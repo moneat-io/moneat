@@ -100,8 +100,8 @@ curl -X POST http://localhost:8080/api/1/store/ \
 ```
 moneat/
 ├── backend/                 # Kotlin/Ktor backend
-├── dashboard/               # React frontend (TODO)
-├── sdk/                     # Kotlin Multiplatform SDK (TODO)
+├── dashboard/               # React frontend
+├── emails/                  # Maizzle email templates
 └── docker-compose.yml       # Local development infrastructure
 ```
 
@@ -141,6 +141,19 @@ moneat/
 - `GET /api/v1/issues/{id}/events` - Get issue events
 
 ## Development
+
+### Email Templates
+
+Email templates are built with [Maizzle](https://maizzle.com):
+
+```bash
+cd emails
+npm install
+npm run dev                  # Preview with live reload
+npm run build:production     # Build for production
+```
+
+Built templates are in `emails/build/templates/email/` with `{{ variable }}` placeholders.
 
 ### Backend
 

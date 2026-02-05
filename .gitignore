@@ -36,6 +36,11 @@ bin/
 # VS Code
 .vscode/
 
+# Email templates
+emails/node_modules/
+emails/build/
+emails/.maizzle/
+
 # Mac
 .DS_Store
 

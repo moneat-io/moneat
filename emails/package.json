@@ -1,0 +1,15 @@
+{
+  "name": "moneat-emails",
+  "version": "1.0.0",
+  "description": "Email templates for Moneat error monitoring",
+  "type": "module",
+  "scripts": {
+    "dev": "maizzle serve",
+    "build:development": "maizzle build",
+    "build:staging": "maizzle build production",
+    "build:production": "maizzle build production"
+  },
+  "dependencies": {
+    "@maizzle/framework": "^5.0.0"
+  }
+}
