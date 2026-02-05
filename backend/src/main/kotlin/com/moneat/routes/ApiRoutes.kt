@@ -3,6 +3,8 @@ package com.moneat.routes
 import com.moneat.models.CreateProjectRequest
 import com.moneat.models.IssueUpdateRequest
 import com.moneat.models.UpdateProjectRequest
+import com.moneat.models.UserResponse
+import com.moneat.models.Users
 import com.moneat.services.DashboardService
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -11,12 +13,36 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Route.apiRoutes() {
     val dashboardService = DashboardService()
     
     authenticate("auth-jwt") {
         route("/api/v1") {
+            // User profile
+            get("/user") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val user = transaction {
+                    Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                }
+                
+                if (user == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "User not found"))
+                } else {
+                    call.respond(UserResponse(
+                        user[Users.id],
+                        user[Users.email],
+                        user[Users.name],
+                        user[Users.email_verified],
+                        user[Users.onboarding_completed]
+                    ))
+                }
+            }
+            
             // Projects
             get("/projects") {
                 val principal = call.principal<JWTPrincipal>()

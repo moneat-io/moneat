@@ -1,10 +1,10 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, redirect, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 
 export const Route = createFileRoute('/login')({
   beforeLoad: () => {
@@ -23,8 +23,13 @@ function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await api.login(email, password)
-      window.location.href = '/'
+      const response = await api.login(email, password)
+      // Check if user needs to complete onboarding
+      if (!response.user.onboardingCompleted) {
+        window.location.href = '/onboarding'
+      } else {
+        window.location.href = '/'
+      }
     } catch (err) {
       setError('Invalid credentials')
     }
@@ -61,12 +66,23 @@ function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <div className="text-right">
+                <Link to="/forgot-password" className="text-sm text-primary hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
             </div>
             <Button type="submit" className="w-full">
               Sign in
             </Button>
           </form>
         </CardContent>
+        <CardFooter className="flex justify-center text-sm text-muted-foreground">
+          Don't have an account?{' '}
+          <Link to="/signup" className="ml-1 text-primary hover:underline">
+            Sign up
+          </Link>
+        </CardFooter>
       </Card>
     </div>
   )

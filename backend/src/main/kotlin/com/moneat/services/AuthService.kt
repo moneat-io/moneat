@@ -73,7 +73,7 @@ class AuthService {
         val token = generateToken(userId, request.email)
         return AuthResponse(
             token = token,
-            user = UserResponse(userId, request.email, request.name, emailVerified)
+            user = UserResponse(userId, request.email, request.name, emailVerified, false)
         )
     }
     
@@ -141,6 +141,10 @@ class AuthService {
                 return@transaction null
             }
             
+            if (!user[Users.email_verified]) {
+                throw IllegalArgumentException("Email not verified. Please check your email for the verification link.")
+            }
+            
             val userId = user[Users.id]
             val token = generateToken(userId, user[Users.email])
             AuthResponse(
@@ -149,7 +153,8 @@ class AuthService {
                     userId, 
                     user[Users.email], 
                     user[Users.name],
-                    user[Users.email_verified]
+                    user[Users.email_verified],
+                    user[Users.onboarding_completed]
                 )
             )
         }
@@ -169,5 +174,100 @@ class AuthService {
         val bytes = ByteArray(32)
         secureRandom.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+    }
+    
+    fun requestPasswordReset(email: String): Boolean {
+        return transaction {
+            val user = Users.selectAll()
+                .where { Users.email eq email }
+                .firstOrNull()
+                ?: return@transaction false
+            
+            // Generate reset token
+            val resetToken = generateVerificationToken()
+            val expiresAt = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour
+            
+            Users.update({ Users.id eq user[Users.id] }) {
+                it[password_reset_token] = resetToken
+                it[password_reset_expires_at] = expiresAt
+            }
+            
+            // Send password reset email
+            try {
+                emailService.sendPasswordResetEmail(email, resetToken, user[Users.name])
+                true
+            } catch (e: Exception) {
+                println("Failed to send password reset email: ${e.message}")
+                false
+            }
+        }
+    }
+    
+    fun resetPassword(token: String, newPassword: String): Boolean {
+        if (newPassword.length < 8) {
+            throw IllegalArgumentException("Password must be at least 8 characters")
+        }
+        
+        return transaction {
+            val user = Users.selectAll()
+                .where { Users.password_reset_token eq token }
+                .firstOrNull()
+                ?: return@transaction false
+            
+            val expiresAt = user[Users.password_reset_expires_at]
+            if (expiresAt == null || expiresAt < System.currentTimeMillis()) {
+                return@transaction false
+            }
+            
+            // Update password and clear reset token
+            val passwordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt())
+            Users.update({ Users.id eq user[Users.id] }) {
+                it[password_hash] = passwordHash
+                it[password_reset_token] = null
+                it[password_reset_expires_at] = null
+            }
+            
+            true
+        }
+    }
+    
+    fun completeOnboarding(userId: Int, organizationName: String, companySize: String): UserResponse {
+        return transaction {
+            val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                ?: throw IllegalArgumentException("User not found")
+            
+            // Get the user's default organization
+            val membership = Memberships.selectAll()
+                .where { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?: throw IllegalArgumentException("No organization found for user")
+            
+            val orgId = membership[Memberships.organization_id]
+            
+            // Update organization with new name and company size
+            val slug = organizationName.lowercase()
+                .replace(Regex("[^a-z0-9]+"), "-")
+                .trim('-')
+                .take(100)
+            
+            Organizations.update({ Organizations.id eq orgId }) {
+                it[name] = organizationName
+                it[Organizations.slug] = slug
+                it[company_size] = companySize
+            }
+            
+            // Mark onboarding as completed
+            Users.update({ Users.id eq userId }) {
+                it[onboarding_completed] = true
+            }
+            
+            UserResponse(
+                user[Users.id],
+                user[Users.email],
+                user[Users.name],
+                user[Users.email_verified],
+                true
+            )
+        }
     }
 }

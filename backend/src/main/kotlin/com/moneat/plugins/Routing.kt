@@ -23,5 +23,11 @@ fun Application.configureRouting() {
         
         // Authentication endpoints
         authRoutes()
+        
+        // Auth token management endpoints
+        authTokenRoutes()
+        
+        // Release and source map endpoints
+        releaseRoutes()
     }
 }

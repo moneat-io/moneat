@@ -9,18 +9,23 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified BOOLEAN DEFAULT false,
     email_verification_token VARCHAR(255),
     email_verification_expires_at BIGINT,
+    password_reset_token VARCHAR(255),
+    password_reset_expires_at BIGINT,
+    onboarding_completed BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_verification_token ON users(email_verification_token);
+CREATE INDEX idx_users_reset_token ON users(password_reset_token);
 
 -- Organizations
 CREATE TABLE IF NOT EXISTS organizations (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(255) UNIQUE NOT NULL,
+    company_size VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

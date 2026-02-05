@@ -17,9 +17,20 @@ import { Plus, Search } from 'lucide-react'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/')({
-  beforeLoad: () => {
+  beforeLoad: async () => {
     if (!api.isAuthenticated()) {
       throw redirect({ to: '/login' })
+    }
+    
+    // Check if user needs to complete onboarding
+    try {
+      const user = await api.getCurrentUser()
+      if (!user.onboardingCompleted) {
+        throw redirect({ to: '/onboarding' })
+      }
+    } catch (error) {
+      // If we can't fetch user, let them continue (auth will handle it)
+      console.error('Failed to fetch user:', error)
     }
   },
   component: DashboardPage,

@@ -26,7 +26,8 @@ data class UserResponse(
     val id: Int,
     val email: String,
     val name: String?,
-    val emailVerified: Boolean = false
+    val emailVerified: Boolean = false,
+    val onboardingCompleted: Boolean = false
 )
 
 @Serializable
@@ -123,4 +124,73 @@ data class VerifyEmailRequest(
 @Serializable
 data class ResendVerificationRequest(
     val email: String
+)
+
+@Serializable
+data class CompleteOnboardingRequest(
+    val organizationName: String,
+    val companySize: String
+)
+
+@Serializable
+data class ForgotPasswordRequest(
+    val email: String
+)
+
+@Serializable
+data class ResetPasswordRequest(
+    val token: String,
+    val newPassword: String
+)
+
+@Serializable
+data class CreateAuthTokenRequest(
+    val name: String,
+    val scopes: List<String>,
+    val expiresInDays: Int? = null
+)
+
+@Serializable
+data class AuthTokenResponse(
+    val id: Int,
+    val name: String,
+    val token: String? = null, // Only returned on creation
+    val scopes: List<String>,
+    val lastUsedAt: String? = null,
+    val expiresAt: String? = null,
+    val createdAt: String
+)
+
+@Serializable
+data class UpdateAuthTokenRequest(
+    val name: String? = null,
+    val scopes: List<String>? = null
+)
+
+@Serializable
+data class CreateReleaseRequest(
+    val version: String,
+    val ref: String? = null,
+    val projects: List<String>? = null
+)
+
+@Serializable
+data class ReleaseResponse(
+    val version: String,
+    val ref: String? = null,
+    val projectSlug: String,
+    val dateCreated: String
+)
+
+@Serializable
+data class UploadSourceMapRequest(
+    val name: String,
+    val file: String // Base64 encoded file content for simplicity
+)
+
+@Serializable
+data class SourceMapFileResponse(
+    val id: Int,
+    val name: String,
+    val dateCreated: String
 )

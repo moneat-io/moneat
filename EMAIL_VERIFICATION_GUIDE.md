@@ -60,7 +60,9 @@ Email verification has been added to the signup process. Users will receive a ve
   - Sends verification email (if AWS SES is configured)
   - Token expires in 24 hours
 
-- **POST /auth/login** - Now includes `emailVerified` status in the response
+- **POST /auth/login** - Now requires email verification before allowing login
+  - Returns 403 Forbidden if email is not verified
+  - Error message: "Email not verified. Please check your email for the verification link."
 
 ### Email Service
 - Uses AWS SES for sending emails
@@ -173,7 +175,7 @@ docker exec -i moneat-postgres psql -U moneat -d moneat \
 
 ## Behavior Notes
 
-1. **Login Allowed Before Verification**: Users can login before verifying their email, but the `emailVerified` field in the response will be `false`. The frontend can use this to show a banner encouraging email verification.
+1. **Login Blocked Until Verification**: Users cannot login until they verify their email. Attempting to login with an unverified email will return a 403 Forbidden error with the message "Email not verified. Please check your email for the verification link."
 
 2. **Token Expiration**: Verification tokens expire after 24 hours. Users will need to use the resend endpoint to get a new token.
 
@@ -185,17 +187,17 @@ docker exec -i moneat-postgres psql -U moneat -d moneat \
 
 The frontend should:
 
-1. **After Signup**: Show a message like "Check your email to verify your account"
+1. **After Signup**: Show a message like "Check your email to verify your account. You must verify your email before you can login."
 
 2. **Verification Page**: Create a `/verify-email` route that:
    - Extracts the `token` from the URL query params
    - Calls `POST /auth/verify-email` with the token
    - Shows success/error message
+   - On success, redirect to login page
 
-3. **Unverified Users**: Display a banner for logged-in users with `emailVerified: false`:
-   ```
-   "Please verify your email address. [Resend verification email]"
-   ```
+3. **Login Error Handling**: Handle 403 errors from the login endpoint:
+   - Show the error message from the API
+   - Provide a "Resend verification email" button
 
 4. **Resend Button**: Calls `POST /auth/resend-verification` with the user's email
 

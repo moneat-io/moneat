@@ -2,7 +2,13 @@ const API_BASE = '/api/v1'
 
 interface AuthResponse {
   token: string
-  user: { id: number; email: string; name?: string }
+  user: { 
+    id: number
+    email: string
+    name?: string
+    emailVerified: boolean
+    onboardingCompleted: boolean
+  }
 }
 
 interface Project {
@@ -139,6 +145,45 @@ class ApiClient {
     await this.request(`${API_BASE}/issues/${issueId}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
+    })
+  }
+
+  async completeOnboarding(organizationName: string, companySize: string): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean }> {
+    return this.request('/auth/complete-onboarding', {
+      method: 'POST',
+      body: JSON.stringify({ organizationName, companySize }),
+    })
+  }
+
+  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean }> {
+    return this.request(`${API_BASE}/user`)
+  }
+
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    return this.request('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    return this.request('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    })
+  }
+
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    return this.request('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    return this.request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
     })
   }
 }

@@ -47,18 +47,21 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-dao:$exposed_version")
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposed_version")
     implementation("org.jetbrains.exposed:exposed-kotlin-datetime:$exposed_version")
-    implementation("org.postgresql:postgresql:42.7.1")
+    implementation("org.postgresql:postgresql:42.7.7")
     implementation("com.zaxxer:HikariCP:$hikari_version")
 
     // Redis
     implementation("io.lettuce:lettuce-core:6.3.1.RELEASE")
     
-    // Email - AWS SES
-    implementation("aws.sdk.kotlin:ses:1.0.0")
+    // Email - SMTP
+    implementation("com.sun.mail:jakarta.mail:2.0.2")
     
     // Security
     implementation("org.mindrot:jbcrypt:0.4")
     implementation("commons-codec:commons-codec:1.16.0")
+
+    // Environment variables
+    implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
 
     // Logging
     implementation("ch.qos.logback:logback-classic:$logback_version")
