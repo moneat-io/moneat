@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useProject } from '@/contexts/project-context'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import {
   Home,
@@ -13,19 +15,30 @@ import {
   User,
   BarChart3,
 } from 'lucide-react'
+import { getProjectColor, getProjectInitial } from '@/lib/project-colors'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false)
   const router = useRouterState()
   const currentPath = router.location.pathname
+  const { selectedProjectId, setSelectedProjectId } = useProject()
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -33,8 +46,14 @@ export function Sidebar() {
     enabled: api.isAuthenticated(),
   })
 
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+    enabled: api.isAuthenticated(),
+  })
+
   const navItems = [
-    { icon: Home, label: 'Issues', href: '/' },
+    { icon: Home, label: 'Dashboard', href: '/' },
     { icon: BarChart3, label: 'Analytics', href: '/analytics' },
     { icon: FolderKanban, label: 'Projects', href: '/projects' },
     { icon: Settings, label: 'Settings', href: '/settings' },
@@ -93,6 +112,103 @@ export function Sidebar() {
         </DropdownMenu>
       </div>
 
+      {/* Project Selector */}
+      {projects && projects.length > 0 && (
+        <div className="p-2 border-b">
+          {isExpanded ? (
+            <Select
+              value={selectedProjectId?.toString() || projects[0]?.id.toString() || ''}
+              onValueChange={(val) => setSelectedProjectId(Number(val))}
+            >
+              <SelectTrigger className="w-full">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const currentProject = projects.find(p => p.id === selectedProjectId) || projects[0]
+                    return currentProject ? (
+                      <>
+                        <div 
+                          className="rounded flex items-center justify-center w-5 h-5 flex-shrink-0"
+                          style={{ backgroundColor: getProjectColor(currentProject.name) }}
+                        >
+                          <span className="text-white font-semibold text-xs">{getProjectInitial(currentProject.name)}</span>
+                        </div>
+                        <SelectValue placeholder="Select project" />
+                      </>
+                    ) : (
+                      <SelectValue placeholder="Select project" />
+                    )
+                  })()}
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id.toString()}>
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="rounded flex items-center justify-center w-5 h-5 flex-shrink-0"
+                        style={{ backgroundColor: getProjectColor(project.name) }}
+                      >
+                        <span className="text-white font-semibold text-xs">{getProjectInitial(project.name)}</span>
+                      </div>
+                      <span>{project.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="w-full justify-center px-0">
+                      {(() => {
+                        const currentProject = projects.find(p => p.id === selectedProjectId) || projects[0]
+                        return currentProject ? (
+                          <div 
+                            className="rounded flex items-center justify-center w-8 h-8"
+                            style={{ backgroundColor: getProjectColor(currentProject.name) }}
+                          >
+                            <span className="text-white font-semibold text-sm">{getProjectInitial(currentProject.name)}</span>
+                          </div>
+                        ) : (
+                          <div className="bg-gray-500 rounded flex items-center justify-center w-8 h-8">
+                            <span className="text-white font-semibold text-sm">?</span>
+                          </div>
+                        )
+                      })()}
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>{projects.find(p => p.id === selectedProjectId)?.name || projects[0]?.name || 'Select project'}</p>
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="start" side="right" className="w-56">
+                {projects.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => setSelectedProjectId(project.id)}
+                    className={cn(
+                      'cursor-pointer',
+                      project.id === selectedProjectId && 'bg-accent'
+                    )}
+                  >
+                    <div 
+                      className="rounded flex items-center justify-center w-5 h-5 mr-2 flex-shrink-0"
+                      style={{ backgroundColor: getProjectColor(project.name) }}
+                    >
+                      <span className="text-white font-semibold text-xs">{getProjectInitial(project.name)}</span>
+                    </div>
+                    {project.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+
       {/* Navigation Items */}
       <nav className="flex-1 p-2">
         <div className="space-y-1">
@@ -100,7 +216,7 @@ export function Sidebar() {
             const isActive = currentPath === item.href
             const Icon = item.icon
 
-            return (
+            const linkContent = (
               <Link
                 key={item.href}
                 to={item.href}
@@ -116,27 +232,80 @@ export function Sidebar() {
                 {isExpanded && <span className="text-sm font-medium">{item.label}</span>}
               </Link>
             )
+
+            if (!isExpanded) {
+              return (
+                <Tooltip key={item.href}>
+                  <TooltipTrigger asChild>
+                    {linkContent}
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{item.label}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
+
+            return linkContent
           })}
         </div>
       </nav>
 
       {/* Bottom Section */}
       <div className="p-2 border-t space-y-1">
-        {/* Logout Button */}
-        <Button
-          variant="ghost"
-          className={cn(
-            'w-full justify-start gap-3 text-muted-foreground hover:text-foreground',
-            !isExpanded && 'justify-center px-0'
+        {/* Theme Toggle */}
+        <div className={cn('w-full', !isExpanded && 'flex justify-center')}>
+          {isExpanded ? (
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-sm text-muted-foreground">Theme</span>
+              <ThemeToggle />
+            </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <ThemeToggle />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Toggle theme</p>
+              </TooltipContent>
+            </Tooltip>
           )}
-          onClick={() => {
-            api.logout()
-            window.location.href = '/login'
-          }}
-        >
-          <LogOut className="h-5 w-5 flex-shrink-0" />
-          {isExpanded && <span className="text-sm">Logout</span>}
-        </Button>
+        </div>
+
+        {/* Logout Button */}
+        {isExpanded ? (
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              api.logout()
+              window.location.href = '/login'
+            }}
+          >
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            <span className="text-sm">Logout</span>
+          </Button>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-center px-0 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  api.logout()
+                  window.location.href = '/login'
+                }}
+              >
+                <LogOut className="h-5 w-5 flex-shrink-0" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Logout</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Expand/Collapse Button */}
         <Button

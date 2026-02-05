@@ -50,9 +50,21 @@ export function EventsChart({ data, title = 'Events Over Time', height = 300 }: 
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'hsl(var(--background))',
+                backgroundColor: 'hsl(var(--popover) / 0.95)',
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
+                color: 'hsl(var(--popover-foreground))',
+                padding: '8px 12px',
+                fontSize: '13px',
+              }}
+              labelStyle={{
+                color: 'hsl(var(--popover-foreground))',
+                fontWeight: '500',
+                fontSize: '13px',
+              }}
+              itemStyle={{
+                color: 'hsl(var(--popover-foreground))',
+                fontSize: '13px',
               }}
             />
             <Area

@@ -1,5 +1,4 @@
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
-import { ThemeToggle } from '../components/theme-toggle'
 import { Sidebar } from '../components/sidebar'
 import { api } from '../lib/api'
 
@@ -17,9 +16,6 @@ function RootComponent() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
       {showSidebar && <Sidebar />}
       <div className={showSidebar ? 'ml-16' : ''}>
         <Outlet />

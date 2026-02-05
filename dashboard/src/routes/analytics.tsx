@@ -1,6 +1,7 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, redirect, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useProject } from '@/contexts/project-context'
 import { useState } from 'react'
 import {
   Select,
@@ -35,8 +36,8 @@ export const Route = createFileRoute('/analytics')({
 })
 
 function AnalyticsPage() {
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
   const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('7d')
+  const { selectedProjectId } = useProject()
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -56,26 +57,7 @@ function AnalyticsPage() {
       <div className="p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold">Analytics</h2>
-            {projects && projects.length > 0 && (
-              <Select
-                value={projectId?.toString() || ''}
-                onValueChange={(val) => setSelectedProjectId(Number(val))}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id.toString()}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          <h2 className="text-2xl font-bold">Analytics</h2>
           <Select value={period} onValueChange={(val) => setPeriod(val as '24h' | '7d' | '30d')}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
@@ -89,9 +71,11 @@ function AnalyticsPage() {
         </div>
 
         {!projects || projects.length === 0 ? (
-          <div className="rounded-lg border bg-card p-8 text-center">
-            <p className="text-muted-foreground">No projects yet. Create a project to view analytics.</p>
-          </div>
+          <Card className="p-12 text-center">
+            <div className="max-w-md mx-auto space-y-4">
+              <p className="text-muted-foreground">No projects yet. Create a project to view analytics.</p>
+            </div>
+          </Card>
         ) : isLoading ? (
           <div className="p-8 text-center">Loading analytics...</div>
         ) : stats ? (
@@ -184,7 +168,12 @@ function AnalyticsPage() {
                 <CardContent>
                   <div className="space-y-3">
                     {stats.topIssues.map((issue, index) => (
-                      <div key={issue.issueId} className="flex items-center justify-between p-3 rounded-lg border">
+                      <Link
+                        key={issue.issueId}
+                        to="/issues/$issueId"
+                        params={{ issueId: issue.issueId }}
+                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+                      >
                         <div className="flex items-center gap-3">
                           <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-sm font-semibold">
                             {index + 1}
@@ -198,7 +187,7 @@ function AnalyticsPage() {
                           <div className="font-semibold">{issue.count.toLocaleString()}</div>
                           <div className="text-xs text-muted-foreground">events</div>
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 </CardContent>

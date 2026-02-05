@@ -19,6 +19,7 @@ import {
   Globe,
   Smartphone,
   Battery,
+  Circle,
 } from 'lucide-react'
 
 // Helper function to get level color
@@ -76,31 +77,15 @@ function IssueDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-card px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/" className="flex items-center gap-1">
-                <ChevronLeft className="h-4 w-4" />
-                Back to Issues
-              </Link>
-            </Button>
-            <h1 className="text-2xl font-bold">Moneat</h1>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              api.logout()
-              window.location.href = '/login'
-            }}
-          >
-            Logout
-          </Button>
-        </div>
-      </nav>
-
       <div className="p-6 max-w-7xl mx-auto">
+        {/* Breadcrumbs */}
+        <div className="mb-4">
+          <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Link>
+        </div>
+
         {/* Issue Header */}
         <div className="mb-6 bg-card rounded-lg border p-6">
           <div className="flex items-start justify-between mb-4">
@@ -436,6 +421,8 @@ function StackFrame({ frame }: { frame: any }) {
 
 // Helper to get icon for breadcrumb category
 function getBreadcrumbIcon(category: string, data?: any) {
+  if (!category) return <Circle className="h-4 w-4" />
+  
   const cat = category.toLowerCase()
   
   if (cat.includes('lifecycle')) {
@@ -479,6 +466,10 @@ function formatBreadcrumbData(crumb: any): string {
   
   const data = crumb.data
   const category = (crumb.category || crumb.type || '').toLowerCase()
+  
+  if (!category) {
+    return JSON.stringify(data)
+  }
   
   // UI Lifecycle
   if (category.includes('ui.lifecycle')) {

@@ -5,7 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatRelativeTime(dateString: string): string {
+export function formatRelativeTime(dateString: string | undefined): string {
+  if (!dateString) return 'unknown'
+  
   // Handle ClickHouse DateTime format (YYYY-MM-DD HH:MM:SS) as UTC
   let date: Date
   if (dateString.includes('T')) {

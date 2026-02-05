@@ -12,9 +12,11 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
-      <p className="text-muted-foreground">Settings page coming soon...</p>
+    <div className="min-h-screen bg-background">
+      <div className="p-6 max-w-7xl mx-auto">
+        <h1 className="text-2xl font-bold mb-4">Settings</h1>
+        <p className="text-muted-foreground">Settings page coming soon...</p>
+      </div>
     </div>
   )
 }
