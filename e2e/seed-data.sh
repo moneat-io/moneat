@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+
+echo "🌱 Seeding E2E test data..."
+
+# Check if we're in the e2e directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Check if database is accessible (whether backend is running or not)
+echo "Checking database connection..."
+if ! docker-compose ps postgres | grep -q "Up"; then
+  echo "❌ PostgreSQL is not running. Please start database:"
+  echo "   docker-compose up -d postgres"
+  exit 1
+fi
+
+echo "Database is running. Compiling and running data seeder..."
+cd backend
+
+# Run the seeder and capture output
+./gradlew seedE2EData --console=plain 2>&1 | tee /tmp/e2e-seed.log
+
+# Extract DSNs from the output
+ANDROID_DSN=$(grep "Android E2E App" -A1 /tmp/e2e-seed.log | grep "DSN:" | sed 's/.*DSN: //')
+KMP_DSN=$(grep "KMP E2E App" -A1 /tmp/e2e-seed.log | grep "DSN:" | sed 's/.*DSN: //')
+
+# Update local.properties if DSNs were found
+if [ -n "$ANDROID_DSN" ]; then
+  echo "Updating Android local.properties with DSN..."
+  echo "sentry.dsn=$ANDROID_DSN" > ../e2e/Android/local.properties
+  echo "✅ Updated e2e/Android/local.properties"
+fi
+
+if [ -n "$KMP_DSN" ]; then
+  echo "Updating KMP local.properties with DSN..."
+  echo "sentry.dsn=$KMP_DSN" > ../e2e/KMP/local.properties
+  echo "✅ Updated e2e/KMP/local.properties"
+fi
+
+echo ""
+echo "✅ E2E data seeding complete!"
+echo ""
+echo "You can now:"
+echo "1. Login to Moneat dashboard at http://localhost:3000"
+echo "2. Use credentials: e2e-test@moneat.dev / e2e-test-password"
+echo "3. Run the E2E apps to trigger errors:"
+echo "   cd e2e && ./run-android.sh"
+echo "   cd e2e && ./run-kmp.sh"

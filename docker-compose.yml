@@ -32,7 +32,7 @@ services:
       - "9000:9000"  # Native interface
     volumes:
       - clickhouse_data:/var/lib/clickhouse
-      - ./backend/src/main/resources/db/clickhouse_init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backend/src/main/resources/db/clickhouse_init.sql:/docker-entrypoint-initdb.d/clickhouse_init.sql
     ulimits:
       nofile:
         soft: 262144

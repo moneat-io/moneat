@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<resources>
+    <string name="label_title">Título</string>
+    <string name="label_artist">Artista</string>
+    <string name="label_date">Fecha</string>
+    <string name="label_dimensions">Dimensiones</string>
+    <string name="label_medium">Técnica</string>
+    <string name="label_department">Departamento</string>
+    <string name="label_repository">Repositorio</string>
+    <string name="label_credits">Créditos</string>
+    <string name="back">Atrás</string>
+    <string name="no_data_available">No hay datos disponibles</string>
+    <string name="e2e_test_string">Cadena de Prueba E2E</string>
+</resources>

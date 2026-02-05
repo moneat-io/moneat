@@ -7,7 +7,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.config.*
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.selectAll
@@ -39,8 +39,10 @@ class EventService {
     
     suspend fun processEnvelope(projectId: Long, envelope: SentryEnvelope) {
         for (item in envelope.items) {
+            logger.debug { "Processing envelope item type: ${item.type}" }
             when (item.type) {
                 "event" -> {
+                    logger.debug { "Event payload: ${item.payload.take(500)}" }
                     val event = json.decodeFromString<SentryEvent>(item.payload)
                     storeEvent(projectId, event)
                 }
@@ -66,17 +68,47 @@ class EventService {
     
     private suspend fun storeEvent(projectId: Long, event: SentryEvent) {
         val eventId = event.event_id ?: UUID.randomUUID().toString()
-        val timestamp = event.timestamp?.toLong()?.let { it * 1000 } ?: System.currentTimeMillis()
+        
+        logger.debug { "Full event structure - exception: ${event.exception}, message: ${event.message}, platform: ${event.platform}" }
+        
+        // Parse ISO 8601 timestamp or use current time
+        val timestamp = event.timestamp?.let {
+            try {
+                // Parse ISO 8601 to epoch milliseconds
+                java.time.Instant.parse(it).toEpochMilli()
+            } catch (e: Exception) {
+                logger.warn { "Failed to parse timestamp: $it, using current time" }
+                System.currentTimeMillis()
+            }
+        } ?: System.currentTimeMillis()
         
         // Generate issue ID from fingerprint
-        val fingerprint = event.fingerprint ?: generateFingerprint(event)
+        val fingerprint = if (event.fingerprint.isNullOrEmpty()) {
+            generateFingerprint(event)
+        } else {
+            event.fingerprint
+        }
+        logger.debug { "Generated fingerprint: $fingerprint" }
         val issueId = generateIssueId(fingerprint)
+        logger.debug { "Generated issue ID: $issueId" }
         
         // Extract exception info
-        val exceptionType = event.exception?.values?.firstOrNull()?.type ?: ""
-        val exceptionValue = event.exception?.values?.firstOrNull()?.value ?: event.message ?: ""
-        val stackTrace = event.exception?.values?.firstOrNull()?.stacktrace?.let { 
-            Json.encodeToString(StackTrace.serializer(), it) 
+        val firstException = event.exception?.values?.firstOrNull()
+        val exceptionType = firstException?.type ?: ""
+        val exceptionValue = firstException?.value ?: event.message ?: ""
+        
+        // Detect if this is a crash (unhandled exception)
+        val mechanism = firstException?.mechanism
+        val isHandled = mechanism?.get("handled")?.jsonPrimitive?.booleanOrNull ?: true
+        val mechanismType = mechanism?.get("type")?.jsonPrimitive?.contentOrNull
+        val isCrash = !isHandled || mechanismType == "onerror" || mechanismType == "onunhandledrejection"
+        
+        // Determine level: fatal for crashes, otherwise use provided level
+        val eventLevel = if (isCrash && event.level == null) "fatal" else (event.level ?: "error")
+        
+        // Encode full exception with stack trace
+        val stackTrace = event.exception?.let { 
+            Json.encodeToString(ExceptionInfo.serializer(), it) 
         } ?: ""
         
         // Extract contexts
@@ -94,11 +126,11 @@ class EventService {
                 fingerprint, issue_id, tags, contexts, breadcrumbs, request,
                 sdk_name, sdk_version
             ) VALUES (
-                '${eventId}',
+                toUUID('${eventId}'),
                 $projectId,
                 fromUnixTimestamp64Milli($timestamp),
                 'error',
-                '${event.level ?: "error"}',
+                '$eventLevel',
                 '${escapeSql(exceptionValue)}',
                 '${event.platform ?: "unknown"}',
                 '${event.environment ?: "production"}',
@@ -144,11 +176,31 @@ class EventService {
     }
     
     private fun generateFingerprint(event: SentryEvent): List<String> {
-        val type = event.exception?.values?.firstOrNull()?.type
-        val value = event.exception?.values?.firstOrNull()?.value
-        val function = event.exception?.values?.firstOrNull()?.stacktrace?.frames?.lastOrNull()?.function
+        val firstException = event.exception?.values?.firstOrNull()
+        val type = firstException?.type
         
-        return listOfNotNull(type, value, function).ifEmpty { listOf("{{ default }}") }
+        logger.info { "=== FINGERPRINT GENERATION ===" }
+        logger.info { "Exception type: $type" }
+        logger.info { "Total frames: ${firstException?.stacktrace?.frames?.size}" }
+        
+        // Find the last in_app frame (innermost/actual error location), or fall back to the last frame
+        val relevantFrame = firstException?.stacktrace?.frames?.findLast { it.in_app == true }
+            ?: firstException?.stacktrace?.frames?.lastOrNull()
+        
+        val function = relevantFrame?.function
+        val filename = relevantFrame?.filename
+        
+        logger.info { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.in_app}" }
+        
+        val fingerprint = buildList {
+            type?.let { add(it) }
+            function?.let { add(it) }
+            filename?.let { add(it) }
+        }
+        
+        logger.info { "Final fingerprint: $fingerprint" }
+        
+        return fingerprint.ifEmpty { listOf("{{ default }}") }
     }
     
     private fun generateIssueId(fingerprint: List<String>): String {

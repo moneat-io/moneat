@@ -54,7 +54,7 @@ data class EnvelopeItem(
 @Serializable
 data class SentryEvent(
     val event_id: String? = null,
-    val timestamp: Double? = null,
+    val timestamp: String? = null,  // ISO 8601 timestamp string
     val level: String? = null,
     val logger: String? = null,
     val platform: String? = null,
@@ -70,7 +70,8 @@ data class SentryEvent(
     val breadcrumbs: JsonArray? = null,
     val request: JsonObject? = null,
     val fingerprint: List<String>? = null,
-    val server_name: String? = null
+    val server_name: String? = null,
+    val threads: JsonObject? = null
 )
 
 @Serializable
@@ -87,7 +88,7 @@ data class ExceptionInfo(
 @Serializable
 data class ExceptionValue(
     val type: String,
-    val value: String,
+    val value: String? = null,
     val stacktrace: StackTrace? = null,
     val mechanism: JsonObject? = null
 )
@@ -108,7 +109,8 @@ data class StackFrame(
     val context_line: String? = null,
     val pre_context: List<String>? = null,
     val post_context: List<String>? = null,
-    val in_app: Boolean? = null
+    val in_app: Boolean? = null,
+    val vars: JsonObject? = null
 )
 
 @Serializable

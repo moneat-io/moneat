@@ -1,0 +1,10 @@
+# Sentry configuration for Moneat E2E Android App
+# Copy this to local.properties and update with your actual DSN
+
+# Get the DSN from Moneat dashboard after creating a project
+# IMPORTANT: Use 10.0.2.2 instead of localhost for Android emulator
+# Format: http://PUBLIC_KEY@10.0.2.2:8080/PROJECT_ID
+sentry.dsn=
+
+# Or use the full URL if Moneat is running elsewhere
+# sentry.dsn=http://PUBLIC_KEY@your-moneat-host:8080/PROJECT_ID

@@ -177,20 +177,28 @@ class DashboardService {
             "AND status = '${status.replace("'", "''")}'"
         } else ""
         
+        // Query events table directly and aggregate
         val query = """
             SELECT 
                 issue_id,
-                title,
-                culprit,
-                level,
-                platform,
-                first_seen,
-                last_seen,
-                event_count,
-                user_count,
-                status
-            FROM $clickhouseDb.issues
-            WHERE project_id = $projectId $statusFilter
+                any(message) as title,
+                any(exception_type) as culprit,
+                any(level) as level,
+                any(platform) as platform,
+                min(timestamp) as first_seen,
+                max(timestamp) as last_seen,
+                count() as event_count,
+                uniq(user_id) as user_count,
+                any(i.status) as status
+            FROM $clickhouseDb.events e
+            LEFT JOIN (
+                SELECT issue_id, status 
+                FROM $clickhouseDb.issues FINAL
+            ) i USING issue_id
+            WHERE e.project_id = $projectId 
+                AND e.event_type = 'error'
+                $statusFilter
+            GROUP BY issue_id
             ORDER BY last_seen DESC
             LIMIT $limit OFFSET $offset
             FORMAT JSONEachRow
@@ -230,22 +238,28 @@ class DashboardService {
     
     suspend fun getIssue(issueId: String): IssueDetailResponse? {
         val escapedIssueId = issueId.replace("'", "''")
+        
+        // Query events table directly and aggregate
         val query = """
             SELECT 
                 issue_id,
-                title,
-                culprit,
-                level,
-                platform,
-                first_seen,
-                last_seen,
-                event_count,
-                user_count,
-                status,
-                fingerprint
-            FROM $clickhouseDb.issues
-            WHERE issue_id = '$escapedIssueId'
-            LIMIT 1
+                any(message) as title,
+                any(exception_type) as culprit,
+                any(level) as level,
+                any(platform) as platform,
+                min(timestamp) as first_seen,
+                max(timestamp) as last_seen,
+                count() as event_count,
+                uniq(user_id) as user_count,
+                any(i.status) as status,
+                any(fingerprint) as fingerprint
+            FROM $clickhouseDb.events e
+            LEFT JOIN (
+                SELECT issue_id, status 
+                FROM $clickhouseDb.issues FINAL
+            ) i USING issue_id
+            WHERE e.issue_id = '$escapedIssueId'
+            GROUP BY issue_id
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -296,7 +310,7 @@ class DashboardService {
                 user_username,
                 tags,
                 contexts,
-                exception_value,
+                stack_trace,
                 breadcrumbs
             FROM $clickhouseDb.events
             WHERE issue_id = '$escapedIssueId'
@@ -337,7 +351,7 @@ class DashboardService {
                             it.key to it.value.jsonPrimitive.content 
                         } ?: emptyMap(),
                         contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
-                        exception = obj["exception_value"]?.jsonPrimitive?.contentOrNull,
+                        exception = obj["stack_trace"]?.jsonPrimitive?.contentOrNull,
                         breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
                     )
                 }

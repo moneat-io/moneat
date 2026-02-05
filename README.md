@@ -142,6 +142,34 @@ moneat/
 
 ## Development
 
+### E2E Testing
+
+Moneat includes end-to-end testing apps for Android and Kotlin Multiplatform:
+
+```bash
+# Set up E2E environment
+cd e2e
+./setup.sh
+
+# Start Moneat services (from project root)
+cd ..
+docker-compose up -d
+
+# Seed test data (creates projects, users, and DSNs)
+cd e2e
+./seed-data.sh
+
+# Configure DSNs in local.properties files (copy from seed output)
+
+# Run Android E2E app
+./run-android.sh
+
+# Or run KMP E2E app
+./run-kmp.sh
+```
+
+See [e2e/README.md](e2e/README.md) for detailed instructions.
+
 ### Email Templates
 
 Email templates are built with [Maizzle](https://maizzle.com):

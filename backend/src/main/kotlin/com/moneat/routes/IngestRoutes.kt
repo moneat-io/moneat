@@ -38,18 +38,30 @@ fun Route.ingestRoutes() {
                 return@post
             }
             
-            // Parse envelope
-            val body = call.receiveText()
-            logger.debug { "Received envelope for project $projectId: ${body.take(200)}" }
-            
+            // Parse envelope - handle gzip compression
             try {
-                val envelope = SentryEnvelope.parse(body)
+                val contentEncoding = call.request.header("Content-Encoding")
+                val bodyBytes = call.receive<ByteArray>()
+                
+                val bodyText = if (contentEncoding == "gzip") {
+                    logger.debug { "Decompressing gzip envelope" }
+                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).bufferedReader().use { it.readText() }
+                } else {
+                    bodyBytes.decodeToString()
+                }
+                
+                logger.debug { "Received envelope for project $projectId" }
+                logger.debug { "Envelope body:\n${bodyText.take(500)}" }
+                
+                val envelope = SentryEnvelope.parse(bodyText)
+                logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }
                 eventService.processEnvelope(projectId, envelope)
                 
                 call.respond(HttpStatusCode.OK, mapOf("id" to envelope.eventId))
             } catch (e: Exception) {
-                logger.error(e) { "Failed to process envelope" }
-                call.respond(HttpStatusCode.BadRequest, "Invalid envelope format")
+                logger.error(e) { "Failed to process envelope: ${e.message}" }
+                e.printStackTrace()
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid envelope format", "message" to (e.message ?: "Unknown error")))
             }
         }
         

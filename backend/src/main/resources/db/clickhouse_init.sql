@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS events (
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp, event_id)
-TTL timestamp + INTERVAL 90 DAY
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
 -- Issues table (aggregated view)
@@ -104,7 +104,7 @@ SELECT
     any(exception_type) as culprit,
     any(level) as level,
     any(platform) as platform,
-    toEnum8('unresolved', 'Enum8(\'unresolved\' = 1, \'resolved\' = 2, \'ignored\' = 3)') as status,
+    CAST('unresolved' AS Enum8('unresolved' = 1, 'resolved' = 2, 'ignored' = 3)) as status,
     max(timestamp) as updated_at
 FROM events
 WHERE event_type = 'error'
@@ -125,5 +125,5 @@ CREATE TABLE IF NOT EXISTS sessions (
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(started)
 ORDER BY (project_id, started)
-TTL started + INTERVAL 90 DAY
+TTL toDateTime(started) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;

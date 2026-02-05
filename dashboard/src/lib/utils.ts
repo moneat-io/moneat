@@ -6,7 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString)
+  // Handle ClickHouse DateTime format (YYYY-MM-DD HH:MM:SS) as UTC
+  let date: Date
+  if (dateString.includes('T')) {
+    // ISO format with timezone
+    date = new Date(dateString)
+  } else {
+    // ClickHouse format without timezone - treat as UTC
+    date = new Date(dateString + ' UTC')
+  }
+  
   const now = new Date()
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 

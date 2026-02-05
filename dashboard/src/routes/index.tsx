@@ -16,6 +16,48 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Search } from 'lucide-react'
 import { useState } from 'react'
 
+// Helper function to get level color
+function getLevelColor(level: string): string {
+  switch (level.toLowerCase()) {
+    case 'fatal':
+      return 'bg-red-900 text-red-100 hover:bg-red-900'
+    case 'error':
+      return 'bg-red-600 text-white hover:bg-red-600'
+    case 'warning':
+      return 'bg-orange-500 text-white hover:bg-orange-500'
+    case 'info':
+      return 'bg-blue-500 text-white hover:bg-blue-500'
+    case 'debug':
+      return 'bg-gray-500 text-white hover:bg-gray-500'
+    default:
+      return 'bg-secondary text-secondary-foreground'
+  }
+}
+
+// Simple sparkline component
+function EventSparkline({ eventCount }: { eventCount: number }) {
+  // Generate a simple frequency visualization
+  const bars = Math.min(Math.ceil(eventCount / 10), 10)
+  const heights = Array.from({ length: 10 }, (_, i) => {
+    if (i < bars) {
+      return 40 + Math.random() * 60 // 40-100% height for active bars
+    }
+    return 0
+  })
+
+  return (
+    <div className="flex items-end gap-0.5 h-8 w-20">
+      {heights.map((height, i) => (
+        <div
+          key={i}
+          className="flex-1 bg-primary/60 rounded-sm transition-all"
+          style={{ height: `${height}%` }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
@@ -82,22 +124,6 @@ function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-card px-6 py-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Moneat</h1>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              api.logout()
-              window.location.href = '/login'
-            }}
-          >
-            Logout
-          </Button>
-        </div>
-      </nav>
-
       <div className="p-6 max-w-7xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -208,26 +234,32 @@ function DashboardPage() {
                     params={{ issueId: issue.id }}
                     className="block rounded-lg border bg-card p-4 hover:bg-accent transition"
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
                       <div className="flex-1">
                         <div className="font-semibold">{issue.title}</div>
                         <div className="text-sm text-muted-foreground">{issue.culprit}</div>
+                        <div className="mt-2 flex gap-2">
+                          <Badge className={getLevelColor(issue.level)}>
+                            {issue.level.toUpperCase()}
+                          </Badge>
+                          <Badge variant="outline">{issue.platform}</Badge>
+                          {issue.status === 'resolved' && (
+                            <Badge variant="default" className="bg-green-500">
+                              Resolved
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right text-sm text-muted-foreground">
-                        <div className="font-semibold">{issue.eventCount} events</div>
-                        <div>{formatRelativeTime(issue.lastSeen)}</div>
+                      <div className="flex items-center gap-6">
+                        <div className="text-center">
+                          <div className="text-xs text-muted-foreground mb-1">Frequency</div>
+                          <EventSparkline eventCount={issue.eventCount} />
+                        </div>
+                        <div className="text-right text-sm text-muted-foreground min-w-[100px]">
+                          <div className="font-semibold text-foreground">{issue.eventCount} events</div>
+                          <div>{formatRelativeTime(issue.lastSeen)}</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      <Badge variant={issue.level === 'error' ? 'destructive' : 'secondary'}>
-                        {issue.level}
-                      </Badge>
-                      <Badge variant="outline">{issue.platform}</Badge>
-                      {issue.status === 'resolved' && (
-                        <Badge variant="default" className="bg-green-500">
-                          Resolved
-                        </Badge>
-                      )}
                     </div>
                   </Link>
                 ))}

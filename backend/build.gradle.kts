@@ -71,3 +71,15 @@ dependencies {
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
 }
+
+// Task to run the E2E data seeder
+tasks.register<JavaExec>("seedE2EData") {
+    group = "e2e"
+    description = "Seeds E2E test data into the database"
+    
+    classpath = sourceSets["main"].runtimeClasspath + sourceSets["test"].runtimeClasspath
+    mainClass.set("com.moneat.e2e.DataSeederKt")
+    
+    standardOutput = System.out
+    errorOutput = System.err
+}

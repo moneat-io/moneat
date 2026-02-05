@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="app_name">Moneat Android E2E</string>
+    <string name="welcome_title">Moneat E2E Testing</string>
+    <string name="welcome_message">Test various error scenarios</string>
+    
+    <string name="error_crash">Trigger Crash</string>
+    <string name="error_exception">Throw Exception</string>
+    <string name="error_network">Network Error</string>
+    <string name="error_anr">Simulate ANR</string>
+    <string name="error_background">Background Crash</string>
+    <string name="error_null">Null Pointer</string>
+    
+    <string name="test_results">Test Results</string>
+    <string name="clear_log">Clear Log</string>
+</resources>
