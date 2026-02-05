@@ -77,7 +77,7 @@ curl -X POST http://localhost:8080/api/1/store/ \
 
 - **Backend API**: http://localhost:8080
 - **Dashboard**: http://localhost:3000
-- **PostgreSQL**: localhost:5432 (user: moneat, password: moneat_dev_password)
+- **PostgreSQL**: localhost:5499 (user: moneat, password: moneat_dev_password)
 - **ClickHouse**: localhost:8123 (HTTP), localhost:9000 (Native)
 - **Redis**: localhost:6379
 

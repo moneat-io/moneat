@@ -220,7 +220,7 @@
 - ✅ ClickHouse client (optional)
 
 ### Services Running
-- ✅ PostgreSQL on port 5432
+- ✅ PostgreSQL on port 5499
 - ✅ ClickHouse on ports 8123, 9000
 - ✅ Redis on port 6379
 - ✅ Backend API on port 8080

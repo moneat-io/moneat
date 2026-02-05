@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from '@tantml:react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '@/lib/api'
 

@@ -26,6 +26,30 @@ interface Issue {
   status: string
 }
 
+interface IssueDetail extends Issue {
+  fingerprint: string[]
+  latestEvent?: Event
+}
+
+interface Event {
+  eventId: string
+  timestamp: string
+  message: string
+  platform: string
+  level: string
+  environment?: string
+  release?: string
+  user?: {
+    id: string
+    email?: string
+    username?: string
+  }
+  tags: Record<string, string>
+  contexts: string
+  exception?: string
+  breadcrumbs?: string
+}
+
 class ApiClient {
   private getToken(): string | null {
     return localStorage.getItem('auth_token')
@@ -33,9 +57,9 @@ class ApiClient {
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken()
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     }
     if (token) headers['Authorization'] = `Bearer ${token}`
 
@@ -74,12 +98,50 @@ class ApiClient {
     return this.request<Project[]>(`${API_BASE}/projects`)
   }
 
+  async createProject(name: string, platform?: string): Promise<Project> {
+    return this.request<Project>(`${API_BASE}/projects`, {
+      method: 'POST',
+      body: JSON.stringify({ name, platform }),
+    })
+  }
+
+  async updateProject(
+    projectId: number,
+    updates: { name?: string; platform?: string }
+  ): Promise<void> {
+    await this.request(`${API_BASE}/projects/${projectId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  }
+
+  async deleteProject(projectId: number): Promise<void> {
+    await this.request(`${API_BASE}/projects/${projectId}`, {
+      method: 'DELETE',
+    })
+  }
+
   async getIssues(projectId: number, page = 1, limit = 25): Promise<Issue[]> {
     return this.request<Issue[]>(
       `${API_BASE}/projects/${projectId}/issues?page=${page}&limit=${limit}`
     )
   }
+
+  async getIssue(issueId: string): Promise<IssueDetail> {
+    return this.request<IssueDetail>(`${API_BASE}/issues/${issueId}`)
+  }
+
+  async getIssueEvents(issueId: string, limit = 50): Promise<Event[]> {
+    return this.request<Event[]>(`${API_BASE}/issues/${issueId}/events?limit=${limit}`)
+  }
+
+  async updateIssue(issueId: string, updates: { status?: string }): Promise<void> {
+    await this.request(`${API_BASE}/issues/${issueId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    })
+  }
 }
 
 export const api = new ApiClient()
-export type { AuthResponse, Project, Issue }
+export type { AuthResponse, Project, Issue, IssueDetail, Event }

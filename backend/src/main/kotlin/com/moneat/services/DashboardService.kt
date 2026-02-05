@@ -23,6 +23,50 @@ class DashboardService {
     private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
     
+    fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
+        return transaction {
+            val orgIds = Memberships.select { Memberships.user_id eq userId }
+                .map { it[Memberships.organization_id] }
+            
+            Projects.select { 
+                (Projects.id eq projectId) and (Projects.organization_id inList orgIds)
+            }.count() > 0
+        }
+    }
+    
+    suspend fun hasIssueAccess(userId: Int, issueId: String): Boolean {
+        val projectId = getProjectIdForIssue(issueId) ?: return false
+        return hasProjectAccess(userId, projectId)
+    }
+    
+    private suspend fun getProjectIdForIssue(issueId: String): Long? {
+        val escapedIssueId = issueId.replace("'", "''")
+        val query = """
+            SELECT project_id 
+            FROM $clickhouseDb.issues 
+            WHERE issue_id = '$escapedIssueId'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["project_id"]?.jsonPrimitive?.long
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get project ID for issue" }
+            null
+        }
+    }
+    
     fun getProjects(userId: Int): List<ProjectResponse> {
         return transaction {
             val orgIds = Memberships.select { Memberships.user_id eq userId }
@@ -66,9 +110,72 @@ class DashboardService {
         }
     }
     
+    fun createProject(userId: Int, request: com.moneat.models.CreateProjectRequest): ProjectResponse {
+        return transaction {
+            // Get user's first organization
+            val orgId = Memberships.select { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?.get(Memberships.organization_id)
+                ?: throw IllegalStateException("User has no organization")
+            
+            // Create slug from name
+            val slug = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+            
+            // Insert project
+            val projectId = Projects.insert {
+                it[organization_id] = orgId
+                it[name] = request.name
+                it[Projects.slug] = slug
+                it[platform] = request.platform
+            } get Projects.id
+            
+            // Generate project key
+            val publicKey = java.util.UUID.randomUUID().toString().replace("-", "")
+            val secretKey = java.util.UUID.randomUUID().toString().replace("-", "")
+            
+            ProjectKeys.insert {
+                it[project_id] = projectId
+                it[ProjectKeys.public_key] = publicKey
+                it[secret_key] = secretKey
+                it[is_active] = true
+            }
+            
+            ProjectResponse(
+                id = projectId,
+                name = request.name,
+                slug = slug,
+                platform = request.platform,
+                dsn = "http://$publicKey@localhost:8080/$projectId"
+            )
+        }
+    }
+    
+    fun updateProject(projectId: Long, request: com.moneat.models.UpdateProjectRequest) {
+        transaction {
+            Projects.update({ Projects.id eq projectId }) {
+                if (request.name != null) {
+                    it[name] = request.name
+                    it[slug] = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+                }
+                if (request.platform != null) {
+                    it[platform] = request.platform
+                }
+            }
+        }
+    }
+    
+    fun deleteProject(projectId: Long) {
+        transaction {
+            Projects.deleteWhere { Projects.id eq projectId }
+        }
+    }
+    
     suspend fun getIssues(projectId: Long, page: Int, limit: Int, status: String?): List<IssueResponse> {
         val offset = (page - 1) * limit
-        val statusFilter = if (status != null) "AND status = '$status'" else ""
+        val validStatuses = setOf("unresolved", "resolved", "ignored")
+        val statusFilter = if (status != null && status in validStatuses) {
+            "AND status = '${status.replace("'", "''")}'"
+        } else ""
         
         val query = """
             SELECT 
@@ -122,6 +229,7 @@ class DashboardService {
     }
     
     suspend fun getIssue(issueId: String): IssueDetailResponse? {
+        val escapedIssueId = issueId.replace("'", "''")
         val query = """
             SELECT 
                 issue_id,
@@ -136,7 +244,7 @@ class DashboardService {
                 status,
                 fingerprint
             FROM $clickhouseDb.issues
-            WHERE issue_id = '$issueId'
+            WHERE issue_id = '$escapedIssueId'
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
@@ -173,6 +281,7 @@ class DashboardService {
     }
     
     suspend fun getIssueEvents(issueId: String, limit: Int): List<EventResponse> {
+        val escapedIssueId = issueId.replace("'", "''")
         val query = """
             SELECT 
                 event_id,
@@ -190,7 +299,7 @@ class DashboardService {
                 exception_value,
                 breadcrumbs
             FROM $clickhouseDb.events
-            WHERE issue_id = '$issueId'
+            WHERE issue_id = '$escapedIssueId'
             ORDER BY timestamp DESC
             LIMIT $limit
             FORMAT JSONEachRow
@@ -247,6 +356,36 @@ class DashboardService {
             timeline = emptyList()
         )
     }
+    
+    suspend fun updateIssue(issueId: String, update: com.moneat.models.IssueUpdateRequest) {
+        if (update.status != null) {
+            val validStatuses = setOf("unresolved", "resolved", "ignored")
+            if (update.status !in validStatuses) {
+                throw IllegalArgumentException("Invalid status value")
+            }
+            
+            val escapedIssueId = issueId.replace("'", "''")
+            val escapedStatus = update.status.replace("'", "''")
+            
+            val query = """
+                ALTER TABLE $clickhouseDb.issues
+                UPDATE status = '$escapedStatus'
+                WHERE issue_id = '$escapedIssueId'
+            """.trimIndent()
+            
+            try {
+                httpClient.post("$clickhouseUrl") {
+                    parameter("database", clickhouseDb)
+                    parameter("user", clickhouseUser)
+                    parameter("password", clickhousePassword)
+                    setBody(query)
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to update issue" }
+                throw e
+            }
+        }
+    }
 }
 
 object Projects : Table("projects") {
@@ -255,5 +394,22 @@ object Projects : Table("projects") {
     val name = varchar("name", 255)
     val slug = varchar("slug", 255)
     val platform = varchar("platform", 50).nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+object Memberships : Table("memberships") {
+    val id = integer("id").autoIncrement()
+    val user_id = integer("user_id")
+    val organization_id = integer("organization_id")
+    val role = varchar("role", 50)
+    override val primaryKey = PrimaryKey(id)
+}
+
+object ProjectKeys : Table("project_keys") {
+    val id = integer("id").autoIncrement()
+    val project_id = long("project_id")
+    val public_key = varchar("public_key", 255)
+    val secret_key = varchar("secret_key", 255)
+    val is_active = bool("is_active")
     override val primaryKey = PrimaryKey(id)
 }

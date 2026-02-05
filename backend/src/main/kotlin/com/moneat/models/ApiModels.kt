@@ -96,3 +96,20 @@ data class TimelinePoint(
     val timestamp: String,
     val count: Long
 )
+
+@Serializable
+data class IssueUpdateRequest(
+    val status: String? = null
+)
+
+@Serializable
+data class CreateProjectRequest(
+    val name: String,
+    val platform: String? = null
+)
+
+@Serializable
+data class UpdateProjectRequest(
+    val name: String? = null,
+    val platform: String? = null
+)

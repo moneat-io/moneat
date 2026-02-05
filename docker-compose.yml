@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: moneat
       POSTGRES_PASSWORD: moneat_dev_password
     ports:
-      - "5432:5432"
+      - "5499:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/src/main/resources/db/init.sql:/docker-entrypoint-initdb.d/init.sql

@@ -31,7 +31,7 @@ docker-compose up -d
 ```
 
 This starts:
-- PostgreSQL (port 5432)
+- PostgreSQL (port 5499)
 - ClickHouse (ports 8123, 9000)
 - Redis (port 6379)
 
@@ -173,7 +173,7 @@ Environment variables:
 
 ```bash
 # Database
-DATABASE_URL=jdbc:postgresql://localhost:5432/moneat
+DATABASE_URL=jdbc:postgresql://localhost:5499/moneat
 DATABASE_USER=moneat
 DATABASE_PASSWORD=moneat_dev_password
 
