@@ -169,6 +169,13 @@ class EventService {
                 logger.error { "Failed to insert event: $errorBody" }
             } else {
                 logger.info { "Event stored: $eventId for project $projectId" }
+                event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
+                    try {
+                        ReleaseService().upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
+                    } catch (e: Exception) {
+                        logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                    }
+                }
             }
         } catch (e: Exception) {
             logger.error(e) { "Error storing event in ClickHouse" }

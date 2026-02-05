@@ -67,8 +67,34 @@ class DashboardService {
         }
     }
     
-    fun getProjects(userId: Int): List<ProjectResponse> {
-        return transaction {
+    private suspend fun getIssueCount(projectId: Long): Long {
+        val query = """
+            SELECT count(DISTINCT issue_id) as count
+            FROM $clickhouseDb.issues
+            WHERE project_id = $projectId
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            
+            val body = response.bodyAsText()
+            if (body.isBlank()) return 0
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["count"]?.jsonPrimitive?.long ?: 0
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get issue count for project $projectId" }
+            0
+        }
+    }
+    
+    suspend fun getProjects(userId: Int): List<ProjectResponse> {
+        val projectsData = transaction {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
             
@@ -79,19 +105,29 @@ class DashboardService {
                         .firstOrNull()
                         ?.get(ProjectKeys.public_key) ?: ""
                     
-                    ProjectResponse(
-                        id = projectId,
-                        name = row[Projects.name],
-                        slug = row[Projects.slug],
-                        platform = row[Projects.platform],
-                        dsn = "http://$publicKey@localhost:8080/$projectId"
+                    Triple(
+                        projectId,
+                        ProjectResponse(
+                            id = projectId,
+                            name = row[Projects.name],
+                            slug = row[Projects.slug],
+                            platform = row[Projects.platform],
+                            dsn = "http://$publicKey@localhost:8080/$projectId",
+                            issueCount = 0
+                        ),
+                        publicKey
                     )
                 }
         }
+        
+        // Get issue counts for all projects
+        return projectsData.map { (projectId, projectResponse, _) ->
+            projectResponse.copy(issueCount = getIssueCount(projectId))
+        }
     }
     
-    fun getProject(projectId: Long): ProjectResponse? {
-        return transaction {
+    suspend fun getProject(projectId: Long): ProjectResponse? {
+        val projectData = transaction {
             Projects.select { Projects.id eq projectId }
                 .map { row ->
                     val publicKey = ProjectKeys.select { ProjectKeys.project_id eq projectId }
@@ -103,11 +139,14 @@ class DashboardService {
                         name = row[Projects.name],
                         slug = row[Projects.slug],
                         platform = row[Projects.platform],
-                        dsn = "http://$publicKey@localhost:8080/$projectId"
+                        dsn = "http://$publicKey@localhost:8080/$projectId",
+                        issueCount = 0
                     )
                 }
                 .firstOrNull()
         }
+        
+        return projectData?.copy(issueCount = getIssueCount(projectId))
     }
     
     fun createProject(userId: Int, request: com.moneat.models.CreateProjectRequest): ProjectResponse {
@@ -145,7 +184,8 @@ class DashboardService {
                 name = request.name,
                 slug = slug,
                 platform = request.platform,
-                dsn = "http://$publicKey@localhost:8080/$projectId"
+                dsn = "http://$publicKey@localhost:8080/$projectId",
+                issueCount = 0 // New projects always have 0 issues
             )
         }
     }
@@ -539,6 +579,8 @@ class DashboardService {
             val topIssues = executeTopIssuesQuery(topIssuesQuery)
             val usersTimeline = executeTimelineQuery(usersTimelineQuery)
             
+            val releaseMarkers = executeReleaseMarkersQuery(projectId, hoursBack)
+
             ProjectStatsResponse(
                 totalEvents = totalEvents,
                 totalIssues = totalIssues,
@@ -551,7 +593,8 @@ class DashboardService {
                 eventsByEnvironment = eventsByEnvironment,
                 issuesByStatus = issuesByStatus,
                 topIssues = topIssues,
-                usersTimeline = usersTimeline
+                usersTimeline = usersTimeline,
+                releaseMarkers = releaseMarkers
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch project stats" }
@@ -567,8 +610,239 @@ class DashboardService {
                 eventsByEnvironment = emptyMap(),
                 issuesByStatus = emptyMap(),
                 topIssues = emptyList(),
-                usersTimeline = emptyList()
+                usersTimeline = emptyList(),
+                releaseMarkers = emptyList()
             )
+        }
+    }
+
+    suspend fun getReleases(projectId: Long): List<ReleaseListResponse> {
+        val escapedProjectId = projectId
+        val releasesQuery = """
+            SELECT
+                release as version,
+                formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
+                formatDateTime(max(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as last_seen,
+                count() as event_count,
+                uniq(user_id) as user_count
+            FROM $clickhouseDb.events
+            WHERE project_id = $escapedProjectId AND release != ''
+            GROUP BY release
+            ORDER BY first_seen DESC
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val releases = executeReleasesListQuery(releasesQuery)
+            val result = mutableListOf<ReleaseListResponse>()
+            for (r in releases) {
+                val newIssueCount = getNewIssueCountForRelease(projectId, r.version)
+                val crashFreeRate = getCrashFreeRateForRelease(projectId, r.version)
+                result.add(ReleaseListResponse(
+                    version = r.version,
+                    firstSeen = r.firstSeen,
+                    lastSeen = r.lastSeen,
+                    eventCount = r.eventCount,
+                    newIssueCount = newIssueCount,
+                    crashFreeRate = crashFreeRate,
+                    userCount = r.userCount
+                ))
+            }
+            result
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch releases for project $projectId" }
+            emptyList()
+        }
+    }
+
+    suspend fun getReleaseStats(projectId: Long, version: String): ReleaseDetailStats? {
+        val escapedVersion = version.replace("'", "''")
+        val releasesQuery = """
+            SELECT
+                formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
+                formatDateTime(max(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as last_seen,
+                count() as total_events,
+                uniq(user_id) as user_count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId AND release = '$escapedVersion'
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(releasesQuery)
+            }
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            val firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: return null
+            val lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: return null
+            val totalEvents = obj["total_events"]?.jsonPrimitive?.long ?: 0
+            val userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0
+
+            val newIssues = getNewIssueCountForRelease(projectId, version)
+            val resolvedIssues = 0L
+            val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version)
+            val crashFreeUserRate = crashFreeSessionRate
+
+            val intervalMinutes = 360
+            val eventsTimelineQuery = """
+                SELECT
+                    formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%c-%dT%H:%i:%S.000Z') as time,
+                    count() as count
+                FROM $clickhouseDb.events
+                WHERE project_id = $projectId AND release = '$escapedVersion'
+                GROUP BY time
+                ORDER BY time
+                FORMAT JSONEachRow
+            """.trimIndent()
+
+            val eventsByLevelQuery = """
+                SELECT level, count() as count
+                FROM $clickhouseDb.events
+                WHERE project_id = $projectId AND release = '$escapedVersion'
+                GROUP BY level
+                FORMAT JSONEachRow
+            """.trimIndent()
+
+            val topIssuesQuery = """
+                SELECT issue_id, any(message) as title, count() as count
+                FROM $clickhouseDb.events
+                WHERE project_id = $projectId AND release = '$escapedVersion' AND event_type = 'error'
+                GROUP BY issue_id
+                ORDER BY count DESC
+                LIMIT 10
+                FORMAT JSONEachRow
+            """.trimIndent()
+
+            ReleaseDetailStats(
+                version = version,
+                firstSeen = firstSeen,
+                lastSeen = lastSeen,
+                totalEvents = totalEvents,
+                newIssues = newIssues,
+                resolvedIssues = resolvedIssues,
+                crashFreeSessionRate = crashFreeSessionRate,
+                crashFreeUserRate = crashFreeUserRate,
+                userCount = userCount,
+                eventsTimeline = executeTimelineQuery(eventsTimelineQuery),
+                eventsByLevel = executeMapQuery(eventsByLevelQuery, "level"),
+                topIssues = executeTopIssuesQuery(topIssuesQuery)
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch release stats for $version" }
+            null
+        }
+    }
+
+    private suspend fun executeReleaseMarkersQuery(projectId: Long, hoursBack: Int): List<ReleaseMarker> {
+        val query = """
+            SELECT version, formatDateTime(first_seen, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp
+            FROM (
+                SELECT release as version, min(timestamp) as first_seen
+                FROM $clickhouseDb.events
+                WHERE project_id = $projectId AND release != ''
+                GROUP BY release
+            )
+            WHERE first_seen >= now() - INTERVAL $hoursBack HOUR
+            ORDER BY first_seen
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    ReleaseMarker(
+                        version = obj["version"]?.jsonPrimitive?.content ?: "",
+                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: ""
+                    )
+                }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to fetch release markers" }
+            emptyList()
+        }
+    }
+
+    private data class ReleaseListRow(
+        val version: String,
+        val firstSeen: String,
+        val lastSeen: String,
+        val eventCount: Long,
+        val userCount: Long
+    )
+
+    private suspend fun executeReleasesListQuery(query: String): List<ReleaseListRow> {
+        val response = httpClient.post("$clickhouseUrl") {
+            parameter("database", clickhouseDb)
+            parameter("user", clickhouseUser)
+            parameter("password", clickhousePassword)
+            setBody(query)
+        }
+        val body = response.bodyAsText()
+        return body.lines()
+            .filter { it.isNotBlank() }
+            .map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                ReleaseListRow(
+                    version = obj["version"]?.jsonPrimitive?.content ?: "",
+                    firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
+                    lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
+                    eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
+                    userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0
+                )
+            }
+    }
+
+    private suspend fun getNewIssueCountForRelease(projectId: Long, version: String): Long {
+        val escapedVersion = version.replace("'", "''")
+        val query = """
+            SELECT count() as total FROM (
+                SELECT issue_id, argMin(release, timestamp) as first_release
+                FROM $clickhouseDb.events
+                WHERE project_id = $projectId AND event_type = 'error' AND issue_id != ''
+                GROUP BY issue_id
+                HAVING first_release = '$escapedVersion'
+            )
+            FORMAT JSONEachRow
+        """.trimIndent()
+        return executeScalarQuery(query)
+    }
+
+    private suspend fun getCrashFreeRateForRelease(projectId: Long, version: String): Double? {
+        val escapedVersion = version.replace("'", "''")
+        val query = """
+            SELECT countIf(errors = 0) * 100.0 / count() as rate
+            FROM $clickhouseDb.sessions
+            WHERE project_id = $projectId AND release = '$escapedVersion'
+            FORMAT JSONEachRow
+        """.trimIndent()
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
+            if (rate.isNaN() || rate.isInfinite()) null else rate
+        } catch (e: Exception) {
+            null
         }
     }
     

@@ -2,6 +2,7 @@ import { createFileRoute, redirect, Link } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
+import { useToast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,6 +53,7 @@ export const Route = createFileRoute('/issues/$issueId')({
 function IssueDetailPage() {
   const { issueId } = Route.useParams()
   const queryClient = useQueryClient()
+  const { toast } = useToast()
 
   const { data: issue, isLoading } = useQuery({
     queryKey: ['issue', issueId],
@@ -65,8 +67,15 @@ function IssueDetailPage() {
 
   const resolveMutation = useMutation({
     mutationFn: (status: string) => api.updateIssue(issueId, { status }),
-    onSuccess: () => {
+    onSuccess: (_, status) => {
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
+      toast({
+        variant: 'success',
+        title: status === 'resolved' ? 'Issue resolved' : 'Issue unresolved',
+        description: status === 'resolved' 
+          ? 'The issue has been marked as resolved.' 
+          : 'The issue has been marked as unresolved.',
+      })
     },
   })
 

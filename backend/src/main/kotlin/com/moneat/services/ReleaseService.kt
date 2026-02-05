@@ -2,7 +2,7 @@ package com.moneat.services
 
 import com.moneat.models.*
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.plus
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 import java.time.Instant
@@ -100,6 +100,44 @@ class ReleaseService {
                 name = fileName,
                 dateCreated = formatTimestamp(createdAt)
             )
+        }
+    }
+    
+    /**
+     * Auto-detect and upsert release from an incoming event.
+     * Creates the release if it doesn't exist, or updates last_seen and event_count.
+     */
+    fun upsertReleaseFromEvent(projectId: Long, version: String, eventTimestampMs: Long) {
+        if (version.isBlank()) return
+        
+        transaction {
+            val existing = Releases.selectAll()
+                .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
+                .firstOrNull()
+            
+            if (existing != null) {
+                val currentFirstSeen = existing[Releases.first_seen]
+                Releases.update(
+                    where = { (Releases.project_id eq projectId) and (Releases.version eq version) }
+                ) {
+                    it[last_seen] = eventTimestampMs
+                    it[event_count] = Releases.event_count + 1
+                    if (currentFirstSeen == null) {
+                        it[first_seen] = eventTimestampMs
+                    }
+                }
+            } else {
+                Releases.insert {
+                    it[Releases.project_id] = projectId
+                    it[Releases.version] = version
+                    it[Releases.ref] = null
+                    it[Releases.created_at] = eventTimestampMs
+                    it[Releases.first_seen] = eventTimestampMs
+                    it[Releases.last_seen] = eventTimestampMs
+                    it[Releases.event_count] = 1
+                    it[Releases.is_auto_detected] = true
+                }
+            }
         }
     }
     

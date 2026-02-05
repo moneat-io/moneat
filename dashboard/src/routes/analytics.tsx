@@ -106,8 +106,18 @@ function AnalyticsPage() {
 
             {/* Primary Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <EventsChart data={stats.eventsTimeline} title="Events Over Time" height={300} />
-              <EventsChart data={stats.usersTimeline} title="Affected Users Over Time" height={300} />
+              <EventsChart
+                data={stats.eventsTimeline}
+                title="Events Over Time"
+                height={300}
+                releaseMarkers={stats.releaseMarkers ?? []}
+              />
+              <EventsChart
+                data={stats.usersTimeline}
+                title="Affected Users Over Time"
+                height={300}
+                releaseMarkers={stats.releaseMarkers ?? []}
+              />
             </div>
 
             {/* Status and Level Charts */}

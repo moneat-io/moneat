@@ -80,7 +80,11 @@ CREATE TABLE IF NOT EXISTS releases (
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     version VARCHAR(255) NOT NULL,
     ref VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at BIGINT,
+    first_seen BIGINT,
+    last_seen BIGINT,
+    event_count BIGINT DEFAULT 0,
+    is_auto_detected BOOLEAN DEFAULT false,
     UNIQUE(project_id, version)
 );
 

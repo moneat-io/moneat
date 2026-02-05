@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useRouterState } from '@tanstack/react-router'
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useProject } from '@/contexts/project-context'
@@ -14,6 +14,8 @@ import {
   ChevronRight,
   User,
   BarChart3,
+  BookOpen,
+  Package,
 } from 'lucide-react'
 import { getProjectColor, getProjectInitial } from '@/lib/project-colors'
 import { cn } from '@/lib/utils'
@@ -22,7 +24,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import {
   Select,
@@ -38,7 +39,16 @@ export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false)
   const router = useRouterState()
   const currentPath = router.location.pathname
+  const navigate = useNavigate()
   const { selectedProjectId, setSelectedProjectId } = useProject()
+
+  const handleProjectChange = (projectId: number) => {
+    setSelectedProjectId(projectId)
+    // If we're on a project setup page, navigate to the new project's setup page
+    if (/^\/projects\/\d+$/.test(currentPath)) {
+      navigate({ to: '/projects/$projectId', params: { projectId: String(projectId) } })
+    }
+  }
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -53,11 +63,16 @@ export function Sidebar() {
   })
 
   const navItems = [
-    { icon: Home, label: 'Dashboard', href: '/' },
-    { icon: BarChart3, label: 'Analytics', href: '/analytics' },
-    { icon: FolderKanban, label: 'Projects', href: '/projects' },
-    { icon: Settings, label: 'Settings', href: '/settings' },
+    { icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
+    { icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false },
+    { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
+    { icon: FolderKanban, label: 'Projects', href: '/projects', requiresProject: false },
+    { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]
+  
+  const projectNavItems = selectedProjectId ? [
+    { icon: BookOpen, label: 'Setup Guide', href: `/projects/${selectedProjectId}` }
+  ] : []
 
   const getInitials = (name?: string) => {
     if (!name) return 'U'
@@ -118,7 +133,7 @@ export function Sidebar() {
           {isExpanded ? (
             <Select
               value={selectedProjectId?.toString() || projects[0]?.id.toString() || ''}
-              onValueChange={(val) => setSelectedProjectId(Number(val))}
+              onValueChange={(val) => handleProjectChange(Number(val))}
             >
               <SelectTrigger className="w-full">
                 <div className="flex items-center gap-2">
@@ -188,7 +203,7 @@ export function Sidebar() {
                 {projects.map((project) => (
                   <DropdownMenuItem
                     key={project.id}
-                    onClick={() => setSelectedProjectId(project.id)}
+                    onClick={() => handleProjectChange(project.id)}
                     className={cn(
                       'cursor-pointer',
                       project.id === selectedProjectId && 'bg-accent'
@@ -250,6 +265,48 @@ export function Sidebar() {
           })}
         </div>
       </nav>
+
+      {/* Setup Guide - at bottom, above divider */}
+      {projectNavItems.length > 0 && (
+        <div className="p-2">
+          {projectNavItems.map((item) => {
+            const isActive = currentPath === item.href
+            const Icon = item.icon
+
+            const linkContent = (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-accent text-muted-foreground hover:text-foreground',
+                  !isExpanded && 'justify-center'
+                )}
+              >
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                {isExpanded && <span className="text-sm font-medium">{item.label}</span>}
+              </Link>
+            )
+
+            if (!isExpanded) {
+              return (
+                <Tooltip key={item.href}>
+                  <TooltipTrigger asChild>
+                    {linkContent}
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{item.label}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
+
+            return linkContent
+          })}
+        </div>
+      )}
 
       {/* Bottom Section */}
       <div className="p-2 border-t space-y-1">

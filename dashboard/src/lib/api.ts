@@ -17,6 +17,7 @@ interface Project {
   slug: string
   platform?: string
   dsn: string
+  issueCount?: number
 }
 
 interface Issue {
@@ -80,6 +81,32 @@ interface ProjectStats {
   issuesByStatus: Record<string, number>
   topIssues: TopIssue[]
   usersTimeline: TimelinePoint[]
+  releaseMarkers?: { version: string; timestamp: string }[]
+}
+
+interface Release {
+  version: string
+  firstSeen: string
+  lastSeen: string
+  eventCount: number
+  newIssueCount: number
+  crashFreeRate: number | null
+  userCount: number
+}
+
+interface ReleaseStats {
+  version: string
+  firstSeen: string
+  lastSeen: string
+  totalEvents: number
+  newIssues: number
+  resolvedIssues: number
+  crashFreeSessionRate: number | null
+  crashFreeUserRate: number | null
+  userCount: number
+  eventsTimeline: TimelinePoint[]
+  eventsByLevel: Record<string, number>
+  topIssues: TopIssue[]
 }
 
 class ApiClient {
@@ -128,6 +155,10 @@ class ApiClient {
 
   async getProjects(): Promise<Project[]> {
     return this.request<Project[]>(`${API_BASE}/projects`)
+  }
+
+  async getProject(projectId: number): Promise<Project> {
+    return this.request<Project>(`${API_BASE}/projects/${projectId}`)
   }
 
   async createProject(name: string, platform?: string): Promise<Project> {
@@ -216,7 +247,28 @@ class ApiClient {
   async getProjectStats(projectId: number, period: '24h' | '7d' | '30d' = '7d'): Promise<ProjectStats> {
     return this.request<ProjectStats>(`${API_BASE}/projects/${projectId}/stats?period=${period}`)
   }
+
+  async getReleases(projectId: number): Promise<Release[]> {
+    return this.request<Release[]>(`${API_BASE}/projects/${projectId}/releases`)
+  }
+
+  async getReleaseStats(projectId: number, version: string): Promise<ReleaseStats> {
+    return this.request<ReleaseStats>(
+      `${API_BASE}/projects/${projectId}/releases/${encodeURIComponent(version)}/stats`
+    )
+  }
 }
 
 export const api = new ApiClient()
-export type { AuthResponse, Project, Issue, IssueDetail, Event, ProjectStats, TimelinePoint, TopIssue }
+export type {
+  AuthResponse,
+  Project,
+  Issue,
+  IssueDetail,
+  Event,
+  ProjectStats,
+  TimelinePoint,
+  TopIssue,
+  Release,
+  ReleaseStats,
+}

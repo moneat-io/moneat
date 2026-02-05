@@ -231,6 +231,50 @@ fun Route.apiRoutes() {
                 val stats = dashboardService.getProjectStats(projectId, period)
                 call.respond(stats)
             }
+            
+            // Releases
+            get("/projects/{projectId}/releases") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+                
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+                
+                val releases = dashboardService.getReleases(projectId)
+                call.respond(releases)
+            }
+            
+            get("/projects/{projectId}/releases/{version}/stats") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                val version = call.parameters["version"]
+                if (projectId == null || version == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+                
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+                
+                val stats = dashboardService.getReleaseStats(projectId, version)
+                if (stats == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(stats)
+                }
+            }
         }
     }
 }

@@ -36,7 +36,8 @@ data class ProjectResponse(
     val name: String,
     val slug: String,
     val platform: String?,
-    val dsn: String
+    val dsn: String,
+    val issueCount: Long = 0
 )
 
 @Serializable
@@ -98,7 +99,8 @@ data class ProjectStatsResponse(
     val eventsByEnvironment: Map<String, Long>,
     val issuesByStatus: Map<String, Long>,
     val topIssues: List<TopIssue>,
-    val usersTimeline: List<TimelinePoint>
+    val usersTimeline: List<TimelinePoint>,
+    val releaseMarkers: List<ReleaseMarker> = emptyList()
 )
 
 @Serializable
@@ -208,4 +210,37 @@ data class SourceMapFileResponse(
     val id: Int,
     val name: String,
     val dateCreated: String
+)
+
+@Serializable
+data class ReleaseListResponse(
+    val version: String,
+    val firstSeen: String,
+    val lastSeen: String,
+    val eventCount: Long,
+    val newIssueCount: Long,
+    val crashFreeRate: Double? = null,
+    val userCount: Long
+)
+
+@Serializable
+data class ReleaseDetailStats(
+    val version: String,
+    val firstSeen: String,
+    val lastSeen: String,
+    val totalEvents: Long,
+    val newIssues: Long,
+    val resolvedIssues: Long,
+    val crashFreeSessionRate: Double? = null,
+    val crashFreeUserRate: Double? = null,
+    val userCount: Long,
+    val eventsTimeline: List<TimelinePoint>,
+    val eventsByLevel: Map<String, Long>,
+    val topIssues: List<TopIssue>
+)
+
+@Serializable
+data class ReleaseMarker(
+    val version: String,
+    val timestamp: String
 )

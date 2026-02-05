@@ -13,12 +13,15 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ReleasesRouteImport } from './routes/releases'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
+import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -39,6 +42,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReleasesRoute = ReleasesRouteImport.update({
+  id: '/releases',
+  path: '/releases',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsRoute = ProjectsRouteImport.update({
@@ -71,6 +79,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReleasesVersionRoute = ReleasesVersionRouteImport.update({
+  id: '/$version',
+  path: '/$version',
+  getParentRoute: () => ReleasesRoute,
+} as any)
+const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => ProjectsRoute,
+} as any)
 const IssuesIssueIdRoute = IssuesIssueIdRouteImport.update({
   id: '/issues/$issueId',
   path: '/issues/$issueId',
@@ -83,12 +101,15 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
+  '/releases': typeof ReleasesRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/releases/$version': typeof ReleasesVersionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -96,12 +117,15 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
+  '/releases': typeof ReleasesRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/releases/$version': typeof ReleasesVersionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -110,12 +134,15 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
+  '/releases': typeof ReleasesRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/releases/$version': typeof ReleasesVersionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -126,11 +153,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/projects'
+    | '/releases'
     | '/reset-password'
     | '/settings'
     | '/signup'
     | '/verify-email'
     | '/issues/$issueId'
+    | '/projects/$projectId'
+    | '/releases/$version'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -139,11 +169,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/projects'
+    | '/releases'
     | '/reset-password'
     | '/settings'
     | '/signup'
     | '/verify-email'
     | '/issues/$issueId'
+    | '/projects/$projectId'
+    | '/releases/$version'
   id:
     | '__root__'
     | '/'
@@ -152,11 +185,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/projects'
+    | '/releases'
     | '/reset-password'
     | '/settings'
     | '/signup'
     | '/verify-email'
     | '/issues/$issueId'
+    | '/projects/$projectId'
+    | '/releases/$version'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -165,7 +201,8 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
-  ProjectsRoute: typeof ProjectsRoute
+  ProjectsRoute: typeof ProjectsRouteWithChildren
+  ReleasesRoute: typeof ReleasesRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
@@ -201,6 +238,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/releases': {
+      id: '/releases'
+      path: '/releases'
+      fullPath: '/releases'
+      preLoaderRoute: typeof ReleasesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects': {
@@ -245,6 +289,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/releases/$version': {
+      id: '/releases/$version'
+      path: '/$version'
+      fullPath: '/releases/$version'
+      preLoaderRoute: typeof ReleasesVersionRouteImport
+      parentRoute: typeof ReleasesRoute
+    }
+    '/projects/$projectId': {
+      id: '/projects/$projectId'
+      path: '/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof ProjectsProjectIdRouteImport
+      parentRoute: typeof ProjectsRoute
+    }
     '/issues/$issueId': {
       id: '/issues/$issueId'
       path: '/issues/$issueId'
@@ -255,13 +313,38 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ProjectsRouteChildren {
+  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
+}
+
+const ProjectsRouteChildren: ProjectsRouteChildren = {
+  ProjectsProjectIdRoute: ProjectsProjectIdRoute,
+}
+
+const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
+  ProjectsRouteChildren,
+)
+
+interface ReleasesRouteChildren {
+  ReleasesVersionRoute: typeof ReleasesVersionRoute
+}
+
+const ReleasesRouteChildren: ReleasesRouteChildren = {
+  ReleasesVersionRoute: ReleasesVersionRoute,
+}
+
+const ReleasesRouteWithChildren = ReleasesRoute._addFileChildren(
+  ReleasesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyticsRoute: AnalyticsRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
-  ProjectsRoute: ProjectsRoute,
+  ProjectsRoute: ProjectsRouteWithChildren,
+  ReleasesRoute: ReleasesRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,

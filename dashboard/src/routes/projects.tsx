@@ -1,17 +1,17 @@
-import { createFileRoute, redirect, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useNavigate, Outlet, useMatches } from '@tanstack/react-router'
 import { api } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Smartphone, Globe, Code2, Terminal, Settings } from 'lucide-react'
+import { Plus, Smartphone, Globe, Code2, Terminal, Settings, BookOpen } from 'lucide-react'
 import { useState } from 'react'
-import { formatRelativeTime } from '@/lib/utils'
 import { getProjectColor, getProjectInitial } from '@/lib/project-colors'
+import { useProject } from '@/contexts/project-context'
 
 // Helper function to get platform info (with fallbacks for different naming conventions)
-function getPlatformInfo(platformId?: string) {
+export function getPlatformInfo(platformId?: string) {
   if (!platformId) return null
   
   // Direct match
@@ -43,7 +43,7 @@ function getPlatformInfo(platformId?: string) {
 }
 
 // Platform type definitions
-type PlatformType = {
+export type PlatformType = {
   id: string
   name: string
   description: string
@@ -53,7 +53,7 @@ type PlatformType = {
 }
 
 // Platform configurations with custom SVG icons
-const platforms: PlatformType[] = [
+export const platforms: PlatformType[] = [
   {
     id: 'android',
     name: 'Android',
@@ -184,11 +184,25 @@ export const Route = createFileRoute('/projects')({
       throw redirect({ to: '/login' })
     }
   },
-  component: ProjectsPage,
+  component: ProjectsLayout,
 })
+
+function ProjectsLayout() {
+  const matches = useMatches()
+  // Check if we're showing a child route (project detail)
+  const showingChild = matches.some(match => match.id.includes('projectId'))
+  
+  if (showingChild) {
+    return <Outlet />
+  }
+  
+  // Render projects list page
+  return <ProjectsPage />
+}
 
 function ProjectsPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
@@ -198,14 +212,14 @@ function ProjectsPage() {
     queryFn: () => api.getProjects(),
   })
 
+  const { setSelectedProjectId } = useProject()
+
   const createProjectMutation = useMutation({
     mutationFn: (data: { name: string; platform: string }) => 
-      api.createProject(data.name),
-    onSuccess: () => {
+      api.createProject(data.name, data.platform),
+    onSuccess: (project) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setShowCreateProject(false)
-      setNewProjectName('')
-      setSelectedPlatform(null)
+      navigate({ to: `/projects/${project.id}` })
     },
   })
 
@@ -258,7 +272,7 @@ function ProjectsPage() {
                             }
                           `}
                         >
-                          <div className={`${platform.color} p-3 rounded-lg`}>
+                          <div className="p-3 rounded-lg" style={{ backgroundColor: platform.color }}>
                             <Icon className="h-6 w-6 text-white" />
                           </div>
                           <span className="text-xs font-medium text-center">{platform.name}</span>
@@ -313,7 +327,7 @@ function ProjectsPage() {
                         key={platform.id}
                         className="flex flex-col items-center gap-2 p-3 rounded-lg border bg-card hover:bg-accent transition-colors"
                       >
-                        <div className={`${platform.color} p-2.5 rounded-lg`}>
+                        <div className="p-2.5 rounded-lg" style={{ backgroundColor: platform.color }}>
                           <Icon className="h-5 w-5 text-white" />
                         </div>
                         <span className="text-xs font-medium text-center">{platform.name}</span>
@@ -331,59 +345,90 @@ function ProjectsPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {projects.map((project) => (
-              <Link
-                key={project.id}
-                to="/"
-                className="block"
-              >
-                <Card className="p-4 hover:bg-accent transition-colors cursor-pointer">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div 
-                        className="p-3 rounded-lg flex items-center justify-center w-12 h-12 flex-shrink-0"
-                        style={{ backgroundColor: getProjectColor(project.name) }}
-                      >
-                        <span className="text-white font-semibold text-lg">{getProjectInitial(project.name)}</span>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{project.name}</h3>
-                          {project.platform && (() => {
-                            const platformInfo = getPlatformInfo(project.platform)
-                            if (!platformInfo) return null
-                            const PlatformIcon = platformInfo.icon
-                            return (
-                              <Badge 
-                                className="flex items-center gap-1.5 px-2 py-0.5 text-white border-0"
-                                style={{ backgroundColor: platformInfo.color }}
-                              >
-                                <div className="w-3.5 h-3.5 flex items-center justify-center">
-                                  <PlatformIcon className="w-full h-full" />
-                                </div>
-                                <span className="text-xs font-medium">{platformInfo.name}</span>
-                              </Badge>
-                            )
-                          })()}
+            {projects.map((project) => {
+              const handleProjectClick = () => {
+                if ((project.issueCount ?? 0) > 0) {
+                  setSelectedProjectId(project.id)
+                  navigate({ to: '/' })
+                } else {
+                  navigate({ to: `/projects/${project.id}` })
+                }
+              }
+              
+              return (
+                <div
+                  key={project.id}
+                  onClick={handleProjectClick}
+                  className="block cursor-pointer"
+                >
+                  <Card className="p-4 hover:bg-accent transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div 
+                          className="p-3 rounded-lg flex items-center justify-center w-12 h-12 flex-shrink-0"
+                          style={{ backgroundColor: getProjectColor(project.name) }}
+                        >
+                          <span className="text-white font-semibold text-lg">{getProjectInitial(project.name)}</span>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          Created {formatRelativeTime(project.createdAt)}
-                        </p>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">{project.name}</h3>
+                            {project.platform && (() => {
+                              const platformInfo = getPlatformInfo(project.platform)
+                              if (!platformInfo) return null
+                              const PlatformIcon = platformInfo.icon
+                              return (
+                                <Badge 
+                                  className="flex items-center gap-1.5 px-2 py-0.5 text-white border-0"
+                                  style={{ backgroundColor: platformInfo.color }}
+                                >
+                                  <div className="w-3.5 h-3.5 flex items-center justify-center">
+                                    <PlatformIcon className="w-full h-full" />
+                                  </div>
+                                  <span className="text-xs font-medium">{platformInfo.name}</span>
+                                </Badge>
+                              )
+                            })()}
+                            {(project.issueCount ?? 0) === 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                Setup Required
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {(project.issueCount ?? 0) === 0 
+                              ? 'No issues yet • Click to set up SDK' 
+                              : `${project.issueCount} ${project.issueCount === 1 ? 'issue' : 'issues'}`
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" asChild title="Setup guide">
+                          <Link
+                            to="/projects/$projectId"
+                            params={{ projectId: project.id.toString() }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <BookOpen className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            // TODO: Navigate to project settings
+                          }}
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-sm text-muted-foreground">DSN</div>
-                        <code className="text-xs bg-muted px-2 py-1 rounded">{project.dsn.slice(0, 20)}...</code>
-                      </div>
-                      <Button variant="ghost" size="icon">
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
-            ))}
+                  </Card>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

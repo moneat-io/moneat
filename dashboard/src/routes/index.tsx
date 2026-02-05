@@ -13,11 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Search, Activity, AlertCircle, Users, TrendingUp, Copy, Check, FolderKanban } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Plus, Search, Activity, AlertCircle, Users, TrendingUp, FolderKanban, CheckCircle2 } from 'lucide-react'
 import { useState } from 'react'
 import { StatsCard } from '@/components/charts/stats-card'
 import { EventsChart } from '@/components/charts/events-chart'
+import { useToast } from '@/hooks/use-toast'
 
 // Helper function to get level color
 function getLevelColor(level: string): string {
@@ -84,9 +86,10 @@ export const Route = createFileRoute('/')({
 function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
-  const [copied, setCopied] = useState(false)
-  const queryClient = useQueryClient()
+  const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set())
   const { selectedProjectId, setSelectedProjectId } = useProject()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -112,7 +115,49 @@ function DashboardPage() {
     enabled: !!projectId,
   })
 
+  const resolveMutation = useMutation({
+    mutationFn: async (issueIds: string[]) => {
+      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'resolved' })))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
+      toast({
+        title: 'Success',
+        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} resolved`,
+      })
+      setSelectedIssues(new Set())
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to resolve issues',
+        variant: 'destructive',
+      })
+    },
+  })
 
+  const handleToggleIssue = (issueId: string) => {
+    const newSelected = new Set(selectedIssues)
+    if (newSelected.has(issueId)) {
+      newSelected.delete(issueId)
+    } else {
+      newSelected.add(issueId)
+    }
+    setSelectedIssues(newSelected)
+  }
+
+  const handleToggleAll = () => {
+    if (selectedIssues.size === filteredIssues.length) {
+      setSelectedIssues(new Set())
+    } else {
+      setSelectedIssues(new Set(filteredIssues.map(issue => issue.id)))
+    }
+  }
+
+  const handleResolveSelected = () => {
+    resolveMutation.mutate(Array.from(selectedIssues))
+  }
 
   if (isLoading) return <div className="p-8">Loading...</div>
 
@@ -125,23 +170,16 @@ function DashboardPage() {
     return matchesSearch && matchesStatus
   })
 
-  const currentProject = projects?.find((p) => p.id === projectId)
-
-  const handleCopyDSN = async () => {
-    if (currentProject?.dsn) {
-      await navigator.clipboard.writeText(currentProject.dsn)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="p-6 max-w-7xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Dashboard</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold">Dashboard</h2>
+            <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
+          </div>
           <Link to="/projects">
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary/10 hover:border-primary/50">
               <Plus className="h-4 w-4 mr-2" />
               New Project
             </Button>
@@ -149,11 +187,11 @@ function DashboardPage() {
         </div>
 
         {!projects || projects.length === 0 ? (
-          <Card className="p-12 text-center">
+          <Card className="p-12 text-center border-primary/20 bg-gradient-to-b from-card to-primary/5">
             <div className="max-w-md mx-auto space-y-4">
               <div className="flex justify-center">
-                <div className="rounded-full bg-primary/10 p-4">
-                  <FolderKanban className="h-10 w-10 text-primary" />
+                <div className="rounded-full bg-violet-500/15 p-4 ring-2 ring-violet-500/20">
+                  <FolderKanban className="h-10 w-10 text-violet-600 dark:text-violet-400" />
                 </div>
               </div>
               <div>
@@ -172,33 +210,6 @@ function DashboardPage() {
           </Card>
         ) : (
           <>
-            {currentProject && (
-              <div className="mb-4 p-4 bg-muted rounded-lg border flex items-center justify-between">
-                <div className="text-sm">
-                  <span className="text-muted-foreground font-medium">DSN:</span>{' '}
-                  <code className="bg-background px-2 py-1 rounded text-xs ml-2">{currentProject.dsn}</code>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopyDSN}
-                  className="ml-4"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-
             {/* Stats Tiles */}
             {stats && (
               <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -206,21 +217,25 @@ function DashboardPage() {
                   title="Events (24h)"
                   value={stats.totalEvents.toLocaleString()}
                   icon={Activity}
+                  accent="blue"
                 />
                 <StatsCard
                   title="Unresolved Issues"
                   value={stats.unresolvedIssues.toLocaleString()}
                   icon={AlertCircle}
+                  accent="amber"
                 />
                 <StatsCard
                   title="Affected Users (24h)"
                   value={stats.affectedUsers.toLocaleString()}
                   icon={Users}
+                  accent="emerald"
                 />
                 <StatsCard
                   title="Total Issues"
                   value={stats.totalIssues.toLocaleString()}
                   icon={TrendingUp}
+                  accent="violet"
                 />
               </div>
             )}
@@ -236,7 +251,35 @@ function DashboardPage() {
               </div>
             )}
 
-            <div className="mb-4 flex gap-4">
+            <div className="mb-4 flex gap-4 items-center">
+              {filteredIssues.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedIssues.size === filteredIssues.length}
+                    onCheckedChange={handleToggleAll}
+                    aria-label="Select all issues"
+                  />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">Select all</span>
+                </div>
+              )}
+              
+              {selectedIssues.size > 0 && (
+                <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium whitespace-nowrap">
+                    {selectedIssues.size} selected
+                  </span>
+                  <Button
+                    onClick={handleResolveSelected}
+                    disabled={resolveMutation.isPending}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 h-7 ml-2"
+                  >
+                    {resolveMutation.isPending ? 'Resolving...' : 'Resolve'}
+                  </Button>
+                </div>
+              )}
+
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -259,14 +302,14 @@ function DashboardPage() {
             </div>
 
             {filteredIssues.length === 0 ? (
-              <Card className="p-12 text-center">
+              <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
                 <div className="max-w-md mx-auto space-y-4">
                   <div className="flex justify-center">
-                    <div className="rounded-full bg-muted p-4">
+                    <div className="rounded-full bg-blue-500/10 p-4">
                       {searchQuery || statusFilter !== 'unresolved' ? (
-                        <Search className="h-10 w-10 text-muted-foreground" />
+                        <Search className="h-10 w-10 text-blue-600 dark:text-blue-400" />
                       ) : (
-                        <AlertCircle className="h-10 w-10 text-muted-foreground" />
+                        <AlertCircle className="h-10 w-10 text-blue-600 dark:text-blue-400" />
                       )}
                     </div>
                   </div>
@@ -279,7 +322,7 @@ function DashboardPage() {
                     <p className="text-muted-foreground">
                       {searchQuery || statusFilter !== 'unresolved'
                         ? 'Try adjusting your search or filters.'
-                        : 'Start sending errors to this project to see them tracked here. Copy the DSN above and integrate it into your application.'}
+                        : 'Start sending errors to this project to see them tracked here. Visit the setup guide to integrate your application.'}
                     </p>
                   </div>
                 </div>
@@ -287,40 +330,52 @@ function DashboardPage() {
             ) : (
               <div className="space-y-2">
                 {filteredIssues.map((issue) => (
-                  <Link
+                  <div
                     key={issue.id}
-                    to="/issues/$issueId"
-                    params={{ issueId: issue.id }}
-                    className="block rounded-lg border bg-card p-4 hover:bg-accent transition"
+                    className="rounded-lg border border-border/80 bg-card hover:bg-accent hover:border-primary/20 transition"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className="flex-1">
-                        <div className="font-semibold">{issue.title}</div>
-                        <div className="text-sm text-muted-foreground">{issue.culprit}</div>
-                        <div className="mt-2 flex gap-2">
-                          <Badge className={getLevelColor(issue.level)}>
-                            {issue.level.toUpperCase()}
-                          </Badge>
-                          <Badge variant="outline">{issue.platform}</Badge>
-                          {issue.status === 'resolved' && (
-                            <Badge variant="default" className="bg-green-500">
-                              Resolved
-                            </Badge>
-                          )}
-                        </div>
+                    <div className="flex items-center gap-4 p-4">
+                      <div className="flex items-center">
+                        <Checkbox
+                          checked={selectedIssues.has(issue.id)}
+                          onCheckedChange={() => handleToggleIssue(issue.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${issue.title}`}
+                        />
                       </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-center">
-                          <div className="text-xs text-muted-foreground mb-1">Frequency</div>
-                          <EventSparkline eventCount={issue.eventCount} />
-                        </div>
-                        <div className="text-right text-sm text-muted-foreground min-w-[100px]">
-                          <div className="font-semibold text-foreground">{issue.eventCount} events</div>
-                          <div>{formatRelativeTime(issue.lastSeen)}</div>
-                        </div>
-                      </div>
+                      <Link
+                        to="/issues/$issueId"
+                        params={{ issueId: issue.id }}
+                        className="flex-1 flex items-start gap-4"
+                      >
+                          <div className="flex-1">
+                            <div className="font-semibold">{issue.title}</div>
+                            <div className="text-sm text-muted-foreground">{issue.culprit}</div>
+                            <div className="mt-2 flex gap-2">
+                              <Badge className={getLevelColor(issue.level)}>
+                                {issue.level.toUpperCase()}
+                              </Badge>
+                              <Badge variant="outline">{issue.platform}</Badge>
+                              {issue.status === 'resolved' && (
+                                <Badge variant="default" className="bg-green-500">
+                                  Resolved
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="text-center">
+                              <div className="text-xs text-muted-foreground mb-1">Frequency</div>
+                              <EventSparkline eventCount={issue.eventCount} />
+                            </div>
+                            <div className="text-right text-sm text-muted-foreground min-w-[100px]">
+                              <div className="font-semibold text-foreground">{issue.eventCount} events</div>
+                              <div>{formatRelativeTime(issue.lastSeen)}</div>
+                            </div>
+                          </div>
+                      </Link>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}

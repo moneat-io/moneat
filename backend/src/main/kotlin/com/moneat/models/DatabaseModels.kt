@@ -68,6 +68,10 @@ object Releases : Table("releases") {
     val version = varchar("version", 255)
     val ref = varchar("ref", 255).nullable()
     val created_at = long("created_at")
+    val first_seen = long("first_seen").nullable()
+    val last_seen = long("last_seen").nullable()
+    val event_count = long("event_count").default(0)
+    val is_auto_detected = bool("is_auto_detected").default(false)
     override val primaryKey = PrimaryKey(id)
 }
 

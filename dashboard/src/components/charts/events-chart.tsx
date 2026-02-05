@@ -7,27 +7,55 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts'
 import type { TimelinePoint } from '@/lib/api'
+
+interface ReleaseMarker {
+  version: string
+  timestamp: string
+}
 
 interface EventsChartProps {
   data: TimelinePoint[]
   title?: string
   height?: number
+  releaseMarkers?: ReleaseMarker[]
 }
 
-export function EventsChart({ data, title = 'Events Over Time', height = 300 }: EventsChartProps) {
+const formatTime = (timestamp: string) =>
+  new Date(timestamp).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+  })
+
+export function EventsChart({
+  data,
+  title = 'Events Over Time',
+  height = 300,
+  releaseMarkers = [],
+}: EventsChartProps) {
   const chartData = data.map((point) => ({
-    time: new Date(point.timestamp).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-    }),
+    timestamp: new Date(point.timestamp).getTime(),
+    time: formatTime(point.timestamp),
     count: point.count,
   }))
 
+  const releaseLines = releaseMarkers
+    .map((m) => ({
+      ...m,
+      timestamp: new Date(m.timestamp).getTime(),
+    }))
+    .filter((m) => {
+      if (chartData.length === 0) return false
+      const min = chartData[0]!.timestamp
+      const max = chartData[chartData.length - 1]!.timestamp
+      return m.timestamp >= min && m.timestamp <= max
+    })
+
   return (
-    <Card>
+    <Card className="border-t-4 border-t-blue-500/50">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
@@ -36,7 +64,10 @@ export function EventsChart({ data, title = 'Events Over Time', height = 300 }: 
           <AreaChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
-              dataKey="time"
+              dataKey="timestamp"
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              tickFormatter={(ts) => formatTime(new Date(ts).toISOString())}
               fontSize={12}
               tickLine={false}
               axisLine={false}
@@ -74,6 +105,20 @@ export function EventsChart({ data, title = 'Events Over Time', height = 300 }: 
               fill="hsl(var(--primary))"
               fillOpacity={0.2}
             />
+            {releaseLines.map((marker) => (
+              <ReferenceLine
+                key={marker.version}
+                x={marker.timestamp}
+                stroke="hsl(var(--muted-foreground))"
+                strokeDasharray="4 4"
+                label={{
+                  value: marker.version,
+                  position: 'top',
+                  fill: 'hsl(var(--muted-foreground))',
+                  fontSize: 11,
+                }}
+              />
+            ))}
           </AreaChart>
         </ResponsiveContainer>
       </CardContent>
