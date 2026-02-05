@@ -10,6 +10,7 @@ import io.ktor.server.config.*
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.MessageDigest
 import java.util.*
@@ -28,10 +29,10 @@ class EventService {
     
     fun verifyProjectKey(projectId: Long, publicKey: String): Boolean {
         return transaction {
-            ProjectKeys.select {
+            ProjectKeys.selectAll().where {
                 (ProjectKeys.project_id eq projectId) and
-                (ProjectKeys.public_key eq publicKey) and
-                (ProjectKeys.is_active eq true)
+                        (ProjectKeys.public_key eq publicKey) and
+                        (ProjectKeys.is_active eq true)
             }.count() > 0
         }
     }
@@ -166,7 +167,7 @@ class EventService {
     }
     
     private fun tagsToMap(tags: Map<String, String>?): String {
-        if (tags == null || tags.isEmpty()) return "{}"
+        if (tags.isNullOrEmpty()) return "{}"
         return "{${tags.entries.joinToString(",") { "'${escapeSql(it.key)}':'${escapeSql(it.value)}'" }}}"
     }
 }

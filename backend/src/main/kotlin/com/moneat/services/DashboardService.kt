@@ -10,6 +10,7 @@ import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
@@ -26,12 +27,10 @@ class DashboardService {
     
     fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
         return transaction {
-            val orgIds = Memberships.select { Memberships.user_id eq userId }
+            val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
-            
-            Projects.select { 
-                (Projects.id eq projectId) and (Projects.organization_id inList orgIds)
-            }.count() > 0
+
+            Projects.selectAll().where { (Projects.id eq projectId) and (Projects.organization_id inList orgIds) }.count() > 0
         }
     }
     
@@ -70,7 +69,7 @@ class DashboardService {
     
     fun getProjects(userId: Int): List<ProjectResponse> {
         return transaction {
-            val orgIds = Memberships.select { Memberships.user_id eq userId }
+            val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
             
             Projects.select { Projects.organization_id inList orgIds }

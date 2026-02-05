@@ -5,6 +5,7 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.*
 import io.ktor.server.config.*
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
 import java.util.*
@@ -22,7 +23,7 @@ class AuthService {
         
         val userId = transaction {
             // Check if user exists
-            val existing = Users.select { Users.email eq request.email }.firstOrNull()
+            val existing = Users.selectAll().where { Users.email eq request.email }.firstOrNull()
             if (existing != null) {
                 throw IllegalArgumentException("User already exists")
             }
@@ -60,7 +61,7 @@ class AuthService {
     
     fun login(request: LoginRequest): AuthResponse? {
         return transaction {
-            val user = Users.select { Users.email eq request.email }.firstOrNull()
+            val user = Users.selectAll().where { Users.email eq request.email }.firstOrNull()
                 ?: return@transaction null
             
             if (!BCrypt.checkpw(request.password, user[Users.password_hash])) {

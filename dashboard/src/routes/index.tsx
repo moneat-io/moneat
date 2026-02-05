@@ -70,19 +70,20 @@ function DashboardPage() {
   const currentProject = projects?.find((p) => p.id === projectId)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="border-b bg-white px-6 py-4">
+    <div className="min-h-screen bg-background">
+      <nav className="border-b bg-card px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Moneat</h1>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => {
               api.logout()
               window.location.href = '/login'
             }}
-            className="text-sm text-gray-600 hover:text-gray-900"
           >
             Logout
-          </button>
+          </Button>
         </div>
       </nav>
 
@@ -143,23 +144,23 @@ function DashboardPage() {
         )}
 
         {!projects || projects.length === 0 ? (
-          <div className="rounded-lg border bg-white p-8 text-center">
-            <p className="text-gray-600">No projects yet. Create your first project to get started.</p>
+          <div className="rounded-lg border bg-card p-8 text-center">
+            <p className="text-muted-foreground">No projects yet. Create your first project to get started.</p>
           </div>
         ) : (
           <>
             {currentProject && (
-              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="text-sm text-gray-600">
+              <div className="mb-4 p-4 bg-muted rounded-lg border">
+                <div className="text-sm text-muted-foreground">
                   <strong>DSN:</strong>{' '}
-                  <code className="bg-white px-2 py-1 rounded text-xs">{currentProject.dsn}</code>
+                  <code className="bg-background px-2 py-1 rounded text-xs">{currentProject.dsn}</code>
                 </div>
               </div>
             )}
 
             <div className="mb-4 flex gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search issues..."
                   value={searchQuery}
@@ -180,8 +181,8 @@ function DashboardPage() {
             </div>
 
             {filteredIssues.length === 0 ? (
-              <div className="rounded-lg border bg-white p-8 text-center">
-                <p className="text-gray-600">
+              <div className="rounded-lg border bg-card p-8 text-center">
+                <p className="text-muted-foreground">
                   {searchQuery || statusFilter !== 'all'
                     ? 'No issues match your filters.'
                     : 'No issues found. Start sending errors to see them here.'}
@@ -194,14 +195,14 @@ function DashboardPage() {
                     key={issue.id}
                     to="/issues/$issueId"
                     params={{ issueId: issue.id }}
-                    className="block rounded-lg border bg-white p-4 hover:border-gray-400 transition"
+                    className="block rounded-lg border bg-card p-4 hover:bg-accent transition"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="font-semibold">{issue.title}</div>
-                        <div className="text-sm text-gray-600">{issue.culprit}</div>
+                        <div className="text-sm text-muted-foreground">{issue.culprit}</div>
                       </div>
-                      <div className="text-right text-sm text-gray-500">
+                      <div className="text-right text-sm text-muted-foreground">
                         <div className="font-semibold">{issue.eventCount} events</div>
                         <div>{formatRelativeTime(issue.lastSeen)}</div>
                       </div>

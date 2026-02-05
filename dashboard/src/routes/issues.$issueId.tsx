@@ -43,31 +43,34 @@ function IssueDetailPage() {
   const latestEvent = events[0] || issue.latestEvent
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="border-b bg-white px-6 py-4">
+    <div className="min-h-screen bg-background">
+      <nav className="border-b bg-card px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link to="/" className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1">
-              <ChevronLeft className="h-4 w-4" />
-              Back to Issues
-            </Link>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/" className="flex items-center gap-1">
+                <ChevronLeft className="h-4 w-4" />
+                Back to Issues
+              </Link>
+            </Button>
             <h1 className="text-2xl font-bold">Moneat</h1>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => {
               api.logout()
               window.location.href = '/login'
             }}
-            className="text-sm text-gray-600 hover:text-gray-900"
           >
             Logout
-          </button>
+          </Button>
         </div>
       </nav>
 
       <div className="p-6 max-w-7xl mx-auto">
         {/* Issue Header */}
-        <div className="mb-6 bg-white rounded-lg border p-6">
+        <div className="mb-6 bg-card rounded-lg border p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
@@ -83,7 +86,7 @@ function IssueDetailPage() {
                 )}
               </div>
               <h2 className="text-2xl font-bold mb-2">{issue.title}</h2>
-              <p className="text-gray-600">{issue.culprit}</p>
+              <p className="text-muted-foreground">{issue.culprit}</p>
             </div>
             <div className="flex gap-2">
               {issue.status === 'resolved' ? (
@@ -111,19 +114,19 @@ function IssueDetailPage() {
 
           <div className="grid grid-cols-4 gap-4 pt-4 border-t">
             <div>
-              <div className="text-xs text-gray-500 uppercase mb-1">Events</div>
+              <div className="text-xs text-muted-foreground uppercase mb-1">Events</div>
               <div className="text-2xl font-bold">{issue.eventCount}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-500 uppercase mb-1">Users</div>
+              <div className="text-xs text-muted-foreground uppercase mb-1">Users</div>
               <div className="text-2xl font-bold">{issue.userCount}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-500 uppercase mb-1">First Seen</div>
+              <div className="text-xs text-muted-foreground uppercase mb-1">First Seen</div>
               <div className="text-sm">{formatRelativeTime(issue.firstSeen)}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-500 uppercase mb-1">Last Seen</div>
+              <div className="text-xs text-muted-foreground uppercase mb-1">Last Seen</div>
               <div className="text-sm">{formatRelativeTime(issue.lastSeen)}</div>
             </div>
           </div>
@@ -140,7 +143,7 @@ function IssueDetailPage() {
                 {latestEvent.exception ? (
                   <StackTraceViewer exception={latestEvent.exception} />
                 ) : (
-                  <p className="text-gray-500">No stack trace available</p>
+                  <p className="text-muted-foreground">No stack trace available</p>
                 )}
               </CardContent>
             </Card>
@@ -165,7 +168,7 @@ function IssueDetailPage() {
                   <div className="space-y-2">
                     {Object.entries(latestEvent.tags).map(([key, value]) => (
                       <div key={key} className="flex justify-between text-sm">
-                        <span className="text-gray-600">{key}</span>
+                        <span className="text-muted-foreground">{key}</span>
                         <span className="font-mono">{value}</span>
                       </div>
                     ))}
@@ -180,28 +183,28 @@ function IssueDetailPage() {
                 <CardContent>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Event ID</span>
+                      <span className="text-muted-foreground">Event ID</span>
                       <span className="font-mono text-xs">{latestEvent.eventId}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Timestamp</span>
+                      <span className="text-muted-foreground">Timestamp</span>
                       <span>{new Date(latestEvent.timestamp).toLocaleString()}</span>
                     </div>
                     {latestEvent.environment && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Environment</span>
+                        <span className="text-muted-foreground">Environment</span>
                         <span>{latestEvent.environment}</span>
                       </div>
                     )}
                     {latestEvent.release && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Release</span>
+                        <span className="text-muted-foreground">Release</span>
                         <span>{latestEvent.release}</span>
                       </div>
                     )}
                     {latestEvent.user && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">User</span>
+                        <span className="text-muted-foreground">User</span>
                         <span>{latestEvent.user.email || latestEvent.user.id}</span>
                       </div>
                     )}
@@ -223,13 +226,13 @@ function IssueDetailPage() {
                 {events.map((event) => (
                   <div
                     key={event.eventId}
-                    className="flex items-center justify-between p-3 rounded border hover:bg-gray-50"
+                    className="flex items-center justify-between p-3 rounded border hover:bg-accent"
                   >
                     <div className="flex-1">
-                      <div className="font-mono text-xs text-gray-500">{event.eventId}</div>
+                      <div className="font-mono text-xs text-muted-foreground">{event.eventId}</div>
                       <div className="text-sm">{event.message}</div>
                     </div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-muted-foreground">
                       {formatRelativeTime(event.timestamp)}
                     </div>
                   </div>
@@ -251,34 +254,34 @@ function StackTraceViewer({ exception }: { exception: string }) {
       <div className="space-y-2">
         {parsed.values?.map((value: any, idx: number) => (
           <div key={idx} className="mb-4">
-            <div className="font-semibold text-red-600 mb-2">
+            <div className="font-semibold text-destructive mb-2">
               {value.type}: {value.value}
             </div>
             {value.stacktrace?.frames?.map((frame: any, frameIdx: number) => (
               <div
                 key={frameIdx}
-                className="font-mono text-xs bg-gray-50 p-3 rounded border mb-1"
+                className="font-mono text-xs bg-muted p-3 rounded border mb-1"
               >
                 <div className="flex items-start justify-between mb-1">
                   <div className="font-semibold">
                     {frame.function || '<anonymous>'}
                   </div>
-                  <div className="text-gray-500">
+                  <div className="text-muted-foreground">
                     {frame.filename}:{frame.lineno}
                   </div>
                 </div>
                 {frame.context_line && (
                   <div className="mt-2">
                     {frame.pre_context?.map((line: string, i: number) => (
-                      <div key={i} className="text-gray-400">
+                      <div key={i} className="text-muted-foreground/70">
                         {line}
                       </div>
                     ))}
-                    <div className="bg-red-50 text-red-900 px-1">
+                    <div className="bg-destructive/10 text-destructive px-1">
                       → {frame.context_line}
                     </div>
                     {frame.post_context?.map((line: string, i: number) => (
-                      <div key={i} className="text-gray-400">
+                      <div key={i} className="text-muted-foreground/70">
                         {line}
                       </div>
                     ))}
@@ -291,7 +294,7 @@ function StackTraceViewer({ exception }: { exception: string }) {
       </div>
     )
   } catch (e) {
-    return <pre className="text-xs bg-gray-50 p-4 rounded overflow-auto">{exception}</pre>
+    return <pre className="text-xs bg-muted p-4 rounded overflow-auto">{exception}</pre>
   }
 }
 
@@ -303,8 +306,8 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
     return (
       <div className="space-y-2">
         {crumbs.map((crumb: any, idx: number) => (
-          <div key={idx} className="flex gap-4 text-sm border-l-2 border-gray-300 pl-4 py-2">
-            <div className="text-gray-500 font-mono text-xs w-32">
+          <div key={idx} className="flex gap-4 text-sm border-l-2 border-muted-foreground/30 pl-4 py-2">
+            <div className="text-muted-foreground font-mono text-xs w-32">
               {new Date(crumb.timestamp * 1000).toLocaleTimeString()}
             </div>
             <div className="flex-1">
@@ -318,6 +321,6 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
       </div>
     )
   } catch (e) {
-    return <pre className="text-xs bg-gray-50 p-4 rounded overflow-auto">{breadcrumbs}</pre>
+    return <pre className="text-xs bg-muted p-4 rounded overflow-auto">{breadcrumbs}</pre>
   }
 }
