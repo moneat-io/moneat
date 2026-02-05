@@ -132,7 +132,8 @@ class EventService {
             }
             
             if (!response.status.isSuccess()) {
-                logger.error { "Failed to insert event: ${response.bodyAsText()}" }
+                val errorBody = response.bodyAsText()
+                logger.error { "Failed to insert event: $errorBody" }
             } else {
                 logger.info { "Event stored: $eventId for project $projectId" }
             }
@@ -168,12 +169,4 @@ class EventService {
         if (tags == null || tags.isEmpty()) return "{}"
         return "{${tags.entries.joinToString(",") { "'${escapeSql(it.key)}':'${escapeSql(it.value)}'" }}}"
     }
-}
-
-object ProjectKeys : Table("project_keys") {
-    val id = integer("id").autoIncrement()
-    val project_id = long("project_id")
-    val public_key = varchar("public_key", 255)
-    val is_active = bool("is_active")
-    override val primaryKey = PrimaryKey(id)
 }

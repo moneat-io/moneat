@@ -86,26 +86,3 @@ class AuthService {
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 }
-
-object Users : Table("users") {
-    val id = integer("id").autoIncrement()
-    val email = varchar("email", 255)
-    val password_hash = varchar("password_hash", 255)
-    val name = varchar("name", 255).nullable()
-    override val primaryKey = PrimaryKey(id)
-}
-
-object Organizations : Table("organizations") {
-    val id = integer("id").autoIncrement()
-    val name = varchar("name", 255)
-    val slug = varchar("slug", 255)
-    override val primaryKey = PrimaryKey(id)
-}
-
-object Memberships : Table("memberships") {
-    val id = integer("id").autoIncrement()
-    val user_id = integer("user_id").references(Users.id)
-    val organization_id = integer("organization_id").references(Organizations.id)
-    val role = varchar("role", 50)
-    override val primaryKey = PrimaryKey(id)
-}
