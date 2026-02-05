@@ -1,0 +1,30 @@
+package com.moneat.plugins
+
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
+import io.ktor.server.application.*
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.transactions.TransactionManager
+import java.sql.Connection
+
+fun Application.configureDatabases() {
+    val config = environment.config
+    
+    // PostgreSQL connection pool
+    val hikariConfig = HikariConfig().apply {
+        jdbcUrl = config.property("database.postgres.url").getString()
+        driverClassName = config.property("database.postgres.driver").getString()
+        username = config.property("database.postgres.user").getString()
+        password = config.property("database.postgres.password").getString()
+        maximumPoolSize = config.property("database.postgres.maxPoolSize").getString().toInt()
+        isAutoCommit = false
+        transactionIsolation = "TRANSACTION_REPEATABLE_READ"
+        validate()
+    }
+    
+    val dataSource = HikariDataSource(hikariConfig)
+    val database = Database.connect(dataSource)
+    TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ
+    
+    log.info("PostgreSQL database connected")
+}
