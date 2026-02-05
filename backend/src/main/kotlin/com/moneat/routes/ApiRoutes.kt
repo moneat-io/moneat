@@ -227,7 +227,8 @@ fun Route.apiRoutes() {
                     return@get
                 }
                 
-                val stats = dashboardService.getProjectStats(projectId)
+                val period = call.request.queryParameters["period"] ?: "7d"
+                val stats = dashboardService.getProjectStats(projectId, period)
                 call.respond(stats)
             }
         }

@@ -56,6 +56,32 @@ interface Event {
   breadcrumbs?: string
 }
 
+interface TimelinePoint {
+  timestamp: string
+  count: number
+}
+
+interface TopIssue {
+  issueId: string
+  title: string
+  count: number
+}
+
+interface ProjectStats {
+  totalEvents: number
+  totalIssues: number
+  unresolvedIssues: number
+  affectedUsers: number
+  eventsTimeline: TimelinePoint[]
+  eventsByLevel: Record<string, number>
+  eventsByPlatform: Record<string, number>
+  eventsByBrowser: Record<string, number>
+  eventsByEnvironment: Record<string, number>
+  issuesByStatus: Record<string, number>
+  topIssues: TopIssue[]
+  usersTimeline: TimelinePoint[]
+}
+
 class ApiClient {
   private getToken(): string | null {
     return localStorage.getItem('auth_token')
@@ -186,7 +212,11 @@ class ApiClient {
       body: JSON.stringify({ token, newPassword }),
     })
   }
+
+  async getProjectStats(projectId: number, period: '24h' | '7d' | '30d' = '7d'): Promise<ProjectStats> {
+    return this.request<ProjectStats>(`${API_BASE}/projects/${projectId}/stats?period=${period}`)
+  }
 }
 
 export const api = new ApiClient()
-export type { AuthResponse, Project, Issue, IssueDetail, Event }
+export type { AuthResponse, Project, Issue, IssueDetail, Event, ProjectStats, TimelinePoint, TopIssue }

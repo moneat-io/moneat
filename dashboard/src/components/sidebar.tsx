@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -34,6 +35,7 @@ export function Sidebar() {
 
   const navItems = [
     { icon: Home, label: 'Issues', href: '/' },
+    { icon: BarChart3, label: 'Analytics', href: '/analytics' },
     { icon: FolderKanban, label: 'Projects', href: '/projects' },
     { icon: Settings, label: 'Settings', href: '/settings' },
   ]

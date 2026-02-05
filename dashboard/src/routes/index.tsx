@@ -13,8 +13,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Activity, AlertCircle, Users, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
+import { StatsCard } from '@/components/charts/stats-card'
+import { EventsChart } from '@/components/charts/events-chart'
 
 // Helper function to get level color
 function getLevelColor(level: string): string {
@@ -94,6 +96,12 @@ function DashboardPage() {
   const { data: issues = [] } = useQuery({
     queryKey: ['issues', projectId, statusFilter],
     queryFn: () => (projectId ? api.getIssues(projectId) : []),
+    enabled: !!projectId,
+  })
+
+  const { data: stats } = useQuery({
+    queryKey: ['stats', projectId],
+    queryFn: () => (projectId ? api.getProjectStats(projectId, '24h') : null),
     enabled: !!projectId,
   })
 
@@ -192,6 +200,43 @@ function DashboardPage() {
                   <strong>DSN:</strong>{' '}
                   <code className="bg-background px-2 py-1 rounded text-xs">{currentProject.dsn}</code>
                 </div>
+              </div>
+            )}
+
+            {/* Stats Tiles */}
+            {stats && (
+              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatsCard
+                  title="Events (24h)"
+                  value={stats.totalEvents.toLocaleString()}
+                  icon={Activity}
+                />
+                <StatsCard
+                  title="Unresolved Issues"
+                  value={stats.unresolvedIssues.toLocaleString()}
+                  icon={AlertCircle}
+                />
+                <StatsCard
+                  title="Affected Users (24h)"
+                  value={stats.affectedUsers.toLocaleString()}
+                  icon={Users}
+                />
+                <StatsCard
+                  title="Total Issues"
+                  value={stats.totalIssues.toLocaleString()}
+                  icon={TrendingUp}
+                />
+              </div>
+            )}
+
+            {/* Mini Events Chart */}
+            {stats && stats.eventsTimeline.length > 0 && (
+              <div className="mb-6">
+                <EventsChart
+                  data={stats.eventsTimeline}
+                  title="Events in Last 24 Hours"
+                  height={200}
+                />
               </div>
             )}
 

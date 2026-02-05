@@ -361,14 +361,285 @@ class DashboardService {
         }
     }
     
-    suspend fun getProjectStats(projectId: Long): ProjectStatsResponse {
-        // TODO: Implement real stats
-        return ProjectStatsResponse(
-            totalEvents = 0,
-            totalIssues = 0,
-            eventsToday = 0,
-            timeline = emptyList()
-        )
+    suspend fun getProjectStats(projectId: Long, period: String = "7d"): ProjectStatsResponse {
+        val hoursBack = when (period) {
+            "24h" -> 24
+            "7d" -> 168
+            "30d" -> 720
+            else -> 168
+        }
+        
+        val intervalMinutes = when (period) {
+            "24h" -> 60  // 1 hour buckets
+            "7d" -> 360  // 6 hour buckets
+            "30d" -> 1440 // 1 day buckets
+            else -> 360
+        }
+        
+        // Total events in period
+        val totalEventsQuery = """
+            SELECT count() as total
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Total issues
+        val totalIssuesQuery = """
+            SELECT count(DISTINCT issue_id) as total
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND event_type = 'error'
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Unresolved issues
+        val unresolvedIssuesQuery = """
+            SELECT count() as total
+            FROM (
+                SELECT issue_id
+                FROM $clickhouseDb.issues FINAL
+                WHERE project_id = $projectId
+                    AND status = 'unresolved'
+            )
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Affected users in period
+        val affectedUsersQuery = """
+            SELECT uniq(user_id) as total
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND user_id != ''
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Events timeline
+        val eventsTimelineQuery = """
+            SELECT 
+                toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE) as time,
+                count() as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+            GROUP BY time
+            ORDER BY time
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Events by level
+        val eventsByLevelQuery = """
+            SELECT 
+                level,
+                count() as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+            GROUP BY level
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Events by platform
+        val eventsByPlatformQuery = """
+            SELECT 
+                platform,
+                count() as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND platform != ''
+            GROUP BY platform
+            ORDER BY count DESC
+            LIMIT 10
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Events by browser
+        val eventsByBrowserQuery = """
+            SELECT 
+                browser_name,
+                count() as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND browser_name != ''
+            GROUP BY browser_name
+            ORDER BY count DESC
+            LIMIT 10
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Events by environment
+        val eventsByEnvironmentQuery = """
+            SELECT 
+                environment,
+                count() as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND environment != ''
+            GROUP BY environment
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Issues by status
+        val issuesByStatusQuery = """
+            SELECT 
+                status,
+                count() as count
+            FROM $clickhouseDb.issues FINAL
+            WHERE project_id = $projectId
+            GROUP BY status
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Top issues
+        val topIssuesQuery = """
+            SELECT 
+                issue_id,
+                any(message) as title,
+                count() as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND event_type = 'error'
+            GROUP BY issue_id
+            ORDER BY count DESC
+            LIMIT 10
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Users timeline
+        val usersTimelineQuery = """
+            SELECT 
+                toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE) as time,
+                uniq(user_id) as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND user_id != ''
+            GROUP BY time
+            ORDER BY time
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        return try {
+            val totalEvents = executeScalarQuery(totalEventsQuery)
+            val totalIssues = executeScalarQuery(totalIssuesQuery)
+            val unresolvedIssues = executeScalarQuery(unresolvedIssuesQuery)
+            val affectedUsers = executeScalarQuery(affectedUsersQuery)
+            val eventsTimeline = executeTimelineQuery(eventsTimelineQuery)
+            val eventsByLevel = executeMapQuery(eventsByLevelQuery, "level")
+            val eventsByPlatform = executeMapQuery(eventsByPlatformQuery, "platform")
+            val eventsByBrowser = executeMapQuery(eventsByBrowserQuery, "browser_name")
+            val eventsByEnvironment = executeMapQuery(eventsByEnvironmentQuery, "environment")
+            val issuesByStatus = executeMapQuery(issuesByStatusQuery, "status")
+            val topIssues = executeTopIssuesQuery(topIssuesQuery)
+            val usersTimeline = executeTimelineQuery(usersTimelineQuery)
+            
+            ProjectStatsResponse(
+                totalEvents = totalEvents,
+                totalIssues = totalIssues,
+                unresolvedIssues = unresolvedIssues,
+                affectedUsers = affectedUsers,
+                eventsTimeline = eventsTimeline,
+                eventsByLevel = eventsByLevel,
+                eventsByPlatform = eventsByPlatform,
+                eventsByBrowser = eventsByBrowser,
+                eventsByEnvironment = eventsByEnvironment,
+                issuesByStatus = issuesByStatus,
+                topIssues = topIssues,
+                usersTimeline = usersTimeline
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch project stats" }
+            ProjectStatsResponse(
+                totalEvents = 0,
+                totalIssues = 0,
+                unresolvedIssues = 0,
+                affectedUsers = 0,
+                eventsTimeline = emptyList(),
+                eventsByLevel = emptyMap(),
+                eventsByPlatform = emptyMap(),
+                eventsByBrowser = emptyMap(),
+                eventsByEnvironment = emptyMap(),
+                issuesByStatus = emptyMap(),
+                topIssues = emptyList(),
+                usersTimeline = emptyList()
+            )
+        }
+    }
+    
+    private suspend fun executeScalarQuery(query: String): Long {
+        val response = httpClient.post("$clickhouseUrl") {
+            parameter("database", clickhouseDb)
+            parameter("user", clickhouseUser)
+            parameter("password", clickhousePassword)
+            setBody(query)
+        }
+        val body = response.bodyAsText()
+        if (body.isBlank()) return 0
+        val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+        return obj["total"]?.jsonPrimitive?.long ?: 0
+    }
+    
+    private suspend fun executeTimelineQuery(query: String): List<TimelinePoint> {
+        val response = httpClient.post("$clickhouseUrl") {
+            parameter("database", clickhouseDb)
+            parameter("user", clickhouseUser)
+            parameter("password", clickhousePassword)
+            setBody(query)
+        }
+        val body = response.bodyAsText()
+        return body.lines()
+            .filter { it.isNotBlank() }
+            .map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                TimelinePoint(
+                    timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
+                    count = obj["count"]?.jsonPrimitive?.long ?: 0
+                )
+            }
+    }
+    
+    private suspend fun executeMapQuery(query: String, keyField: String): Map<String, Long> {
+        val response = httpClient.post("$clickhouseUrl") {
+            parameter("database", clickhouseDb)
+            parameter("user", clickhouseUser)
+            parameter("password", clickhousePassword)
+            setBody(query)
+        }
+        val body = response.bodyAsText()
+        return body.lines()
+            .filter { it.isNotBlank() }
+            .associate { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                val key = obj[keyField]?.jsonPrimitive?.content ?: "unknown"
+                val count = obj["count"]?.jsonPrimitive?.long ?: 0
+                key to count
+            }
+    }
+    
+    private suspend fun executeTopIssuesQuery(query: String): List<TopIssue> {
+        val response = httpClient.post("$clickhouseUrl") {
+            parameter("database", clickhouseDb)
+            parameter("user", clickhouseUser)
+            parameter("password", clickhousePassword)
+            setBody(query)
+        }
+        val body = response.bodyAsText()
+        return body.lines()
+            .filter { it.isNotBlank() }
+            .map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                TopIssue(
+                    issueId = obj["issue_id"]?.jsonPrimitive?.content ?: "",
+                    title = obj["title"]?.jsonPrimitive?.content ?: "",
+                    count = obj["count"]?.jsonPrimitive?.long ?: 0
+                )
+            }
     }
     
     suspend fun updateIssue(issueId: String, update: com.moneat.models.IssueUpdateRequest) {

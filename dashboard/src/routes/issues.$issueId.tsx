@@ -19,7 +19,6 @@ import {
   Globe,
   Smartphone,
   Battery,
-  ChevronRight
 } from 'lucide-react'
 
 // Helper function to get level color

@@ -89,13 +89,28 @@ data class EventResponse(
 data class ProjectStatsResponse(
     val totalEvents: Long,
     val totalIssues: Long,
-    val eventsToday: Long,
-    val timeline: List<TimelinePoint>
+    val unresolvedIssues: Long,
+    val affectedUsers: Long,
+    val eventsTimeline: List<TimelinePoint>,
+    val eventsByLevel: Map<String, Long>,
+    val eventsByPlatform: Map<String, Long>,
+    val eventsByBrowser: Map<String, Long>,
+    val eventsByEnvironment: Map<String, Long>,
+    val issuesByStatus: Map<String, Long>,
+    val topIssues: List<TopIssue>,
+    val usersTimeline: List<TimelinePoint>
 )
 
 @Serializable
 data class TimelinePoint(
     val timestamp: String,
+    val count: Long
+)
+
+@Serializable
+data class TopIssue(
+    val issueId: String,
+    val title: String,
     val count: Long
 )
 
