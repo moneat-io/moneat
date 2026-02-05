@@ -25,7 +25,8 @@ data class AuthResponse(
 data class UserResponse(
     val id: Int,
     val email: String,
-    val name: String?
+    val name: String?,
+    val emailVerified: Boolean = false
 )
 
 @Serializable
@@ -112,4 +113,14 @@ data class CreateProjectRequest(
 data class UpdateProjectRequest(
     val name: String? = null,
     val platform: String? = null
+)
+
+@Serializable
+data class VerifyEmailRequest(
+    val token: String
+)
+
+@Serializable
+data class ResendVerificationRequest(
+    val email: String
 )

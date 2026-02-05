@@ -7,6 +7,9 @@ object Users : Table("users") {
     val email = varchar("email", 255)
     val password_hash = varchar("password_hash", 255)
     val name = varchar("name", 255).nullable()
+    val email_verified = bool("email_verified").default(false)
+    val email_verification_token = varchar("email_verification_token", 255).nullable()
+    val email_verification_expires_at = long("email_verification_expires_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

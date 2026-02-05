@@ -53,6 +53,9 @@ dependencies {
     // Redis
     implementation("io.lettuce:lettuce-core:6.3.1.RELEASE")
     
+    // Email - AWS SES
+    implementation("aws.sdk.kotlin:ses:1.0.0")
+    
     // Security
     implementation("org.mindrot:jbcrypt:0.4")
     implementation("commons-codec:commons-codec:1.16.0")
