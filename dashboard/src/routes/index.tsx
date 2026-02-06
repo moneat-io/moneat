@@ -1,4 +1,5 @@
 import { createFileRoute, redirect, Link } from '@tanstack/react-router'
+import { LandingPage } from '@/components/landing/landing-page'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useProject } from '@/contexts/project-context'
@@ -66,22 +67,27 @@ function EventSparkline({ eventCount }: { eventCount: number }) {
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      return
     }
-    
-    // Check if user needs to complete onboarding
     try {
       const user = await api.getCurrentUser()
       if (!user.onboardingCompleted) {
         throw redirect({ to: '/onboarding' })
       }
     } catch (error) {
-      // If we can't fetch user, let them continue (auth will handle it)
+      if (error instanceof Error && 'redirect' in error) throw error
       console.error('Failed to fetch user:', error)
     }
   },
-  component: DashboardPage,
+  component: IndexPage,
 })
+
+function IndexPage() {
+  if (!api.isAuthenticated()) {
+    return <LandingPage />
+  }
+  return <DashboardPage />
+}
 
 function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')

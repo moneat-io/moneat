@@ -166,7 +166,6 @@ function FeedbackDetailPage() {
   if (!feedback) return <div className="p-8">Feedback not found</div>
 
   const config = statusConfig[feedback.status as keyof typeof statusConfig] || statusConfig.unresolved
-  const StatusIcon = config.icon
   const displayName = feedback.name || feedback.contactEmail || 'Anonymous'
   const initials = getInitials(feedback.name, feedback.contactEmail)
   const avatarColor = getAvatarColor(feedback.name, feedback.contactEmail)

@@ -11,9 +11,10 @@ function RootComponent() {
   const router = useRouterState()
   const currentPath = router.location.pathname
   
-  // Don't show sidebar on auth pages
+  // Don't show sidebar on auth pages or landing page (when logged out)
   const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'].includes(currentPath)
-  const showSidebar = api.isAuthenticated() && !isAuthPage
+  const isLandingPage = currentPath === '/' && !api.isAuthenticated()
+  const showSidebar = api.isAuthenticated() && !isAuthPage && !isLandingPage
 
   return (
     <div className="min-h-screen bg-background">

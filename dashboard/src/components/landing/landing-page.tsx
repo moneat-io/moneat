@@ -1,0 +1,98 @@
+import { Link } from '@tanstack/react-router'
+import { Logo } from '@/components/logo'
+import { Button } from '@/components/ui/button'
+import { VariantA } from './variant-a'
+import { PricingSection } from './pricing-section'
+
+export function LandingPage() {
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
+        <div className="flex h-16 items-center px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto justify-between">
+          <Link to="/" className="flex items-center">
+            <Logo className="h-8" />
+          </Link>
+          <nav className="hidden md:flex items-center gap-8">
+            <a
+              href="#features"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Features
+            </a>
+            <a
+              href="#pricing"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Pricing
+            </a>
+          </nav>
+          <div className="flex items-center gap-3">
+            <Link to="/login">
+              <Button variant="ghost" className="text-sm">Log in</Button>
+            </Link>
+            <Link to="/signup">
+              <Button className="bg-sky-500 hover:bg-sky-600 text-white shadow-md shadow-sky-500/25 text-sm">
+                Sign up free
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <VariantA />
+        <PricingSection />
+      </main>
+
+      <footer className="border-t border-border/50 bg-slate-950 py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-8">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <Logo className="h-7" markOnly />
+                <span className="text-lg font-semibold text-white">moneat</span>
+              </div>
+              <p className="text-sm text-slate-400 max-w-xs">
+                Open-source error monitoring built for developers who care about reliability.
+              </p>
+            </div>
+            <nav className="flex items-center gap-8">
+              <a
+                href="#features"
+                className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
+              >
+                Features
+              </a>
+              <a
+                href="#pricing"
+                className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
+              >
+                Pricing
+              </a>
+              <Link
+                to="/login"
+                className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
+              >
+                Log in
+              </Link>
+              <Link
+                to="/signup"
+                className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
+              >
+                Sign up
+              </Link>
+            </nav>
+          </div>
+          <div className="mt-10 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-xs text-slate-500">
+              &copy; {new Date().getFullYear()} Moneat. All rights reserved.
+            </p>
+            <p className="text-xs text-slate-500">
+              Sentry-compatible. Switch in minutes.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
