@@ -66,6 +66,27 @@ ORDER BY (project_id, timestamp, event_id)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
+-- Spans table for transaction child spans
+CREATE TABLE IF NOT EXISTS spans (
+    span_id String,
+    parent_span_id String,
+    trace_id String,
+    transaction_id UUID,
+    project_id UInt64,
+    op String,
+    description String,
+    start_timestamp DateTime64(3, 'UTC'),
+    end_timestamp DateTime64(3, 'UTC'),
+    duration_ms Float64,
+    status String,
+    tags Map(String, String),
+    data String
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(start_timestamp)
+ORDER BY (project_id, trace_id, transaction_id, start_timestamp)
+TTL toDateTime(start_timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192;
+
 -- Issues table (aggregated view)
 CREATE TABLE IF NOT EXISTS issues (
     issue_id String,

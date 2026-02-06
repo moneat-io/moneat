@@ -47,8 +47,9 @@ class EventService {
                     storeEvent(projectId, event)
                 }
                 "transaction" -> {
-                    // TODO: Handle transactions
-                    logger.debug { "Received transaction (not yet implemented)" }
+                    logger.debug { "Transaction payload: ${item.payload.take(500)}" }
+                    val transaction = json.decodeFromString<SentryTransaction>(item.payload)
+                    storeTransaction(projectId, transaction)
                 }
                 "session" -> {
                     // TODO: Handle sessions
@@ -64,6 +65,151 @@ class EventService {
     suspend fun processStoreEvent(projectId: Long, body: String) {
         val event = json.decodeFromString<SentryEvent>(body)
         storeEvent(projectId, event)
+    }
+
+    private suspend fun storeTransaction(projectId: Long, transaction: SentryTransaction) {
+        val rawEventId = transaction.event_id ?: UUID.randomUUID().toString()
+        val eventId = normalizeUuid(rawEventId)
+        val traceContext = transaction.contexts?.get("trace") as? JsonObject
+        val traceId = traceContext?.get("trace_id")?.jsonPrimitive?.contentOrNull ?: ""
+        val transactionOp = traceContext?.get("op")?.jsonPrimitive?.contentOrNull ?: ""
+        val traceStatus = traceContext?.get("status")?.jsonPrimitive?.contentOrNull
+        val transactionLevel = if (traceStatus == null || traceStatus == "ok") "info" else "error"
+
+        val endTimestampMs = unixSecondsToMillis(transaction.timestamp) ?: System.currentTimeMillis()
+        val durationMs = durationMs(transaction.start_timestamp, transaction.timestamp)
+
+        val contexts = transaction.contexts?.toString() ?: "{}"
+        val breadcrumbs = transaction.breadcrumbs?.toString() ?: "[]"
+        val request = transaction.request?.toString() ?: "{}"
+        val message = transaction.transaction ?: transactionOp.ifBlank { "transaction" }
+
+        val transactionInsert = """
+            INSERT INTO $clickhouseDb.events (
+                event_id, project_id, timestamp, event_type, level,
+                message, platform, environment, release, dist, server_name,
+                user_id, user_email, user_username, user_ip_address,
+                exception_type, exception_value, stack_trace,
+                transaction_name, transaction_op, duration_ms,
+                fingerprint, issue_id, tags, contexts, breadcrumbs, request,
+                sdk_name, sdk_version
+            ) VALUES (
+                toUUID('$eventId'),
+                $projectId,
+                fromUnixTimestamp64Milli($endTimestampMs),
+                'transaction',
+                '$transactionLevel',
+                '${escapeSql(message)}',
+                '${escapeSql(transaction.platform ?: "unknown")}',
+                '${escapeSql(transaction.environment ?: "production")}',
+                '${escapeSql(transaction.release ?: "")}',
+                '${escapeSql(transaction.dist ?: "")}',
+                '${escapeSql(transaction.server_name ?: "")}',
+                '${escapeSql(transaction.user?.id ?: "")}',
+                '${escapeSql(transaction.user?.email ?: "")}',
+                '${escapeSql(transaction.user?.username ?: "")}',
+                '${escapeSql(transaction.user?.ip_address ?: "")}',
+                '',
+                '',
+                '',
+                '${escapeSql(transaction.transaction ?: "")}',
+                '${escapeSql(transactionOp)}',
+                $durationMs,
+                [],
+                '',
+                ${tagsToMap(transaction.tags)},
+                '${escapeSql(contexts)}',
+                '${escapeSql(breadcrumbs)}',
+                '${escapeSql(request)}',
+                '${escapeSql(transaction.sdk?.name ?: "")}',
+                '${escapeSql(transaction.sdk?.version ?: "")}'
+            )
+        """.trimIndent()
+
+        try {
+            val transactionResponse = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                contentType(ContentType.Text.Plain)
+                setBody(transactionInsert)
+            }
+
+            if (!transactionResponse.status.isSuccess()) {
+                val errorBody = transactionResponse.bodyAsText()
+                logger.error { "Failed to insert transaction: $errorBody" }
+                return
+            }
+
+            val spans = transaction.spans.orEmpty()
+            if (spans.isNotEmpty()) {
+                val spanRows = spans.mapNotNull { span ->
+                    val spanStart = span.start_timestamp ?: transaction.start_timestamp
+                    val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
+                    if (spanStart == null || spanEnd == null) return@mapNotNull null
+
+                    val spanStartMs = unixSecondsToMillis(spanStart)
+                    val spanEndMs = unixSecondsToMillis(spanEnd)
+                    val spanDurationMs = durationMs(spanStart, spanEnd)
+                    val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
+                    val parentSpanId = span.parent_span_id ?: ""
+                    val spanTraceId = span.trace_id ?: traceId
+                    val spanData = span.data?.toString() ?: "{}"
+
+                    """
+                        (
+                            '${escapeSql(spanId)}',
+                            '${escapeSql(parentSpanId)}',
+                            '${escapeSql(spanTraceId)}',
+                            toUUID('$eventId'),
+                            $projectId,
+                            '${escapeSql(span.op ?: "")}',
+                            '${escapeSql(span.description ?: "")}',
+                            fromUnixTimestamp64Milli($spanStartMs),
+                            fromUnixTimestamp64Milli($spanEndMs),
+                            $spanDurationMs,
+                            '${escapeSql(span.status ?: "")}',
+                            ${tagsToMap(span.tags)},
+                            '${escapeSql(spanData)}'
+                        )
+                    """.trimIndent()
+                }
+
+                if (spanRows.isNotEmpty()) {
+                    val spansInsert = """
+                        INSERT INTO $clickhouseDb.spans (
+                            span_id, parent_span_id, trace_id, transaction_id, project_id,
+                            op, description, start_timestamp, end_timestamp, duration_ms, status, tags, data
+                        ) VALUES
+                        ${spanRows.joinToString(",\n")}
+                    """.trimIndent()
+
+                    val spansResponse = httpClient.post("$clickhouseUrl") {
+                        parameter("database", clickhouseDb)
+                        parameter("user", clickhouseUser)
+                        parameter("password", clickhousePassword)
+                        contentType(ContentType.Text.Plain)
+                        setBody(spansInsert)
+                    }
+
+                    if (!spansResponse.status.isSuccess()) {
+                        val errorBody = spansResponse.bodyAsText()
+                        logger.error { "Failed to insert spans: $errorBody" }
+                    }
+                }
+            }
+
+            logger.info { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
+            transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
+                try {
+                    ReleaseService().upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
+                } catch (e: Exception) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error storing transaction in ClickHouse" }
+        }
     }
     
     private suspend fun storeEvent(projectId: Long, event: SentryEvent) {
@@ -215,6 +361,32 @@ class EventService {
         val digest = MessageDigest.getInstance("SHA-256")
         val hash = digest.digest(combined.toByteArray())
         return hash.joinToString("") { "%02x".format(it) }.take(16)
+    }
+
+    private fun normalizeUuid(value: String): String {
+        val trimmed = value.trim().lowercase()
+        val uuidRegex = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+        if (uuidRegex.matches(trimmed)) return trimmed
+
+        val hexRegex = Regex("^[0-9a-f]{32}$")
+        if (hexRegex.matches(trimmed)) {
+            return "${trimmed.substring(0, 8)}-${trimmed.substring(8, 12)}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+        }
+
+        return UUID.randomUUID().toString()
+    }
+
+    private fun unixSecondsToMillis(value: Double): Long {
+        return (value * 1000).toLong()
+    }
+
+    private fun unixSecondsToMillis(value: Double?): Long? {
+        return value?.let { unixSecondsToMillis(it) }
+    }
+
+    private fun durationMs(start: Double?, end: Double?): Double {
+        if (start == null || end == null) return 0.0
+        return ((end - start) * 1000.0).coerceAtLeast(0.0)
     }
     
     private fun escapeSql(str: String): String {

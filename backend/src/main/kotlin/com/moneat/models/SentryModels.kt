@@ -75,6 +75,42 @@ data class SentryEvent(
 )
 
 @Serializable
+data class SentryTransaction(
+    val event_id: String? = null,
+    val type: String? = null,
+    val transaction: String? = null,
+    val start_timestamp: Double? = null,
+    val timestamp: Double? = null,
+    val platform: String? = null,
+    val environment: String? = null,
+    val release: String? = null,
+    val dist: String? = null,
+    val tags: Map<String, String>? = null,
+    val user: UserInfo? = null,
+    val contexts: JsonObject? = null,
+    val spans: List<SentrySpan>? = null,
+    val sdk: SdkInfo? = null,
+    val server_name: String? = null,
+    val request: JsonObject? = null,
+    val breadcrumbs: JsonArray? = null,
+    val measurements: JsonObject? = null
+)
+
+@Serializable
+data class SentrySpan(
+    val span_id: String? = null,
+    val parent_span_id: String? = null,
+    val trace_id: String? = null,
+    val op: String? = null,
+    val description: String? = null,
+    val start_timestamp: Double? = null,
+    val timestamp: Double? = null,
+    val status: String? = null,
+    val tags: Map<String, String>? = null,
+    val data: JsonObject? = null
+)
+
+@Serializable
 data class SdkInfo(
     val name: String,
     val version: String

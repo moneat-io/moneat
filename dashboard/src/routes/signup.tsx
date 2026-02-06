@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { Logo } from '@/components/logo'
 
 export const Route = createFileRoute('/signup')({
   beforeLoad: () => {
@@ -90,9 +91,14 @@ function SignupPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Create an account</CardTitle>
-          <CardDescription>Sign up for Moneat</CardDescription>
+        <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center">
+            <Logo className="h-10" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl">Create an account</CardTitle>
+            <CardDescription className="mt-1">Sign up to get started</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

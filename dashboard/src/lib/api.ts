@@ -62,6 +62,68 @@ interface TimelinePoint {
   count: number
 }
 
+interface TransactionSummary {
+  name: string
+  op: string
+  latestEventId?: string
+  count: number
+  p50: number
+  p75: number
+  p95: number
+  failureRate: number
+  tpm: number
+}
+
+interface TransactionDetail {
+  eventId: string
+  name: string
+  op: string
+  startTimestamp: number
+  duration: number
+  traceId: string
+  timestamp: string
+  environment?: string
+  release?: string
+  status?: string
+  tags: Record<string, string>
+  contexts: string
+  breadcrumbs?: string
+  request?: string
+}
+
+interface Span {
+  spanId: string
+  parentSpanId?: string | null
+  op: string
+  description: string
+  startTimestamp: number
+  endTimestamp: number
+  duration: number
+  status?: string
+  tags: Record<string, string>
+}
+
+interface TransactionWithSpans {
+  transaction: TransactionDetail
+  spans: Span[]
+}
+
+interface SlowTransaction {
+  eventId: string
+  name: string
+  op: string
+  duration: number
+  timestamp: string
+}
+
+interface PerformanceStats {
+  apdex: number
+  throughput: TimelinePoint[]
+  slowestTransactions: SlowTransaction[]
+  totalTransactions: number
+  avgDuration: number
+}
+
 interface TopIssue {
   issueId: string
   title: string
@@ -248,6 +310,48 @@ class ApiClient {
     return this.request<ProjectStats>(`${API_BASE}/projects/${projectId}/stats?period=${period}`)
   }
 
+  async getTransactions(
+    projectId: number,
+    options: { period?: '24h' | '7d' | '30d'; environment?: string; operation?: string } = {}
+  ): Promise<TransactionSummary[]> {
+    const params = new URLSearchParams()
+    params.set('period', options.period || '7d')
+    if (options.environment) params.set('environment', options.environment)
+    if (options.operation) params.set('operation', options.operation)
+    return this.request<TransactionSummary[]>(
+      `${API_BASE}/projects/${projectId}/transactions?${params.toString()}`
+    )
+  }
+
+  async getPerformanceStats(
+    projectId: number,
+    options: { period?: '24h' | '7d' | '30d'; environment?: string; operation?: string } = {}
+  ): Promise<PerformanceStats> {
+    const params = new URLSearchParams()
+    params.set('period', options.period || '7d')
+    if (options.environment) params.set('environment', options.environment)
+    if (options.operation) params.set('operation', options.operation)
+    return this.request<PerformanceStats>(
+      `${API_BASE}/projects/${projectId}/transactions/stats?${params.toString()}`
+    )
+  }
+
+  async getTransaction(eventId: string): Promise<TransactionDetail> {
+    return this.request<TransactionDetail>(`${API_BASE}/transactions/${encodeURIComponent(eventId)}`)
+  }
+
+  async getTransactionSpans(eventId: string): Promise<TransactionWithSpans> {
+    return this.request<TransactionWithSpans>(
+      `${API_BASE}/transactions/${encodeURIComponent(eventId)}/spans`
+    )
+  }
+
+  async getRelatedErrors(eventId: string, limit = 20): Promise<Event[]> {
+    return this.request<Event[]>(
+      `${API_BASE}/transactions/${encodeURIComponent(eventId)}/related-errors?limit=${limit}`
+    )
+  }
+
   async getReleases(projectId: number): Promise<Release[]> {
     return this.request<Release[]>(`${API_BASE}/projects/${projectId}/releases`)
   }
@@ -269,6 +373,12 @@ export type {
   ProjectStats,
   TimelinePoint,
   TopIssue,
+  TransactionSummary,
+  TransactionDetail,
+  Span,
+  TransactionWithSpans,
+  SlowTransaction,
+  PerformanceStats,
   Release,
   ReleaseStats,
 }

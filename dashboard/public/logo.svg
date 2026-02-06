@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48">
+  <!-- Pulse "m" mark -->
+  <polyline
+    points="0,30 16,30 22,12 30,36 38,12 44,30 60,30"
+    fill="none"
+    stroke="#38bdf8"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Wordmark -->
+  <text x="68" y="31" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600" fill="#e2e8f0" letter-spacing="-0.5">moneat</text>
+</svg>

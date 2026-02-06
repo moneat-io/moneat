@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Logo } from '@/components/logo'
 import { api } from '@/lib/api'
 
 export const Route = createFileRoute('/verify-email')({
@@ -41,7 +42,10 @@ function VerifyEmail() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
+        <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center">
+            <Logo className="h-10" />
+          </div>
           <CardTitle>Email Verification</CardTitle>
           <CardDescription>
             {status === 'loading' && 'Verifying your email...'}

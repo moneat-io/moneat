@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { Logo } from '@/components/logo'
 
 export const Route = createFileRoute('/forgot-password')({
   component: ForgotPasswordPage,
@@ -59,11 +60,16 @@ function ForgotPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Reset your password</CardTitle>
-          <CardDescription>
-            Enter your email address and we'll send you a link to reset your password
-          </CardDescription>
+        <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center">
+            <Logo className="h-10" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl">Reset your password</CardTitle>
+            <CardDescription className="mt-1">
+              Enter your email address and we'll send you a link to reset your password
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

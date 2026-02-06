@@ -14,6 +14,7 @@ import {
   ChevronRight,
   User,
   BarChart3,
+  Timer,
   BookOpen,
   Package,
 } from 'lucide-react'
@@ -34,6 +35,7 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Logo } from '@/components/logo'
 
 export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -65,6 +67,7 @@ export function Sidebar() {
   const navItems = [
     { icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
     { icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false },
+    { icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
     { icon: FolderKanban, label: 'Projects', href: '/projects', requiresProject: false },
     { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
@@ -91,6 +94,15 @@ export function Sidebar() {
         isExpanded ? 'w-64' : 'w-16'
       )}
     >
+      {/* Logo */}
+      <div className={cn('p-3 border-b flex items-center', isExpanded ? 'justify-start px-4' : 'justify-center')}>
+        {isExpanded ? (
+          <Logo className="h-7" />
+        ) : (
+          <Logo markOnly className="h-7 w-8" />
+        )}
+      </div>
+
       {/* User Section */}
       <div className="p-4 border-b">
         <DropdownMenu>

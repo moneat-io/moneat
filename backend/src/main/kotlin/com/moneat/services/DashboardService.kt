@@ -38,6 +38,11 @@ class DashboardService {
         val projectId = getProjectIdForIssue(issueId) ?: return false
         return hasProjectAccess(userId, projectId)
     }
+
+    suspend fun hasTransactionAccess(userId: Int, eventId: String): Boolean {
+        val projectId = getProjectIdForTransaction(eventId) ?: return false
+        return hasProjectAccess(userId, projectId)
+    }
     
     private suspend fun getProjectIdForIssue(issueId: String): Long? {
         val escapedIssueId = issueId.replace("'", "''")
@@ -63,6 +68,35 @@ class DashboardService {
             obj["project_id"]?.jsonPrimitive?.long
         } catch (e: Exception) {
             logger.error(e) { "Failed to get project ID for issue" }
+            null
+        }
+    }
+
+    private suspend fun getProjectIdForTransaction(eventId: String): Long? {
+        val normalizedEventId = normalizeUuid(eventId) ?: return null
+        val query = """
+            SELECT project_id
+            FROM $clickhouseDb.events
+            WHERE event_id = toUUID('$normalizedEventId')
+                AND event_type = 'transaction'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["project_id"]?.jsonPrimitive?.long
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get project ID for transaction" }
             null
         }
     }
@@ -397,6 +431,361 @@ class DashboardService {
                 }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch issue events" }
+            emptyList()
+        }
+    }
+
+    suspend fun getTransactions(
+        projectId: Long,
+        period: String = "7d",
+        environment: String? = null,
+        operation: String? = null
+    ): List<TransactionSummaryResponse> {
+        val periodConfig = getPeriodConfig(period)
+        val filters = buildTransactionFilterClause(environment, operation)
+        val query = """
+            SELECT
+                transaction_name as name,
+                transaction_op as op,
+                argMax(toString(event_id), timestamp) as latest_event_id,
+                count() as count,
+                quantileTDigest(0.50)(duration_ms) as p50,
+                quantileTDigest(0.75)(duration_ms) as p75,
+                quantileTDigest(0.95)(duration_ms) as p95,
+                (countIf(level IN ('error', 'fatal')) * 100.0) / if(count() = 0, 1, count()) as failure_rate,
+                count() / ${periodConfig.periodMinutes}.0 as tpm
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND event_type = 'transaction'
+                AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                $filters
+            GROUP BY transaction_name, transaction_op
+            ORDER BY p95 DESC
+            LIMIT 200
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    TransactionSummaryResponse(
+                        name = obj["name"]?.jsonPrimitive?.content ?: "",
+                        op = obj["op"]?.jsonPrimitive?.content ?: "",
+                        latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull,
+                        count = obj["count"]?.jsonPrimitive?.long ?: 0,
+                        p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        p95 = obj["p95"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        failureRate = obj["failure_rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        tpm = obj["tpm"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+                    )
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch transactions for project $projectId" }
+            emptyList()
+        }
+    }
+
+    suspend fun getPerformanceStats(
+        projectId: Long,
+        period: String = "7d",
+        environment: String? = null,
+        operation: String? = null
+    ): PerformanceStatsResponse {
+        val periodConfig = getPeriodConfig(period)
+        val filters = buildTransactionFilterClause(environment, operation)
+
+        val aggregateQuery = """
+            SELECT
+                count() as total,
+                avg(duration_ms) as avg_duration,
+                (countIf(duration_ms <= 300) + countIf(duration_ms <= 1200)) / (2.0 * if(count() = 0, 1, count())) as apdex
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND event_type = 'transaction'
+                AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                $filters
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val throughputQuery = """
+            SELECT
+                formatDateTime(toStartOfInterval(timestamp, INTERVAL ${periodConfig.intervalMinutes} MINUTE), '%Y-%c-%dT%H:%i:%S.000Z') as time,
+                count() as count
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND event_type = 'transaction'
+                AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                $filters
+            GROUP BY time
+            ORDER BY time
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val slowestQuery = """
+            SELECT
+                toString(event_id) as event_id,
+                transaction_name as name,
+                transaction_op as op,
+                duration_ms as duration,
+                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND event_type = 'transaction'
+                AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                $filters
+            ORDER BY duration_ms DESC
+            LIMIT 10
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val aggregateResponse = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(aggregateQuery)
+            }
+
+            val aggregateBody = aggregateResponse.bodyAsText()
+            val aggregateObj = aggregateBody.lines().firstOrNull { it.isNotBlank() }?.let {
+                json.parseToJsonElement(it).jsonObject
+            }
+
+            val throughput = executeTimelineQuery(throughputQuery)
+            val slowest = executeSlowestTransactionsQuery(slowestQuery)
+
+            PerformanceStatsResponse(
+                apdex = aggregateObj?.get("apdex")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                throughput = throughput,
+                slowestTransactions = slowest,
+                totalTransactions = aggregateObj?.get("total")?.jsonPrimitive?.long ?: 0,
+                avgDuration = aggregateObj?.get("avg_duration")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
+            PerformanceStatsResponse(
+                apdex = 0.0,
+                throughput = emptyList(),
+                slowestTransactions = emptyList(),
+                totalTransactions = 0,
+                avgDuration = 0.0
+            )
+        }
+    }
+
+    suspend fun getTransaction(eventId: String): TransactionDetailResponse? {
+        val normalizedEventId = normalizeUuid(eventId) ?: return null
+        val query = """
+            SELECT
+                toString(event_id) as event_id,
+                transaction_name as name,
+                transaction_op as op,
+                toUnixTimestamp64Milli(timestamp) as end_ts_ms,
+                duration_ms,
+                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp,
+                environment,
+                release,
+                tags,
+                contexts,
+                breadcrumbs,
+                request
+            FROM $clickhouseDb.events
+            WHERE event_id = toUUID('$normalizedEventId')
+                AND event_type = 'transaction'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
+            val obj = json.parseToJsonElement(line).jsonObject
+            val endTsMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+            val durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+            val contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}"
+            val traceContext = parseTraceContext(contexts)
+            val traceId = traceContext?.get("trace_id")?.jsonPrimitive?.contentOrNull ?: ""
+            val status = traceContext?.get("status")?.jsonPrimitive?.contentOrNull
+            val op = obj["op"]?.jsonPrimitive?.content?.ifBlank {
+                traceContext?.get("op")?.jsonPrimitive?.contentOrNull ?: ""
+            } ?: ""
+
+            TransactionDetailResponse(
+                eventId = obj["event_id"]?.jsonPrimitive?.content ?: normalizedEventId,
+                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                op = op,
+                startTimestamp = ((endTsMs - durationMs).coerceAtLeast(0.0)) / 1000.0,
+                duration = durationMs,
+                traceId = traceId,
+                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
+                release = obj["release"]?.jsonPrimitive?.contentOrNull,
+                status = status,
+                tags = parseStringMap(obj["tags"]),
+                contexts = contexts,
+                breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull,
+                request = obj["request"]?.jsonPrimitive?.contentOrNull
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch transaction $eventId" }
+            null
+        }
+    }
+
+    suspend fun getTransactionSpans(eventId: String): TransactionWithSpansResponse? {
+        val transaction = getTransaction(eventId) ?: return null
+        val normalizedEventId = normalizeUuid(transaction.eventId) ?: return null
+        val query = """
+            SELECT
+                span_id,
+                parent_span_id,
+                op,
+                description,
+                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
+                toUnixTimestamp64Milli(end_timestamp) as end_ts_ms,
+                duration_ms,
+                status,
+                tags
+            FROM $clickhouseDb.spans
+            WHERE transaction_id = toUUID('$normalizedEventId')
+            ORDER BY start_timestamp ASC
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            val spans = body.lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    SpanResponse(
+                        spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+                        parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.ifBlank { null },
+                        op = obj["op"]?.jsonPrimitive?.content ?: "",
+                        description = obj["description"]?.jsonPrimitive?.content ?: "",
+                        startTimestamp = (obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
+                        endTimestamp = (obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
+                        duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        status = obj["status"]?.jsonPrimitive?.contentOrNull,
+                        tags = parseStringMap(obj["tags"])
+                    )
+                }
+
+            val traceContext = parseTraceContext(transaction.contexts)
+            val rootSpanId = traceContext?.get("span_id")?.jsonPrimitive?.contentOrNull
+                ?: "root-${transaction.eventId.take(8)}"
+
+            val rootSpan = SpanResponse(
+                spanId = rootSpanId,
+                parentSpanId = null,
+                op = transaction.op,
+                description = transaction.name,
+                startTimestamp = transaction.startTimestamp,
+                endTimestamp = transaction.startTimestamp + (transaction.duration / 1000.0),
+                duration = transaction.duration,
+                status = transaction.status,
+                tags = transaction.tags
+            )
+
+            val mergedSpans = if (spans.any { it.spanId == rootSpanId }) spans else listOf(rootSpan) + spans
+            TransactionWithSpansResponse(transaction = transaction, spans = mergedSpans)
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch spans for transaction $eventId" }
+            null
+        }
+    }
+
+    suspend fun getRelatedErrorsForTransaction(eventId: String, limit: Int = 20): List<EventResponse> {
+        val transaction = getTransaction(eventId) ?: return emptyList()
+        if (transaction.traceId.isBlank()) return emptyList()
+        val projectId = getProjectIdForTransaction(eventId) ?: return emptyList()
+        val traceId = escapeSql(transaction.traceId)
+
+        val query = """
+            SELECT
+                toString(event_id) as event_id,
+                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp,
+                message,
+                platform,
+                level,
+                environment,
+                release,
+                user_id,
+                user_email,
+                user_username,
+                tags,
+                contexts,
+                stack_trace,
+                breadcrumbs
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND event_type = 'error'
+                AND positionCaseInsensitive(contexts, '"trace_id":"$traceId"') > 0
+            ORDER BY timestamp DESC
+            LIMIT $limit
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    EventResponse(
+                        eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
+                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                        message = obj["message"]?.jsonPrimitive?.content ?: "",
+                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                        level = obj["level"]?.jsonPrimitive?.content ?: "error",
+                        environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
+                        release = obj["release"]?.jsonPrimitive?.contentOrNull,
+                        user = obj["user_id"]?.jsonPrimitive?.content?.let {
+                            UserInfo(
+                                id = it,
+                                email = obj["user_email"]?.jsonPrimitive?.contentOrNull,
+                                username = obj["user_username"]?.jsonPrimitive?.contentOrNull
+                            )
+                        },
+                        tags = parseStringMap(obj["tags"]),
+                        contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
+                        exception = obj["stack_trace"]?.jsonPrimitive?.contentOrNull,
+                        breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
+                    )
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch related errors for transaction $eventId" }
             emptyList()
         }
     }
@@ -845,6 +1234,65 @@ class DashboardService {
             null
         }
     }
+
+    private data class PeriodConfig(
+        val hoursBack: Int,
+        val intervalMinutes: Int,
+        val periodMinutes: Int
+    )
+
+    private fun getPeriodConfig(period: String): PeriodConfig {
+        return when (period) {
+            "24h" -> PeriodConfig(hoursBack = 24, intervalMinutes = 60, periodMinutes = 24 * 60)
+            "30d" -> PeriodConfig(hoursBack = 720, intervalMinutes = 1440, periodMinutes = 30 * 24 * 60)
+            else -> PeriodConfig(hoursBack = 168, intervalMinutes = 360, periodMinutes = 7 * 24 * 60)
+        }
+    }
+
+    private fun buildTransactionFilterClause(environment: String?, operation: String?): String {
+        val conditions = mutableListOf<String>()
+        environment?.takeIf { it.isNotBlank() }?.let {
+            conditions.add("environment = '${escapeSql(it)}'")
+        }
+        operation?.takeIf { it.isNotBlank() }?.let {
+            conditions.add("transaction_op = '${escapeSql(it)}'")
+        }
+
+        return if (conditions.isEmpty()) "" else conditions.joinToString(separator = "\n                ", prefix = "AND ")
+    }
+
+    private fun parseStringMap(element: JsonElement?): Map<String, String> {
+        val objectValue = element as? JsonObject ?: return emptyMap()
+        return objectValue.entries.associate { (key, value) ->
+            key to (value.jsonPrimitive.contentOrNull ?: "")
+        }
+    }
+
+    private fun parseTraceContext(contexts: String): JsonObject? {
+        return try {
+            val contextsJson = json.parseToJsonElement(contexts) as? JsonObject ?: return null
+            contextsJson["trace"] as? JsonObject
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun normalizeUuid(value: String): String? {
+        val trimmed = value.trim().lowercase()
+        val uuidRegex = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+        if (uuidRegex.matches(trimmed)) return trimmed
+
+        val hexRegex = Regex("^[0-9a-f]{32}$")
+        if (hexRegex.matches(trimmed)) {
+            return "${trimmed.substring(0, 8)}-${trimmed.substring(8, 12)}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+        }
+
+        return null
+    }
+
+    private fun escapeSql(value: String): String {
+        return value.replace("'", "''").replace("\\", "\\\\")
+    }
     
     private suspend fun executeScalarQuery(query: String): Long {
         val response = httpClient.post("$clickhouseUrl") {
@@ -874,6 +1322,28 @@ class DashboardService {
                 TimelinePoint(
                     timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
                     count = obj["count"]?.jsonPrimitive?.long ?: 0
+                )
+            }
+    }
+
+    private suspend fun executeSlowestTransactionsQuery(query: String): List<SlowTransactionResponse> {
+        val response = httpClient.post("$clickhouseUrl") {
+            parameter("database", clickhouseDb)
+            parameter("user", clickhouseUser)
+            parameter("password", clickhousePassword)
+            setBody(query)
+        }
+        val body = response.bodyAsText()
+        return body.lines()
+            .filter { it.isNotBlank() }
+            .map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                SlowTransactionResponse(
+                    eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
+                    name = obj["name"]?.jsonPrimitive?.content ?: "",
+                    op = obj["op"]?.jsonPrimitive?.content ?: "",
+                    duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                    timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: ""
                 )
             }
     }

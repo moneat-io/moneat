@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Logo } from '@/components/logo'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export const Route = createFileRoute('/onboarding')({
@@ -59,9 +60,14 @@ function OnboardingPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Welcome to Moneat!</CardTitle>
-          <CardDescription>Let's set up your organization</CardDescription>
+        <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center">
+            <Logo className="h-10" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl">Welcome!</CardTitle>
+            <CardDescription className="mt-1">Let's set up your organization</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

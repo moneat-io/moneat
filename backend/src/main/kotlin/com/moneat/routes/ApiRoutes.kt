@@ -231,6 +231,116 @@ fun Route.apiRoutes() {
                 val stats = dashboardService.getProjectStats(projectId, period)
                 call.respond(stats)
             }
+
+            get("/projects/{projectId}/transactions") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val period = call.request.queryParameters["period"] ?: "7d"
+                val environment = call.request.queryParameters["environment"]
+                val operation = call.request.queryParameters["operation"]
+                val transactions = dashboardService.getTransactions(projectId, period, environment, operation)
+                call.respond(transactions)
+            }
+
+            get("/projects/{projectId}/transactions/stats") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val period = call.request.queryParameters["period"] ?: "7d"
+                val environment = call.request.queryParameters["environment"]
+                val operation = call.request.queryParameters["operation"]
+                val stats = dashboardService.getPerformanceStats(projectId, period, environment, operation)
+                call.respond(stats)
+            }
+
+            get("/transactions/{eventId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val eventId = call.parameters["eventId"]
+                if (eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasTransactionAccess(userId, eventId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val transaction = dashboardService.getTransaction(eventId)
+                if (transaction == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(transaction)
+                }
+            }
+
+            get("/transactions/{eventId}/spans") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val eventId = call.parameters["eventId"]
+                if (eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasTransactionAccess(userId, eventId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val spansResponse = dashboardService.getTransactionSpans(eventId)
+                if (spansResponse == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(spansResponse)
+                }
+            }
+
+            get("/transactions/{eventId}/related-errors") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val eventId = call.parameters["eventId"]
+                if (eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasTransactionAccess(userId, eventId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 20
+                val relatedErrors = dashboardService.getRelatedErrorsForTransaction(eventId, limit)
+                call.respond(relatedErrors)
+            }
             
             // Releases
             get("/projects/{projectId}/releases") {

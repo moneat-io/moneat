@@ -117,6 +117,74 @@ data class TopIssue(
 )
 
 @Serializable
+data class TransactionSummaryResponse(
+    val name: String,
+    val op: String,
+    val latestEventId: String? = null,
+    val count: Long,
+    val p50: Double,
+    val p75: Double,
+    val p95: Double,
+    val failureRate: Double,
+    val tpm: Double
+)
+
+@Serializable
+data class TransactionDetailResponse(
+    val eventId: String,
+    val name: String,
+    val op: String,
+    val startTimestamp: Double,
+    val duration: Double,
+    val traceId: String,
+    val timestamp: String,
+    val environment: String?,
+    val release: String?,
+    val status: String? = null,
+    val tags: Map<String, String>,
+    val contexts: String,
+    val breadcrumbs: String? = null,
+    val request: String? = null
+)
+
+@Serializable
+data class SpanResponse(
+    val spanId: String,
+    val parentSpanId: String? = null,
+    val op: String,
+    val description: String,
+    val startTimestamp: Double,
+    val endTimestamp: Double,
+    val duration: Double,
+    val status: String? = null,
+    val tags: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class TransactionWithSpansResponse(
+    val transaction: TransactionDetailResponse,
+    val spans: List<SpanResponse>
+)
+
+@Serializable
+data class SlowTransactionResponse(
+    val eventId: String,
+    val name: String,
+    val op: String,
+    val duration: Double,
+    val timestamp: String
+)
+
+@Serializable
+data class PerformanceStatsResponse(
+    val apdex: Double,
+    val throughput: List<TimelinePoint>,
+    val slowestTransactions: List<SlowTransactionResponse>,
+    val totalTransactions: Long,
+    val avgDuration: Double
+)
+
+@Serializable
 data class IssueUpdateRequest(
     val status: String? = null
 )

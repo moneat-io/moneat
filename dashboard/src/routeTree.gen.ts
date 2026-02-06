@@ -15,6 +15,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReleasesRouteImport } from './routes/releases'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -22,6 +23,7 @@ import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -52,6 +54,11 @@ const ReleasesRoute = ReleasesRouteImport.update({
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerformanceRoute = PerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -89,6 +96,12 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
+const PerformanceTransactionIdRoute =
+  PerformanceTransactionIdRouteImport.update({
+    id: '/$transactionId',
+    path: '/$transactionId',
+    getParentRoute: () => PerformanceRoute,
+  } as any)
 const IssuesIssueIdRoute = IssuesIssueIdRouteImport.update({
   id: '/issues/$issueId',
   path: '/issues/$issueId',
@@ -101,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/performance': typeof PerformanceRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -108,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
 }
@@ -117,6 +132,7 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/performance': typeof PerformanceRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -124,6 +140,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
 }
@@ -134,6 +151,7 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/performance': typeof PerformanceRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -141,6 +159,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
 }
@@ -152,6 +171,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/onboarding'
+    | '/performance'
     | '/projects'
     | '/releases'
     | '/reset-password'
@@ -159,6 +179,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/issues/$issueId'
+    | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
   fileRoutesByTo: FileRoutesByTo
@@ -168,6 +189,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/onboarding'
+    | '/performance'
     | '/projects'
     | '/releases'
     | '/reset-password'
@@ -175,6 +197,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/issues/$issueId'
+    | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
   id:
@@ -184,6 +207,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/onboarding'
+    | '/performance'
     | '/projects'
     | '/releases'
     | '/reset-password'
@@ -191,6 +215,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/issues/$issueId'
+    | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
   fileRoutesById: FileRoutesById
@@ -201,6 +226,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
+  PerformanceRoute: typeof PerformanceRouteWithChildren
   ProjectsRoute: typeof ProjectsRouteWithChildren
   ReleasesRoute: typeof ReleasesRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -254,6 +280,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/performance': {
+      id: '/performance'
+      path: '/performance'
+      fullPath: '/performance'
+      preLoaderRoute: typeof PerformanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding': {
       id: '/onboarding'
       path: '/onboarding'
@@ -303,6 +336,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
+    '/performance/$transactionId': {
+      id: '/performance/$transactionId'
+      path: '/$transactionId'
+      fullPath: '/performance/$transactionId'
+      preLoaderRoute: typeof PerformanceTransactionIdRouteImport
+      parentRoute: typeof PerformanceRoute
+    }
     '/issues/$issueId': {
       id: '/issues/$issueId'
       path: '/issues/$issueId'
@@ -312,6 +352,18 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface PerformanceRouteChildren {
+  PerformanceTransactionIdRoute: typeof PerformanceTransactionIdRoute
+}
+
+const PerformanceRouteChildren: PerformanceRouteChildren = {
+  PerformanceTransactionIdRoute: PerformanceTransactionIdRoute,
+}
+
+const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(
+  PerformanceRouteChildren,
+)
 
 interface ProjectsRouteChildren {
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
@@ -343,6 +395,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
+  PerformanceRoute: PerformanceRouteWithChildren,
   ProjectsRoute: ProjectsRouteWithChildren,
   ReleasesRoute: ReleasesRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
