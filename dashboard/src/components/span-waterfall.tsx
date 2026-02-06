@@ -82,13 +82,20 @@ function TimeRuler({ durationMs }: TimeRulerProps) {
   })
 
   return (
-    <div className="relative h-10 border-b bg-muted/20">
-      {points.map((tick) => (
-        <div key={tick.left} className="absolute top-0 h-full" style={{ left: tick.left }}>
-          <div className="h-full w-px bg-border/80" />
-          <div className="-translate-x-1/2 pt-1 text-[10px] text-muted-foreground">{tick.label}</div>
-        </div>
-      ))}
+    <div className="grid grid-cols-[minmax(260px,36%)_1fr] border-b bg-muted/20 text-xs">
+      <div className="flex items-center px-2 py-1.5 text-foreground/70 font-medium" aria-hidden="true">
+        Time
+      </div>
+      <div className="relative h-9 overflow-hidden px-2 py-1">
+        {points.map((tick) => (
+          <div key={tick.left} className="absolute top-0 h-full" style={{ left: tick.left }}>
+            <div className="h-3 w-px bg-border/80 shrink-0" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-[10px] whitespace-nowrap text-[10px] font-medium text-foreground/80">
+              {tick.label}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -96,16 +103,16 @@ function TimeRuler({ durationMs }: TimeRulerProps) {
 function SpanTooltip({ span, x, y }: SpanTooltipProps) {
   return (
     <div
-      className="fixed z-50 w-72 rounded-md border bg-popover px-3 py-2 text-xs shadow-lg"
+      className="fixed z-50 w-72 rounded-md border bg-popover px-3 py-2 text-xs shadow-lg text-popover-foreground"
       style={{ left: x, top: y }}
     >
-      <div className="mb-1 font-semibold text-popover-foreground">{span.op || 'operation'}</div>
-      <div className="text-muted-foreground">{span.description || 'No description'}</div>
-      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
-        <span>Duration</span>
-        <span className="text-right text-foreground">{span.duration.toFixed(2)}ms</span>
-        <span>Status</span>
-        <span className="text-right text-foreground">{span.status || 'unknown'}</span>
+      <div className="mb-1 font-semibold">{span.op || 'operation'}</div>
+      <div className="text-foreground/90">{span.description || 'No description'}</div>
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
+        <span className="text-foreground/70">Duration</span>
+        <span className="text-right font-medium">{span.duration.toFixed(2)}ms</span>
+        <span className="text-foreground/70">Status</span>
+        <span className="text-right font-medium">{span.status || 'unknown'}</span>
       </div>
     </div>
   )
@@ -135,6 +142,8 @@ function SpanRow({
   const isCollapsed = collapsed.has(span.spanId)
   const leftPct = durationSec > 0 ? ((span.startTimestamp - transactionStartSec) / durationSec) * 100 : 0
   const widthPct = durationSec > 0 ? ((span.duration / 1000) / durationSec) * 100 : 0
+  const durationLabel = span.duration >= 1000 ? `${(span.duration / 1000).toFixed(2)}s` : `${Math.round(span.duration)}ms`
+  const showLabelInBar = widthPct >= 12
 
   return (
     <div className="grid min-h-8 grid-cols-[minmax(260px,36%)_1fr] border-b text-xs last:border-b-0">
@@ -144,7 +153,7 @@ function SpanRow({
             <button
               type="button"
               onClick={() => onToggle(span.spanId)}
-              className="rounded p-0.5 text-muted-foreground hover:bg-accent"
+              className="rounded p-0.5 text-foreground/70 hover:bg-accent hover:text-foreground"
               aria-label={isCollapsed ? 'Expand span' : 'Collapse span'}
             >
               {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -152,22 +161,28 @@ function SpanRow({
           ) : (
             <span className="inline-block h-3.5 w-3.5" />
           )}
-          <span className="truncate font-medium">{span.op || 'unknown'}</span>
-          <span className="truncate text-muted-foreground">{span.description || ''}</span>
+          <span className="truncate font-medium text-foreground">{span.op || 'unknown'}</span>
+          <span className="truncate text-foreground/80">{span.description || ''}</span>
         </div>
       </div>
       <div
-        className="relative px-2 py-1"
+        className="relative px-2 py-1 min-h-6"
         onMouseMove={(e) => onHover(span, e.clientX + 12, e.clientY + 12)}
         onMouseLeave={onLeave}
       >
         <div
-          className={cn('h-6 rounded-sm', opColorClass(span.op))}
+          className={cn('relative h-6 rounded-sm min-w-[2px] overflow-hidden', opColorClass(span.op))}
           style={{
             marginLeft: `${Math.max(0, leftPct)}%`,
             width: `${Math.max(1, Math.min(100, widthPct))}%`,
           }}
-        />
+        >
+          {showLabelInBar && (
+            <span className="absolute inset-0 flex items-center px-1.5 text-[10px] font-semibold text-white drop-shadow-[0_0_1px_rgba(0,0,0,0.8)] select-none">
+              {durationLabel}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

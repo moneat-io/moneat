@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SpanWaterfall } from '@/components/span-waterfall'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   CheckCircle2, 
@@ -332,17 +333,11 @@ function IssueDetailPage() {
                 Spans Preview ({primaryTransactionSpans.spans.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {primaryTransactionSpans.spans.slice(0, 10).map((span) => (
-                <div key={span.spanId} className="flex items-center justify-between rounded border p-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{span.description || '(no description)'}</div>
-                    <div className="text-xs text-muted-foreground">{span.op || 'span'}</div>
-                  </div>
-                  <div className="ml-3 text-xs font-mono text-muted-foreground">{formatDuration(span.duration)}</div>
-                </div>
-              ))}
-
+            <CardContent className="space-y-3">
+              <SpanWaterfall
+                transaction={primaryTransactionSpans.transaction}
+                spans={primaryTransactionSpans.spans}
+              />
               <Link
                 to="/performance/$transactionId"
                 params={{ transactionId: primaryTransactionSpans.transaction.eventId }}

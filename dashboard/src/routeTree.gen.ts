@@ -21,6 +21,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
@@ -86,6 +87,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PerformanceRoute,
+} as any)
 const ReleasesVersionRoute = ReleasesVersionRouteImport.update({
   id: '/$version',
   path: '/$version',
@@ -125,6 +131,7 @@ export interface FileRoutesByFullPath {
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
+  '/performance/': typeof PerformanceIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -132,7 +139,6 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/performance': typeof PerformanceRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -143,6 +149,7 @@ export interface FileRoutesByTo {
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
+  '/performance': typeof PerformanceIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -162,6 +169,7 @@ export interface FileRoutesById {
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
+  '/performance/': typeof PerformanceIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -182,6 +190,7 @@ export interface FileRouteTypes {
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
+    | '/performance/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -189,7 +198,6 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/onboarding'
-    | '/performance'
     | '/projects'
     | '/releases'
     | '/reset-password'
@@ -200,6 +208,7 @@ export interface FileRouteTypes {
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
+    | '/performance'
   id:
     | '__root__'
     | '/'
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
+    | '/performance/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -322,6 +332,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/performance/': {
+      id: '/performance/'
+      path: '/'
+      fullPath: '/performance/'
+      preLoaderRoute: typeof PerformanceIndexRouteImport
+      parentRoute: typeof PerformanceRoute
+    }
     '/releases/$version': {
       id: '/releases/$version'
       path: '/$version'
@@ -355,10 +372,12 @@ declare module '@tanstack/react-router' {
 
 interface PerformanceRouteChildren {
   PerformanceTransactionIdRoute: typeof PerformanceTransactionIdRoute
+  PerformanceIndexRoute: typeof PerformanceIndexRoute
 }
 
 const PerformanceRouteChildren: PerformanceRouteChildren = {
   PerformanceTransactionIdRoute: PerformanceTransactionIdRoute,
+  PerformanceIndexRoute: PerformanceIndexRoute,
 }
 
 const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(

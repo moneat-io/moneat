@@ -1,11 +1,14 @@
 import { createFileRoute, redirect, Link } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { SpanWaterfall } from '@/components/span-waterfall'
-import { ChevronLeft, Clock3, DatabaseZap, Globe } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock3, DatabaseZap, Globe, Tag, Layers } from 'lucide-react'
 
 export const Route = createFileRoute('/performance/$transactionId')({
   beforeLoad: () => {
@@ -71,8 +74,74 @@ function BreadcrumbsTimeline({ breadcrumbs }: { breadcrumbs?: string }) {
   )
 }
 
+function formatContextValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value
+  return JSON.stringify(value)
+}
+
+function ContextSection({ name, data, depth = 0, defaultOpen = true }: { name: string; data: unknown; depth?: number; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const isNested = depth > 0
+
+  const entries = typeof data === 'object' && data !== null
+    ? Object.entries(data as Record<string, unknown>)
+    : [['value', data]]
+
+  return (
+    <div
+      className={cn(
+        'rounded-lg border border-border bg-card shadow-sm',
+        isNested && 'ml-4 mt-2 border-l-2 border-l-primary/20 first:mt-0 mb-3'
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-2 rounded-t-lg px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        <span className="capitalize">{name.replace(/_/g, ' ')}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">{entries.length} {entries.length === 1 ? 'field' : 'fields'}</span>
+          <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', open && 'rotate-90')} />
+        </div>
+      </button>
+      {open && (
+        <div className="rounded-b-lg border-t border-b border-border bg-muted/10 overflow-hidden">
+          <div className="divide-y pb-2">
+            {entries.map(([key, value]) => {
+              const isNestedObject = typeof value === 'object' && value !== null && !Array.isArray(value)
+              const isArray = Array.isArray(value)
+
+              if (isNestedObject) {
+                return (
+                  <ContextSection key={key} name={key} data={value} depth={depth + 1} defaultOpen={defaultOpen} />
+                )
+              }
+
+              return (
+                <div key={key} className="flex items-start justify-between gap-4 px-3 py-2">
+                  <span className="shrink-0 text-xs text-muted-foreground">{key}</span>
+                  <span className="text-right font-mono text-xs break-all">
+                    {isArray
+                      ? (value as unknown[]).map(formatContextValue).join(', ')
+                      : formatContextValue(value)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TransactionDetailPage() {
   const { transactionId } = Route.useParams()
+  const [expandByDefault, setExpandByDefault] = useState(true)
 
   const { data, isLoading } = useQuery({
     queryKey: ['transaction-spans', transactionId],
@@ -166,33 +235,52 @@ function TransactionDetailPage() {
             <CardHeader>
               <CardTitle>Tags & Context</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5 pb-6">
               <div>
-                <div className="mb-2 text-sm font-medium">Tags</div>
+                <div className="mb-2.5 flex items-center gap-1.5 text-sm font-medium">
+                  <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                  Tags
+                </div>
                 {Object.keys(transaction.tags).length === 0 ? (
                   <p className="text-sm text-muted-foreground">No tags</p>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="flex flex-wrap gap-2">
                     {Object.entries(transaction.tags).map(([key, value]) => (
-                      <div key={key} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{key}</span>
-                        <span className="font-mono">{value}</span>
+                      <div
+                        key={key}
+                        className="inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1 text-xs"
+                      >
+                        <span className="text-muted-foreground">{key}:</span>
+                        <span className="font-mono font-medium">{value}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
               <div>
-                <div className="mb-2 text-sm font-medium">Contexts</div>
+                <div className="mb-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-sm font-medium">
+                    <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                    Contexts
+                  </div>
+                  {contextEntries.length > 0 && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={expandByDefault}
+                        onCheckedChange={(checked) => setExpandByDefault(checked === true)}
+                      />
+                      <Label className="cursor-pointer text-sm font-normal text-muted-foreground">
+                        Expand All
+                      </Label>
+                    </label>
+                  )}
+                </div>
                 {contextEntries.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No context entries</p>
                 ) : (
-                  <div className="max-h-64 space-y-2 overflow-auto">
+                  <div key={String(expandByDefault)} className="space-y-4">
                     {contextEntries.map(([key, value]) => (
-                      <div key={key} className="rounded border p-2">
-                        <div className="text-xs font-medium text-muted-foreground">{key}</div>
-                        <pre className="mt-1 overflow-auto text-xs">{JSON.stringify(value, null, 2)}</pre>
-                      </div>
+                      <ContextSection key={key} name={key} data={value} defaultOpen={expandByDefault} />
                     ))}
                   </div>
                 )}
