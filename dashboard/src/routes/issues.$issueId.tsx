@@ -88,15 +88,23 @@ function IssueDetailPage() {
     <div className="min-h-screen bg-background">
       <div className="p-6 max-w-7xl mx-auto">
         {/* Breadcrumbs */}
-        <div className="mb-4">
-          <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <nav className="mb-6 flex items-center gap-2 rounded-lg border border-amber-200/60 bg-amber-50/80 dark:border-amber-800/50 dark:bg-amber-950/30 px-4 py-2.5">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-800 dark:text-amber-200 hover:text-amber-600 dark:hover:text-amber-100 transition-colors"
+          >
             <ChevronLeft className="h-4 w-4" />
-            Back to Dashboard
+            Dashboard
           </Link>
-        </div>
+          <span className="text-amber-600/70 dark:text-amber-400/60">/</span>
+          <span className="text-sm font-medium text-amber-900 dark:text-amber-100 truncate max-w-[200px] sm:max-w-none" title={issue.title}>
+            Issue
+          </span>
+          <span className="text-amber-600/70 dark:text-amber-400/60 text-xs ml-1">({issue.level})</span>
+        </nav>
 
         {/* Issue Header */}
-        <div className="mb-6 bg-card rounded-lg border p-6">
+        <div className={`mb-6 bg-card rounded-lg border border-l-4 p-6 ${issue.level.toLowerCase() === 'fatal' || issue.level.toLowerCase() === 'error' ? 'border-l-red-500' : issue.level.toLowerCase() === 'warning' ? 'border-l-amber-500' : issue.level.toLowerCase() === 'info' ? 'border-l-blue-500' : 'border-l-muted-foreground/40'}`}>
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
@@ -139,21 +147,21 @@ function IssueDetailPage() {
           </div>
 
           <div className="grid grid-cols-4 gap-4 pt-4 border-t">
-            <div>
-              <div className="text-xs text-muted-foreground uppercase mb-1">Events</div>
-              <div className="text-2xl font-bold">{issue.eventCount}</div>
+            <div className="rounded-lg bg-blue-500/10 dark:bg-blue-500/20 px-3 py-2 border border-blue-200/50 dark:border-blue-800/50">
+              <div className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase mb-1">Events</div>
+              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{issue.eventCount}</div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase mb-1">Users</div>
-              <div className="text-2xl font-bold">{issue.userCount}</div>
+            <div className="rounded-lg bg-violet-500/10 dark:bg-violet-500/20 px-3 py-2 border border-violet-200/50 dark:border-violet-800/50">
+              <div className="text-xs font-medium text-violet-700 dark:text-violet-300 uppercase mb-1">Users</div>
+              <div className="text-2xl font-bold text-violet-900 dark:text-violet-100">{issue.userCount}</div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase mb-1">First Seen</div>
-              <div className="text-sm">{formatRelativeTime(issue.firstSeen)}</div>
+            <div className="rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 px-3 py-2 border border-emerald-200/50 dark:border-emerald-800/50">
+              <div className="text-xs font-medium text-emerald-700 dark:text-emerald-300 uppercase mb-1">First Seen</div>
+              <div className="text-sm font-medium text-emerald-900 dark:text-emerald-100">{formatRelativeTime(issue.firstSeen)}</div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase mb-1">Last Seen</div>
-              <div className="text-sm">{formatRelativeTime(issue.lastSeen)}</div>
+            <div className="rounded-lg bg-amber-500/10 dark:bg-amber-500/20 px-3 py-2 border border-amber-200/50 dark:border-amber-800/50">
+              <div className="text-xs font-medium text-amber-700 dark:text-amber-300 uppercase mb-1">Last Seen</div>
+              <div className="text-sm font-medium text-amber-900 dark:text-amber-100">{formatRelativeTime(issue.lastSeen)}</div>
             </div>
           </div>
         </div>
@@ -161,9 +169,12 @@ function IssueDetailPage() {
         {/* Latest Event Details */}
         {latestEvent && (
           <>
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Exception</CardTitle>
+            <Card className="mb-6 border-l-4 border-l-red-400 dark:border-l-red-600">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                  <AlertCircle className="h-5 w-5" />
+                  Exception
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {latestEvent.exception ? (
@@ -175,9 +186,12 @@ function IssueDetailPage() {
             </Card>
 
             {latestEvent.breadcrumbs && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle>Breadcrumbs</CardTitle>
+              <Card className="mb-6 border-l-4 border-l-amber-400 dark:border-l-amber-600">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                    <Navigation className="h-5 w-5" />
+                    Breadcrumbs
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <BreadcrumbsViewer breadcrumbs={latestEvent.breadcrumbs} />
@@ -186,9 +200,12 @@ function IssueDetailPage() {
             )}
 
             <div className="grid grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tags</CardTitle>
+              <Card className="border-l-4 border-l-blue-400 dark:border-l-blue-600">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                    <Info className="h-5 w-5" />
+                    Tags
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
@@ -202,9 +219,12 @@ function IssueDetailPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Event Details</CardTitle>
+              <Card className="border-l-4 border-l-slate-400 dark:border-l-slate-500">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                    <Activity className="h-5 w-5" />
+                    Event Details
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
@@ -243,9 +263,12 @@ function IssueDetailPage() {
 
         {/* Event Timeline */}
         {events.length > 1 && (
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Recent Events ({events.length})</CardTitle>
+          <Card className="mt-6 border-l-4 border-l-violet-400 dark:border-l-violet-600">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
+                <Activity className="h-5 w-5" />
+                Recent Events ({events.length})
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -428,6 +451,20 @@ function StackFrame({ frame }: { frame: any }) {
   )
 }
 
+// Helper to get color classes for breadcrumb category (border + icon + badge)
+function getBreadcrumbCategoryColor(category: string): { border: string; icon: string; badge: string } {
+  if (!category) return { border: 'border-l-slate-400', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
+  const cat = category.toLowerCase()
+  if (cat.includes('lifecycle')) return { border: 'border-l-emerald-500', icon: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' }
+  if (cat.includes('click') || cat.includes('touch')) return { border: 'border-l-violet-500', icon: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300' }
+  if (cat.includes('navigation')) return { border: 'border-l-blue-500', icon: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' }
+  if (cat.includes('action')) return { border: 'border-l-amber-500', icon: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' }
+  if (cat.includes('http') || cat.includes('network')) return { border: 'border-l-cyan-500', icon: 'text-cyan-600 dark:text-cyan-400', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300' }
+  if (cat.includes('device')) return { border: 'border-l-orange-500', icon: 'text-orange-600 dark:text-orange-400', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300' }
+  if (cat.includes('message') || cat.includes('log')) return { border: 'border-l-pink-500', icon: 'text-pink-600 dark:text-pink-400', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300' }
+  return { border: 'border-l-slate-400', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
+}
+
 // Helper to get icon for breadcrumb category
 function getBreadcrumbIcon(category: string, data?: any) {
   if (!category) return <Circle className="h-4 w-4" />
@@ -539,14 +576,15 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
           
           const category = crumb.category || crumb.type || 'event'
           const formattedData = formatBreadcrumbData(crumb)
+          const colors = getBreadcrumbCategoryColor(category)
           
           return (
             <div 
               key={idx} 
-              className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+              className={`flex items-start gap-3 p-3 rounded-lg border border-l-4 bg-card hover:bg-accent/50 transition-colors ${colors.border}`}
             >
               {/* Icon */}
-              <div className="text-muted-foreground mt-0.5">
+              <div className={`mt-0.5 flex-shrink-0 ${colors.icon}`}>
                 {getBreadcrumbIcon(category, crumb.data)}
               </div>
               
@@ -558,7 +596,7 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge className={`text-xs border-0 ${colors.badge}`}>
                     {category}
                   </Badge>
                 </div>

@@ -39,7 +39,7 @@ function VerifyEmail() {
   }, [token, navigate])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+    <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Email Verification</CardTitle>
@@ -52,22 +52,22 @@ function VerifyEmail() {
         <CardContent>
           {status === 'loading' && (
             <div className="flex justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
             </div>
           )}
           {status === 'success' && (
             <div className="text-center">
-              <div className="text-green-600 dark:text-green-400 mb-2">✓</div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
+              <div className="text-green-600 mb-2">✓</div>
+              <p className="text-sm text-muted-foreground">{message}</p>
             </div>
           )}
           {status === 'error' && (
             <div className="text-center">
-              <div className="text-red-600 dark:text-red-400 mb-2">✗</div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
+              <div className="text-destructive mb-2">✗</div>
+              <p className="text-sm text-muted-foreground">{message}</p>
               <button
                 onClick={() => navigate({ to: '/login' })}
-                className="mt-4 text-sm text-blue-600 hover:underline"
+                className="mt-4 text-sm text-primary hover:underline"
               >
                 Go to login
               </button>
