@@ -18,8 +18,8 @@ import {
   BookOpen,
   Package,
 } from 'lucide-react'
-import { getProjectColor, getProjectInitial } from '@/lib/project-colors'
 import { cn } from '@/lib/utils'
+import { getPlatformInfo } from '@/routes/projects'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +31,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -76,6 +75,25 @@ export function Sidebar() {
   const projectNavItems = selectedProjectId ? [
     { icon: BookOpen, label: 'Setup Guide', href: `/projects/${selectedProjectId}` }
   ] : []
+  const currentProject = projects?.find((project) => project.id === selectedProjectId) || projects?.[0]
+
+  const renderProjectPlatformIcon = (
+    platformId?: string,
+    iconClassName = 'h-3.5 w-3.5',
+    containerClassName = 'h-5 w-5'
+  ) => {
+    const platformInfo = getPlatformInfo(platformId) || getPlatformInfo('other')
+    const PlatformIcon = platformInfo?.icon || Package
+
+    return (
+      <div
+        className={cn('rounded flex items-center justify-center flex-shrink-0', containerClassName)}
+        style={{ backgroundColor: platformInfo?.color || '#4b5563' }}
+      >
+        <PlatformIcon className={cn(iconClassName, 'text-white')} />
+      </div>
+    )
+  }
 
   const getInitials = (name?: string) => {
     if (!name) return 'U'
@@ -148,35 +166,16 @@ export function Sidebar() {
               onValueChange={(val) => handleProjectChange(Number(val))}
             >
               <SelectTrigger className="w-full">
-                <div className="flex items-center gap-2">
-                  {(() => {
-                    const currentProject = projects.find(p => p.id === selectedProjectId) || projects[0]
-                    return currentProject ? (
-                      <>
-                        <div 
-                          className="rounded flex items-center justify-center w-5 h-5 flex-shrink-0"
-                          style={{ backgroundColor: getProjectColor(currentProject.name) }}
-                        >
-                          <span className="text-white font-semibold text-xs">{getProjectInitial(currentProject.name)}</span>
-                        </div>
-                        <SelectValue placeholder="Select project" />
-                      </>
-                    ) : (
-                      <SelectValue placeholder="Select project" />
-                    )
-                  })()}
+                <div className="flex items-center gap-2 min-w-0">
+                  {renderProjectPlatformIcon(currentProject?.platform, 'h-3.5 w-3.5', 'h-5 w-5')}
+                  <span className="truncate">{currentProject?.name || 'Select project'}</span>
                 </div>
               </SelectTrigger>
               <SelectContent>
                 {projects.map((project) => (
                   <SelectItem key={project.id} value={project.id.toString()}>
                     <div className="flex items-center gap-2">
-                      <div 
-                        className="rounded flex items-center justify-center w-5 h-5 flex-shrink-0"
-                        style={{ backgroundColor: getProjectColor(project.name) }}
-                      >
-                        <span className="text-white font-semibold text-xs">{getProjectInitial(project.name)}</span>
-                      </div>
+                      {renderProjectPlatformIcon(project.platform, 'h-3 w-3', 'h-4 w-4')}
                       <span>{project.name}</span>
                     </div>
                   </SelectItem>
@@ -189,26 +188,12 @@ export function Sidebar() {
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="w-full justify-center px-0">
-                      {(() => {
-                        const currentProject = projects.find(p => p.id === selectedProjectId) || projects[0]
-                        return currentProject ? (
-                          <div 
-                            className="rounded flex items-center justify-center w-8 h-8"
-                            style={{ backgroundColor: getProjectColor(currentProject.name) }}
-                          >
-                            <span className="text-white font-semibold text-sm">{getProjectInitial(currentProject.name)}</span>
-                          </div>
-                        ) : (
-                          <div className="bg-gray-500 rounded flex items-center justify-center w-8 h-8">
-                            <span className="text-white font-semibold text-sm">?</span>
-                          </div>
-                        )
-                      })()}
+                      {renderProjectPlatformIcon(currentProject?.platform, 'h-4 w-4', 'h-8 w-8')}
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="right">
-                  <p>{projects.find(p => p.id === selectedProjectId)?.name || projects[0]?.name || 'Select project'}</p>
+                  <p>{currentProject?.name || 'Select project'}</p>
                 </TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="start" side="right" className="w-56">
@@ -221,11 +206,8 @@ export function Sidebar() {
                       project.id === selectedProjectId && 'bg-accent'
                     )}
                   >
-                    <div 
-                      className="rounded flex items-center justify-center w-5 h-5 mr-2 flex-shrink-0"
-                      style={{ backgroundColor: getProjectColor(project.name) }}
-                    >
-                      <span className="text-white font-semibold text-xs">{getProjectInitial(project.name)}</span>
+                    <div className="mr-2">
+                      {renderProjectPlatformIcon(project.platform, 'h-3 w-3', 'h-4 w-4')}
                     </div>
                     {project.name}
                   </DropdownMenuItem>

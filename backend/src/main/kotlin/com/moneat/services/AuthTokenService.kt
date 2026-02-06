@@ -6,14 +6,11 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.*
+import kotlinx.datetime.*
 
 class AuthTokenService {
     private val secureRandom = SecureRandom()
-    private val dateFormatter = DateTimeFormatter.ISO_INSTANT
     
     companion object {
         // Supported permission scopes
@@ -56,10 +53,10 @@ class AuthTokenService {
         
         // Calculate expiration if specified
         val expiresAt = expiresInDays?.let {
-            Instant.now().plusSeconds((it * 24 * 60 * 60).toLong())
+            Clock.System.now().plus(it * 24 * 60 * 60, DateTimeUnit.SECOND)
         }
         
-        val createdAt = Instant.now()
+        val createdAt = Clock.System.now()
         
         val tokenId = transaction {
             AuthTokens.insert {
@@ -79,8 +76,8 @@ class AuthTokenService {
             token = tokenValue, // Only returned on creation
             scopes = scopes,
             lastUsedAt = null,
-            expiresAt = expiresAt?.let { it.atOffset(ZoneOffset.UTC).format(dateFormatter) },
-            createdAt = createdAt.atOffset(ZoneOffset.UTC).format(dateFormatter)
+            expiresAt = expiresAt?.toString(),
+            createdAt = createdAt.toString()
         )
     }
     
@@ -102,7 +99,7 @@ class AuthTokenService {
             
             // Check if token is expired
             val expiresAt = tokenRow[AuthTokens.expires_at]
-            if (expiresAt != null && expiresAt.isBefore(Instant.now())) {
+            if (expiresAt != null && expiresAt < Clock.System.now()) {
                 return@transaction null
             }
             
@@ -112,7 +109,7 @@ class AuthTokenService {
             
             // Update last_used_at timestamp
             AuthTokens.update({ AuthTokens.id eq tokenId }) {
-                it[last_used_at] = Instant.now()
+                it[last_used_at] = Clock.System.now()
             }
             
             TokenValidationResult(userId, scopes, tokenId)
@@ -147,9 +144,9 @@ class AuthTokenService {
                         name = row[AuthTokens.name],
                         token = null, // Never return the actual token
                         scopes = row[AuthTokens.scopes].split(",").filter { it.isNotEmpty() },
-                        lastUsedAt = row[AuthTokens.last_used_at]?.let { it.atOffset(ZoneOffset.UTC).format(dateFormatter) },
-                        expiresAt = row[AuthTokens.expires_at]?.let { it.atOffset(ZoneOffset.UTC).format(dateFormatter) },
-                        createdAt = row[AuthTokens.created_at].atOffset(ZoneOffset.UTC).format(dateFormatter)
+                        lastUsedAt = row[AuthTokens.last_used_at]?.toString(),
+                        expiresAt = row[AuthTokens.expires_at]?.toString(),
+                        createdAt = row[AuthTokens.created_at].toString()
                     )
                 }
         }

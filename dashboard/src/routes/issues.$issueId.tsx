@@ -12,11 +12,14 @@ import {
   AlertCircle, 
   ChevronLeft,
   Activity,
+  ArrowUpRight,
   MousePointer,
   Navigation,
   Zap,
   Info,
   MessageSquare,
+  Clock3,
+  DatabaseZap,
   Globe,
   Smartphone,
   Battery,
@@ -41,6 +44,11 @@ function getLevelColor(level: string): string {
   }
 }
 
+function formatDuration(ms: number) {
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`
+  return `${ms.toFixed(1)}ms`
+}
+
 export const Route = createFileRoute('/issues/$issueId')({
   beforeLoad: () => {
     if (!api.isAuthenticated()) {
@@ -63,6 +71,19 @@ function IssueDetailPage() {
   const { data: events = [] } = useQuery({
     queryKey: ['issue-events', issueId],
     queryFn: () => api.getIssueEvents(issueId),
+  })
+
+  const { data: relatedTransactions = [] } = useQuery({
+    queryKey: ['issue-transactions', issueId],
+    queryFn: () => api.getIssueTransactions(issueId),
+  })
+
+  const primaryTransactionId = relatedTransactions[0]?.eventId
+
+  const { data: primaryTransactionSpans } = useQuery({
+    queryKey: ['issue-transaction-spans', primaryTransactionId],
+    queryFn: () => api.getTransactionSpans(primaryTransactionId!),
+    enabled: !!primaryTransactionId,
   })
 
   const resolveMutation = useMutation({
@@ -261,6 +282,79 @@ function IssueDetailPage() {
           </>
         )}
 
+        <Card className="mt-6 border-l-4 border-l-indigo-400 dark:border-l-indigo-600">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
+              <Activity className="h-5 w-5" />
+              Related Transactions ({relatedTransactions.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {relatedTransactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No related transactions were found for this issue.</p>
+            ) : (
+              <div className="space-y-2">
+                {relatedTransactions.map((tx) => (
+                  <Link
+                    key={tx.eventId}
+                    to="/performance/$transactionId"
+                    params={{ transactionId: tx.eventId }}
+                    className="flex items-center justify-between rounded border p-3 transition-colors hover:bg-accent"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{tx.name || '(unnamed transaction)'}</span>
+                        {tx.op && <Badge variant="secondary">{tx.op}</Badge>}
+                        {tx.status && <Badge variant="outline">{tx.status}</Badge>}
+                      </div>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          {formatDuration(tx.duration)}
+                        </span>
+                        <span>{new Date(tx.timestamp).toLocaleString()}</span>
+                        {tx.traceId && <span className="truncate font-mono">trace {tx.traceId}</span>}
+                      </div>
+                    </div>
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {primaryTransactionSpans && (
+          <Card className="mt-6 border-l-4 border-l-cyan-400 dark:border-l-cyan-600">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-cyan-700 dark:text-cyan-300">
+                <DatabaseZap className="h-5 w-5" />
+                Spans Preview ({primaryTransactionSpans.spans.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {primaryTransactionSpans.spans.slice(0, 10).map((span) => (
+                <div key={span.spanId} className="flex items-center justify-between rounded border p-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{span.description || '(no description)'}</div>
+                    <div className="text-xs text-muted-foreground">{span.op || 'span'}</div>
+                  </div>
+                  <div className="ml-3 text-xs font-mono text-muted-foreground">{formatDuration(span.duration)}</div>
+                </div>
+              ))}
+
+              <Link
+                to="/performance/$transactionId"
+                params={{ transactionId: primaryTransactionSpans.transaction.eventId }}
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              >
+                Open Full Span Waterfall
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Event Timeline */}
         {events.length > 1 && (
           <Card className="mt-6 border-l-4 border-l-violet-400 dark:border-l-violet-600">
@@ -451,18 +545,18 @@ function StackFrame({ frame }: { frame: any }) {
   )
 }
 
-// Helper to get color classes for breadcrumb category (border + icon + badge)
+// Helper to get color classes for breadcrumb category (container border + icon + badge)
 function getBreadcrumbCategoryColor(category: string): { border: string; icon: string; badge: string } {
-  if (!category) return { border: 'border-l-slate-400', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
+  if (!category) return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
   const cat = category.toLowerCase()
-  if (cat.includes('lifecycle')) return { border: 'border-l-emerald-500', icon: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' }
-  if (cat.includes('click') || cat.includes('touch')) return { border: 'border-l-violet-500', icon: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300' }
-  if (cat.includes('navigation')) return { border: 'border-l-blue-500', icon: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' }
-  if (cat.includes('action')) return { border: 'border-l-amber-500', icon: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' }
-  if (cat.includes('http') || cat.includes('network')) return { border: 'border-l-cyan-500', icon: 'text-cyan-600 dark:text-cyan-400', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300' }
-  if (cat.includes('device')) return { border: 'border-l-orange-500', icon: 'text-orange-600 dark:text-orange-400', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300' }
-  if (cat.includes('message') || cat.includes('log')) return { border: 'border-l-pink-500', icon: 'text-pink-600 dark:text-pink-400', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300' }
-  return { border: 'border-l-slate-400', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
+  if (cat.includes('lifecycle')) return { border: 'border-emerald-300 dark:border-emerald-700', icon: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' }
+  if (cat.includes('click') || cat.includes('touch')) return { border: 'border-violet-300 dark:border-violet-700', icon: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300' }
+  if (cat.includes('navigation')) return { border: 'border-blue-300 dark:border-blue-700', icon: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' }
+  if (cat.includes('action')) return { border: 'border-amber-300 dark:border-amber-700', icon: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' }
+  if (cat.includes('http') || cat.includes('network')) return { border: 'border-cyan-300 dark:border-cyan-700', icon: 'text-cyan-600 dark:text-cyan-400', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300' }
+  if (cat.includes('device')) return { border: 'border-orange-300 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300' }
+  if (cat.includes('message') || cat.includes('log')) return { border: 'border-pink-300 dark:border-pink-700', icon: 'text-pink-600 dark:text-pink-400', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300' }
+  return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
 }
 
 // Helper to get icon for breadcrumb category
@@ -581,7 +675,7 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
           return (
             <div 
               key={idx} 
-              className={`flex items-start gap-3 p-3 rounded-lg border border-l-4 bg-card hover:bg-accent/50 transition-colors ${colors.border}`}
+              className={`flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors ${colors.border}`}
             >
               {/* Icon */}
               <div className={`mt-0.5 flex-shrink-0 ${colors.icon}`}>

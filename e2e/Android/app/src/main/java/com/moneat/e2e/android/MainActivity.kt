@@ -213,22 +213,27 @@ class MainActivity : AppCompatActivity() {
         thread {
             Sentry.setTag("performance_scenario", "failed")
             val transaction = Sentry.startTransaction("E2E/payment.submit", "http.client")
+            val transactionScope = transaction.makeCurrent()
             try {
                 val authSpan = transaction.startChild("auth.jwt", "Validate auth token")
                 Thread.sleep(120)
                 authSpan.finish(SpanStatus.OK)
 
                 val paymentSpan = transaction.startChild("http.client", "POST /api/payments")
-                Thread.sleep(180)
-                paymentSpan.finish(SpanStatus.INTERNAL_ERROR)
-
-                Sentry.withScope { scope ->
-                    scope.setTransaction(transaction)
-                    scope.setTag("error_type", "transaction_failure")
-                    scope.setTag("trace_linked", "true")
-                    Sentry.captureException(
-                        IllegalStateException("E2E payment submission failed: upstream 502")
-                    )
+                val paymentScope = paymentSpan.makeCurrent()
+                val failure = IllegalStateException("E2E payment submission failed: upstream 502")
+                try {
+                    Thread.sleep(180)
+                    Sentry.captureException(failure) { scope ->
+                        scope.setTransaction(transaction)
+                        scope.setActiveSpan(paymentSpan)
+                        scope.setTag("error_type", "transaction_failure")
+                        scope.setTag("trace_linked", "true")
+                    }
+                    paymentSpan.setThrowable(failure)
+                } finally {
+                    paymentScope.close()
+                    paymentSpan.finish(SpanStatus.INTERNAL_ERROR)
                 }
 
                 transaction.finish(SpanStatus.INTERNAL_ERROR)
@@ -237,6 +242,8 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 transaction.finish(SpanStatus.INTERNAL_ERROR)
                 log("Failed to send failed transaction scenario: ${e.message}")
+            } finally {
+                transactionScope.close()
             }
         }
     }

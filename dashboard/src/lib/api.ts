@@ -74,6 +74,16 @@ interface TransactionSummary {
   tpm: number
 }
 
+interface IssueTransaction {
+  eventId: string
+  name: string
+  op: string
+  duration: number
+  timestamp: string
+  status?: string | null
+  traceId?: string | null
+}
+
 interface TransactionDetail {
   eventId: string
   name: string
@@ -260,6 +270,12 @@ class ApiClient {
     return this.request<Event[]>(`${API_BASE}/issues/${issueId}/events?limit=${limit}`)
   }
 
+  async getIssueTransactions(issueId: string, limit = 20): Promise<IssueTransaction[]> {
+    return this.request<IssueTransaction[]>(
+      `${API_BASE}/issues/${issueId}/transactions?limit=${limit}`
+    )
+  }
+
   async updateIssue(issueId: string, updates: { status?: string }): Promise<void> {
     await this.request(`${API_BASE}/issues/${issueId}`, {
       method: 'PATCH',
@@ -318,9 +334,17 @@ class ApiClient {
     params.set('period', options.period || '7d')
     if (options.environment) params.set('environment', options.environment)
     if (options.operation) params.set('operation', options.operation)
-    return this.request<TransactionSummary[]>(
-      `${API_BASE}/projects/${projectId}/transactions?${params.toString()}`
-    )
+    const rows = await this.request<Array<TransactionSummary & {
+      latest_event_id?: string
+      failure_rate?: number
+    }>>(`${API_BASE}/projects/${projectId}/transactions?${params.toString()}`)
+
+    // Normalize wire-format variants to keep routing resilient.
+    return rows.map((row) => ({
+      ...row,
+      latestEventId: row.latestEventId || row.latest_event_id,
+      failureRate: row.failureRate ?? row.failure_rate ?? 0,
+    }))
   }
 
   async getPerformanceStats(
@@ -373,6 +397,7 @@ export type {
   ProjectStats,
   TimelinePoint,
   TopIssue,
+  IssueTransaction,
   TransactionSummary,
   TransactionDetail,
   Span,

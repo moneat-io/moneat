@@ -190,6 +190,27 @@ fun Route.apiRoutes() {
                 val events = dashboardService.getIssueEvents(issueId, limit)
                 call.respond(events)
             }
+
+            get("/issues/{issueId}/transactions") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val issueId = call.parameters["issueId"]
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 20
+
+                if (issueId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val transactions = dashboardService.getIssueTransactions(issueId, limit)
+                call.respond(transactions)
+            }
             
             patch("/issues/{issueId}") {
                 val principal = call.principal<JWTPrincipal>()

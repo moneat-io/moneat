@@ -51,6 +51,9 @@ dependencies {
     implementation("com.zaxxer:HikariCP:$hikari_version")
     implementation("org.flywaydb:flyway-core:10.6.0")
     implementation("org.flywaydb:flyway-database-postgresql:10.6.0")
+    
+    // Date/Time
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
 
     // Redis
     implementation("io.lettuce:lettuce-core:6.3.1.RELEASE")

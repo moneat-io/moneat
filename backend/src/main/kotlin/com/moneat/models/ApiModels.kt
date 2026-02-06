@@ -130,6 +130,17 @@ data class TransactionSummaryResponse(
 )
 
 @Serializable
+data class IssueTransactionResponse(
+    val eventId: String,
+    val name: String,
+    val op: String,
+    val duration: Double,
+    val timestamp: String,
+    val status: String? = null,
+    val traceId: String? = null
+)
+
+@Serializable
 data class TransactionDetailResponse(
     val eventId: String,
     val name: String,

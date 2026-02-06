@@ -1,10 +1,12 @@
 package com.moneat.services
 
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.server.config.*
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
@@ -21,6 +23,7 @@ class DashboardService {
     private val clickhouseDb = config.property("database.clickhouse.database").getString()
     private val clickhouseUser = config.property("database.clickhouse.user").getString()
     private val clickhousePassword = config.property("database.clickhouse.password").getString()
+    private val backendUrl = EnvConfig.get("BACKEND_URL", "http://localhost:8080")
     
     private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -146,7 +149,7 @@ class DashboardService {
                             name = row[Projects.name],
                             slug = row[Projects.slug],
                             platform = row[Projects.platform],
-                            dsn = "http://$publicKey@localhost:8080/$projectId",
+                            dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId",
                             issueCount = 0
                         ),
                         publicKey
@@ -173,7 +176,7 @@ class DashboardService {
                         name = row[Projects.name],
                         slug = row[Projects.slug],
                         platform = row[Projects.platform],
-                        dsn = "http://$publicKey@localhost:8080/$projectId",
+                        dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId",
                         issueCount = 0
                     )
                 }
@@ -218,7 +221,7 @@ class DashboardService {
                 name = request.name,
                 slug = slug,
                 platform = request.platform,
-                dsn = "http://$publicKey@localhost:8080/$projectId",
+                dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId",
                 issueCount = 0 // New projects always have 0 issues
             )
         }
@@ -435,6 +438,69 @@ class DashboardService {
         }
     }
 
+    suspend fun getIssueTransactions(issueId: String, limit: Int): List<IssueTransactionResponse> {
+        val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
+        val escapedIssueId = issueId.replace("'", "''")
+        val query = """
+            WITH (
+                SELECT arrayFilter(
+                    trace -> trace != '',
+                    arrayDistinct(groupArray(JSONExtractString(contexts, 'trace', 'trace_id')))
+                )
+                FROM $clickhouseDb.events
+                WHERE project_id = $projectId
+                    AND issue_id = '$escapedIssueId'
+                    AND event_type = 'error'
+            ) AS issue_trace_ids
+            SELECT
+                toString(event_id) as event_id,
+                transaction_name as name,
+                transaction_op as op,
+                duration_ms as duration,
+                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp,
+                JSONExtractString(contexts, 'trace', 'status') as status,
+                JSONExtractString(contexts, 'trace', 'trace_id') as trace_id
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+                AND event_type = 'transaction'
+                AND (
+                    issue_id = '$escapedIssueId'
+                    OR has(issue_trace_ids, JSONExtractString(contexts, 'trace', 'trace_id'))
+                )
+            ORDER BY timestamp DESC
+            LIMIT $limit
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    IssueTransactionResponse(
+                        eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
+                        name = obj["name"]?.jsonPrimitive?.content ?: "",
+                        op = obj["op"]?.jsonPrimitive?.content ?: "",
+                        duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                        status = obj["status"]?.jsonPrimitive?.contentOrNull?.ifBlank { null },
+                        traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull?.ifBlank { null }
+                    )
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch related transactions for issue $issueId" }
+            emptyList()
+        }
+    }
+
     suspend fun getTransactions(
         projectId: Long,
         period: String = "7d",
@@ -481,7 +547,8 @@ class DashboardService {
                     TransactionSummaryResponse(
                         name = obj["name"]?.jsonPrimitive?.content ?: "",
                         op = obj["op"]?.jsonPrimitive?.content ?: "",
-                        latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull,
+                        latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull
+                            ?: obj["latestEventId"]?.jsonPrimitive?.contentOrNull,
                         count = obj["count"]?.jsonPrimitive?.long ?: 0,
                         p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
                         p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
@@ -510,22 +577,25 @@ class DashboardService {
                 count() as total,
                 avg(duration_ms) as avg_duration,
                 (countIf(duration_ms <= 300) + countIf(duration_ms <= 1200)) / (2.0 * if(count() = 0, 1, count())) as apdex
-            FROM $clickhouseDb.events
-            WHERE project_id = $projectId
-                AND event_type = 'transaction'
-                AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+            FROM $clickhouseDb.events e
+            WHERE e.project_id = $projectId
+                AND e.event_type = 'transaction'
+                AND e.timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
                 $filters
             FORMAT JSONEachRow
         """.trimIndent()
 
         val throughputQuery = """
             SELECT
-                formatDateTime(toStartOfInterval(timestamp, INTERVAL ${periodConfig.intervalMinutes} MINUTE), '%Y-%c-%dT%H:%i:%S.000Z') as time,
+                formatDateTime(
+                    toStartOfInterval(e.timestamp, INTERVAL ${periodConfig.intervalMinutes} MINUTE),
+                    '%Y-%c-%dT%H:%i:%S.000Z'
+                ) as time,
                 count() as count
-            FROM $clickhouseDb.events
-            WHERE project_id = $projectId
-                AND event_type = 'transaction'
-                AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+            FROM $clickhouseDb.events e
+            WHERE e.project_id = $projectId
+                AND e.event_type = 'transaction'
+                AND e.timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
                 $filters
             GROUP BY time
             ORDER BY time
@@ -534,17 +604,17 @@ class DashboardService {
 
         val slowestQuery = """
             SELECT
-                toString(event_id) as event_id,
-                transaction_name as name,
-                transaction_op as op,
-                duration_ms as duration,
-                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp
-            FROM $clickhouseDb.events
-            WHERE project_id = $projectId
-                AND event_type = 'transaction'
-                AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                toString(e.event_id) as event_id,
+                e.transaction_name as name,
+                e.transaction_op as op,
+                e.duration_ms as duration,
+                formatDateTime(e.timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp_iso
+            FROM $clickhouseDb.events e
+            WHERE e.project_id = $projectId
+                AND e.event_type = 'transaction'
+                AND e.timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
                 $filters
-            ORDER BY duration_ms DESC
+            ORDER BY e.duration_ms DESC
             LIMIT 10
             FORMAT JSONEachRow
         """.trimIndent()
@@ -588,21 +658,26 @@ class DashboardService {
         val normalizedEventId = normalizeUuid(eventId) ?: return null
         val query = """
             SELECT
-                toString(event_id) as event_id,
-                transaction_name as name,
-                transaction_op as op,
-                toUnixTimestamp64Milli(timestamp) as end_ts_ms,
-                duration_ms,
-                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp,
-                environment,
-                release,
-                tags,
-                contexts,
-                breadcrumbs,
-                request
-            FROM $clickhouseDb.events
-            WHERE event_id = toUUID('$normalizedEventId')
-                AND event_type = 'transaction'
+                toString(e.event_id) as event_id,
+                e.transaction_name as name,
+                e.transaction_op as op,
+                toUnixTimestamp64Milli(
+                    ifNull(parseDateTime64BestEffortOrNull(toString(e.timestamp)), now64(3))
+                ) as end_ts_ms,
+                e.duration_ms,
+                formatDateTime(
+                    ifNull(parseDateTime64BestEffortOrNull(toString(e.timestamp)), now64(3)),
+                    '%Y-%c-%dT%H:%i:%S.000Z'
+                ) as timestamp_iso,
+                e.environment,
+                e.release,
+                e.tags,
+                e.contexts,
+                e.breadcrumbs,
+                e.request
+            FROM $clickhouseDb.events e
+            WHERE toString(e.event_id) = '$normalizedEventId'
+                AND e.event_type = 'transaction'
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
@@ -616,7 +691,17 @@ class DashboardService {
             }
 
             val body = response.bodyAsText()
+            if (!response.status.isSuccess()) {
+                logger.error { "Failed to fetch transaction $eventId (status=${response.status}): ${body.take(400)}" }
+                return null
+            }
+
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
+            if (line.startsWith("Code: ")) {
+                logger.error { "Failed to fetch transaction $eventId: ${line.take(400)}" }
+                return null
+            }
+
             val obj = json.parseToJsonElement(line).jsonObject
             val endTsMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
             val durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
@@ -635,7 +720,7 @@ class DashboardService {
                 startTimestamp = ((endTsMs - durationMs).coerceAtLeast(0.0)) / 1000.0,
                 duration = durationMs,
                 traceId = traceId,
-                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                timestamp = obj["timestamp_iso"]?.jsonPrimitive?.content ?: "",
                 environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
                 release = obj["release"]?.jsonPrimitive?.contentOrNull,
                 status = status,
@@ -665,7 +750,7 @@ class DashboardService {
                 status,
                 tags
             FROM $clickhouseDb.spans
-            WHERE transaction_id = toUUID('$normalizedEventId')
+            WHERE toString(transaction_id) = '$normalizedEventId'
             ORDER BY start_timestamp ASC
             FORMAT JSONEachRow
         """.trimIndent()
@@ -1315,14 +1400,25 @@ class DashboardService {
             setBody(query)
         }
         val body = response.bodyAsText()
+        
+        if (!response.status.isSuccess()) {
+            logger.error { "ClickHouse query failed: $body" }
+            return emptyList()
+        }
+        
         return body.lines()
             .filter { it.isNotBlank() }
-            .map { line ->
-                val obj = json.parseToJsonElement(line).jsonObject
-                TimelinePoint(
-                    timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
-                    count = obj["count"]?.jsonPrimitive?.long ?: 0
-                )
+            .mapNotNull { line ->
+                try {
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    TimelinePoint(
+                        timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
+                        count = obj["count"]?.jsonPrimitive?.long ?: 0
+                    )
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to parse line: $line" }
+                    null
+                }
             }
     }
 
@@ -1334,17 +1430,30 @@ class DashboardService {
             setBody(query)
         }
         val body = response.bodyAsText()
+        
+        if (!response.status.isSuccess()) {
+            logger.error { "ClickHouse query failed: $body" }
+            return emptyList()
+        }
+        
         return body.lines()
             .filter { it.isNotBlank() }
-            .map { line ->
-                val obj = json.parseToJsonElement(line).jsonObject
-                SlowTransactionResponse(
-                    eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
-                    name = obj["name"]?.jsonPrimitive?.content ?: "",
-                    op = obj["op"]?.jsonPrimitive?.content ?: "",
-                    duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                    timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: ""
-                )
+            .mapNotNull { line ->
+                try {
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    SlowTransactionResponse(
+                        eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
+                        name = obj["name"]?.jsonPrimitive?.content ?: "",
+                        op = obj["op"]?.jsonPrimitive?.content ?: "",
+                        duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        timestamp = obj["timestamp_iso"]?.jsonPrimitive?.content
+                            ?: obj["timestamp"]?.jsonPrimitive?.content
+                            ?: ""
+                    )
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to parse line: $line" }
+                    null
+                }
             }
     }
     

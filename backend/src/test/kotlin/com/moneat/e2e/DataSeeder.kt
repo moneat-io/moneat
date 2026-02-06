@@ -154,6 +154,9 @@ object DataSeeder {
                 it[is_active] = true
             }
             
+            val backendUrl = EnvConfig.get("BACKEND_URL", "http://localhost:8080")
+            val backendHost = backendUrl.removePrefix("http://").removePrefix("https://")
+            
             println("\n=== E2E SETUP COMPLETE ===")
             println("Test Users:")
             println("  - e2e-test@moneat.dev / e2e-test-password (owner)")
@@ -162,9 +165,9 @@ object DataSeeder {
             println("\nOrganization: E2E Testing Organization (slug: e2e-testing)")
             println("\nProjects:")
             println("  - Android E2E App (ID: $androidProjectId)")
-            println("    DSN: http://$androidPublicKey@localhost:8080/$androidProjectId")
+            println("    DSN: http://$androidPublicKey@$backendHost/$androidProjectId")
             println("  - KMP E2E App (ID: $kmpProjectId)")
-            println("    DSN: http://$kmpPublicKey@localhost:8080/$kmpProjectId")
+            println("    DSN: http://$kmpPublicKey@$backendHost/$kmpProjectId")
             println("\nNext steps:")
             println("1. Copy the DSNs above to e2e/Android/local.properties and e2e/KMP/local.properties")
             println("2. Build and run the Android and KMP apps")

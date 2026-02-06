@@ -28,7 +28,7 @@ export const Route = createFileRoute('/releases/$version')({
 function ReleaseDetailPage() {
   const { version } = Route.useParams()
   const { selectedProjectId } = useProject()
-  const decodedVersion = decodeURIComponent(version)
+  const releaseVersion = version
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -38,10 +38,10 @@ function ReleaseDetailPage() {
   const projectId = selectedProjectId || projects?.[0]?.id
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['releaseStats', projectId, decodedVersion],
+    queryKey: ['releaseStats', projectId, releaseVersion],
     queryFn: () =>
       projectId
-        ? api.getReleaseStats(projectId, decodedVersion)
+        ? api.getReleaseStats(projectId, releaseVersion)
         : Promise.reject(new Error('No project')),
     enabled: !!projectId,
   })
@@ -57,7 +57,7 @@ function ReleaseDetailPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to releases
           </Link>
-          <h2 className="text-2xl font-bold">{decodedVersion}</h2>
+          <h2 className="text-2xl font-bold">{releaseVersion}</h2>
           <p className="text-muted-foreground mt-1">Release statistics</p>
         </div>
 
