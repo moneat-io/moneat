@@ -6,6 +6,7 @@ interface MobileReplayViewerProps {
   platform: string
   className?: string
   onTimeUpdate?: (offsetMs: number) => void
+  onDurationReady?: (durationMs: number) => void
 }
 
 export interface MobileReplayViewerHandle {
@@ -77,9 +78,67 @@ function formatClock(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
+function formatBreadcrumbDetail(payload: Record<string, unknown>, category: string): string | undefined {
+  const cat = category.toLowerCase()
+
+  if (payload.message && typeof payload.message === 'string') {
+    return payload.message
+  }
+
+  // UI Lifecycle
+  if (cat.includes('ui.lifecycle')) {
+    const screen = payload.screen ?? 'Screen'
+    const state = payload.state ?? ''
+    return `${screen}: ${state}`
+  }
+
+  // UI Click
+  if (cat.includes('ui.click')) {
+    const viewClass = (payload['view.class'] as string)?.split('.').pop() ?? ''
+    const viewId = payload['view.id'] ?? ''
+    return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
+  }
+
+  // Navigation
+  if (cat.includes('navigation')) {
+    const from = payload.from ?? ''
+    const to = payload.to ?? ''
+    return `${from} → ${to}`
+  }
+
+  // HTTP
+  if (cat.includes('http') || cat.includes('network')) {
+    const parts: string[] = []
+    if (payload.method) parts.push(String(payload.method))
+    if (payload.url) parts.push(String(payload.url))
+    if (payload.status_code != null) parts.push(String(payload.status_code))
+    return parts.length > 0 ? parts.join(' ') : undefined
+  }
+
+  // Device
+  if (cat.includes('device')) {
+    if (payload.action && String(payload.action).includes('BATTERY')) {
+      const level = payload.level ?? ''
+      const charging = payload.charging ? ' (charging)' : ''
+      return `Battery ${level}%${charging}`
+    }
+    return payload.action ? String(payload.action) : undefined
+  }
+
+  if (payload.action && typeof payload.action === 'string') return payload.action
+  if (payload.type && typeof payload.type === 'string') return payload.type
+
+  return undefined
+}
+
 function getEventDetail(event: ReplayEvent): string | undefined {
   if (event.type !== 5 || !event.data?.payload) return undefined
-  const payload = event.data.payload
+  const payload = event.data.payload as Record<string, unknown>
+
+  if (event.data.tag === 'breadcrumb') {
+    const category = (payload.category ?? payload.type ?? '') as string
+    return formatBreadcrumbDetail(payload, category)
+  }
 
   const action = payload.action
   if (typeof action === 'string' && action.length > 0) return action
@@ -140,13 +199,31 @@ function getCategoryMarkerColors(category: string): {
   return { markerBackgroundColor: '#94a3b8', tooltipAccentColor: '#94a3b8' }
 }
 
+function formatCategoryAsTitle(category: string): string {
+  if (!category) return 'Breadcrumb'
+  // user_navigation → User Navigation, ui.click → UI Click, etc.
+  return category
+    .split(/[._-]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ')
+}
+
 function getEventTitle(event: ReplayEvent): string {
   if (event.type === 3) return 'Touch/Input'
   if (event.type === 4) return 'Viewport Metadata'
 
   if (event.type === 5) {
     const tag = event.data?.tag
-    if (tag === 'breadcrumb') return 'Breadcrumb'
+    if (tag === 'breadcrumb') {
+      const payload = event.data?.payload
+      const category = payload?.category ?? payload?.type
+      if (typeof category === 'string' && category.length > 0) {
+        return formatCategoryAsTitle(category)
+      }
+      const message = payload?.message
+      if (typeof message === 'string' && message.length > 0) return message
+      return 'Breadcrumb'
+    }
     if (tag === 'video') return 'Video Metadata'
     if (typeof tag === 'string' && tag.length > 0) return tag
     return 'Custom Event'
@@ -227,7 +304,7 @@ function findSeekTarget(globalMs: number, durationsMs: number[]): GlobalSeekTarg
 }
 
 export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileReplayViewerProps>(function MobileReplayViewer(
-  { events, platform, className = '', onTimeUpdate },
+  { events, platform, className = '', onTimeUpdate, onDurationReady },
   ref
 ) {
   const videoSegments = useMemo(
@@ -338,6 +415,12 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
     () => segmentDurationsMs.reduce((sum, duration) => sum + duration, 0),
     [segmentDurationsMs]
   )
+
+  useEffect(() => {
+    if (totalDurationMs > 0) {
+      onDurationReady?.(totalDurationMs)
+    }
+  }, [totalDurationMs, onDurationReady])
 
   const selectedVideo = filteredVideoSegments[selectedSegmentIdx]
   const videoSrc = selectedVideo
@@ -584,12 +667,6 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                   style={{ left: `${playheadPercent}%`, backgroundColor: 'hsl(var(--foreground))' }}
                 />
 
-                {/* Playhead knob — visible on hover */}
-                <div
-                  className="absolute top-1/2 z-30 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-0 group-hover/timeline:opacity-100 transition-opacity"
-                  style={{ left: `${playheadPercent}%`, backgroundColor: 'hsl(var(--foreground))', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }}
-                />
-
                 {timelineMarkers.map((marker) => {
                   const isHovered = hoveredTimelineMarkerId === marker.id
                   return (
@@ -607,8 +684,8 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                       className="absolute top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full hover:scale-125 transition-transform appearance-none p-0 focus:outline-none"
                       style={{
                         left: `${marker.percent}%`,
-                        width: 10,
-                        height: 10,
+                        width: 16,
+                        height: 16,
                         backgroundColor: marker.markerBackgroundColor,
                         border: '1.5px solid hsl(var(--background))',
                         boxShadow: isHovered ? `0 0 6px 2px ${marker.markerBackgroundColor}` : `0 0 0 0.5px rgba(0,0,0,0.3)`,

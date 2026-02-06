@@ -350,6 +350,7 @@ data class ReplayDetailResponse(
     val finishedAt: String,
     val durationMs: Double,
     val urls: List<String>,
+    val errorCount: Int,
     val errorIds: List<String>,
     val traceIds: List<String>,
     val segmentCount: Int,

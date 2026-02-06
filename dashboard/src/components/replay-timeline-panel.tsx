@@ -83,9 +83,20 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, onSeek }: ReplayTi
 
   useEffect(() => {
     if (scrollIndex < 0 || !listRef.current) return
-    const el = listRef.current.querySelector(`[data-timeline-index="${scrollIndex}"]`)
+    const container = listRef.current
+    const el = container.querySelector<HTMLElement>(`[data-timeline-index="${scrollIndex}"]`)
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      const padding = 8
+      const viewTop = container.scrollTop
+      const viewBottom = viewTop + container.clientHeight
+      const elTop = el.offsetTop
+      const elBottom = elTop + el.offsetHeight
+
+      if (elTop < viewTop + padding) {
+        container.scrollTop = Math.max(0, elTop - padding)
+      } else if (elBottom > viewBottom - padding) {
+        container.scrollTop = Math.max(0, elBottom - container.clientHeight + padding)
+      }
     }
   }, [scrollIndex])
 

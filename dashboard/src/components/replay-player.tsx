@@ -9,6 +9,7 @@ interface ReplayPlayerProps {
   autoPlay?: boolean
   className?: string
   onTimeUpdate?: (offsetMs: number) => void
+  onDurationReady?: (durationMs: number) => void
 }
 
 export interface ReplayPlayerHandle {
@@ -23,13 +24,16 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
     autoPlay = true,
     className = '',
     onTimeUpdate,
+    onDurationReady,
   },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<InstanceType<typeof rrwebPlayer> | null>(null)
   const onTimeUpdateRef = useRef(onTimeUpdate)
+  const onDurationReadyRef = useRef(onDurationReady)
   onTimeUpdateRef.current = onTimeUpdate
+  onDurationReadyRef.current = onDurationReady
 
   useImperativeHandle(ref, () => ({
     seekTo(offsetMs: number) {
@@ -61,6 +65,20 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
         },
       })
       playerRef.current = player
+
+      const replayer = player.getReplayer?.()
+      if (replayer && typeof replayer.getMetaData === 'function') {
+        try {
+          const meta = replayer.getMetaData()
+          const startTime = meta?.startTime ?? 0
+          const endTime = meta?.endTime ?? 0
+          if (typeof startTime === 'number' && typeof endTime === 'number' && endTime > startTime) {
+            onDurationReadyRef.current?.(endTime - startTime)
+          }
+        } catch {
+          // ignore
+        }
+      }
     } catch (error) {
       console.error('Failed to initialize replay player:', error)
       target.innerHTML = `

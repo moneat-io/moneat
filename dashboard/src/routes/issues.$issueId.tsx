@@ -592,18 +592,18 @@ function StackFrame({ frame }: { frame: any }) {
   )
 }
 
-// Helper to get color classes for breadcrumb category (container border + icon + badge)
-function getBreadcrumbCategoryColor(category: string): { border: string; icon: string; badge: string } {
-  if (!category) return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
+// Helper to get color classes for breadcrumb category
+function getBreadcrumbCategoryColor(category: string): { border: string; icon: string; badge: string; dot: string; line: string } {
+  if (!category) return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', dot: 'bg-slate-400 dark:bg-slate-500 ring-slate-400/20 dark:ring-slate-500/20', line: 'bg-slate-300 dark:bg-slate-700' }
   const cat = category.toLowerCase()
-  if (cat.includes('lifecycle')) return { border: 'border-emerald-300 dark:border-emerald-700', icon: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' }
-  if (cat.includes('click') || cat.includes('touch')) return { border: 'border-violet-300 dark:border-violet-700', icon: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300' }
-  if (cat.includes('navigation')) return { border: 'border-blue-300 dark:border-blue-700', icon: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' }
-  if (cat.includes('action')) return { border: 'border-amber-300 dark:border-amber-700', icon: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' }
-  if (cat.includes('http') || cat.includes('network')) return { border: 'border-cyan-300 dark:border-cyan-700', icon: 'text-cyan-600 dark:text-cyan-400', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300' }
-  if (cat.includes('device')) return { border: 'border-orange-300 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300' }
-  if (cat.includes('message') || cat.includes('log')) return { border: 'border-pink-300 dark:border-pink-700', icon: 'text-pink-600 dark:text-pink-400', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300' }
-  return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
+  if (cat.includes('lifecycle')) return { border: 'border-emerald-300 dark:border-emerald-700', icon: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300', dot: 'bg-emerald-500 dark:bg-emerald-400 ring-emerald-500/20 dark:ring-emerald-400/20', line: 'bg-emerald-300 dark:bg-emerald-700' }
+  if (cat.includes('click') || cat.includes('touch')) return { border: 'border-violet-300 dark:border-violet-700', icon: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300', dot: 'bg-violet-500 dark:bg-violet-400 ring-violet-500/20 dark:ring-violet-400/20', line: 'bg-violet-300 dark:bg-violet-700' }
+  if (cat.includes('navigation')) return { border: 'border-blue-300 dark:border-blue-700', icon: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300', dot: 'bg-blue-500 dark:bg-blue-400 ring-blue-500/20 dark:ring-blue-400/20', line: 'bg-blue-300 dark:bg-blue-700' }
+  if (cat.includes('action')) return { border: 'border-amber-300 dark:border-amber-700', icon: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300', dot: 'bg-amber-500 dark:bg-amber-400 ring-amber-500/20 dark:ring-amber-400/20', line: 'bg-amber-300 dark:bg-amber-700' }
+  if (cat.includes('http') || cat.includes('network')) return { border: 'border-cyan-300 dark:border-cyan-700', icon: 'text-cyan-600 dark:text-cyan-400', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300', dot: 'bg-cyan-500 dark:bg-cyan-400 ring-cyan-500/20 dark:ring-cyan-400/20', line: 'bg-cyan-300 dark:bg-cyan-700' }
+  if (cat.includes('device')) return { border: 'border-orange-300 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300', dot: 'bg-orange-500 dark:bg-orange-400 ring-orange-500/20 dark:ring-orange-400/20', line: 'bg-orange-300 dark:bg-orange-700' }
+  if (cat.includes('message') || cat.includes('log')) return { border: 'border-pink-300 dark:border-pink-700', icon: 'text-pink-600 dark:text-pink-400', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300', dot: 'bg-pink-500 dark:bg-pink-400 ring-pink-500/20 dark:ring-pink-400/20', line: 'bg-pink-300 dark:bg-pink-700' }
+  return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', dot: 'bg-slate-400 dark:bg-slate-500 ring-slate-400/20 dark:ring-slate-500/20', line: 'bg-slate-300 dark:bg-slate-700' }
 }
 
 // Helper to get icon for breadcrumb category
@@ -704,7 +704,7 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
     const crumbs = Array.isArray(parsed) ? parsed : parsed.values || []
 
     return (
-      <div className="space-y-1">
+      <div className="relative">
         {crumbs.map((crumb: any, idx: number) => {
           // Handle timestamps - they could be in seconds or milliseconds
           let timestamp = crumb.timestamp
@@ -718,40 +718,39 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
           const category = crumb.category || crumb.type || 'event'
           const formattedData = formatBreadcrumbData(crumb)
           const colors = getBreadcrumbCategoryColor(category)
+          const isLast = idx === crumbs.length - 1
           
           return (
-            <div 
-              key={idx} 
-              className={`flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors ${colors.border}`}
-            >
-              {/* Icon */}
-              <div className={`mt-0.5 flex-shrink-0 ${colors.icon}`}>
-                {getBreadcrumbIcon(category, crumb.data)}
-              </div>
-              
-              {/* Time */}
-              <div className="text-muted-foreground font-mono text-xs w-20 flex-shrink-0 mt-0.5">
-                {timestamp ? new Date(timestamp).toLocaleTimeString() : '--:--:--'}
+            <div key={idx} className="relative flex gap-3 group">
+              {/* Timeline track */}
+              <div className="flex flex-col items-center flex-shrink-0 w-5">
+                {/* Dot */}
+                <div className={`relative z-10 mt-1.5 h-2.5 w-2.5 rounded-full ring-4 ${colors.dot}`} />
+                {/* Connecting line */}
+                {!isLast && (
+                  <div className={`w-0.5 flex-1 min-h-[16px] ${colors.line}`} />
+                )}
               </div>
               
               {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge className={`text-xs border-0 ${colors.badge}`}>
+              <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`flex-shrink-0 ${colors.icon}`}>
+                    {getBreadcrumbIcon(category, crumb.data)}
+                  </div>
+                  <span className="text-muted-foreground font-mono text-xs">
+                    {timestamp ? new Date(timestamp).toLocaleTimeString() : '--:--:--'}
+                  </span>
+                  <Badge className={`text-[10px] leading-tight px-1.5 py-0 border-0 ${colors.badge}`}>
                     {category}
                   </Badge>
                 </div>
                 {formattedData && (
-                  <div className="text-sm text-foreground">
+                  <p className="text-sm text-foreground mt-0.5 ml-6">
                     {formattedData}
-                  </div>
+                  </p>
                 )}
               </div>
-              
-              {/* Connector for timeline */}
-              {idx < crumbs.length - 1 && (
-                <div className="absolute left-[2.15rem] mt-12 h-3 w-px bg-border" />
-              )}
             </div>
           )
         })}
