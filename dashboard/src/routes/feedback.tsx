@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import { createFileRoute, Outlet, redirect, useMatches, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useProject } from '@/contexts/project-context'
@@ -15,8 +15,30 @@ import {
 } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MessageSquare, Search, CheckCircle2, ExternalLink } from 'lucide-react'
-import { useState } from 'react'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
+  MessageSquare,
+  Search,
+  CheckCircle2,
+  ExternalLink,
+  CircleDot,
+  Archive,
+  Inbox,
+  Clock,
+  Mail,
+  Globe,
+  Monitor,
+  AlertCircle,
+  Video,
+} from 'lucide-react'
+import { useState, useMemo } from 'react'
 import { useToast } from '@/hooks/use-toast'
 
 export const Route = createFileRoute('/feedback')({
@@ -33,8 +55,72 @@ export const Route = createFileRoute('/feedback')({
       console.error('Failed to fetch user:', error)
     }
   },
-  component: FeedbackPage,
+  component: FeedbackLayout,
 })
+
+function FeedbackLayout() {
+  const matches = useMatches()
+  const showingChildRoute = matches.some((match) => match.id.includes('/feedback/$feedbackId'))
+
+  if (showingChildRoute) {
+    return <Outlet />
+  }
+
+  return <FeedbackPage />
+}
+
+function getInitials(name?: string, email?: string): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+    return name.slice(0, 2).toUpperCase()
+  }
+  if (email) return email.slice(0, 2).toUpperCase()
+  return '?'
+}
+
+function getAvatarColor(name?: string, email?: string): string {
+  const str = name || email || ''
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const colors = [
+    'bg-violet-500/20 text-violet-700 dark:text-violet-300',
+    'bg-blue-500/20 text-blue-700 dark:text-blue-300',
+    'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
+    'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+    'bg-rose-500/20 text-rose-700 dark:text-rose-300',
+    'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300',
+    'bg-pink-500/20 text-pink-700 dark:text-pink-300',
+    'bg-orange-500/20 text-orange-700 dark:text-orange-300',
+  ]
+  return colors[Math.abs(hash) % colors.length]
+}
+
+const statusConfig = {
+  unresolved: {
+    color: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30',
+    dot: 'bg-amber-500',
+    border: 'border-l-amber-500',
+    icon: CircleDot,
+    label: 'Unresolved',
+  },
+  resolved: {
+    color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+    dot: 'bg-emerald-500',
+    border: 'border-l-emerald-500',
+    icon: CheckCircle2,
+    label: 'Resolved',
+  },
+  archived: {
+    color: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30',
+    dot: 'bg-slate-400',
+    border: 'border-l-slate-400',
+    icon: Archive,
+    label: 'Archived',
+  },
+} as const
 
 function FeedbackPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -43,6 +129,7 @@ function FeedbackPage() {
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -54,6 +141,16 @@ function FeedbackPage() {
   if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
     setSelectedProjectId(projects[0].id)
   }
+
+  // Fetch all feedback for stats (unfiltered)
+  const { data: allFeedback = [] } = useQuery({
+    queryKey: ['feedback', projectId, 'all'],
+    queryFn: () =>
+      projectId
+        ? api.getFeedback(projectId, { page: 1, limit: 500 })
+        : [],
+    enabled: !!projectId,
+  })
 
   const { data: feedbackList = [] } = useQuery({
     queryKey: ['feedback', projectId, statusFilter],
@@ -67,6 +164,14 @@ function FeedbackPage() {
         : [],
     enabled: !!projectId,
   })
+
+  const stats = useMemo(() => {
+    const total = allFeedback.length
+    const unresolved = allFeedback.filter((f) => f.status === 'unresolved').length
+    const resolved = allFeedback.filter((f) => f.status === 'resolved').length
+    const archived = allFeedback.filter((f) => f.status === 'archived').length
+    return { total, unresolved, resolved, archived }
+  }, [allFeedback])
 
   const resolveMutation = useMutation({
     mutationFn: async (feedbackIds: string[]) => {
@@ -124,8 +229,15 @@ function FeedbackPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Feedback</h2>
+        {/* Header */}
+        <div className="mb-6 flex items-center gap-3">
+          <div className="rounded-xl bg-violet-500/15 p-2.5 ring-1 ring-violet-500/20">
+            <MessageSquare className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">User Feedback</h2>
+            <p className="text-sm text-muted-foreground">Review and manage feedback from your users</p>
+          </div>
         </div>
 
         {!projects || projects.length === 0 ? (
@@ -146,11 +258,74 @@ function FeedbackPage() {
           </Card>
         ) : (
           <>
-            <div className="mb-4 flex gap-4 items-center flex-wrap">
+            {/* Stats Cards */}
+            {allFeedback.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                    statusFilter === 'all'
+                      ? 'border-violet-500/40 bg-violet-500/10 shadow-sm ring-1 ring-violet-500/20'
+                      : 'border-border/60 bg-card hover:border-violet-500/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Inbox className="h-4 w-4 text-violet-500" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total</span>
+                  </div>
+                  <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">{stats.total}</div>
+                </button>
+                <button
+                  onClick={() => setStatusFilter('unresolved')}
+                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                    statusFilter === 'unresolved'
+                      ? 'border-amber-500/40 bg-amber-500/10 shadow-sm ring-1 ring-amber-500/20'
+                      : 'border-border/60 bg-card hover:border-amber-500/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <CircleDot className="h-4 w-4 text-amber-500" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unresolved</span>
+                  </div>
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.unresolved}</div>
+                </button>
+                <button
+                  onClick={() => setStatusFilter('resolved')}
+                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                    statusFilter === 'resolved'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 shadow-sm ring-1 ring-emerald-500/20'
+                      : 'border-border/60 bg-card hover:border-emerald-500/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Resolved</span>
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.resolved}</div>
+                </button>
+                <button
+                  onClick={() => setStatusFilter('archived')}
+                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                    statusFilter === 'archived'
+                      ? 'border-slate-500/40 bg-slate-500/10 shadow-sm ring-1 ring-slate-500/20'
+                      : 'border-border/60 bg-card hover:border-slate-500/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Archive className="h-4 w-4 text-slate-500" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Archived</span>
+                  </div>
+                  <div className="text-2xl font-bold text-slate-600 dark:text-slate-400">{stats.archived}</div>
+                </button>
+              </div>
+            )}
+
+            {/* Toolbar */}
+            <div className="mb-4 flex gap-3 items-center flex-wrap">
               {filteredFeedback.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    checked={selectedFeedback.size === filteredFeedback.length}
+                    checked={selectedFeedback.size === filteredFeedback.length && filteredFeedback.length > 0}
                     onCheckedChange={handleToggleAll}
                     aria-label="Select all feedback"
                   />
@@ -158,8 +333,8 @@ function FeedbackPage() {
                 </div>
               )}
               {selectedFeedback.size > 0 && (
-                <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   <span className="text-sm font-medium whitespace-nowrap">
                     {selectedFeedback.size} selected
                   </span>
@@ -167,7 +342,7 @@ function FeedbackPage() {
                     onClick={handleResolveSelected}
                     disabled={resolveMutation.isPending}
                     size="sm"
-                    className="bg-green-600 hover:bg-green-700 h-7 ml-2"
+                    className="bg-emerald-600 hover:bg-emerald-700 h-7 ml-2"
                   >
                     {resolveMutation.isPending ? 'Resolving...' : 'Resolve'}
                   </Button>
@@ -176,23 +351,12 @@ function FeedbackPage() {
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search feedback..."
+                  placeholder="Search by message, name, or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="unresolved">Unresolved</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             {filteredFeedback.length === 0 ? (
@@ -213,78 +377,135 @@ function FeedbackPage() {
                     </h3>
                     <p className="text-muted-foreground">
                       {searchQuery
-                        ? 'Try adjusting your search.'
+                        ? 'Try adjusting your search or changing the status filter.'
                         : 'Use the Sentry User Feedback widget in your app to collect user feedback. It will appear here.'}
                     </p>
                   </div>
                 </div>
               </Card>
             ) : (
-              <div className="space-y-2">
-                {filteredFeedback.map((f) => (
-                  <div
-                    key={f.feedbackId}
-                    className="rounded-lg border border-border/80 bg-card hover:bg-accent hover:border-primary/20 transition"
-                  >
-                    <div className="flex items-center gap-4 p-4">
-                      <div className="flex items-center">
-                        <Checkbox
-                          checked={selectedFeedback.has(f.feedbackId)}
-                          onCheckedChange={() => handleToggleFeedback(f.feedbackId)}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={`Select feedback`}
-                        />
-                      </div>
-                      <Link
-                        to="/feedback/$feedbackId"
-                        params={{ feedbackId: f.feedbackId }}
-                        className="flex-1 flex items-start gap-4 min-w-0"
+              <TooltipProvider>
+                <div className="space-y-2">
+                  {filteredFeedback.map((f) => {
+                    const config = statusConfig[f.status as keyof typeof statusConfig] || statusConfig.unresolved
+                    const displayName = f.name || f.contactEmail || 'Anonymous'
+                    const initials = getInitials(f.name, f.contactEmail)
+                    const avatarColor = getAvatarColor(f.name, f.contactEmail)
+
+                    return (
+                      <div
+                        key={f.feedbackId}
+                        onClick={() => navigate({ to: '/feedback/$feedbackId', params: { feedbackId: f.feedbackId } })}
+                        className={`cursor-pointer rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all hover:shadow-md border-l-[3px] ${config.border}`}
                       >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium line-clamp-2">{f.message || '(No message)'}</div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {f.name || f.contactEmail || 'Anonymous'}
-                            {f.url && (
-                              <span className="truncate ml-2 text-xs block sm:inline" title={f.url}>
-                                {f.url}
+                        <div className="flex items-start gap-4 p-4">
+                          {/* Checkbox */}
+                          <div className="flex items-center pt-1">
+                            <Checkbox
+                              checked={selectedFeedback.has(f.feedbackId)}
+                              onCheckedChange={() => handleToggleFeedback(f.feedbackId)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label="Select feedback"
+                            />
+                          </div>
+
+                          {/* Avatar */}
+                          <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                            <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
+                              {initials}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            {/* Top row: name + time */}
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-sm truncate">{displayName}</span>
+                              {f.contactEmail && f.name && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Mail className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>{f.contactEmail}</TooltipContent>
+                                </Tooltip>
+                              )}
+                              <span className="text-xs text-muted-foreground ml-auto shrink-0 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatRelativeTime(f.timestamp)}
                               </span>
-                            )}
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Badge
-                              variant={f.status === 'resolved' ? 'default' : 'secondary'}
-                              className={f.status === 'resolved' ? 'bg-green-500' : ''}
-                            >
-                              {f.status}
-                            </Badge>
-                            {f.platform && (
-                              <Badge variant="outline">{f.platform}</Badge>
-                            )}
-                            {f.associatedEventId && (
-                              <Badge variant="outline" className="text-xs font-normal">
-                                Event linked
-                              </Badge>
-                            )}
-                            {f.replayId && (
-                              <Link
-                                to="/replays/$replayId"
-                                params={{ replayId: f.replayId }}
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                            </div>
+
+                            {/* Message */}
+                            <p className="text-sm text-foreground/80 line-clamp-2 mb-2">
+                              {f.message || '(No message)'}
+                            </p>
+
+                            {/* Bottom row: badges */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={`text-xs font-medium ${config.color}`}
                               >
-                                <ExternalLink className="h-3 w-3" />
-                                Replay
-                              </Link>
-                            )}
+                                <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${config.dot}`} />
+                                {config.label}
+                              </Badge>
+                              {f.environment && (
+                                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                                  {f.environment}
+                                </Badge>
+                              )}
+                              {f.platform && (
+                                <Badge variant="outline" className="text-xs font-normal gap-1">
+                                  <Monitor className="h-3 w-3" />
+                                  {f.platform}
+                                </Badge>
+                              )}
+                              {f.url && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="text-xs font-normal gap-1 max-w-[200px] truncate">
+                                      <Globe className="h-3 w-3 shrink-0" />
+                                      <span className="truncate">{f.url.replace(/^https?:\/\//, '')}</span>
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{f.url}</TooltipContent>
+                                </Tooltip>
+                              )}
+                              {f.associatedEventId && (
+                                <Badge variant="outline" className="text-xs font-normal gap-1 text-orange-600 dark:text-orange-400 border-orange-500/30">
+                                  <AlertCircle className="h-3 w-3" />
+                                  Event linked
+                                </Badge>
+                              )}
+                              {f.replayId && (
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    navigate({ to: '/replays/$replayId', params: { replayId: f.replayId! } })
+                                  }}
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-blue-500/10 border border-blue-500/20 rounded-full px-2.5 py-0.5"
+                                >
+                                  <Video className="h-3 w-3" />
+                                  Replay
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right text-sm text-muted-foreground shrink-0">
-                          {formatRelativeTime(f.timestamp)}
-                        </div>
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              </TooltipProvider>
+            )}
+
+            {/* Footer count */}
+            {filteredFeedback.length > 0 && (
+              <div className="mt-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  Showing {filteredFeedback.length} feedback item{filteredFeedback.length === 1 ? '' : 's'}
+                  {searchQuery && ' matching your search'}
+                </p>
               </div>
             )}
           </>
