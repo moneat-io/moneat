@@ -7,6 +7,7 @@ build/
 
 # Java / Kotlin
 *.hprof
+*.salive
 
 # IntelliJ IDEA
 .idea/
