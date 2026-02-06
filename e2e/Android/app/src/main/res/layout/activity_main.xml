@@ -72,6 +72,35 @@
             android:layout_marginTop="8dp"
             android:text="@string/error_null" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/performance_scenarios"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnTransactionOk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/perf_transaction_ok" />
+
+        <Button
+            android:id="@+id/btnTransactionSlow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/perf_transaction_slow" />
+
+        <Button
+            android:id="@+id/btnTransactionFail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/perf_transaction_fail" />
+
         <Button
             android:id="@+id/btnClear"
             android:layout_width="match_parent"

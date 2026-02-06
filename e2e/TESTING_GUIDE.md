@@ -92,6 +92,9 @@ In the app:
 3. Click "Throw Exception" - should see toast "Exception sent to Sentry"
 4. Click "Network Error" - should see toast
 5. Click "Null Pointer" - should see toast
+6. Click "Transaction (Successful)" - should see toast
+7. Click "Transaction (Slow)" - should see toast
+8. Click "Transaction (Failed + Related Error)" - should see toast
 
 ### 6. Test KMP App
 
@@ -139,6 +142,20 @@ For each project, check:
 **Error Grouping:**
 - [ ] Clicking the same error button multiple times creates events under the same issue
 - [ ] Different error types create separate issues
+
+### 9. Verify Performance Views
+
+Navigate to `/performance` in the dashboard and check:
+
+- [ ] Throughput chart renders transaction timeline data
+- [ ] Transaction groups table shows p50/p75/p95 and TPM
+- [ ] Slow transaction appears in "Slowest Transactions"
+
+Open one transaction detail (`/performance/$transactionId`) and verify:
+
+- [ ] Span waterfall displays nested spans with timeline bars
+- [ ] Transaction metadata (duration, op, trace) is shown
+- [ ] Failed transaction scenario includes related error entries
 
 ## Troubleshooting
 
@@ -219,6 +236,7 @@ Common issues:
 - [ ] Error grouping works (same error = same issue)
 - [ ] Tags and context are preserved
 - [ ] Multiple events per issue are counted correctly
+- [ ] Performance transactions/spans appear and render correctly
 - [ ] Can login with e2e test credentials
 - [ ] Can navigate between projects
 
@@ -247,7 +265,7 @@ cd e2e
 To generate load:
 
 ```bash
-# In Android app, repeatedly click error buttons
+# In Android app, repeatedly click error and transaction buttons
 # Or write a script to trigger errors programmatically
 ```
 

@@ -1,13 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48">
-  <!-- Pulse "m" mark -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 48" role="img" aria-label="Moneat">
+  <circle cx="24" cy="24" r="18" fill="none" stroke="#38bdf8" stroke-width="2.5" />
   <polyline
-    points="0,30 16,30 22,12 30,36 38,12 44,30 60,30"
+    points="10,24 14,24 18,15 24,31 30,15 34,24 38,24"
     fill="none"
     stroke="#38bdf8"
-    stroke-width="3.5"
+    stroke-width="2.8"
     stroke-linecap="round"
     stroke-linejoin="round"
   />
-  <!-- Wordmark -->
-  <text x="68" y="31" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600" fill="#e2e8f0" letter-spacing="-0.5">moneat</text>
+  <text x="52" y="31" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600" fill="#e2e8f0" letter-spacing="-0.5">moneat</text>
 </svg>

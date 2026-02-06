@@ -1,15 +1,13 @@
 package com.moneat.e2e.android
 
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.moneat.e2e.android.databinding.ActivityMainBinding
 import io.sentry.Breadcrumb
 import io.sentry.Sentry
 import io.sentry.SentryLevel
-import java.io.IOException
+import io.sentry.SpanStatus
 import java.net.SocketTimeoutException
 import kotlin.concurrent.thread
 
@@ -61,6 +59,24 @@ class MainActivity : AppCompatActivity() {
             log("Triggering null pointer exception...")
             addBreadcrumb("User clicked Null button")
             triggerNullPointer()
+        }
+
+        binding.btnTransactionOk.setOnClickListener {
+            log("Sending successful transaction with nested spans...")
+            addBreadcrumb("User clicked Transaction OK button")
+            triggerSuccessfulTransaction()
+        }
+
+        binding.btnTransactionSlow.setOnClickListener {
+            log("Sending slow transaction profile...")
+            addBreadcrumb("User clicked Slow Transaction button")
+            triggerSlowTransaction()
+        }
+
+        binding.btnTransactionFail.setOnClickListener {
+            log("Sending failed transaction + related error...")
+            addBreadcrumb("User clicked Failed Transaction button")
+            triggerFailedTransactionWithRelatedError()
         }
 
         binding.btnClear.setOnClickListener {
@@ -139,6 +155,92 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun triggerSuccessfulTransaction() {
+        thread {
+            Sentry.setTag("performance_scenario", "success")
+            val transaction = Sentry.startTransaction("E2E/checkout", "ui.load")
+            try {
+                val dbSpan = transaction.startChild("db.query", "SELECT cart_items")
+                Thread.sleep(80)
+                dbSpan.finish(SpanStatus.OK)
+
+                val httpSpan = transaction.startChild("http.client", "GET /api/pricing")
+                Thread.sleep(120)
+                httpSpan.finish(SpanStatus.OK)
+
+                val renderSpan = transaction.startChild("ui.render", "Render checkout screen")
+                Thread.sleep(45)
+                renderSpan.finish(SpanStatus.OK)
+
+                transaction.finish(SpanStatus.OK)
+                log("Successful transaction sent")
+                showToast("Successful transaction sent")
+            } catch (e: Exception) {
+                transaction.finish(SpanStatus.INTERNAL_ERROR)
+                log("Failed to send successful transaction: ${e.message}")
+            }
+        }
+    }
+
+    private fun triggerSlowTransaction() {
+        thread {
+            Sentry.setTag("performance_scenario", "slow")
+            val transaction = Sentry.startTransaction("E2E/report.generate", "task.background")
+            try {
+                val fetchSpan = transaction.startChild("db.query", "Fetch report rows")
+                Thread.sleep(650)
+                fetchSpan.finish(SpanStatus.OK)
+
+                val aggregateSpan = transaction.startChild("compute.aggregate", "Aggregate metrics")
+                Thread.sleep(900)
+                aggregateSpan.finish(SpanStatus.OK)
+
+                val uploadSpan = transaction.startChild("http.client", "POST /api/reports")
+                Thread.sleep(350)
+                uploadSpan.finish(SpanStatus.OK)
+
+                transaction.finish(SpanStatus.OK)
+                log("Slow transaction sent (~1.9s)")
+                showToast("Slow transaction sent")
+            } catch (e: Exception) {
+                transaction.finish(SpanStatus.INTERNAL_ERROR)
+                log("Failed to send slow transaction: ${e.message}")
+            }
+        }
+    }
+
+    private fun triggerFailedTransactionWithRelatedError() {
+        thread {
+            Sentry.setTag("performance_scenario", "failed")
+            val transaction = Sentry.startTransaction("E2E/payment.submit", "http.client")
+            try {
+                val authSpan = transaction.startChild("auth.jwt", "Validate auth token")
+                Thread.sleep(120)
+                authSpan.finish(SpanStatus.OK)
+
+                val paymentSpan = transaction.startChild("http.client", "POST /api/payments")
+                Thread.sleep(180)
+                paymentSpan.finish(SpanStatus.INTERNAL_ERROR)
+
+                Sentry.withScope { scope ->
+                    scope.setSpan(transaction)
+                    scope.setTag("error_type", "transaction_failure")
+                    scope.setTag("trace_linked", "true")
+                    Sentry.captureException(
+                        IllegalStateException("E2E payment submission failed: upstream 502")
+                    )
+                }
+
+                transaction.finish(SpanStatus.INTERNAL_ERROR)
+                log("Failed transaction and related error sent")
+                showToast("Failed transaction + related error sent")
+            } catch (e: Exception) {
+                transaction.finish(SpanStatus.INTERNAL_ERROR)
+                log("Failed to send failed transaction scenario: ${e.message}")
+            }
+        }
+    }
+
     private fun addBreadcrumb(message: String) {
         val breadcrumb = Breadcrumb().apply {
             this.message = message
@@ -149,16 +251,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun log(message: String) {
-        logBuilder.append("${System.currentTimeMillis()}: $message\n")
-        binding.tvLog.text = logBuilder.toString()
+        runOnUiThread {
+            logBuilder.append("${System.currentTimeMillis()}: $message\n")
+            binding.tvLog.text = logBuilder.toString()
+        }
     }
 
     private fun clearLog() {
-        logBuilder.clear()
-        binding.tvLog.text = ""
+        runOnUiThread {
+            logBuilder.clear()
+            binding.tvLog.text = ""
+        }
     }
 
     private fun showToast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        runOnUiThread {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
     }
 }

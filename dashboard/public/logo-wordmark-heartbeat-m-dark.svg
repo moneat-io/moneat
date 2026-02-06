@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 288 64" role="img" aria-label="Moneat">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="55%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="moneat-hb-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee" />
+      <stop offset="55%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#60a5fa" />
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="288" height="64" fill="url(#bg-grad)" />
+
+  <g transform="translate(24 8)">
+    <polyline
+      points="0,34 4,34 15,8 27,33 38,8 50,34 56,34"
+      fill="none"
+      stroke="url(#moneat-hb-grad)"
+      stroke-width="4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <text
+      x="57"
+      y="35"
+      font-family="system-ui, -apple-system, Segoe UI, sans-serif"
+      font-size="28"
+      font-weight="700"
+      fill="#f8fafc"
+      letter-spacing="-0.5"
+    >
+      oneat
+    </text>
+  </g>
+</svg>

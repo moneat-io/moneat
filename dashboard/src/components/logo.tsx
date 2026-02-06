@@ -11,15 +11,23 @@ export function Logo({ className, markOnly = false }: LogoProps) {
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 64 48"
+        viewBox="0 0 48 48"
         className={cn('h-8', className)}
         aria-label="Moneat"
       >
-        <polyline
-          points="2,30 16,30 22,12 30,36 38,12 44,30 62,30"
+        <circle
+          cx="24"
+          cy="24"
+          r="18"
           fill="none"
           stroke="#38bdf8"
-          strokeWidth="3.5"
+          strokeWidth="2.5"
+        />
+        <polyline
+          points="10,24 14,24 18,15 24,31 30,15 34,24 38,24"
+          fill="none"
+          stroke="#38bdf8"
+          strokeWidth="2.8"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -30,20 +38,21 @@ export function Logo({ className, markOnly = false }: LogoProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 240 48"
+      viewBox="0 0 236 48"
       className={cn('h-8', className)}
       aria-label="Moneat"
     >
+      <circle cx="24" cy="24" r="18" fill="none" stroke="#38bdf8" strokeWidth="2.5" />
       <polyline
-        points="0,30 16,30 22,12 30,36 38,12 44,30 60,30"
+        points="10,24 14,24 18,15 24,31 30,15 34,24 38,24"
         fill="none"
         stroke="#38bdf8"
-        strokeWidth="3.5"
+        strokeWidth="2.8"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <text
-        x="68"
+        x="52"
         y="31"
         fontFamily="system-ui, -apple-system, sans-serif"
         fontSize="28"

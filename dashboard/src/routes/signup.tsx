@@ -4,7 +4,6 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Logo } from '@/components/logo'
 
 export const Route = createFileRoute('/signup')({
@@ -28,7 +27,7 @@ function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    
+
     try {
       await api.signup(email, password, name || undefined)
       setSuccess(true)
@@ -40,7 +39,7 @@ function SignupPage() {
   const handleResendEmail = async () => {
     setResending(true)
     setResendMessage('')
-    
+
     try {
       await api.resendVerificationEmail(email)
       setResendMessage('Verification email sent! Please check your inbox.')
@@ -51,102 +50,123 @@ function SignupPage() {
     }
   }
 
-  if (success) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Check your email</CardTitle>
-            <CardDescription>
-              We've sent a verification link to {email}. Please verify your email before signing in.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {resendMessage && (
-              <div className={`text-sm text-center ${resendMessage.includes('sent') ? 'text-green-600' : 'text-destructive'}`}>
-                {resendMessage}
-              </div>
-            )}
-            <div className="text-center text-sm text-muted-foreground">
-              Didn't receive the email?{' '}
-              <button
-                onClick={handleResendEmail}
-                disabled={resending}
-                className="text-primary hover:underline disabled:opacity-50"
-              >
-                {resending ? 'Sending...' : 'Resend verification email'}
-              </button>
-            </div>
-          </CardContent>
-          <CardFooter className="flex justify-center">
-            <Link to="/login">
-              <Button>Go to Sign In</Button>
-            </Link>
-          </CardFooter>
-        </Card>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <Logo className="h-10" />
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto flex min-h-screen max-w-6xl overflow-hidden border-x border-border">
+        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative flex-col justify-between p-10">
+          <div className="text-white">
+            <Logo className="h-10 text-white" />
           </div>
           <div>
-            <CardTitle className="text-2xl">Create an account</CardTitle>
-            <CardDescription className="mt-1">Sign up to get started</CardDescription>
+            <h2 className="text-3xl font-bold text-white mb-3">
+              Error monitoring
+              <br />
+              that just works.
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
+              Track, triage, and resolve issues before your users even notice.
+            </p>
           </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <div className="text-sm text-destructive">{error}</div>}
-            <div className="space-y-2">
-              <Label htmlFor="name">Name (optional)</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+          <svg viewBox="0 0 400 60" className="absolute bottom-0 left-0 right-0 opacity-10" aria-hidden="true">
+            <polyline points="0,40 60,40 80,10 120,50 160,10 200,40 400,40" fill="none" stroke="#38bdf8" strokeWidth="2" />
+          </svg>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center px-8 py-12 lg:px-16 bg-background">
+          <div className="w-full max-w-md">
+            <div className="lg:hidden flex justify-center mb-8">
+              <Logo className="h-10" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Create a password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full">
-              Sign up
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-center text-sm text-muted-foreground">
-          Already have an account?{' '}
-          <Link to="/login" className="ml-1 text-primary hover:underline">
-            Sign in
-          </Link>
-        </CardFooter>
-      </Card>
+
+            {success ? (
+              <>
+                <h1 className="text-2xl font-bold mb-1">Check your email</h1>
+                <p className="text-sm text-muted-foreground mb-8">
+                  We sent a verification link to {email}. Verify your email before signing in.
+                </p>
+
+                <div className="space-y-4">
+                  {resendMessage && (
+                    <div className={`text-sm ${resendMessage.includes('sent') ? 'text-green-600' : 'text-destructive'}`}>
+                      {resendMessage}
+                    </div>
+                  )}
+
+                  <p className="text-sm text-muted-foreground">
+                    Didn&apos;t receive the email?{' '}
+                    <button
+                      onClick={handleResendEmail}
+                      disabled={resending}
+                      className="text-primary hover:underline disabled:opacity-50"
+                    >
+                      {resending ? 'Sending...' : 'Resend verification email'}
+                    </button>
+                  </p>
+
+                  <Link to="/login">
+                    <Button className="w-full">Go to Sign In</Button>
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl font-bold mb-1">Create an account</h1>
+                <p className="text-sm text-muted-foreground mb-8">Sign up to get started</p>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && <div className="text-sm text-destructive">{error}</div>}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name (optional)</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      placeholder="Your name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Create a password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full">
+                    Sign up
+                  </Button>
+                </form>
+
+                <div className="mt-6 flex justify-center text-sm text-muted-foreground">
+                  Already have an account?
+                  <Link to="/login" className="ml-1 text-primary hover:underline">
+                    Sign in
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -52,6 +52,11 @@ Both apps include buttons to trigger:
 - **Background thread crashes**
 - **Null pointer exceptions**
 
+Android app also includes:
+- **Successful transaction + child spans**
+- **Slow transaction profile**
+- **Failed transaction with related error on same trace**
+
 ## Test Users
 
 After seeding, you can login with:
@@ -84,6 +89,9 @@ e2e/
    - Context data (tags, breadcrumbs) is attached
    - Affected users are tracked
    - Multiple events per issue are counted
+   - Performance page (`/performance`) lists transaction groups and throughput
+   - Transaction detail (`/performance/$transactionId`) renders span waterfall
+   - Failed transaction scenario shows related errors in trace context
 
 ## Troubleshooting
 
