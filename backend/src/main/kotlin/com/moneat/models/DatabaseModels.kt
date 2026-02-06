@@ -1,6 +1,7 @@
 package com.moneat.models
 
 import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
 
 object Users : Table("users") {
     val id = integer("id").autoIncrement()
@@ -56,9 +57,9 @@ object AuthTokens : Table("auth_tokens") {
     val token_hash = varchar("token_hash", 64)
     val name = varchar("name", 255)
     val scopes = text("scopes")
-    val last_used_at = long("last_used_at").nullable()
-    val expires_at = long("expires_at").nullable()
-    val created_at = long("created_at")
+    val last_used_at = timestamp("last_used_at").nullable()
+    val expires_at = timestamp("expires_at").nullable()
+    val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
 

@@ -3,6 +3,7 @@ package com.moneat.plugins
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.*
+import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.sql.Connection
@@ -23,6 +24,18 @@ fun Application.configureDatabases() {
     }
     
     val dataSource = HikariDataSource(hikariConfig)
+    
+    // Run Flyway migrations
+    log.info("Running database migrations...")
+    val flyway = Flyway.configure()
+        .dataSource(dataSource)
+        .locations("classpath:db/migration")
+        .baselineOnMigrate(true) // Allow migrations on existing databases
+        .load()
+    
+    val migrationsApplied = flyway.migrate()
+    log.info("Applied ${migrationsApplied.migrationsExecuted} database migration(s)")
+    
     val database = Database.connect(dataSource)
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ
     

@@ -56,10 +56,10 @@ class AuthTokenService {
         
         // Calculate expiration if specified
         val expiresAt = expiresInDays?.let {
-            System.currentTimeMillis() + (it * 24 * 60 * 60 * 1000L)
+            Instant.now().plusSeconds((it * 24 * 60 * 60).toLong())
         }
         
-        val createdAt = System.currentTimeMillis()
+        val createdAt = Instant.now()
         
         val tokenId = transaction {
             AuthTokens.insert {
@@ -79,8 +79,8 @@ class AuthTokenService {
             token = tokenValue, // Only returned on creation
             scopes = scopes,
             lastUsedAt = null,
-            expiresAt = expiresAt?.let { formatTimestamp(it) },
-            createdAt = formatTimestamp(createdAt)
+            expiresAt = expiresAt?.let { it.atOffset(ZoneOffset.UTC).format(dateFormatter) },
+            createdAt = createdAt.atOffset(ZoneOffset.UTC).format(dateFormatter)
         )
     }
     
@@ -102,7 +102,7 @@ class AuthTokenService {
             
             // Check if token is expired
             val expiresAt = tokenRow[AuthTokens.expires_at]
-            if (expiresAt != null && expiresAt < System.currentTimeMillis()) {
+            if (expiresAt != null && expiresAt.isBefore(Instant.now())) {
                 return@transaction null
             }
             
@@ -112,7 +112,7 @@ class AuthTokenService {
             
             // Update last_used_at timestamp
             AuthTokens.update({ AuthTokens.id eq tokenId }) {
-                it[last_used_at] = System.currentTimeMillis()
+                it[last_used_at] = Instant.now()
             }
             
             TokenValidationResult(userId, scopes, tokenId)
@@ -147,9 +147,9 @@ class AuthTokenService {
                         name = row[AuthTokens.name],
                         token = null, // Never return the actual token
                         scopes = row[AuthTokens.scopes].split(",").filter { it.isNotEmpty() },
-                        lastUsedAt = row[AuthTokens.last_used_at]?.let { formatTimestamp(it) },
-                        expiresAt = row[AuthTokens.expires_at]?.let { formatTimestamp(it) },
-                        createdAt = formatTimestamp(row[AuthTokens.created_at])
+                        lastUsedAt = row[AuthTokens.last_used_at]?.let { it.atOffset(ZoneOffset.UTC).format(dateFormatter) },
+                        expiresAt = row[AuthTokens.expires_at]?.let { it.atOffset(ZoneOffset.UTC).format(dateFormatter) },
+                        createdAt = row[AuthTokens.created_at].atOffset(ZoneOffset.UTC).format(dateFormatter)
                     )
                 }
         }
@@ -207,14 +207,7 @@ class AuthTokenService {
         return hashBytes.joinToString("") { "%02x".format(it) }
     }
     
-    /**
-     * Format timestamp to ISO-8601 string
-     */
-    private fun formatTimestamp(timestamp: Long): String {
-        return Instant.ofEpochMilli(timestamp)
-            .atOffset(ZoneOffset.UTC)
-            .format(dateFormatter)
-    }
+
 }
 
 /**

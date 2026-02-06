@@ -223,7 +223,7 @@ class MainActivity : AppCompatActivity() {
                 paymentSpan.finish(SpanStatus.INTERNAL_ERROR)
 
                 Sentry.withScope { scope ->
-                    scope.setSpan(transaction)
+                    scope.setTransaction(transaction)
                     scope.setTag("error_type", "transaction_failure")
                     scope.setTag("trace_linked", "true")
                     Sentry.captureException(
