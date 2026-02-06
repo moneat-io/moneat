@@ -148,3 +148,49 @@ PARTITION BY toYYYYMM(started)
 ORDER BY (project_id, started)
 TTL toDateTime(started) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
+
+-- Replay events table (metadata per segment; aggregate by replay_id for list/detail)
+CREATE TABLE IF NOT EXISTS replay_events (
+    replay_id UUID,
+    project_id UInt64,
+    segment_id UInt32,
+    timestamp DateTime64(3, 'UTC'),
+    replay_start_timestamp DateTime64(3, 'UTC'),
+    urls Array(String),
+    error_ids Array(String),
+    trace_ids Array(String),
+    environment String,
+    release String,
+    platform String,
+    user_id String,
+    user_email String,
+    user_username String,
+    user_ip_address String,
+    sdk_name String,
+    sdk_version String,
+    browser_name String,
+    browser_version String,
+    os_name String,
+    os_version String,
+    device_name String,
+    device_family String,
+    activity UInt32,
+    tags String
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, replay_id, segment_id)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192;
+
+-- Replay segments table (rrweb recording data)
+CREATE TABLE IF NOT EXISTS replay_segments (
+    replay_id UUID,
+    project_id UInt64,
+    segment_id UInt32,
+    timestamp DateTime64(3, 'UTC'),
+    recording_data String
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, replay_id, segment_id)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192;

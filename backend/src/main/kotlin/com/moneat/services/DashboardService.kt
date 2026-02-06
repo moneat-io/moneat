@@ -46,6 +46,11 @@ class DashboardService {
         val projectId = getProjectIdForTransaction(eventId) ?: return false
         return hasProjectAccess(userId, projectId)
     }
+
+    suspend fun hasReplayAccess(userId: Int, replayId: String): Boolean {
+        val projectId = getProjectIdForReplay(replayId) ?: return false
+        return hasProjectAccess(userId, projectId)
+    }
     
     private suspend fun getProjectIdForIssue(issueId: String): Long? {
         val escapedIssueId = issueId.replace("'", "''")
@@ -71,6 +76,88 @@ class DashboardService {
             obj["project_id"]?.jsonPrimitive?.long
         } catch (e: Exception) {
             logger.error(e) { "Failed to get project ID for issue" }
+            null
+        }
+    }
+
+    suspend fun getProjectIdForEvent(eventId: String): Long? {
+        val normalizedEventId = normalizeUuid(eventId) ?: return null
+        val query = """
+            SELECT project_id
+            FROM $clickhouseDb.events
+            WHERE toString(event_id) = '$normalizedEventId'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["project_id"]?.jsonPrimitive?.long
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get project ID for event" }
+            null
+        }
+    }
+
+    suspend fun getIssueIdForEvent(eventId: String): String? {
+        val normalizedEventId = normalizeUuid(eventId) ?: return null
+        val query = """
+            SELECT issue_id
+            FROM $clickhouseDb.events
+            WHERE toString(event_id) = '$normalizedEventId' AND event_type = 'error' AND issue_id != ''
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["issue_id"]?.jsonPrimitive?.contentOrNull
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get issue ID for event $eventId" }
+            null
+        }
+    }
+
+    private suspend fun getProjectIdForReplay(replayId: String): Long? {
+        val normalizedReplayId = normalizeUuid(replayId) ?: return null
+        val query = """
+            SELECT project_id
+            FROM $clickhouseDb.replay_events
+            WHERE toString(replay_id) = '$normalizedReplayId'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["project_id"]?.jsonPrimitive?.long
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get project ID for replay" }
             null
         }
     }
@@ -1495,6 +1582,332 @@ class DashboardService {
             }
     }
     
+    suspend fun getReplays(
+        projectId: Long,
+        page: Int = 1,
+        limit: Int = 25,
+        environment: String? = null,
+        period: String = "7d"
+    ): List<ReplayListItem> {
+        val offset = (page - 1) * limit
+        val periodClause = when (period) {
+            "24h" -> "replay_start_timestamp >= now64(3) - INTERVAL 1 DAY"
+            "30d" -> "replay_start_timestamp >= now64(3) - INTERVAL 30 DAY"
+            else -> "replay_start_timestamp >= now64(3) - INTERVAL 7 DAY"
+        }
+        val envClause = if (environment != null && environment.isNotBlank()) {
+            "AND environment = '${environment.replace("'", "''")}'"
+        } else ""
+
+        val query = """
+            SELECT
+                toString(replay_id) as replay_id,
+                project_id,
+                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as started_at,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as finished_at,
+                dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
+                arrayFlatten(groupArray(urls)) as urls,
+                length(arrayFlatten(groupArray(error_ids))) as error_count,
+                argMax(user_id, timestamp) as user_id,
+                argMax(user_email, timestamp) as user_email,
+                argMax(user_username, timestamp) as user_username,
+                argMax(browser_name, timestamp) as browser_name,
+                argMax(browser_version, timestamp) as browser_version,
+                argMax(os_name, timestamp) as os_name,
+                argMax(os_version, timestamp) as os_version,
+                argMax(activity, timestamp) as activity
+            FROM $clickhouseDb.replay_events
+            WHERE project_id = $projectId AND $periodClause $envClause
+            GROUP BY replay_id, project_id
+            ORDER BY max(timestamp) DESC
+            LIMIT $limit OFFSET $offset
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) return emptyList()
+
+            body.lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    try {
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+                        val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
+                        val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
+                        ReplayListItem(
+                            replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                            projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
+                            startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
+                            finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
+                            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            urls = parseStringArray(obj["urls"]),
+                            errorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0,
+                            user = if (userId != null || userEmail != null || userUsername != null) {
+                                UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                            } else null,
+                            browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
+                        )
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to parse replay list row" }
+                        null
+                    }
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch replays for project $projectId" }
+            emptyList()
+        }
+    }
+
+    private fun parseStringArray(element: JsonElement?): List<String> {
+        val arr = element?.jsonArray ?: return emptyList()
+        return arr.mapNotNull { it.jsonPrimitive.contentOrNull }
+    }
+
+    suspend fun getReplay(replayId: String): ReplayDetailResponse? {
+        val normalizedReplayId = normalizeUuid(replayId) ?: return null
+
+        val query = """
+            SELECT
+                toString(replay_id) as replay_id,
+                project_id,
+                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as started_at,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as finished_at,
+                dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
+                arrayFlatten(groupArray(urls)) as urls,
+                arrayFlatten(groupArray(error_ids)) as error_ids,
+                arrayFlatten(groupArray(trace_ids)) as trace_ids,
+                count() as segment_count,
+                argMax(environment, timestamp) as environment,
+                argMax(release, timestamp) as release,
+                argMax(platform, timestamp) as platform,
+                argMax(user_id, timestamp) as user_id,
+                argMax(user_email, timestamp) as user_email,
+                argMax(user_username, timestamp) as user_username,
+                argMax(browser_name, timestamp) as browser_name,
+                argMax(browser_version, timestamp) as browser_version,
+                argMax(os_name, timestamp) as os_name,
+                argMax(os_version, timestamp) as os_version,
+                argMax(activity, timestamp) as activity,
+                argMax(tags, timestamp) as tags
+            FROM $clickhouseDb.replay_events
+            WHERE toString(replay_id) = '$normalizedReplayId'
+            GROUP BY replay_id, project_id
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
+
+            val obj = json.parseToJsonElement(line).jsonObject
+            val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+            val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
+            val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
+            val tagsStr = obj["tags"]?.jsonPrimitive?.contentOrNull ?: "{}"
+            val tagsMap = try {
+                val tagsObj = json.parseToJsonElement(tagsStr) as? JsonObject ?: return null
+                tagsObj.mapValues { it.value.jsonPrimitive.content }
+            } catch (_: Exception) { emptyMap<String, String>() }
+
+            ReplayDetailResponse(
+                replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return null,
+                projectId = obj["project_id"]?.jsonPrimitive?.long ?: return null,
+                startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
+                finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
+                durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                urls = parseStringArray(obj["urls"]),
+                errorIds = parseStringArray(obj["error_ids"]),
+                traceIds = parseStringArray(obj["trace_ids"]),
+                segmentCount = obj["segment_count"]?.jsonPrimitive?.intOrNull ?: 0,
+                environment = obj["environment"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                release = obj["release"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                platform = obj["platform"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                user = if (userId != null || userEmail != null || userUsername != null) {
+                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                } else null,
+                browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0,
+                tags = tagsMap
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch replay $replayId" }
+            null
+        }
+    }
+
+    suspend fun getReplayRecording(replayId: String): ReplayRecordingResponse? {
+        val normalizedReplayId = normalizeUuid(replayId) ?: return null
+
+        val query = """
+            SELECT recording_data
+            FROM $clickhouseDb.replay_segments
+            WHERE toString(replay_id) = '$normalizedReplayId'
+            ORDER BY segment_id ASC
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            val allEvents = mutableListOf<JsonElement>()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .forEach { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    val recordingData = obj["recording_data"]?.jsonPrimitive?.content ?: return@forEach
+                    try {
+                        val segmentEvents = json.parseToJsonElement(recordingData)
+                        when (segmentEvents) {
+                            is JsonArray -> segmentEvents.forEach { allEvents.add(it) }
+                            else -> allEvents.add(segmentEvents)
+                        }
+                    } catch (_: Exception) {
+                        // ignore malformed segment
+                    }
+                }
+            ReplayRecordingResponse(events = allEvents)
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch replay recording $replayId" }
+            null
+        }
+    }
+
+    suspend fun getReplaysForIssue(issueId: String, limit: Int = 10): List<ReplayListItem> {
+        val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
+        val escapedIssueId = issueId.replace("'", "''")
+
+        val eventIdsQuery = """
+            SELECT toString(event_id) as event_id
+            FROM $clickhouseDb.events
+            WHERE issue_id = '$escapedIssueId' AND event_type = 'error'
+            LIMIT 100
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val eventIds = try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(eventIdsQuery)
+            }
+            val body = response.bodyAsText()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    obj["event_id"]?.jsonPrimitive?.content
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get event IDs for issue $issueId" }
+            emptyList()
+        }
+
+        if (eventIds.isEmpty()) return emptyList()
+
+        val eventIdList = eventIds.joinToString(",") { "'${it.replace("'", "''")}'" }
+        val query = """
+            SELECT
+                toString(r.replay_id) as replay_id,
+                r.project_id,
+                formatDateTime(min(r.replay_start_timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as started_at,
+                formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as finished_at,
+                dateDiff('millisecond', min(r.replay_start_timestamp), max(r.timestamp)) as duration_ms,
+                arrayFlatten(groupArray(r.urls)) as urls,
+                length(arrayFlatten(groupArray(r.error_ids))) as error_count,
+                argMax(r.user_id, r.timestamp) as user_id,
+                argMax(r.user_email, r.timestamp) as user_email,
+                argMax(r.user_username, r.timestamp) as user_username,
+                argMax(r.browser_name, r.timestamp) as browser_name,
+                argMax(r.browser_version, r.timestamp) as browser_version,
+                argMax(r.os_name, r.timestamp) as os_name,
+                argMax(r.os_version, r.timestamp) as os_version,
+                argMax(r.activity, r.timestamp) as activity
+            FROM $clickhouseDb.replay_events r
+            WHERE r.project_id = $projectId AND hasAny(r.error_ids, [$eventIdList])
+            GROUP BY r.replay_id, r.project_id
+            ORDER BY max(r.timestamp) DESC
+            LIMIT $limit
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) return emptyList()
+
+            body.lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    try {
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+                        val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
+                        val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
+                        ReplayListItem(
+                            replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                            projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
+                            startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
+                            finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
+                            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            urls = parseStringArray(obj["urls"]),
+                            errorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0,
+                            user = if (userId != null || userEmail != null || userUsername != null) {
+                                UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                            } else null,
+                            browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
+                        )
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to parse replay list row for issue" }
+                        null
+                    }
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch replays for issue $issueId" }
+            emptyList()
+        }
+    }
+
     suspend fun updateIssue(issueId: String, update: com.moneat.models.IssueUpdateRequest) {
         if (update.status != null) {
             val validStatuses = setOf("unresolved", "resolved", "ignored")

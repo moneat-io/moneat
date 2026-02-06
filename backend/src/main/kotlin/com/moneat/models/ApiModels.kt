@@ -1,6 +1,7 @@
 package com.moneat.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class SignupRequest(
@@ -322,4 +323,49 @@ data class ReleaseDetailStats(
 data class ReleaseMarker(
     val version: String,
     val timestamp: String
+)
+
+@Serializable
+data class ReplayListItem(
+    val replayId: String,
+    val projectId: Long,
+    val startedAt: String,
+    val finishedAt: String,
+    val durationMs: Double,
+    val urls: List<String>,
+    val errorCount: Int,
+    val user: UserInfo?,
+    val browserName: String?,
+    val browserVersion: String?,
+    val osName: String?,
+    val osVersion: String?,
+    val activity: Int
+)
+
+@Serializable
+data class ReplayDetailResponse(
+    val replayId: String,
+    val projectId: Long,
+    val startedAt: String,
+    val finishedAt: String,
+    val durationMs: Double,
+    val urls: List<String>,
+    val errorIds: List<String>,
+    val traceIds: List<String>,
+    val segmentCount: Int,
+    val environment: String?,
+    val release: String?,
+    val platform: String?,
+    val user: UserInfo?,
+    val browserName: String?,
+    val browserVersion: String?,
+    val osName: String?,
+    val osVersion: String?,
+    val activity: Int,
+    val tags: Map<String, String>
+)
+
+@Serializable
+data class ReplayRecordingResponse(
+    val events: List<JsonElement>
 )

@@ -181,6 +181,36 @@ interface ReleaseStats {
   topIssues: TopIssue[]
 }
 
+interface Replay {
+  replayId: string
+  projectId: number
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+  urls: string[]
+  errorCount: number
+  user?: { id?: string; email?: string; username?: string }
+  browserName?: string
+  browserVersion?: string
+  osName?: string
+  osVersion?: string
+  activity: number
+}
+
+interface ReplayDetail extends Replay {
+  errorIds: string[]
+  traceIds: string[]
+  segmentCount: number
+  environment?: string
+  release?: string
+  platform?: string
+  tags: Record<string, string>
+}
+
+interface ReplayRecordingResponse {
+  events: unknown[]
+}
+
 class ApiClient {
   private getToken(): string | null {
     return localStorage.getItem('auth_token')
@@ -385,6 +415,44 @@ class ApiClient {
       `${API_BASE}/projects/${projectId}/releases/${encodeURIComponent(version)}/stats`
     )
   }
+
+  async getReplays(
+    projectId: number,
+    options: { page?: number; limit?: number; environment?: string; period?: '24h' | '7d' | '30d' } = {}
+  ): Promise<Replay[]> {
+    const params = new URLSearchParams()
+    params.set('page', String(options.page ?? 1))
+    params.set('limit', String(options.limit ?? 25))
+    params.set('period', options.period ?? '7d')
+    if (options.environment) params.set('environment', options.environment)
+    return this.request<Replay[]>(`${API_BASE}/projects/${projectId}/replays?${params.toString()}`)
+  }
+
+  async getReplay(replayId: string): Promise<ReplayDetail> {
+    return this.request<ReplayDetail>(`${API_BASE}/replays/${encodeURIComponent(replayId)}`)
+  }
+
+  async getReplayRecording(replayId: string): Promise<ReplayRecordingResponse> {
+    return this.request<ReplayRecordingResponse>(
+      `${API_BASE}/replays/${encodeURIComponent(replayId)}/recording`
+    )
+  }
+
+  async getIssueIdForEvent(eventId: string): Promise<{ issueId: string } | null> {
+    try {
+      return await this.request<{ issueId: string }>(
+        `${API_BASE}/events/${encodeURIComponent(eventId)}/issue`
+      )
+    } catch {
+      return null
+    }
+  }
+
+  async getReplaysForIssue(issueId: string, limit = 10): Promise<Replay[]> {
+    return this.request<Replay[]>(
+      `${API_BASE}/issues/${encodeURIComponent(issueId)}/replays?limit=${limit}`
+    )
+  }
 }
 
 export const api = new ApiClient()
@@ -406,4 +474,7 @@ export type {
   PerformanceStats,
   Release,
   ReleaseStats,
+  Replay,
+  ReplayDetail,
+  ReplayRecordingResponse,
 }

@@ -117,13 +117,13 @@ function ContextSection({ name, data, depth = 0, defaultOpen = true }: { name: s
 
               if (isNestedObject) {
                 return (
-                  <ContextSection key={key} name={key} data={value} depth={depth + 1} defaultOpen={defaultOpen} />
+                  <ContextSection key={String(key)} name={String(key)} data={value as Record<string, unknown>} depth={depth + 1} defaultOpen={defaultOpen} />
                 )
               }
 
               return (
-                <div key={key} className="flex items-start justify-between gap-4 px-3 py-2">
-                  <span className="shrink-0 text-xs text-muted-foreground">{key}</span>
+                <div key={String(key)} className="flex items-start justify-between gap-4 px-3 py-2">
+                  <span className="shrink-0 text-xs text-muted-foreground">{String(key)}</span>
                   <span className="text-right font-mono text-xs break-all">
                     {isArray
                       ? (value as unknown[]).map(formatContextValue).join(', ')

@@ -18,6 +18,10 @@ class MoneatApp : Application() {
             options.isDebug = true
             options.isEnableAutoSessionTracking = true
             
+            // Enable session replay at 100%
+            options.sessionReplay.sessionSampleRate = 1.0
+            options.sessionReplay.onErrorSampleRate = 1.0
+            
             // Enable stack trace attachment
             options.isAttachStacktrace = true
             options.isAttachThreads = true

@@ -263,12 +263,15 @@ yarn add @sentry/browser`,
     },
     {
       title: 'Initialize as early as possible',
-      description: 'Initialize Sentry at your application entry point (e.g., main.js or index.js).',
+      description: 'Initialize Sentry at your application entry point. Include replayIntegration for Session Replay (optional).',
       code: `import * as Sentry from "@sentry/browser";
 
 Sentry.init({
   dsn: "${DSN_PLACEHOLDER}",
+  integrations: [Sentry.replayIntegration()],
   tracesSampleRate: 1.0,
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1.0,
 });`,
       language: 'javascript',
     },
@@ -294,14 +297,19 @@ yarn add @sentry/react`,
     },
     {
       title: 'Initialize in your entry point',
-      description: 'Initialize Sentry before rendering your React app (main.tsx or index.tsx).',
+      description: 'Initialize Sentry before rendering your React app (main.tsx or index.tsx). Include replayIntegration for Session Replay (optional).',
       code: `import * as Sentry from "@sentry/react";
 import App from "./App";
 
 Sentry.init({
   dsn: "${DSN_PLACEHOLDER}",
-  integrations: [Sentry.browserTracingIntegration()],
+  integrations: [
+    Sentry.browserTracingIntegration(),
+    Sentry.replayIntegration(),
+  ],
   tracesSampleRate: 1.0,
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1.0,
 });
 
 const root = createRoot(document.getElementById("root")!);
@@ -340,8 +348,13 @@ const app = createApp(App);
 Sentry.init({
   app,
   dsn: "${DSN_PLACEHOLDER}",
-  integrations: [Sentry.browserTracingIntegration()],
+  integrations: [
+    Sentry.browserTracingIntegration(),
+    Sentry.replayIntegration(),
+  ],
   tracesSampleRate: 1.0,
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1.0,
 });
 
 app.mount("#app");`,

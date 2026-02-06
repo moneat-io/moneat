@@ -11,6 +11,7 @@ androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = 
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
+sentry-android-replay = { group = "io.sentry", name = "sentry-android-replay", version.ref = "sentry" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

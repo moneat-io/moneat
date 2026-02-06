@@ -38,6 +38,8 @@ class EventService {
     }
     
     suspend fun processEnvelope(projectId: Long, envelope: SentryEnvelope) {
+        var lastReplayId: String? = null
+        var lastSegmentId: Int = 0
         for (item in envelope.items) {
             logger.debug { "Processing envelope item type: ${item.type}" }
             when (item.type) {
@@ -54,6 +56,18 @@ class EventService {
                 "session" -> {
                     // TODO: Handle sessions
                     logger.debug { "Received session (not yet implemented)" }
+                }
+                "replay_event" -> {
+                    val replayEvent = json.decodeFromString<SentryReplayEvent>(item.payload)
+                    lastReplayId = replayEvent.replay_id
+                    lastSegmentId = replayEvent.segment_id ?: 0
+                    storeReplayEvent(projectId, replayEvent)
+                }
+                "replay_recording" -> {
+                    val rid = lastReplayId ?: envelope.eventId
+                    storeReplayRecording(projectId, rid, lastSegmentId, item.payload)
+                    lastReplayId = null
+                    lastSegmentId = 0
                 }
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
@@ -325,6 +339,125 @@ class EventService {
             }
         } catch (e: Exception) {
             logger.error(e) { "Error storing event in ClickHouse" }
+        }
+    }
+
+    private suspend fun storeReplayEvent(projectId: Long, replayEvent: SentryReplayEvent) {
+        val replayId = replayEvent.replay_id ?: UUID.randomUUID().toString()
+        val segmentId = replayEvent.segment_id ?: 0
+        val ts = replayEvent.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
+        val startTs = replayEvent.replay_start_timestamp?.let { unixSecondsToMillis(it) } ?: ts
+        val durationMs = durationMs(replayEvent.replay_start_timestamp, replayEvent.timestamp)
+
+        val urls = replayEvent.urls?.take(100) ?: emptyList()
+        val errorIds = replayEvent.error_ids ?: emptyList()
+        val traceIds = replayEvent.trace_ids ?: emptyList()
+        val tags = replayEvent.tags?.let { JsonObject(it.mapValues { (_, v) -> JsonPrimitive(v) })?.toString() } ?: "{}"
+
+        val contexts = replayEvent.contexts
+        val browser = contexts?.get("browser") as? JsonObject
+        val os = contexts?.get("os") as? JsonObject
+        val device = contexts?.get("device") as? JsonObject
+        val browserName = browser?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+        val browserVersion = browser?.get("version")?.jsonPrimitive?.contentOrNull ?: ""
+        val osName = os?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+        val osVersion = os?.get("version")?.jsonPrimitive?.contentOrNull ?: ""
+        val deviceName = device?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+        val deviceFamily = device?.get("family")?.jsonPrimitive?.contentOrNull ?: ""
+        val activity = contexts?.get("replay")?.jsonObject?.get("activity")?.jsonPrimitive?.intOrNull ?: 0
+
+        val urlsArray = "[${urls.joinToString(",") { "'${escapeSql(it)}'" }}]"
+        val errorIdsArray = "[${errorIds.joinToString(",") { "'${escapeSql(it)}'" }}]"
+        val traceIdsArray = "[${traceIds.joinToString(",") { "'${escapeSql(it)}'" }}]"
+
+        val replayEventInsert = """
+            INSERT INTO $clickhouseDb.replay_events (
+                replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
+                urls, error_ids, trace_ids, environment, release, platform,
+                user_id, user_email, user_username, user_ip_address,
+                sdk_name, sdk_version, browser_name, browser_version,
+                os_name, os_version, device_name, device_family, activity, tags
+            ) VALUES (
+                toUUID('${normalizeUuid(replayId)}'),
+                $projectId,
+                $segmentId,
+                fromUnixTimestamp64Milli($ts),
+                fromUnixTimestamp64Milli($startTs),
+                $urlsArray,
+                $errorIdsArray,
+                $traceIdsArray,
+                '${escapeSql(replayEvent.environment ?: "")}',
+                '${escapeSql(replayEvent.release ?: "")}',
+                '${escapeSql(replayEvent.platform ?: "")}',
+                '${escapeSql(replayEvent.user?.id ?: "")}',
+                '${escapeSql(replayEvent.user?.email ?: "")}',
+                '${escapeSql(replayEvent.user?.username ?: "")}',
+                '${escapeSql(replayEvent.user?.ip_address ?: "")}',
+                '${escapeSql(replayEvent.sdk?.name ?: "")}',
+                '${escapeSql(replayEvent.sdk?.version ?: "")}',
+                '${escapeSql(browserName)}',
+                '${escapeSql(browserVersion)}',
+                '${escapeSql(osName)}',
+                '${escapeSql(osVersion)}',
+                '${escapeSql(deviceName)}',
+                '${escapeSql(deviceFamily)}',
+                $activity,
+                '${escapeSql(tags)}'
+            )
+        """.trimIndent()
+
+        try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                contentType(ContentType.Text.Plain)
+                setBody(replayEventInsert)
+            }
+            if (!response.status.isSuccess()) {
+                val errorBody = response.bodyAsText()
+                logger.error { "Failed to insert replay event: $errorBody" }
+            } else {
+                logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error storing replay event in ClickHouse" }
+        }
+    }
+
+    private suspend fun storeReplayRecording(projectId: Long, replayId: String, segmentId: Int, payload: String) {
+        val normalizedReplayId = normalizeUuid(replayId)
+        val timestamp = System.currentTimeMillis()
+        val escapedPayload = escapeSql(payload)
+
+        val recordingInsert = """
+            INSERT INTO $clickhouseDb.replay_segments (
+                replay_id, project_id, segment_id, timestamp, recording_data
+            ) VALUES (
+                toUUID('$normalizedReplayId'),
+                $projectId,
+                $segmentId,
+                fromUnixTimestamp64Milli($timestamp),
+                '$escapedPayload'
+            )
+        """.trimIndent()
+
+        try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                contentType(ContentType.Text.Plain)
+                setBody(recordingInsert)
+            }
+            if (!response.status.isSuccess()) {
+                val errorBody = response.bodyAsText()
+                logger.error { "Failed to insert replay recording: $errorBody" }
+            } else {
+                logger.info { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error storing replay recording in ClickHouse" }
         }
     }
     

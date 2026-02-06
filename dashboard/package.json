@@ -30,6 +30,8 @@
     "react-dom": "^18.2.0",
     "react-syntax-highlighter": "^16.1.0",
     "recharts": "^2.10.3",
+    "rrweb": "^2.0.0-alpha.4",
+    "rrweb-player": "^1.0.0-alpha.4",
     "tailwind-merge": "^2.6.1",
     "tailwindcss-animate": "^1.0.7"
   },

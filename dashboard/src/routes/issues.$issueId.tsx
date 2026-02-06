@@ -25,6 +25,7 @@ import {
   Smartphone,
   Battery,
   Circle,
+  Play,
 } from 'lucide-react'
 
 // Helper function to get level color
@@ -77,6 +78,11 @@ function IssueDetailPage() {
   const { data: relatedTransactions = [] } = useQuery({
     queryKey: ['issue-transactions', issueId],
     queryFn: () => api.getIssueTransactions(issueId),
+  })
+
+  const { data: linkedReplays = [] } = useQuery({
+    queryKey: ['issue-replays', issueId],
+    queryFn: () => api.getReplaysForIssue(issueId, 10),
   })
 
   const primaryTransactionId = relatedTransactions[0]?.eventId
@@ -324,6 +330,52 @@ function IssueDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {linkedReplays.length > 0 && (
+          <Card className="mt-6 border-l-4 border-l-emerald-400 dark:border-l-emerald-600">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                <Play className="h-5 w-5" />
+                Session Replays ({linkedReplays.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {linkedReplays.map((replay) => (
+                  <Link
+                    key={replay.replayId}
+                    to="/replays/$replayId"
+                    params={{ replayId: replay.replayId }}
+                    className="flex items-center justify-between rounded border p-3 transition-colors hover:bg-accent"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">
+                          {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'}
+                        </span>
+                        {replay.errorCount > 0 && (
+                          <Badge variant="destructive" className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {replay.errorCount}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          {formatDuration(replay.durationMs)}
+                        </span>
+                        <span>{new Date(replay.startedAt).toLocaleString()}</span>
+                        {replay.browserName && <span>{replay.browserName}</span>}
+                      </div>
+                    </div>
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {primaryTransactionSpans && (
           <Card className="mt-6 border-l-4 border-l-cyan-400 dark:border-l-cyan-600">

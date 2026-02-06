@@ -11,35 +11,43 @@ data class SentryEnvelope(
 ) {
     companion object {
         fun parse(body: String): SentryEnvelope {
-            val lines = body.lines()
-            if (lines.isEmpty()) throw IllegalArgumentException("Empty envelope")
-            
-            // Parse header
-            val headerJson = Json.parseToJsonElement(lines[0]).jsonObject
-            val eventId = headerJson["event_id"]?.jsonPrimitive?.content 
+            if (body.isBlank()) throw IllegalArgumentException("Empty envelope")
+            val bodyBytes = body.toByteArray(Charsets.UTF_8)
+            var bytePos = 0
+
+            // Parse envelope header (first line)
+            val headerLineEnd = bodyBytes.indexOf('\n'.code.toByte())
+            if (headerLineEnd == -1) throw IllegalArgumentException("Invalid envelope: missing header newline")
+            val headerLine = bodyBytes.copyOfRange(bytePos, headerLineEnd).toString(Charsets.UTF_8)
+            val headerJson = Json.parseToJsonElement(headerLine).jsonObject
+            val eventId = headerJson["event_id"]?.jsonPrimitive?.content
                 ?: UUID.randomUUID().toString()
-            
-            // Parse items
+            bytePos = headerLineEnd + 1
+
             val items = mutableListOf<EnvelopeItem>()
-            var i = 1
-            while (i < lines.size) {
-                if (lines[i].isBlank()) {
-                    i++
-                    continue
+            while (bytePos < bodyBytes.size) {
+                // Skip blank lines
+                while (bytePos < bodyBytes.size && (bodyBytes[bytePos] == '\n'.code.toByte() || bodyBytes[bytePos] == '\r'.code.toByte())) {
+                    bytePos++
                 }
-                
-                val itemHeader = Json.parseToJsonElement(lines[i]).jsonObject
+                if (bytePos >= bodyBytes.size) break
+
+                // Parse item header line
+                val itemHeaderEnd = (bytePos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() } ?: -1
+                if (itemHeaderEnd == -1) break
+                val itemHeaderLine = bodyBytes.copyOfRange(bytePos, itemHeaderEnd).toString(Charsets.UTF_8)
+                val itemHeader = Json.parseToJsonElement(itemHeaderLine).jsonObject
                 val itemType = itemHeader["type"]?.jsonPrimitive?.content ?: "unknown"
                 val length = itemHeader["length"]?.jsonPrimitive?.int ?: 0
-                
-                i++
-                if (i < lines.size) {
-                    val payload = lines[i]
+                bytePos = itemHeaderEnd + 1
+
+                if (length > 0 && bytePos + length <= bodyBytes.size) {
+                    val payloadBytes = bodyBytes.copyOfRange(bytePos, bytePos + length)
+                    val payload = payloadBytes.toString(Charsets.UTF_8)
                     items.add(EnvelopeItem(itemType, payload))
                 }
-                i++
+                bytePos += length
             }
-            
             return SentryEnvelope(eventId, items)
         }
     }
@@ -155,4 +163,23 @@ data class UserInfo(
     val email: String? = null,
     val username: String? = null,
     val ip_address: String? = null
+)
+
+@Serializable
+data class SentryReplayEvent(
+    val replay_id: String? = null,
+    val segment_id: Int? = null,
+    val timestamp: Double? = null,
+    val replay_start_timestamp: Double? = null,
+    val urls: List<String>? = null,
+    val error_ids: List<String>? = null,
+    val trace_ids: List<String>? = null,
+    val platform: String? = null,
+    val environment: String? = null,
+    val release: String? = null,
+    val user: UserInfo? = null,
+    val contexts: JsonObject? = null,
+    val sdk: SdkInfo? = null,
+    val tags: Map<String, String>? = null,
+    val replay_type: String? = null
 )

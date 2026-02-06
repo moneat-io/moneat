@@ -13,6 +13,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ReplaysRouteImport } from './routes/replays'
 import { Route as ReleasesRouteImport } from './routes/releases'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PerformanceRouteImport } from './routes/performance'
@@ -22,6 +23,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
+import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
@@ -45,6 +47,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReplaysRoute = ReplaysRouteImport.update({
+  id: '/replays',
+  path: '/replays',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReleasesRoute = ReleasesRouteImport.update({
@@ -92,6 +99,11 @@ const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PerformanceRoute,
 } as any)
+const ReplaysReplayIdRoute = ReplaysReplayIdRouteImport.update({
+  id: '/$replayId',
+  path: '/$replayId',
+  getParentRoute: () => ReplaysRoute,
+} as any)
 const ReleasesVersionRoute = ReleasesVersionRouteImport.update({
   id: '/$version',
   path: '/$version',
@@ -123,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/performance': typeof PerformanceRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
+  '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -131,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
+  '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/performance/': typeof PerformanceIndexRoute
 }
 export interface FileRoutesByTo {
@@ -141,6 +155,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
+  '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -149,6 +164,7 @@ export interface FileRoutesByTo {
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
+  '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/performance': typeof PerformanceIndexRoute
 }
 export interface FileRoutesById {
@@ -161,6 +177,7 @@ export interface FileRoutesById {
   '/performance': typeof PerformanceRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
+  '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -169,6 +186,7 @@ export interface FileRoutesById {
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
+  '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/performance/': typeof PerformanceIndexRoute
 }
 export interface FileRouteTypes {
@@ -182,6 +200,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/projects'
     | '/releases'
+    | '/replays'
     | '/reset-password'
     | '/settings'
     | '/signup'
@@ -190,6 +209,7 @@ export interface FileRouteTypes {
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
+    | '/replays/$replayId'
     | '/performance/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -200,6 +220,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/projects'
     | '/releases'
+    | '/replays'
     | '/reset-password'
     | '/settings'
     | '/signup'
@@ -208,6 +229,7 @@ export interface FileRouteTypes {
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
+    | '/replays/$replayId'
     | '/performance'
   id:
     | '__root__'
@@ -219,6 +241,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/projects'
     | '/releases'
+    | '/replays'
     | '/reset-password'
     | '/settings'
     | '/signup'
@@ -227,6 +250,7 @@ export interface FileRouteTypes {
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
+    | '/replays/$replayId'
     | '/performance/'
   fileRoutesById: FileRoutesById
 }
@@ -239,6 +263,7 @@ export interface RootRouteChildren {
   PerformanceRoute: typeof PerformanceRouteWithChildren
   ProjectsRoute: typeof ProjectsRouteWithChildren
   ReleasesRoute: typeof ReleasesRouteWithChildren
+  ReplaysRoute: typeof ReplaysRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
@@ -274,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/replays': {
+      id: '/replays'
+      path: '/replays'
+      fullPath: '/replays'
+      preLoaderRoute: typeof ReplaysRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/releases': {
@@ -338,6 +370,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/performance/'
       preLoaderRoute: typeof PerformanceIndexRouteImport
       parentRoute: typeof PerformanceRoute
+    }
+    '/replays/$replayId': {
+      id: '/replays/$replayId'
+      path: '/$replayId'
+      fullPath: '/replays/$replayId'
+      preLoaderRoute: typeof ReplaysReplayIdRouteImport
+      parentRoute: typeof ReplaysRoute
     }
     '/releases/$version': {
       id: '/releases/$version'
@@ -408,6 +447,17 @@ const ReleasesRouteWithChildren = ReleasesRoute._addFileChildren(
   ReleasesRouteChildren,
 )
 
+interface ReplaysRouteChildren {
+  ReplaysReplayIdRoute: typeof ReplaysReplayIdRoute
+}
+
+const ReplaysRouteChildren: ReplaysRouteChildren = {
+  ReplaysReplayIdRoute: ReplaysReplayIdRoute,
+}
+
+const ReplaysRouteWithChildren =
+  ReplaysRoute._addFileChildren(ReplaysRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyticsRoute: AnalyticsRoute,
@@ -417,6 +467,7 @@ const rootRouteChildren: RootRouteChildren = {
   PerformanceRoute: PerformanceRouteWithChildren,
   ProjectsRoute: ProjectsRouteWithChildren,
   ReleasesRoute: ReleasesRouteWithChildren,
+  ReplaysRoute: ReplaysRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,

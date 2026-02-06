@@ -362,6 +362,121 @@ fun Route.apiRoutes() {
                 val relatedErrors = dashboardService.getRelatedErrorsForTransaction(eventId, limit)
                 call.respond(relatedErrors)
             }
+
+            // Replays
+            get("/projects/{projectId}/replays") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                val environment = call.request.queryParameters["environment"]
+                val period = call.request.queryParameters["period"] ?: "7d"
+
+                val replays = dashboardService.getReplays(projectId, page, limit, environment, period)
+                call.respond(replays)
+            }
+
+            get("/replays/{replayId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val replayId = call.parameters["replayId"]
+                if (replayId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasReplayAccess(userId, replayId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val replay = dashboardService.getReplay(replayId)
+                if (replay == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(replay)
+                }
+            }
+
+            get("/replays/{replayId}/recording") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val replayId = call.parameters["replayId"]
+                if (replayId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasReplayAccess(userId, replayId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val recording = dashboardService.getReplayRecording(replayId)
+                if (recording == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(recording)
+                }
+            }
+
+            get("/events/{eventId}/issue") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val eventId = call.parameters["eventId"]
+                if (eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                val projectId = dashboardService.getProjectIdForEvent(eventId)
+                if (projectId == null || !dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val issueId = dashboardService.getIssueIdForEvent(eventId)
+                if (issueId == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(mapOf("issueId" to issueId))
+                }
+            }
+
+            get("/issues/{issueId}/replays") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val issueId = call.parameters["issueId"]
+                if (issueId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+                val replays = dashboardService.getReplaysForIssue(issueId, limit)
+                call.respond(replays)
+            }
             
             // Releases
             get("/projects/{projectId}/releases") {
