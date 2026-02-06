@@ -1,4 +1,5 @@
 const API_BASE = '/api/v1'
+const AUTH_PAGE_PATHS = new Set(['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
 
 interface AuthResponse {
   token: string
@@ -212,6 +213,8 @@ interface ReplayRecordingResponse {
 }
 
 class ApiClient {
+  private authRedirectInProgress = false
+
   private getToken(): string | null {
     return localStorage.getItem('auth_token')
   }
@@ -225,7 +228,23 @@ class ApiClient {
     if (token) headers['Authorization'] = `Bearer ${token}`
 
     const response = await fetch(endpoint, { ...options, headers })
-    if (!response.ok) throw new Error(`API Error: ${response.statusText}`)
+
+    if (response.status === 401 && token) {
+      this.logout()
+
+      if (
+        !this.authRedirectInProgress &&
+        typeof window !== 'undefined' &&
+        !AUTH_PAGE_PATHS.has(window.location.pathname)
+      ) {
+        this.authRedirectInProgress = true
+        window.location.assign('/login')
+      }
+
+      throw new Error('Unauthorized')
+    }
+
+    if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`)
     return response.json()
   }
 

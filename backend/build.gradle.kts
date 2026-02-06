@@ -64,6 +64,9 @@ dependencies {
     // Security
     implementation("org.mindrot:jbcrypt:0.4")
     implementation("commons-codec:commons-codec:1.16.0")
+    
+    // MessagePack for mobile replay decoding
+    implementation("org.msgpack:msgpack-core:0.9.8")
 
     // Environment variables
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")

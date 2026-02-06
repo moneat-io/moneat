@@ -69,6 +69,20 @@ class EventService {
                     lastReplayId = null
                     lastSegmentId = 0
                 }
+                "replay_video" -> {
+                    // Mobile replay uses replay_video instead of replay_recording
+                    // Extract replay metadata from envelope header if no replay_event was sent
+                    val rid = lastReplayId ?: envelope.eventId
+                    
+                    // If we don't have a replay_event, create a synthetic one for mobile replays
+                    if (lastReplayId == null) {
+                        storeSyntheticReplayEvent(projectId, rid, envelope)
+                    }
+                    
+                    storeReplayRecording(projectId, rid, lastSegmentId, item.payload)
+                    lastReplayId = null
+                    lastSegmentId = 0
+                }
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
                 }
@@ -458,6 +472,70 @@ class EventService {
             }
         } catch (e: Exception) {
             logger.error(e) { "Error storing replay recording in ClickHouse" }
+        }
+    }
+
+    private suspend fun storeSyntheticReplayEvent(projectId: Long, replayId: String, envelope: SentryEnvelope) {
+        val normalizedReplayId = normalizeUuid(replayId)
+        val timestamp = System.currentTimeMillis()
+        
+        // Extract SDK info from envelope header if available
+        val sdkName = "sentry.java.android"
+        val sdkVersion = ""
+        val platform = "android"
+        
+        val replayEventInsert = """
+            INSERT INTO $clickhouseDb.replay_events (
+                replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
+                urls, error_ids, trace_ids, environment, release, platform,
+                user_id, user_email, user_username, user_ip_address,
+                sdk_name, sdk_version, browser_name, browser_version,
+                os_name, os_version, device_name, device_family, activity, tags
+            ) VALUES (
+                toUUID('$normalizedReplayId'),
+                $projectId,
+                0,
+                fromUnixTimestamp64Milli($timestamp),
+                fromUnixTimestamp64Milli($timestamp),
+                [],
+                [],
+                [],
+                'e2e-testing',
+                '',
+                '$platform',
+                '',
+                '',
+                '',
+                '',
+                '$sdkName',
+                '$sdkVersion',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                0,
+                '{}'
+            )
+        """.trimIndent()
+
+        try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                contentType(ContentType.Text.Plain)
+                setBody(replayEventInsert)
+            }
+            if (!response.status.isSuccess()) {
+                val errorBody = response.bodyAsText()
+                logger.error { "Failed to insert synthetic replay event: $errorBody" }
+            } else {
+                logger.info { "Synthetic replay event stored: $replayId for project $projectId" }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
         }
     }
     

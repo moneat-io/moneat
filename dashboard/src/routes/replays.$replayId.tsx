@@ -2,6 +2,7 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { ReplayPlayer } from '@/components/replay-player'
+import { MobileReplayViewer } from '@/components/mobile-replay-viewer'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ChevronLeft, User, Monitor, Globe, AlertCircle, DatabaseZap, Tag } from 'lucide-react'
@@ -95,7 +96,22 @@ function ReplayDetailPage() {
   }
 
   const events = recording?.events ?? []
-  const hasRecording = events.length > 0
+  const hasMobileVideoSegments = events.some((event) => {
+    if (typeof event !== 'object' || event === null || !('type' in event)) return false
+    return event.type === 'mobile_replay_video'
+  })
+
+  const isMobileReplay =
+    replay?.platform === 'android' ||
+    replay?.platform === 'ios' ||
+    hasMobileVideoSegments ||
+    (events.length === 1 &&
+      typeof events[0] === 'object' &&
+      events[0] !== null &&
+      'type' in events[0] &&
+      events[0].type === 'mobile_replay_not_supported')
+
+  const hasRecording = events.length > 0 && !isMobileReplay
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,6 +143,12 @@ function ReplayDetailPage() {
                   <div className="flex items-center justify-center h-[400px] rounded border bg-muted">
                     <p className="text-muted-foreground">Loading recording...</p>
                   </div>
+                ) : isMobileReplay ? (
+                  <MobileReplayViewer 
+                    events={events}
+                    platform={replay.platform || 'mobile'}
+                    className="min-h-[400px]"
+                  />
                 ) : hasRecording ? (
                   <ReplayPlayer
                     events={events}

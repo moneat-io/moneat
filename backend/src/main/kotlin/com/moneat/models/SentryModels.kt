@@ -10,9 +10,8 @@ data class SentryEnvelope(
     val items: List<EnvelopeItem>
 ) {
     companion object {
-        fun parse(body: String): SentryEnvelope {
-            if (body.isBlank()) throw IllegalArgumentException("Empty envelope")
-            val bodyBytes = body.toByteArray(Charsets.UTF_8)
+        fun parse(bodyBytes: ByteArray): SentryEnvelope {
+            if (bodyBytes.isEmpty()) throw IllegalArgumentException("Empty envelope")
             var bytePos = 0
 
             // Parse envelope header (first line)
@@ -43,8 +42,15 @@ data class SentryEnvelope(
 
                 if (length > 0 && bytePos + length <= bodyBytes.size) {
                     val payloadBytes = bodyBytes.copyOfRange(bytePos, bytePos + length)
-                    val payload = payloadBytes.toString(Charsets.UTF_8)
-                    items.add(EnvelopeItem(itemType, payload))
+                    // For replay video/recording, preserve binary data
+                    if (itemType == "replay_video" || itemType == "replay_recording") {
+                        // Store as base64 string to preserve binary data
+                        val payload = java.util.Base64.getEncoder().encodeToString(payloadBytes)
+                        items.add(EnvelopeItem(itemType, payload, payloadBytes))
+                    } else {
+                        val payload = payloadBytes.toString(Charsets.UTF_8)
+                        items.add(EnvelopeItem(itemType, payload))
+                    }
                 }
                 bytePos += length
             }
@@ -56,7 +62,9 @@ data class SentryEnvelope(
 @Serializable
 data class EnvelopeItem(
     val type: String,
-    val payload: String
+    val payload: String,
+    @kotlinx.serialization.Transient
+    val payloadBytes: ByteArray? = null
 )
 
 @Serializable

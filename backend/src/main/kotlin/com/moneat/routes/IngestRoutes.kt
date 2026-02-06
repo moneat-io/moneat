@@ -43,17 +43,17 @@ fun Route.ingestRoutes() {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
                 
-                val bodyText = if (contentEncoding == "gzip") {
+                val decompressedBytes = if (contentEncoding == "gzip") {
                     logger.debug { "Decompressing gzip envelope" }
-                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).bufferedReader().use { it.readText() }
+                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
                 } else {
-                    bodyBytes.decodeToString()
+                    bodyBytes
                 }
                 
                 logger.debug { "Received envelope for project $projectId" }
-                logger.debug { "Envelope body:\n${bodyText.take(500)}" }
+                logger.debug { "Envelope body:\n${decompressedBytes.decodeToString().take(500)}" }
                 
-                val envelope = SentryEnvelope.parse(bodyText)
+                val envelope = SentryEnvelope.parse(decompressedBytes)
                 logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }
                 eventService.processEnvelope(projectId, envelope)
                 

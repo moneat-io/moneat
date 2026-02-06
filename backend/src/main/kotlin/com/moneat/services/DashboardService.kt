@@ -14,6 +14,10 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.msgpack.core.MessagePack
+import org.msgpack.core.MessageUnpacker
+import org.msgpack.value.ValueType
+import java.util.Base64
 
 private val logger = KotlinLogging.logger {}
 
@@ -1603,8 +1607,8 @@ class DashboardService {
             SELECT
                 toString(replay_id) as replay_id,
                 project_id,
-                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as started_at,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as finished_at,
+                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as started_at,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as finished_at,
                 dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
                 arrayFlatten(groupArray(urls)) as urls,
                 length(arrayFlatten(groupArray(error_ids))) as error_count,
@@ -1683,8 +1687,8 @@ class DashboardService {
             SELECT
                 toString(replay_id) as replay_id,
                 project_id,
-                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as started_at,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as finished_at,
+                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as started_at,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as finished_at,
                 dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
                 arrayFlatten(groupArray(urls)) as urls,
                 arrayFlatten(groupArray(error_ids)) as error_ids,
@@ -1759,6 +1763,152 @@ class DashboardService {
         }
     }
 
+    private data class SegmentDecodeResult(
+        val events: List<JsonElement>,
+        val isMobileReplay: Boolean = false
+    )
+
+    private fun parseJsonEvents(payload: String, segmentIdx: Int): List<JsonElement> {
+        return try {
+            val parsed = json.parseToJsonElement(payload)
+            when (parsed) {
+                is JsonArray -> parsed.toList()
+                else -> listOf(parsed)
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse replay payload as JSON" }
+            emptyList()
+        }
+    }
+
+    private fun readMsgpackBinaryOrString(unpacker: MessageUnpacker): ByteArray? {
+        return when (unpacker.nextFormat.valueType) {
+            ValueType.BINARY -> {
+                val size = unpacker.unpackBinaryHeader()
+                unpacker.readPayload(size)
+            }
+            ValueType.STRING -> unpacker.unpackString().toByteArray(Charsets.UTF_8)
+            else -> {
+                unpacker.skipValue()
+                null
+            }
+        }
+    }
+
+    private fun extractSegmentIdFromJsonPayload(payload: String): Int? {
+        return try {
+            val obj = json.parseToJsonElement(payload).jsonObject
+            obj["segment_id"]?.jsonPrimitive?.intOrNull
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseReplayRecordingBinary(payloadBytes: ByteArray, segmentIdx: Int): Pair<Int?, List<JsonElement>> {
+        val payload = String(payloadBytes, Charsets.UTF_8)
+        val arrayStart = payload.indexOf('[')
+        if (arrayStart == -1) {
+            logger.warn { "Segment $segmentIdx: replay_recording payload does not contain event array" }
+            return null to emptyList()
+        }
+
+        val header = payload.substring(0, arrayStart).trim()
+        val segmentId = extractSegmentIdFromJsonPayload(header)
+        val events = parseJsonEvents(payload.substring(arrayStart), segmentIdx)
+        return segmentId to events
+    }
+
+    private fun annotateEventsWithSegmentId(events: List<JsonElement>, segmentId: Int): List<JsonElement> {
+        return events.map { event ->
+            val obj = event as? JsonObject ?: return@map event
+            if (obj["segment_id"] != null) {
+                event
+            } else {
+                val updated = obj.toMutableMap()
+                updated["segment_id"] = JsonPrimitive(segmentId)
+                JsonObject(updated)
+            }
+        }
+    }
+
+    private fun isLikelyMp4(payloadBytes: ByteArray): Boolean {
+        if (payloadBytes.size < 8) return false
+        val boxType = String(payloadBytes.copyOfRange(4, 8), Charsets.US_ASCII)
+        return boxType == "ftyp"
+    }
+
+    private fun decodeReplaySegment(recordingData: String, segmentIdx: Int): SegmentDecodeResult {
+        val rawBytes = try {
+            Base64.getDecoder().decode(recordingData)
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+
+        if (rawBytes == null) {
+            return SegmentDecodeResult(events = parseJsonEvents(recordingData, segmentIdx))
+        }
+
+        val firstNonWhitespace = rawBytes.firstOrNull {
+            val code = it.toInt()
+            code != ' '.code && code != '\n'.code && code != '\r'.code && code != '\t'.code
+        }
+
+        if (firstNonWhitespace == '['.code.toByte() || firstNonWhitespace == '{'.code.toByte()) {
+            return SegmentDecodeResult(
+                events = parseJsonEvents(String(rawBytes, Charsets.UTF_8), segmentIdx)
+            )
+        }
+
+        return try {
+            val unpacker = MessagePack.newDefaultUnpacker(rawBytes)
+            val topMapSize = unpacker.unpackMapHeader()
+            val events = mutableListOf<JsonElement>()
+            var mobileSegmentId: Int? = null
+
+            repeat(topMapSize) {
+                val key = unpacker.unpackString()
+                when (key) {
+                    "replay_event" -> {
+                        val payload = readMsgpackBinaryOrString(unpacker)
+                        if (payload != null && mobileSegmentId == null) {
+                            mobileSegmentId = extractSegmentIdFromJsonPayload(String(payload, Charsets.UTF_8))
+                        }
+                    }
+                    "replay_recording" -> {
+                        val payload = readMsgpackBinaryOrString(unpacker) ?: return@repeat
+                        val (segmentIdFromRecording, recordingEvents) = parseReplayRecordingBinary(payload, segmentIdx)
+                        val effectiveSegmentId = segmentIdFromRecording ?: mobileSegmentId ?: segmentIdx
+                        if (mobileSegmentId == null) {
+                            mobileSegmentId = segmentIdFromRecording
+                        }
+                        events.addAll(annotateEventsWithSegmentId(recordingEvents, effectiveSegmentId))
+                    }
+                    "replay_video" -> {
+                        val payload = readMsgpackBinaryOrString(unpacker) ?: return@repeat
+                        events.add(
+                            JsonObject(
+                                mapOf(
+                                    "type" to JsonPrimitive("mobile_replay_video"),
+                                    "segment_id" to JsonPrimitive(mobileSegmentId ?: segmentIdx),
+                                    "mime_type" to JsonPrimitive(if (isLikelyMp4(payload)) "video/mp4" else "application/octet-stream"),
+                                    "size" to JsonPrimitive(payload.size),
+                                    "data" to JsonPrimitive(Base64.getEncoder().encodeToString(payload))
+                                )
+                            )
+                        )
+                    }
+                    else -> unpacker.skipValue()
+                }
+            }
+
+            unpacker.close()
+            SegmentDecodeResult(events = events, isMobileReplay = true)
+        } catch (e: Exception) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse msgpack replay segment" }
+            SegmentDecodeResult(events = emptyList(), isMobileReplay = true)
+        }
+    }
+
     suspend fun getReplayRecording(replayId: String): ReplayRecordingResponse? {
         val normalizedReplayId = normalizeUuid(replayId) ?: return null
 
@@ -1780,22 +1930,37 @@ class DashboardService {
 
             val body = response.bodyAsText()
             val allEvents = mutableListOf<JsonElement>()
+            var isMobileReplay = false
+            
+            logger.debug { "Processing replay recording response, body lines: ${body.lines().filter { it.isNotBlank() }.size}" }
+            
             body.lines()
                 .filter { it.isNotBlank() }
-                .forEach { line ->
+                .forEachIndexed { segmentIdx, line ->
                     val obj = json.parseToJsonElement(line).jsonObject
-                    val recordingData = obj["recording_data"]?.jsonPrimitive?.content ?: return@forEach
-                    try {
-                        val segmentEvents = json.parseToJsonElement(recordingData)
-                        when (segmentEvents) {
-                            is JsonArray -> segmentEvents.forEach { allEvents.add(it) }
-                            else -> allEvents.add(segmentEvents)
-                        }
-                    } catch (_: Exception) {
-                        // ignore malformed segment
+                    val recordingData = obj["recording_data"]?.jsonPrimitive?.content ?: return@forEachIndexed
+                    val segment = decodeReplaySegment(recordingData, segmentIdx)
+                    if (segment.isMobileReplay) {
+                        isMobileReplay = true
                     }
+                    allEvents.addAll(segment.events)
                 }
-            ReplayRecordingResponse(events = allEvents)
+            
+            logger.info { "Msgpack decoding complete, extracted ${allEvents.size} total events from all segments" }
+            
+            // If mobile replay but no events decoded, return placeholder
+            if (isMobileReplay && allEvents.isEmpty()) {
+                logger.warn { "Mobile replay detected but no events extracted!" }
+                ReplayRecordingResponse(events = listOf(
+                    JsonObject(mapOf(
+                        "type" to JsonPrimitive("mobile_replay_not_supported"),
+                        "message" to JsonPrimitive("Mobile session replays are not yet supported in the web viewer")
+                    ))
+                ))
+            } else {
+                logger.info { "Returning response with ${allEvents.size} events, isMobileReplay=$isMobileReplay" }
+                ReplayRecordingResponse(events = allEvents)
+            }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch replay recording $replayId" }
             null
@@ -1840,8 +2005,8 @@ class DashboardService {
             SELECT
                 toString(r.replay_id) as replay_id,
                 r.project_id,
-                formatDateTime(min(r.replay_start_timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as started_at,
-                formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%M:%S.000Z') as finished_at,
+                formatDateTime(min(r.replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as started_at,
+                formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as finished_at,
                 dateDiff('millisecond', min(r.replay_start_timestamp), max(r.timestamp)) as duration_ms,
                 arrayFlatten(groupArray(r.urls)) as urls,
                 length(arrayFlatten(groupArray(r.error_ids))) as error_count,
