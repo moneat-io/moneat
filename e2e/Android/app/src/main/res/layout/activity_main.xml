@@ -101,6 +101,21 @@
             android:layout_marginTop="8dp"
             android:text="@string/perf_transaction_fail" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/user_feedback_section"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnUserFeedback"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/user_feedback_button" />
+
         <Button
             android:id="@+id/btnClear"
             android:layout_width="match_parent"

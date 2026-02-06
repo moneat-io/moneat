@@ -391,3 +391,45 @@ data class ReplayTimelineResponse(
     val items: List<ReplayTimelineItem>,
     val replayStartMs: Long
 )
+
+@Serializable
+data class FeedbackListItem(
+    val feedbackId: String,
+    val message: String,
+    val contactEmail: String,
+    val name: String,
+    val url: String,
+    val status: String,
+    val timestamp: String,
+    val environment: String,
+    val release: String,
+    val platform: String,
+    val user: UserInfo?,
+    val associatedEventId: String?,
+    val replayId: String?
+)
+
+@Serializable
+data class FeedbackDetailResponse(
+    val feedbackId: String,
+    val message: String,
+    val contactEmail: String,
+    val name: String,
+    val url: String,
+    val status: String,
+    val timestamp: String,
+    val environment: String,
+    val release: String,
+    val platform: String,
+    val user: UserInfo?,
+    val associatedEventId: String?,
+    val replayId: String?,
+    val tags: Map<String, String>,
+    val sdkName: String,
+    val sdkVersion: String
+)
+
+@Serializable
+data class FeedbackUpdateRequest(
+    val status: String? = null
+)

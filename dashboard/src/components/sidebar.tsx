@@ -18,6 +18,7 @@ import {
   BookOpen,
   Package,
   Play,
+  MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getPlatformInfo } from '@/routes/projects'
@@ -69,6 +70,7 @@ export function Sidebar() {
     { icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false },
     { icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
+    { icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
     { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
     { icon: FolderKanban, label: 'Projects', href: '/projects', requiresProject: false },
     { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },

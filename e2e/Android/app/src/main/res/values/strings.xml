@@ -15,6 +15,9 @@
     <string name="perf_transaction_ok">Transaction (Successful)</string>
     <string name="perf_transaction_slow">Transaction (Slow)</string>
     <string name="perf_transaction_fail">Transaction (Failed + Related Error)</string>
+
+    <string name="user_feedback_section">User Feedback</string>
+    <string name="user_feedback_button">Send User Feedback</string>
     
     <string name="test_results">Test Results</string>
     <string name="clear_log">Clear Log</string>

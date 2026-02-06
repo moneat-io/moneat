@@ -20,6 +20,7 @@ import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
@@ -28,6 +29,7 @@ import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
+import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -84,6 +86,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedbackRoute = FeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -125,10 +132,16 @@ const IssuesIssueIdRoute = IssuesIssueIdRouteImport.update({
   path: '/issues/$issueId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
+  id: '/$feedbackId',
+  path: '/$feedbackId',
+  getParentRoute: () => FeedbackRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
+  '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -140,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -150,6 +164,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
+  '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -160,6 +175,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -171,6 +187,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
+  '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
@@ -182,6 +199,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -194,6 +212,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/analytics'
+    | '/feedback'
     | '/forgot-password'
     | '/login'
     | '/onboarding'
@@ -205,6 +224,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
@@ -215,6 +235,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/analytics'
+    | '/feedback'
     | '/forgot-password'
     | '/login'
     | '/onboarding'
@@ -225,6 +246,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
@@ -235,6 +257,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/analytics'
+    | '/feedback'
     | '/forgot-password'
     | '/login'
     | '/onboarding'
@@ -246,6 +269,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
@@ -257,6 +281,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyticsRoute: typeof AnalyticsRoute
+  FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
@@ -350,6 +375,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feedback': {
+      id: '/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/analytics': {
       id: '/analytics'
       path: '/analytics'
@@ -406,8 +438,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IssuesIssueIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feedback/$feedbackId': {
+      id: '/feedback/$feedbackId'
+      path: '/$feedbackId'
+      fullPath: '/feedback/$feedbackId'
+      preLoaderRoute: typeof FeedbackFeedbackIdRouteImport
+      parentRoute: typeof FeedbackRoute
+    }
   }
 }
+
+interface FeedbackRouteChildren {
+  FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
+}
+
+const FeedbackRouteChildren: FeedbackRouteChildren = {
+  FeedbackFeedbackIdRoute: FeedbackFeedbackIdRoute,
+}
+
+const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
+  FeedbackRouteChildren,
+)
 
 interface PerformanceRouteChildren {
   PerformanceTransactionIdRoute: typeof PerformanceTransactionIdRoute
@@ -461,6 +512,7 @@ const ReplaysRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyticsRoute: AnalyticsRoute,
+  FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,

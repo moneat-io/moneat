@@ -212,6 +212,28 @@ interface ReplayRecordingResponse {
   events: unknown[]
 }
 
+export interface Feedback {
+  feedbackId: string
+  message: string
+  contactEmail: string
+  name: string
+  url: string
+  status: string
+  timestamp: string
+  environment: string
+  release: string
+  platform: string
+  user?: { id?: string; email?: string; username?: string }
+  associatedEventId?: string | null
+  replayId?: string | null
+}
+
+export interface FeedbackDetail extends Feedback {
+  tags: Record<string, string>
+  sdkName: string
+  sdkVersion: string
+}
+
 interface ReplayTimelineItem {
   id: string
   type: 'error' | 'transaction' | 'span'
@@ -229,6 +251,16 @@ interface ReplayTimelineItem {
 interface ReplayTimelineResponse {
   items: ReplayTimelineItem[]
   replayStartMs: number
+}
+
+interface AuthToken {
+  id: number
+  name: string
+  token?: string | null
+  scopes: string[]
+  lastUsedAt?: string | null
+  expiresAt?: string | null
+  createdAt: string
 }
 
 class ApiClient {
@@ -264,6 +296,7 @@ class ApiClient {
     }
 
     if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`)
+    if (response.status === 204) return undefined as T
     return response.json()
   }
 
@@ -497,6 +530,63 @@ class ApiClient {
       `${API_BASE}/issues/${encodeURIComponent(issueId)}/replays?limit=${limit}`
     )
   }
+
+  async getFeedback(
+    projectId: number,
+    options: { page?: number; limit?: number; status?: string } = {}
+  ): Promise<Feedback[]> {
+    const params = new URLSearchParams()
+    params.set('page', String(options.page ?? 1))
+    params.set('limit', String(options.limit ?? 25))
+    if (options.status) params.set('status', options.status)
+    return this.request<Feedback[]>(
+      `${API_BASE}/projects/${projectId}/feedback?${params.toString()}`
+    )
+  }
+
+  async getFeedbackDetail(feedbackId: string): Promise<FeedbackDetail> {
+    return this.request<FeedbackDetail>(
+      `${API_BASE}/feedback/${encodeURIComponent(feedbackId)}`
+    )
+  }
+
+  async updateFeedback(feedbackId: string, updates: { status?: string }): Promise<void> {
+    await this.request(`${API_BASE}/feedback/${encodeURIComponent(feedbackId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    })
+  }
+
+  async getAuthTokens(): Promise<AuthToken[]> {
+    return this.request<AuthToken[]>(`${API_BASE}/auth-tokens`)
+  }
+
+  async createAuthToken(
+    name: string,
+    scopes: string[],
+    expiresInDays?: number
+  ): Promise<AuthToken> {
+    return this.request<AuthToken>(`${API_BASE}/auth-tokens`, {
+      method: 'POST',
+      body: JSON.stringify({ name, scopes, expiresInDays: expiresInDays ?? null }),
+    })
+  }
+
+  async updateAuthToken(
+    tokenId: number,
+    updates: { name?: string; scopes?: string[] }
+  ): Promise<void> {
+    await this.request<void>(`${API_BASE}/auth-tokens/${tokenId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  }
+
+  async deleteAuthToken(tokenId: number): Promise<void> {
+    await this.request<void>(`${API_BASE}/auth-tokens/${tokenId}`, {
+      method: 'DELETE',
+    })
+  }
 }
 
 export const api = new ApiClient()
@@ -523,4 +613,5 @@ export type {
   ReplayRecordingResponse,
   ReplayTimelineItem,
   ReplayTimelineResponse,
+  AuthToken,
 }

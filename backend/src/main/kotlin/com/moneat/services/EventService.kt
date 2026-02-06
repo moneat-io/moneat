@@ -14,6 +14,8 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.MessageDigest
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 private val logger = KotlinLogging.logger {}
 
@@ -26,6 +28,10 @@ class EventService {
     
     private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
+    
+    // Track replay segment counters for mobile replays that lack a separate replay_event item.
+    // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
+    private val replaySegmentCounters = ConcurrentHashMap<String, AtomicInteger>()
     
     fun verifyProjectKey(projectId: Long, publicKey: String): Boolean {
         return transaction {
@@ -70,18 +76,38 @@ class EventService {
                     lastSegmentId = 0
                 }
                 "replay_video" -> {
-                    // Mobile replay uses replay_video instead of replay_recording
-                    // Extract replay metadata from envelope header if no replay_event was sent
+                    // Mobile replay uses replay_video instead of replay_recording.
+                    // The SDK may send a preceding replay_event item (with replay_id & segment_id)
+                    // or just a standalone replay_video. Handle both cases.
                     val rid = lastReplayId ?: envelope.eventId
                     
-                    // If we don't have a replay_event, create a synthetic one for mobile replays
-                    if (lastReplayId == null) {
-                        storeSyntheticReplayEvent(projectId, rid, envelope)
+                    val segmentId = if (lastReplayId != null) {
+                        // A replay_event was parsed in this envelope - use its segment_id
+                        lastSegmentId
+                    } else {
+                        // No replay_event - derive segment_id from an in-memory counter.
+                        // Evict stale entries if the map grows too large.
+                        if (replaySegmentCounters.size > 10_000) {
+                            replaySegmentCounters.clear()
+                        }
+                        replaySegmentCounters
+                            .computeIfAbsent(rid) { AtomicInteger(0) }
+                            .getAndIncrement()
                     }
                     
-                    storeReplayRecording(projectId, rid, lastSegmentId, item.payload)
+                    // Only create a synthetic replay event for the first segment of a session
+                    if (lastReplayId == null && segmentId == 0) {
+                        storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
+                    }
+                    
+                    storeReplayRecording(projectId, rid, segmentId, item.payload)
                     lastReplayId = null
                     lastSegmentId = 0
+                }
+                "feedback" -> {
+                    logger.debug { "Feedback payload: ${item.payload.take(500)}" }
+                    val feedback = json.decodeFromString<SentryFeedback>(item.payload)
+                    storeFeedback(projectId, feedback)
                 }
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
@@ -356,6 +382,79 @@ class EventService {
         }
     }
 
+    private suspend fun storeFeedback(projectId: Long, feedback: SentryFeedback) {
+        val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
+        val timestamp = feedback.timestamp?.let {
+            try {
+                java.time.Instant.parse(it).toEpochMilli()
+            } catch (e: Exception) {
+                logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
+                System.currentTimeMillis()
+            }
+        } ?: System.currentTimeMillis()
+
+        val feedbackContext = feedback.contexts?.get("feedback") as? JsonObject
+        val message = feedbackContext?.get("message")?.jsonPrimitive?.contentOrNull ?: ""
+        val contactEmail = feedbackContext?.get("contact_email")?.jsonPrimitive?.contentOrNull ?: ""
+        val name = feedbackContext?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+        val url = feedbackContext?.get("url")?.jsonPrimitive?.contentOrNull ?: ""
+        val associatedEventId = feedbackContext?.get("associated_event_id")?.jsonPrimitive?.contentOrNull ?: ""
+        val replayId = feedbackContext?.get("replay_id")?.jsonPrimitive?.contentOrNull ?: ""
+
+        val userId = feedback.user?.id ?: ""
+        val userEmail = feedback.user?.email ?: contactEmail
+        val userUsername = feedback.user?.username ?: ""
+        val userIpAddress = feedback.user?.ip_address ?: ""
+
+        val insertQuery = """
+            INSERT INTO $clickhouseDb.user_feedback (
+                feedback_id, project_id, timestamp, message, contact_email, name, url,
+                associated_event_id, replay_id, environment, release, platform,
+                user_id, user_email, user_username, user_ip_address,
+                sdk_name, sdk_version, tags, status
+            ) VALUES (
+                toUUID('${normalizeUuid(feedbackId)}'),
+                $projectId,
+                fromUnixTimestamp64Milli($timestamp),
+                '${escapeSql(message)}',
+                '${escapeSql(contactEmail)}',
+                '${escapeSql(name)}',
+                '${escapeSql(url)}',
+                '${escapeSql(associatedEventId)}',
+                '${escapeSql(replayId)}',
+                '${escapeSql(feedback.environment ?: "")}',
+                '${escapeSql(feedback.release ?: "")}',
+                '${escapeSql(feedback.platform ?: "")}',
+                '${escapeSql(userId)}',
+                '${escapeSql(userEmail)}',
+                '${escapeSql(userUsername)}',
+                '${escapeSql(userIpAddress)}',
+                '${escapeSql(feedback.sdk?.name ?: "")}',
+                '${escapeSql(feedback.sdk?.version ?: "")}',
+                ${tagsToMap(feedback.tags)},
+                'unresolved'
+            )
+        """.trimIndent()
+
+        try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                contentType(ContentType.Text.Plain)
+                setBody(insertQuery)
+            }
+            if (!response.status.isSuccess()) {
+                val errorBody = response.bodyAsText()
+                logger.error { "Failed to insert feedback: $errorBody" }
+            } else {
+                logger.info { "Feedback stored: $feedbackId for project $projectId" }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error storing feedback in ClickHouse" }
+        }
+    }
+
     private suspend fun storeReplayEvent(projectId: Long, replayEvent: SentryReplayEvent) {
         val replayId = replayEvent.replay_id ?: UUID.randomUUID().toString()
         val segmentId = replayEvent.segment_id ?: 0
@@ -475,7 +574,7 @@ class EventService {
         }
     }
 
-    private suspend fun storeSyntheticReplayEvent(projectId: Long, replayId: String, envelope: SentryEnvelope) {
+    private suspend fun storeSyntheticReplayEvent(projectId: Long, replayId: String, segmentId: Int, envelope: SentryEnvelope) {
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
         
@@ -494,7 +593,7 @@ class EventService {
             ) VALUES (
                 toUUID('$normalizedReplayId'),
                 $projectId,
-                0,
+                $segmentId,
                 fromUnixTimestamp64Milli($timestamp),
                 fromUnixTimestamp64Milli($timestamp),
                 [],

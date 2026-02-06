@@ -28,7 +28,7 @@ class DashboardService {
     private val clickhouseDb = config.property("database.clickhouse.database").getString()
     private val clickhouseUser = config.property("database.clickhouse.user").getString()
     private val clickhousePassword = config.property("database.clickhouse.password").getString()
-    private val backendUrl = EnvConfig.get("BACKEND_URL", "http://localhost:8080")
+    private val backendUrl = EnvConfig.get("BACKEND_URL", "http://ltocalhost:8080")
     
     private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -54,6 +54,11 @@ class DashboardService {
 
     suspend fun hasReplayAccess(userId: Int, replayId: String): Boolean {
         val projectId = getProjectIdForReplay(replayId) ?: return false
+        return hasProjectAccess(userId, projectId)
+    }
+
+    suspend fun hasFeedbackAccess(userId: Int, feedbackId: String): Boolean {
+        val projectId = getProjectIdForFeedback(feedbackId) ?: return false
         return hasProjectAccess(userId, projectId)
     }
     
@@ -163,6 +168,33 @@ class DashboardService {
             obj["project_id"]?.jsonPrimitive?.long
         } catch (e: Exception) {
             logger.error(e) { "Failed to get project ID for replay" }
+            null
+        }
+    }
+
+    private suspend fun getProjectIdForFeedback(feedbackId: String): Long? {
+        val normalizedFeedbackId = normalizeUuid(feedbackId) ?: return null
+        val query = """
+            SELECT project_id
+            FROM $clickhouseDb.user_feedback FINAL
+            WHERE toString(feedback_id) = '$normalizedFeedbackId'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["project_id"]?.jsonPrimitive?.long
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get project ID for feedback" }
             null
         }
     }
@@ -2572,6 +2604,183 @@ class DashboardService {
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch replays for issue $issueId" }
             emptyList()
+        }
+    }
+
+    suspend fun getFeedback(
+        projectId: Long,
+        page: Int = 1,
+        limit: Int = 25,
+        status: String? = null
+    ): List<FeedbackListItem> {
+        val offset = (page - 1) * limit
+        val validStatuses = setOf("unresolved", "resolved", "archived")
+        val statusFilter = if (status != null && status in validStatuses) {
+            "AND status = '${status.replace("'", "''")}'"
+        } else ""
+
+        val query = """
+            SELECT
+                toString(feedback_id) as feedback_id,
+                message,
+                contact_email,
+                name,
+                url,
+                status,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z') as timestamp,
+                environment,
+                release,
+                platform,
+                user_id,
+                user_email,
+                user_username,
+                associated_event_id,
+                replay_id
+            FROM $clickhouseDb.user_feedback FINAL
+            WHERE project_id = $projectId $statusFilter
+            ORDER BY timestamp DESC
+            LIMIT $limit OFFSET $offset
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) return emptyList()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+                    val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
+                    val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
+                    FeedbackListItem(
+                        feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: "",
+                        message = obj["message"]?.jsonPrimitive?.content ?: "",
+                        contactEmail = obj["contact_email"]?.jsonPrimitive?.content ?: "",
+                        name = obj["name"]?.jsonPrimitive?.content ?: "",
+                        url = obj["url"]?.jsonPrimitive?.content ?: "",
+                        status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
+                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                        environment = obj["environment"]?.jsonPrimitive?.content ?: "",
+                        release = obj["release"]?.jsonPrimitive?.content ?: "",
+                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                        user = if (userId != null || userEmail != null || userUsername != null) {
+                            UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                        } else null,
+                        associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                        replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                    )
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch feedback for project $projectId" }
+            emptyList()
+        }
+    }
+
+    suspend fun getFeedbackDetail(feedbackId: String): FeedbackDetailResponse? {
+        val normalizedFeedbackId = normalizeUuid(feedbackId) ?: return null
+        val query = """
+            SELECT
+                toString(feedback_id) as feedback_id,
+                message,
+                contact_email,
+                name,
+                url,
+                status,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z') as timestamp,
+                environment,
+                release,
+                platform,
+                user_id,
+                user_email,
+                user_username,
+                associated_event_id,
+                replay_id,
+                tags,
+                sdk_name,
+                sdk_version
+            FROM $clickhouseDb.user_feedback FINAL
+            WHERE toString(feedback_id) = '$normalizedFeedbackId'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = httpClient.post("$clickhouseUrl") {
+                parameter("database", clickhouseDb)
+                parameter("user", clickhouseUser)
+                parameter("password", clickhousePassword)
+                setBody(query)
+            }
+            val body = response.bodyAsText()
+            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
+            val obj = json.parseToJsonElement(line).jsonObject
+            val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+            val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
+            val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
+            val tagsMap = parseTagsMap(obj["tags"])
+            FeedbackDetailResponse(
+                feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: return null,
+                message = obj["message"]?.jsonPrimitive?.content ?: "",
+                contactEmail = obj["contact_email"]?.jsonPrimitive?.content ?: "",
+                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                url = obj["url"]?.jsonPrimitive?.content ?: "",
+                status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
+                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                environment = obj["environment"]?.jsonPrimitive?.content ?: "",
+                release = obj["release"]?.jsonPrimitive?.content ?: "",
+                platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                user = if (userId != null || userEmail != null || userUsername != null) {
+                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                } else null,
+                associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                tags = tagsMap,
+                sdkName = obj["sdk_name"]?.jsonPrimitive?.content ?: "",
+                sdkVersion = obj["sdk_version"]?.jsonPrimitive?.content ?: ""
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch feedback $feedbackId" }
+            null
+        }
+    }
+
+    private fun parseTagsMap(element: JsonElement?): Map<String, String> {
+        if (element == null) return emptyMap()
+        val obj = element as? JsonObject ?: return emptyMap()
+        return obj.mapValues { (_, v) -> (v as? JsonPrimitive)?.contentOrNull ?: "" }
+    }
+
+    suspend fun updateFeedback(feedbackId: String, update: com.moneat.models.FeedbackUpdateRequest) {
+        if (update.status != null) {
+            val validStatuses = setOf("unresolved", "resolved", "archived")
+            if (update.status !in validStatuses) {
+                throw IllegalArgumentException("Invalid status value")
+            }
+            val normalizedFeedbackId = normalizeUuid(feedbackId) ?: throw IllegalArgumentException("Invalid feedback ID")
+            val escapedStatus = update.status.replace("'", "''")
+            val query = """
+                ALTER TABLE $clickhouseDb.user_feedback
+                UPDATE status = '$escapedStatus', updated_at = now64(3)
+                WHERE toString(feedback_id) = '$normalizedFeedbackId'
+            """.trimIndent()
+            try {
+                httpClient.post("$clickhouseUrl") {
+                    parameter("database", clickhouseDb)
+                    parameter("user", clickhouseUser)
+                    parameter("password", clickhousePassword)
+                    setBody(query)
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to update feedback" }
+                throw e
+            }
         }
     }
 

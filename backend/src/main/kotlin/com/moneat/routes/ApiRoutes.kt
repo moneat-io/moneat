@@ -1,6 +1,7 @@
 package com.moneat.routes
 
 import com.moneat.models.CreateProjectRequest
+import com.moneat.models.FeedbackUpdateRequest
 import com.moneat.models.IssueUpdateRequest
 import com.moneat.models.UpdateProjectRequest
 import com.moneat.models.UserResponse
@@ -451,6 +452,72 @@ fun Route.apiRoutes() {
 
                 val timeline = dashboardService.getReplayTimeline(replayId)
                 call.respond(timeline)
+            }
+
+            get("/projects/{projectId}/feedback") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                val status = call.request.queryParameters["status"]
+
+                val feedback = dashboardService.getFeedback(projectId, page, limit, status)
+                call.respond(feedback)
+            }
+
+            get("/feedback/{feedbackId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val feedbackId = call.parameters["feedbackId"]
+                if (feedbackId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasFeedbackAccess(userId, feedbackId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val feedback = dashboardService.getFeedbackDetail(feedbackId)
+                if (feedback == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(feedback)
+                }
+            }
+
+            patch("/feedback/{feedbackId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val feedbackId = call.parameters["feedbackId"]
+                if (feedbackId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing feedback ID")
+                    return@patch
+                }
+
+                if (!dashboardService.hasFeedbackAccess(userId, feedbackId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@patch
+                }
+
+                val update = call.receive<FeedbackUpdateRequest>()
+                dashboardService.updateFeedback(feedbackId, update)
+                call.respond(HttpStatusCode.OK)
             }
 
             get("/events/{eventId}/issue") {

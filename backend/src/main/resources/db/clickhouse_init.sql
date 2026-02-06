@@ -194,3 +194,33 @@ PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, replay_id, segment_id)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
+
+-- User feedback table (Sentry feedback widget)
+CREATE TABLE IF NOT EXISTS user_feedback (
+    feedback_id UUID,
+    project_id UInt64,
+    timestamp DateTime64(3, 'UTC'),
+    received_at DateTime64(3, 'UTC') DEFAULT now64(3),
+    message String,
+    contact_email String,
+    name String,
+    url String,
+    associated_event_id String,
+    replay_id String,
+    environment String,
+    release String,
+    platform String,
+    user_id String,
+    user_email String,
+    user_username String,
+    user_ip_address String,
+    sdk_name String,
+    sdk_version String,
+    tags Map(String, String),
+    status Enum8('unresolved' = 1, 'resolved' = 2, 'archived' = 3),
+    updated_at DateTime64(3, 'UTC') DEFAULT now64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, feedback_id)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192;
