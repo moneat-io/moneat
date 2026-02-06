@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import rrwebPlayer from 'rrweb-player'
 import 'rrweb-player/dist/style.css'
 
@@ -8,16 +8,37 @@ interface ReplayPlayerProps {
   height?: number
   autoPlay?: boolean
   className?: string
+  onTimeUpdate?: (offsetMs: number) => void
 }
 
-export function ReplayPlayer({
-  events,
-  width = 1024,
-  height = 576,
-  autoPlay = true,
-  className = '',
-}: ReplayPlayerProps) {
+export interface ReplayPlayerHandle {
+  seekTo: (offsetMs: number) => void
+}
+
+const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function ReplayPlayer(
+  {
+    events,
+    width = 1024,
+    height = 576,
+    autoPlay = true,
+    className = '',
+    onTimeUpdate,
+  },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const playerRef = useRef<InstanceType<typeof rrwebPlayer> | null>(null)
+  const onTimeUpdateRef = useRef(onTimeUpdate)
+  onTimeUpdateRef.current = onTimeUpdate
+
+  useImperativeHandle(ref, () => ({
+    seekTo(offsetMs: number) {
+      const p = playerRef.current
+      if (p && typeof p.goto === 'function') {
+        p.goto(offsetMs, false)
+      }
+    },
+  }), [])
 
   useEffect(() => {
     if (!containerRef.current || !events || events.length === 0) return
@@ -27,7 +48,7 @@ export function ReplayPlayer({
     containerRef.current.innerHTML = ''
     containerRef.current.appendChild(target)
 
-    let player: unknown
+    let player: InstanceType<typeof rrwebPlayer> | null = null
     try {
       player = new rrwebPlayer({
         target,
@@ -39,6 +60,7 @@ export function ReplayPlayer({
           showController: true,
         },
       })
+      playerRef.current = player
     } catch (error) {
       console.error('Failed to initialize replay player:', error)
       target.innerHTML = `
@@ -52,15 +74,31 @@ export function ReplayPlayer({
       return
     }
 
+    let rafId = 0
+    const tick = () => {
+      const cb = onTimeUpdateRef.current
+      if (cb && player) {
+        try {
+          const replayer = player.getReplayer?.()
+          if (replayer && typeof replayer.getCurrentTime === 'function') {
+            const ms = replayer.getCurrentTime()
+            cb(ms)
+          }
+        } catch {
+          // ignore
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+
     return () => {
+      cancelAnimationFrame(rafId)
+      playerRef.current = null
       try {
-        if (
-          player &&
-          typeof player === 'object' &&
-          'destroy' in player &&
-          typeof (player as { destroy: () => void }).destroy === 'function'
-        ) {
-          (player as { destroy: () => void }).destroy()
+        const p = player as { destroy?: () => void }
+        if (p && typeof p.destroy === 'function') {
+          p.destroy()
         }
       } catch {
         // ignore
@@ -80,4 +118,6 @@ export function ReplayPlayer({
   }
 
   return <div ref={containerRef} className={className} />
-}
+})
+
+export const ReplayPlayer = rrwebPlayerRef

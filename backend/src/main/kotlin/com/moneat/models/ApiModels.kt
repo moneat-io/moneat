@@ -369,3 +369,24 @@ data class ReplayDetailResponse(
 data class ReplayRecordingResponse(
     val events: List<JsonElement>
 )
+
+@Serializable
+data class ReplayTimelineItem(
+    val id: String,
+    val type: String,
+    val timestamp: String,
+    val offsetMs: Double,
+    val title: String,
+    val description: String? = null,
+    val durationMs: Double? = null,
+    val category: String? = null,
+    val eventId: String? = null,
+    val issueId: String? = null,
+    val traceId: String? = null
+)
+
+@Serializable
+data class ReplayTimelineResponse(
+    val items: List<ReplayTimelineItem>,
+    val replayStartMs: Long
+)

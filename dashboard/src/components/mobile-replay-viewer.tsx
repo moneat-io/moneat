@@ -1,10 +1,15 @@
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Pause, Play } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
 
 interface MobileReplayViewerProps {
   events: unknown[]
   platform: string
   className?: string
+  onTimeUpdate?: (offsetMs: number) => void
+}
+
+export interface MobileReplayViewerHandle {
+  seekTo: (offsetMs: number) => void
 }
 
 interface ReplayEvent {
@@ -221,7 +226,10 @@ function findSeekTarget(globalMs: number, durationsMs: number[]): GlobalSeekTarg
   return { segmentIndex: durationsMs.length - 1, localTimeMs: durationsMs[durationsMs.length - 1] }
 }
 
-export function MobileReplayViewer({ events, platform, className = '' }: MobileReplayViewerProps) {
+export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileReplayViewerProps>(function MobileReplayViewer(
+  { events, platform, className = '', onTimeUpdate },
+  ref
+) {
   const videoSegments = useMemo(
     (): MobileVideoSegment[] =>
       events
@@ -287,6 +295,9 @@ export function MobileReplayViewer({ events, platform, className = '' }: MobileR
   const timelineTrackRef = useRef<HTMLDivElement>(null)
   const shouldResumeAfterSwitchRef = useRef(false)
   const pendingSeekRef = useRef<{ segmentId: number; localTimeMs: number } | null>(null)
+  const onTimeUpdateRef = useRef(onTimeUpdate)
+  onTimeUpdateRef.current = onTimeUpdate
+  const seekToGlobalTimeRef = useRef<(ms: number) => void>(() => {})
 
   const filteredVideoSegments = useMemo(() => {
     if (!hideIdleSegments) return videoSegments
@@ -442,6 +453,17 @@ export function MobileReplayViewer({ events, platform, className = '' }: MobileR
     setSelectedSegmentIdx(target.segmentIndex)
     setCurrentSegmentTimeMs(target.localTimeMs)
   }
+  seekToGlobalTimeRef.current = seekToGlobalTime
+
+  useImperativeHandle(ref, () => ({
+    seekTo(offsetMs: number) {
+      seekToGlobalTimeRef.current(offsetMs)
+    },
+  }), [])
+
+  useEffect(() => {
+    onTimeUpdateRef.current?.(currentGlobalTimeMs)
+  }, [currentGlobalTimeMs])
 
   const seekFromTimelinePointer = (clientX: number) => {
     const track = timelineTrackRef.current
@@ -621,4 +643,4 @@ export function MobileReplayViewer({ events, platform, className = '' }: MobileR
       )}
       </div>
   )
-}
+})

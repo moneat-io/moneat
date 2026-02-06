@@ -1,8 +1,10 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQueries, useQuery } from '@tanstack/react-query'
+import { useRef, useState } from 'react'
 import { api } from '@/lib/api'
-import { ReplayPlayer } from '@/components/replay-player'
-import { MobileReplayViewer } from '@/components/mobile-replay-viewer'
+import { ReplayPlayer, type ReplayPlayerHandle } from '@/components/replay-player'
+import { MobileReplayViewer, type MobileReplayViewerHandle } from '@/components/mobile-replay-viewer'
+import { ReplayTimelinePanel } from '@/components/replay-timeline-panel'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ChevronLeft, User, Monitor, Globe, AlertCircle, DatabaseZap, Tag } from 'lucide-react'
@@ -87,6 +89,21 @@ function ReplayDetailPage() {
     enabled: !!replayId,
   })
 
+  const { data: timeline } = useQuery({
+    queryKey: ['replay-timeline', replayId],
+    queryFn: () => api.getReplayTimeline(replayId),
+    enabled: !!replayId,
+  })
+
+  const [currentOffsetMs, setCurrentOffsetMs] = useState(0)
+  const replayPlayerRef = useRef<ReplayPlayerHandle>(null)
+  const mobileReplayViewerRef = useRef<MobileReplayViewerHandle>(null)
+
+  const handleSeek = (offsetMs: number) => {
+    replayPlayerRef.current?.seekTo(offsetMs)
+    mobileReplayViewerRef.current?.seekTo(offsetMs)
+  }
+
   if (isLoading || !replay) {
     return (
       <div className="min-h-screen bg-background p-6">
@@ -144,18 +161,22 @@ function ReplayDetailPage() {
                     <p className="text-muted-foreground">Loading recording...</p>
                   </div>
                 ) : isMobileReplay ? (
-                  <MobileReplayViewer 
+                  <MobileReplayViewer
+                    ref={mobileReplayViewerRef}
                     events={events}
                     platform={replay.platform || 'mobile'}
                     className="min-h-[400px]"
+                    onTimeUpdate={setCurrentOffsetMs}
                   />
                 ) : hasRecording ? (
                   <ReplayPlayer
+                    ref={replayPlayerRef}
                     events={events}
                     width={800}
                     height={450}
                     autoPlay={false}
                     className="rounded border overflow-hidden"
+                    onTimeUpdate={setCurrentOffsetMs}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-[400px] rounded border bg-muted">
@@ -164,6 +185,21 @@ function ReplayDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {timeline ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ReplayTimelinePanel
+                    items={timeline.items}
+                    currentOffsetMs={currentOffsetMs}
+                    onSeek={handleSeek}
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
 
           <div className="space-y-4">

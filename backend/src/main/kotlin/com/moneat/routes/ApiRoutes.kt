@@ -434,6 +434,25 @@ fun Route.apiRoutes() {
                 }
             }
 
+            get("/replays/{replayId}/timeline") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val replayId = call.parameters["replayId"]
+                if (replayId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasReplayAccess(userId, replayId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val timeline = dashboardService.getReplayTimeline(replayId)
+                call.respond(timeline)
+            }
+
             get("/events/{eventId}/issue") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()

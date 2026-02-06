@@ -212,6 +212,25 @@ interface ReplayRecordingResponse {
   events: unknown[]
 }
 
+interface ReplayTimelineItem {
+  id: string
+  type: 'error' | 'transaction' | 'span'
+  timestamp: string
+  offsetMs: number
+  title: string
+  description?: string
+  durationMs?: number
+  category?: string
+  eventId?: string
+  issueId?: string
+  traceId?: string
+}
+
+interface ReplayTimelineResponse {
+  items: ReplayTimelineItem[]
+  replayStartMs: number
+}
+
 class ApiClient {
   private authRedirectInProgress = false
 
@@ -457,6 +476,12 @@ class ApiClient {
     )
   }
 
+  async getReplayTimeline(replayId: string): Promise<ReplayTimelineResponse> {
+    return this.request<ReplayTimelineResponse>(
+      `${API_BASE}/replays/${encodeURIComponent(replayId)}/timeline`
+    )
+  }
+
   async getIssueIdForEvent(eventId: string): Promise<{ issueId: string } | null> {
     try {
       return await this.request<{ issueId: string }>(
@@ -496,4 +521,6 @@ export type {
   Replay,
   ReplayDetail,
   ReplayRecordingResponse,
+  ReplayTimelineItem,
+  ReplayTimelineResponse,
 }
