@@ -95,3 +95,6 @@ deploy/nginx/conf.d/*.disabled
 active-slot
 deploy/nginx/conf.d/https.conf
 
+# SSL credentials (server-only)
+deploy/certbot/
+
