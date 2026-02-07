@@ -84,6 +84,8 @@ for i in {1..30}; do
   fi
   if [[ $i -eq 30 ]]; then
     echo "ERROR: backend-$INACTIVE health check failed after 60s"
+    echo "Checking backend logs:"
+    docker logs moneat-backend-$INACTIVE --tail 50
     docker compose -f "$COMPOSE_FILE" stop backend-$INACTIVE dashboard-$INACTIVE
     exit 1
   fi
