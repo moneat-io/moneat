@@ -8,8 +8,9 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.config.*
 import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -21,12 +22,34 @@ import java.util.*
 private val logger = KotlinLogging.logger {}
 
 class MonitorService {
+    private data class DefaultAlertTemplate(
+        val metric: String,
+        val condition: String,
+        val threshold: Double,
+        val durationSeconds: Int = 0,
+        val enabled: Boolean = false
+    )
+
+    companion object {
+        const val ALERT_SCOPE_GLOBAL = "global"
+        const val ALERT_SCOPE_SYSTEM = "system"
+    }
+
     private val config = ApplicationConfig("application.conf")
     private val clickhouseUrl = config.property("database.clickhouse.url").getString()
     private val clickhouseDb = config.property("database.clickhouse.database").getString()
     private val clickhouseUser = config.property("database.clickhouse.user").getString()
     private val clickhousePassword = config.property("database.clickhouse.password").getString()
     private val httpClient = HttpClient(CIO)
+    private val defaultAlertTemplates = listOf(
+        DefaultAlertTemplate(metric = "cpu_percent", condition = ">", threshold = 80.0),
+        DefaultAlertTemplate(metric = "mem_percent", condition = ">", threshold = 80.0),
+        DefaultAlertTemplate(metric = "disk_percent", condition = ">", threshold = 80.0),
+        DefaultAlertTemplate(metric = "load_1", condition = ">", threshold = 4.0),
+        DefaultAlertTemplate(metric = "temp_max", condition = ">", threshold = 85.0),
+        DefaultAlertTemplate(metric = "gpu_percent", condition = ">", threshold = 85.0),
+        DefaultAlertTemplate(metric = "battery_percent", condition = "<=", threshold = 20.0)
+    )
     
     /**
      * Create a new system and generate an agent key.
@@ -36,6 +59,8 @@ class MonitorService {
         val agentKeyHash = hashAgentKey(agentKey)
         val systemId = UUID.randomUUID()
         val now = Clock.System.now()
+
+        ensureOrganizationAlertTemplates(organizationId)
         
         transaction {
             Systems.insert {
@@ -52,7 +77,16 @@ class MonitorService {
                 it[created_at] = now
                 it[updated_at] = now
             }
+
+            SystemAlertSettings.insert {
+                it[SystemAlertSettings.system_id] = systemId
+                it[SystemAlertSettings.organization_id] = organizationId
+                it[SystemAlertSettings.scope] = ALERT_SCOPE_GLOBAL
+                it[updated_at] = now
+            }
         }
+
+        ensureSystemAlertsSeeded(systemId, organizationId)
         
         val system = getSystemById(systemId)!!
         return Pair(system, agentKey)
@@ -275,6 +309,8 @@ class MonitorService {
             val memUsed = data.getOrNull(2)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
             val diskTotal = data.getOrNull(3)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
             val diskUsed = data.getOrNull(4)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
+            val netRecvBytes = data.getOrNull(5)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
+            val netSentBytes = data.getOrNull(6)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
             val load1 = data.getOrNull(7)?.toString()?.toFloatOrNull() ?: 0f
             val tempMax = data.getOrNull(8)?.toString()?.toFloatOrNull()
             val gpuPercent = data.getOrNull(9)?.toString()?.toFloatOrNull()
@@ -282,8 +318,14 @@ class MonitorService {
             
             return LatestMetrics(
                 cpu_percent = cpuPercent,
+                mem_total = memTotal,
+                mem_used = memUsed,
                 mem_percent = if (memTotal > 0) (memUsed.toFloat() / memTotal * 100) else 0f,
+                disk_total = diskTotal,
+                disk_used = diskUsed,
                 disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * 100) else 0f,
+                net_recv_bytes = netRecvBytes,
+                net_sent_bytes = netSentBytes,
                 net_recv_mbps = null,
                 net_sent_mbps = null,
                 load_1 = load1,
@@ -560,29 +602,97 @@ class MonitorService {
      * List all alerts for a system.
      */
     fun listAlerts(systemId: UUID): List<AlertResponse> {
-        return transaction {
-            SystemAlerts.select { SystemAlerts.system_id eq systemId }
-                .orderBy(SystemAlerts.created_at to SortOrder.DESC)
-                .map { row ->
-                    AlertResponse(
-                        id = row[SystemAlerts.id],
-                        systemId = row[SystemAlerts.system_id].toString(),
-                        metric = row[SystemAlerts.metric],
-                        condition = row[SystemAlerts.condition],
-                        threshold = row[SystemAlerts.threshold],
-                        durationSeconds = row[SystemAlerts.duration_seconds],
-                        enabled = row[SystemAlerts.enabled],
-                        lastTriggeredAt = row[SystemAlerts.last_triggered_at]?.toEpochMilliseconds(),
-                        createdAt = row[SystemAlerts.created_at].toEpochMilliseconds()
-                    )
-                }
+        return listSystemAlerts(systemId)
+    }
+
+    fun getAlertConfig(systemId: UUID, organizationId: Int): AlertConfigResponse {
+        ensureOrganizationAlertTemplates(organizationId)
+        ensureSystemAlertsSeeded(systemId, organizationId)
+
+        val scope = getSystemAlertScope(systemId, organizationId)
+        val globalAlerts = listGlobalAlerts(systemId, organizationId)
+        val systemAlerts = listSystemAlerts(systemId)
+        val effectiveAlerts = if (scope == ALERT_SCOPE_GLOBAL) globalAlerts else systemAlerts
+
+        return AlertConfigResponse(
+            scope = scope,
+            globalAlerts = globalAlerts,
+            systemAlerts = systemAlerts,
+            effectiveAlerts = effectiveAlerts
+        )
+    }
+
+    fun updateAlertScope(systemId: UUID, organizationId: Int, scope: String): Boolean {
+        if (!isValidAlertScope(scope)) {
+            return false
         }
+        ensureOrganizationAlertTemplates(organizationId)
+        ensureSystemAlertsSeeded(systemId, organizationId)
+
+        val now = Clock.System.now()
+        transaction {
+            val existing = SystemAlertSettings.select {
+                (SystemAlertSettings.system_id eq systemId) and
+                (SystemAlertSettings.organization_id eq organizationId)
+            }.firstOrNull()
+
+            if (existing != null) {
+                SystemAlertSettings.update({ SystemAlertSettings.system_id eq systemId }) {
+                    it[SystemAlertSettings.scope] = scope
+                    it[updated_at] = now
+                }
+            } else {
+                SystemAlertSettings.insert {
+                    it[SystemAlertSettings.system_id] = systemId
+                    it[SystemAlertSettings.organization_id] = organizationId
+                    it[SystemAlertSettings.scope] = scope
+                    it[updated_at] = now
+                }
+            }
+        }
+        return true
     }
     
     /**
      * Create an alert for a system.
      */
-    fun createAlert(systemId: UUID, organizationId: Int, request: CreateAlertRequest): AlertResponse {
+    fun createAlert(
+        systemId: UUID,
+        organizationId: Int,
+        request: CreateAlertRequest,
+        scope: String = ALERT_SCOPE_SYSTEM
+    ): AlertResponse {
+        if (scope == ALERT_SCOPE_GLOBAL) {
+            ensureOrganizationAlertTemplates(organizationId)
+            val now = Clock.System.now()
+            val alertId = transaction {
+                OrganizationAlertTemplates.insert {
+                    it[OrganizationAlertTemplates.organization_id] = organizationId
+                    it[metric] = request.metric
+                    it[condition] = request.condition
+                    it[threshold] = request.threshold
+                    it[duration_seconds] = request.durationSeconds
+                    it[enabled] = request.enabled
+                    it[created_at] = now
+                    it[updated_at] = now
+                } get OrganizationAlertTemplates.id
+            }
+
+            return AlertResponse(
+                id = alertId,
+                systemId = systemId.toString(),
+                scope = ALERT_SCOPE_GLOBAL,
+                metric = request.metric,
+                condition = request.condition,
+                threshold = request.threshold,
+                durationSeconds = request.durationSeconds,
+                enabled = request.enabled,
+                lastTriggeredAt = null,
+                createdAt = now.toEpochMilliseconds()
+            )
+        }
+
+        ensureSystemAlertsSeeded(systemId, organizationId)
         val now = Clock.System.now()
         
         val alertId = transaction {
@@ -602,6 +712,7 @@ class MonitorService {
         return AlertResponse(
             id = alertId,
             systemId = systemId.toString(),
+            scope = ALERT_SCOPE_SYSTEM,
             metric = request.metric,
             condition = request.condition,
             threshold = request.threshold,
@@ -619,8 +730,27 @@ class MonitorService {
         alertId: Int,
         systemId: UUID,
         organizationId: Int,
-        request: UpdateAlertRequest
+        request: UpdateAlertRequest,
+        scope: String = ALERT_SCOPE_SYSTEM
     ): Boolean {
+        if (scope == ALERT_SCOPE_GLOBAL) {
+            val now = Clock.System.now()
+            return transaction {
+                val count = OrganizationAlertTemplates.update({
+                    (OrganizationAlertTemplates.id eq alertId) and
+                    (OrganizationAlertTemplates.organization_id eq organizationId)
+                }) {
+                    request.metric?.let { metric -> it[OrganizationAlertTemplates.metric] = metric }
+                    request.condition?.let { cond -> it[condition] = cond }
+                    request.threshold?.let { thresh -> it[threshold] = thresh }
+                    request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
+                    request.enabled?.let { en -> it[enabled] = en }
+                    it[updated_at] = now
+                }
+                count > 0
+            }
+        }
+
         return transaction {
             val count = SystemAlerts.update({
                 (SystemAlerts.id eq alertId) and
@@ -640,7 +770,22 @@ class MonitorService {
     /**
      * Delete an alert.
      */
-    fun deleteAlert(alertId: Int, systemId: UUID, organizationId: Int): Boolean {
+    fun deleteAlert(
+        alertId: Int,
+        systemId: UUID,
+        organizationId: Int,
+        scope: String = ALERT_SCOPE_SYSTEM
+    ): Boolean {
+        if (scope == ALERT_SCOPE_GLOBAL) {
+            return transaction {
+                val deleted = OrganizationAlertTemplates.deleteWhere {
+                    (OrganizationAlertTemplates.id eq alertId) and
+                    (OrganizationAlertTemplates.organization_id eq organizationId)
+                }
+                deleted > 0
+            }
+        }
+
         return transaction {
             val deleted = SystemAlerts.deleteWhere {
                 (SystemAlerts.id eq alertId) and
@@ -652,6 +797,156 @@ class MonitorService {
     }
     
     // Helper functions
+
+    private fun isValidAlertScope(scope: String): Boolean {
+        return scope == ALERT_SCOPE_GLOBAL || scope == ALERT_SCOPE_SYSTEM
+    }
+
+    private fun ensureOrganizationAlertTemplates(organizationId: Int) {
+        transaction {
+            val existingCount = OrganizationAlertTemplates.select {
+                OrganizationAlertTemplates.organization_id eq organizationId
+            }.count()
+            if (existingCount > 0) {
+                return@transaction
+            }
+
+            val now = Clock.System.now()
+            defaultAlertTemplates.forEach { template ->
+                OrganizationAlertTemplates.insert {
+                    it[OrganizationAlertTemplates.organization_id] = organizationId
+                    it[metric] = template.metric
+                    it[condition] = template.condition
+                    it[threshold] = template.threshold
+                    it[duration_seconds] = template.durationSeconds
+                    it[enabled] = template.enabled
+                    it[created_at] = now
+                    it[updated_at] = now
+                }
+            }
+        }
+    }
+
+    private fun ensureSystemAlertsSeeded(systemId: UUID, organizationId: Int) {
+        transaction {
+            val existingCount = SystemAlerts.select {
+                (SystemAlerts.system_id eq systemId) and
+                (SystemAlerts.organization_id eq organizationId)
+            }.count()
+            if (existingCount > 0) {
+                return@transaction
+            }
+
+            val now = Clock.System.now()
+            val templates = OrganizationAlertTemplates.select {
+                OrganizationAlertTemplates.organization_id eq organizationId
+            }.toList()
+
+            if (templates.isEmpty()) {
+                defaultAlertTemplates.forEach { template ->
+                    SystemAlerts.insert {
+                        it[SystemAlerts.system_id] = systemId
+                        it[SystemAlerts.organization_id] = organizationId
+                        it[metric] = template.metric
+                        it[condition] = template.condition
+                        it[threshold] = template.threshold
+                        it[duration_seconds] = template.durationSeconds
+                        it[enabled] = template.enabled
+                        it[last_triggered_at] = null
+                        it[created_at] = now
+                    }
+                }
+                return@transaction
+            }
+
+            templates.forEach { template ->
+                SystemAlerts.insert {
+                    it[SystemAlerts.system_id] = systemId
+                    it[SystemAlerts.organization_id] = organizationId
+                    it[metric] = template[OrganizationAlertTemplates.metric]
+                    it[condition] = template[OrganizationAlertTemplates.condition]
+                    it[threshold] = template[OrganizationAlertTemplates.threshold]
+                    it[duration_seconds] = template[OrganizationAlertTemplates.duration_seconds]
+                    it[enabled] = template[OrganizationAlertTemplates.enabled]
+                    it[last_triggered_at] = null
+                    it[created_at] = now
+                }
+            }
+        }
+    }
+
+    private fun getSystemAlertScope(systemId: UUID, organizationId: Int): String {
+        return transaction {
+            val existing = SystemAlertSettings.select {
+                (SystemAlertSettings.system_id eq systemId) and
+                (SystemAlertSettings.organization_id eq organizationId)
+            }.firstOrNull()
+
+            if (existing != null) {
+                return@transaction existing[SystemAlertSettings.scope]
+            }
+
+            val now = Clock.System.now()
+            SystemAlertSettings.insert {
+                it[SystemAlertSettings.system_id] = systemId
+                it[SystemAlertSettings.organization_id] = organizationId
+                it[SystemAlertSettings.scope] = ALERT_SCOPE_SYSTEM
+                it[updated_at] = now
+            }
+            ALERT_SCOPE_SYSTEM
+        }
+    }
+
+    private fun listSystemAlerts(systemId: UUID): List<AlertResponse> {
+        return transaction {
+            SystemAlerts.select { SystemAlerts.system_id eq systemId }
+                .orderBy(SystemAlerts.created_at to SortOrder.DESC)
+                .map { row ->
+                    AlertResponse(
+                        id = row[SystemAlerts.id],
+                        systemId = row[SystemAlerts.system_id].toString(),
+                        scope = ALERT_SCOPE_SYSTEM,
+                        metric = row[SystemAlerts.metric],
+                        condition = row[SystemAlerts.condition],
+                        threshold = row[SystemAlerts.threshold],
+                        durationSeconds = row[SystemAlerts.duration_seconds],
+                        enabled = row[SystemAlerts.enabled],
+                        lastTriggeredAt = row[SystemAlerts.last_triggered_at]?.toEpochMilliseconds(),
+                        createdAt = row[SystemAlerts.created_at].toEpochMilliseconds()
+                    )
+                }
+        }
+    }
+
+    private fun listGlobalAlerts(systemId: UUID, organizationId: Int): List<AlertResponse> {
+        return transaction {
+            val templateStates = SystemAlertTemplateStates.select {
+                SystemAlertTemplateStates.system_id eq systemId
+            }.associateBy(
+                keySelector = { it[SystemAlertTemplateStates.template_alert_id] },
+                valueTransform = { it[SystemAlertTemplateStates.last_triggered_at] }
+            )
+
+            OrganizationAlertTemplates.select {
+                OrganizationAlertTemplates.organization_id eq organizationId
+            }
+                .orderBy(OrganizationAlertTemplates.created_at to SortOrder.DESC)
+                .map { row ->
+                    AlertResponse(
+                        id = row[OrganizationAlertTemplates.id],
+                        systemId = systemId.toString(),
+                        scope = ALERT_SCOPE_GLOBAL,
+                        metric = row[OrganizationAlertTemplates.metric],
+                        condition = row[OrganizationAlertTemplates.condition],
+                        threshold = row[OrganizationAlertTemplates.threshold],
+                        durationSeconds = row[OrganizationAlertTemplates.duration_seconds],
+                        enabled = row[OrganizationAlertTemplates.enabled],
+                        lastTriggeredAt = templateStates[row[OrganizationAlertTemplates.id]]?.toEpochMilliseconds(),
+                        createdAt = row[OrganizationAlertTemplates.created_at].toEpochMilliseconds()
+                    )
+                }
+        }
+    }
     
     private fun escapeSql(value: String): String {
         return value.replace("\\", "\\\\").replace("'", "\\'")

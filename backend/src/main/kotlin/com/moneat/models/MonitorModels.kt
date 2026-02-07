@@ -1,7 +1,7 @@
 package com.moneat.models
 
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.util.*
 
 // Agent-facing models
@@ -23,16 +23,16 @@ data class SystemMetricsPayload(
     val load_1: Float,
     val load_5: Float,
     val load_15: Float,
-    val temp_max: Float?,
-    val gpu_percent: Float?,
-    val gpu_mem_percent: Float?,
-    val gpu_power: Float?,
-    val battery_percent: Float?,
-    val containers: List<ContainerMetricsPayload>?,
-    val agent_version: String?,
-    val os: String?,
-    val arch: String?,
-    val host: String?
+    val temp_max: Float? = null,
+    val gpu_percent: Float? = null,
+    val gpu_mem_percent: Float? = null,
+    val gpu_power: Float? = null,
+    val battery_percent: Float? = null,
+    val containers: List<ContainerMetricsPayload>? = null,
+    val agent_version: String? = null,
+    val os: String? = null,
+    val arch: String? = null,
+    val host: String? = null
 )
 
 @Serializable
@@ -73,8 +73,14 @@ data class SystemResponse(
 @Serializable
 data class LatestMetrics(
     val cpu_percent: Float,
+    val mem_total: Long,
+    val mem_used: Long,
     val mem_percent: Float,
+    val disk_total: Long,
+    val disk_used: Long,
     val disk_percent: Float,
+    val net_recv_bytes: Long,
+    val net_sent_bytes: Long,
     val net_recv_mbps: Float?,
     val net_sent_mbps: Float?,
     val load_1: Float,
@@ -159,7 +165,8 @@ data class ContainerMetricDataPoint(
 @Serializable
 data class AlertResponse(
     val id: Int,
-    @SerialName("system_id") val systemId: String,
+    @SerialName("system_id") val systemId: String? = null,
+    val scope: String = "system",
     val metric: String,
     val condition: String,
     val threshold: Double,
@@ -170,12 +177,25 @@ data class AlertResponse(
 )
 
 @Serializable
+data class AlertConfigResponse(
+    val scope: String,
+    @SerialName("global_alerts") val globalAlerts: List<AlertResponse>,
+    @SerialName("system_alerts") val systemAlerts: List<AlertResponse>,
+    @SerialName("effective_alerts") val effectiveAlerts: List<AlertResponse>
+)
+
+@Serializable
 data class CreateAlertRequest(
     val metric: String,
     val condition: String,
     val threshold: Double,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
     val enabled: Boolean = true
+)
+
+@Serializable
+data class UpdateAlertScopeRequest(
+    val scope: String
 )
 
 @Serializable
@@ -213,5 +233,7 @@ data class AlertData(
     val durationSeconds: Int,
     val enabled: Boolean,
     val lastTriggeredAt: kotlinx.datetime.Instant?,
-    val createdAt: kotlinx.datetime.Instant
+    val createdAt: kotlinx.datetime.Instant,
+    val scope: String = "system",
+    val templateAlertId: Int? = null
 )

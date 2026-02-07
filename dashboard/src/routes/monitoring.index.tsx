@@ -1,44 +1,39 @@
-import {createFileRoute, redirect, Link} from '@tanstack/react-router'
-import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Separator} from '@/components/ui/separator'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import {
-  Activity,
-  ArrowUpRight,
-  CheckCircle2,
-  Copy,
-  Check,
-  Cpu,
-  HardDrive,
-  MemoryStick,
-  Network,
-  Plus,
-  Server,
-  ServerOff,
-  Terminal,
-  Thermometer,
-  Trash2,
-  Zap,
+    Activity,
+    ArrowUpRight,
+    Check,
+    CheckCircle2,
+    Copy,
+    Cpu,
+    HardDrive,
+    MemoryStick,
+    Network,
+    Plus,
+    Server,
+    ServerOff,
+    Terminal,
+    Thermometer,
+    Trash2,
+    Zap,
 } from 'lucide-react'
 import {useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
@@ -315,10 +310,11 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
 }
 
 function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, name: string) => void}) {
+  const metrics = system.latest_metrics
   const memPercent =
-    system.memUsed && system.memTotal ? (system.memUsed / system.memTotal) * 100 : undefined
+    metrics?.mem_used && metrics?.mem_total ? (metrics.mem_used / metrics.mem_total) * 100 : undefined
   const diskPercent =
-    system.diskUsed && system.diskTotal ? (system.diskUsed / system.diskTotal) * 100 : undefined
+    metrics?.disk_used && metrics?.disk_total ? (metrics.disk_used / metrics.disk_total) * 100 : undefined
   const isOnline = system.status === 'up'
 
   return (
@@ -397,7 +393,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
-                    <MiniGauge value={system.cpuPercent} />
+                    <MiniGauge value={metrics?.cpu_percent} />
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Cpu className="h-3 w-3" />
                       <span>CPU</span>
@@ -405,7 +401,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>CPU: {formatPercent(system.cpuPercent)}</p>
+                  <p>CPU: {formatPercent(metrics?.cpu_percent)}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -424,7 +420,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
                 <TooltipContent>
                   <p>Memory: {formatPercent(memPercent)}</p>
                   <p className="text-muted-foreground">
-                    {formatBytes(system.memUsed)} / {formatBytes(system.memTotal)}
+                    {formatBytes(metrics?.mem_used)} / {formatBytes(metrics?.mem_total)}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -444,7 +440,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
                 <TooltipContent>
                   <p>Disk: {formatPercent(diskPercent)}</p>
                   <p className="text-muted-foreground">
-                    {formatBytes(system.diskUsed)} / {formatBytes(system.diskTotal)}
+                    {formatBytes(metrics?.disk_used)} / {formatBytes(metrics?.disk_total)}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -461,7 +457,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
                 <span className="text-xs">Load</span>
               </div>
               <span className="font-mono text-xs font-medium">
-                {system.load1?.toFixed(2) || '—'}
+                {metrics?.load_1?.toFixed(2) || '—'}
               </span>
             </div>
 
@@ -471,7 +467,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
                 <span className="text-xs">Temp</span>
               </div>
               <span className="font-mono text-xs font-medium">
-                {system.tempMax ? `${system.tempMax.toFixed(0)}°C` : '—'}
+                {metrics?.temp_max ? `${metrics.temp_max.toFixed(0)}°C` : '—'}
               </span>
             </div>
 
@@ -481,7 +477,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
                 <span className="text-xs">Net In</span>
               </div>
               <span className="font-mono text-xs font-medium">
-                {formatBytesPerSec(system.netRecvBytes)}
+                {formatBytesPerSec(metrics?.net_recv_bytes)}
               </span>
             </div>
 
@@ -491,7 +487,7 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
                 <span className="text-xs">Net Out</span>
               </div>
               <span className="font-mono text-xs font-medium">
-                {formatBytesPerSec(system.netSentBytes)}
+                {formatBytesPerSec(metrics?.net_sent_bytes)}
               </span>
             </div>
           </div>
@@ -623,7 +619,7 @@ function MonitoringListPage() {
                     <p className="text-2xl font-bold">
                       {systems.length > 0
                         ? (
-                            systems.reduce((acc, s) => acc + (s.cpuPercent || 0), 0) / systems.length
+                            systems.reduce((acc, s) => acc + (s.latest_metrics?.cpu_percent || 0), 0) / systems.length
                           ).toFixed(0)
                         : 0}
                       %

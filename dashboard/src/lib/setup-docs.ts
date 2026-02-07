@@ -509,6 +509,56 @@ Sentry.captureMessage("Moneat test event from Spring Boot");`,
     },
   ]),
 
+  ktor: createDocs('ktor', 'Sentry Java SDK (Ktor)', [
+    {
+      title: 'Add the dependency',
+      description: 'Add Sentry to your Ktor server project.',
+      code: `// build.gradle.kts
+dependencies {
+  implementation("io.sentry:sentry")
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Initialize in application startup',
+      description: 'Initialize Sentry as early as possible in your Ktor module.',
+      code: `import io.sentry.Sentry
+import io.ktor.server.application.*
+
+fun Application.module() {
+  Sentry.init { options ->
+    options.dsn = "${DSN_PLACEHOLDER}"
+    options.tracesSampleRate = 1.0
+  }
+
+  // Ktor plugins/routes...
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Capture unhandled exceptions',
+      description: 'Use StatusPages so server errors are reported to Moneat.',
+      code: `import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.response.*
+import io.ktor.http.*
+import io.sentry.Sentry
+
+install(StatusPages) {
+  exception<Throwable> { call, cause ->
+    Sentry.captureException(cause)
+    call.respond(HttpStatusCode.InternalServerError, "Internal Server Error")
+  }
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Verify installation',
+      description: 'Capture a test message during startup or from a route.',
+      code: `Sentry.captureMessage("Moneat test event from Ktor")`,
+      language: 'kotlin',
+    },
+  ]),
+
   dotnet: createDocs('dotnet', '.NET SDK', [
     {
       title: 'Install the package',
@@ -1199,6 +1249,9 @@ const platformAliases: Record<string, string> = {
   spring: 'spring-boot',
   springboot: 'spring-boot',
   'spring-boot': 'spring-boot',
+  ktor: 'ktor',
+  'kotlin-ktor': 'ktor',
+  'ktor-server': 'ktor',
   csharp: 'dotnet',
   'c#': 'dotnet',
   aspnet: 'dotnet',

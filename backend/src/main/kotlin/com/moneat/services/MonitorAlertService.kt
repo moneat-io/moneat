@@ -10,10 +10,11 @@ import io.ktor.server.config.*
 import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
@@ -87,26 +88,107 @@ class MonitorAlertService {
      */
     private suspend fun evaluateAlerts() {
         val alerts = transaction {
-            SystemAlerts.innerJoin(Systems)
-                .select { SystemAlerts.enabled eq true }
-                .map { row ->
-                    Triple(
-                        AlertData(
-                            id = row[SystemAlerts.id],
-                            systemId = row[SystemAlerts.system_id],
-                            organizationId = row[SystemAlerts.organization_id],
-                            metric = row[SystemAlerts.metric],
-                            condition = row[SystemAlerts.condition],
-                            threshold = row[SystemAlerts.threshold],
-                            durationSeconds = row[SystemAlerts.duration_seconds],
-                            enabled = row[SystemAlerts.enabled],
-                            lastTriggeredAt = row[SystemAlerts.last_triggered_at],
-                            createdAt = row[SystemAlerts.created_at]
-                        ),
-                        row[Systems.name],
-                        row[Systems.organization_id]
-                    )
+            val results = mutableListOf<Triple<AlertData, String, Int>>()
+
+            val globalScopeSystemIds = SystemAlertSettings.select {
+                SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL
+            }.map { it[SystemAlertSettings.system_id] }
+
+            val systemScopedAlerts = if (globalScopeSystemIds.isEmpty()) {
+                SystemAlerts.innerJoin(Systems)
+                    .select { SystemAlerts.enabled eq true }
+                    .toList()
+            } else {
+                SystemAlerts.innerJoin(Systems)
+                    .select {
+                        (SystemAlerts.enabled eq true) and
+                        (SystemAlerts.system_id notInList globalScopeSystemIds)
+                    }
+                    .toList()
+            }
+
+            systemScopedAlerts.forEach { row ->
+                results += Triple(
+                    AlertData(
+                        id = row[SystemAlerts.id],
+                        systemId = row[SystemAlerts.system_id],
+                        organizationId = row[SystemAlerts.organization_id],
+                        metric = row[SystemAlerts.metric],
+                        condition = row[SystemAlerts.condition],
+                        threshold = row[SystemAlerts.threshold],
+                        durationSeconds = row[SystemAlerts.duration_seconds],
+                        enabled = row[SystemAlerts.enabled],
+                        lastTriggeredAt = row[SystemAlerts.last_triggered_at],
+                        createdAt = row[SystemAlerts.created_at],
+                        scope = MonitorService.ALERT_SCOPE_SYSTEM,
+                        templateAlertId = null
+                    ),
+                    row[Systems.name],
+                    row[Systems.organization_id]
+                )
+            }
+
+            if (globalScopeSystemIds.isNotEmpty()) {
+                val globalTemplates = OrganizationAlertTemplates.select {
+                    OrganizationAlertTemplates.enabled eq true
+                }.toList()
+
+                if (globalTemplates.isNotEmpty()) {
+                    val globalSystems = Systems.innerJoin(SystemAlertSettings)
+                        .select {
+                            (SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL) and
+                            (SystemAlertSettings.system_id inList globalScopeSystemIds)
+                        }
+                        .toList()
+
+                    val templateIds = globalTemplates.map { it[OrganizationAlertTemplates.id] }
+                    val stateMap = if (templateIds.isEmpty()) {
+                        emptyMap()
+                    } else {
+                        SystemAlertTemplateStates.select {
+                            (SystemAlertTemplateStates.template_alert_id inList templateIds) and
+                            (SystemAlertTemplateStates.system_id inList globalScopeSystemIds)
+                        }.associate {
+                            Pair(
+                                it[SystemAlertTemplateStates.template_alert_id],
+                                it[SystemAlertTemplateStates.system_id]
+                            ) to it[SystemAlertTemplateStates.last_triggered_at]
+                        }
+                    }
+
+                    globalSystems.forEach { systemRow ->
+                        val systemId = systemRow[Systems.id]
+                        val systemName = systemRow[Systems.name]
+                        val orgId = systemRow[Systems.organization_id]
+
+                        globalTemplates
+                            .filter { template -> template[OrganizationAlertTemplates.organization_id] == orgId }
+                            .forEach { template ->
+                                val templateId = template[OrganizationAlertTemplates.id]
+                                results += Triple(
+                                    AlertData(
+                                        id = templateId,
+                                        systemId = systemId,
+                                        organizationId = orgId,
+                                        metric = template[OrganizationAlertTemplates.metric],
+                                        condition = template[OrganizationAlertTemplates.condition],
+                                        threshold = template[OrganizationAlertTemplates.threshold],
+                                        durationSeconds = template[OrganizationAlertTemplates.duration_seconds],
+                                        enabled = template[OrganizationAlertTemplates.enabled],
+                                        lastTriggeredAt = stateMap[Pair(templateId, systemId)],
+                                        createdAt = template[OrganizationAlertTemplates.created_at],
+                                        scope = MonitorService.ALERT_SCOPE_GLOBAL,
+                                        templateAlertId = templateId
+                                    ),
+                                    systemName,
+                                    orgId
+                                )
+                            }
+                    }
                 }
+            }
+
+            results
         }
         
         logger.debug { "Evaluating ${alerts.size} alerts" }
@@ -162,9 +244,33 @@ class MonitorAlertService {
         logger.info { "Alert ${alert.id} triggered for system ${alert.systemId}: ${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)" }
         
         // Update last triggered timestamp
-        transaction {
-            SystemAlerts.update({ SystemAlerts.id eq alert.id }) {
-                it[last_triggered_at] = now
+        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+            transaction {
+                val existing = SystemAlertTemplateStates.select {
+                    (SystemAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
+                    (SystemAlertTemplateStates.system_id eq alert.systemId)
+                }.firstOrNull()
+
+                if (existing != null) {
+                    SystemAlertTemplateStates.update({
+                        (SystemAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
+                        (SystemAlertTemplateStates.system_id eq alert.systemId)
+                    }) {
+                        it[last_triggered_at] = now
+                    }
+                } else {
+                    SystemAlertTemplateStates.insert {
+                        it[SystemAlertTemplateStates.template_alert_id] = alert.templateAlertId
+                        it[SystemAlertTemplateStates.system_id] = alert.systemId
+                        it[SystemAlertTemplateStates.last_triggered_at] = now
+                    }
+                }
+            }
+        } else {
+            transaction {
+                SystemAlerts.update({ SystemAlerts.id eq alert.id }) {
+                    it[last_triggered_at] = now
+                }
             }
         }
         

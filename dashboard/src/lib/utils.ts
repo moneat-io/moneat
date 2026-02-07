@@ -5,17 +5,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatRelativeTime(dateString: string | undefined): string {
-  if (!dateString) return 'unknown'
+export function formatRelativeTime(dateValue: string | number | undefined): string {
+  if (!dateValue) return 'unknown'
   
   // Handle ClickHouse DateTime format (YYYY-MM-DD HH:MM:SS) as UTC
   let date: Date
-  if (dateString.includes('T')) {
-    // ISO format with timezone
-    date = new Date(dateString)
+  if (typeof dateValue === 'number') {
+    date = new Date(dateValue)
+  } else if (dateValue.includes('T')) {
+    date = new Date(dateValue)
   } else {
-    // ClickHouse format without timezone - treat as UTC
-    date = new Date(dateString + ' UTC')
+    date = new Date(dateValue + ' UTC')
   }
   
   const now = new Date()

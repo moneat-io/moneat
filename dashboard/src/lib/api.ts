@@ -286,12 +286,30 @@ interface MonitorSystem {
   name: string
   host?: string
   status: 'up' | 'down' | 'pending'
-  lastSeenAt?: string
+  lastSeenAt?: string | number
   agentVersion?: string
   os?: string
   arch?: string
-  createdAt: string
-  updatedAt: string
+  createdAt?: string | number
+  updatedAt?: string | number
+}
+
+interface LatestMetrics {
+  cpu_percent: number
+  mem_total: number
+  mem_used: number
+  mem_percent: number
+  disk_total: number
+  disk_used: number
+  disk_percent: number
+  net_recv_bytes: number
+  net_sent_bytes: number
+  net_recv_mbps?: number | null
+  net_sent_mbps?: number | null
+  load_1: number
+  temp_max?: number | null
+  gpu_percent?: number | null
+  battery_percent?: number | null
 }
 
 interface MonitorSystemWithMetrics extends MonitorSystem {
@@ -309,6 +327,7 @@ interface MonitorSystemWithMetrics extends MonitorSystem {
   tempMax?: number
   gpuPercent?: number
   batteryPercent?: number
+  latest_metrics?: LatestMetrics
 }
 
 interface MonitorSystemDetail extends MonitorSystemWithMetrics {
@@ -378,13 +397,22 @@ interface ContainerMetricsHistory {
 
 interface SystemAlert {
   id: number
+  systemId?: string
+  scope: 'global' | 'system'
   metric: string
   condition: string
   threshold: number
   durationSeconds: number
   enabled: boolean
-  lastTriggeredAt?: string
-  createdAt: string
+  lastTriggeredAt?: number
+  createdAt: number
+}
+
+interface SystemAlertConfig {
+  scope: 'global' | 'system'
+  globalAlerts: SystemAlert[]
+  systemAlerts: SystemAlert[]
+  effectiveAlerts: SystemAlert[]
 }
 
 class ApiClient {
@@ -422,6 +450,52 @@ class ApiClient {
     if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`)
     if (response.status === 204) return undefined as T
     return response.json()
+  }
+
+  private mapMonitorSystem(row: any): MonitorSystemWithMetrics {
+    const latest = row.latest_metrics || {}
+    return {
+      id: row.id,
+      name: row.name,
+      host: row.host,
+      status: row.status,
+      lastSeenAt: row.lastSeenAt ?? row.last_seen_at,
+      agentVersion: row.agentVersion ?? row.agent_version,
+      os: row.os,
+      arch: row.arch,
+      createdAt: row.createdAt ?? row.created_at,
+      updatedAt: row.updatedAt ?? row.updated_at,
+      cpuPercent: row.cpuPercent ?? latest.cpu_percent,
+      memTotal: row.memTotal ?? latest.mem_total,
+      memUsed: row.memUsed ?? latest.mem_used,
+      memAvailable: row.memAvailable ?? latest.mem_available,
+      diskTotal: row.diskTotal ?? latest.disk_total,
+      diskUsed: row.diskUsed ?? latest.disk_used,
+      load1: row.load1 ?? latest.load_1,
+      load5: row.load5 ?? latest.load_5,
+      load15: row.load15 ?? latest.load_15,
+      netRecvBytes: row.netRecvBytes ?? latest.net_recv_bytes,
+      netSentBytes: row.netSentBytes ?? latest.net_sent_bytes,
+      tempMax: row.tempMax ?? latest.temp_max,
+      gpuPercent: row.gpuPercent ?? latest.gpu_percent,
+      batteryPercent: row.batteryPercent ?? latest.battery_percent,
+      latest_metrics: row.latest_metrics,
+    }
+  }
+
+  private mapSystemAlert(row: any): SystemAlert {
+    return {
+      id: row.id,
+      systemId: row.systemId ?? row.system_id,
+      scope: (row.scope ?? 'system') as 'global' | 'system',
+      metric: row.metric,
+      condition: row.condition,
+      threshold: row.threshold,
+      durationSeconds: row.durationSeconds ?? row.duration_seconds ?? 0,
+      enabled: row.enabled === true,
+      lastTriggeredAt: row.lastTriggeredAt ?? row.last_triggered_at,
+      createdAt: row.createdAt ?? row.created_at,
+    }
   }
 
   async signup(email: string, password: string, name?: string): Promise<AuthResponse> {
@@ -851,11 +925,13 @@ class ApiClient {
 
   // Monitoring API
   async getMonitorSystems() {
-    return this.request<MonitorSystemWithMetrics[]>(`${API_BASE}/monitor/systems`)
+    const rows = await this.request<any[]>(`${API_BASE}/monitor/systems`)
+    return rows.map((row) => this.mapMonitorSystem(row))
   }
 
   async getMonitorSystem(systemId: string) {
-    return this.request<MonitorSystemDetail>(`${API_BASE}/monitor/systems/${systemId}`)
+    const row = await this.request<any>(`${API_BASE}/monitor/systems/${systemId}`)
+    return this.mapMonitorSystem(row) as MonitorSystemDetail
   }
 
   async createMonitorSystem(name: string) {
@@ -907,7 +983,25 @@ class ApiClient {
   }
 
   async getSystemAlerts(systemId: string) {
-    return this.request<SystemAlert[]>(`${API_BASE}/monitor/systems/${systemId}/alerts`)
+    const config = await this.getSystemAlertConfig(systemId)
+    return config.effectiveAlerts
+  }
+
+  async getSystemAlertConfig(systemId: string) {
+    const response = await this.request<any>(`${API_BASE}/monitor/systems/${systemId}/alerts/config`)
+    return {
+      scope: (response.scope ?? 'system') as 'global' | 'system',
+      globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map((row: any) => this.mapSystemAlert(row)),
+      systemAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map((row: any) => this.mapSystemAlert(row)),
+      effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map((row: any) => this.mapSystemAlert(row)),
+    } as SystemAlertConfig
+  }
+
+  async updateSystemAlertScope(systemId: string, scope: 'global' | 'system') {
+    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/scope`, {
+      method: 'PUT',
+      body: JSON.stringify({scope}),
+    })
   }
 
   async createSystemAlert(
@@ -917,23 +1011,30 @@ class ApiClient {
       condition: string
       threshold: number
       durationSeconds?: number
-    }
+      enabled?: boolean
+    },
+    scope: 'global' | 'system' = 'system'
   ) {
-    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts`, {
+    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts?scope=${scope}`, {
       method: 'POST',
       body: JSON.stringify(alert),
     })
   }
 
-  async updateSystemAlert(systemId: string, alertId: number, updates: Partial<SystemAlert>) {
-    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}`, {
+  async updateSystemAlert(
+    systemId: string,
+    alertId: number,
+    updates: Partial<SystemAlert>,
+    scope: 'global' | 'system' = 'system'
+  ) {
+    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}?scope=${scope}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     })
   }
 
-  async deleteSystemAlert(systemId: string, alertId: number) {
-    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}`, {
+  async deleteSystemAlert(systemId: string, alertId: number, scope: 'global' | 'system' = 'system') {
+    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}?scope=${scope}`, {
       method: 'DELETE',
     })
   }
@@ -976,4 +1077,5 @@ export type {
   ContainerHistoricalDataPoint,
   ContainerMetricsHistory,
   SystemAlert,
+  SystemAlertConfig,
 }

@@ -10,12 +10,15 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.util.UUID
+import java.util.*
 
 private val logger = KotlinLogging.logger {}
+
+private val json = Json { ignoreUnknownKeys = true }
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -63,7 +66,7 @@ fun Route.monitorRoutes() {
                     bodyBytes
                 }
                 
-                val payload = kotlinx.serialization.json.Json.decodeFromString<SystemMetricsPayload>(
+                val payload = json.decodeFromString<SystemMetricsPayload>(
                     decompressedBytes.decodeToString()
                 )
                 
@@ -131,7 +134,7 @@ fun Route.monitorRoutes() {
                         os = system.os,
                         arch = system.arch,
                         created_at = system.createdAt.toEpochMilliseconds(),
-                        latest_metrics = null // Will be fetched separately by frontend for performance
+                        latest_metrics = monitorService.getLatestMetrics(system.id)
                     )
                 }
                 
@@ -172,7 +175,7 @@ fun Route.monitorRoutes() {
                       -v /var/run/docker.sock:/var/run/docker.sock:ro \
                       -e MONEAT_KEY="$agentKey" \
                       -e MONEAT_URL="$apiUrl" \
-                      ghcr.io/moneat/agent
+                      adrianelder/moneat-agent:latest
                 """.trimIndent()
                 
                 call.respond(
@@ -418,6 +421,71 @@ fun Route.monitorRoutes() {
                 val alerts = monitorService.listAlerts(systemId)
                 call.respond(HttpStatusCode.OK, alerts)
             }
+
+            // List scoped alert config for a system
+            get("/systems/{id}/alerts/config") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val systemIdStr = call.parameters["id"]
+
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    return@get
+                }
+
+                val systemId = try {
+                    UUID.fromString(systemIdStr)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    return@get
+                }
+
+                val system = monitorService.getSystemById(systemId)
+                if (system == null || system.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    return@get
+                }
+
+                val config = monitorService.getAlertConfig(systemId, system.organizationId)
+                call.respond(HttpStatusCode.OK, config)
+            }
+
+            // Update active alert scope for a system (global vs system)
+            put("/systems/{id}/alerts/scope") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val systemIdStr = call.parameters["id"]
+
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    return@put
+                }
+
+                val systemId = try {
+                    UUID.fromString(systemIdStr)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    return@put
+                }
+
+                val system = monitorService.getSystemById(systemId)
+                if (system == null || system.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    return@put
+                }
+
+                val request = call.receive<UpdateAlertScopeRequest>()
+                val scope = request.scope.lowercase()
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    return@put
+                }
+
+                monitorService.updateAlertScope(systemId, system.organizationId, scope)
+                call.respond(HttpStatusCode.NoContent)
+            }
             
             // Create an alert
             post("/systems/{id}/alerts") {
@@ -445,8 +513,14 @@ fun Route.monitorRoutes() {
                     return@post
                 }
                 
+                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    return@post
+                }
+
                 val request = call.receive<CreateAlertRequest>()
-                val alert = monitorService.createAlert(systemId, system.organizationId, request)
+                val alert = monitorService.createAlert(systemId, system.organizationId, request, scope)
                 call.respond(HttpStatusCode.Created, alert)
             }
             
@@ -483,8 +557,14 @@ fun Route.monitorRoutes() {
                     return@put
                 }
                 
+                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    return@put
+                }
+
                 val request = call.receive<UpdateAlertRequest>()
-                val updated = monitorService.updateAlert(alertId, systemId, system.organizationId, request)
+                val updated = monitorService.updateAlert(alertId, systemId, system.organizationId, request, scope)
                 if (!updated) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
                     return@put
@@ -526,7 +606,13 @@ fun Route.monitorRoutes() {
                     return@delete
                 }
                 
-                val deleted = monitorService.deleteAlert(alertId, systemId, system.organizationId)
+                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    return@delete
+                }
+
+                val deleted = monitorService.deleteAlert(alertId, systemId, system.organizationId, scope)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
                     return@delete

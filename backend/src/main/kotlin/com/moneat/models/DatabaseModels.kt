@@ -164,3 +164,31 @@ object SystemAlerts : Table("system_alerts") {
     val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
+
+object OrganizationAlertTemplates : Table("organization_alert_templates") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val metric = varchar("metric", 50)
+    val condition = varchar("condition", 20)
+    val threshold = double("threshold")
+    val duration_seconds = integer("duration_seconds").default(0)
+    val enabled = bool("enabled").default(false)
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SystemAlertSettings : Table("system_alert_settings") {
+    val system_id = uuid("system_id").references(Systems.id)
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val scope = varchar("scope", 20).default("system")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(system_id)
+}
+
+object SystemAlertTemplateStates : Table("system_alert_template_states") {
+    val template_alert_id = integer("template_alert_id").references(OrganizationAlertTemplates.id)
+    val system_id = uuid("system_id").references(Systems.id)
+    val last_triggered_at = timestamp("last_triggered_at").nullable()
+    override val primaryKey = PrimaryKey(template_alert_id, system_id)
+}

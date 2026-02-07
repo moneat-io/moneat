@@ -23,6 +23,9 @@ const platformAliases: Record<string, string> = {
   spring: 'spring-boot',
   springboot: 'spring-boot',
   'spring-boot': 'spring-boot',
+  ktor: 'ktor',
+  'kotlin-ktor': 'ktor',
+  'ktor-server': 'ktor',
   csharp: 'dotnet',
   'c#': 'dotnet',
   aspnet: 'dotnet',
@@ -239,6 +242,14 @@ export const platforms: PlatformType[] = [
     description: 'Java applications with Spring Boot',
     icon: createMonogramIcon('SB'),
     color: '#6db33f',
+    category: 'backend'
+  },
+  {
+    id: 'ktor',
+    name: 'Ktor',
+    description: 'Kotlin server applications',
+    icon: createMonogramIcon('Kt'),
+    color: '#7f52ff',
     category: 'backend'
   },
   {
@@ -537,28 +548,30 @@ function ProjectsPage() {
                       </Button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    {filteredPlatforms.map((platform) => {
-                      const Icon = platform.icon
-                      return (
-                        <button
-                          key={platform.id}
-                          onClick={() => setSelectedPlatform(platform.id)}
-                          className={`
-                            relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all
-                            ${selectedPlatform === platform.id 
-                              ? 'border-primary bg-primary/5 shadow-md' 
-                              : 'border-border hover:border-primary/50 hover:bg-accent'
-                            }
-                          `}
-                        >
-                          <div className="p-3 rounded-lg" style={{ backgroundColor: platform.color }}>
-                            <Icon className="h-6 w-6 text-white" />
-                          </div>
-                          <span className="text-xs font-medium text-center">{platform.name}</span>
-                        </button>
-                      )
-                    })}
+                  <div className="max-h-96 overflow-y-auto rounded-lg border p-3 pr-2">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                      {filteredPlatforms.map((platform) => {
+                        const Icon = platform.icon
+                        return (
+                          <button
+                            key={platform.id}
+                            onClick={() => setSelectedPlatform(platform.id)}
+                            className={`
+                              relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all
+                              ${selectedPlatform === platform.id
+                                ? 'border-primary bg-primary/5 shadow-md'
+                                : 'border-border hover:border-primary/50 hover:bg-accent'
+                              }
+                            `}
+                          >
+                            <div className="p-3 rounded-lg" style={{ backgroundColor: platform.color }}>
+                              <Icon className="h-6 w-6 text-white" />
+                            </div>
+                            <span className="text-xs font-medium text-center">{platform.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -583,46 +596,27 @@ function ProjectsPage() {
         )}
 
         {!projects || projects.length === 0 ? (
-          <Card className="p-12 text-center">
-            <div className="max-w-2xl mx-auto space-y-6">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-primary/10 p-4">
-                  <Smartphone className="h-10 w-10 text-primary" />
+          showCreateProject ? null : (
+            <Card className="p-12 text-center">
+              <div className="max-w-2xl mx-auto space-y-6">
+                <div className="flex justify-center">
+                  <div className="rounded-full bg-primary/10 p-4">
+                    <Smartphone className="h-10 w-10 text-primary" />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
-                <p className="text-muted-foreground mb-6">
-                  Create your first project to start tracking errors and monitoring your applications.
-                </p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium mb-4">Get started with any platform:</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 max-w-4xl mx-auto">
-                  {platforms.slice(0, 10).map((platform) => {
-                    const Icon = platform.icon
-                    return (
-                      <div
-                        key={platform.id}
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg border bg-card hover:bg-accent transition-colors"
-                      >
-                        <div className="p-2.5 rounded-lg" style={{ backgroundColor: platform.color }}>
-                          <Icon className="h-5 w-5 text-white" />
-                        </div>
-                        <span className="text-xs font-medium text-center">{platform.name}</span>
-                      </div>
-                    )
-                  })}
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Create your first project to start tracking errors and monitoring your applications.
+                  </p>
                 </div>
+                <Button onClick={() => setShowCreateProject(true)} size="lg" className="mt-4">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Your First Project
+                </Button>
               </div>
-
-              <Button onClick={() => setShowCreateProject(true)} size="lg" className="mt-4">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Your First Project
-              </Button>
-            </div>
-          </Card>
+            </Card>
+          )
         ) : (
           <div className="space-y-3">
             {projects.map((project) => {
