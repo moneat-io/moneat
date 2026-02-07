@@ -7,6 +7,8 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.config.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.and
@@ -20,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 private val logger = KotlinLogging.logger {}
 
-class EventService {
+class EventService(private val notificationService: NotificationService? = null) {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseUrl = config.property("database.clickhouse.url").getString()
     private val clickhouseDb = config.property("database.clickhouse.database").getString()
@@ -390,6 +392,18 @@ class EventService {
                         logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                     }
                 }
+                
+                // Check if this is a new issue and trigger notifications
+                CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        if (isNewIssue(projectId, issueId)) {
+                            logger.info { "New issue detected: $issueId for project $projectId" }
+                            notificationService?.onNewIssue(projectId, issueId, event)
+                        }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error checking for new issue notifications" }
+                    }
+                }
             }
         } catch (e: Exception) {
             logger.error(e) { "Error storing event in ClickHouse" }
@@ -724,5 +738,33 @@ class EventService {
     private fun tagsToMap(tags: Map<String, String>?): String {
         if (tags.isNullOrEmpty()) return "{}"
         return "{${tags.entries.joinToString(",") { "'${escapeSql(it.key)}':'${escapeSql(it.value)}'" }}}"
+    }
+    
+    private suspend fun isNewIssue(projectId: Long, issueId: String): Boolean {
+        // Query ClickHouse to check if any events exist with this issue_id
+        val query = """
+            SELECT count() as cnt
+            FROM $clickhouseDb.events
+            WHERE project_id = $projectId
+              AND issue_id = '$issueId'
+            FORMAT JSON
+        """.trimIndent()
+        
+        return try {
+            val response = httpClient.post("$clickhouseUrl?database=$clickhouseDb") {
+                basicAuth(clickhouseUser, clickhousePassword)
+                setBody(query)
+            }
+            
+            val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val count = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
+                ?.get("cnt")?.jsonPrimitive?.longOrNull ?: 0
+            
+            // If count is 1, this is the first event for this issue (the one we just inserted)
+            count <= 1
+        } catch (e: Exception) {
+            logger.error(e) { "Error checking if issue $issueId is new" }
+            false
+        }
     }
 }

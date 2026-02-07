@@ -101,6 +101,12 @@ fun Route.adminRoutes() {
                 val consumers = adminService.getTopConsumers(limit)
                 call.respond(consumers)
             }
+            
+            get("/emails") {
+                val period = call.request.queryParameters["period"] ?: "30d"
+                val stats = adminService.getEmailStats(period)
+                call.respond(stats)
+            }
         }
     }
 }

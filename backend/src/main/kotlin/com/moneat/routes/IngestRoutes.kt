@@ -1,7 +1,9 @@
 package com.moneat.routes
 
 import com.moneat.models.SentryEnvelope
+import com.moneat.services.EmailService
 import com.moneat.services.EventService
+import com.moneat.services.NotificationService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -12,7 +14,9 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 fun Route.ingestRoutes() {
-    val eventService = EventService()
+    val emailService = EmailService()
+    val notificationService = NotificationService(emailService)
+    val eventService = EventService(notificationService)
     
     route("/api/{projectId}") {
         // Sentry envelope endpoint (primary)

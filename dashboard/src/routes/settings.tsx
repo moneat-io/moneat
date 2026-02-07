@@ -11,16 +11,16 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/
 import {Badge} from '@/components/ui/badge'
 import {Checkbox} from '@/components/ui/checkbox'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from '@/components/ui/dialog'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {useToast} from '@/hooks/use-toast'
-import {AlertTriangle, Copy, Key, Plus, Trash2} from 'lucide-react'
+import {AlertTriangle, Bell, Copy, Key, Plus, Trash2} from 'lucide-react'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -89,9 +89,13 @@ function SettingsPage() {
         <Tabs defaultValue="auth-tokens" className="space-y-4">
           <TabsList>
             <TabsTrigger value="auth-tokens">Auth Tokens</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
           <TabsContent value="auth-tokens" className="space-y-4">
             <AuthTokensTab />
+          </TabsContent>
+          <TabsContent value="notifications" className="space-y-4">
+            <NotificationsTab />
           </TabsContent>
         </Tabs>
       </div>
@@ -535,5 +539,261 @@ function RevokeTokenDialog({ token, onClose, onConfirm, isRevoking }: RevokeToke
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function NotificationsTab() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  const { data: preferences, isLoading } = useQuery({
+    queryKey: ['notificationPreferences'],
+    queryFn: () => api.getNotificationPreferences(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const updateGlobalMutation = useMutation({
+    mutationFn: (prefs: Partial<{
+      issueAlerts: boolean
+      errorAlerts: boolean
+      weeklySummary: boolean
+      alertFrequencyMinutes: number
+    }>) => api.updateNotificationPreferences(prefs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
+      toast({ title: 'Preferences updated', description: 'Your notification preferences have been saved.' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to update preferences',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const updateProjectMutation = useMutation({
+    mutationFn: ({ projectId, prefs }: {
+      projectId: number
+      prefs: Partial<{
+        issueAlerts: boolean
+        errorAlerts: boolean
+        weeklySummary: boolean
+        alertFrequencyMinutes: number
+      }>
+    }) => api.updateProjectNotificationPreferences(projectId, prefs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
+      toast({ title: 'Project preferences updated' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to update project preferences',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: (projectId: number) => api.deleteProjectNotificationPreferences(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
+      toast({ title: 'Project override removed', description: 'Using global preferences for this project.' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to remove override',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  const global = preferences?.global || {
+    issueAlerts: true,
+    errorAlerts: true,
+    weeklySummary: true,
+    alertFrequencyMinutes: 30,
+  }
+
+  const projects = preferences?.projects || []
+
+  return (
+    <div className="space-y-6">
+      {/* Global Preferences */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            <CardTitle>Global Notification Preferences</CardTitle>
+          </div>
+          <CardDescription>
+            Default notification settings for all projects. You can override these settings per project below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between space-x-2">
+            <div className="space-y-0.5">
+              <Label htmlFor="global-issue-alerts" className="text-base font-medium">
+                Issue Alerts
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Get notified when new issues are detected
+              </p>
+            </div>
+            <Checkbox
+              id="global-issue-alerts"
+              checked={global.issueAlerts}
+              onCheckedChange={(checked) => updateGlobalMutation.mutate({ issueAlerts: checked === true })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between space-x-2">
+            <div className="space-y-0.5">
+              <Label htmlFor="global-error-alerts" className="text-base font-medium">
+                Error Alerts
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Get notified about errors and exceptions
+              </p>
+            </div>
+            <Checkbox
+              id="global-error-alerts"
+              checked={global.errorAlerts}
+              onCheckedChange={(checked) => updateGlobalMutation.mutate({ errorAlerts: checked === true })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between space-x-2">
+            <div className="space-y-0.5">
+              <Label htmlFor="global-weekly-summary" className="text-base font-medium">
+                Weekly Summary
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Receive a weekly summary email every Monday
+              </p>
+            </div>
+            <Checkbox
+              id="global-weekly-summary"
+              checked={global.weeklySummary}
+              onCheckedChange={(checked) => updateGlobalMutation.mutate({ weeklySummary: checked === true })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="global-frequency" className="text-base font-medium">
+              Alert Frequency
+            </Label>
+            <p className="text-sm text-muted-foreground mb-2">
+              Minimum time between alerts for the same project
+            </p>
+            <Select
+              value={global.alertFrequencyMinutes.toString()}
+              onValueChange={(value) => updateGlobalMutation.mutate({ alertFrequencyMinutes: parseInt(value) })}
+            >
+              <SelectTrigger id="global-frequency" className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5 minutes</SelectItem>
+                <SelectItem value="15">15 minutes</SelectItem>
+                <SelectItem value="30">30 minutes</SelectItem>
+                <SelectItem value="60">1 hour</SelectItem>
+                <SelectItem value="240">4 hours</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Per-Project Overrides */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Per-Project Overrides</CardTitle>
+          <CardDescription>
+            Customize notification settings for specific projects
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {projects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No project-specific overrides configured. All projects use the global preferences above.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Project</TableHead>
+                  <TableHead className="text-center">Issues</TableHead>
+                  <TableHead className="text-center">Errors</TableHead>
+                  <TableHead className="text-center">Weekly</TableHead>
+                  <TableHead className="text-center">Frequency</TableHead>
+                  <TableHead className="w-[100px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projects.map((project) => (
+                  <TableRow key={project.projectId}>
+                    <TableCell className="font-medium">{project.projectName}</TableCell>
+                    <TableCell className="text-center">
+                      <Checkbox
+                        checked={project.issueAlerts}
+                        onCheckedChange={(checked) =>
+                          updateProjectMutation.mutate({
+                            projectId: project.projectId,
+                            prefs: { issueAlerts: checked === true },
+                          })
+                        }
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Checkbox
+                        checked={project.errorAlerts}
+                        onCheckedChange={(checked) =>
+                          updateProjectMutation.mutate({
+                            projectId: project.projectId,
+                            prefs: { errorAlerts: checked === true },
+                          })
+                        }
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Checkbox
+                        checked={project.weeklySummary}
+                        onCheckedChange={(checked) =>
+                          updateProjectMutation.mutate({
+                            projectId: project.projectId,
+                            prefs: { weeklySummary: checked === true },
+                          })
+                        }
+                      />
+                    </TableCell>
+                    <TableCell className="text-center text-sm text-muted-foreground">
+                      {project.alertFrequencyMinutes >= 60
+                        ? `${project.alertFrequencyMinutes / 60}h`
+                        : `${project.alertFrequencyMinutes}m`}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteProjectMutation.mutate(project.projectId)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

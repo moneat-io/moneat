@@ -9,7 +9,8 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Route.apiRoutes() {
@@ -602,6 +603,197 @@ fun Route.apiRoutes() {
                 } else {
                     call.respond(stats)
                 }
+            }
+            
+            // Notification Preferences
+            get("/notification-preferences") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val preferences = transaction {
+                    // Get global preferences
+                    val global = NotificationPreferences.selectAll()
+                        .where { 
+                            (NotificationPreferences.user_id eq userId) and
+                            (NotificationPreferences.project_id.isNull())
+                        }
+                        .firstOrNull()
+                    
+                    val globalPrefs = if (global != null) {
+                        mapOf(
+                            "issueAlerts" to global[NotificationPreferences.issue_alerts],
+                            "errorAlerts" to global[NotificationPreferences.error_alerts],
+                            "weeklySummary" to global[NotificationPreferences.weekly_summary],
+                            "alertFrequencyMinutes" to global[NotificationPreferences.alert_frequency_minutes]
+                        )
+                    } else {
+                        mapOf(
+                            "issueAlerts" to true,
+                            "errorAlerts" to true,
+                            "weeklySummary" to true,
+                            "alertFrequencyMinutes" to 30
+                        )
+                    }
+                    
+                    // Get per-project overrides
+                    val projects = NotificationPreferences.selectAll()
+                        .where { 
+                            (NotificationPreferences.user_id eq userId) and
+                            (NotificationPreferences.project_id.isNotNull())
+                        }
+                        .map { pref ->
+                            val projectId = pref[NotificationPreferences.project_id]!!
+                            val projectName = Projects.selectAll()
+                                .where { Projects.id eq projectId }
+                                .firstOrNull()?.get(Projects.name) ?: "Unknown"
+                            
+                            mapOf(
+                                "projectId" to projectId,
+                                "projectName" to projectName,
+                                "issueAlerts" to pref[NotificationPreferences.issue_alerts],
+                                "errorAlerts" to pref[NotificationPreferences.error_alerts],
+                                "weeklySummary" to pref[NotificationPreferences.weekly_summary],
+                                "alertFrequencyMinutes" to pref[NotificationPreferences.alert_frequency_minutes]
+                            )
+                        }
+                    
+                    mapOf(
+                        "global" to globalPrefs,
+                        "projects" to projects
+                    )
+                }
+                
+                call.respond(preferences)
+            }
+            
+            put("/notification-preferences") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val request = call.receive<Map<String, Any>>()
+                
+                transaction {
+                    val existing = NotificationPreferences.selectAll()
+                        .where { 
+                            (NotificationPreferences.user_id eq userId) and
+                            (NotificationPreferences.project_id.isNull())
+                        }
+                        .firstOrNull()
+                    
+                    val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
+                    val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
+                    val weeklySummary = request["weeklySummary"] as? Boolean ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
+                    val alertFrequency = (request["alertFrequencyMinutes"] as? Number)?.toInt() ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
+                    
+                    if (existing != null) {
+                        NotificationPreferences.update({ 
+                            (NotificationPreferences.user_id eq userId) and
+                            (NotificationPreferences.project_id.isNull())
+                        }) {
+                            it[issue_alerts] = issueAlerts
+                            it[error_alerts] = errorAlerts
+                            it[weekly_summary] = weeklySummary
+                            it[alert_frequency_minutes] = alertFrequency
+                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                        }
+                    } else {
+                        NotificationPreferences.insert {
+                            it[user_id] = userId
+                            it[project_id] = null
+                            it[issue_alerts] = issueAlerts
+                            it[error_alerts] = errorAlerts
+                            it[weekly_summary] = weeklySummary
+                            it[alert_frequency_minutes] = alertFrequency
+                            it[created_at] = kotlinx.datetime.Clock.System.now()
+                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                        }
+                    }
+                }
+                
+                call.respond(HttpStatusCode.OK)
+            }
+            
+            put("/notification-preferences/{projectId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
+                    return@put
+                }
+                
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@put
+                }
+                
+                val request = call.receive<Map<String, Any>>()
+                
+                transaction {
+                    val existing = NotificationPreferences.selectAll()
+                        .where { 
+                            (NotificationPreferences.user_id eq userId) and
+                            (NotificationPreferences.project_id eq projectId)
+                        }
+                        .firstOrNull()
+                    
+                    val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
+                    val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
+                    val weeklySummary = request["weeklySummary"] as? Boolean ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
+                    val alertFrequency = (request["alertFrequencyMinutes"] as? Number)?.toInt() ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
+                    
+                    if (existing != null) {
+                        NotificationPreferences.update({ 
+                            (NotificationPreferences.user_id eq userId) and
+                            (NotificationPreferences.project_id eq projectId)
+                        }) {
+                            it[issue_alerts] = issueAlerts
+                            it[error_alerts] = errorAlerts
+                            it[weekly_summary] = weeklySummary
+                            it[alert_frequency_minutes] = alertFrequency
+                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                        }
+                    } else {
+                        NotificationPreferences.insert {
+                            it[user_id] = userId
+                            it[NotificationPreferences.project_id] = projectId
+                            it[issue_alerts] = issueAlerts
+                            it[error_alerts] = errorAlerts
+                            it[weekly_summary] = weeklySummary
+                            it[alert_frequency_minutes] = alertFrequency
+                            it[created_at] = kotlinx.datetime.Clock.System.now()
+                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                        }
+                    }
+                }
+                
+                call.respond(HttpStatusCode.OK)
+            }
+            
+            delete("/notification-preferences/{projectId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
+                    return@delete
+                }
+                
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@delete
+                }
+                
+                transaction {
+                    NotificationPreferences.deleteWhere { 
+                        (NotificationPreferences.user_id eq userId) and
+                        (NotificationPreferences.project_id eq projectId)
+                    }
+                }
+                
+                call.respond(HttpStatusCode.NoContent)
             }
         }
     }

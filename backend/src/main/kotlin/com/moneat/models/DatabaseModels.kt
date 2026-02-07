@@ -111,3 +111,26 @@ object Subscriptions : Table("subscriptions") {
     val current_period_end = timestamp("current_period_end").nullable()
     override val primaryKey = PrimaryKey(id)
 }
+
+object NotificationPreferences : Table("notification_preferences") {
+    val id = integer("id").autoIncrement()
+    val user_id = integer("user_id").references(Users.id)
+    val project_id = long("project_id").references(Projects.id).nullable()
+    val issue_alerts = bool("issue_alerts").default(true)
+    val error_alerts = bool("error_alerts").default(true)
+    val weekly_summary = bool("weekly_summary").default(true)
+    val alert_frequency_minutes = integer("alert_frequency_minutes").default(30)
+    val created_at = timestamp("created_at").nullable()
+    val updated_at = timestamp("updated_at").nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+object EmailsSent : Table("emails_sent") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id).nullable()
+    val email_type = varchar("email_type", 50)
+    val recipient = varchar("recipient", 255)
+    val sent_at = timestamp("sent_at")
+    val success = bool("success").default(true)
+    override val primaryKey = PrimaryKey(id)
+}

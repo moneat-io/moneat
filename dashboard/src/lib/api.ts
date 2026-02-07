@@ -248,6 +248,23 @@ interface ReplayTimelineItem {
   traceId?: string
 }
 
+interface NotificationPreference {
+  issueAlerts: boolean
+  errorAlerts: boolean
+  weeklySummary: boolean
+  alertFrequencyMinutes: number
+}
+
+interface ProjectNotificationPreference extends NotificationPreference {
+  projectId: number
+  projectName: string
+}
+
+interface NotificationPreferences {
+  global: NotificationPreference
+  projects: ProjectNotificationPreference[]
+}
+
 interface ReplayTimelineResponse {
   items: ReplayTimelineItem[]
   replayStartMs: number
@@ -686,6 +703,44 @@ class ApiClient {
       bytesIngested: number
     }>>(`${API_BASE}/admin/top-consumers?limit=${limit}`)
   }
+
+  async getAdminEmailStats(period = '30d') {
+    return this.request<{
+      totalSent: number
+      byType: Record<string, number>
+      last7Days: Array<{ date: string; count: number }>
+      last30Days: Array<{ date: string; count: number }>
+      estimatedCost: number
+    }>(`${API_BASE}/admin/emails?period=${period}`)
+  }
+
+  // Notification Preferences
+  async getNotificationPreferences() {
+    return this.request<NotificationPreferences>(`${API_BASE}/notification-preferences`)
+  }
+
+  async updateNotificationPreferences(preferences: Partial<NotificationPreference>) {
+    return this.request(`${API_BASE}/notification-preferences`, {
+      method: 'PUT',
+      body: JSON.stringify(preferences),
+    })
+  }
+
+  async updateProjectNotificationPreferences(
+    projectId: number,
+    preferences: Partial<NotificationPreference>
+  ) {
+    return this.request(`${API_BASE}/notification-preferences/${projectId}`, {
+      method: 'PUT',
+      body: JSON.stringify(preferences),
+    })
+  }
+
+  async deleteProjectNotificationPreferences(projectId: number) {
+    return this.request(`${API_BASE}/notification-preferences/${projectId}`, {
+      method: 'DELETE',
+    })
+  }
 }
 
 export const api = new ApiClient()
@@ -713,4 +768,7 @@ export type {
   ReplayTimelineItem,
   ReplayTimelineResponse,
   AuthToken,
+  NotificationPreference,
+  ProjectNotificationPreference,
+  NotificationPreferences,
 }

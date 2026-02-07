@@ -1,6 +1,10 @@
+---
+userName: Alex
+verificationUrl: https://moneat.example.com/verify?token=abc123def456
+---
 <x-main>
-  <table class="w-full max-w-[600px]" cellpadding="0" cellspacing="0" role="presentation">
-    
+  <table class="w-full max-w-[600px]" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);">
+
     <!-- Header -->
     <tr>
       <td>
@@ -8,36 +12,45 @@
       </td>
     </tr>
 
-    <!-- Main Content -->
+    <!-- Welcome illustration area -->
     <tr>
-      <td class="px-8 py-8 bg-white">
-        <table cellpadding="0" cellspacing="0" role="presentation" class="w-full">
+      <td class="bg-white" style="text-align: center; padding: 40px 32px 16px 32px;">
+        <!-- Shield icon with gradient background -->
+        <table cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto;">
           <tr>
             <td>
-              <h2 class="m-0 text-2xl font-bold text-slate-900 mb-4">
-                Verify Your Email
-              </h2>
-              <p class="m-0 text-base text-slate-700 mb-4">
-                Hi {{ userName }},
-              </p>
-              <p class="m-0 text-base text-slate-700 mb-4">
-                Thanks for signing up for Moneat! Please verify your email address by clicking the button below:
-              </p>
+              <div style="width: 72px; height: 72px; border-radius: 16px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); text-align: center; line-height: 72px; margin: 0 auto;">
+                <span style="font-size: 32px; color: #ffffff;">&#9989;</span>
+              </div>
             </td>
           </tr>
         </table>
       </td>
     </tr>
 
+    <!-- Main Content -->
+    <tr>
+      <td class="px-8 pt-4 pb-2 bg-white" style="text-align: center;">
+        <h2 class="m-0 text-2xl font-semibold tracking-tight" style="color: #0a0a0a;">
+          Verify Your Email
+        </h2>
+        <p class="m-0 mt-3 text-base" style="color: #525252;">
+          Hi {{ userName }},
+        </p>
+        <p class="m-0 mt-2 text-base leading-relaxed" style="color: #525252;">
+          Thanks for signing up for Moneat! Please verify your email address to get started with error and performance monitoring.
+        </p>
+      </td>
+    </tr>
+
     <!-- CTA Button -->
     <tr>
-      <td align="center" class="px-8 py-4 bg-white">
+      <td align="center" class="px-8 py-6 bg-white">
         <table cellpadding="0" cellspacing="0" role="presentation">
           <tr>
-            <td align="center" class="bg-blue-600 rounded-md">
+            <td align="center" style="border-radius: 6px; background-color: #171717; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);">
               <a href="{{ verificationUrl }}"
-                class="inline-block px-8 py-4 text-base text-white font-semibold no-underline"
-                style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; display: inline-block; background-color: #2563eb;">
+                style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #fafafa; text-decoration: none; padding: 12px 32px; border-radius: 6px; display: inline-block; font-size: 14px; font-weight: 500;">
                 Verify Email Address
               </a>
             </td>
@@ -46,21 +59,65 @@
       </td>
     </tr>
 
-    <!-- Additional Info -->
+    <!-- Info cards -->
     <tr>
-      <td class="px-8 py-6 bg-white">
-        <table cellpadding="0" cellspacing="0" role="presentation" class="w-full">
+      <td class="px-8 pb-6 bg-white">
+        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5;">
           <tr>
-            <td>
-              <p class="m-0 text-sm text-slate-600 mb-3">
-                This link will expire in <strong>24 hours</strong>.
+            <td class="p-4">
+              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
+                <!-- Expiry info -->
+                <tr>
+                  <td class="pb-3" style="border-bottom: 1px solid #f5f5f5;">
+                    <table cellpadding="0" cellspacing="0" role="presentation">
+                      <tr>
+                        <td class="pr-3" style="vertical-align: top;">
+                          <div style="width: 28px; height: 28px; border-radius: 8px; background-color: #fffbeb; text-align: center; line-height: 28px; font-size: 14px;">&#9200;</div>
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <p class="m-0 text-sm" style="color: #525252;">
+                            This link will expire in <strong style="color: #0a0a0a;">24 hours</strong>.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Safety info -->
+                <tr>
+                  <td class="pt-3">
+                    <table cellpadding="0" cellspacing="0" role="presentation">
+                      <tr>
+                        <td class="pr-3" style="vertical-align: top;">
+                          <div style="width: 28px; height: 28px; border-radius: 8px; background-color: #f0fdf4; text-align: center; line-height: 28px; font-size: 14px;">&#128274;</div>
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <p class="m-0 text-sm" style="color: #525252;">
+                            If you didn't create an account, you can safely ignore this email.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Fallback URL -->
+    <tr>
+      <td class="px-8 pb-6 bg-white">
+        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 6px; background-color: #fafafa; border: 1px solid #e5e5e5;">
+          <tr>
+            <td class="p-3">
+              <p class="m-0 text-xs" style="color: #737373;">
+                If the button doesn't work, copy and paste this link into your browser:
               </p>
-              <p class="m-0 text-sm text-slate-600 mb-3">
-                If you didn't create an account with Moneat, you can safely ignore this email.
-              </p>
-              <p class="m-0 text-xs text-slate-500">
-                If the button doesn't work, copy and paste this link into your browser:<br>
-                <span class="font-mono text-xs break-all">{{ verificationUrl }}</span>
+              <p class="m-0 mt-1 text-xs" style="color: #525252; word-break: break-all; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;">
+                {{ verificationUrl }}
               </p>
             </td>
           </tr>

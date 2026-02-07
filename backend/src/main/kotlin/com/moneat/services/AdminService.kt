@@ -132,6 +132,21 @@ data class AdminTopConsumer(
     val bytesIngested: Long
 )
 
+@Serializable
+data class AdminEmailStats(
+    val totalSent: Long,
+    val byType: Map<String, Long>,
+    val last7Days: List<EmailTimelinePoint>,
+    val last30Days: List<EmailTimelinePoint>,
+    val estimatedCost: Double
+)
+
+@Serializable
+data class EmailTimelinePoint(
+    val date: String,
+    val count: Long
+)
+
 class AdminService {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseUrl = config.property("database.clickhouse.url").getString()
@@ -469,6 +484,73 @@ class AdminService {
         }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
         return usageTracker.getUsageForOrg(orgId, startDate, today)
+    }
+    
+    fun getEmailStats(period: String = "30d"): AdminEmailStats {
+        val today = Clock.System.todayIn(TimeZone.UTC)
+        val daysBack = when (period) {
+            "7d" -> 7
+            "30d" -> 30
+            else -> 30
+        }
+        val startDate = today.minus(daysBack, DateTimeUnit.DAY)
+        
+        return transaction {
+            // Total sent all time (only successful)
+            val totalSent = EmailsSent.selectAll()
+                .where { EmailsSent.success eq true }
+                .count()
+            
+            // By type
+            val byType = EmailsSent.selectAll()
+                .where { EmailsSent.success eq true }
+                .toList()
+                .groupBy { it[EmailsSent.email_type] }
+                .mapValues { it.value.size.toLong() }
+            
+            // Timeline for last 7 days
+            val last7DaysStart = today.minus(7, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
+            val last7Days = EmailsSent.selectAll()
+                .where { 
+                    (EmailsSent.success eq true) and 
+                    (EmailsSent.sent_at greaterEq last7DaysStart)
+                }
+                .toList()
+                .groupBy { row -> 
+                    row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
+                }
+                .map { (date, emails) -> 
+                    EmailTimelinePoint(date = date, count = emails.size.toLong())
+                }
+                .sortedBy { it.date }
+            
+            // Timeline for last 30 days
+            val last30DaysStart = startDate.atStartOfDayIn(TimeZone.UTC)
+            val last30Days = EmailsSent.selectAll()
+                .where { 
+                    (EmailsSent.success eq true) and 
+                    (EmailsSent.sent_at greaterEq last30DaysStart)
+                }
+                .toList()
+                .groupBy { row -> 
+                    row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
+                }
+                .map { (date, emails) -> 
+                    EmailTimelinePoint(date = date, count = emails.size.toLong())
+                }
+                .sortedBy { it.date }
+            
+            // Estimate cost - AWS SES costs $0.10 per 1,000 emails
+            val estimatedCost = totalSent * 0.0001
+            
+            AdminEmailStats(
+                totalSent = totalSent,
+                byType = byType,
+                last7Days = last7Days,
+                last30Days = last30Days,
+                estimatedCost = estimatedCost
+            )
+        }
     }
 
     private suspend fun queryClickHouseEvents(startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): Triple<Long, Long, List<AdminTimelinePoint>> {
