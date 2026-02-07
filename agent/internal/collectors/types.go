@@ -6,7 +6,7 @@ import (
 
 // SystemMetrics represents all metrics collected from a system
 type SystemMetrics struct {
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp int64 `json:"timestamp"` // Unix timestamp in seconds
 	
 	// CPU metrics
 	CPUPercent   float64   `json:"cpu_percent"`

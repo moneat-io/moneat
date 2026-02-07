@@ -42,10 +42,6 @@ fun Application.configureDatabases() {
     
     log.info("PostgreSQL database connected")
     
-    // Start background services for monitoring
-    SystemStatusTracker.start()
-    log.info("System status tracker started")
-    
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopped) {
         log.info("Stopping background services...")

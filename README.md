@@ -135,11 +135,11 @@ moneat/
 - `GET /api/{projectId}/security/` - CORS preflight
 
 ### Dashboard API (requires JWT auth)
-- `GET /api/v1/projects` - List projects
-- `GET /api/v1/projects/{id}` - Get project details
-- `GET /api/v1/projects/{id}/issues` - List issues
-- `GET /api/v1/issues/{id}` - Get issue detail
-- `GET /api/v1/issues/{id}/events` - Get issue events
+- `GET /v1/projects` - List projects
+- `GET /v1/projects/{id}` - Get project details
+- `GET /v1/projects/{id}/issues` - List issues
+- `GET /v1/issues/{id}` - Get issue detail
+- `GET /v1/issues/{id}/events` - Get issue events
 
 ## Development
 

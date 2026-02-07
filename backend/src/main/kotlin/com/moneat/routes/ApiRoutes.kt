@@ -17,7 +17,7 @@ fun Route.apiRoutes() {
     val dashboardService = DashboardService()
     
     authenticate("auth-jwt") {
-        route("/api/v1") {
+        route("/v1") {
             // User profile
             get("/user") {
                 val principal = call.principal<JWTPrincipal>()

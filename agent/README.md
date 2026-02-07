@@ -9,7 +9,7 @@ docker run -d --name moneat-agent \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -e MONEAT_KEY="<your-agent-key>" \
-  -e MONEAT_URL="https://api.moneat.dev" \
+  -e MONEAT_URL="https://api.moneat.io" \
   ghcr.io/moneat/agent:latest
 ```
 
@@ -18,7 +18,7 @@ docker run -d --name moneat-agent \
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `MONEAT_KEY` | Yes | - | Agent authentication key (from dashboard) |
-| `MONEAT_URL` | No | `https://api.moneat.dev` | Moneat API endpoint |
+| `MONEAT_URL` | No | `https://api.moneat.io` | Moneat API endpoint |
 | `POLL_INTERVAL` | No | `60` | Initial poll interval in seconds (server-controlled) |
 
 ## Collected Metrics

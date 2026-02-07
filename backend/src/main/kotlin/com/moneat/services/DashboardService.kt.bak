@@ -80,10 +80,6 @@ class DashboardService {
             }
             
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for issue $issueId: ${response.status} ${body.take(400)}" }
-                return null
-            }
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.long
@@ -111,10 +107,6 @@ class DashboardService {
                 setBody(query)
             }
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for event $eventId: ${response.status} ${body.take(400)}" }
-                return null
-            }
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.long
@@ -142,10 +134,6 @@ class DashboardService {
                 setBody(query)
             }
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get issue ID for event $eventId: ${response.status} ${body.take(400)}" }
-                return null
-            }
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["issue_id"]?.jsonPrimitive?.contentOrNull
@@ -174,10 +162,6 @@ class DashboardService {
             }
 
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for replay $replayId: ${response.status} ${body.take(400)}" }
-                return null
-            }
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.long
@@ -205,10 +189,6 @@ class DashboardService {
                 setBody(query)
             }
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for feedback $feedbackId: ${response.status} ${body.take(400)}" }
-                return null
-            }
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.long
@@ -238,10 +218,6 @@ class DashboardService {
             }
 
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for transaction $eventId: ${response.status} ${body.take(400)}" }
-                return null
-            }
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.long

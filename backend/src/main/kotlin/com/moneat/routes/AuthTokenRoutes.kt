@@ -15,7 +15,7 @@ fun Route.authTokenRoutes() {
     val authTokenService = AuthTokenService()
     
     authenticate("auth-jwt") {
-        route("/api/v1/auth-tokens") {
+        route("/v1/auth-tokens") {
             // Create a new auth token
             post {
                 val principal = call.principal<JWTPrincipal>()

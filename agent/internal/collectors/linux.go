@@ -62,7 +62,7 @@ func NewCollector() (Collector, error) {
 // Collect gathers all available metrics
 func (c *LinuxCollector) Collect() (*SystemMetrics, error) {
 	metrics := &SystemMetrics{
-		Timestamp: time.Now(),
+		Timestamp: time.Now().Unix(),
 		Hostname:  c.hostname,
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,

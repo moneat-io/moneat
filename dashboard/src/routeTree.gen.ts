@@ -25,6 +25,7 @@ import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
+import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
@@ -119,6 +120,11 @@ const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PerformanceRoute,
+} as any)
+const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
+  id: '/monitoring/',
+  path: '/monitoring/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
@@ -221,6 +227,7 @@ export interface FileRoutesByFullPath {
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
 }
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/admin': typeof AdminIndexRoute
+  '/monitoring': typeof MonitoringIndexRoute
   '/performance': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
 }
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
 }
@@ -318,6 +327,7 @@ export interface FileRouteTypes {
     | '/releases/$version'
     | '/replays/$replayId'
     | '/admin/'
+    | '/monitoring/'
     | '/performance/'
     | '/admin/organizations/$orgId'
   fileRoutesByTo: FileRoutesByTo
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
     | '/releases/$version'
     | '/replays/$replayId'
     | '/admin'
+    | '/monitoring'
     | '/performance'
     | '/admin/organizations/$orgId'
   id:
@@ -380,6 +391,7 @@ export interface FileRouteTypes {
     | '/releases/$version'
     | '/replays/$replayId'
     | '/admin/'
+    | '/monitoring/'
     | '/performance/'
     | '/admin/organizations/$orgId'
   fileRoutesById: FileRoutesById
@@ -402,6 +414,7 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
   MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
+  MonitoringIndexRoute: typeof MonitoringIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -517,6 +530,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/performance/'
       preLoaderRoute: typeof PerformanceIndexRouteImport
       parentRoute: typeof PerformanceRoute
+    }
+    '/monitoring/': {
+      id: '/monitoring/'
+      path: '/monitoring'
+      fullPath: '/monitoring/'
+      preLoaderRoute: typeof MonitoringIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/': {
       id: '/admin/'
@@ -729,6 +749,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   IssuesIssueIdRoute: IssuesIssueIdRoute,
   MonitoringSystemIdRoute: MonitoringSystemIdRoute,
+  MonitoringIndexRoute: MonitoringIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

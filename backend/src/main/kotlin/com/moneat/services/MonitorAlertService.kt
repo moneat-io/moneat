@@ -390,6 +390,12 @@ class MonitorAlertService {
             val (currentStatus, lastSeenAt) = statusInfo
             
             val isDown = lastSeenAt == null || lastSeenAt < downThreshold
+            
+            // Skip pending systems that have never reported
+            if (lastSeenAt == null && currentStatus == "pending") {
+                continue
+            }
+            
             val newStatus = if (isDown) "down" else "up"
             
             // Only send notification if status changed

@@ -15,7 +15,7 @@ fun Route.adminRoutes() {
     val adminService = AdminService()
     
     authenticate("auth-jwt") {
-        route("/api/v1/admin") {
+        route("/v1/admin") {
             intercept(ApplicationCallPipeline.Call) {
                 val principal = call.principal<JWTPrincipal>()
                 if (principal == null) {

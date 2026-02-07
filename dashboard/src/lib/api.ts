@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1'
+const API_BASE = '/v1'
 const AUTH_PAGE_PATHS = new Set(['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
 
 interface AuthResponse {
@@ -315,28 +315,40 @@ interface MonitorSystemDetail extends MonitorSystemWithMetrics {
   agentKey?: string
 }
 
-interface MetricDataPoint {
-  timestamp: string
-  value: number
+interface CreateMonitorSystemResponse {
+  system: {
+    id: string
+    name: string
+    host?: string
+    status: string
+    last_seen_at?: number
+    agent_version?: string
+    os?: string
+    arch?: string
+    created_at: number
+    latest_metrics?: any
+  }
+  agent_key: string
+  docker_command: string
+}
+
+interface HistoricalDataPoint {
+  timestamp: number
+  cpu_percent?: number
+  mem_percent?: number
+  disk_percent?: number
+  net_recv_bytes?: number
+  net_sent_bytes?: number
+  load_1?: number
+  load_5?: number
+  load_15?: number
+  temp_max?: number
+  gpu_percent?: number
+  battery_percent?: number
 }
 
 interface SystemMetricsHistory {
-  cpu: MetricDataPoint[]
-  memUsed: MetricDataPoint[]
-  memTotal: MetricDataPoint[]
-  diskUsed: MetricDataPoint[]
-  diskTotal: MetricDataPoint[]
-  diskReadBytes: MetricDataPoint[]
-  diskWriteBytes: MetricDataPoint[]
-  netRecvBytes: MetricDataPoint[]
-  netSentBytes: MetricDataPoint[]
-  load1: MetricDataPoint[]
-  load5: MetricDataPoint[]
-  load15: MetricDataPoint[]
-  tempMax: MetricDataPoint[]
-  gpuPercent: MetricDataPoint[]
-  gpuMemPercent: MetricDataPoint[]
-  batteryPercent: MetricDataPoint[]
+  data_points: HistoricalDataPoint[]
 }
 
 interface ContainerStats {
@@ -351,12 +363,17 @@ interface ContainerStats {
   netSentBytes?: number
 }
 
+interface ContainerHistoricalDataPoint {
+  timestamp: number
+  cpu_percent: number
+  mem_used: number
+  mem_limit: number
+  net_recv_bytes: number
+  net_sent_bytes: number
+}
+
 interface ContainerMetricsHistory {
-  cpu: MetricDataPoint[]
-  memUsed: MetricDataPoint[]
-  memLimit: MetricDataPoint[]
-  netRecvBytes: MetricDataPoint[]
-  netSentBytes: MetricDataPoint[]
+  data_points: ContainerHistoricalDataPoint[]
 }
 
 interface SystemAlert {
@@ -842,7 +859,7 @@ class ApiClient {
   }
 
   async createMonitorSystem(name: string) {
-    return this.request<MonitorSystemDetail>(`${API_BASE}/monitor/systems`, {
+    return this.request<CreateMonitorSystemResponse>(`${API_BASE}/monitor/systems`, {
       method: 'POST',
       body: JSON.stringify({ name }),
     })
@@ -866,7 +883,10 @@ class ApiClient {
   }
 
   async getSystemContainers(systemId: string) {
-    return this.request<ContainerStats[]>(`${API_BASE}/monitor/systems/${systemId}/containers`)
+    const response = await this.request<{containers: ContainerStats[]}>(
+      `${API_BASE}/monitor/systems/${systemId}/containers`
+    )
+    return response.containers
   }
 
   async getContainerMetrics(
@@ -950,9 +970,10 @@ export type {
   MonitorSystem,
   MonitorSystemWithMetrics,
   MonitorSystemDetail,
-  MetricDataPoint,
+  HistoricalDataPoint,
   SystemMetricsHistory,
   ContainerStats,
+  ContainerHistoricalDataPoint,
   ContainerMetricsHistory,
   SystemAlert,
 }

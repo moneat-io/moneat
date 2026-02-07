@@ -11,15 +11,28 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import mu.KotlinLogging
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
+
+/**
+ * Helper function to get organization IDs for a user from their memberships.
+ * Returns the list of organization IDs the user belongs to.
+ */
+private fun getOrganizationIdsForUser(userId: Int): List<Int> {
+    return transaction {
+        Memberships.selectAll().where { Memberships.user_id eq userId }
+            .map { it[Memberships.organization_id] }
+    }
+}
 
 fun Route.monitorRoutes() {
     val monitorService = MonitorService()
     val usageTracking = UsageTrackingService.instance
     
-    route("/api/v1/monitor") {
+    route("/v1/monitor") {
         
         /**
          * Agent-facing ingestion endpoint.
@@ -89,20 +102,25 @@ fun Route.monitorRoutes() {
         /**
          * Dashboard-facing endpoints (JWT auth required).
          */
-        authenticate("jwt") {
+        authenticate("auth-jwt") {
             
             // List all systems for organization
             get("/systems") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@get
                 }
                 
-                val systems = monitorService.listSystems(organizationId)
-                val response = systems.map { system ->
+                // Get systems from all user's organizations
+                val allSystems = organizationIds.flatMap { orgId ->
+                    monitorService.listSystems(orgId)
+                }
+                
+                val response = allSystems.map { system ->
                     SystemResponse(
                         id = system.id.toString(),
                         name = system.name,
@@ -123,12 +141,16 @@ fun Route.monitorRoutes() {
             // Create a new system
             post("/systems") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@post
                 }
+                
+                // Use the first organization for creating the system
+                val organizationId = organizationIds.first()
                 
                 // Check quota
                 if (!monitorService.checkSystemQuota(organizationId)) {
@@ -143,7 +165,7 @@ fun Route.monitorRoutes() {
                 val (system, agentKey) = monitorService.createSystem(organizationId, request.name)
                 
                 // Generate docker run command
-                val apiUrl = System.getenv("API_URL") ?: "https://api.moneat.dev"
+                val apiUrl = System.getenv("API_URL") ?: "https://api.moneat.io"
                 val dockerCommand = """
                     docker run -d --name moneat-agent \
                       --restart unless-stopped \
@@ -177,11 +199,12 @@ fun Route.monitorRoutes() {
             // Get system details
             get("/systems/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@get
                 }
                 
@@ -193,7 +216,7 @@ fun Route.monitorRoutes() {
                 }
                 
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@get
                 }
@@ -218,11 +241,12 @@ fun Route.monitorRoutes() {
             // Delete system
             delete("/systems/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@delete
                 }
                 
@@ -233,7 +257,14 @@ fun Route.monitorRoutes() {
                     return@delete
                 }
                 
-                val deleted = monitorService.deleteSystem(systemId, organizationId)
+                // Check if system belongs to any of user's organizations
+                val system = monitorService.getSystemById(systemId)
+                if (system == null || system.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    return@delete
+                }
+                
+                val deleted = monitorService.deleteSystem(systemId, system.organizationId)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@delete
@@ -245,11 +276,12 @@ fun Route.monitorRoutes() {
             // Get historical metrics with downsampling
             get("/systems/{id}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@get
                 }
                 
@@ -262,7 +294,7 @@ fun Route.monitorRoutes() {
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@get
                 }
@@ -283,11 +315,12 @@ fun Route.monitorRoutes() {
             // Get latest container stats
             get("/systems/{id}/containers") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@get
                 }
                 
@@ -300,7 +333,7 @@ fun Route.monitorRoutes() {
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@get
                 }
@@ -312,12 +345,13 @@ fun Route.monitorRoutes() {
             // Get container historical metrics
             get("/systems/{id}/containers/{name}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 val containerName = call.parameters["name"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@get
                 }
                 
@@ -335,7 +369,7 @@ fun Route.monitorRoutes() {
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@get
                 }
@@ -358,11 +392,12 @@ fun Route.monitorRoutes() {
             // List alerts for a system
             get("/systems/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@get
                 }
                 
@@ -375,7 +410,7 @@ fun Route.monitorRoutes() {
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@get
                 }
@@ -387,11 +422,12 @@ fun Route.monitorRoutes() {
             // Create an alert
             post("/systems/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@post
                 }
                 
@@ -404,25 +440,26 @@ fun Route.monitorRoutes() {
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@post
                 }
                 
                 val request = call.receive<CreateAlertRequest>()
-                val alert = monitorService.createAlert(systemId, organizationId, request)
+                val alert = monitorService.createAlert(systemId, system.organizationId, request)
                 call.respond(HttpStatusCode.Created, alert)
             }
             
             // Update an alert
             put("/systems/{systemId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["systemId"]
                 val alertIdStr = call.parameters["alertId"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@put
                 }
                 
@@ -441,13 +478,13 @@ fun Route.monitorRoutes() {
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@put
                 }
                 
                 val request = call.receive<UpdateAlertRequest>()
-                val updated = monitorService.updateAlert(alertId, systemId, organizationId, request)
+                val updated = monitorService.updateAlert(alertId, systemId, system.organizationId, request)
                 if (!updated) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
                     return@put
@@ -459,12 +496,13 @@ fun Route.monitorRoutes() {
             // Delete an alert
             delete("/systems/{systemId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["systemId"]
                 val alertIdStr = call.parameters["alertId"]
                 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
                     return@delete
                 }
                 
@@ -483,12 +521,12 @@ fun Route.monitorRoutes() {
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId != organizationId) {
+                if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
                     return@delete
                 }
                 
-                val deleted = monitorService.deleteAlert(alertId, systemId, organizationId)
+                val deleted = monitorService.deleteAlert(alertId, systemId, system.organizationId)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
                     return@delete

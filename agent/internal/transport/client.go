@@ -15,9 +15,9 @@ import (
 
 // IngestResponse is the response from the ingest endpoint
 type IngestResponse struct {
-	Success      bool  `json:"success"`
-	PollInterval int   `json:"poll_interval"` // Server-controlled interval in seconds
-	Message      string `json:"message,omitempty"`
+	Success        bool  `json:"success"`
+	IntervalSeconds int  `json:"interval_seconds"` // Server-controlled interval in seconds
+	Message        string `json:"message,omitempty"`
 }
 
 // Client handles communication with the Moneat API

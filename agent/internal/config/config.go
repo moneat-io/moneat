@@ -8,7 +8,7 @@ import (
 
 // Config holds the agent configuration
 type Config struct {
-	// API endpoint URL (e.g., https://api.moneat.dev)
+	// API endpoint URL (e.g., https://api.moneat.io)
 	MoneatURL string
 
 	// Agent authentication key (from dashboard)
@@ -31,10 +31,10 @@ func LoadFromEnv() *Config {
 	}
 
 	return &Config{
-		MoneatURL:    getEnv("MONEAT_URL", "https://api.moneat.dev"),
+		MoneatURL:    getEnv("MONEAT_URL", "https://api.moneat.io"),
 		AgentKey:     getEnv("MONEAT_KEY", ""),
 		PollInterval: pollInterval,
-		IngestPath:   "/api/v1/monitor/ingest",
+		IngestPath:   "/v1/monitor/ingest",
 	}
 }
 

@@ -1,18 +1,21 @@
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute, redirect, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
   Activity,
   ArrowLeft,
+  Box,
+  Clock,
   Cpu,
   HardDrive,
   MemoryStick,
+  Monitor,
   Network,
   Server,
   Thermometer,
@@ -68,15 +71,12 @@ function formatPercent(value: number | undefined): string {
   return `${value.toFixed(1)}%`
 }
 
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'up':
-      return 'bg-green-500'
-    case 'down':
-      return 'bg-red-500'
-    default:
-      return 'bg-yellow-500'
-  }
+function getPercentColor(value: number | undefined): string {
+  if (value === undefined) return 'text-muted-foreground'
+  if (value >= 90) return 'text-red-500'
+  if (value >= 75) return 'text-orange-500'
+  if (value >= 50) return 'text-yellow-500'
+  return 'text-emerald-500'
 }
 
 export const Route = createFileRoute('/monitoring/$systemId')({
@@ -87,6 +87,75 @@ export const Route = createFileRoute('/monitoring/$systemId')({
   },
   component: SystemDetailPage,
 })
+
+// Custom chart tooltip
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  formatter,
+}: {
+  active?: boolean
+  payload?: any[]
+  label?: string
+  formatter?: (value: number, name: string) => string
+}) {
+  if (!active || !payload?.length) return null
+
+  return (
+    <div className="bg-popover/95 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-xl">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      {payload.map((entry: any, idx: number) => (
+        <div key={idx} className="flex items-center gap-2 text-sm">
+          <div className="h-2 w-2 rounded-full" style={{backgroundColor: entry.color}} />
+          <span className="text-muted-foreground">{entry.name}:</span>
+          <span className="font-medium">
+            {formatter ? formatter(entry.value, entry.dataKey) : entry.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MetricCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  iconColor,
+  gradientFrom,
+  gradientTo,
+  borderColor,
+}: {
+  title: string
+  value: string
+  subtitle: string
+  icon: any
+  iconColor: string
+  gradientFrom: string
+  gradientTo: string
+  borderColor: string
+}) {
+  return (
+    <Card className={`relative overflow-hidden bg-gradient-to-br ${gradientFrom} ${gradientTo} ${borderColor}`}>
+      <CardContent className="pt-5 pb-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {title}
+            </p>
+            <p className="text-2xl font-bold tracking-tight">{value}</p>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+          </div>
+          <div className={`flex items-center justify-center h-12 w-12 rounded-xl ${iconColor} bg-opacity-15`}>
+            <Icon className="h-6 w-6" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 function SystemDetailPage() {
   const {systemId} = Route.useParams()
@@ -99,13 +168,14 @@ function SystemDetailPage() {
 
   const selectedRange = TIME_RANGES.find((r) => r.value === timeRange)!
   const now = new Date()
-  const from = new Date(now.getTime() - selectedRange.seconds * 1000).toISOString()
-  const to = now.toISOString()
+  const fromMs = now.getTime() - selectedRange.seconds * 1000
+  const from = Math.floor(fromMs / 1000).toString()
+  const to = Math.floor(now.getTime() / 1000).toString()
 
   const {data: metrics} = useQuery({
     queryKey: ['system-metrics', systemId, timeRange],
     queryFn: () => api.getSystemMetrics(systemId, from, to),
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: 30000,
   })
 
   const {data: containers = []} = useQuery({
@@ -117,121 +187,176 @@ function SystemDetailPage() {
   if (systemLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-muted-foreground">Loading system details...</div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-muted-foreground text-sm">Loading system details...</p>
+        </div>
       </div>
     )
   }
 
   if (!system) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-muted-foreground">System not found</div>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <Server className="h-12 w-12 text-muted-foreground" />
+        <div className="text-muted-foreground text-lg">System not found</div>
+        <Button variant="outline" asChild>
+          <Link to="/monitoring">Back to Systems</Link>
+        </Button>
       </div>
     )
   }
 
+  const memPercent =
+    system.memUsed && system.memTotal ? (system.memUsed / system.memTotal) * 100 : undefined
+  const diskPercent =
+    system.diskUsed && system.diskTotal ? (system.diskUsed / system.diskTotal) * 100 : undefined
+  const isOnline = system.status === 'up'
+
   // Transform metrics data for charts
   const cpuData =
-    metrics?.cpu.map((point) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      value: point.value,
+    metrics?.data_points.map((point) => ({
+      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      CPU: point.cpu_percent || 0,
     })) || []
 
   const memoryData =
-    metrics?.memUsed.map((point, idx) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      used: point.value,
-      total: metrics.memTotal[idx]?.value || 0,
-      usedPercent:
-        metrics.memTotal[idx]?.value
-          ? (point.value / metrics.memTotal[idx].value) * 100
-          : 0,
+    metrics?.data_points.map((point) => ({
+      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      Memory: point.mem_percent || 0,
     })) || []
 
   const diskData =
-    metrics?.diskUsed.map((point, idx) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      used: point.value,
-      total: metrics.diskTotal[idx]?.value || 0,
-      usedPercent:
-        metrics.diskTotal[idx]?.value
-          ? (point.value / metrics.diskTotal[idx].value) * 100
-          : 0,
-    })) || []
-
-  const diskIoData =
-    metrics?.diskReadBytes.map((point, idx) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      read: point.value,
-      write: metrics.diskWriteBytes[idx]?.value || 0,
+    metrics?.data_points.map((point) => ({
+      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      Disk: point.disk_percent || 0,
     })) || []
 
   const networkData =
-    metrics?.netRecvBytes.map((point, idx) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      recv: point.value,
-      sent: metrics.netSentBytes[idx]?.value || 0,
+    metrics?.data_points.map((point) => ({
+      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      Received: point.net_recv_bytes || 0,
+      Sent: point.net_sent_bytes || 0,
     })) || []
 
   const loadData =
-    metrics?.load1.map((point, idx) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      load1: point.value,
-      load5: metrics.load5[idx]?.value || 0,
-      load15: metrics.load15[idx]?.value || 0,
+    metrics?.data_points.map((point) => ({
+      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      '1 min': point.load_1 || 0,
+      '5 min': point.load_5 || 0,
+      '15 min': point.load_15 || 0,
     })) || []
 
   const temperatureData =
-    metrics?.tempMax.map((point) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      temp: point.value,
-    })) || []
+    metrics?.data_points
+      .filter((point) => point.temp_max)
+      .map((point) => ({
+        time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+        Temperature: point.temp_max!,
+      })) || []
 
   const gpuData =
-    metrics?.gpuPercent.map((point, idx) => ({
-      time: new Date(point.timestamp).toLocaleTimeString(),
-      gpu: point.value,
-      memory: metrics.gpuMemPercent[idx]?.value || 0,
-    })) || []
+    metrics?.data_points
+      .filter((point) => point.gpu_percent)
+      .map((point) => ({
+        time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+        GPU: point.gpu_percent!,
+      })) || []
+
+  const commonXAxis = {
+    dataKey: 'time',
+    tick: {fontSize: 11},
+    tickLine: false,
+    axisLine: false,
+    className: 'text-xs fill-muted-foreground',
+  }
+
+  const commonYAxis = {
+    tick: {fontSize: 11},
+    tickLine: false,
+    axisLine: false,
+    className: 'text-xs fill-muted-foreground',
+    width: 40,
+  }
+
+  const commonGrid = {
+    strokeDasharray: '3 3',
+    className: 'stroke-muted/50',
+    vertical: false,
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="border-b">
+      {/* Header */}
+      <div className="border-b bg-card/50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-2 mb-4">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => window.history.back()}
+              asChild
+              className="gap-2 text-muted-foreground hover:text-foreground"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Systems
+              <Link to="/monitoring">
+                <ArrowLeft className="h-4 w-4" />
+                Back to Systems
+              </Link>
             </Button>
           </div>
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <Server className="h-8 w-8" />
-                <div>
-                  <h1 className="text-2xl font-bold">{system.name}</h1>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${getStatusColor(system.status)}`} />
-                      <span className="capitalize">{system.status}</span>
-                    </div>
-                    {system.host && <span>{system.host}</span>}
-                    {system.os && <span>{system.os}</span>}
-                    {system.lastSeenAt && (
-                      <span>Last seen {formatRelativeTime(system.lastSeenAt)}</span>
-                    )}
-                  </div>
+              <div
+                className={`flex items-center justify-center h-12 w-12 rounded-xl ${
+                  isOnline
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                }`}
+              >
+                <Server className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">{system.name}</h1>
+                <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 flex-wrap">
+                  <Badge
+                    variant="secondary"
+                    className={`text-xs ${
+                      isOnline
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                        : 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
+                    }`}
+                  >
+                    <div
+                      className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
+                        isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                      }`}
+                    />
+                    {system.status}
+                  </Badge>
+                  {system.host && (
+                    <span className="flex items-center gap-1">
+                      <Monitor className="h-3.5 w-3.5" />
+                      {system.host}
+                    </span>
+                  )}
+                  {system.os && (
+                    <span className="flex items-center gap-1">
+                      <Box className="h-3.5 w-3.5" />
+                      {system.os}
+                    </span>
+                  )}
+                  {system.lastSeenAt && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatRelativeTime(system.lastSeenAt)}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
             <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -248,341 +373,377 @@ function SystemDetailPage() {
 
       <div className="container mx-auto px-4 py-6">
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="containers">Containers</TabsTrigger>
-            <TabsTrigger value="disk-io">Disk I/O</TabsTrigger>
-            <TabsTrigger value="network">Network</TabsTrigger>
-            <TabsTrigger value="alerts">Alerts</TabsTrigger>
+          <TabsList className="bg-muted/50">
+            <TabsTrigger value="overview" className="gap-1.5">
+              <Activity className="h-3.5 w-3.5" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="containers" className="gap-1.5">
+              <Box className="h-3.5 w-3.5" />
+              Containers
+              {containers.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                  {containers.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="network" className="gap-1.5">
+              <Network className="h-3.5 w-3.5" />
+              Network
+            </TabsTrigger>
+            <TabsTrigger value="alerts" className="gap-1.5">
+              <AlertTriangleIcon className="h-3.5 w-3.5" />
+              Alerts
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            {/* Current Stats */}
+            {/* Current Stats Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                title="CPU Usage"
+                value={formatPercent(system.cpuPercent)}
+                subtitle={`Load: ${system.load1?.toFixed(2) || 'N/A'}`}
+                icon={Cpu}
+                iconColor="text-blue-500"
+                gradientFrom="from-blue-500/5"
+                gradientTo="to-cyan-500/5"
+                borderColor="border-blue-500/10"
+              />
+              <MetricCard
+                title="Memory"
+                value={formatPercent(memPercent)}
+                subtitle={`${formatBytesShort(system.memUsed)} / ${formatBytesShort(system.memTotal)}`}
+                icon={MemoryStick}
+                iconColor="text-violet-500"
+                gradientFrom="from-violet-500/5"
+                gradientTo="to-purple-500/5"
+                borderColor="border-violet-500/10"
+              />
+              <MetricCard
+                title="Disk Usage"
+                value={formatPercent(diskPercent)}
+                subtitle={`${formatBytesShort(system.diskUsed)} / ${formatBytesShort(system.diskTotal)}`}
+                icon={HardDrive}
+                iconColor="text-amber-500"
+                gradientFrom="from-amber-500/5"
+                gradientTo="to-orange-500/5"
+                borderColor="border-amber-500/10"
+              />
+              <MetricCard
+                title="Temperature"
+                value={system.tempMax ? `${system.tempMax.toFixed(1)}°C` : 'N/A'}
+                subtitle="Max sensor temperature"
+                icon={Thermometer}
+                iconColor="text-rose-500"
+                gradientFrom="from-rose-500/5"
+                gradientTo="to-red-500/5"
+                borderColor="border-rose-500/10"
+              />
+            </div>
+
+            {/* Charts - 2 column on large screens */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* CPU Chart */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">CPU Usage</CardTitle>
-                  <Cpu className="h-4 w-4 text-muted-foreground" />
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-blue-500/10">
+                      <Cpu className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm">CPU Usage</CardTitle>
+                      <CardDescription className="text-xs">Percentage over time</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{formatPercent(system.cpuPercent)}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Load: {system.load1?.toFixed(2) || 'N/A'}
-                  </p>
+                  {cpuData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={cpuData}>
+                        <defs>
+                          <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid {...commonGrid} />
+                        <XAxis {...commonXAxis} />
+                        <YAxis {...commonYAxis} domain={[0, 100]} />
+                        <Tooltip
+                          content={
+                            <ChartTooltip
+                              formatter={(v) => `${v.toFixed(1)}%`}
+                            />
+                          }
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="CPU"
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#cpuGradient)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart />
+                  )}
                 </CardContent>
               </Card>
 
+              {/* Memory Chart */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Memory</CardTitle>
-                  <MemoryStick className="h-4 w-4 text-muted-foreground" />
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-violet-500/10">
+                      <MemoryStick className="h-4 w-4 text-violet-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm">Memory Usage</CardTitle>
+                      <CardDescription className="text-xs">Percentage over time</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {system.memUsed && system.memTotal
-                      ? formatPercent((system.memUsed / system.memTotal) * 100)
-                      : 'N/A'}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatBytesShort(system.memUsed)} / {formatBytesShort(system.memTotal)}
-                  </p>
+                  {memoryData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={memoryData}>
+                        <defs>
+                          <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid {...commonGrid} />
+                        <XAxis {...commonXAxis} />
+                        <YAxis {...commonYAxis} domain={[0, 100]} />
+                        <Tooltip
+                          content={
+                            <ChartTooltip
+                              formatter={(v) => `${v.toFixed(1)}%`}
+                            />
+                          }
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="Memory"
+                          stroke="#8b5cf6"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#memGradient)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart />
+                  )}
                 </CardContent>
               </Card>
 
+              {/* Disk Usage Chart */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Disk Usage</CardTitle>
-                  <HardDrive className="h-4 w-4 text-muted-foreground" />
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/10">
+                      <HardDrive className="h-4 w-4 text-amber-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm">Disk Usage</CardTitle>
+                      <CardDescription className="text-xs">Percentage over time</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {system.diskUsed && system.diskTotal
-                      ? formatPercent((system.diskUsed / system.diskTotal) * 100)
-                      : 'N/A'}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatBytesShort(system.diskUsed)} / {formatBytesShort(system.diskTotal)}
-                  </p>
+                  {diskData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={diskData}>
+                        <defs>
+                          <linearGradient id="diskGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid {...commonGrid} />
+                        <XAxis {...commonXAxis} />
+                        <YAxis {...commonYAxis} domain={[0, 100]} />
+                        <Tooltip
+                          content={
+                            <ChartTooltip
+                              formatter={(v) => `${v.toFixed(1)}%`}
+                            />
+                          }
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="Disk"
+                          stroke="#f59e0b"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#diskGradient)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart />
+                  )}
                 </CardContent>
               </Card>
 
+              {/* Load Average Chart */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Temperature</CardTitle>
-                  <Thermometer className="h-4 w-4 text-muted-foreground" />
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-500/10">
+                      <Activity className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm">Load Average</CardTitle>
+                      <CardDescription className="text-xs">1m, 5m, 15m averages</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {system.tempMax ? `${system.tempMax.toFixed(1)}°C` : 'N/A'}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Max sensor temp</p>
+                  {loadData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={loadData}>
+                        <CartesianGrid {...commonGrid} />
+                        <XAxis {...commonXAxis} />
+                        <YAxis {...commonYAxis} />
+                        <Tooltip
+                          content={
+                            <ChartTooltip
+                              formatter={(v) => v.toFixed(2)}
+                            />
+                          }
+                        />
+                        <Legend
+                          iconType="circle"
+                          iconSize={8}
+                          wrapperStyle={{fontSize: '12px'}}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="1 min"
+                          stroke="#ef4444"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{r: 4, strokeWidth: 0}}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="5 min"
+                          stroke="#f59e0b"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{r: 4, strokeWidth: 0}}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="15 min"
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{r: 4, strokeWidth: 0}}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart />
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* CPU Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Cpu className="h-5 w-5" />
-                  CPU Usage
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {cpuData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={cpuData}>
-                      <defs>
-                        <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" domain={[0, 100]} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number) => `${value.toFixed(1)}%`}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#3b82f6"
-                        fillOpacity={1}
-                        fill="url(#cpuGradient)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    No data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Memory Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MemoryStick className="h-5 w-5" />
-                  Memory Usage
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {memoryData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={memoryData}>
-                      <defs>
-                        <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" domain={[0, 100]} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number, name: string) => {
-                          if (name === 'usedPercent') return `${value.toFixed(1)}%`
-                          return formatBytes(value)
-                        }}
-                        labelFormatter={(label) => `Time: ${label}`}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="usedPercent"
-                        stroke="#8b5cf6"
-                        fillOpacity={1}
-                        fill="url(#memGradient)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    No data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Disk Usage Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <HardDrive className="h-5 w-5" />
-                  Disk Usage
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {diskData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={diskData}>
-                      <defs>
-                        <linearGradient id="diskGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" domain={[0, 100]} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number, name: string) => {
-                          if (name === 'usedPercent') return `${value.toFixed(1)}%`
-                          return formatBytes(value)
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="usedPercent"
-                        stroke="#f59e0b"
-                        fillOpacity={1}
-                        fill="url(#diskGradient)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    No data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Load Average Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  Load Average
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={loadData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number) => value.toFixed(2)}
-                      />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="load1"
-                        stroke="#ef4444"
-                        dot={false}
-                        name="1 min"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="load5"
-                        stroke="#f59e0b"
-                        dot={false}
-                        name="5 min"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="load15"
-                        stroke="#10b981"
-                        dot={false}
-                        name="15 min"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    No data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Temperature Chart (if available) */}
+            {/* Full-width charts for conditionally visible metrics */}
             {temperatureData.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Thermometer className="h-5 w-5" />
-                    Temperature
-                  </CardTitle>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-rose-500/10">
+                      <Thermometer className="h-4 w-4 text-rose-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm">Temperature</CardTitle>
+                      <CardDescription className="text-xs">Max sensor reading over time</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={temperatureData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" />
+                  <ResponsiveContainer width="100%" height={250}>
+                    <AreaChart data={temperatureData}>
+                      <defs>
+                        <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid {...commonGrid} />
+                      <XAxis {...commonXAxis} />
+                      <YAxis {...commonYAxis} />
                       <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number) => `${value.toFixed(1)}°C`}
+                        content={
+                          <ChartTooltip
+                            formatter={(v) => `${v.toFixed(1)}°C`}
+                          />
+                        }
                       />
-                      <Line type="monotone" dataKey="temp" stroke="#ef4444" dot={false} />
-                    </LineChart>
+                      <Area
+                        type="monotone"
+                        dataKey="Temperature"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#tempGradient)"
+                      />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             )}
 
-            {/* GPU Chart (if available) */}
-            {gpuData.length > 0 && gpuData.some((d) => d.gpu > 0 || d.memory > 0) && (
+            {gpuData.length > 0 && gpuData.some((d) => d.GPU > 0) && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Cpu className="h-5 w-5" />
-                    GPU Usage
-                  </CardTitle>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-teal-500/10">
+                      <Cpu className="h-4 w-4 text-teal-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm">GPU Usage</CardTitle>
+                      <CardDescription className="text-xs">GPU utilization over time</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={gpuData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" domain={[0, 100]} />
+                  <ResponsiveContainer width="100%" height={250}>
+                    <AreaChart data={gpuData}>
+                      <defs>
+                        <linearGradient id="gpuGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid {...commonGrid} />
+                      <XAxis {...commonXAxis} />
+                      <YAxis {...commonYAxis} domain={[0, 100]} />
                       <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number) => `${value.toFixed(1)}%`}
+                        content={
+                          <ChartTooltip
+                            formatter={(v) => `${v.toFixed(1)}%`}
+                          />
+                        }
                       />
-                      <Legend />
-                      <Line
+                      <Area
                         type="monotone"
-                        dataKey="gpu"
-                        stroke="#10b981"
-                        dot={false}
-                        name="GPU"
+                        dataKey="GPU"
+                        stroke="#14b8a6"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#gpuGradient)"
                       />
-                      <Line
-                        type="monotone"
-                        dataKey="memory"
-                        stroke="#8b5cf6"
-                        dot={false}
-                        name="Memory"
-                      />
-                    </LineChart>
+                    </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
@@ -591,154 +752,177 @@ function SystemDetailPage() {
 
           <TabsContent value="containers" className="space-y-6">
             {containers.length > 0 ? (
-              <div className="space-y-4">
-                {containers.map((container) => (
-                  <Card key={container.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">{container.name}</CardTitle>
-                        <Badge
-                          variant={
-                            container.status === 'running' ? 'default' : 'secondary'
-                          }
-                        >
-                          {container.status}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{container.image}</p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <div className="text-sm text-muted-foreground">CPU</div>
-                          <div className="text-lg font-semibold">
-                            {formatPercent(container.cpuPercent)}
+              <div className="grid gap-4 md:grid-cols-2">
+                {containers.map((container) => {
+                  const isRunning = container.status === 'running'
+
+                  return (
+                    <Card
+                      key={container.id}
+                      className={`relative overflow-hidden ${
+                        isRunning ? 'border-emerald-500/10' : 'border-muted'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0 left-0 right-0 h-0.5 ${
+                          isRunning
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                            : 'bg-gradient-to-r from-zinc-400 to-zinc-500'
+                        }`}
+                      />
+                      <CardHeader className="pb-3 pt-5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`flex items-center justify-center h-8 w-8 rounded-lg shrink-0 ${
+                                isRunning
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              <Box className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <CardTitle className="text-sm truncate">{container.name}</CardTitle>
+                              <p className="text-xs text-muted-foreground truncate">{container.image}</p>
+                            </div>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className={`text-xs shrink-0 ${
+                              isRunning
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                                : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
+                            }`}
+                          >
+                            {container.status}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <Cpu className="h-3 w-3 text-blue-500" />
+                              <span className="text-xs text-muted-foreground">CPU</span>
+                            </div>
+                            <p className={`text-lg font-semibold ${getPercentColor(container.cpuPercent)}`}>
+                              {formatPercent(container.cpuPercent)}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <MemoryStick className="h-3 w-3 text-violet-500" />
+                              <span className="text-xs text-muted-foreground">Memory</span>
+                            </div>
+                            <p className="text-lg font-semibold">
+                              {formatBytesShort(container.memUsed)}
+                              <span className="text-xs text-muted-foreground font-normal ml-1">
+                                / {formatBytesShort(container.memLimit)}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <Network className="h-3 w-3 text-sky-500" />
+                              <span className="text-xs text-muted-foreground">Net In</span>
+                            </div>
+                            <p className="text-lg font-semibold">
+                              {formatBytesShort(container.netRecvBytes)}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <Network className="h-3 w-3 text-indigo-500 rotate-180" />
+                              <span className="text-xs text-muted-foreground">Net Out</span>
+                            </div>
+                            <p className="text-lg font-semibold">
+                              {formatBytesShort(container.netSentBytes)}
+                            </p>
                           </div>
                         </div>
-                        <div>
-                          <div className="text-sm text-muted-foreground">Memory</div>
-                          <div className="text-lg font-semibold">
-                            {formatBytesShort(container.memUsed)} /{' '}
-                            {formatBytesShort(container.memLimit)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-muted-foreground">Network In</div>
-                          <div className="text-lg font-semibold">
-                            {formatBytesShort(container.netRecvBytes)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-muted-foreground">Network Out</div>
-                          <div className="text-lg font-semibold">
-                            {formatBytesShort(container.netSentBytes)}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             ) : (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  No containers detected on this system
+              <Card className="border-dashed">
+                <CardContent className="py-16 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
+                    <Box className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-medium mb-1">No containers detected</h3>
+                  <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                    Make sure the Docker socket is mounted and the agent has read access to it.
+                  </p>
                 </CardContent>
               </Card>
             )}
           </TabsContent>
 
-          <TabsContent value="disk-io" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <HardDrive className="h-5 w-5" />
-                  Disk I/O
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {diskIoData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={diskIoData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number) => formatBytes(value)}
-                      />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="read"
-                        stroke="#3b82f6"
-                        dot={false}
-                        name="Read"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="write"
-                        stroke="#10b981"
-                        dot={false}
-                        name="Write"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[400px] flex items-center justify-center text-muted-foreground">
-                    No data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="network" className="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Network className="h-5 w-5" />
-                  Network Throughput
-                </CardTitle>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-indigo-500/10">
+                    <Network className="h-4 w-4 text-indigo-500" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm">Network Throughput</CardTitle>
+                    <CardDescription className="text-xs">Bytes sent and received over time</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {networkData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={networkData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="time" className="text-xs" />
-                      <YAxis className="text-xs" />
+                    <AreaChart data={networkData}>
+                      <defs>
+                        <linearGradient id="netRecvGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="netSentGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid {...commonGrid} />
+                      <XAxis {...commonXAxis} />
+                      <YAxis {...commonYAxis} />
                       <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                        }}
-                        formatter={(value: number) => formatBytes(value)}
+                        content={
+                          <ChartTooltip
+                            formatter={(v) => formatBytes(v)}
+                          />
+                        }
                       />
-                      <Legend />
-                      <Line
+                      <Legend
+                        iconType="circle"
+                        iconSize={8}
+                        wrapperStyle={{fontSize: '12px'}}
+                      />
+                      <Area
                         type="monotone"
-                        dataKey="recv"
+                        dataKey="Received"
                         stroke="#8b5cf6"
-                        dot={false}
-                        name="Received"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#netRecvGradient)"
                       />
-                      <Line
+                      <Area
                         type="monotone"
-                        dataKey="sent"
+                        dataKey="Sent"
                         stroke="#f59e0b"
-                        dot={false}
-                        name="Sent"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#netSentGradient)"
                       />
-                    </LineChart>
+                    </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-[400px] flex items-center justify-center text-muted-foreground">
-                    No data available
-                  </div>
+                  <EmptyChart height={400} />
                 )}
               </CardContent>
             </Card>
@@ -750,5 +934,38 @@ function SystemDetailPage() {
         </Tabs>
       </div>
     </div>
+  )
+}
+
+function EmptyChart({height = 250}: {height?: number}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center text-muted-foreground gap-2"
+      style={{height}}
+    >
+      <Activity className="h-8 w-8 opacity-30" />
+      <p className="text-sm">No data available</p>
+    </div>
+  )
+}
+
+function AlertTriangleIcon(props: any) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
   )
 }
