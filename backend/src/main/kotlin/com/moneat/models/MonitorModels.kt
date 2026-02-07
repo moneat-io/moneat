@@ -1,6 +1,7 @@
 package com.moneat.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import java.util.*
 
 // Agent-facing models
@@ -158,14 +159,14 @@ data class ContainerMetricDataPoint(
 @Serializable
 data class AlertResponse(
     val id: Int,
-    val system_id: String,
+    @SerialName("system_id") val systemId: String,
     val metric: String,
     val condition: String,
     val threshold: Double,
-    val duration_seconds: Int,
+    @SerialName("duration_seconds") val durationSeconds: Int,
     val enabled: Boolean,
-    val last_triggered_at: Long?,
-    val created_at: Long
+    @SerialName("last_triggered_at") val lastTriggeredAt: Long?,
+    @SerialName("created_at") val createdAt: Long
 )
 
 @Serializable
@@ -173,7 +174,7 @@ data class CreateAlertRequest(
     val metric: String,
     val condition: String,
     val threshold: Double,
-    val duration_seconds: Int = 0,
+    @SerialName("duration_seconds") val durationSeconds: Int = 0,
     val enabled: Boolean = true
 )
 
@@ -182,7 +183,7 @@ data class UpdateAlertRequest(
     val metric: String? = null,
     val condition: String? = null,
     val threshold: Double? = null,
-    val duration_seconds: Int? = null,
+    @SerialName("duration_seconds") val durationSeconds: Int? = null,
     val enabled: Boolean? = null
 )
 

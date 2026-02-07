@@ -30,6 +30,7 @@ import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
+import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
@@ -145,6 +146,11 @@ const PerformanceTransactionIdRoute =
     path: '/$transactionId',
     getParentRoute: () => PerformanceRoute,
   } as any)
+const MonitoringSystemIdRoute = MonitoringSystemIdRouteImport.update({
+  id: '/monitoring/$systemId',
+  path: '/monitoring/$systemId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IssuesIssueIdRoute = IssuesIssueIdRouteImport.update({
   id: '/issues/$issueId',
   path: '/issues/$issueId',
@@ -209,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
@@ -238,6 +245,7 @@ export interface FileRoutesByTo {
   '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
@@ -270,6 +278,7 @@ export interface FileRoutesById {
   '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
+    | '/monitoring/$systemId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
@@ -332,6 +342,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
+    | '/monitoring/$systemId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
@@ -363,6 +374,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
+    | '/monitoring/$systemId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
@@ -389,6 +401,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
+  MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -539,6 +552,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/performance/$transactionId'
       preLoaderRoute: typeof PerformanceTransactionIdRouteImport
       parentRoute: typeof PerformanceRoute
+    }
+    '/monitoring/$systemId': {
+      id: '/monitoring/$systemId'
+      path: '/monitoring/$systemId'
+      fullPath: '/monitoring/$systemId'
+      preLoaderRoute: typeof MonitoringSystemIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/issues/$issueId': {
       id: '/issues/$issueId'
@@ -708,6 +728,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   IssuesIssueIdRoute: IssuesIssueIdRoute,
+  MonitoringSystemIdRoute: MonitoringSystemIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

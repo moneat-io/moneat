@@ -25,7 +25,7 @@ fun Application.configureMonitoring() {
                     scope.setTag("http.method", call.request.httpMethod.value)
                     scope.setTag("http.path", call.request.path())
                     scope.setExtra("user_agent", call.request.headers["User-Agent"] ?: "unknown")
-                    scope.setExtra("remote_host", call.request.origin.remoteHost)
+                    scope.setExtra("remote_host", call.request.local.remoteHost)
                 }
             }
             

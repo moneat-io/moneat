@@ -11,6 +11,7 @@ A Sentry-compatible error monitoring platform built with Kotlin/Ktor, focused on
 - ✅ ClickHouse for high-performance event analytics
 - ✅ JWT-based authentication
 - ✅ Multi-project support
+- ✅ Self-monitoring with Sentry integration (optional)
 - 🚧 React dashboard (coming soon)
 - 🚧 Kotlin Multiplatform SDK (coming soon)
 
@@ -231,7 +232,13 @@ JWT_SECRET=your-secret-key
 
 # Server
 PORT=8080
+
+# Sentry (optional - for self-monitoring)
+SENTRY_DSN=  # Use http://PUBLIC_KEY@localhost:8080/api/PROJECT_ID or see docs/SENTRY_SETUP.md
+SENTRY_ENVIRONMENT=production
 ```
+
+For self-monitoring setup (using Moneat to monitor itself!), see [docs/SENTRY_SETUP.md](docs/SENTRY_SETUP.md).
 
 ## Roadmap
 

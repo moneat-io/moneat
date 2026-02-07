@@ -280,6 +280,96 @@ interface AuthToken {
   createdAt: string
 }
 
+// Monitoring types
+interface MonitorSystem {
+  id: string
+  name: string
+  host?: string
+  status: 'up' | 'down' | 'pending'
+  lastSeenAt?: string
+  agentVersion?: string
+  os?: string
+  arch?: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface MonitorSystemWithMetrics extends MonitorSystem {
+  cpuPercent?: number
+  memTotal?: number
+  memUsed?: number
+  memAvailable?: number
+  diskTotal?: number
+  diskUsed?: number
+  load1?: number
+  load5?: number
+  load15?: number
+  netRecvBytes?: number
+  netSentBytes?: number
+  tempMax?: number
+  gpuPercent?: number
+  batteryPercent?: number
+}
+
+interface MonitorSystemDetail extends MonitorSystemWithMetrics {
+  agentKey?: string
+}
+
+interface MetricDataPoint {
+  timestamp: string
+  value: number
+}
+
+interface SystemMetricsHistory {
+  cpu: MetricDataPoint[]
+  memUsed: MetricDataPoint[]
+  memTotal: MetricDataPoint[]
+  diskUsed: MetricDataPoint[]
+  diskTotal: MetricDataPoint[]
+  diskReadBytes: MetricDataPoint[]
+  diskWriteBytes: MetricDataPoint[]
+  netRecvBytes: MetricDataPoint[]
+  netSentBytes: MetricDataPoint[]
+  load1: MetricDataPoint[]
+  load5: MetricDataPoint[]
+  load15: MetricDataPoint[]
+  tempMax: MetricDataPoint[]
+  gpuPercent: MetricDataPoint[]
+  gpuMemPercent: MetricDataPoint[]
+  batteryPercent: MetricDataPoint[]
+}
+
+interface ContainerStats {
+  name: string
+  id: string
+  image: string
+  status: string
+  cpuPercent?: number
+  memUsed?: number
+  memLimit?: number
+  netRecvBytes?: number
+  netSentBytes?: number
+}
+
+interface ContainerMetricsHistory {
+  cpu: MetricDataPoint[]
+  memUsed: MetricDataPoint[]
+  memLimit: MetricDataPoint[]
+  netRecvBytes: MetricDataPoint[]
+  netSentBytes: MetricDataPoint[]
+}
+
+interface SystemAlert {
+  id: number
+  metric: string
+  condition: string
+  threshold: number
+  durationSeconds: number
+  enabled: boolean
+  lastTriggeredAt?: string
+  createdAt: string
+}
+
 class ApiClient {
   private authRedirectInProgress = false
 
@@ -741,6 +831,92 @@ class ApiClient {
       method: 'DELETE',
     })
   }
+
+  // Monitoring API
+  async getMonitorSystems() {
+    return this.request<MonitorSystemWithMetrics[]>(`${API_BASE}/monitor/systems`)
+  }
+
+  async getMonitorSystem(systemId: string) {
+    return this.request<MonitorSystemDetail>(`${API_BASE}/monitor/systems/${systemId}`)
+  }
+
+  async createMonitorSystem(name: string) {
+    return this.request<MonitorSystemDetail>(`${API_BASE}/monitor/systems`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async deleteMonitorSystem(systemId: string) {
+    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getSystemMetrics(systemId: string, from?: string, to?: string, interval?: string) {
+    const params = new URLSearchParams()
+    if (from) params.append('from', from)
+    if (to) params.append('to', to)
+    if (interval) params.append('interval', interval)
+    const query = params.toString()
+    return this.request<SystemMetricsHistory>(
+      `${API_BASE}/monitor/systems/${systemId}/metrics${query ? `?${query}` : ''}`
+    )
+  }
+
+  async getSystemContainers(systemId: string) {
+    return this.request<ContainerStats[]>(`${API_BASE}/monitor/systems/${systemId}/containers`)
+  }
+
+  async getContainerMetrics(
+    systemId: string,
+    containerName: string,
+    from?: string,
+    to?: string,
+    interval?: string
+  ) {
+    const params = new URLSearchParams()
+    if (from) params.append('from', from)
+    if (to) params.append('to', to)
+    if (interval) params.append('interval', interval)
+    const query = params.toString()
+    return this.request<ContainerMetricsHistory>(
+      `${API_BASE}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics${query ? `?${query}` : ''}`
+    )
+  }
+
+  async getSystemAlerts(systemId: string) {
+    return this.request<SystemAlert[]>(`${API_BASE}/monitor/systems/${systemId}/alerts`)
+  }
+
+  async createSystemAlert(
+    systemId: string,
+    alert: {
+      metric: string
+      condition: string
+      threshold: number
+      durationSeconds?: number
+    }
+  ) {
+    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts`, {
+      method: 'POST',
+      body: JSON.stringify(alert),
+    })
+  }
+
+  async updateSystemAlert(systemId: string, alertId: number, updates: Partial<SystemAlert>) {
+    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  }
+
+  async deleteSystemAlert(systemId: string, alertId: number) {
+    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}`, {
+      method: 'DELETE',
+    })
+  }
 }
 
 export const api = new ApiClient()
@@ -771,4 +947,12 @@ export type {
   NotificationPreference,
   ProjectNotificationPreference,
   NotificationPreferences,
+  MonitorSystem,
+  MonitorSystemWithMetrics,
+  MonitorSystemDetail,
+  MetricDataPoint,
+  SystemMetricsHistory,
+  ContainerStats,
+  ContainerMetricsHistory,
+  SystemAlert,
 }

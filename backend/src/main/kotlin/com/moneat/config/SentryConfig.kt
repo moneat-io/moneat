@@ -28,7 +28,7 @@ object SentryConfig {
             options.serverName = System.getenv("HOSTNAME") ?: "moneat-backend"
             
             // Enable performance monitoring for database queries
-            options.isEnableTracing = true
+            options.enableTracing = true
             
             // Add custom tags
             options.setTag("service", "moneat-backend")

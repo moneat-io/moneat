@@ -100,7 +100,7 @@ class EmailService {
         sendEmail(email, subject, htmlBody, textBody, "password_reset")
     }
     
-    private fun sendEmail(to: String, subject: String, htmlBody: String, textBody: String, emailType: String = "other") {
+    fun sendEmail(to: String, subject: String, htmlBody: String, textBody: String, emailType: String = "other") {
         val mailSession = session
         if (mailSession == null) {
             logger.warn { "Email service not configured. Would send to $to: $subject" }

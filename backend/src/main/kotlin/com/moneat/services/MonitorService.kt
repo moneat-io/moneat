@@ -566,14 +566,14 @@ class MonitorService {
                 .map { row ->
                     AlertResponse(
                         id = row[SystemAlerts.id],
-                        system_id = row[SystemAlerts.system_id].toString(),
+                        systemId = row[SystemAlerts.system_id].toString(),
                         metric = row[SystemAlerts.metric],
                         condition = row[SystemAlerts.condition],
                         threshold = row[SystemAlerts.threshold],
-                        duration_seconds = row[SystemAlerts.duration_seconds],
+                        durationSeconds = row[SystemAlerts.duration_seconds],
                         enabled = row[SystemAlerts.enabled],
-                        last_triggered_at = row[SystemAlerts.last_triggered_at]?.toEpochMilliseconds(),
-                        created_at = row[SystemAlerts.created_at].toEpochMilliseconds()
+                        lastTriggeredAt = row[SystemAlerts.last_triggered_at]?.toEpochMilliseconds(),
+                        createdAt = row[SystemAlerts.created_at].toEpochMilliseconds()
                     )
                 }
         }
@@ -592,7 +592,7 @@ class MonitorService {
                 it[metric] = request.metric
                 it[condition] = request.condition
                 it[threshold] = request.threshold
-                it[duration_seconds] = request.duration_seconds
+                it[duration_seconds] = request.durationSeconds
                 it[enabled] = request.enabled
                 it[last_triggered_at] = null
                 it[created_at] = now
@@ -601,14 +601,14 @@ class MonitorService {
         
         return AlertResponse(
             id = alertId,
-            system_id = systemId.toString(),
+            systemId = systemId.toString(),
             metric = request.metric,
             condition = request.condition,
             threshold = request.threshold,
-            duration_seconds = request.duration_seconds,
+            durationSeconds = request.durationSeconds,
             enabled = request.enabled,
-            last_triggered_at = null,
-            created_at = now.toEpochMilliseconds()
+            lastTriggeredAt = null,
+            createdAt = now.toEpochMilliseconds()
         )
     }
     
@@ -630,7 +630,7 @@ class MonitorService {
                 request.metric?.let { metric -> it[SystemAlerts.metric] = metric }
                 request.condition?.let { cond -> it[condition] = cond }
                 request.threshold?.let { thresh -> it[threshold] = thresh }
-                request.duration_seconds?.let { dur -> it[duration_seconds] = dur }
+                request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
                 request.enabled?.let { en -> it[enabled] = en }
             }
             count > 0

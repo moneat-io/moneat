@@ -22,4 +22,5 @@ fun Application.module() {
     configureMonitoring()
     configureRouting()
     configureDatabases()
+    configureBackgroundJobs()
 }
