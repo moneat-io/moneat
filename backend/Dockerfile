@@ -1,10 +1,13 @@
+# syntax=docker/dockerfile:1.7
 FROM gradle:8-jdk17 AS build
 WORKDIR /app
 COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 COPY gradle ./gradle
-RUN gradle dependencies --no-daemon || true
+RUN --mount=type=cache,target=/home/gradle/.gradle \
+    gradle dependencies --no-daemon --build-cache || true
 COPY src ./src
-RUN gradle shadowJar --no-daemon
+RUN --mount=type=cache,target=/home/gradle/.gradle \
+    gradle shadowJar --no-daemon --build-cache
 
 FROM eclipse-temurin:17-jre-alpine
 RUN addgroup -S moneat && adduser -S moneat -G moneat

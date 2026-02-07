@@ -15,6 +15,10 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [backend, dashboard]
     permissions:
       contents: read
       packages: write
@@ -32,27 +36,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push backend
+      - name: Build and push ${{ matrix.component }}
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: ./${{ matrix.component }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-backend:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push dashboard
-        uses: docker/build-push-action@v5
-        with:
-          context: ./dashboard
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-dashboard:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-dashboard:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-${{ matrix.component }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-${{ matrix.component }}:latest
+          cache-from: type=gha,scope=moneat-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=moneat-${{ matrix.component }}
+          provenance: false
 
   deploy:
     needs: build-and-push
@@ -68,8 +62,8 @@ jobs:
           script: |
             set -e
             cd /opt/moneat
-            git fetch origin
-            git checkout ${{ github.sha }}
+            git fetch --depth=1 origin ${{ github.sha }}
+            git checkout --detach ${{ github.sha }}
             export IMAGE_TAG=${{ github.sha }}
             export BACKEND_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-backend
             export DASHBOARD_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-dashboard
