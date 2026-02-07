@@ -110,19 +110,32 @@ mv "$TEMP_UPSTREAM" "$UPSTREAM_CONF" || {
   sudo chown deploy:deploy "$UPSTREAM_CONF" 2>/dev/null || true
 }
 
-# 8. Reload nginx
+# 8. Wait for nginx to be stable (not restarting)
+echo "Waiting for nginx to be stable..."
+for i in {1..15}; do
+  if docker exec moneat-nginx nginx -t 2>&1 >/dev/null; then
+    echo "Nginx is stable"
+    break
+  fi
+  if [[ $i -eq 15 ]]; then
+    echo "WARNING: nginx still unstable after 30s, attempting reload anyway"
+  fi
+  sleep 2
+done
+
+# 9. Reload nginx
 docker exec moneat-nginx nginx -s reload
 
-# 9. Stop old slot
+# 10. Stop old slot
 docker compose -f "$COMPOSE_FILE" stop backend-$ACTIVE dashboard-$ACTIVE
 
-# 10. Record new active slot
+# 11. Record new active slot
 echo -n "$INACTIVE" > "$ACTIVE_SLOT_FILE"
 
-# 11. Safe prune: images only, never volumes
+# 12. Safe prune: images only, never volumes
 docker image prune -f --filter "until=24h" || true
 
-# 12. Assert database volumes still exist
+# 13. Assert database volumes still exist
 for vol in moneat_postgres_data moneat_clickhouse_data; do
   if ! docker volume inspect "$vol" &>/dev/null; then
     echo "ERROR: Volume $vol is missing. Never run 'docker system prune --volumes' or 'docker volume prune' on production."
