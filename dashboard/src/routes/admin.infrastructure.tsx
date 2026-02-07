@@ -1,8 +1,25 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Server, AlertTriangle } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { AlertTriangle, Database, Rows3 } from 'lucide-react'
+import {
+  MetricCard,
+  StorageRing,
+  SectionHeader,
+  AdminSkeleton,
+  EmptyState,
+  formatBytes,
+  formatNumber,
+} from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/infrastructure')({
   component: AdminInfrastructurePage,
@@ -15,87 +32,136 @@ function AdminInfrastructurePage() {
   })
 
   if (isLoading || !data) {
-    return <div className="p-8 text-center">Loading infrastructure data...</div>
+    return <AdminSkeleton />
   }
 
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Infrastructure</h2>
+  const storageColor =
+    data.storageUsedPercent >= 90
+      ? 'text-red-600 dark:text-red-400'
+      : data.storageUsedPercent >= 70
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-emerald-600 dark:text-emerald-400'
 
+  // Find the largest table for relative bar sizing
+  const maxTableBytes = Math.max(...data.clickhouseTables.map((t) => t.bytesOnDisk), 1)
+
+  return (
+    <div className="space-y-8">
+      <SectionHeader
+        title="Infrastructure"
+        description="ClickHouse storage health and table-level metrics."
+      />
+
+      {/* Scaling Alerts */}
       {data.scalingTriggerAlerts.length > 0 && (
-        <Card className="border-destructive bg-destructive/10">
+        <Card className="border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/30">
           <CardContent className="pt-6">
-            <div className="flex gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0" />
-              <ul className="list-disc list-inside text-sm text-destructive">
-                {data.scalingTriggerAlerts.map((msg, i) => (
-                  <li key={i}>{msg}</li>
-                ))}
-              </ul>
+            <div className="flex gap-3">
+              <div className="rounded-lg bg-red-100 dark:bg-red-950 p-2 h-fit">
+                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">
+                  Scaling Alerts
+                </p>
+                <ul className="space-y-1">
+                  {data.scalingTriggerAlerts.map((msg, i) => (
+                    <li key={i} className="text-sm text-red-600 dark:text-red-400 flex items-start gap-1.5">
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                      {msg}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Storage - special card with ring */}
+        <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Storage Used</CardTitle>
-            <Server className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.storageUsedPercent.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {(data.totalDiskBytes / 1024 / 1024 / 1024).toFixed(2)} GB
-            </p>
+            <div className="flex items-center gap-4">
+              <StorageRing percent={data.storageUsedPercent} size={72} />
+              <div>
+                <div className={`text-2xl font-bold tracking-tight ${storageColor}`}>
+                  {data.storageUsedPercent.toFixed(1)}%
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatBytes(data.totalDiskBytes)} total
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Rows</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.totalRows.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Tables</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.clickhouseTables.length}</div>
-          </CardContent>
-        </Card>
+
+        <MetricCard
+          title="Total Rows"
+          value={formatNumber(data.totalRows)}
+          subtitle="across all tables"
+          icon={Rows3}
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-100 dark:bg-blue-950"
+        />
+        <MetricCard
+          title="ClickHouse Tables"
+          value={data.clickhouseTables.length}
+          subtitle="active tables"
+          icon={Database}
+          iconColor="text-violet-600 dark:text-violet-400"
+          iconBg="bg-violet-100 dark:bg-violet-950"
+        />
       </div>
 
+      {/* Table Sizes */}
       <Card>
         <CardHeader>
-          <CardTitle>ClickHouse Table Sizes</CardTitle>
+          <CardTitle className="text-base">Table Sizes</CardTitle>
+          <CardDescription>ClickHouse table storage breakdown with relative sizing</CardDescription>
         </CardHeader>
         <CardContent>
           {data.clickhouseTables.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 font-medium">Table</th>
-                    <th className="text-right py-2 font-medium">Rows</th>
-                    <th className="text-right py-2 font-medium">Size on Disk</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.clickhouseTables.map((t) => (
-                    <tr key={t.table} className="border-b last:border-0">
-                      <td className="py-2 font-mono">{t.table}</td>
-                      <td className="py-2 text-right">{t.rows.toLocaleString()}</td>
-                      <td className="py-2 text-right">{t.bytesOnDiskFormatted}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[280px]">Table</TableHead>
+                  <TableHead className="text-right">Rows</TableHead>
+                  <TableHead className="text-right w-[120px]">Size on Disk</TableHead>
+                  <TableHead className="w-[200px]">Relative Size</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...data.clickhouseTables]
+                  .sort((a, b) => b.bytesOnDisk - a.bytesOnDisk)
+                  .map((t) => {
+                    const pct = (t.bytesOnDisk / maxTableBytes) * 100
+                    return (
+                      <TableRow key={t.table}>
+                        <TableCell className="font-mono text-xs">{t.table}</TableCell>
+                        <TableCell className="text-right tabular-nums">{t.rows.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">
+                          {t.bytesOnDiskFormatted}
+                        </TableCell>
+                        <TableCell>
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-blue-500/70 transition-all duration-500"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+              </TableBody>
+            </Table>
           ) : (
-            <p className="text-muted-foreground text-center py-8">No table data</p>
+            <EmptyState message="No table data" icon={Database} />
           )}
         </CardContent>
       </Card>
