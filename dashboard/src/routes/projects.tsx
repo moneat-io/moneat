@@ -10,6 +10,72 @@ import {useState} from 'react'
 import {getProjectColor, getProjectInitial} from '@/lib/project-colors'
 import {useProject} from '@/contexts/project-context'
 
+const platformAliases: Record<string, string> = {
+  kotlin: 'kmp',
+  'kotlin-multiplatform': 'kmp',
+  kotlinmultiplatform: 'kmp',
+  javascript: 'web',
+  js: 'web',
+  typescript: 'web',
+  ts: 'web',
+  reactnative: 'react-native',
+  react_native: 'react-native',
+  spring: 'spring-boot',
+  springboot: 'spring-boot',
+  'spring-boot': 'spring-boot',
+  csharp: 'dotnet',
+  'c#': 'dotnet',
+  aspnet: 'dotnet',
+  'asp.net': 'dotnet',
+  aspnetcore: 'dotnet',
+  'asp.netcore': 'dotnet',
+  golang: 'go',
+  rb: 'ruby',
+  ror: 'rails',
+  py: 'python',
+  next: 'nextjs',
+  'next.js': 'nextjs',
+  nuxtjs: 'nuxt',
+  'nuxt.js': 'nuxt',
+  solidstart: 'solid',
+  'solid-start': 'solid',
+  'unreal-engine': 'unreal',
+  'godot-engine': 'godot',
+  c: 'native',
+  cpp: 'native',
+  'c++': 'native',
+}
+
+function createMonogramIcon(label: string): React.ComponentType<{ className?: string }> {
+  return ({ className }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
+      <text
+        x="12"
+        y="15"
+        fill="currentColor"
+        textAnchor="middle"
+        fontSize="7"
+        fontWeight="700"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >
+        {label}
+      </text>
+    </svg>
+  )
+}
+
+type PlatformCategory = 'mobile' | 'frontend' | 'backend' | 'desktop' | 'gaming'
+type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
+
+const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'mobile', label: 'Mobile' },
+  { id: 'frontend', label: 'Frontend' },
+  { id: 'backend', label: 'Backend' },
+  { id: 'desktop-gaming', label: 'Desktop & Gaming' },
+]
+
 // Helper function to get platform info (with fallbacks for different naming conventions)
 export function getPlatformInfo(platformId?: string) {
   if (!platformId) return null
@@ -23,18 +89,8 @@ export function getPlatformInfo(platformId?: string) {
   platform = platforms.find(p => p.id.toLowerCase() === lowerPlatform)
   if (platform) return platform
   
-  // Common aliases
-  const aliases: Record<string, string> = {
-    'kotlin': 'kmp',
-    'kotlin-multiplatform': 'kmp',
-    'kotlinmultiplatform': 'kmp',
-    'javascript': 'web',
-    'js': 'web',
-    'typescript': 'web',
-    'ts': 'web',
-  }
-  
-  const aliasMatch = aliases[lowerPlatform]
+  const normalizedPlatform = lowerPlatform.replace(/_/g, '-')
+  const aliasMatch = platformAliases[lowerPlatform] ?? platformAliases[normalizedPlatform]
   if (aliasMatch) {
     return platforms.find(p => p.id === aliasMatch) || null
   }
@@ -49,7 +105,8 @@ export type PlatformType = {
   description: string
   icon: React.ComponentType<{ className?: string }>
   color: string
-  category: 'mobile' | 'web' | 'multiplatform'
+  category: PlatformCategory
+  alwaysVisible?: boolean
 }
 
 // Platform configurations with custom SVG icons
@@ -88,7 +145,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#9333ea',
-    category: 'multiplatform'
+    category: 'mobile'
   },
   {
     id: 'react-native',
@@ -100,7 +157,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#06b6d4',
-    category: 'multiplatform'
+    category: 'mobile'
   },
   {
     id: 'flutter',
@@ -112,7 +169,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#3b82f6',
-    category: 'multiplatform'
+    category: 'mobile'
   },
   {
     id: 'web',
@@ -120,7 +177,7 @@ export const platforms: PlatformType[] = [
     description: 'Browser-based applications',
     icon: Globe,
     color: '#eab308',
-    category: 'web'
+    category: 'frontend'
   },
   {
     id: 'react',
@@ -132,7 +189,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#22d3ee',
-    category: 'web'
+    category: 'frontend'
   },
   {
     id: 'vue',
@@ -145,7 +202,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#10b981',
-    category: 'web'
+    category: 'frontend'
   },
   {
     id: 'node',
@@ -153,7 +210,7 @@ export const platforms: PlatformType[] = [
     description: 'Server-side JavaScript',
     icon: Terminal,
     color: '#16a34a',
-    category: 'web'
+    category: 'backend'
   },
   {
     id: 'python',
@@ -166,7 +223,207 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#2563eb',
-    category: 'web'
+    category: 'backend'
+  },
+  {
+    id: 'java',
+    name: 'Java',
+    description: 'Java services and applications',
+    icon: createMonogramIcon('J'),
+    color: '#f89820',
+    category: 'backend'
+  },
+  {
+    id: 'spring-boot',
+    name: 'Spring Boot',
+    description: 'Java applications with Spring Boot',
+    icon: createMonogramIcon('SB'),
+    color: '#6db33f',
+    category: 'backend'
+  },
+  {
+    id: 'dotnet',
+    name: '.NET / C#',
+    description: 'ASP.NET and .NET applications',
+    icon: createMonogramIcon('.N'),
+    color: '#512bd4',
+    category: 'backend'
+  },
+  {
+    id: 'go',
+    name: 'Go',
+    description: 'Go backend services',
+    icon: createMonogramIcon('Go'),
+    color: '#00add8',
+    category: 'backend'
+  },
+  {
+    id: 'ruby',
+    name: 'Ruby',
+    description: 'Ruby applications',
+    icon: createMonogramIcon('Rb'),
+    color: '#cc342d',
+    category: 'backend'
+  },
+  {
+    id: 'rails',
+    name: 'Ruby on Rails',
+    description: 'Rails web applications',
+    icon: createMonogramIcon('RoR'),
+    color: '#d30001',
+    category: 'backend'
+  },
+  {
+    id: 'php',
+    name: 'PHP',
+    description: 'PHP backend applications',
+    icon: createMonogramIcon('PHP'),
+    color: '#777bb4',
+    category: 'backend'
+  },
+  {
+    id: 'laravel',
+    name: 'Laravel',
+    description: 'Laravel PHP applications',
+    icon: createMonogramIcon('Lv'),
+    color: '#ff2d20',
+    category: 'backend'
+  },
+  {
+    id: 'rust',
+    name: 'Rust',
+    description: 'Rust services and APIs',
+    icon: createMonogramIcon('Rs'),
+    color: '#7c2d12',
+    category: 'backend'
+  },
+  {
+    id: 'elixir',
+    name: 'Elixir',
+    description: 'Elixir and Phoenix applications',
+    icon: createMonogramIcon('Ex'),
+    color: '#4b275f',
+    category: 'backend'
+  },
+  {
+    id: 'django',
+    name: 'Django',
+    description: 'Django web applications',
+    icon: createMonogramIcon('Dj'),
+    color: '#0c4b33',
+    category: 'backend'
+  },
+  {
+    id: 'flask',
+    name: 'Flask',
+    description: 'Flask Python applications',
+    icon: createMonogramIcon('Fl'),
+    color: '#1f2937',
+    category: 'backend'
+  },
+  {
+    id: 'fastapi',
+    name: 'FastAPI',
+    description: 'FastAPI Python applications',
+    icon: createMonogramIcon('FA'),
+    color: '#009688',
+    category: 'backend'
+  },
+  {
+    id: 'angular',
+    name: 'Angular',
+    description: 'Angular web applications',
+    icon: createMonogramIcon('Ng'),
+    color: '#dd0031',
+    category: 'frontend'
+  },
+  {
+    id: 'svelte',
+    name: 'Svelte',
+    description: 'Svelte web applications',
+    icon: createMonogramIcon('Sv'),
+    color: '#ff3e00',
+    category: 'frontend'
+  },
+  {
+    id: 'nextjs',
+    name: 'Next.js',
+    description: 'React apps with Next.js',
+    icon: createMonogramIcon('Nx'),
+    color: '#111827',
+    category: 'frontend'
+  },
+  {
+    id: 'nuxt',
+    name: 'Nuxt',
+    description: 'Vue apps with Nuxt',
+    icon: createMonogramIcon('Nu'),
+    color: '#00dc82',
+    category: 'frontend'
+  },
+  {
+    id: 'remix',
+    name: 'Remix',
+    description: 'Full-stack Remix applications',
+    icon: createMonogramIcon('Rx'),
+    color: '#121212',
+    category: 'frontend'
+  },
+  {
+    id: 'astro',
+    name: 'Astro',
+    description: 'Astro web applications',
+    icon: createMonogramIcon('As'),
+    color: '#ff5d01',
+    category: 'frontend'
+  },
+  {
+    id: 'solid',
+    name: 'Solid',
+    description: 'SolidStart applications',
+    icon: createMonogramIcon('So'),
+    color: '#2c4f7c',
+    category: 'frontend'
+  },
+  {
+    id: 'electron',
+    name: 'Electron',
+    description: 'Desktop apps with Electron',
+    icon: createMonogramIcon('El'),
+    color: '#47848f',
+    category: 'desktop'
+  },
+  {
+    id: 'native',
+    name: 'Native (C/C++)',
+    description: 'Native C and C++ applications',
+    icon: createMonogramIcon('C++'),
+    color: '#6b7280',
+    category: 'desktop'
+  },
+  {
+    id: 'unity',
+    name: 'Unity',
+    description: 'Unity games and apps',
+    icon: createMonogramIcon('Un'),
+    color: '#111111',
+    category: 'gaming'
+  },
+  {
+    id: 'unreal',
+    name: 'Unreal Engine',
+    description: 'Unreal Engine games',
+    icon: createMonogramIcon('UE'),
+    color: '#0f172a',
+    category: 'gaming'
+  },
+  {
+    id: 'godot',
+    name: 'Godot Engine',
+    description: 'Godot games and applications',
+    icon: createMonogramIcon('Go'),
+    color: '#478cbf',
+    category: 'gaming'
   },
   {
     id: 'other',
@@ -174,7 +431,8 @@ export const platforms: PlatformType[] = [
     description: 'Generic project setup',
     icon: Code2,
     color: '#4b5563',
-    category: 'multiplatform'
+    category: 'backend',
+    alwaysVisible: true
   }
 ]
 
@@ -206,6 +464,7 @@ function ProjectsPage() {
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -228,6 +487,14 @@ function ProjectsPage() {
       createProjectMutation.mutate({ name: newProjectName, platform: selectedPlatform })
     }
   }
+
+  const filteredPlatforms = platforms.filter((platform) => {
+    if (platform.alwaysVisible || platformFilter === 'all') return true
+    if (platformFilter === 'desktop-gaming') {
+      return platform.category === 'desktop' || platform.category === 'gaming'
+    }
+    return platform.category === platformFilter
+  })
 
   if (isLoading) return <div className="p-8">Loading...</div>
 
@@ -257,8 +524,21 @@ function ProjectsPage() {
 
                 <div>
                   <label className="text-sm font-medium mb-3 block">Select Platform</label>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {platformFilterTabs.map((tab) => (
+                      <Button
+                        key={tab.id}
+                        type="button"
+                        size="sm"
+                        variant={platformFilter === tab.id ? 'default' : 'outline'}
+                        onClick={() => setPlatformFilter(tab.id)}
+                      >
+                        {tab.label}
+                      </Button>
+                    ))}
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    {platforms.map((platform) => {
+                    {filteredPlatforms.map((platform) => {
                       const Icon = platform.icon
                       return (
                         <button
