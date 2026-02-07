@@ -13,8 +13,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/v1': process.env.VITE_BACKEND_URL || 'http://localhost:8080',
-      '/auth': process.env.VITE_BACKEND_URL || 'http://localhost:8080'
+      '/v1': process.env.VITE_BACKEND_URL || 'https://api.moneat.io',
+      '/auth': process.env.VITE_BACKEND_URL || 'https://api.moneat.io'
     }
   }
 })
