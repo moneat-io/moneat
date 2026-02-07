@@ -91,7 +91,7 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/moneat/backend}:${IMAGE_TAG:-latest}
     container_name: moneat-backend-blue
     env_file:
-      - .env.prod
+      - .env
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/moneat
       CLICKHOUSE_URL: http://clickhouse:8123
@@ -110,7 +110,7 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/moneat/backend}:${IMAGE_TAG:-latest}
     container_name: moneat-backend-green
     env_file:
-      - .env.prod
+      - .env
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/moneat
       CLICKHOUSE_URL: http://clickhouse:8123

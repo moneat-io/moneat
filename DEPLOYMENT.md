@@ -179,11 +179,11 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
    If the repo is public, you can use HTTPS instead: `https://github.com/bandapella/moneat.git`
 
-3. **Create `.env.prod`** in `/opt/moneat` with production values (do not commit this file):
+3. **Create `.env`** in `/opt/moneat` with production values (do not commit this file):
 
    ```bash
-   cp .env.example .env.prod
-   nano .env.prod
+   cp .env.example .env
+   nano .env
    ```
 
    **Update these production values:**
@@ -252,49 +252,75 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
 ## E. Initial SSL Certificate Setup
 
-1. **Set your domain** (e.g. `app.moneat.io`). Ensure the domain’s DNS A record points to the droplet IP.
+1. **Ensure DNS is configured**: Your domain `moneat.io` DNS A record must point to the droplet IP before proceeding.
 
-2. **Replace the domain placeholder** in the nginx config:
+2. **Comment out the HTTPS block temporarily** (since SSL certificates don't exist yet):
 
-   In `/opt/moneat/deploy/nginx/conf.d/app.conf`, replace every `DOMAIN_PLACEHOLDER` with your actual domain (e.g. `moneat.io`).
+   Run this command to automatically comment out the HTTPS server block:
 
-3. **First-time certificate** (HTTP-only so certbot can complete the challenge):
+   ```bash
+   cd /opt/moneat
+   sed -i.backup '/# HTTPS server/,/^}/s/^/#/' deploy/nginx/conf.d/app.conf
+   ```
 
-   - Temporarily use an HTTP-only server block for your domain (or use the existing HTTP server that serves `/.well-known/acme-challenge/` from `/var/www/certbot`).
-   - Start nginx and certbot so the webroot is available:
+   This comments out lines from "# HTTPS server" to the closing `}`. A backup is saved as `app.conf.backup`.
 
-     ```bash
-     cd /opt/moneat
-     docker compose -f docker-compose.prod.yml up -d nginx certbot
-     ```
+   Alternatively, if you prefer manual editing:
+   - Open the file: `nano deploy/nginx/conf.d/app.conf`
+   - Find the HTTPS server block (starts around line 19: `server {` with `listen 443`)
+   - Delete the entire block (or add `#` at the start of each line)
+   - Save and exit (Ctrl+O, Enter, Ctrl+X)
 
-   - Request the certificate (replace `YOUR_EMAIL` with your email):
+3. **Start nginx and certbot**:
 
-     ```bash
-     docker compose -f docker-compose.prod.yml run --rm certbot certonly \
-       --webroot -w /var/www/certbot \
-       -d moneat.io \
-       --email YOUR_EMAIL \
-       --agree-tos \
-       --no-eff-email
-     ```
+   ```bash
+   cd /opt/moneat
+   docker compose -f docker-compose.prod.yml up -d nginx certbot
+   ```
 
-   - Ensure `/opt/moneat/deploy/nginx/conf.d/app.conf` uses the correct paths:  
-     `ssl_certificate /etc/letsencrypt/live/moneat.io/fullchain.pem` and  
-     `ssl_certificate_key /etc/letsencrypt/live/moneat.io/privkey.pem`.  
-     Reload nginx:
+4. **Request the SSL certificate** (replace `YOUR_EMAIL` with your email):
 
-     ```bash
-     docker exec moneat-nginx nginx -s reload
-     ```
+   ```bash
+   docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+     --webroot -w /var/www/certbot \
+     -d moneat.io \
+     --email YOUR_EMAIL \
+     --agree-tos \
+     --no-eff-email
+   ```
 
-4. **Renewal cron** (run as `deploy` or root):
+   You should see "Successfully received certificate" when it completes.
+
+5. **Uncomment the HTTPS block**:
+
+   Restore the HTTPS block:
+
+   ```bash
+   cd /opt/moneat
+   sed -i.backup2 '/# HTTPS server/,/^#}/s/^#//' deploy/nginx/conf.d/app.conf
+   ```
+
+   Or manually:
+   - Open: `nano deploy/nginx/conf.d/app.conf`
+   - Remove the `#` at the start of each line in the HTTPS server block
+   - Verify the certificate paths: `ssl_certificate /etc/letsencrypt/live/moneat.io/fullchain.pem`
+   - Save and exit
+
+6. **Reload nginx** to enable HTTPS:
+
+   ```bash
+   docker exec moneat-nginx nginx -s reload
+   ```
+
+   Your site should now be accessible at `https://moneat.io`!
+
+7. **Set up automatic renewal** (run as `deploy`):
 
    ```bash
    crontab -e
    ```
 
-   Add:
+   Add this line:
 
    ```text
    0 0 */60 * * cd /opt/moneat && docker compose -f docker-compose.prod.yml run --rm certbot renew && docker exec moneat-nginx nginx -s reload
