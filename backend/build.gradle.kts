@@ -8,6 +8,7 @@ plugins {
     kotlin("jvm") version "1.9.22"
     kotlin("plugin.serialization") version "1.9.22"
     id("io.ktor.plugin") version "2.3.7"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "com.moneat"
@@ -18,6 +19,16 @@ application {
 
     val isDevelopment: Boolean = project.ext.has("development")
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("moneat-backend")
+    archiveClassifier.set("all")
+    archiveVersion.set("")
+    mergeServiceFiles()
+    manifest {
+        attributes("Main-Class" to application.mainClass.get())
+    }
 }
 
 repositories {
