@@ -115,7 +115,118 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
 ---
 
-## C. Create Protected External Volumes
+## C. Clone Repository and Setup Environment
+
+1. **Set up SSH key for GitHub access** (if repo is private):
+
+   On the droplet as `deploy`:
+
+   ```bash
+   # Generate SSH key for GitHub
+   ssh-keygen -t ed25519 -C "deploy@moneat-production" -f ~/.ssh/github_deploy -N ""
+   
+   # Display the public key
+   cat ~/.ssh/github_deploy.pub
+   ```
+
+   Copy the public key output, then add it to your GitHub repo:
+   - Go to `https://github.com/bandapella/moneat/settings/keys`
+   - Click "Add deploy key"
+   - Paste the public key
+   - Give it a title like "Production Droplet"
+   - **Do not** check "Allow write access" (read-only is safer)
+
+   **Configure SSH to use this key for GitHub:**
+
+   Create or edit the SSH config file:
+
+   ```bash
+   nano ~/.ssh/config
+   ```
+
+   Add these lines to the file (or append if the file already exists):
+
+   ```
+   Host github.com
+       IdentityFile ~/.ssh/github_deploy
+       StrictHostKeyChecking no
+   ```
+
+   Save and exit (Ctrl+O, Enter, Ctrl+X in nano).
+
+   Then set the correct permissions:
+
+   ```bash
+   chmod 600 ~/.ssh/config
+   ```
+
+2. **Clone the repo** on the droplet:
+
+   As `root` (or a user with sudo access), create the directory:
+
+   ```bash
+   mkdir -p /opt/moneat
+   chown deploy:deploy /opt/moneat
+   ```
+
+   Then switch to the `deploy` user and clone:
+
+   ```bash
+   su - deploy
+   git clone git@github.com:bandapella/moneat.git /opt/moneat
+   cd /opt/moneat
+   ```
+
+   If the repo is public, you can use HTTPS instead: `https://github.com/bandapella/moneat.git`
+
+3. **Create `.env.prod`** in `/opt/moneat` with production values (do not commit this file):
+
+   ```bash
+   cp .env.example .env.prod
+   nano .env.prod
+   ```
+
+   **Update these production values:**
+
+   ```bash
+   # URLs - Use your actual domain
+   FRONTEND_URL=https://moneat.io
+   BACKEND_URL=https://moneat.io
+   
+   # Database - Use Docker service names (from docker-compose.prod.yml)
+   DATABASE_URL=jdbc:postgresql://postgres:5432/moneat
+   DATABASE_PASSWORD=STRONG_RANDOM_PASSWORD_HERE
+   
+   CLICKHOUSE_URL=http://clickhouse:8123
+   CLICKHOUSE_PASSWORD=STRONG_RANDOM_PASSWORD_HERE
+   
+   REDIS_URL=redis://redis:6379
+   
+   # Security
+   JWT_SECRET=STRONG_RANDOM_SECRET_HERE
+   
+   # Email
+   EMAIL_FROM=noreply@moneat.io
+   SMTP_HOST=smtp.your-provider.com
+   SMTP_PORT=587
+   SMTP_USERNAME=your-email@example.com
+   SMTP_PASSWORD=your-smtp-password
+   ```
+
+   **Generate strong passwords:**
+   ```bash
+   openssl rand -base64 32  # Run this 3 times for DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, JWT_SECRET
+   ```
+
+4. **Make the deploy script executable**:
+
+   ```bash
+   chmod +x /opt/moneat/deploy/scripts/deploy.sh
+   ```
+
+---
+
+## D. Create Protected External Volumes
 
 **These volumes must exist before the first deploy and must never be deleted.** Compose declares them as `external: true`, so it will not create or remove them.
 
@@ -139,13 +250,13 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
 ---
 
-## D. Initial SSL Certificate Setup
+## E. Initial SSL Certificate Setup
 
 1. **Set your domain** (e.g. `app.moneat.io`). Ensure the domain’s DNS A record points to the droplet IP.
 
 2. **Replace the domain placeholder** in the nginx config:
 
-   In `deploy/nginx/conf.d/app.conf`, replace every `DOMAIN_PLACEHOLDER` with your actual domain (e.g. `app.moneat.io`).
+   In `/opt/moneat/deploy/nginx/conf.d/app.conf`, replace every `DOMAIN_PLACEHOLDER` with your actual domain (e.g. `moneat.io`).
 
 3. **First-time certificate** (HTTP-only so certbot can complete the challenge):
 
@@ -157,20 +268,20 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
      docker compose -f docker-compose.prod.yml up -d nginx certbot
      ```
 
-   - Request the certificate (replace `YOUR_EMAIL` and `YOUR_DOMAIN`):
+   - Request the certificate (replace `YOUR_EMAIL` with your email):
 
      ```bash
      docker compose -f docker-compose.prod.yml run --rm certbot certonly \
        --webroot -w /var/www/certbot \
-       -d YOUR_DOMAIN \
+       -d moneat.io \
        --email YOUR_EMAIL \
        --agree-tos \
        --no-eff-email
      ```
 
-   - Ensure `deploy/nginx/conf.d/app.conf` uses the correct paths:  
-     `ssl_certificate /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem` and  
-     `ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem`.  
+   - Ensure `/opt/moneat/deploy/nginx/conf.d/app.conf` uses the correct paths:  
+     `ssl_certificate /etc/letsencrypt/live/moneat.io/fullchain.pem` and  
+     `ssl_certificate_key /etc/letsencrypt/live/moneat.io/privkey.pem`.  
      Reload nginx:
 
      ```bash
@@ -193,7 +304,7 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
 ---
 
-## E. Database Initialization
+## F. Database Initialization
 
 1. **Start only infrastructure** (no app slots yet):
 
@@ -213,56 +324,21 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
 ---
 
-## F. First Deployment
+## G. First Deployment
 
-1. **Clone the repo** on the droplet (as `deploy`):
-
-   ```bash
-   sudo mkdir -p /opt/moneat
-   sudo chown deploy:deploy /opt/moneat
-   git clone https://github.com/YOUR_ORG/moneat.git /opt/moneat
-   cd /opt/moneat
-   ```
-
-   (Use the real repo URL; if private, use a deploy key or HTTPS token as needed.)
-
-2. **Create `.env.prod`** in `/opt/moneat` with production values (do not commit this file):
-
-   ```bash
-   cp .env.example .env.prod
-   # Edit .env.prod: set DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, JWT_SECRET, SMTP_*, FRONTEND_URL, BACKEND_URL, etc.
-   ```
-
-   Ensure at least:
-
-   - `DATABASE_PASSWORD`
-   - `CLICKHOUSE_PASSWORD`
-   - `JWT_SECRET` (strong, random)
-   - `FRONTEND_URL` (e.g. `https://app.moneat.io`)
-   - `BACKEND_URL` or equivalent for the backend
-   - SMTP or email provider settings
-
-   The compose file expects `DATABASE_PASSWORD` and `CLICKHOUSE_PASSWORD`; the backend reads the rest from `.env.prod` via `env_file`.
-
-3. **Make the deploy script executable**:
-
-   ```bash
-   chmod +x /opt/moneat/deploy/scripts/deploy.sh
-   ```
-
-4. **Run the first deploy** (after the first successful GitHub Actions build so images exist for the commit you want):
+1. **Run the first deploy** (after the first successful GitHub Actions build so images exist for the commit you want):
 
    Either trigger a push to `main` and let the workflow deploy, or on the server (with `IMAGE_TAG` set to the image tag you built, e.g. a git SHA):
 
    ```bash
    cd /opt/moneat
    export IMAGE_TAG=latest
-   export BACKEND_IMAGE=ghcr.io/YOUR_ORG/moneat-backend
-   export DASHBOARD_IMAGE=ghcr.io/YOUR_ORG/moneat-dashboard
+   export BACKEND_IMAGE=ghcr.io/bandapella/moneat-backend
+   export DASHBOARD_IMAGE=ghcr.io/bandapella/moneat-dashboard
    ./deploy/scripts/deploy.sh latest
    ```
 
-   Replace `YOUR_ORG` with your GitHub org or username. For CI, the workflow sets `IMAGE_TAG` to the git SHA and uses the same image names.
+   For CI, the workflow sets `IMAGE_TAG` to the git SHA and uses the same image names.
 
 5. **Ensure infrastructure and one slot are up** (if you didn’t use the script’s full flow):
 
@@ -308,4 +384,5 @@ Ensure `/opt/backups` exists and is writable, and consider copying dumps off the
 - [ ] Five external volumes created and verified
 - [ ] Domain DNS points to droplet; nginx app.conf updated; certbot certificate obtained; renewal cron added
 - [ ] Repo cloned to `/opt/moneat`; `.env.prod` created; `deploy.sh` executable
+- [ ] Database initialization complete (postgres, clickhouse, redis running)
 - [ ] First deploy run (script or via push to `main`)

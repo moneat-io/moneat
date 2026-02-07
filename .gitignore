@@ -58,6 +58,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.prod
 
 # Node (for dashboard)
 node_modules/
