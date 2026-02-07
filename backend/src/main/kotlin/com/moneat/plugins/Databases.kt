@@ -1,5 +1,6 @@
 package com.moneat.plugins
 
+import com.moneat.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.*
@@ -40,4 +41,14 @@ fun Application.configureDatabases() {
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ
     
     log.info("PostgreSQL database connected")
+    
+    // Start background services for monitoring
+    SystemStatusTracker.start()
+    log.info("System status tracker started")
+    
+    // Register shutdown hook
+    environment.monitor.subscribe(ApplicationStopped) {
+        log.info("Stopping background services...")
+        SystemStatusTracker.stop()
+    }
 }

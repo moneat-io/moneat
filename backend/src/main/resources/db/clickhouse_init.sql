@@ -224,3 +224,53 @@ PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, feedback_id)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
+
+-- Server monitoring metrics
+CREATE TABLE IF NOT EXISTS system_metrics (
+    system_id UUID,
+    org_id UInt32,
+    timestamp DateTime,
+    cpu_percent Float32,
+    mem_total UInt64,
+    mem_used UInt64,
+    mem_available UInt64,
+    swap_total UInt64,
+    swap_used UInt64,
+    disk_total UInt64,
+    disk_used UInt64,
+    disk_read_bytes UInt64,
+    disk_write_bytes UInt64,
+    net_recv_bytes UInt64,
+    net_sent_bytes UInt64,
+    load_1 Float32,
+    load_5 Float32,
+    load_15 Float32,
+    temp_max Float32,
+    gpu_percent Float32,
+    gpu_mem_percent Float32,
+    gpu_power Float32,
+    battery_percent Float32
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (org_id, system_id, timestamp)
+TTL timestamp + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192;
+
+CREATE TABLE IF NOT EXISTS container_metrics (
+    system_id UUID,
+    org_id UInt32,
+    timestamp DateTime,
+    container_name String,
+    container_id String,
+    image String,
+    status String,
+    cpu_percent Float32,
+    mem_used UInt64,
+    mem_limit UInt64,
+    net_recv_bytes UInt64,
+    net_sent_bytes UInt64
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (org_id, system_id, timestamp, container_name)
+TTL timestamp + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192;

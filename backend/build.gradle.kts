@@ -85,6 +85,10 @@ dependencies {
     // Logging
     implementation("ch.qos.logback:logback-classic:$logback_version")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    
+    // Sentry - Error monitoring
+    implementation("io.sentry:sentry-kotlin-extensions:7.6.0")
+    implementation("io.sentry:sentry-logback:7.6.0")
 
     // Testing
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")

@@ -8,6 +8,10 @@ import io.ktor.server.netty.*
 fun main(args: Array<String>) {
     // Load .env file into system properties before starting the server
     EnvConfig.initialize()
+    
+    // Initialize Sentry for error monitoring
+    com.moneat.config.SentryConfig.initialize()
+    
     EngineMain.main(args)
 }
 

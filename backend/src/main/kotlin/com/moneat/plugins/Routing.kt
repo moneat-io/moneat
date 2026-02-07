@@ -85,5 +85,8 @@ fun Application.configureRouting() {
         
         // Admin dashboard endpoints
         adminRoutes()
+        
+        // Server monitoring endpoints
+        monitorRoutes()
     }
 }

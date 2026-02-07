@@ -134,3 +134,33 @@ object EmailsSent : Table("emails_sent") {
     val success = bool("success").default(true)
     override val primaryKey = PrimaryKey(id)
 }
+
+object Systems : Table("systems") {
+    val id = uuid("id")
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val host = varchar("host", 255).nullable()
+    val agent_key_hash = varchar("agent_key_hash", 255)
+    val status = varchar("status", 20)
+    val last_seen_at = timestamp("last_seen_at").nullable()
+    val agent_version = varchar("agent_version", 20).nullable()
+    val os = varchar("os", 100).nullable()
+    val arch = varchar("arch", 20).nullable()
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SystemAlerts : Table("system_alerts") {
+    val id = integer("id").autoIncrement()
+    val system_id = uuid("system_id").references(Systems.id)
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val metric = varchar("metric", 50)
+    val condition = varchar("condition", 20)
+    val threshold = double("threshold")
+    val duration_seconds = integer("duration_seconds")
+    val enabled = bool("enabled")
+    val last_triggered_at = timestamp("last_triggered_at").nullable()
+    val created_at = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+}

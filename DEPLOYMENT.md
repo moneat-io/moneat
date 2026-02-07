@@ -130,7 +130,7 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
    ```
 
    Copy the public key output, then add it to your GitHub repo:
-   - Go to `https://github.com/bandapella/moneat/settings/keys`
+   - Go to `https://github.com/moneat-io/moneat/settings/keys`
    - Click "Add deploy key"
    - Paste the public key
    - Give it a title like "Production Droplet"
@@ -173,11 +173,11 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
    ```bash
    su - deploy
-   git clone git@github.com:bandapella/moneat.git /opt/moneat
+   git clone git@github.com:moneat-io/moneat.git /opt/moneat
    cd /opt/moneat
    ```
 
-   If the repo is public, you can use HTTPS instead: `https://github.com/bandapella/moneat.git`
+   If the repo is public, you can use HTTPS instead: `https://github.com/moneat-io/moneat.git`
 
 3. **Create `.env`** in `/opt/moneat` with production values (do not commit this file):
 
@@ -314,8 +314,8 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
    ```bash
    cd /opt/moneat
    export IMAGE_TAG=latest
-   export BACKEND_IMAGE=ghcr.io/bandapella/moneat-backend
-   export DASHBOARD_IMAGE=ghcr.io/bandapella/moneat-dashboard
+   export BACKEND_IMAGE=ghcr.io/moneat-io/moneat-backend
+   export DASHBOARD_IMAGE=ghcr.io/moneat-io/moneat-dashboard
    ./deploy/scripts/deploy.sh latest
    ```
 

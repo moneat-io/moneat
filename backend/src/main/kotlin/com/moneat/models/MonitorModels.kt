@@ -1,0 +1,216 @@
+package com.moneat.models
+
+import kotlinx.serialization.Serializable
+import java.util.*
+
+// Agent-facing models
+@Serializable
+data class SystemMetricsPayload(
+    val timestamp: Long,
+    val cpu_percent: Float,
+    val mem_total: Long,
+    val mem_used: Long,
+    val mem_available: Long,
+    val swap_total: Long,
+    val swap_used: Long,
+    val disk_total: Long,
+    val disk_used: Long,
+    val disk_read_bytes: Long,
+    val disk_write_bytes: Long,
+    val net_recv_bytes: Long,
+    val net_sent_bytes: Long,
+    val load_1: Float,
+    val load_5: Float,
+    val load_15: Float,
+    val temp_max: Float?,
+    val gpu_percent: Float?,
+    val gpu_mem_percent: Float?,
+    val gpu_power: Float?,
+    val battery_percent: Float?,
+    val containers: List<ContainerMetricsPayload>?,
+    val agent_version: String?,
+    val os: String?,
+    val arch: String?,
+    val host: String?
+)
+
+@Serializable
+data class ContainerMetricsPayload(
+    val name: String,
+    val id: String,
+    val image: String,
+    val status: String,
+    val cpu_percent: Float,
+    val mem_used: Long,
+    val mem_limit: Long,
+    val net_recv_bytes: Long,
+    val net_sent_bytes: Long
+)
+
+@Serializable
+data class IngestResponse(
+    val success: Boolean,
+    val interval_seconds: Int,
+    val message: String? = null
+)
+
+// Dashboard-facing models
+@Serializable
+data class SystemResponse(
+    val id: String,
+    val name: String,
+    val host: String?,
+    val status: String,
+    val last_seen_at: Long?,
+    val agent_version: String?,
+    val os: String?,
+    val arch: String?,
+    val created_at: Long,
+    val latest_metrics: LatestMetrics?
+)
+
+@Serializable
+data class LatestMetrics(
+    val cpu_percent: Float,
+    val mem_percent: Float,
+    val disk_percent: Float,
+    val net_recv_mbps: Float?,
+    val net_sent_mbps: Float?,
+    val load_1: Float,
+    val temp_max: Float?,
+    val gpu_percent: Float?,
+    val battery_percent: Float?
+)
+
+@Serializable
+data class CreateSystemRequest(
+    val name: String
+)
+
+@Serializable
+data class CreateSystemResponse(
+    val system: SystemResponse,
+    val agent_key: String,
+    val docker_command: String
+)
+
+@Serializable
+data class HistoricalMetricsResponse(
+    val system_id: String,
+    val from: Long,
+    val to: Long,
+    val interval_seconds: Int,
+    val data_points: List<MetricDataPoint>
+)
+
+@Serializable
+data class MetricDataPoint(
+    val timestamp: Long,
+    val cpu_percent: Float?,
+    val mem_percent: Float?,
+    val disk_percent: Float?,
+    val net_recv_bytes: Long?,
+    val net_sent_bytes: Long?,
+    val load_1: Float?,
+    val load_5: Float?,
+    val load_15: Float?,
+    val temp_max: Float?,
+    val gpu_percent: Float?,
+    val battery_percent: Float?
+)
+
+@Serializable
+data class ContainerStatsResponse(
+    val containers: List<ContainerStats>
+)
+
+@Serializable
+data class ContainerStats(
+    val name: String,
+    val id: String,
+    val image: String,
+    val status: String,
+    val cpu_percent: Float,
+    val mem_used: Long,
+    val mem_limit: Long,
+    val mem_percent: Float
+)
+
+@Serializable
+data class ContainerMetricsResponse(
+    val container_name: String,
+    val from: Long,
+    val to: Long,
+    val interval_seconds: Int,
+    val data_points: List<ContainerMetricDataPoint>
+)
+
+@Serializable
+data class ContainerMetricDataPoint(
+    val timestamp: Long,
+    val cpu_percent: Float?,
+    val mem_used: Long?,
+    val mem_limit: Long?,
+    val net_recv_bytes: Long?,
+    val net_sent_bytes: Long?
+)
+
+@Serializable
+data class AlertResponse(
+    val id: Int,
+    val system_id: String,
+    val metric: String,
+    val condition: String,
+    val threshold: Double,
+    val duration_seconds: Int,
+    val enabled: Boolean,
+    val last_triggered_at: Long?,
+    val created_at: Long
+)
+
+@Serializable
+data class CreateAlertRequest(
+    val metric: String,
+    val condition: String,
+    val threshold: Double,
+    val duration_seconds: Int = 0,
+    val enabled: Boolean = true
+)
+
+@Serializable
+data class UpdateAlertRequest(
+    val metric: String? = null,
+    val condition: String? = null,
+    val threshold: Double? = null,
+    val duration_seconds: Int? = null,
+    val enabled: Boolean? = null
+)
+
+// Internal data classes
+data class SystemData(
+    val id: UUID,
+    val organizationId: Int,
+    val name: String,
+    val host: String?,
+    val agentKeyHash: String,
+    val status: String,
+    val lastSeenAt: kotlinx.datetime.Instant?,
+    val agentVersion: String?,
+    val os: String?,
+    val arch: String?,
+    val createdAt: kotlinx.datetime.Instant,
+    val updatedAt: kotlinx.datetime.Instant
+)
+
+data class AlertData(
+    val id: Int,
+    val systemId: UUID,
+    val organizationId: Int,
+    val metric: String,
+    val condition: String,
+    val threshold: Double,
+    val durationSeconds: Int,
+    val enabled: Boolean,
+    val lastTriggeredAt: kotlinx.datetime.Instant?,
+    val createdAt: kotlinx.datetime.Instant
+)

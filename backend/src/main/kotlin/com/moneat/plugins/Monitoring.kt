@@ -1,11 +1,14 @@
 package com.moneat.plugins
 
+import com.moneat.config.SentryConfig
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
+import io.sentry.Sentry
+import io.sentry.SentryLevel
 import mu.KotlinLogging
 import org.slf4j.event.Level
 
@@ -15,6 +18,17 @@ fun Application.configureMonitoring() {
     install(StatusPages) {
         exception<Throwable> { call, cause ->
             logger.error(cause) { "Unhandled exception: ${cause.message}" }
+            
+            // Send to Sentry if enabled
+            if (SentryConfig.isEnabled()) {
+                Sentry.captureException(cause) { scope ->
+                    scope.setTag("http.method", call.request.httpMethod.value)
+                    scope.setTag("http.path", call.request.path())
+                    scope.setExtra("user_agent", call.request.headers["User-Agent"] ?: "unknown")
+                    scope.setExtra("remote_host", call.request.origin.remoteHost)
+                }
+            }
+            
             cause.printStackTrace()
             call.respond(
                 HttpStatusCode.InternalServerError,
