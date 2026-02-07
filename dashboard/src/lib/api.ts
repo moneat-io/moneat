@@ -391,7 +391,7 @@ class ApiClient {
     })
   }
 
-  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean }> {
+  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean }> {
     return this.request(`${API_BASE}/user`)
   }
 
@@ -586,6 +586,105 @@ class ApiClient {
     await this.request<void>(`${API_BASE}/auth-tokens/${tokenId}`, {
       method: 'DELETE',
     })
+  }
+
+  // Admin API
+  async getAdminOverview() {
+    return this.request<{
+      totalOrganizations: number
+      totalUsers: number
+      totalEventsAllTime: number
+      totalEventsLast30Days: number
+      mrr: number
+      subscriptionsByPlan: Record<string, number>
+      eventsLast30Days: { date: string; count: number }[]
+    }>(`${API_BASE}/admin/overview`)
+  }
+
+  async getAdminOrganizations(page = 1, limit = 25) {
+    return this.request<Array<{
+      id: number
+      name: string
+      slug: string
+      plan: string
+      eventCountThisMonth: number
+      projectCount: number
+      memberCount: number
+      quotaUsedPercent: number | null
+    }>>(`${API_BASE}/admin/organizations?page=${page}&limit=${limit}`)
+  }
+
+  async getAdminOrgDetail(orgId: number) {
+    return this.request<{
+      id: number
+      name: string
+      slug: string
+      companySize: string | null
+      plan: string
+      subscriptionStatus: string | null
+      memberCount: number
+      projectCount: number
+      eventCountThisMonth: number
+      bytesIngestedThisMonth: number
+      quotaUsedPercent: number | null
+      members: Array<{ userId: number; email: string; name: string | null; role: string }>
+      projects: Array<{ id: number; name: string; slug: string; platform: string | null }>
+    }>(`${API_BASE}/admin/organizations/${orgId}`)
+  }
+
+  async getAdminOrgUsage(orgId: number, period = '7d') {
+    return this.request<Array<{ date: string; eventType: string; eventCount: number; bytesIngested: number }>>(
+      `${API_BASE}/admin/organizations/${orgId}/usage?period=${period}`
+    )
+  }
+
+  async getAdminUsage(period = '7d') {
+    return this.request<{
+      daily: Array<{
+        date: string
+        error: number
+        transaction: number
+        replay: number
+        feedback: number
+        total: number
+      }>
+      totalBytes: number
+    }>(`${API_BASE}/admin/usage?period=${period}`)
+  }
+
+  async getAdminRevenue() {
+    return this.request<{
+      mrr: number
+      subscriptionsByPlan: Record<string, number>
+      estimatedCostPerOrg: Record<string, number>
+      churnLast30Days: number
+    }>(`${API_BASE}/admin/revenue`)
+  }
+
+  async getAdminInfrastructure() {
+    return this.request<{
+      clickhouseTables: Array<{
+        table: string
+        rows: number
+        bytesOnDisk: number
+        bytesOnDiskFormatted: string
+      }>
+      totalDiskBytes: number
+      totalRows: number
+      storageUsedPercent: number
+      scalingTriggerAlerts: string[]
+    }>(`${API_BASE}/admin/infrastructure`)
+  }
+
+  async getAdminTopConsumers(limit = 10) {
+    return this.request<Array<{
+      orgId: number
+      orgName: string
+      orgSlug: string
+      plan: string
+      eventCount: number
+      bytesIngested: number
+    }>>(`${API_BASE}/admin/top-consumers?limit=${limit}`)
   }
 }
 

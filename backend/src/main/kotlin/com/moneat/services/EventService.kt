@@ -12,6 +12,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -28,6 +29,7 @@ class EventService {
     
     private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
+    private val usageTracker = UsageTrackingService.instance
     
     // Track replay segment counters for mobile replays that lack a separate replay_event item.
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
@@ -53,11 +55,13 @@ class EventService {
                     logger.debug { "Event payload: ${item.payload.take(500)}" }
                     val event = json.decodeFromString<SentryEvent>(item.payload)
                     storeEvent(projectId, event)
+                    recordUsage(projectId, "error", item)
                 }
                 "transaction" -> {
                     logger.debug { "Transaction payload: ${item.payload.take(500)}" }
                     val transaction = json.decodeFromString<SentryTransaction>(item.payload)
                     storeTransaction(projectId, transaction)
+                    recordUsage(projectId, "transaction", item)
                 }
                 "session" -> {
                     // TODO: Handle sessions
@@ -68,10 +72,12 @@ class EventService {
                     lastReplayId = replayEvent.replay_id
                     lastSegmentId = replayEvent.segment_id ?: 0
                     storeReplayEvent(projectId, replayEvent)
+                    recordUsage(projectId, "replay", item)
                 }
                 "replay_recording" -> {
                     val rid = lastReplayId ?: envelope.eventId
                     storeReplayRecording(projectId, rid, lastSegmentId, item.payload)
+                    recordUsage(projectId, "replay", item)
                     lastReplayId = null
                     lastSegmentId = 0
                 }
@@ -101,6 +107,7 @@ class EventService {
                     }
                     
                     storeReplayRecording(projectId, rid, segmentId, item.payload)
+                    recordUsage(projectId, "replay", item)
                     lastReplayId = null
                     lastSegmentId = 0
                 }
@@ -108,6 +115,7 @@ class EventService {
                     logger.debug { "Feedback payload: ${item.payload.take(500)}" }
                     val feedback = json.decodeFromString<SentryFeedback>(item.payload)
                     storeFeedback(projectId, feedback)
+                    recordUsage(projectId, "feedback", item)
                 }
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
@@ -119,6 +127,12 @@ class EventService {
     suspend fun processStoreEvent(projectId: Long, body: String) {
         val event = json.decodeFromString<SentryEvent>(body)
         storeEvent(projectId, event)
+        usageTracker.recordUsage(projectId, "error", body.toByteArray(StandardCharsets.UTF_8).size)
+    }
+
+    private fun recordUsage(projectId: Long, eventType: String, item: EnvelopeItem) {
+        val byteSize = item.payloadBytes?.size ?: item.payload.toByteArray(StandardCharsets.UTF_8).size
+        usageTracker.recordUsage(projectId, eventType, byteSize)
     }
 
     private suspend fun storeTransaction(projectId: Long, transaction: SentryTransaction) {

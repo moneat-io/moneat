@@ -39,7 +39,8 @@ fun Route.apiRoutes() {
                         user[Users.email],
                         user[Users.name],
                         user[Users.email_verified],
-                        user[Users.onboarding_completed]
+                        user[Users.onboarding_completed],
+                        user[Users.is_admin]
                     ))
                 }
             }

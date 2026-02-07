@@ -29,5 +29,8 @@ fun Application.configureRouting() {
         
         // Release and source map endpoints
         releaseRoutes()
+        
+        // Admin dashboard endpoints
+        adminRoutes()
     }
 }

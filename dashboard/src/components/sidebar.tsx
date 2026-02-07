@@ -19,6 +19,7 @@ import {
   Package,
   Play,
   MessageSquare,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getPlatformInfo } from '@/routes/projects'
@@ -73,6 +74,7 @@ export function Sidebar() {
     { icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
     { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
     { icon: FolderKanban, label: 'Projects', href: '/projects', requiresProject: false },
+    ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]
   

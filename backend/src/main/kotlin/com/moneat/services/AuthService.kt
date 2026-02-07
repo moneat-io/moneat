@@ -73,7 +73,7 @@ class AuthService {
         val token = generateToken(userId, request.email)
         return AuthResponse(
             token = token,
-            user = UserResponse(userId, request.email, request.name, emailVerified, false)
+            user = UserResponse(userId, request.email, request.name, emailVerified, false, false)
         )
     }
     
@@ -154,7 +154,8 @@ class AuthService {
                     user[Users.email], 
                     user[Users.name],
                     user[Users.email_verified],
-                    user[Users.onboarding_completed]
+                    user[Users.onboarding_completed],
+                    user[Users.is_admin]
                 )
             )
         }
@@ -266,7 +267,8 @@ class AuthService {
                 user[Users.email],
                 user[Users.name],
                 user[Users.email_verified],
-                true
+                true,
+                user[Users.is_admin]
             )
         }
     }

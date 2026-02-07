@@ -1,6 +1,7 @@
 package com.moneat.models
 
 import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.kotlin.datetime.date
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
 
 object Users : Table("users") {
@@ -9,6 +10,7 @@ object Users : Table("users") {
     val password_hash = varchar("password_hash", 255)
     val name = varchar("name", 255).nullable()
     val email_verified = bool("email_verified").default(false)
+    val is_admin = bool("is_admin").default(false)
     val email_verification_token = varchar("email_verification_token", 255).nullable()
     val email_verification_expires_at = long("email_verification_expires_at").nullable()
     val password_reset_token = varchar("password_reset_token", 255).nullable()
@@ -84,5 +86,28 @@ object ReleaseFiles : Table("release_files") {
     val storage_path = varchar("storage_path", 1000).nullable()
     val file_type = varchar("file_type", 50).nullable()
     val created_at = long("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object UsageRecords : Table("usage_records") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val project_id = integer("project_id").nullable()  // FK to projects(id) in DB
+    val event_type = varchar("event_type", 50).default("error")
+    val event_count = integer("event_count").default(0)
+    val bytes_ingested = long("bytes_ingested").default(0)
+    val recordDate = date("date")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object Subscriptions : Table("subscriptions") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val stripe_subscription_id = varchar("stripe_subscription_id", 255).nullable()
+    val stripe_customer_id = varchar("stripe_customer_id", 255).nullable()
+    val plan = varchar("plan", 50)
+    val status = varchar("status", 50)
+    val current_period_start = timestamp("current_period_start").nullable()
+    val current_period_end = timestamp("current_period_end").nullable()
     override val primaryKey = PrimaryKey(id)
 }

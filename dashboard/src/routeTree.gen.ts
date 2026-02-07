@@ -22,14 +22,21 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
+import { Route as AdminUsageRouteImport } from './routes/admin.usage'
+import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
+import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
+import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastructure'
+import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -96,6 +103,11 @@ const AnalyticsRoute = AnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -105,6 +117,11 @@ const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PerformanceRoute,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const ReplaysReplayIdRoute = ReplaysReplayIdRouteImport.update({
   id: '/$replayId',
@@ -137,9 +154,35 @@ const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
   path: '/$feedbackId',
   getParentRoute: () => FeedbackRoute,
 } as any)
+const AdminUsageRoute = AdminUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRevenueRoute = AdminRevenueRouteImport.update({
+  id: '/revenue',
+  path: '/revenue',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrganizationsRoute = AdminOrganizationsRouteImport.update({
+  id: '/organizations',
+  path: '/organizations',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminInfrastructureRoute = AdminInfrastructureRouteImport.update({
+  id: '/infrastructure',
+  path: '/infrastructure',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
+  id: '/$orgId',
+  path: '/$orgId',
+  getParentRoute: () => AdminOrganizationsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -153,13 +196,19 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/infrastructure': typeof AdminInfrastructureRoute
+  '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
+  '/admin/revenue': typeof AdminRevenueRoute
+  '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -175,17 +224,24 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/infrastructure': typeof AdminInfrastructureRoute
+  '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
+  '/admin/revenue': typeof AdminRevenueRoute
+  '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/admin': typeof AdminIndexRoute
   '/performance': typeof PerformanceIndexRoute
+  '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -199,18 +255,25 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/infrastructure': typeof AdminInfrastructureRoute
+  '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
+  '/admin/revenue': typeof AdminRevenueRoute
+  '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/analytics'
     | '/feedback'
     | '/forgot-password'
@@ -224,13 +287,19 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/admin/infrastructure'
+    | '/admin/organizations'
+    | '/admin/revenue'
+    | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/admin/'
     | '/performance/'
+    | '/admin/organizations/$orgId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -246,16 +315,23 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/admin/infrastructure'
+    | '/admin/organizations'
+    | '/admin/revenue'
+    | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/admin'
     | '/performance'
+    | '/admin/organizations/$orgId'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/analytics'
     | '/feedback'
     | '/forgot-password'
@@ -269,17 +345,24 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/admin/infrastructure'
+    | '/admin/organizations'
+    | '/admin/revenue'
+    | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/admin/'
     | '/performance/'
+    | '/admin/organizations/$orgId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AnalyticsRoute: typeof AnalyticsRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -389,6 +472,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -402,6 +492,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/performance/'
       preLoaderRoute: typeof PerformanceIndexRouteImport
       parentRoute: typeof PerformanceRoute
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/replays/$replayId': {
       id: '/replays/$replayId'
@@ -445,8 +542,72 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackFeedbackIdRouteImport
       parentRoute: typeof FeedbackRoute
     }
+    '/admin/usage': {
+      id: '/admin/usage'
+      path: '/usage'
+      fullPath: '/admin/usage'
+      preLoaderRoute: typeof AdminUsageRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/revenue': {
+      id: '/admin/revenue'
+      path: '/revenue'
+      fullPath: '/admin/revenue'
+      preLoaderRoute: typeof AdminRevenueRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/organizations': {
+      id: '/admin/organizations'
+      path: '/organizations'
+      fullPath: '/admin/organizations'
+      preLoaderRoute: typeof AdminOrganizationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/infrastructure': {
+      id: '/admin/infrastructure'
+      path: '/infrastructure'
+      fullPath: '/admin/infrastructure'
+      preLoaderRoute: typeof AdminInfrastructureRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/organizations/$orgId': {
+      id: '/admin/organizations/$orgId'
+      path: '/$orgId'
+      fullPath: '/admin/organizations/$orgId'
+      preLoaderRoute: typeof AdminOrganizationsOrgIdRouteImport
+      parentRoute: typeof AdminOrganizationsRoute
+    }
   }
 }
+
+interface AdminOrganizationsRouteChildren {
+  AdminOrganizationsOrgIdRoute: typeof AdminOrganizationsOrgIdRoute
+}
+
+const AdminOrganizationsRouteChildren: AdminOrganizationsRouteChildren = {
+  AdminOrganizationsOrgIdRoute: AdminOrganizationsOrgIdRoute,
+}
+
+const AdminOrganizationsRouteWithChildren =
+  AdminOrganizationsRoute._addFileChildren(AdminOrganizationsRouteChildren)
+
+interface AdminRouteChildren {
+  AdminInfrastructureRoute: typeof AdminInfrastructureRoute
+  AdminOrganizationsRoute: typeof AdminOrganizationsRouteWithChildren
+  AdminRevenueRoute: typeof AdminRevenueRoute
+  AdminUsageRoute: typeof AdminUsageRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminInfrastructureRoute: AdminInfrastructureRoute,
+  AdminOrganizationsRoute: AdminOrganizationsRouteWithChildren,
+  AdminRevenueRoute: AdminRevenueRoute,
+  AdminUsageRoute: AdminUsageRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface FeedbackRouteChildren {
   FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
@@ -511,6 +672,7 @@ const ReplaysRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   AnalyticsRoute: AnalyticsRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,

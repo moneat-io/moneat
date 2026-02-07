@@ -28,7 +28,8 @@ data class UserResponse(
     val email: String,
     val name: String?,
     val emailVerified: Boolean = false,
-    val onboardingCompleted: Boolean = false
+    val onboardingCompleted: Boolean = false,
+    val isAdmin: Boolean = false
 )
 
 @Serializable
