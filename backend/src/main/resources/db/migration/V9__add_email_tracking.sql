@@ -1,6 +1,6 @@
 -- Add email tracking table to monitor email sending costs
 CREATE TABLE IF NOT EXISTS emails_sent (
-    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER REFERENCES organizations(id),
     email_type VARCHAR(50) NOT NULL,
     recipient VARCHAR(255) NOT NULL,
