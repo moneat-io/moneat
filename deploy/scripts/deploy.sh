@@ -78,7 +78,13 @@ docker compose -f "$COMPOSE_FILE" up -d backend-$INACTIVE dashboard-$INACTIVE
 # 6. Wait for backend health (up to 60s)
 echo "Waiting for backend-$INACTIVE /health..."
 for i in {1..30}; do
-  if docker exec moneat-nginx wget --spider --quiet --tries=1 --timeout=2 "http://backend-$INACTIVE:8080/health" 2>/dev/null; then
+  # Test with verbose output on first few attempts
+  if [[ $i -le 3 ]]; then
+    echo "  Attempt $i: testing http://backend-$INACTIVE:8080/health"
+    docker exec moneat-nginx wget --spider --tries=1 --timeout=2 "http://backend-$INACTIVE:8080/health" 2>&1 | head -5
+  fi
+  
+  if docker exec moneat-nginx wget --spider --quiet --tries=1 --timeout=2 "http://backend-$INACTIVE:8080/health" 2>&1; then
     echo "Health OK"
     break
   fi
