@@ -45,6 +45,30 @@ echo "Active slot: $ACTIVE -> deploying to slot: $INACTIVE (tag: $IMAGE_TAG)"
 # 3. Ensure infrastructure is running (do not touch database containers)
 docker compose -f "$COMPOSE_FILE" up -d nginx certbot postgres clickhouse redis 2>/dev/null || true
 
+# 3a. Wait for databases to be healthy (up to 60s)
+echo "Waiting for databases to be healthy..."
+for i in {1..30}; do
+  POSTGRES_HEALTHY=$(docker inspect moneat-postgres --format='{{.State.Health.Status}}' 2>/dev/null || echo "starting")
+  CLICKHOUSE_HEALTHY=$(docker inspect moneat-clickhouse --format='{{.State.Health.Status}}' 2>/dev/null || echo "starting")
+  REDIS_HEALTHY=$(docker inspect moneat-redis --format='{{.State.Health.Status}}' 2>/dev/null || echo "starting")
+  
+  if [[ "$POSTGRES_HEALTHY" == "healthy" && "$CLICKHOUSE_HEALTHY" == "healthy" && "$REDIS_HEALTHY" == "healthy" ]]; then
+    echo "All databases healthy"
+    break
+  fi
+  
+  if [[ $i -eq 30 ]]; then
+    echo "ERROR: Databases failed to become healthy after 60s"
+    echo "  Postgres: $POSTGRES_HEALTHY"
+    echo "  ClickHouse: $CLICKHOUSE_HEALTHY"
+    echo "  Redis: $REDIS_HEALTHY"
+    exit 1
+  fi
+  
+  echo "  Waiting... (Postgres: $POSTGRES_HEALTHY, ClickHouse: $CLICKHOUSE_HEALTHY, Redis: $REDIS_HEALTHY)"
+  sleep 2
+done
+
 # 4. Pull new images
 docker compose -f "$COMPOSE_FILE" pull backend-$INACTIVE dashboard-$INACTIVE
 
