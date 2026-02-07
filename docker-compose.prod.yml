@@ -65,7 +65,7 @@ services:
         soft: 262144
         hard: 262144
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--timeout=3", "-O", "-", "http://localhost:8123/ping"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--timeout=3", "-O", "-", "http://127.0.0.1:8123/ping"]
       interval: 10s
       timeout: 5s
       retries: 5
