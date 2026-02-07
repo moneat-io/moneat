@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Blue/green deployment script. Run from repo root (e.g. /opt/moneat).
 # Usage: ./deploy/scripts/deploy.sh <IMAGE_TAG>
-# Requires: .env.prod, external volumes created, docker compose.
+# Requires: .env, external volumes created, docker compose.
 
 IMAGE_TAG="${1:?Usage: $0 <IMAGE_TAG>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,14 +15,14 @@ UPSTREAM_CONF="$NGINX_CONF_DIR/upstream.conf"
 
 cd "$REPO_ROOT"
 
-if [[ ! -f .env.prod ]]; then
-  echo "ERROR: .env.prod not found in $REPO_ROOT"
+if [[ ! -f .env ]]; then
+  echo "ERROR: .env not found in $REPO_ROOT"
   exit 1
 fi
 
 # Load env for compose
 set -a
-source .env.prod
+source .env
 set +a
 
 export IMAGE_TAG
