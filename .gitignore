@@ -86,3 +86,7 @@ e2e/**/.idea/
 e2e/**/*.iml
 e2e/**/local.properties
 e2e/**/.DS_Store
+
+# Deployment scripts (server-only)
+verify.sh
+deploy/nginx/conf.d/*.disabled
