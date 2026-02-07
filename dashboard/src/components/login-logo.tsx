@@ -1,5 +1,5 @@
-import { Logo } from '@/components/logo'
-import { cn } from '@/lib/utils'
+import {Logo} from '@/components/logo'
+import {cn} from '@/lib/utils'
 
 interface LoginLogoProps {
   className?: string

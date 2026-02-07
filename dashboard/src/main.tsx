@@ -1,10 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { routeTree } from './routeTree.gen'
-import { ProjectProvider } from './contexts/project-context'
-import { TooltipProvider } from './components/ui/tooltip'
+import {createRouter, RouterProvider} from '@tanstack/react-router'
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {routeTree} from './routeTree.gen'
+import {ProjectProvider} from './contexts/project-context'
+import {TooltipProvider} from './components/ui/tooltip'
 import './index.css'
 
 const queryClient = new QueryClient()

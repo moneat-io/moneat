@@ -1,15 +1,8 @@
-import { Link } from '@tanstack/react-router'
-import { Check, X, Activity, Zap, Play } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import {Link} from '@tanstack/react-router'
+import {Activity, Check, Play, X, Zap} from 'lucide-react'
+import {Button} from '@/components/ui/button'
+import {Card, CardContent} from '@/components/ui/card'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
 
 const stats = [
   { value: '10x', label: 'More errors included' },

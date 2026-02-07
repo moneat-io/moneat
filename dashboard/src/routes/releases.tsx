@@ -1,20 +1,14 @@
-import { createFileRoute, Link, Outlet, redirect, useMatches } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { useMemo, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { StatsCard } from '@/components/charts/stats-card'
-import { Activity, AlertCircle, Users, Package, ShieldCheck, Flame, Search } from 'lucide-react'
+import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {useMemo, useState} from 'react'
+import {Card, CardContent} from '@/components/ui/card'
+import {Input} from '@/components/ui/input'
+import {Badge} from '@/components/ui/badge'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
+import {StatsCard} from '@/components/charts/stats-card'
+import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/releases')({
   beforeLoad: async () => {

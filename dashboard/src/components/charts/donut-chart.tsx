@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts'
 
 interface DonutChartProps {
   data: Record<string, number>

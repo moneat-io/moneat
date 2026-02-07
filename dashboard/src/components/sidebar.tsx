@@ -1,43 +1,33 @@
-import { useState } from 'react'
-import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { Button } from '@/components/ui/button'
+import {useState} from 'react'
+import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {ThemeToggle} from '@/components/theme-toggle'
+import {Button} from '@/components/ui/button'
 import {
-  Home,
-  FolderKanban,
-  Settings,
-  LogOut,
+  BarChart3,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
-  User,
-  BarChart3,
-  Timer,
-  BookOpen,
+  FolderKanban,
+  Home,
+  LogOut,
+  MessageSquare,
   Package,
   Play,
-  MessageSquare,
+  Settings,
   Shield,
+  Timer,
+  User,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { getPlatformInfo } from '@/routes/projects'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Logo } from '@/components/logo'
+import {cn} from '@/lib/utils'
+import {getPlatformInfo} from '@/routes/projects'
+import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,} from '@/components/ui/dropdown-menu'
+import {Select, SelectContent, SelectItem, SelectTrigger,} from '@/components/ui/select'
+import {Avatar, AvatarFallback} from '@/components/ui/avatar'
+import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
+import {Logo} from '@/components/logo'
 
 export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false)

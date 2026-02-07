@@ -1,13 +1,13 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { useMemo, useRef, useState } from 'react'
-import { api } from '@/lib/api'
-import { ReplayPlayer, type ReplayPlayerHandle } from '@/components/replay-player'
-import { MobileReplayViewer, type MobileReplayViewerHandle } from '@/components/mobile-replay-viewer'
-import { ReplayTimelinePanel } from '@/components/replay-timeline-panel'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { ChevronLeft, User, Monitor, Globe, AlertCircle, DatabaseZap, Tag } from 'lucide-react'
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {useMemo, useRef, useState} from 'react'
+import {api} from '@/lib/api'
+import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/replay-player'
+import {MobileReplayViewer, type MobileReplayViewerHandle} from '@/components/mobile-replay-viewer'
+import {ReplayTimelinePanel} from '@/components/replay-timeline-panel'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Badge} from '@/components/ui/badge'
+import {AlertCircle, ChevronLeft, DatabaseZap, Globe, Monitor, Tag, User} from 'lucide-react'
 
 export const Route = createFileRoute('/replays/$replayId')({
   beforeLoad: () => {

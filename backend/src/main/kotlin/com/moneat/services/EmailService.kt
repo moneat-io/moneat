@@ -8,7 +8,7 @@ import jakarta.mail.internet.MimeMessage
 import jakarta.mail.internet.MimeMultipart
 import mu.KotlinLogging
 import java.io.File
-import java.util.Properties
+import java.util.*
 
 private val logger = KotlinLogging.logger {}
 

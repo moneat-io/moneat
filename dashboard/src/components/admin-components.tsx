@@ -1,8 +1,8 @@
-import { type ReactNode } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
-import type { LucideIcon } from 'lucide-react'
+import {type ReactNode} from 'react'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Badge} from '@/components/ui/badge'
+import {cn} from '@/lib/utils'
+import type {LucideIcon} from 'lucide-react'
 
 // ─── Plan Badge ─────────────────────────────────────────────────────────────
 

@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import type { ReplayTimelineItem as ReplayTimelineItemType } from '@/lib/api'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
-import { AlertCircle, Layers, Activity, ExternalLink } from 'lucide-react'
+import React, {useEffect, useMemo, useRef, useState} from 'react'
+import {Link} from '@tanstack/react-router'
+import type {ReplayTimelineItem as ReplayTimelineItemType} from '@/lib/api'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {cn} from '@/lib/utils'
+import {Activity, AlertCircle, ExternalLink, Layers} from 'lucide-react'
 
 export interface ReplayTimelinePanelProps {
   items: ReplayTimelineItemType[]

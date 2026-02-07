@@ -1,35 +1,20 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {createFileRoute} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useState} from 'react'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
+import {AlertCircle, ArrowRightLeft, HardDrive, MonitorPlay} from 'lucide-react'
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { AlertCircle, ArrowRightLeft, HardDrive, MonitorPlay } from 'lucide-react'
-import {
-  MetricCard,
-  SectionHeader,
-  AdminSkeleton,
-  EmptyState,
-  ChartTooltipContent,
-  formatBytes,
-  formatNumber,
-  eventTypeColors,
+    AdminSkeleton,
+    ChartTooltipContent,
+    EmptyState,
+    eventTypeColors,
+    formatBytes,
+    formatNumber,
+    MetricCard,
+    SectionHeader,
 } from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/usage')({

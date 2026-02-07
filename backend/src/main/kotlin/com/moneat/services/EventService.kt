@@ -9,7 +9,7 @@ import io.ktor.http.*
 import io.ktor.server.config.*
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.charset.StandardCharsets

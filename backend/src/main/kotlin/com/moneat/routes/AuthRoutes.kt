@@ -1,12 +1,6 @@
 package com.moneat.routes
 
-import com.moneat.models.CompleteOnboardingRequest
-import com.moneat.models.ForgotPasswordRequest
-import com.moneat.models.LoginRequest
-import com.moneat.models.ResendVerificationRequest
-import com.moneat.models.ResetPasswordRequest
-import com.moneat.models.SignupRequest
-import com.moneat.models.VerifyEmailRequest
+import com.moneat.models.*
 import com.moneat.services.AuthService
 import io.ktor.http.*
 import io.ktor.server.application.*

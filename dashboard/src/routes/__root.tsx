@@ -1,7 +1,7 @@
-import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
-import { Sidebar } from '../components/sidebar'
-import { Toaster } from '../components/ui/toaster'
-import { api } from '../lib/api'
+import {createRootRoute, Outlet, useRouterState} from '@tanstack/react-router'
+import {Sidebar} from '../components/sidebar'
+import {Toaster} from '../components/ui/toaster'
+import {api} from '../lib/api'
 
 export const Route = createRootRoute({
   component: RootComponent,

@@ -1,29 +1,16 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { EventsChart } from '@/components/charts/events-chart'
-import { BarChart } from '@/components/charts/bar-chart'
-import { StatsCard } from '@/components/charts/stats-card'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Activity, ArrowUpDown, Gauge, Timer } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import {createFileRoute, useNavigate} from '@tanstack/react-router'
+import {useMemo, useState} from 'react'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {EventsChart} from '@/components/charts/events-chart'
+import {BarChart} from '@/components/charts/bar-chart'
+import {StatsCard} from '@/components/charts/stats-card'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
+import {Activity, ArrowUpDown, Gauge, Timer} from 'lucide-react'
+import {Button} from '@/components/ui/button'
 
 type SortKey = 'name' | 'op' | 'tpm' | 'p50' | 'p75' | 'p95' | 'failureRate'
 

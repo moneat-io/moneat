@@ -1,31 +1,31 @@
-import { createFileRoute, redirect, Link } from '@tanstack/react-router'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { formatRelativeTime } from '@/lib/utils'
-import { useToast } from '@/hooks/use-toast'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { SpanWaterfall } from '@/components/span-waterfall'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  CheckCircle2, 
-  AlertCircle, 
-  ChevronLeft,
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {formatRelativeTime} from '@/lib/utils'
+import {useToast} from '@/hooks/use-toast'
+import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {SpanWaterfall} from '@/components/span-waterfall'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {
   Activity,
+  AlertCircle,
   ArrowUpRight,
-  MousePointer,
-  Navigation,
-  Zap,
-  Info,
-  MessageSquare,
+  Battery,
+  CheckCircle2,
+  ChevronLeft,
+  Circle,
   Clock3,
   DatabaseZap,
   Globe,
-  Smartphone,
-  Battery,
-  Circle,
+  Info,
+  MessageSquare,
+  MousePointer,
+  Navigation,
   Play,
+  Smartphone,
+  Zap,
 } from 'lucide-react'
 
 // Helper function to get level color

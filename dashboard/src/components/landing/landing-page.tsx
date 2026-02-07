@@ -1,8 +1,8 @@
-import { Link } from '@tanstack/react-router'
-import { Logo } from '@/components/logo'
-import { Button } from '@/components/ui/button'
-import { VariantA } from './variant-a'
-import { PricingSection } from './pricing-section'
+import {Link} from '@tanstack/react-router'
+import {Logo} from '@/components/logo'
+import {Button} from '@/components/ui/button'
+import {VariantA} from './variant-a'
+import {PricingSection} from './pricing-section'
 
 export function LandingPage() {
   return (

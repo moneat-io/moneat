@@ -1,24 +1,17 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {createFileRoute} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
+import {AlertTriangle, Database, Rows3} from 'lucide-react'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { AlertTriangle, Database, Rows3 } from 'lucide-react'
-import {
-  MetricCard,
-  StorageRing,
-  SectionHeader,
   AdminSkeleton,
   EmptyState,
   formatBytes,
   formatNumber,
+  MetricCard,
+  SectionHeader,
+  StorageRing,
 } from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/infrastructure')({

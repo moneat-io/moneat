@@ -1,12 +1,12 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EventsChart } from '@/components/charts/events-chart'
-import { BarChart } from '@/components/charts/bar-chart'
-import { StatsCard } from '@/components/charts/stats-card'
-import { Activity, AlertCircle, Users, ArrowLeft } from 'lucide-react'
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {EventsChart} from '@/components/charts/events-chart'
+import {BarChart} from '@/components/charts/bar-chart'
+import {StatsCard} from '@/components/charts/stats-card'
+import {Activity, AlertCircle, ArrowLeft, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/releases/$version')({
   beforeLoad: async () => {

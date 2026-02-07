@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react'
-import type { Span, TransactionDetail } from '@/lib/api'
-import { ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import {useMemo, useRef, useState} from 'react'
+import type {Span, TransactionDetail} from '@/lib/api'
+import {ChevronDown, ChevronRight} from 'lucide-react'
+import {cn} from '@/lib/utils'
 
 type SpanNode = Span & { children: SpanNode[] }
 type VisibleSpan = { span: SpanNode; depth: number }

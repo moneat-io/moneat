@@ -1,15 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts'
-import type { TimelinePoint } from '@/lib/api'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
+import type {TimelinePoint} from '@/lib/api'
 
 interface ReleaseMarker {
   version: string

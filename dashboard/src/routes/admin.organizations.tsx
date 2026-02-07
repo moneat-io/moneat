@@ -1,23 +1,16 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { Card, CardContent } from '@/components/ui/card'
+import {createFileRoute, Link} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {Card, CardContent} from '@/components/ui/card'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
+import {Building2} from 'lucide-react'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Building2 } from 'lucide-react'
-import {
-  PlanBadge,
-  QuotaBar,
-  SectionHeader,
   AdminSkeleton,
   EmptyState,
   formatNumber,
+  PlanBadge,
+  QuotaBar,
+  SectionHeader,
 } from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/organizations')({

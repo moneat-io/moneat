@@ -1,40 +1,29 @@
-import { createFileRoute, Outlet, redirect, useMatches, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { formatRelativeTime } from '@/lib/utils'
-import { useState, useMemo } from 'react'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Button } from '@/components/ui/button'
+import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {formatRelativeTime} from '@/lib/utils'
+import {useMemo, useState} from 'react'
+import {Card} from '@/components/ui/card'
+import {Badge} from '@/components/ui/badge'
+import {Input} from '@/components/ui/input'
+import {Avatar, AvatarFallback} from '@/components/ui/avatar'
+import {Button} from '@/components/ui/button'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import {
-  Play,
   AlertCircle,
-  Globe,
-  User,
-  Monitor,
-  Clock,
-  Search,
-  Video,
-  Timer,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Globe,
+  Monitor,
   MousePointerClick,
+  Play,
+  Search,
+  Timer,
+  User,
+  Video,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/replays')({

@@ -1,14 +1,6 @@
-import { Link } from '@tanstack/react-router'
-import {
-  Activity,
-  Zap,
-  Play,
-  GitBranch,
-  MessageSquare,
-  Shield,
-  ArrowRight,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import {Link} from '@tanstack/react-router'
+import {Activity, ArrowRight, GitBranch, MessageSquare, Play, Shield, Zap,} from 'lucide-react'
+import {Button} from '@/components/ui/button'
 
 const features = [
   {

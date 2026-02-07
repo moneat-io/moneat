@@ -2,7 +2,7 @@ package com.moneat.models
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
-import java.util.UUID
+import java.util.*
 
 @Serializable
 data class SentryEnvelope(

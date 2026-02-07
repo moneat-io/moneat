@@ -1,26 +1,18 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Building2, Users, Activity, DollarSign, BarChart3, Database, ArrowUpRight, Crown } from 'lucide-react'
+import {createFileRoute, Link} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Activity, ArrowUpRight, BarChart3, Building2, Crown, Database, DollarSign, Users} from 'lucide-react'
+import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
-import {
-  MetricCard,
-  PlanBadge,
-  ChartTooltipContent,
-  SectionHeader,
   AdminSkeleton,
+  ChartTooltipContent,
   EmptyState,
   formatBytes,
   formatNumber,
+  MetricCard,
+  PlanBadge,
+  SectionHeader,
 } from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/')({

@@ -1,37 +1,21 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import {createFileRoute, Link} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Badge} from '@/components/ui/badge'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
+import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
+import {ArrowLeft, FolderKanban, HardDrive, Users, Zap} from 'lucide-react'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts'
-import { ArrowLeft, Users, FolderKanban, Zap, HardDrive } from 'lucide-react'
-import {
+  AdminSkeleton,
+  ChartTooltipContent,
+  EmptyState,
+  eventTypeColors,
+  formatBytes,
+  formatNumber,
   MetricCard,
   PlanBadge,
   QuotaBar,
-  ChartTooltipContent,
-  AdminSkeleton,
-  EmptyState,
-  formatBytes,
-  formatNumber,
-  eventTypeColors,
 } from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/organizations/$orgId')({

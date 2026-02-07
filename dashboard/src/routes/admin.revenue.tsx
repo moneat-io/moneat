@@ -1,14 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { DollarSign, Users, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
-import {
-  MetricCard,
-  PlanBadge,
-  SectionHeader,
-  AdminSkeleton,
-} from '@/components/admin-components'
+import {createFileRoute} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {DollarSign, TrendingDown, TrendingUp, Users, Wallet} from 'lucide-react'
+import {AdminSkeleton, MetricCard, PlanBadge, SectionHeader,} from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/revenue')({
   component: AdminRevenuePage,

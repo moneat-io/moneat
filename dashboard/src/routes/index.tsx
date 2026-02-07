@@ -1,26 +1,20 @@
-import { createFileRoute, redirect, Link } from '@tanstack/react-router'
-import { LandingPage } from '@/components/landing/landing-page'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { formatRelativeTime } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Card } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Plus, Search, Activity, AlertCircle, Users, TrendingUp, FolderKanban, CheckCircle2 } from 'lucide-react'
-import { useState } from 'react'
-import { StatsCard } from '@/components/charts/stats-card'
-import { EventsChart } from '@/components/charts/events-chart'
-import { useToast } from '@/hooks/use-toast'
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {LandingPage} from '@/components/landing/landing-page'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {formatRelativeTime} from '@/lib/utils'
+import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
+import {Card} from '@/components/ui/card'
+import {Checkbox} from '@/components/ui/checkbox'
+import {Activity, AlertCircle, CheckCircle2, FolderKanban, Plus, Search, TrendingUp, Users} from 'lucide-react'
+import {useState} from 'react'
+import {StatsCard} from '@/components/charts/stats-card'
+import {EventsChart} from '@/components/charts/events-chart'
+import {useToast} from '@/hooks/use-toast'
 
 // Helper function to get level color
 function getLevelColor(level: string): string {

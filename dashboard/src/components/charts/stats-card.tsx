@@ -1,5 +1,5 @@
-import { Card, CardContent } from '@/components/ui/card'
-import { LucideIcon } from 'lucide-react'
+import {Card, CardContent} from '@/components/ui/card'
+import {LucideIcon} from 'lucide-react'
 
 const ACCENT_STYLES: Record<string, { bar: string; icon: string }> = {
   blue: { bar: 'bg-blue-500', icon: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },

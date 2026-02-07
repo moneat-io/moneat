@@ -1,10 +1,10 @@
-import { Link } from '@tanstack/react-router'
-import { Activity, Zap, Play, GitBranch, MessageSquare, Terminal } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import {Link} from '@tanstack/react-router'
+import {Activity, GitBranch, MessageSquare, Play, Terminal, Zap} from 'lucide-react'
+import {Button} from '@/components/ui/button'
+import {Card, CardContent} from '@/components/ui/card'
+import {Badge} from '@/components/ui/badge'
+import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
+import {oneDark} from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 const sdkCode = `// Install: npm install @sentry/react
 import * as Sentry from "@sentry/react";

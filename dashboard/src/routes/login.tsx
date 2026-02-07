@@ -1,10 +1,10 @@
-import { createFileRoute, redirect, Link, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { api } from '@/lib/api'
-import { Logo } from '@/components/logo'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
+import {useState} from 'react'
+import {api} from '@/lib/api'
+import {Logo} from '@/components/logo'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Label} from '@/components/ui/label'
 
 export const Route = createFileRoute('/login')({
   beforeLoad: () => {

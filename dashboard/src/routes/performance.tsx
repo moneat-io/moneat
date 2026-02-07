@@ -1,5 +1,5 @@
-import { createFileRoute, redirect, Outlet } from '@tanstack/react-router'
-import { api } from '@/lib/api'
+import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
+import {api} from '@/lib/api'
 
 export const Route = createFileRoute('/performance')({
   beforeLoad: async () => {

@@ -1,21 +1,15 @@
-import { createFileRoute, redirect, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { useState } from 'react'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { EventsChart } from '@/components/charts/events-chart'
-import { DonutChart } from '@/components/charts/donut-chart'
-import { BarChart } from '@/components/charts/bar-chart'
-import { StatsCard } from '@/components/charts/stats-card'
-import { Activity, AlertCircle, Users, TrendingUp } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {useState} from 'react'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
+import {EventsChart} from '@/components/charts/events-chart'
+import {DonutChart} from '@/components/charts/donut-chart'
+import {BarChart} from '@/components/charts/bar-chart'
+import {StatsCard} from '@/components/charts/stats-card'
+import {Activity, AlertCircle, TrendingUp, Users} from 'lucide-react'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 
 export const Route = createFileRoute('/analytics')({
   beforeLoad: async () => {

@@ -1,6 +1,6 @@
-import { createFileRoute, redirect, Link, Outlet, useRouterState } from '@tanstack/react-router'
-import { api } from '@/lib/api'
-import { LayoutDashboard, Building2, BarChart3, DollarSign, Server, ArrowLeft, Shield } from 'lucide-react'
+import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
+import {api} from '@/lib/api'
+import {ArrowLeft, BarChart3, Building2, DollarSign, LayoutDashboard, Server, Shield} from 'lucide-react'
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
