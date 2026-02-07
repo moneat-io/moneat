@@ -1,5 +1,9 @@
 -- ClickHouse initialization script
 
+-- Create database and use it
+CREATE DATABASE IF NOT EXISTS moneat;
+USE moneat;
+
 -- Events table for error/transaction storage
 CREATE TABLE IF NOT EXISTS events (
     event_id UUID,
