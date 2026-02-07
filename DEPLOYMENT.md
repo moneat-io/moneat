@@ -273,9 +273,18 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
 3. **Start nginx and certbot**:
 
+   First, temporarily disable the upstream config (which references backend containers that don't exist yet):
+
    ```bash
    cd /opt/moneat
+   mv deploy/nginx/conf.d/upstream.conf deploy/nginx/conf.d/upstream.conf.disabled
    docker compose -f docker-compose.prod.yml up -d nginx certbot
+   ```
+
+   Verify nginx is running:
+
+   ```bash
+   docker ps | grep nginx
    ```
 
 4. **Request the SSL certificate** (replace `YOUR_EMAIL` with your email):
