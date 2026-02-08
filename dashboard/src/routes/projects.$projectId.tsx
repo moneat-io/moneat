@@ -1,4 +1,4 @@
-import {createFileRoute, redirect, useRouter} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, redirect, useMatches, useRouter} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {getSetupDocs} from '@/lib/setup-docs'
 import {getPlatformInfo} from '@/routes/projects'
@@ -6,7 +6,7 @@ import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
-import {Check, Copy, Plus, X} from 'lucide-react'
+import {Check, Copy, Plus, Settings, X} from 'lucide-react'
 import {useEffect, useState} from 'react'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -102,6 +102,8 @@ function CodeBlock({
 }
 
 function SetupPage() {
+  const matches = useMatches()
+  const showingSettingsPage = matches.some(match => match.id === '/projects/$projectId/settings')
   const { project } = Route.useLoaderData()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -163,6 +165,10 @@ function SetupPage() {
 
   const docs = getCurrentDocs(selectedTarget)
 
+  if (showingSettingsPage) {
+    return <Outlet />
+  }
+
   if (!docs) {
     return (
       <div className="min-h-screen bg-background p-8">
@@ -179,25 +185,32 @@ function SetupPage() {
         style={{ background: `linear-gradient(90deg, ${accentColor}, transparent 60%)` }}
       />
       <div className="p-6 max-w-4xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-2">
-            {platformInfo && PlatformIcon && (
-              <Badge
-                className="flex items-center gap-1.5 px-2.5 py-1 text-white border-0 shadow-sm"
-                style={{ backgroundColor: platformInfo.color }}
-              >
-                <div className="w-4 h-4 flex items-center justify-center">
-                  <PlatformIcon className="w-full h-full" />
-                </div>
-                <span className="text-sm font-medium">{platformInfo.name}</span>
-              </Badge>
-            )}
-            <span className="text-sm text-muted-foreground">{docs.sdkName}</span>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              {platformInfo && PlatformIcon && (
+                <Badge
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-white border-0 shadow-sm"
+                  style={{ backgroundColor: platformInfo.color }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    <PlatformIcon className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-medium">{platformInfo.name}</span>
+                </Badge>
+              )}
+              <span className="text-sm text-muted-foreground">{docs.sdkName}</span>
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+              {project.name}
+            </h1>
+            <p className="text-muted-foreground mt-1">Setup Guide</p>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
-            {project.name}
-          </h1>
-          <p className="text-muted-foreground mt-1">Setup Guide</p>
+          <Button asChild variant="outline" size="icon" aria-label="Project settings">
+            <Link to="/projects/$projectId/settings" params={{ projectId: String(project.id) }}>
+              <Settings className="h-4 w-4" />
+            </Link>
+          </Button>
         </div>
 
         {/* Target Platforms Card - for multiplatform projects */}

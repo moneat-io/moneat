@@ -7,7 +7,11 @@ import kotlinx.serialization.json.JsonElement
 data class SignupRequest(
     val email: String,
     val password: String,
-    val name: String?
+    val name: String?,
+    val acceptTerms: Boolean,
+    val acceptPrivacy: Boolean,
+    val termsVersion: String,
+    val privacyVersion: String
 )
 
 @Serializable

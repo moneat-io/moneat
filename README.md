@@ -55,7 +55,11 @@ curl -X POST http://localhost:8080/auth/signup \
   -d '{
     "email": "test@example.com",
     "password": "password123",
-    "name": "Test User"
+    "name": "Test User",
+    "acceptTerms": true,
+    "acceptPrivacy": true,
+    "termsVersion": "2026-02-08",
+    "privacyVersion": "2026-02-08"
   }'
 ```
 

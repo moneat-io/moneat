@@ -20,6 +20,21 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_verification_token ON users(email_verification_token);
 CREATE INDEX idx_users_reset_token ON users(password_reset_token);
 
+-- User legal acceptance audit trail
+CREATE TABLE IF NOT EXISTS user_legal_acceptances (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    document_type VARCHAR(20) NOT NULL,
+    document_version VARCHAR(32) NOT NULL,
+    accepted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(64),
+    user_agent TEXT,
+    UNIQUE(user_id, document_type, document_version)
+);
+
+CREATE INDEX idx_user_legal_acceptances_user ON user_legal_acceptances(user_id);
+CREATE INDEX idx_user_legal_acceptances_doc_version ON user_legal_acceptances(document_type, document_version);
+
 -- Organizations
 CREATE TABLE IF NOT EXISTS organizations (
     id SERIAL PRIMARY KEY,

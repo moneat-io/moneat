@@ -1,0 +1,2 @@
+export const LEGAL_TERMS_VERSION = import.meta.env.VITE_LEGAL_TERMS_VERSION || '2026-02-08'
+export const LEGAL_PRIVACY_VERSION = import.meta.env.VITE_LEGAL_PRIVACY_VERSION || '2026-02-08'

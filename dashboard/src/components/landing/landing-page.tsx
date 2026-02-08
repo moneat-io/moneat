@@ -81,6 +81,18 @@ export function LandingPage() {
               >
                 Sign up
               </Link>
+              <Link
+                to="/legal/terms"
+                className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
+              >
+                Terms
+              </Link>
+              <Link
+                to="/legal/privacy"
+                className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
+              >
+                Privacy
+              </Link>
             </nav>
           </div>
           <div className="mt-10 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">

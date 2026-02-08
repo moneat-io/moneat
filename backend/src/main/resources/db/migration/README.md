@@ -22,6 +22,7 @@ Migrations run automatically on application startup before the server starts acc
 - `V4__add_password_reset.sql` - Password reset tokens
 - `V5__add_auth_tokens.sql` - API authentication tokens
 - `V6__add_release_stats.sql` - Release tracking columns
+- `V16__add_user_legal_acceptance.sql` - Signup legal consent audit trail
 
 ## Adding New Migrations
 

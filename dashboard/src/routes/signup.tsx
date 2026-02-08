@@ -2,8 +2,10 @@ import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useState} from 'react'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
+import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
+import {LEGAL_PRIVACY_VERSION, LEGAL_TERMS_VERSION} from '@/lib/legal'
 import {Logo} from '@/components/logo'
 
 export const Route = createFileRoute('/signup')({
@@ -19,6 +21,7 @@ function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [acceptedLegal, setAcceptedLegal] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [resending, setResending] = useState(false)
@@ -28,8 +31,18 @@ function SignupPage() {
     e.preventDefault()
     setError('')
 
+    if (!acceptedLegal) {
+      setError('You must agree to the Terms of Use and Privacy Policy to create an account.')
+      return
+    }
+
     try {
-      await api.signup(email, password, name || undefined)
+      await api.signup(email, password, name || undefined, {
+        acceptTerms: true,
+        acceptPrivacy: true,
+        termsVersion: LEGAL_TERMS_VERSION,
+        privacyVersion: LEGAL_PRIVACY_VERSION,
+      })
       setSuccess(true)
     } catch (err) {
       setError('Failed to create account. Email may already be in use.')
@@ -151,7 +164,26 @@ function SignupPage() {
                     />
                   </div>
 
-                  <Button type="submit" className="w-full">
+                  <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+                    <Checkbox
+                      id="accept-legal"
+                      checked={acceptedLegal}
+                      onCheckedChange={(checked) => setAcceptedLegal(checked === true)}
+                      className="mt-0.5"
+                    />
+                    <Label htmlFor="accept-legal" className="text-sm font-normal leading-relaxed">
+                      I agree to the{' '}
+                      <Link to="/legal/terms" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                        Terms of Use
+                      </Link>{' '}
+                      and{' '}
+                      <Link to="/legal/privacy" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                        Privacy Policy
+                      </Link>.
+                    </Label>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={!acceptedLegal}>
                     Sign up
                   </Button>
                 </form>

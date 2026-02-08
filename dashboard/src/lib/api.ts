@@ -12,6 +12,13 @@ interface AuthResponse {
   }
 }
 
+interface SignupLegalConsent {
+  acceptTerms: boolean
+  acceptPrivacy: boolean
+  termsVersion: string
+  privacyVersion: string
+}
+
 interface ProjectKey {
   platformTarget: string | null
   dsn: string
@@ -636,10 +643,10 @@ class ApiClient {
     }
   }
 
-  async signup(email: string, password: string, name?: string): Promise<AuthResponse> {
+  async signup(email: string, password: string, name: string | undefined, legalConsent: SignupLegalConsent): Promise<AuthResponse> {
     const response = await this.request<AuthResponse>(`${API_BASE.replace('/v1', '')}/auth/signup`, {
       method: 'POST',
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, name, ...legalConsent }),
     })
     localStorage.setItem('auth_token', response.token)
     return response

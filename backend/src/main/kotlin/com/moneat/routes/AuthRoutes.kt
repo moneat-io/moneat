@@ -2,10 +2,12 @@ package com.moneat.routes
 
 import com.moneat.models.*
 import com.moneat.services.AuthService
+import com.moneat.services.SignupRequestContext
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -16,9 +18,20 @@ fun Route.authRoutes() {
     route("/auth") {
         post("/signup") {
             val request = call.receive<SignupRequest>()
+            val forwardedFor = call.request.headers["X-Forwarded-For"]
+                ?.split(",")
+                ?.firstOrNull()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val remoteHost = call.request.origin.remoteHost.takeIf { it.isNotBlank() }
+            val userAgent = call.request.headers["User-Agent"]?.trim()?.takeIf { it.isNotBlank() }?.take(2048)
+            val context = SignupRequestContext(
+                ipAddress = forwardedFor ?: remoteHost,
+                userAgent = userAgent
+            )
             
             try {
-                val result = authService.signup(request)
+                val result = authService.signup(request, context)
                 call.respond(HttpStatusCode.Created, result)
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
@@ -70,7 +83,7 @@ fun Route.authRoutes() {
             val request = call.receive<ForgotPasswordRequest>()
             
             // Always return success to prevent email enumeration
-            val success = authService.requestPasswordReset(request.email)
+            authService.requestPasswordReset(request.email)
             call.respond(mapOf("message" to "If an account exists with this email, a password reset link has been sent"))
         }
         

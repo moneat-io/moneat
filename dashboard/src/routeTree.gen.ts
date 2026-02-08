@@ -8,43 +8,53 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as ReplaysRouteImport } from './routes/replays'
-import { Route as ReleasesRouteImport } from './routes/releases'
-import { Route as ProjectsRouteImport } from './routes/projects'
-import { Route as PerformanceRouteImport } from './routes/performance'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as FeedbackRouteImport } from './routes/feedback'
-import { Route as AnalyticsRouteImport } from './routes/analytics'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
-import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
-import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
-import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
-import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
-import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
-import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
-import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
-import { Route as AdminUsageRouteImport } from './routes/admin.usage'
-import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
-import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
-import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastructure'
-import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
-import { Route as AdminBillingRouteImport } from './routes/admin.billing'
-import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
+import {Route as rootRouteImport} from './routes/__root'
+import {Route as VerifyEmailRouteImport} from './routes/verify-email'
+import {Route as TermsRouteImport} from './routes/terms'
+import {Route as SignupRouteImport} from './routes/signup'
+import {Route as SettingsRouteImport} from './routes/settings'
+import {Route as ResetPasswordRouteImport} from './routes/reset-password'
+import {Route as ReplaysRouteImport} from './routes/replays'
+import {Route as ReleasesRouteImport} from './routes/releases'
+import {Route as ProjectsRouteImport} from './routes/projects'
+import {Route as PrivacyRouteImport} from './routes/privacy'
+import {Route as PerformanceRouteImport} from './routes/performance'
+import {Route as OnboardingRouteImport} from './routes/onboarding'
+import {Route as LoginRouteImport} from './routes/login'
+import {Route as ForgotPasswordRouteImport} from './routes/forgot-password'
+import {Route as FeedbackRouteImport} from './routes/feedback'
+import {Route as AnalyticsRouteImport} from './routes/analytics'
+import {Route as AdminRouteImport} from './routes/admin'
+import {Route as IndexRouteImport} from './routes/index'
+import {Route as PerformanceIndexRouteImport} from './routes/performance.index'
+import {Route as MonitoringIndexRouteImport} from './routes/monitoring.index'
+import {Route as AdminIndexRouteImport} from './routes/admin.index'
+import {Route as ReplaysReplayIdRouteImport} from './routes/replays.$replayId'
+import {Route as ReleasesVersionRouteImport} from './routes/releases.$version'
+import {Route as ProjectsProjectIdRouteImport} from './routes/projects.$projectId'
+import {Route as PerformanceTransactionIdRouteImport} from './routes/performance.$transactionId'
+import {Route as MonitoringSystemIdRouteImport} from './routes/monitoring.$systemId'
+import {Route as LegalTermsRouteImport} from './routes/legal.terms'
+import {Route as LegalPrivacyRouteImport} from './routes/legal.privacy'
+import {Route as IssuesIssueIdRouteImport} from './routes/issues.$issueId'
+import {Route as FeedbackFeedbackIdRouteImport} from './routes/feedback.$feedbackId'
+import {Route as AdminUsageRouteImport} from './routes/admin.usage'
+import {Route as AdminRevenueRouteImport} from './routes/admin.revenue'
+import {Route as AdminOrganizationsRouteImport} from './routes/admin.organizations'
+import {Route as AdminInfrastructureRouteImport} from './routes/admin.infrastructure'
+import {Route as AdminEmailsRouteImport} from './routes/admin.emails'
+import {Route as AdminBillingRouteImport} from './routes/admin.billing'
+import {Route as ProjectsProjectIdSettingsRouteImport} from './routes/projects.$projectId.settings'
+import {Route as AdminOrganizationsOrgIdRouteImport} from './routes/admin.organizations.$orgId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -75,6 +85,11 @@ const ReleasesRoute = ReleasesRouteImport.update({
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PerformanceRoute = PerformanceRouteImport.update({
@@ -158,6 +173,16 @@ const MonitoringSystemIdRoute = MonitoringSystemIdRouteImport.update({
   path: '/monitoring/$systemId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LegalTermsRoute = LegalTermsRouteImport.update({
+  id: '/legal/terms',
+  path: '/legal/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
+  id: '/legal/privacy',
+  path: '/legal/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IssuesIssueIdRoute = IssuesIssueIdRouteImport.update({
   id: '/issues/$issueId',
   path: '/issues/$issueId',
@@ -198,6 +223,12 @@ const AdminBillingRoute = AdminBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AdminRoute,
 } as any)
+const ProjectsProjectIdSettingsRoute =
+  ProjectsProjectIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   id: '/$orgId',
   path: '/$orgId',
@@ -213,12 +244,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
+  '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -228,15 +261,18 @@ export interface FileRoutesByFullPath {
   '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/admin/': typeof AdminIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -245,12 +281,14 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -260,15 +298,18 @@ export interface FileRoutesByTo {
   '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/admin': typeof AdminIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/performance': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -280,12 +321,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
+  '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -295,15 +338,18 @@ export interface FileRoutesById {
   '/admin/usage': typeof AdminUsageRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/admin/': typeof AdminIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -316,12 +362,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/performance'
+    | '/privacy'
     | '/projects'
     | '/releases'
     | '/replays'
     | '/reset-password'
     | '/settings'
     | '/signup'
+    | '/terms'
     | '/verify-email'
     | '/admin/billing'
     | '/admin/emails'
@@ -331,6 +379,8 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/monitoring/$systemId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
@@ -340,6 +390,7 @@ export interface FileRouteTypes {
     | '/monitoring/'
     | '/performance/'
     | '/admin/organizations/$orgId'
+    | '/projects/$projectId/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -348,12 +399,14 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/onboarding'
+    | '/privacy'
     | '/projects'
     | '/releases'
     | '/replays'
     | '/reset-password'
     | '/settings'
     | '/signup'
+    | '/terms'
     | '/verify-email'
     | '/admin/billing'
     | '/admin/emails'
@@ -363,6 +416,8 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/monitoring/$systemId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
@@ -372,6 +427,7 @@ export interface FileRouteTypes {
     | '/monitoring'
     | '/performance'
     | '/admin/organizations/$orgId'
+    | '/projects/$projectId/settings'
   id:
     | '__root__'
     | '/'
@@ -382,12 +438,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/performance'
+    | '/privacy'
     | '/projects'
     | '/releases'
     | '/replays'
     | '/reset-password'
     | '/settings'
     | '/signup'
+    | '/terms'
     | '/verify-email'
     | '/admin/billing'
     | '/admin/emails'
@@ -397,6 +455,8 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/monitoring/$systemId'
     | '/performance/$transactionId'
     | '/projects/$projectId'
@@ -406,6 +466,7 @@ export interface FileRouteTypes {
     | '/monitoring/'
     | '/performance/'
     | '/admin/organizations/$orgId'
+    | '/projects/$projectId/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -417,14 +478,18 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
+  PrivacyRoute: typeof PrivacyRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   ReleasesRoute: typeof ReleasesRouteWithChildren
   ReplaysRoute: typeof ReplaysRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
+  TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
+  LegalPrivacyRoute: typeof LegalPrivacyRoute
+  LegalTermsRoute: typeof LegalTermsRoute
   MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
 }
@@ -436,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -478,6 +550,13 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/performance': {
@@ -592,6 +671,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringSystemIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/legal/terms': {
+      id: '/legal/terms'
+      path: '/legal/terms'
+      fullPath: '/legal/terms'
+      preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/privacy': {
+      id: '/legal/privacy'
+      path: '/legal/privacy'
+      fullPath: '/legal/privacy'
+      preLoaderRoute: typeof LegalPrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/issues/$issueId': {
       id: '/issues/$issueId'
       path: '/issues/$issueId'
@@ -647,6 +740,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/billing'
       preLoaderRoute: typeof AdminBillingRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/projects/$projectId/settings': {
+      id: '/projects/$projectId/settings'
+      path: '/settings'
+      fullPath: '/projects/$projectId/settings'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
     }
     '/admin/organizations/$orgId': {
       id: '/admin/organizations/$orgId'
@@ -717,12 +817,23 @@ const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(
   PerformanceRouteChildren,
 )
 
+interface ProjectsProjectIdRouteChildren {
+  ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
+}
+
+const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
+  ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
+}
+
+const ProjectsProjectIdRouteWithChildren =
+  ProjectsProjectIdRoute._addFileChildren(ProjectsProjectIdRouteChildren)
+
 interface ProjectsRouteChildren {
-  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
+  ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
 }
 
 const ProjectsRouteChildren: ProjectsRouteChildren = {
-  ProjectsProjectIdRoute: ProjectsProjectIdRoute,
+  ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
 }
 
 const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
@@ -761,14 +872,18 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,
+  PrivacyRoute: PrivacyRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   ReleasesRoute: ReleasesRouteWithChildren,
   ReplaysRoute: ReplaysRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
+  TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   IssuesIssueIdRoute: IssuesIssueIdRoute,
+  LegalPrivacyRoute: LegalPrivacyRoute,
+  LegalTermsRoute: LegalTermsRoute,
   MonitoringSystemIdRoute: MonitoringSystemIdRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
 }

@@ -123,14 +123,14 @@ object DataSeeder {
                 it[organization_id] = orgId
                 it[name] = "Android E2E App"
                 it[slug] = "android-e2e"
-                it[platform] = "android"
+                it[framework] = "android"
             } get Projects.id
             
             val kmpProjectId = Projects.insert {
                 it[organization_id] = orgId
                 it[name] = "KMP E2E App"
                 it[slug] = "kmp-e2e"
-                it[platform] = "kotlin-multiplatform"
+                it[framework] = "kotlin-multiplatform"
             } get Projects.id
             
             println("Created projects: Android=$androidProjectId, KMP=$kmpProjectId")

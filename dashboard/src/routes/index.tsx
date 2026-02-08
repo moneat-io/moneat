@@ -11,16 +11,17 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
 import {
-    Activity,
-    AlertCircle,
-    CheckCircle2,
-    ChevronDown,
-    ChevronRight,
-    FolderKanban,
-    Plus,
-    Search,
-    TrendingUp,
-    Users
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  FolderKanban,
+  Plus,
+  Search,
+  Settings,
+  TrendingUp,
+  Users
 } from 'lucide-react'
 import {useState} from 'react'
 import {StatsCard} from '@/components/charts/stats-card'
@@ -192,12 +193,26 @@ function DashboardPage() {
             <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
           </div>
           {hasProjects && (
-            <Link to="/projects">
-              <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary/10 hover:border-primary/50">
-                <Plus className="h-4 w-4" />
-                New Project
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              {projectId && (
+                <Link to="/projects/$projectId/settings" params={{ projectId: String(projectId) }}>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="border-primary/30 hover:bg-primary/10 hover:border-primary/50"
+                    aria-label="Project settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </Link>
+              )}
+              <Link to="/projects">
+                <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary/10 hover:border-primary/50">
+                  <Plus className="h-4 w-4" />
+                  New Project
+                </Button>
+              </Link>
+            </div>
           )}
         </div>
 

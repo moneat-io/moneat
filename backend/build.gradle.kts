@@ -96,6 +96,7 @@ dependencies {
     // Testing
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
+    testImplementation("com.h2database:h2:2.2.224")
 }
 
 // Task to run the E2E data seeder

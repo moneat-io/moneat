@@ -19,6 +19,17 @@ object Users : Table("users") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object UserLegalAcceptances : Table("user_legal_acceptances") {
+    val id = integer("id").autoIncrement()
+    val user_id = integer("user_id").references(Users.id)
+    val document_type = varchar("document_type", 20)
+    val document_version = varchar("document_version", 32)
+    val accepted_at = timestamp("accepted_at")
+    val ip_address = varchar("ip_address", 64).nullable()
+    val user_agent = text("user_agent").nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
 object Organizations : Table("organizations") {
     val id = integer("id").autoIncrement()
     val name = varchar("name", 255)

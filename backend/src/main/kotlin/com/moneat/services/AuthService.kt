@@ -5,6 +5,7 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.*
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
+import kotlinx.datetime.Clock
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -13,20 +14,36 @@ import org.mindrot.jbcrypt.BCrypt
 import java.security.SecureRandom
 import java.util.*
 
+data class SignupRequestContext(
+    val ipAddress: String? = null,
+    val userAgent: String? = null
+)
+
 class AuthService {
     private val config = ApplicationConfig("application.conf")
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
+    private val legalTermsVersion = config.property("legal.termsVersion").getString()
+    private val legalPrivacyVersion = config.property("legal.privacyVersion").getString()
     private val emailService = EmailService()
     private val secureRandom = SecureRandom()
     
-    fun signup(request: SignupRequest): AuthResponse {
+    fun signup(request: SignupRequest, context: SignupRequestContext = SignupRequestContext()): AuthResponse {
         if (request.email.isBlank() || request.password.length < 8) {
             throw IllegalArgumentException("Invalid email or password too short")
         }
+        validateSignupLegalConsent(request)
         
-        SentryUtils.breadcrumb("auth", "User signup started", mapOf("email" to request.email))
+        SentryUtils.breadcrumb(
+            "auth",
+            "User signup started",
+            mapOf(
+                "email" to request.email,
+                "terms_version" to request.termsVersion,
+                "privacy_version" to request.privacyVersion
+            )
+        )
         
         val (userId, emailVerified) = transaction {
             // Check if user exists
@@ -63,11 +80,40 @@ class AuthService {
                 it[organization_id] = orgId
                 it[role] = "owner"
             }
+
+            val acceptedAt = Clock.System.now()
+            UserLegalAcceptances.insert {
+                it[user_id] = id
+                it[document_type] = "terms"
+                it[document_version] = request.termsVersion
+                it[accepted_at] = acceptedAt
+                it[ip_address] = context.ipAddress
+                it[user_agent] = context.userAgent
+            }
+            UserLegalAcceptances.insert {
+                it[user_id] = id
+                it[document_type] = "privacy"
+                it[document_version] = request.privacyVersion
+                it[accepted_at] = acceptedAt
+                it[ip_address] = context.ipAddress
+                it[user_agent] = context.userAgent
+            }
             
             SentryUtils.breadcrumb("auth", "User created", mapOf(
                 "user_id" to id,
                 "organization_id" to orgId
             ))
+            SentryUtils.breadcrumb(
+                "auth",
+                "Legal consent captured",
+                mapOf(
+                    "user_id" to id,
+                    "terms_version" to request.termsVersion,
+                    "privacy_version" to request.privacyVersion,
+                    "ip_present" to (context.ipAddress != null),
+                    "user_agent_present" to (context.userAgent != null)
+                )
+            )
             
             // Send verification email
             try {
@@ -186,6 +232,15 @@ class AuthService {
         val bytes = ByteArray(32)
         secureRandom.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+    }
+
+    private fun validateSignupLegalConsent(request: SignupRequest) {
+        if (!request.acceptTerms || !request.acceptPrivacy) {
+            throw IllegalArgumentException("You must accept the Terms of Use and Privacy Policy to create an account")
+        }
+        if (request.termsVersion != legalTermsVersion || request.privacyVersion != legalPrivacyVersion) {
+            throw IllegalArgumentException("Please review and accept the latest Terms of Use and Privacy Policy")
+        }
     }
     
     fun requestPasswordReset(email: String): Boolean {
