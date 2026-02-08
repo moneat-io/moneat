@@ -62,7 +62,9 @@ export function AlertsTab({systemId}: AlertsTabProps) {
 
   const alerts = useMemo(() => {
     if (!alertConfig) return []
-    return activeScope === 'global' ? alertConfig.globalAlerts : alertConfig.systemAlerts
+    const baseAlerts = activeScope === 'global' ? alertConfig.globalAlerts : alertConfig.systemAlerts
+    // Sort by ID to maintain stable order regardless of API response order
+    return [...baseAlerts].sort((a, b) => a.id - b.id)
   }, [alertConfig, activeScope])
 
   const scopeMutation = useMutation({
