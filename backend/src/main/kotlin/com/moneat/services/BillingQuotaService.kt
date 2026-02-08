@@ -1,11 +1,10 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import io.ktor.server.config.ApplicationConfig
+import io.ktor.server.config.*
 import kotlinx.datetime.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.math.max
@@ -94,6 +93,7 @@ class BillingQuotaService(
         val organizationId: Int,
         val plan: String,
         val status: String,
+        val retentionDays: Int,
         val subscriptionId: Int?,
         val periodStart: LocalDate,
         val periodEnd: LocalDate,
@@ -206,6 +206,7 @@ class BillingQuotaService(
             organizationId = organizationId,
             plan = tier.tierName.lowercase(),
             status = sub?.get(Subscriptions.status) ?: "active",
+            retentionDays = tier.retentionDays,
             subscriptionId = sub?.get(Subscriptions.id),
             periodStart = periodStart,
             periodEnd = periodEnd,
@@ -226,6 +227,7 @@ class BillingQuotaService(
             organizationId = state.organizationId,
             periodStart = state.periodStart.toString(),
             periodEnd = state.periodEnd.toString(),
+            retentionDays = state.retentionDays,
             usedUnits = state.usedUnits,
             baseLimitUnits = state.baseLimitUnits,
             paygLimitUnits = state.paygLimitUnits,

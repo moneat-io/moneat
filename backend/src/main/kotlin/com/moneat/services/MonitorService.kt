@@ -2,7 +2,6 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
-import com.moneat.services.CacheService
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.datetime.Clock
@@ -16,6 +15,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
+import kotlin.math.max
+import kotlin.math.min
 
 private val logger = KotlinLogging.logger {}
 
@@ -35,6 +36,7 @@ class MonitorService {
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val pricingTierService = PricingTierService()
+    private val retentionPolicyService = RetentionPolicyService()
     private val defaultAlertTemplates = listOf(
         DefaultAlertTemplate(metric = "cpu_percent", condition = ">", threshold = 80.0),
         DefaultAlertTemplate(metric = "mem_percent", condition = ">", threshold = 80.0),
@@ -254,12 +256,14 @@ class MonitorService {
      * Get latest metrics for a system from ClickHouse.
      */
     suspend fun getLatestMetrics(systemId: UUID): LatestMetrics? {
+        val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
         val query = """
             SELECT 
                 cpu_percent, mem_total, mem_used, disk_total, disk_used,
                 net_recv_bytes, net_sent_bytes, load_1, temp_max, gpu_percent, battery_percent
             FROM $clickhouseDb.system_metrics
             WHERE system_id = toUUID('$systemId')
+              AND timestamp >= now() - INTERVAL $retentionDays DAY
             ORDER BY timestamp DESC
             LIMIT 1
             FORMAT JSONCompact
@@ -325,8 +329,20 @@ class MonitorService {
         intervalSeconds: Int?
     ): HistoricalMetricsResponse =
         CacheService.cached("cache:monitor_hist:$systemId:$fromTimestamp:$toTimestamp:$intervalSeconds", 30) {
+        val clampedWindow = clampRangeToRetention(systemId, fromTimestamp, toTimestamp)
+        if (clampedWindow == null) {
+            return@cached HistoricalMetricsResponse(
+                system_id = systemId.toString(),
+                from = fromTimestamp,
+                to = toTimestamp,
+                interval_seconds = intervalSeconds ?: 3600,
+                data_points = emptyList()
+            )
+        }
+        val (effectiveFrom, effectiveTo) = clampedWindow
+
         // Auto-calculate interval if not provided
-        val timeRange = toTimestamp - fromTimestamp
+        val timeRange = effectiveTo - effectiveFrom
         val calculatedInterval = intervalSeconds ?: when {
             timeRange <= 3600 -> 10 // 1 hour: 10s interval
             timeRange <= 21600 -> 60 // 6 hours: 1 min interval
@@ -351,8 +367,8 @@ class MonitorService {
                 avg(battery_percent) as battery
             FROM $clickhouseDb.system_metrics
             WHERE system_id = toUUID('$systemId')
-              AND timestamp >= fromUnixTimestamp($fromTimestamp)
-              AND timestamp <= fromUnixTimestamp($toTimestamp)
+              AND timestamp >= fromUnixTimestamp($effectiveFrom)
+              AND timestamp <= fromUnixTimestamp($effectiveTo)
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -365,8 +381,8 @@ class MonitorService {
             logger.error { "Failed to fetch historical metrics: $errorBody" }
             return@cached HistoricalMetricsResponse(
                 system_id = systemId.toString(),
-                from = fromTimestamp,
-                to = toTimestamp,
+                from = effectiveFrom,
+                to = effectiveTo,
                 interval_seconds = calculatedInterval,
                 data_points = emptyList()
             )
@@ -378,8 +394,8 @@ class MonitorService {
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
                 system_id = systemId.toString(),
-                from = fromTimestamp,
-                to = toTimestamp,
+                from = effectiveFrom,
+                to = effectiveTo,
                 interval_seconds = calculatedInterval,
                 data_points = emptyList()
             )
@@ -408,8 +424,8 @@ class MonitorService {
         
         HistoricalMetricsResponse(
             system_id = systemId.toString(),
-            from = fromTimestamp,
-            to = toTimestamp,
+            from = effectiveFrom,
+            to = effectiveTo,
             interval_seconds = calculatedInterval,
             data_points = dataPoints
         )
@@ -419,6 +435,7 @@ class MonitorService {
      * Get latest container stats from ClickHouse.
      */
     suspend fun getLatestContainers(systemId: UUID): List<ContainerStats> {
+        val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
         val query = """
             SELECT 
                 container_name, container_id, image, status,
@@ -428,6 +445,7 @@ class MonitorService {
                     ROW_NUMBER() OVER (PARTITION BY container_name ORDER BY timestamp DESC) as rn
                 FROM $clickhouseDb.container_metrics
                 WHERE system_id = toUUID('$systemId')
+                  AND timestamp >= now() - INTERVAL $retentionDays DAY
                   AND timestamp >= now() - INTERVAL 5 MINUTE
             ) WHERE rn = 1
             FORMAT JSONCompact
@@ -481,7 +499,19 @@ class MonitorService {
         toTimestamp: Long,
         intervalSeconds: Int?
     ): ContainerMetricsResponse {
-        val timeRange = toTimestamp - fromTimestamp
+        val clampedWindow = clampRangeToRetention(systemId, fromTimestamp, toTimestamp)
+        if (clampedWindow == null) {
+            return ContainerMetricsResponse(
+                container_name = containerName,
+                from = fromTimestamp,
+                to = toTimestamp,
+                interval_seconds = intervalSeconds ?: 3600,
+                data_points = emptyList()
+            )
+        }
+        val (effectiveFrom, effectiveTo) = clampedWindow
+
+        val timeRange = effectiveTo - effectiveFrom
         val calculatedInterval = intervalSeconds ?: when {
             timeRange <= 3600 -> 10
             timeRange <= 21600 -> 60
@@ -501,8 +531,8 @@ class MonitorService {
             FROM $clickhouseDb.container_metrics
             WHERE system_id = toUUID('$systemId')
               AND container_name = '${escapeSql(containerName)}'
-              AND timestamp >= fromUnixTimestamp($fromTimestamp)
-              AND timestamp <= fromUnixTimestamp($toTimestamp)
+              AND timestamp >= fromUnixTimestamp($effectiveFrom)
+              AND timestamp <= fromUnixTimestamp($effectiveTo)
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -513,8 +543,8 @@ class MonitorService {
         if (!response.status.isSuccess()) {
             return ContainerMetricsResponse(
                 container_name = containerName,
-                from = fromTimestamp,
-                to = toTimestamp,
+                from = effectiveFrom,
+                to = effectiveTo,
                 interval_seconds = calculatedInterval,
                 data_points = emptyList()
             )
@@ -526,8 +556,8 @@ class MonitorService {
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray ?: return ContainerMetricsResponse(
                 container_name = containerName,
-                from = fromTimestamp,
-                to = toTimestamp,
+                from = effectiveFrom,
+                to = effectiveTo,
                 interval_seconds = calculatedInterval,
                 data_points = emptyList()
             )
@@ -550,8 +580,8 @@ class MonitorService {
         
         return ContainerMetricsResponse(
             container_name = containerName,
-            from = fromTimestamp,
-            to = toTimestamp,
+            from = effectiveFrom,
+            to = effectiveTo,
             interval_seconds = calculatedInterval,
             data_points = dataPoints
         )
@@ -926,6 +956,16 @@ class MonitorService {
     
     private fun getTierConfig(organizationId: Int): PricingTierConfigResponse {
         return pricingTierService.getEffectiveTierForOrganization(organizationId).tier
+    }
+
+    private suspend fun clampRangeToRetention(systemId: UUID, fromTimestamp: Long, toTimestamp: Long): Pair<Long, Long>? {
+        val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
+        val nowEpochSeconds = Clock.System.now().epochSeconds
+        val oldestAllowed = nowEpochSeconds - (retentionDays * 86_400L)
+        val clampedFrom = max(fromTimestamp, oldestAllowed)
+        val clampedTo = min(toTimestamp, nowEpochSeconds)
+        if (clampedFrom > clampedTo) return null
+        return clampedFrom to clampedTo
     }
     
     private fun rowToSystemData(row: ResultRow): SystemData {

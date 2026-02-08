@@ -2,7 +2,7 @@ import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
-import {useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {EventsChart} from '@/components/charts/events-chart'
 import {DonutChart} from '@/components/charts/donut-chart'
@@ -30,7 +30,7 @@ export const Route = createFileRoute('/analytics')({
 })
 
 function AnalyticsPage() {
-  const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('7d')
+  const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
   const { selectedProjectId } = useProject()
 
   const { data: projects } = useQuery({
@@ -39,6 +39,27 @@ function AnalyticsPage() {
   })
 
   const projectId = selectedProjectId || projects?.[0]?.id
+  const { data: billingUsage } = useQuery({
+    queryKey: ['billing-usage'],
+    queryFn: () => api.getBillingUsage(),
+  })
+  const retentionDays = billingUsage?.retentionDays ?? 30
+  const availablePeriods = useMemo(() => {
+    const options = [
+      { value: '24h', label: 'Last 24 Hours', minDays: 1 },
+      { value: '7d', label: 'Last 7 Days', minDays: 7 },
+      { value: '30d', label: 'Last 30 Days', minDays: 30 },
+      { value: '90d', label: 'Last 90 Days', minDays: 90 },
+    ] as const
+    const filtered = options.filter((option) => retentionDays >= option.minDays)
+    return filtered.length > 0 ? filtered : [options[0]]
+  }, [retentionDays])
+
+  useEffect(() => {
+    if (!availablePeriods.some((option) => option.value === period)) {
+      setPeriod(availablePeriods[availablePeriods.length - 1].value)
+    }
+  }, [availablePeriods, period, setPeriod])
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['stats', projectId, period],
@@ -52,14 +73,16 @@ function AnalyticsPage() {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-2xl font-bold">Analytics</h2>
-          <Select value={period} onValueChange={(val) => setPeriod(val as '24h' | '7d' | '30d')}>
+          <Select value={period} onValueChange={(val) => setPeriod(val as '24h' | '7d' | '30d' | '90d')}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="24h">Last 24 Hours</SelectItem>
-              <SelectItem value="7d">Last 7 Days</SelectItem>
-              <SelectItem value="30d">Last 30 Days</SelectItem>
+              {availablePeriods.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

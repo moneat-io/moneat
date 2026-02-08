@@ -1,5 +1,5 @@
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
-import {useMemo, useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
@@ -30,7 +30,7 @@ function formatRate(value: number) {
 function PerformancePage() {
   const navigate = useNavigate()
   const { selectedProjectId } = useProject()
-  const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('7d')
+  const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
   const [environment, setEnvironment] = useState('all')
   const [operation, setOperation] = useState('all')
   const [sortKey, setSortKey] = useState<SortKey>('p95')
@@ -42,6 +42,27 @@ function PerformancePage() {
   })
 
   const projectId = selectedProjectId || projects?.[0]?.id
+  const { data: billingUsage } = useQuery({
+    queryKey: ['billing-usage'],
+    queryFn: () => api.getBillingUsage(),
+  })
+  const retentionDays = billingUsage?.retentionDays ?? 30
+  const availablePeriods = useMemo(() => {
+    const options = [
+      { value: '24h', label: 'Last 24h', minDays: 1 },
+      { value: '7d', label: 'Last 7d', minDays: 7 },
+      { value: '30d', label: 'Last 30d', minDays: 30 },
+      { value: '90d', label: 'Last 90d', minDays: 90 },
+    ] as const
+    const filtered = options.filter((option) => retentionDays >= option.minDays)
+    return filtered.length > 0 ? filtered : [options[0]]
+  }, [retentionDays])
+
+  useEffect(() => {
+    if (!availablePeriods.some((option) => option.value === period)) {
+      setPeriod(availablePeriods[availablePeriods.length - 1].value)
+    }
+  }, [availablePeriods, period, setPeriod])
 
   const filters = {
     period,
@@ -121,14 +142,16 @@ function PerformancePage() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold">Performance</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={period} onValueChange={(value) => setPeriod(value as '24h' | '7d' | '30d')}>
+            <Select value={period} onValueChange={(value) => setPeriod(value as '24h' | '7d' | '30d' | '90d')}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="24h">Last 24h</SelectItem>
-                <SelectItem value="7d">Last 7d</SelectItem>
-                <SelectItem value="30d">Last 30d</SelectItem>
+                {availablePeriods.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 

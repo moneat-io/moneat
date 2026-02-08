@@ -8,34 +8,34 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
-    Activity,
-    ArrowLeft,
-    Box,
-    Clock,
-    Cpu,
-    HardDrive,
-    MemoryStick,
-    Monitor,
-    Network,
-    Server,
-    Thermometer,
+  Activity,
+  ArrowLeft,
+  Box,
+  Clock,
+  Cpu,
+  HardDrive,
+  MemoryStick,
+  Monitor,
+  Network,
+  Server,
+  Thermometer,
 } from 'lucide-react'
 import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    Legend,
-    Line,
-    LineChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts'
-import {useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
 
-type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d'
+type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 
 interface TimeRangeOption {
   value: TimeRange
@@ -49,6 +49,7 @@ const TIME_RANGES: TimeRangeOption[] = [
   {value: '24h', label: 'Last 24 Hours', seconds: 86400},
   {value: '7d', label: 'Last 7 Days', seconds: 604800},
   {value: '30d', label: 'Last 30 Days', seconds: 2592000},
+  {value: '90d', label: 'Last 90 Days', seconds: 7776000},
 ]
 
 function formatBytes(bytes: number | undefined): string {
@@ -160,13 +161,32 @@ function MetricCard({
 function SystemDetailPage() {
   const {systemId} = Route.useParams()
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
+  const {data: billingUsage} = useQuery({
+    queryKey: ['billing-usage'],
+    queryFn: () => api.getBillingUsage(),
+  })
+  const retentionDays = billingUsage?.retentionDays ?? 30
+  const availableRanges = useMemo(() => {
+    const filtered = TIME_RANGES.filter((option) => option.seconds <= retentionDays * 86_400)
+    return filtered.length > 0 ? filtered : [TIME_RANGES[0]]
+  }, [retentionDays])
+
+  useEffect(() => {
+    if (!availableRanges.some((option) => option.value === timeRange)) {
+      const fallback = availableRanges[availableRanges.length - 1]?.value ?? '24h'
+      setTimeRange(fallback)
+    }
+  }, [availableRanges, timeRange, setTimeRange])
 
   const {data: system, isLoading: systemLoading} = useQuery({
     queryKey: ['monitor-system', systemId],
     queryFn: () => api.getMonitorSystem(systemId),
   })
 
-  const selectedRange = TIME_RANGES.find((r) => r.value === timeRange)!
+  const selectedRange =
+    availableRanges.find((r) => r.value === timeRange) ??
+    availableRanges[availableRanges.length - 1] ??
+    TIME_RANGES[0]
   const now = new Date()
   const fromMs = now.getTime() - selectedRange.seconds * 1000
   const from = Math.floor(fromMs / 1000).toString()
@@ -360,7 +380,7 @@ function SystemDetailPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TIME_RANGES.map((range) => (
+                {availableRanges.map((range) => (
                   <SelectItem key={range.value} value={range.value}>
                     {range.label}
                   </SelectItem>

@@ -312,6 +312,7 @@ interface BillingUsage {
   organizationId: number
   periodStart: string
   periodEnd: string
+  retentionDays: number
   usedUnits: number
   baseLimitUnits: number
   paygLimitUnits: number
@@ -715,13 +716,13 @@ class ApiClient {
     })
   }
 
-  async getProjectStats(projectId: number, period: '24h' | '7d' | '30d' = '7d'): Promise<ProjectStats> {
+  async getProjectStats(projectId: number, period: '24h' | '7d' | '30d' | '90d' = '7d'): Promise<ProjectStats> {
     return this.request<ProjectStats>(`${API_BASE}/projects/${projectId}/stats?period=${period}`)
   }
 
   async getTransactions(
     projectId: number,
-    options: { period?: '24h' | '7d' | '30d'; environment?: string; operation?: string } = {}
+    options: { period?: '24h' | '7d' | '30d' | '90d'; environment?: string; operation?: string } = {}
   ): Promise<TransactionSummary[]> {
     const params = new URLSearchParams()
     params.set('period', options.period || '7d')
@@ -742,7 +743,7 @@ class ApiClient {
 
   async getPerformanceStats(
     projectId: number,
-    options: { period?: '24h' | '7d' | '30d'; environment?: string; operation?: string } = {}
+    options: { period?: '24h' | '7d' | '30d' | '90d'; environment?: string; operation?: string } = {}
   ): Promise<PerformanceStats> {
     const params = new URLSearchParams()
     params.set('period', options.period || '7d')
@@ -781,7 +782,7 @@ class ApiClient {
 
   async getReplays(
     projectId: number,
-    options: { page?: number; limit?: number; environment?: string; period?: '24h' | '7d' | '30d' } = {}
+    options: { page?: number; limit?: number; environment?: string; period?: '24h' | '7d' | '30d' | '90d' } = {}
   ): Promise<Replay[]> {
     const params = new URLSearchParams()
     params.set('page', String(options.page ?? 1))

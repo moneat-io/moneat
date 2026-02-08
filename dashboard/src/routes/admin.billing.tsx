@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type BillingPlan, type BillingTierConfig, type AdminBillingSubscription} from '@/lib/api'
+import {type AdminBillingSubscription, api, type BillingPlan, type BillingTierConfig} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {useToast} from '@/hooks/use-toast'
-import {AdminSkeleton, SectionHeader, PlanBadge} from '@/components/admin-components'
+import {AdminSkeleton, PlanBadge, SectionHeader} from '@/components/admin-components'
 import {AlertTriangle, HelpCircle, Info} from 'lucide-react'
 
 export const Route = createFileRoute('/admin/billing')({
@@ -87,8 +87,8 @@ function validateCreateForm(form: CreateFormState): ValidationErrors {
   if (form.retentionDays < 1) {
     errors.retentionDays = 'Must be at least 1 day'
   }
-  if (form.retentionDays > 365) {
-    errors.retentionDays = 'Cannot exceed 365 days'
+  if (form.retentionDays > 90) {
+    errors.retentionDays = 'Cannot exceed 90 days'
   }
   if (form.maxSystems < 1) {
     errors.maxSystems = 'Must be at least 1 system'
@@ -461,13 +461,13 @@ function AdminBillingPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="retentionDays">
                   Retention Days
-                  <HelpTip text="How long event data is stored before automatic deletion. Longer retention uses more storage." />
+                  <HelpTip text="How long event data is stored before automatic deletion. Retention is capped at 90 days." />
                 </Label>
                 <Input
                   id="retentionDays"
                   type="number"
                   min={1}
-                  max={365}
+                  max={90}
                   value={createForm.retentionDays}
                   onChange={(e) =>
                     setCreateForm((p) => ({...p, retentionDays: Number(e.target.value)}))

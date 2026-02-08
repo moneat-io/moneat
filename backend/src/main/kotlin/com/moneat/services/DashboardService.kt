@@ -3,9 +3,10 @@ package com.moneat.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.models.*
-import com.moneat.services.CacheService
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
@@ -23,6 +24,7 @@ class DashboardService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val backendUrl = EnvConfig.get("BACKEND_URL", "http://ltocalhost:8080")
     private val json = Json { ignoreUnknownKeys = true }
+    private val retentionPolicyService = RetentionPolicyService()
     
     fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
         return transaction {
@@ -214,10 +216,12 @@ class DashboardService {
     }
     
     private suspend fun getIssueCount(projectId: Long): Long {
+        val retentionDays = getProjectRetentionDays(projectId)
         val query = """
             SELECT count(DISTINCT issue_id) as count
             FROM $clickhouseDb.issues
             WHERE project_id = $projectId
+                AND ${timestampRetentionClause("last_seen", retentionDays)}
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -358,6 +362,7 @@ class DashboardService {
     suspend fun getIssues(projectId: Long, page: Int, limit: Int, status: String?): List<IssueResponse> =
         CacheService.cached("cache:issues:$projectId:$page:$limit:${status ?: ""}", 30) {
         val offset = (page - 1) * limit
+        val retentionDays = getProjectRetentionDays(projectId)
         val validStatuses = setOf("unresolved", "resolved", "ignored")
         val statusFilter = if (status != null && status in validStatuses) {
             "AND status = '${status.replace("'", "''")}'"
@@ -380,9 +385,11 @@ class DashboardService {
             LEFT JOIN (
                 SELECT issue_id, status 
                 FROM $clickhouseDb.issues FINAL
+                WHERE ${timestampRetentionClause("last_seen", retentionDays)}
             ) i USING issue_id
             WHERE e.project_id = $projectId 
                 AND e.event_type = 'error'
+                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
                 $statusFilter
             GROUP BY issue_id
             ORDER BY last_seen DESC
@@ -421,6 +428,8 @@ class DashboardService {
         }
 
     suspend fun getIssue(issueId: String): IssueDetailResponse? {
+        val projectId = getProjectIdForIssue(issueId) ?: return null
+        val retentionDays = getProjectRetentionDays(projectId)
         val escapedIssueId = issueId.replace("'", "''")
         
         // Query events table directly and aggregate
@@ -441,8 +450,11 @@ class DashboardService {
             LEFT JOIN (
                 SELECT issue_id, status 
                 FROM $clickhouseDb.issues FINAL
+                WHERE ${timestampRetentionClause("last_seen", retentionDays)}
             ) i USING issue_id
             WHERE e.issue_id = '$escapedIssueId'
+                AND e.project_id = $projectId
+                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
             GROUP BY issue_id
             FORMAT JSONEachRow
         """.trimIndent()
@@ -481,6 +493,8 @@ class DashboardService {
     }
     
     suspend fun getIssueEvents(issueId: String, limit: Int): List<EventResponse> {
+        val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
+        val retentionDays = getProjectRetentionDays(projectId)
         val escapedIssueId = issueId.replace("'", "''")
         val query = """
             SELECT 
@@ -500,6 +514,8 @@ class DashboardService {
                 breadcrumbs
             FROM $clickhouseDb.events
             WHERE issue_id = '$escapedIssueId'
+                AND project_id = $projectId
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             ORDER BY timestamp DESC
             LIMIT $limit
             FORMAT JSONEachRow
@@ -550,6 +566,7 @@ class DashboardService {
 
     suspend fun getIssueTransactions(issueId: String, limit: Int): List<IssueTransactionResponse> {
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
+        val retentionDays = getProjectRetentionDays(projectId)
         val escapedIssueId = issueId.replace("'", "''")
         val query = """
             WITH (
@@ -561,6 +578,7 @@ class DashboardService {
                 WHERE project_id = $projectId
                     AND issue_id = '$escapedIssueId'
                     AND event_type = 'error'
+                    AND ${timestampRetentionClause("timestamp", retentionDays)}
             ) AS issue_trace_ids
             SELECT
                 toString(event_id) as event_id,
@@ -573,6 +591,7 @@ class DashboardService {
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
                 AND event_type = 'transaction'
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
                 AND (
                     issue_id = '$escapedIssueId'
                     OR has(issue_trace_ids, JSONExtractString(contexts, 'trace', 'trace_id'))
@@ -620,6 +639,7 @@ class DashboardService {
     ): List<TransactionSummaryResponse> =
         CacheService.cached("cache:transactions:$projectId:$period:${environment ?: ""}:${operation ?: ""}", 60) {
         val periodConfig = getPeriodConfig(period)
+        val retentionDays = getProjectRetentionDays(projectId)
         val filters = buildTransactionFilterClause(environment, operation)
         val query = """
             SELECT
@@ -636,6 +656,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND event_type = 'transaction'
                 AND timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
                 $filters
             GROUP BY transaction_name, transaction_op
             ORDER BY p95 DESC
@@ -682,6 +703,7 @@ class DashboardService {
     ): PerformanceStatsResponse =
         CacheService.cached("cache:perf_stats:$projectId:$period:${environment ?: ""}:${operation ?: ""}", 60) {
         val periodConfig = getPeriodConfig(period)
+        val retentionDays = getProjectRetentionDays(projectId)
         val filters = buildTransactionFilterClause(environment, operation)
 
         val aggregateQuery = """
@@ -693,6 +715,7 @@ class DashboardService {
             WHERE e.project_id = $projectId
                 AND e.event_type = 'transaction'
                 AND e.timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
                 $filters
             FORMAT JSONEachRow
         """.trimIndent()
@@ -708,6 +731,7 @@ class DashboardService {
             WHERE e.project_id = $projectId
                 AND e.event_type = 'transaction'
                 AND e.timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
                 $filters
             GROUP BY time
             ORDER BY time
@@ -725,6 +749,7 @@ class DashboardService {
             WHERE e.project_id = $projectId
                 AND e.event_type = 'transaction'
                 AND e.timestamp >= now() - INTERVAL ${periodConfig.hoursBack} HOUR
+                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
                 $filters
             ORDER BY e.duration_ms DESC
             LIMIT 10
@@ -773,6 +798,8 @@ class DashboardService {
 
     suspend fun getTransaction(eventId: String): TransactionDetailResponse? {
         val normalizedEventId = normalizeUuid(eventId) ?: return null
+        val projectId = getProjectIdForTransaction(normalizedEventId) ?: return null
+        val retentionDays = getProjectRetentionDays(projectId)
         val query = """
             SELECT
                 toString(e.event_id) as event_id,
@@ -795,6 +822,8 @@ class DashboardService {
             FROM $clickhouseDb.events e
             WHERE toString(e.event_id) = '$normalizedEventId'
                 AND e.event_type = 'transaction'
+                AND e.project_id = $projectId
+                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
@@ -849,6 +878,8 @@ class DashboardService {
 
     suspend fun getTransactionSpans(eventId: String): TransactionWithSpansResponse? {
         val transaction = getTransaction(eventId) ?: return null
+        val projectId = getProjectIdForTransaction(transaction.eventId) ?: return null
+        val retentionDays = getProjectRetentionDays(projectId)
         val normalizedEventId = normalizeUuid(transaction.eventId) ?: return null
         val query = """
             SELECT
@@ -863,6 +894,8 @@ class DashboardService {
                 tags
             FROM $clickhouseDb.spans
             WHERE toString(transaction_id) = '$normalizedEventId'
+                AND project_id = $projectId
+                AND ${timestampRetentionClause("start_timestamp", retentionDays)}
             ORDER BY start_timestamp ASC
             FORMAT JSONEachRow
         """.trimIndent()
@@ -922,6 +955,7 @@ class DashboardService {
         val transaction = getTransaction(eventId) ?: return emptyList()
         if (transaction.traceId.isBlank()) return emptyList()
         val projectId = getProjectIdForTransaction(eventId) ?: return emptyList()
+        val retentionDays = getProjectRetentionDays(projectId)
         val traceId = escapeSql(transaction.traceId)
 
         val query = """
@@ -944,6 +978,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND event_type = 'error'
                 AND positionCaseInsensitive(contexts, '"trace_id":"$traceId"') > 0
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             ORDER BY timestamp DESC
             LIMIT $limit
             FORMAT JSONEachRow
@@ -985,10 +1020,12 @@ class DashboardService {
     
     suspend fun getProjectStats(projectId: Long, period: String = "7d"): ProjectStatsResponse =
         CacheService.cached("cache:project_stats:$projectId:$period", 60) {
+        val retentionDays = getProjectRetentionDays(projectId)
         val hoursBack = when (period) {
             "24h" -> 24
             "7d" -> 168
             "30d" -> 720
+            "90d" -> 2160
             else -> 168
         }
         
@@ -996,6 +1033,7 @@ class DashboardService {
             "24h" -> 60  // 1 hour buckets
             "7d" -> 360  // 6 hour buckets
             "30d" -> 1440 // 1 day buckets
+            "90d" -> 4320 // 3 day buckets
             else -> 360
         }
         
@@ -1005,6 +1043,7 @@ class DashboardService {
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -1014,6 +1053,7 @@ class DashboardService {
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
                 AND event_type = 'error'
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -1025,6 +1065,7 @@ class DashboardService {
                 FROM $clickhouseDb.issues FINAL
                 WHERE project_id = $projectId
                     AND status = 'unresolved'
+                    AND ${timestampRetentionClause("last_seen", retentionDays)}
             )
             FORMAT JSONEachRow
         """.trimIndent()
@@ -1036,6 +1077,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
                 AND user_id != ''
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -1047,6 +1089,7 @@ class DashboardService {
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY time
             ORDER BY time
             FORMAT JSONEachRow
@@ -1060,6 +1103,7 @@ class DashboardService {
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY level
             FORMAT JSONEachRow
         """.trimIndent()
@@ -1073,6 +1117,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
                 AND platform != ''
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY platform
             ORDER BY count DESC
             LIMIT 10
@@ -1088,6 +1133,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
                 AND browser_name != ''
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY browser_name
             ORDER BY count DESC
             LIMIT 10
@@ -1103,6 +1149,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
                 AND environment != ''
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY environment
             FORMAT JSONEachRow
         """.trimIndent()
@@ -1114,6 +1161,7 @@ class DashboardService {
                 count() as count
             FROM $clickhouseDb.issues FINAL
             WHERE project_id = $projectId
+                AND ${timestampRetentionClause("last_seen", retentionDays)}
             GROUP BY status
             FORMAT JSONEachRow
         """.trimIndent()
@@ -1128,6 +1176,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
                 AND event_type = 'error'
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY issue_id
             ORDER BY count DESC
             LIMIT 10
@@ -1143,42 +1192,46 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
                 AND user_id != ''
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY time
             ORDER BY time
             FORMAT JSONEachRow
         """.trimIndent()
         
         try {
-            val totalEvents = executeScalarQuery(totalEventsQuery)
-            val totalIssues = executeScalarQuery(totalIssuesQuery)
-            val unresolvedIssues = executeScalarQuery(unresolvedIssuesQuery)
-            val affectedUsers = executeScalarQuery(affectedUsersQuery)
-            val eventsTimeline = executeTimelineQuery(eventsTimelineQuery)
-            val eventsByLevel = executeMapQuery(eventsByLevelQuery, "level")
-            val eventsByPlatform = executeMapQuery(eventsByPlatformQuery, "platform")
-            val eventsByBrowser = executeMapQuery(eventsByBrowserQuery, "browser_name")
-            val eventsByEnvironment = executeMapQuery(eventsByEnvironmentQuery, "environment")
-            val issuesByStatus = executeMapQuery(issuesByStatusQuery, "status")
-            val topIssues = executeTopIssuesQuery(topIssuesQuery)
-            val usersTimeline = executeTimelineQuery(usersTimelineQuery)
-            
-            val releaseMarkers = executeReleaseMarkersQuery(projectId, hoursBack)
-
-            ProjectStatsResponse(
-                totalEvents = totalEvents,
-                totalIssues = totalIssues,
-                unresolvedIssues = unresolvedIssues,
-                affectedUsers = affectedUsers,
-                eventsTimeline = eventsTimeline,
-                eventsByLevel = eventsByLevel,
-                eventsByPlatform = eventsByPlatform,
-                eventsByBrowser = eventsByBrowser,
-                eventsByEnvironment = eventsByEnvironment,
-                issuesByStatus = issuesByStatus,
-                topIssues = topIssues,
-                usersTimeline = usersTimeline,
-                releaseMarkers = releaseMarkers
-            )
+            // Execute all queries in parallel
+            coroutineScope {
+                val totalEventsDeferred = async { executeScalarQuery(totalEventsQuery) }
+                val totalIssuesDeferred = async { executeScalarQuery(totalIssuesQuery) }
+                val unresolvedIssuesDeferred = async { executeScalarQuery(unresolvedIssuesQuery) }
+                val affectedUsersDeferred = async { executeScalarQuery(affectedUsersQuery) }
+                val eventsTimelineDeferred = async { executeTimelineQuery(eventsTimelineQuery) }
+                val eventsByLevelDeferred = async { executeMapQuery(eventsByLevelQuery, "level") }
+                val eventsByPlatformDeferred = async { executeMapQuery(eventsByPlatformQuery, "platform") }
+                val eventsByBrowserDeferred = async { executeMapQuery(eventsByBrowserQuery, "browser_name") }
+                val eventsByEnvironmentDeferred = async { executeMapQuery(eventsByEnvironmentQuery, "environment") }
+                val issuesByStatusDeferred = async { executeMapQuery(issuesByStatusQuery, "status") }
+                val topIssuesDeferred = async { executeTopIssuesQuery(topIssuesQuery) }
+                val usersTimelineDeferred = async { executeTimelineQuery(usersTimelineQuery) }
+                val releaseMarkersDeferred = async { executeReleaseMarkersQuery(projectId, hoursBack, retentionDays) }
+                
+                // Await all results
+                ProjectStatsResponse(
+                    totalEvents = totalEventsDeferred.await(),
+                    totalIssues = totalIssuesDeferred.await(),
+                    unresolvedIssues = unresolvedIssuesDeferred.await(),
+                    affectedUsers = affectedUsersDeferred.await(),
+                    eventsTimeline = eventsTimelineDeferred.await(),
+                    eventsByLevel = eventsByLevelDeferred.await(),
+                    eventsByPlatform = eventsByPlatformDeferred.await(),
+                    eventsByBrowser = eventsByBrowserDeferred.await(),
+                    eventsByEnvironment = eventsByEnvironmentDeferred.await(),
+                    issuesByStatus = issuesByStatusDeferred.await(),
+                    topIssues = topIssuesDeferred.await(),
+                    usersTimeline = usersTimelineDeferred.await(),
+                    releaseMarkers = releaseMarkersDeferred.await()
+                )
+            }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch project stats" }
             ProjectStatsResponse(
@@ -1201,6 +1254,7 @@ class DashboardService {
 
     suspend fun getReleases(projectId: Long): List<ReleaseListResponse> =
         CacheService.cached("cache:releases:$projectId", 120) {
+        val retentionDays = getProjectRetentionDays(projectId)
         val escapedProjectId = projectId
         val releasesQuery = """
             SELECT
@@ -1211,6 +1265,7 @@ class DashboardService {
                 uniq(user_id) as user_count
             FROM $clickhouseDb.events
             WHERE project_id = $escapedProjectId AND release != ''
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY release
             ORDER BY first_seen DESC
             FORMAT JSONEachRow
@@ -1220,8 +1275,8 @@ class DashboardService {
             val releases = executeReleasesListQuery(releasesQuery)
             val result = mutableListOf<ReleaseListResponse>()
             for (r in releases) {
-                val newIssueCount = getNewIssueCountForRelease(projectId, r.version)
-                val crashFreeRate = getCrashFreeRateForRelease(projectId, r.version)
+                val newIssueCount = getNewIssueCountForRelease(projectId, r.version, retentionDays)
+                val crashFreeRate = getCrashFreeRateForRelease(projectId, r.version, retentionDays)
                 result.add(ReleaseListResponse(
                     version = r.version,
                     firstSeen = r.firstSeen,
@@ -1240,6 +1295,7 @@ class DashboardService {
         }
 
     suspend fun getReleaseStats(projectId: Long, version: String): ReleaseDetailStats? {
+        val retentionDays = getProjectRetentionDays(projectId)
         val escapedVersion = version.replace("'", "''")
         val releasesQuery = """
             SELECT
@@ -1249,6 +1305,7 @@ class DashboardService {
                 uniq(user_id) as user_count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId AND release = '$escapedVersion'
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             FORMAT JSONEachRow
         """.trimIndent()
 
@@ -1263,9 +1320,9 @@ class DashboardService {
             val totalEvents = obj["total_events"]?.jsonPrimitive?.long ?: 0
             val userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0
 
-            val newIssues = getNewIssueCountForRelease(projectId, version)
+            val newIssues = getNewIssueCountForRelease(projectId, version, retentionDays)
             val resolvedIssues = 0L
-            val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version)
+            val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version, retentionDays)
             val crashFreeUserRate = crashFreeSessionRate
 
             val intervalMinutes = 360
@@ -1275,6 +1332,7 @@ class DashboardService {
                     count() as count
                 FROM $clickhouseDb.events
                 WHERE project_id = $projectId AND release = '$escapedVersion'
+                    AND ${timestampRetentionClause("timestamp", retentionDays)}
                 GROUP BY time
                 ORDER BY time
                 FORMAT JSONEachRow
@@ -1284,6 +1342,7 @@ class DashboardService {
                 SELECT level, count() as count
                 FROM $clickhouseDb.events
                 WHERE project_id = $projectId AND release = '$escapedVersion'
+                    AND ${timestampRetentionClause("timestamp", retentionDays)}
                 GROUP BY level
                 FORMAT JSONEachRow
             """.trimIndent()
@@ -1292,6 +1351,7 @@ class DashboardService {
                 SELECT issue_id, any(message) as title, count() as count
                 FROM $clickhouseDb.events
                 WHERE project_id = $projectId AND release = '$escapedVersion' AND event_type = 'error'
+                    AND ${timestampRetentionClause("timestamp", retentionDays)}
                 GROUP BY issue_id
                 ORDER BY count DESC
                 LIMIT 10
@@ -1318,13 +1378,14 @@ class DashboardService {
         }
     }
 
-    private suspend fun executeReleaseMarkersQuery(projectId: Long, hoursBack: Int): List<ReleaseMarker> {
+    private suspend fun executeReleaseMarkersQuery(projectId: Long, hoursBack: Int, retentionDays: Int): List<ReleaseMarker> {
         val query = """
             SELECT version, formatDateTime(first_seen, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp
             FROM (
                 SELECT release as version, min(timestamp) as first_seen
                 FROM $clickhouseDb.events
                 WHERE project_id = $projectId AND release != ''
+                    AND ${timestampRetentionClause("timestamp", retentionDays)}
                 GROUP BY release
             )
             WHERE first_seen >= now() - INTERVAL $hoursBack HOUR
@@ -1387,13 +1448,14 @@ class DashboardService {
             }
     }
 
-    private suspend fun getNewIssueCountForRelease(projectId: Long, version: String): Long {
+    private suspend fun getNewIssueCountForRelease(projectId: Long, version: String, retentionDays: Int): Long {
         val escapedVersion = version.replace("'", "''")
         val query = """
             SELECT count() as total FROM (
                 SELECT issue_id, argMin(release, timestamp) as first_release
                 FROM $clickhouseDb.events
                 WHERE project_id = $projectId AND event_type = 'error' AND issue_id != ''
+                    AND ${timestampRetentionClause("timestamp", retentionDays)}
                 GROUP BY issue_id
                 HAVING first_release = '$escapedVersion'
             )
@@ -1402,12 +1464,13 @@ class DashboardService {
         return executeScalarQuery(query)
     }
 
-    private suspend fun getCrashFreeRateForRelease(projectId: Long, version: String): Double? {
+    private suspend fun getCrashFreeRateForRelease(projectId: Long, version: String, retentionDays: Int): Double? {
         val escapedVersion = version.replace("'", "''")
         val query = """
             SELECT countIf(errors = 0) * 100.0 / count() as rate
             FROM $clickhouseDb.sessions
             WHERE project_id = $projectId AND release = '$escapedVersion'
+                AND ${timestampRetentionClause("started", retentionDays)}
             FORMAT JSONEachRow
         """.trimIndent()
         return try {
@@ -1432,6 +1495,7 @@ class DashboardService {
         return when (period) {
             "24h" -> PeriodConfig(hoursBack = 24, intervalMinutes = 60, periodMinutes = 24 * 60)
             "30d" -> PeriodConfig(hoursBack = 720, intervalMinutes = 1440, periodMinutes = 30 * 24 * 60)
+            "90d" -> PeriodConfig(hoursBack = 2160, intervalMinutes = 4320, periodMinutes = 90 * 24 * 60)
             else -> PeriodConfig(hoursBack = 168, intervalMinutes = 360, periodMinutes = 7 * 24 * 60)
         }
     }
@@ -1479,6 +1543,14 @@ class DashboardService {
 
     private fun escapeSql(value: String): String {
         return value.replace("'", "''").replace("\\", "\\\\")
+    }
+
+    private suspend fun getProjectRetentionDays(projectId: Long): Int {
+        return retentionPolicyService.getRetentionDaysForProject(projectId) ?: PricingTier.FREE.retentionDays
+    }
+
+    private fun timestampRetentionClause(column: String, retentionDays: Int): String {
+        return "$column >= now() - INTERVAL $retentionDays DAY"
     }
     
     private suspend fun executeScalarQuery(query: String): Long {
@@ -1596,9 +1668,11 @@ class DashboardService {
         period: String = "7d"
     ): List<ReplayListItem> {
         val offset = (page - 1) * limit
+        val retentionDays = getProjectRetentionDays(projectId)
         val periodClause = when (period) {
             "24h" -> "replay_start_timestamp >= now64(3) - INTERVAL 1 DAY"
             "30d" -> "replay_start_timestamp >= now64(3) - INTERVAL 30 DAY"
+            "90d" -> "replay_start_timestamp >= now64(3) - INTERVAL 90 DAY"
             else -> "replay_start_timestamp >= now64(3) - INTERVAL 7 DAY"
         }
         val envClause = if (environment != null && environment.isNotBlank()) {
@@ -1625,7 +1699,10 @@ class DashboardService {
                 argMax(os_version, timestamp) as os_version,
                 argMax(activity, timestamp) as activity
             FROM $clickhouseDb.replay_events
-            WHERE project_id = $projectId AND $periodClause $envClause
+            WHERE project_id = $projectId
+                AND $periodClause
+                AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+                $envClause
             GROUP BY replay_id, project_id
             ORDER BY max(timestamp) DESC
             LIMIT $limit OFFSET $offset
@@ -1650,7 +1727,7 @@ class DashboardService {
                         val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                         val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                         val fallbackErrorCount = if (rawErrorCount == 0 && startedMs != null && finishedMs != null) {
-                            getReplayWindowErrorCount(projectId, startedMs, finishedMs, userId)
+                            getReplayWindowErrorCount(projectId, startedMs, finishedMs, userId, retentionDays)
                         } else {
                             0
                         }
@@ -1691,7 +1768,8 @@ class DashboardService {
         projectId: Long,
         startMs: Long,
         endMs: Long,
-        userId: String?
+        userId: String?,
+        retentionDays: Int
     ): Int {
         if (endMs < startMs) return 0
         val userClause = userId?.takeIf { it.isNotBlank() }?.let { "AND user_id = '${escapeSql(it)}'" } ?: ""
@@ -1702,6 +1780,7 @@ class DashboardService {
                 AND event_type = 'error'
                 AND timestamp >= fromUnixTimestamp64Milli($startMs)
                 AND timestamp <= fromUnixTimestamp64Milli($endMs)
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
                 $userClause
             FORMAT JSONEachRow
         """.trimIndent()
@@ -1723,6 +1802,7 @@ class DashboardService {
         startMs: Long,
         endMs: Long,
         userId: String?,
+        retentionDays: Int,
         limit: Int = 200
     ): List<String> {
         if (endMs < startMs) return emptyList()
@@ -1734,6 +1814,7 @@ class DashboardService {
                 AND event_type = 'error'
                 AND timestamp >= fromUnixTimestamp64Milli($startMs)
                 AND timestamp <= fromUnixTimestamp64Milli($endMs)
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
                 $userClause
             ORDER BY timestamp ASC
             LIMIT $limit
@@ -1757,6 +1838,8 @@ class DashboardService {
 
     suspend fun getReplay(replayId: String): ReplayDetailResponse? {
         val normalizedReplayId = normalizeUuid(replayId) ?: return null
+        val projectId = getProjectIdForReplay(normalizedReplayId) ?: return null
+        val retentionDays = getProjectRetentionDays(projectId)
 
         val query = """
             SELECT
@@ -1785,6 +1868,8 @@ class DashboardService {
                 argMax(tags, timestamp) as tags
             FROM $clickhouseDb.replay_events
             WHERE toString(replay_id) = '$normalizedReplayId'
+                AND project_id = $projectId
+                AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
             GROUP BY replay_id, project_id
             LIMIT 1
             FORMAT JSONEachRow
@@ -1813,7 +1898,8 @@ class DashboardService {
                     projectId = obj["project_id"]?.jsonPrimitive?.long ?: return null,
                     startMs = startedMs,
                     endMs = finishedMs,
-                    userId = userId
+                    userId = userId,
+                    retentionDays = retentionDays
                 )
             } else {
                 emptyList()
@@ -1824,7 +1910,8 @@ class DashboardService {
                     projectId = obj["project_id"]?.jsonPrimitive?.long ?: return null,
                     startMs = startedMs,
                     endMs = finishedMs,
-                    userId = userId
+                    userId = userId,
+                    retentionDays = retentionDays
                 )
             } else {
                 0
@@ -1873,6 +1960,7 @@ class DashboardService {
             replayStartMs + 86400_000L
         }
         val projectId = replay.projectId
+        val retentionDays = getProjectRetentionDays(projectId)
         val items = mutableListOf<ReplayTimelineItem>()
         val addedIds = mutableSetOf<String>()
         val userClause = replay.user?.id?.takeIf { it.isNotBlank() }?.let { "AND user_id = '${escapeSql(it)}'" } ?: ""
@@ -1896,6 +1984,7 @@ class DashboardService {
                     WHERE e.project_id = $projectId
                         AND e.event_type = 'error'
                         AND toString(e.event_id) IN ($inClause)
+                        AND ${timestampRetentionClause("e.timestamp", retentionDays)}
                     FORMAT JSONEachRow
                 """.trimIndent()
                 runCatching {
@@ -1957,6 +2046,7 @@ class DashboardService {
                 WHERE e.project_id = $projectId
                     AND e.event_type = 'transaction'
                     AND ($traceConditions)
+                    AND ${timestampRetentionClause("e.timestamp", retentionDays)}
                 FORMAT JSONEachRow
             """.trimIndent()
             runCatching {
@@ -2010,6 +2100,7 @@ class DashboardService {
                 FROM $clickhouseDb.spans
                 WHERE project_id = $projectId
                     AND trace_id IN ($traceIdList)
+                    AND ${timestampRetentionClause("start_timestamp", retentionDays)}
                 FORMAT JSONEachRow
             """.trimIndent()
             runCatching {
@@ -2065,6 +2156,7 @@ class DashboardService {
             FROM (SELECT *, timestamp as ts_col FROM $clickhouseDb.events WHERE project_id = $projectId AND event_type = 'error' $userClause)
             WHERE ts_col >= fromUnixTimestamp64Milli($replayStartMs)
                 AND ts_col <= fromUnixTimestamp64Milli($replayEndMs)
+                AND ${timestampRetentionClause("ts_col", retentionDays)}
             ORDER BY ts_col ASC
             LIMIT 100
             FORMAT JSONEachRow
@@ -2119,6 +2211,7 @@ class DashboardService {
             FROM (SELECT *, timestamp as ts_col FROM $clickhouseDb.events WHERE project_id = $projectId AND event_type = 'transaction' $userClause)
             WHERE ts_col >= fromUnixTimestamp64Milli($replayStartMs)
                 AND ts_col <= fromUnixTimestamp64Milli($replayEndMs)
+                AND ${timestampRetentionClause("ts_col", retentionDays)}
             ORDER BY ts_col ASC
             LIMIT 100
             FORMAT JSONEachRow
@@ -2171,6 +2264,7 @@ class DashboardService {
             WHERE project_id = $projectId
                 AND start_timestamp >= fromUnixTimestamp64Milli($replayStartMs)
                 AND start_timestamp <= fromUnixTimestamp64Milli($replayEndMs)
+                AND ${timestampRetentionClause("start_timestamp", retentionDays)}
             ORDER BY start_timestamp ASC
             LIMIT 200
             FORMAT JSONEachRow
@@ -2364,11 +2458,15 @@ class DashboardService {
 
     suspend fun getReplayRecording(replayId: String): ReplayRecordingResponse? {
         val normalizedReplayId = normalizeUuid(replayId) ?: return null
+        val projectId = getProjectIdForReplay(normalizedReplayId) ?: return null
+        val retentionDays = getProjectRetentionDays(projectId)
 
         val query = """
             SELECT recording_data
             FROM $clickhouseDb.replay_segments
             WHERE toString(replay_id) = '$normalizedReplayId'
+                AND project_id = $projectId
+                AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
             ORDER BY segment_id ASC
             FORMAT JSONEachRow
         """.trimIndent()
@@ -2417,12 +2515,16 @@ class DashboardService {
 
     suspend fun getReplaysForIssue(issueId: String, limit: Int = 10): List<ReplayListItem> {
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
+        val retentionDays = getProjectRetentionDays(projectId)
         val escapedIssueId = issueId.replace("'", "''")
 
         val eventIdsQuery = """
             SELECT toString(event_id) as event_id
             FROM $clickhouseDb.events
-            WHERE issue_id = '$escapedIssueId' AND event_type = 'error'
+            WHERE issue_id = '$escapedIssueId'
+                AND project_id = $projectId
+                AND event_type = 'error'
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             LIMIT 100
             FORMAT JSONEachRow
         """.trimIndent()
@@ -2462,7 +2564,9 @@ class DashboardService {
                 argMax(r.os_version, r.timestamp) as os_version,
                 argMax(r.activity, r.timestamp) as activity
             FROM $clickhouseDb.replay_events r
-            WHERE r.project_id = $projectId AND hasAny(r.error_ids, [$eventIdList])
+            WHERE r.project_id = $projectId
+                AND hasAny(r.error_ids, [$eventIdList])
+                AND r.timestamp >= now64(3) - INTERVAL $retentionDays DAY
             GROUP BY r.replay_id, r.project_id
             ORDER BY max(r.timestamp) DESC
             LIMIT $limit
@@ -2518,6 +2622,7 @@ class DashboardService {
         status: String? = null
     ): List<FeedbackListItem> {
         val offset = (page - 1) * limit
+        val retentionDays = getProjectRetentionDays(projectId)
         val validStatuses = setOf("unresolved", "resolved", "archived")
         val statusFilter = if (status != null && status in validStatuses) {
             "AND status = '${status.replace("'", "''")}'"
@@ -2541,7 +2646,9 @@ class DashboardService {
                 associated_event_id,
                 replay_id
             FROM $clickhouseDb.user_feedback FINAL
-            WHERE project_id = $projectId $statusFilter
+            WHERE project_id = $projectId
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
+                $statusFilter
             ORDER BY timestamp DESC
             LIMIT $limit OFFSET $offset
             FORMAT JSONEachRow
@@ -2584,6 +2691,8 @@ class DashboardService {
 
     suspend fun getFeedbackDetail(feedbackId: String): FeedbackDetailResponse? {
         val normalizedFeedbackId = normalizeUuid(feedbackId) ?: return null
+        val projectId = getProjectIdForFeedback(normalizedFeedbackId) ?: return null
+        val retentionDays = getProjectRetentionDays(projectId)
         val query = """
             SELECT
                 toString(feedback_id) as feedback_id,
@@ -2606,6 +2715,8 @@ class DashboardService {
                 sdk_version
             FROM $clickhouseDb.user_feedback FINAL
             WHERE toString(feedback_id) = '$normalizedFeedbackId'
+                AND project_id = $projectId
+                AND ${timestampRetentionClause("timestamp", retentionDays)}
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()

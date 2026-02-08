@@ -6,7 +6,6 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
@@ -125,6 +124,7 @@ class PricingTierService {
 
     fun createTierVersion(tierName: String, request: CreateTierVersionRequest): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
+        validateCreateTierRequest(request)
         return transaction {
             val current = PricingTierConfigs.select { PricingTierConfigs.tier_name eq canonicalName }
                 .orderBy(PricingTierConfigs.version to SortOrder.DESC)
@@ -153,6 +153,10 @@ class PricingTierService {
 
             rowToResponse(PricingTierConfigs.select { PricingTierConfigs.id eq id }.first())
         }
+    }
+
+    private fun validateCreateTierRequest(request: CreateTierVersionRequest) {
+        require(request.retentionDays in 1..90) { "Retention days must be between 1 and 90" }
     }
 
     fun migrateSubscribers(tierName: String, request: TierMigrationRequest): TierMigrationResponse {
@@ -278,4 +282,3 @@ class PricingTierService {
         return toLocalDateTime(TimeZone.UTC).date
     }
 }
-

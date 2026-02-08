@@ -3,7 +3,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
-import {useMemo, useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 import {Card} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
@@ -124,7 +124,7 @@ function getDurationColor(ms: number): string {
 function ReplaysPage() {
   const navigate = useNavigate()
   const { selectedProjectId } = useProject()
-  const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('7d')
+  const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
   const [environment, setEnvironment] = useState('all')
   const [page, setPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
@@ -135,6 +135,28 @@ function ReplaysPage() {
   })
 
   const projectId = selectedProjectId || projects?.[0]?.id
+  const { data: billingUsage } = useQuery({
+    queryKey: ['billing-usage'],
+    queryFn: () => api.getBillingUsage(),
+  })
+  const retentionDays = billingUsage?.retentionDays ?? 30
+  const availablePeriods = useMemo(() => {
+    const options = [
+      { value: '24h', label: 'Last 24 hours', minDays: 1 },
+      { value: '7d', label: 'Last 7 days', minDays: 7 },
+      { value: '30d', label: 'Last 30 days', minDays: 30 },
+      { value: '90d', label: 'Last 90 days', minDays: 90 },
+    ] as const
+    const filtered = options.filter((option) => retentionDays >= option.minDays)
+    return filtered.length > 0 ? filtered : [options[0]]
+  }, [retentionDays])
+
+  useEffect(() => {
+    if (!availablePeriods.some((option) => option.value === period)) {
+      setPeriod(availablePeriods[availablePeriods.length - 1].value)
+      setPage(1)
+    }
+  }, [availablePeriods, period, setPeriod, setPage])
 
   const { data: replays = [], isLoading } = useQuery({
     queryKey: ['replays', projectId, period, environment, page],
@@ -266,14 +288,16 @@ function ReplaysPage() {
               className="pl-10"
             />
           </div>
-          <Select value={period} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d'); setPage(1) }}>
+          <Select value={period} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d' | '90d'); setPage(1) }}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="24h">Last 24 hours</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
+              {availablePeriods.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={environment} onValueChange={(v) => { setEnvironment(v); setPage(1) }}>

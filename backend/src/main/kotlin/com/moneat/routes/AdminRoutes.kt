@@ -7,7 +7,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
-import io.ktor.server.request.receive
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.selectAll
@@ -127,9 +127,13 @@ fun Route.adminRoutes() {
                         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing tier name"))
                         return@post
                     }
-                    val request = call.receive<com.moneat.models.CreateTierVersionRequest>()
-                    val created = pricingTierService.createTierVersion(tierName, request)
-                    call.respond(HttpStatusCode.Created, created)
+                    try {
+                        val request = call.receive<com.moneat.models.CreateTierVersionRequest>()
+                        val created = pricingTierService.createTierVersion(tierName, request)
+                        call.respond(HttpStatusCode.Created, created)
+                    } catch (e: IllegalArgumentException) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    }
                 }
 
                 post("/tiers/{tierName}/migrate") {
@@ -138,9 +142,13 @@ fun Route.adminRoutes() {
                         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing tier name"))
                         return@post
                     }
-                    val request = call.receive<com.moneat.models.TierMigrationRequest>()
-                    val response = pricingTierService.migrateSubscribers(tierName, request)
-                    call.respond(response)
+                    try {
+                        val request = call.receive<com.moneat.models.TierMigrationRequest>()
+                        val response = pricingTierService.migrateSubscribers(tierName, request)
+                        call.respond(response)
+                    } catch (e: IllegalArgumentException) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    }
                 }
 
                 get("/subscriptions") {

@@ -224,7 +224,7 @@ INSERT INTO pricing_tier_configs (
     stripe_overage_price_id,
     is_current
 ) VALUES
-    ('FREE', 1, 10000, 7, 1, 1, 60, 0, false, 0, NULL, NULL, true),
-    ('PRO', 1, 500000, 30, NULL, 5, 15, 1900, true, 10, NULL, NULL, true),
+    ('FREE', 1, 10000, 30, 1, 1, 60, 0, false, 0, NULL, NULL, true),
+    ('PRO', 1, 500000, 90, NULL, 5, 15, 1900, true, 10, NULL, NULL, true),
     ('TEAM', 1, 5000000, 90, NULL, 25, 10, 4900, true, 10, NULL, NULL, true)
 ON CONFLICT (tier_name, version) DO NOTHING;

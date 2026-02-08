@@ -15,7 +15,7 @@ const fallbackTiers = [
     features: [
       '10K errors per month',
       '1 project',
-      '7-day retention',
+      '30-day retention',
       'Unlimited team members',
       'Email alerts',
       'Sentry-compatible SDKs',
@@ -32,7 +32,7 @@ const fallbackTiers = [
     features: [
       '500K errors per month',
       'Unlimited projects',
-      '30-day retention',
+      '90-day retention',
       'Performance monitoring',
       'Session replay (50/month)',
       'Priority email support',

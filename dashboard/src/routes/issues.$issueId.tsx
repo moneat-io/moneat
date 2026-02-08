@@ -334,17 +334,15 @@ function IssueDetailPage() {
             )}
 
             {/* Related Transactions */}
-            <Card className="border-l-4 border-l-indigo-400 dark:border-l-indigo-600">
-              <CardHeader className="pb-2 px-4 pt-3">
-                <CardTitle className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 text-base">
-                  <Activity className="h-4 w-4" />
-                  Transactions ({relatedTransactions.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                {relatedTransactions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No related transactions found.</p>
-                ) : (
+            {relatedTransactions.length > 0 && (
+              <Card className="border-l-4 border-l-indigo-400 dark:border-l-indigo-600">
+                <CardHeader className="pb-2 px-4 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 text-base">
+                    <Activity className="h-4 w-4" />
+                    Transactions ({relatedTransactions.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
                     {relatedTransactions.map((tx) => (
                       <Link
@@ -370,9 +368,9 @@ function IssueDetailPage() {
                       </Link>
                     ))}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Session Replays */}
             {linkedReplays.length > 0 && (

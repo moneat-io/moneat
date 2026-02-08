@@ -83,6 +83,7 @@ data class BillingUsageResponse(
     val organizationId: Int,
     val periodStart: String,
     val periodEnd: String,
+    val retentionDays: Int,
     val usedUnits: Long,
     val baseLimitUnits: Long,
     val paygLimitUnits: Long,
@@ -171,4 +172,3 @@ data class AdminBillingSubscriptionResponse(
     val currentPeriodStart: String? = null,
     val currentPeriodEnd: String? = null
 )
-
