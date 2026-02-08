@@ -88,6 +88,30 @@ fun Route.apiRoutes() {
                 }
             }
             
+            post("/projects/{projectId}/targets") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
+                    return@post
+                }
+                
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@post
+                }
+                
+                val request = call.receive<AddTargetRequest>()
+                try {
+                    val key = dashboardService.addProjectTarget(projectId, request.target)
+                    call.respond(HttpStatusCode.Created, key)
+                } catch (e: IllegalStateException) {
+                    call.respond(HttpStatusCode.Conflict, mapOf("error" to (e.message ?: "Target already exists")))
+                }
+            }
+
             put("/projects/{projectId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()

@@ -223,6 +223,11 @@ data class UpdateProjectRequest(
 )
 
 @Serializable
+data class AddTargetRequest(
+    val target: String
+)
+
+@Serializable
 data class VerifyEmailRequest(
     val token: String
 )

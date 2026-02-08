@@ -360,6 +360,33 @@ class DashboardService {
         }
     }
     
+    fun addProjectTarget(projectId: Long, target: String): ProjectKeyResponse {
+        return transaction {
+            // Check if target already exists
+            val existing = ProjectKeys.selectAll()
+                .where { (ProjectKeys.project_id eq projectId) and (ProjectKeys.platform_target eq target) }
+                .firstOrNull()
+
+            if (existing != null) {
+                throw IllegalStateException("Target platform '$target' already exists for this project")
+            }
+
+            val publicKey = java.util.UUID.randomUUID().toString().replace("-", "")
+            val secretKey = java.util.UUID.randomUUID().toString().replace("-", "")
+
+            ProjectKeys.insert {
+                it[project_id] = projectId
+                it[ProjectKeys.public_key] = publicKey
+                it[secret_key] = secretKey
+                it[platform_target] = target
+                it[is_active] = true
+            }
+
+            val dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+            ProjectKeyResponse(platformTarget = target, dsn = dsn)
+        }
+    }
+
     fun updateProject(projectId: Long, request: com.moneat.models.UpdateProjectRequest) {
         transaction {
             Projects.update({ Projects.id eq projectId }) {

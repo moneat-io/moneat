@@ -677,6 +677,13 @@ class ApiClient {
     })
   }
 
+  async addProjectTarget(projectId: number, target: string): Promise<ProjectKey> {
+    return this.request<ProjectKey>(`${API_BASE}/projects/${projectId}/targets`, {
+      method: 'POST',
+      body: JSON.stringify({ target }),
+    })
+  }
+
   async updateProject(
     projectId: number,
     updates: { name?: string; framework?: string }
@@ -1248,6 +1255,7 @@ export const api = new ApiClient()
 export type {
   AuthResponse,
   Project,
+  ProjectKey,
   Issue,
   IssueDetail,
   Event,

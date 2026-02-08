@@ -1,4 +1,4 @@
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute, redirect, useRouter} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {getSetupDocs} from '@/lib/setup-docs'
 import {getPlatformInfo} from '@/routes/projects'
@@ -6,10 +6,12 @@ import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
-import {Check, Copy} from 'lucide-react'
+import {Check, Copy, Plus, X} from 'lucide-react'
 import {useEffect, useState} from 'react'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
+import {useMutation, useQueryClient} from '@tanstack/react-query'
+import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/projects/$projectId')({
   beforeLoad: async () => {
@@ -101,9 +103,12 @@ function CodeBlock({
 
 function SetupPage() {
   const { project } = Route.useLoaderData()
+  const router = useRouter()
+  const queryClient = useQueryClient()
   const platformInfo = getPlatformInfo(project.framework)
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
   const [dsnCopiedMap, setDsnCopiedMap] = useState<Record<string, boolean>>({})
+  const [showAddPlatform, setShowAddPlatform] = useState(false)
 
   // Initialize selected target
   useEffect(() => {
@@ -111,6 +116,15 @@ function SetupPage() {
       setSelectedTarget(project.keys[0].platformTarget ?? 'default')
     }
   }, [project.keys, selectedTarget])
+
+  const addTargetMutation = useMutation({
+    mutationFn: (target: string) => api.addProjectTarget(project.id, target),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      router.invalidate()
+      setShowAddPlatform(false)
+    },
+  })
 
   const handleCopyDSN = async (dsn: string, targetKey: string) => {
     await navigator.clipboard.writeText(dsn)
@@ -122,7 +136,16 @@ function SetupPage() {
 
   const PlatformIcon = platformInfo?.icon
   const accentColor = platformInfo?.color ?? '#6366f1'
-  const isMultiPlatform = project.keys.length > 1
+  const isMultiPlatform = project.keys.length > 1 || (platformInfo?.targets && platformInfo.targets.length > 0)
+
+  // Get the framework's available targets that haven't been added yet
+  const existingTargets = project.keys
+    .map(k => k.platformTarget)
+    .filter(Boolean) as string[]
+
+  const availableTargets = platformInfo?.targets?.filter(
+    t => !existingTargets.includes(t.id)
+  ) ?? []
 
   // For multi-platform, get docs for each target
   // For single-platform, use the framework platform
@@ -131,10 +154,10 @@ function SetupPage() {
       return getSetupDocs(project.framework, project.dsn)
     }
     // Try to get target-specific docs (e.g., "kmp-android")
-    const targetSpecificDocs = getSetupDocs(`${project.framework}-${targetId}`, 
+    const targetSpecificDocs = getSetupDocs(`${project.framework}-${targetId}`,
       project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn)
     // Fall back to framework docs if target-specific not found
-    return targetSpecificDocs || getSetupDocs(project.framework, 
+    return targetSpecificDocs || getSetupDocs(project.framework,
       project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn)
   }
 
@@ -177,24 +200,140 @@ function SetupPage() {
           <p className="text-muted-foreground mt-1">Setup Guide</p>
         </div>
 
+        {/* Target Platforms Card - for multiplatform projects */}
+        {isMultiPlatform && (
+          <Card className="mb-8 overflow-hidden shadow-sm border" style={{ borderColor: `${accentColor}30` }}>
+            <CardHeader className="bg-muted/30 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Target Platforms</CardTitle>
+                {availableTargets.length > 0 && !showAddPlatform && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddPlatform(true)}
+                    className="gap-1.5"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Platform
+                  </Button>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Each target platform gets its own DSN for separate error tracking.
+              </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {/* Existing targets */}
+              <div className="flex flex-wrap gap-2 mb-2">
+                {existingTargets.map(target => {
+                  const targetPlatformInfo = getPlatformInfo(target)
+                  const TargetIcon = targetPlatformInfo?.icon
+                  return (
+                    <Badge
+                      key={target}
+                      variant="secondary"
+                      className={cn(
+                        'flex items-center gap-1.5 px-2.5 py-1 cursor-pointer transition-all',
+                        selectedTarget === target
+                          ? 'ring-2 ring-primary ring-offset-1 ring-offset-background'
+                          : 'hover:bg-secondary/80'
+                      )}
+                      onClick={() => setSelectedTarget(target)}
+                    >
+                      {TargetIcon && (
+                        <div
+                          className="w-4 h-4 rounded flex items-center justify-center"
+                          style={{ backgroundColor: targetPlatformInfo?.color }}
+                        >
+                          <TargetIcon className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                      <span className="text-xs font-medium">
+                        {target.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                      </span>
+                    </Badge>
+                  )
+                })}
+                {existingTargets.length === 0 && project.keys.length === 1 && (
+                  <Badge variant="secondary" className="flex items-center gap-1.5 px-2.5 py-1">
+                    <span className="text-xs font-medium">Default</span>
+                  </Badge>
+                )}
+              </div>
+
+              {/* Add platform inline UI */}
+              {showAddPlatform && availableTargets.length > 0 && (
+                <div className="mt-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium">Add a target platform</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setShowAddPlatform(false)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {availableTargets.map(target => {
+                      const targetPlatformInfo = getPlatformInfo(target.id)
+                      const TargetIcon = targetPlatformInfo?.icon
+                      return (
+                        <button
+                          key={target.id}
+                          onClick={() => addTargetMutation.mutate(target.id)}
+                          disabled={addTargetMutation.isPending}
+                          className={cn(
+                            'flex items-center gap-2.5 px-3 py-2.5 rounded-lg border-2 transition-all text-sm font-medium',
+                            'border-border hover:border-primary hover:bg-primary/5',
+                            addTargetMutation.isPending && 'opacity-50 cursor-not-allowed'
+                          )}
+                        >
+                          {TargetIcon && (
+                            <div
+                              className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                              style={{ backgroundColor: targetPlatformInfo?.color }}
+                            >
+                              <TargetIcon className="w-4 h-4 text-white" />
+                            </div>
+                          )}
+                          <span>{target.name}</span>
+                          <Plus className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {addTargetMutation.isError && (
+                    <p className="text-sm text-destructive mt-2">
+                      Failed to add platform. It may already exist.
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* DSN Card */}
         <Card className="mb-8 overflow-hidden border-l-4 shadow-sm" style={{ borderLeftColor: accentColor }}>
           <CardHeader className="bg-muted/40">
             <CardTitle className="text-base flex items-center gap-2">
               <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                {isMultiPlatform ? 'Your DSNs' : 'Your DSN'}
+                {project.keys.length > 1 ? 'Your DSNs' : 'Your DSN'}
               </span>
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              {isMultiPlatform 
+              {project.keys.length > 1
                 ? `Use the appropriate DSN for each target platform in your ${docs.sdkName}.`
                 : `Use this DSN to configure the ${docs.sdkName} in your application.`
               }
             </p>
           </CardHeader>
           <CardContent className="pt-4">
-            {isMultiPlatform ? (
+            {project.keys.length > 1 ? (
               <Tabs value={selectedTarget || 'default'} onValueChange={setSelectedTarget} className="w-full">
-                <TabsList className="mb-4">
+                <TabsList className="mb-4 flex-wrap h-auto gap-1">
                   {project.keys.map(key => (
                     <TabsTrigger key={key.platformTarget || 'default'} value={key.platformTarget || 'default'}>
                       {key.platformTarget ? key.platformTarget.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Default'}
