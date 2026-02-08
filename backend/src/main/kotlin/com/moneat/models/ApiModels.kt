@@ -93,7 +93,7 @@ data class EventResponse(
     val environment: String?,
     val release: String?,
     val user: UserInfo?,
-    val tags: Map<String, String>,
+    val tags: HashMap<String, String> = hashMapOf(),
     val contexts: String,
     val exception: String?,
     val breadcrumbs: String?

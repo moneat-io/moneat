@@ -40,6 +40,7 @@ data class AdminOrgSummary(
     val slug: String,
     val plan: String,
     val eventCountThisMonth: Long,
+    val bytesIngestedThisMonth: Long,
     val projectCount: Int,
     val memberCount: Int,
     val quotaUsedPercent: Double?
@@ -212,11 +213,13 @@ class AdminService {
                     ?.lowercase() ?: "free"
                 val projectCount = Projects.select { Projects.organization_id eq orgId }.count().toInt()
                 val memberCount = Memberships.select { Memberships.organization_id eq orgId }.count().toInt()
-                val usage = UsageRecords.select {
+                val usageRows = UsageRecords.select {
                     (UsageRecords.organization_id eq orgId) and
                         (UsageRecords.recordDate greaterEq monthStart) and
                         (UsageRecords.recordDate lessEq today)
-                }.sumOf { it[UsageRecords.event_count].toLong() }
+                }.toList()
+                val usage = usageRows.sumOf { it[UsageRecords.event_count].toLong() }
+                val bytesCount = usageRows.sumOf { it[UsageRecords.bytes_ingested] }
                 val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
                 val quotaPct = if (tier.monthlyUnitLimit > 0) (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0) else null
 
@@ -226,6 +229,7 @@ class AdminService {
                     slug = row[Organizations.slug],
                     plan = plan,
                     eventCountThisMonth = usage,
+                    bytesIngestedThisMonth = bytesCount,
                     projectCount = projectCount,
                     memberCount = memberCount,
                     quotaUsedPercent = quotaPct

@@ -4,7 +4,7 @@
   "description": "Email templates for Moneat error monitoring",
   "type": "module",
   "scripts": {
-    "dev": "maizzle serve",
+    "dev": "maizzle serve --port 3001",
     "build:development": "maizzle build",
     "build:staging": "maizzle build production",
     "build:production": "maizzle build production"

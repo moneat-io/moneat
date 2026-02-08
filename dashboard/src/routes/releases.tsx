@@ -165,12 +165,6 @@ function ReleasesPage() {
                 Releases are auto-detected when events include a release version.
                 Configure your SDK with a release version to start tracking.
               </p>
-              <div className="text-left text-sm text-muted-foreground bg-muted/40 rounded-lg p-4">
-                <p className="font-medium text-foreground mb-2">What users will see here:</p>
-                <p>- release health (crash-free rate and regressions)</p>
-                <p>- top issues introduced in each release</p>
-                <p>- active user impact per release</p>
-              </div>
             </div>
           </Card>
         ) : (

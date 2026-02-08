@@ -2,15 +2,18 @@ import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
-import {Building2} from 'lucide-react'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {Input} from '@/components/ui/input'
+import {Building2, Search} from 'lucide-react'
+import {useMemo, useState} from 'react'
 import {
-  AdminSkeleton,
-  EmptyState,
-  formatNumber,
-  PlanBadge,
-  QuotaBar,
-  SectionHeader,
+    AdminSkeleton,
+    EmptyState,
+    formatBytes,
+    formatNumber,
+    PlanBadge,
+    QuotaBar,
+    SectionHeader,
 } from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/organizations')({
@@ -18,43 +21,156 @@ export const Route = createFileRoute('/admin/organizations')({
 })
 
 function AdminOrganizationsPage() {
-  const { data: orgs, isLoading } = useQuery({
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'events' | 'bytes' | 'quota' | 'name'>('events')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const {data: orgs, isLoading} = useQuery({
     queryKey: ['admin-organizations', 1],
-    queryFn: () => api.getAdminOrganizations(1, 50),
+    queryFn: () => api.getAdminOrganizations(1, 100),
   })
+
+  const filteredOrgs = useMemo(() => {
+    if (!orgs) return []
+    let result = orgs
+    if (search) {
+      const lower = search.toLowerCase()
+      result = result.filter(
+        (o) =>
+          o.name.toLowerCase().includes(lower) ||
+          o.slug.toLowerCase().includes(lower) ||
+          o.plan.toLowerCase().includes(lower)
+      )
+    }
+    result = [...result].sort((a, b) => {
+      let cmp = 0
+      switch (sortBy) {
+        case 'events':
+          cmp = a.eventCountThisMonth - b.eventCountThisMonth
+          break
+        case 'bytes':
+          cmp = a.bytesIngestedThisMonth - b.bytesIngestedThisMonth
+          break
+        case 'quota':
+          cmp = (a.quotaUsedPercent ?? -1) - (b.quotaUsedPercent ?? -1)
+          break
+        case 'name':
+          cmp = a.name.localeCompare(b.name)
+          break
+      }
+      return sortDir === 'desc' ? -cmp : cmp
+    })
+    return result
+  }, [orgs, search, sortBy, sortDir])
+
+  const handleSort = (column: typeof sortBy) => {
+    if (sortBy === column) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(column)
+      setSortDir('desc')
+    }
+  }
+
+  const SortIndicator = ({column}: {column: typeof sortBy}) => {
+    if (sortBy !== column) return null
+    return <span className="ml-1 text-xs">{sortDir === 'desc' ? '↓' : '↑'}</span>
+  }
 
   if (isLoading || !orgs) {
     return <AdminSkeleton />
   }
+
+  // Aggregate stats
+  const totalEvents = orgs.reduce((sum, o) => sum + o.eventCountThisMonth, 0)
+  const totalBytes = orgs.reduce((sum, o) => sum + o.bytesIngestedThisMonth, 0)
+  const orgsOverQuota = orgs.filter((o) => o.quotaUsedPercent != null && o.quotaUsedPercent >= 90).length
 
   return (
     <div className="space-y-6">
       <SectionHeader
         title="Organizations"
         description={`${orgs.length} organization${orgs.length !== 1 ? 's' : ''} registered on the platform.`}
-      />
+      >
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search orgs..."
+            className="pl-9 w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </SectionHeader>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="px-4 py-3">
+          <div className="text-xs text-muted-foreground">Total Organizations</div>
+          <div className="text-xl font-bold tabular-nums">{orgs.length}</div>
+        </Card>
+        <Card className="px-4 py-3">
+          <div className="text-xs text-muted-foreground">Total Events (Month)</div>
+          <div className="text-xl font-bold tabular-nums">{formatNumber(totalEvents)}</div>
+        </Card>
+        <Card className="px-4 py-3">
+          <div className="text-xs text-muted-foreground">Total Data Ingested</div>
+          <div className="text-xl font-bold tabular-nums">{formatBytes(totalBytes)}</div>
+        </Card>
+        <Card className="px-4 py-3">
+          <div className="text-xs text-muted-foreground">Over 90% Quota</div>
+          <div className={`text-xl font-bold tabular-nums ${orgsOverQuota > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+            {orgsOverQuota}
+          </div>
+        </Card>
+      </div>
 
       <Card>
         <CardContent className="p-0">
-          {orgs.length > 0 ? (
+          {filteredOrgs.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[240px]">Organization</TableHead>
+                  <TableHead
+                    className="w-[220px] cursor-pointer select-none"
+                    onClick={() => handleSort('name')}
+                  >
+                    Organization
+                    <SortIndicator column="name" />
+                  </TableHead>
                   <TableHead>Plan</TableHead>
-                  <TableHead className="text-right">Events (mo)</TableHead>
-                  <TableHead className="w-[200px]">Quota Usage</TableHead>
+                  <TableHead
+                    className="text-right cursor-pointer select-none"
+                    onClick={() => handleSort('events')}
+                  >
+                    Events (mo)
+                    <SortIndicator column="events" />
+                  </TableHead>
+                  <TableHead
+                    className="text-right cursor-pointer select-none"
+                    onClick={() => handleSort('bytes')}
+                  >
+                    Data Ingested
+                    <SortIndicator column="bytes" />
+                  </TableHead>
+                  <TableHead
+                    className="w-[180px] cursor-pointer select-none"
+                    onClick={() => handleSort('quota')}
+                  >
+                    Quota Usage
+                    <SortIndicator column="quota" />
+                  </TableHead>
                   <TableHead className="text-right">Members</TableHead>
                   <TableHead className="text-right">Projects</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orgs.map((org) => (
+                {filteredOrgs.map((org) => (
                   <TableRow key={org.id}>
                     <TableCell>
                       <Link
                         to="/admin/organizations/$orgId"
-                        params={{ orgId: String(org.id) }}
+                        params={{orgId: String(org.id)}}
                         className="font-medium hover:underline text-foreground"
                       >
                         {org.name}
@@ -66,6 +182,9 @@ function AdminOrganizationsPage() {
                     <TableCell className="text-right tabular-nums">
                       {formatNumber(org.eventCountThisMonth)}
                     </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {formatBytes(org.bytesIngestedThisMonth)}
+                    </TableCell>
                     <TableCell>
                       <QuotaBar percent={org.quotaUsedPercent} />
                     </TableCell>
@@ -76,7 +195,10 @@ function AdminOrganizationsPage() {
               </TableBody>
             </Table>
           ) : (
-            <EmptyState message="No organizations yet" icon={Building2} />
+            <EmptyState
+              message={search ? 'No organizations match your search' : 'No organizations yet'}
+              icon={Building2}
+            />
           )}
         </CardContent>
       </Card>

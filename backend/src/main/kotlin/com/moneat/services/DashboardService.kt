@@ -602,9 +602,9 @@ class DashboardService {
                                 username = obj["user_username"]?.jsonPrimitive?.contentOrNull
                             )
                         },
-                        tags = obj["tags"]?.jsonObject?.entries?.associate { 
-                            it.key to it.value.jsonPrimitive.content 
-                        } ?: emptyMap(),
+                        tags = HashMap(obj["tags"]?.jsonObject?.mapValues { 
+                            it.value.jsonPrimitive.content 
+                        } ?: emptyMap()),
                         contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
                         exception = obj["stack_trace"]?.jsonPrimitive?.contentOrNull,
                         breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
@@ -1564,11 +1564,11 @@ class DashboardService {
         return if (conditions.isEmpty()) "" else conditions.joinToString(separator = "\n                ", prefix = "AND ")
     }
 
-    private fun parseStringMap(element: JsonElement?): Map<String, String> {
-        val objectValue = element as? JsonObject ?: return emptyMap()
-        return objectValue.entries.associate { (key, value) ->
+    private fun parseStringMap(element: JsonElement?): HashMap<String, String> {
+        val objectValue = element as? JsonObject ?: return hashMapOf()
+        return HashMap(objectValue.entries.associate { (key, value) ->
             key to (value.jsonPrimitive.contentOrNull ?: "")
-        }
+        })
     }
 
     private fun parseTraceContext(contexts: String): JsonObject? {

@@ -1,6 +1,6 @@
 import {createRootRoute, Outlet, useRouterState} from '@tanstack/react-router'
-import {useEffect} from 'react'
-import {Sidebar} from '../components/sidebar'
+import {useEffect, useState} from 'react'
+import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
 
@@ -91,21 +91,25 @@ function RootComponent() {
   const router = useRouterState()
   const currentPath = router.location.pathname
   const isAuthenticated = api.isAuthenticated()
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
 
   useEffect(() => {
     document.title = getDocumentTitle(currentPath, isAuthenticated)
   }, [currentPath, isAuthenticated])
   
-  // Don't show sidebar on auth pages, landing page (when logged out), or admin (has its own layout)
+  // Don't show sidebar on auth pages or landing page (when logged out)
   const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'].includes(currentPath)
   const isLandingPage = currentPath === '/' && !isAuthenticated
-  const isAdminRoute = currentPath.startsWith('/admin')
-  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isAdminRoute
+  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage
+  const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   return (
     <div className="min-h-screen bg-background">
-      {showSidebar && <Sidebar />}
-      <div className={showSidebar ? 'ml-16' : ''}>
+      {showSidebar && <Sidebar isExpanded={isSidebarExpanded} onExpandedChange={setIsSidebarExpanded} />}
+      <div
+        className="transition-[margin-left] duration-300"
+        style={{ marginLeft: showSidebar ? sidebarWidth : 0 }}
+      >
         <Outlet />
       </div>
       <Toaster />

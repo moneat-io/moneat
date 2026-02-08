@@ -5,6 +5,7 @@ import {AlertTriangle, ArrowLeft, Loader2, Save, Trash2} from 'lucide-react'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
+import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog'
@@ -58,6 +59,12 @@ function ProjectSettingsPage() {
   const trimmedName = name.trim()
   const nameChanged = trimmedName !== project.name
   const frameworkChanged = framework !== initialFramework
+  const frameworkInfo = getPlatformInfo(framework)
+  const isMultiplatformFramework = !!frameworkInfo?.targets?.length
+  const currentTargets = project.keys
+    .map(key => key.platformTarget)
+    .filter((target): target is string => Boolean(target))
+  const availableTargets = frameworkInfo?.targets?.filter(target => !currentTargets.includes(target.id)) ?? []
 
   const filteredPlatforms = useMemo(() => {
     return platforms.filter((platform: PlatformType) => {
@@ -105,6 +112,25 @@ function ProjectSettingsPage() {
     onError: (err: Error) => {
       toast({
         title: 'Failed to delete project',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const addTargetMutation = useMutation({
+    mutationFn: (target: string) => api.addProjectTarget(project.id, target),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['projects'] })
+      await router.invalidate()
+      toast({
+        title: 'Target added',
+        description: 'A new platform target and DSN were created.',
+      })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to add target',
         description: err.message,
         variant: 'destructive',
       })
@@ -197,36 +223,110 @@ function ProjectSettingsPage() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {filteredPlatforms.map((platform) => {
-                  const Icon = platform.icon
-                  return (
-                    <button
-                      key={platform.id}
-                      type="button"
-                      onClick={() => setFramework(platform.id)}
-                      className={cn(
-                        'border-2 rounded-lg p-3 text-left transition-colors',
-                        framework === platform.id
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: platform.color }}
-                        >
-                          <Icon className="h-4 w-4 text-white" />
+              <div className="max-h-96 overflow-y-auto rounded-lg border border-border p-2 pr-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {filteredPlatforms.map((platform) => {
+                    const Icon = platform.icon
+                    return (
+                      <button
+                        key={platform.id}
+                        type="button"
+                        onClick={() => setFramework(platform.id)}
+                        className={cn(
+                          'border-2 rounded-lg p-3 text-left transition-colors',
+                          framework === platform.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-primary/50'
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: platform.color }}
+                          >
+                            <Icon className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="text-sm font-medium">{platform.name}</span>
                         </div>
-                        <span className="text-sm font-medium">{platform.name}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">{platform.description}</p>
-                    </button>
-                  )
-                })}
+                        <p className="text-xs text-muted-foreground mt-2">{platform.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
+
+            {isMultiplatformFramework && (
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-base">Target Platforms</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Multiplatform frameworks use one DSN per target.
+                  </p>
+                </div>
+
+                {frameworkChanged ? (
+                  <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
+                    Save framework changes first, then add target platforms here.
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {currentTargets.length > 0 ? (
+                        currentTargets.map((target) => {
+                          const targetInfo = getPlatformInfo(target)
+                          const TargetIcon = targetInfo?.icon
+                          return (
+                            <Badge key={target} variant="secondary" className="flex items-center gap-1.5 px-2.5 py-1">
+                              {TargetIcon && (
+                                <div
+                                  className="w-4 h-4 rounded flex items-center justify-center"
+                                  style={{ backgroundColor: targetInfo?.color }}
+                                >
+                                  <TargetIcon className="w-3 h-3 text-white" />
+                                </div>
+                              )}
+                              <span>{targetInfo?.name ?? target}</span>
+                            </Badge>
+                          )
+                        })
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No targets added yet.</p>
+                      )}
+                    </div>
+
+                    {availableTargets.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {availableTargets.map((target) => {
+                          const targetInfo = getPlatformInfo(target.id)
+                          const TargetIcon = targetInfo?.icon
+                          return (
+                            <Button
+                              key={target.id}
+                              type="button"
+                              variant="outline"
+                              className="justify-start h-auto py-2.5"
+                              onClick={() => addTargetMutation.mutate(target.id)}
+                              disabled={addTargetMutation.isPending}
+                            >
+                              {TargetIcon && (
+                                <div
+                                  className="w-5 h-5 rounded flex items-center justify-center"
+                                  style={{ backgroundColor: targetInfo?.color }}
+                                >
+                                  <TargetIcon className="w-3.5 h-3.5 text-white" />
+                                </div>
+                              )}
+                              <span>Add {target.name}</span>
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

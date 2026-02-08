@@ -7,22 +7,22 @@ import {ThemeToggle} from '@/components/theme-toggle'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {
-    BarChart3,
-    BookOpen,
-    Check,
-    ChevronLeft,
-    ChevronRight,
-    Home,
-    LogOut,
-    MessageSquare,
-    Package,
-    Play,
-    Plus,
-    Server,
-    Settings,
-    Shield,
-    Timer,
-    User,
+  BarChart3,
+  BookOpen,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  LogOut,
+  MessageSquare,
+  Package,
+  Play,
+  Plus,
+  Server,
+  Settings,
+  Shield,
+  Timer,
+  User,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
@@ -34,6 +34,14 @@ import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} fr
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
+export const SIDEBAR_COLLAPSED_WIDTH = 64
+export const SIDEBAR_EXPANDED_WIDTH = 256
+
+interface SidebarProps {
+  isExpanded: boolean
+  onExpandedChange: (expanded: boolean) => void
+}
+
 const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'mobile', label: 'Mobile' },
@@ -42,8 +50,7 @@ const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
   { id: 'desktop-gaming', label: 'Desktop & Gaming' },
 ]
 
-export function Sidebar() {
-  const [isExpanded, setIsExpanded] = useState(false)
+export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   const router = useRouterState()
   const currentPath = router.location.pathname
   const navigate = useNavigate()
@@ -131,8 +138,12 @@ export function Sidebar() {
 
   const handleProjectSelect = (projectId: number) => {
     setSelectedProjectId(projectId)
-    // If we're on a project setup page, navigate to the new project's setup page
-    if (/^\/projects\/\d+$/.test(currentPath)) {
+    // Keep users on the same project subpage when switching projects.
+    if (/^\/projects\/[^/]+\/settings\/?$/.test(currentPath)) {
+      navigate({ to: '/projects/$projectId/settings', params: { projectId: String(projectId) } })
+      return
+    }
+    if (/^\/projects\/[^/]+\/?$/.test(currentPath) || currentPath === '/projects') {
       navigate({ to: '/projects/$projectId', params: { projectId: String(projectId) } })
     }
   }
@@ -343,7 +354,9 @@ export function Sidebar() {
         <nav className="flex-1 p-2 overflow-y-auto">
           <div className="space-y-1">
             {navItems.map((item) => {
-              const isActive = currentPath === item.href
+              const isActive = item.href === '/'
+                ? currentPath === '/'
+                : currentPath === item.href || currentPath.startsWith(item.href + '/')
               const Icon = item.icon
 
               const linkContent = (
@@ -486,7 +499,7 @@ export function Sidebar() {
               'w-full justify-start gap-3 text-muted-foreground hover:text-foreground',
               !isExpanded && 'justify-center px-0'
             )}
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={() => onExpandedChange(!isExpanded)}
           >
             {isExpanded ? (
               <>

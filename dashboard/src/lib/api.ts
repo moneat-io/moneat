@@ -1001,6 +1001,7 @@ class ApiClient {
       slug: string
       plan: string
       eventCountThisMonth: number
+      bytesIngestedThisMonth: number
       projectCount: number
       memberCount: number
       quotaUsedPercent: number | null

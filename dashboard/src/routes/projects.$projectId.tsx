@@ -1,4 +1,4 @@
-import {createFileRoute, Link, Outlet, redirect, useMatches, useRouter} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, redirect, useRouter, useRouterState} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {getSetupDocs} from '@/lib/setup-docs'
 import {getPlatformInfo} from '@/routes/projects'
@@ -102,8 +102,8 @@ function CodeBlock({
 }
 
 function SetupPage() {
-  const matches = useMatches()
-  const showingSettingsPage = matches.some(match => match.id === '/projects/$projectId/settings')
+  const routerState = useRouterState()
+  const showingSettingsPage = /^\/projects\/[^/]+\/settings\/?$/.test(routerState.location.pathname)
   const { project } = Route.useLoaderData()
   const router = useRouter()
   const queryClient = useQueryClient()

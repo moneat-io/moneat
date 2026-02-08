@@ -1,33 +1,59 @@
 import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import {ArrowLeft, BarChart3, Building2, CreditCard, DollarSign, LayoutDashboard, Mail, Server, Shield} from 'lucide-react'
+import {
+    ArrowLeft,
+    BarChart3,
+    Building2,
+    CreditCard,
+    DollarSign,
+    LayoutDashboard,
+    Mail,
+    Server,
+    Shield,
+} from 'lucide-react'
+import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({to: '/login'})
     }
     try {
       const user = await api.getCurrentUser()
       if (!user.isAdmin) {
-        throw redirect({ to: '/' })
+        throw redirect({to: '/'})
       }
     } catch (e) {
       if (e instanceof Error && e.message?.includes('redirect')) throw e
-      throw redirect({ to: '/' })
+      throw redirect({to: '/'})
     }
   },
   component: AdminLayout,
 })
 
-const adminNavItems = [
-  { icon: LayoutDashboard, label: 'Overview', href: '/admin' },
-  { icon: Building2, label: 'Organizations', href: '/admin/organizations' },
-  { icon: BarChart3, label: 'Usage', href: '/admin/usage' },
-  { icon: DollarSign, label: 'Revenue', href: '/admin/revenue' },
-  { icon: CreditCard, label: 'Billing', href: '/admin/billing' },
-  { icon: Mail, label: 'Emails', href: '/admin/emails' },
-  { icon: Server, label: 'Infrastructure', href: '/admin/infrastructure' },
+const adminNavSections = [
+  {
+    label: 'Monitor',
+    items: [
+      {icon: LayoutDashboard, label: 'Overview', href: '/admin'},
+      {icon: BarChart3, label: 'Usage', href: '/admin/usage'},
+      {icon: Server, label: 'Infrastructure', href: '/admin/infrastructure'},
+    ],
+  },
+  {
+    label: 'Business',
+    items: [
+      {icon: Building2, label: 'Organizations', href: '/admin/organizations'},
+      {icon: DollarSign, label: 'Revenue', href: '/admin/revenue'},
+      {icon: CreditCard, label: 'Billing', href: '/admin/billing'},
+    ],
+  },
+  {
+    label: 'Comms',
+    items: [
+      {icon: Mail, label: 'Emails', href: '/admin/emails'},
+    ],
+  },
 ]
 
 function AdminLayout() {
@@ -35,55 +61,75 @@ function AdminLayout() {
   const currentPath = router.location.pathname
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b">
-        <div className="px-6 flex items-center justify-between max-w-[1400px] mx-auto h-14">
-          <div className="flex items-center gap-4">
-            <Link
-              to="/"
-              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back
-            </Link>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <div className="rounded-md bg-primary p-1">
-                <Shield className="h-3.5 w-3.5 text-primary-foreground" />
-              </div>
-              <h1 className="text-base font-semibold">Admin</h1>
+    <div className="flex min-h-screen">
+      {/* Admin Side Navigation */}
+      <aside className="w-52 shrink-0 border-r bg-muted/30 sticky top-0 h-screen flex flex-col overflow-y-auto">
+        {/* Header */}
+        <div className="px-4 py-4 border-b">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-primary p-1.5">
+              <Shield className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold leading-none">Admin</h1>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Platform Management</p>
             </div>
           </div>
         </div>
-        <nav className="flex gap-0.5 px-6 max-w-[1400px] mx-auto -mb-px">
-          {adminNavItems.map((item) => {
-            const Icon = item.icon
-            const isActive =
-              currentPath === item.href ||
-              (item.href !== '/admin' && currentPath.startsWith(item.href))
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors rounded-t-md ${
-                  isActive
-                    ? 'border-primary text-foreground bg-muted/50'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            )
-          })}
+
+        {/* Navigation */}
+        <nav className="flex-1 px-2 py-3 space-y-4">
+          {adminNavSections.map((section) => (
+            <div key={section.label}>
+              <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon
+                  const isActive =
+                    item.href === '/admin'
+                      ? currentPath === '/admin' || currentPath === '/admin/'
+                      : currentPath.startsWith(item.href)
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all',
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
-      </div>
+
+        {/* Back to Dashboard */}
+        <div className="px-2 py-3 border-t">
+          <Link
+            to="/"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            Back to Dashboard
+          </Link>
+        </div>
+      </aside>
 
       {/* Content */}
-      <div className="px-6 py-6 max-w-[1400px] mx-auto">
-        <Outlet />
-      </div>
+      <main className="flex-1 min-w-0">
+        <div className="p-6 lg:p-8">
+          <Outlet />
+        </div>
+      </main>
     </div>
   )
 }
