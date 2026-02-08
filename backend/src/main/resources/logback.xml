@@ -5,9 +5,18 @@
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
+    
+    <!-- Sentry Appender: Sends WARN and ERROR logs to Sentry as breadcrumbs/events -->
+    <appender name="SENTRY" class="io.sentry.logback.SentryAppender">
+        <options>
+            <minimumEventLevel>WARN</minimumEventLevel>
+            <minimumBreadcrumbLevel>INFO</minimumBreadcrumbLevel>
+        </options>
+    </appender>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
+        <appender-ref ref="SENTRY"/>
     </root>
 
     <logger name="com.moneat" level="DEBUG"/>

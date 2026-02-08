@@ -3,6 +3,7 @@ package com.moneat.plugins
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.services.AuthTokenService
+import com.moneat.utils.SentryUtils
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -33,7 +34,13 @@ fun Application.configureSecurity() {
                     .build()
             )
             validate { credential ->
-                if (credential.payload.getClaim("userId").asInt() != null) {
+                val userId = credential.payload.getClaim("userId").asInt()
+                if (userId != null) {
+                    // Set user context in Sentry
+                    val email = credential.payload.getClaim("email").asString()
+                    SentryUtils.setUser(userId, email = email)
+                    SentryUtils.setTag("auth.type", "jwt")
+                    
                     JWTPrincipal(credential.payload)
                 } else {
                     null
@@ -47,6 +54,11 @@ fun Application.configureSecurity() {
             authenticate { tokenCredential ->
                 val validationResult = authTokenService.validateToken(tokenCredential.token)
                 if (validationResult != null) {
+                    // Set user context in Sentry
+                    SentryUtils.setUser(validationResult.userId)
+                    SentryUtils.setTag("auth.type", "bearer")
+                    SentryUtils.setTag("auth.token_id", validationResult.tokenId.toString())
+                    
                     AuthTokenPrincipal(
                         userId = validationResult.userId,
                         scopes = validationResult.scopes,
@@ -66,6 +78,11 @@ fun Application.configureSecurity() {
                 // First try as auth token
                 val validationResult = authTokenService.validateToken(tokenCredential.token)
                 if (validationResult != null) {
+                    // Set user context in Sentry
+                    SentryUtils.setUser(validationResult.userId)
+                    SentryUtils.setTag("auth.type", "bearer")
+                    SentryUtils.setTag("auth.token_id", validationResult.tokenId.toString())
+                    
                     return@authenticate AuthTokenPrincipal(
                         userId = validationResult.userId,
                         scopes = validationResult.scopes,
@@ -85,6 +102,11 @@ fun Application.configureSecurity() {
                     val userId = decodedJWT.getClaim("userId").asInt()
                     
                     if (userId != null) {
+                        // Set user context in Sentry
+                        val email = decodedJWT.getClaim("email").asString()
+                        SentryUtils.setUser(userId, email = email)
+                        SentryUtils.setTag("auth.type", "jwt")
+                        
                         // Return as AuthTokenPrincipal with full scopes for JWT users
                         return@authenticate AuthTokenPrincipal(
                             userId = userId,

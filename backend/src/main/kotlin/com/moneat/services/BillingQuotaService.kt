@@ -1,6 +1,7 @@
 package com.moneat.services
 
 import com.moneat.models.*
+import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
 import kotlinx.datetime.*
 import mu.KotlinLogging
@@ -53,6 +54,13 @@ class BillingQuotaService(
             val totalAfter = state.usedUnits + requestedUnits
 
             if (totalAfter > state.totalLimitUnits) {
+                SentryUtils.breadcrumb("billing", "Quota exceeded", mapOf(
+                    "organization_id" to organizationId,
+                    "requested_units" to requestedUnits,
+                    "used_units" to state.usedUnits,
+                    "total_limit" to state.totalLimitUnits
+                ))
+                
                 return@transaction QuotaReservationResult(
                     allowed = false,
                     reason = "quota_exceeded",
@@ -73,6 +81,12 @@ class BillingQuotaService(
             val overageDelta = overageAfter - overageBefore
 
             if (state.subscriptionId != null && overageDelta > 0 && state.paygRateMicrosPerUnit > 0) {
+                SentryUtils.breadcrumb("billing", "PAYG overage incurred", mapOf(
+                    "organization_id" to organizationId,
+                    "overage_delta" to overageDelta,
+                    "subscription_id" to state.subscriptionId
+                ))
+                
                 val overageMicros = overageDelta * state.paygRateMicrosPerUnit
                 Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
                     it[payg_used_units] = state.paygUsedUnits + overageDelta

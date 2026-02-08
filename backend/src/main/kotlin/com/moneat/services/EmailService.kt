@@ -3,7 +3,9 @@ package com.moneat.services
 import com.moneat.models.EmailsSent
 import com.moneat.models.Memberships
 import com.moneat.models.Users
+import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
+import io.sentry.Sentry
 import jakarta.mail.*
 import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeBodyPart
@@ -101,6 +103,12 @@ class EmailService {
     }
     
     fun sendEmail(to: String, subject: String, htmlBody: String, textBody: String, emailType: String = "other") {
+        SentryUtils.breadcrumb("email", "Sending email", mapOf(
+            "to" to to,
+            "subject" to subject,
+            "type" to emailType
+        ))
+        
         val mailSession = session
         if (mailSession == null) {
             logger.warn { "Email service not configured. Would send to $to: $subject" }
@@ -137,8 +145,18 @@ class EmailService {
             Transport.send(message)
             success = true
             logger.info { "Email sent to $to" }
+            SentryUtils.breadcrumb("email", "Email sent successfully", mapOf(
+                "to" to to,
+                "type" to emailType
+            ))
         } catch (e: Exception) {
             logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag("email.operation", "send")
+                scope.setExtra("email.to", to)
+                scope.setExtra("email.subject", subject)
+                scope.setExtra("email.type", emailType)
+            }
             throw e
         } finally {
             trackEmailSent(to, emailType, success)

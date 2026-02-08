@@ -3,6 +3,7 @@ package com.moneat.services
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.*
+import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
@@ -25,10 +26,13 @@ class AuthService {
             throw IllegalArgumentException("Invalid email or password too short")
         }
         
+        SentryUtils.breadcrumb("auth", "User signup started", mapOf("email" to request.email))
+        
         val (userId, emailVerified) = transaction {
             // Check if user exists
             val existing = Users.selectAll().where { Users.email eq request.email }.firstOrNull()
             if (existing != null) {
+                SentryUtils.breadcrumb("auth", "Signup failed - user exists", mapOf("email" to request.email))
                 throw IllegalArgumentException("User already exists")
             }
             
@@ -60,6 +64,11 @@ class AuthService {
                 it[role] = "owner"
             }
             
+            SentryUtils.breadcrumb("auth", "User created", mapOf(
+                "user_id" to id,
+                "organization_id" to orgId
+            ))
+            
             // Send verification email
             try {
                 emailService.sendVerificationEmail(request.email, verificationToken, request.name)
@@ -72,6 +81,7 @@ class AuthService {
         }
         
         val token = generateToken(userId, request.email)
+        SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
         return AuthResponse(
             token = token,
             user = UserResponse(userId, request.email, request.name, emailVerified, false, false)

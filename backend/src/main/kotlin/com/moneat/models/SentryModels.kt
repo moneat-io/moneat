@@ -1,6 +1,12 @@
 package com.moneat.models
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import java.util.*
 
@@ -138,6 +144,7 @@ data class SentryEvent(
     val platform: String? = null,
     val sdk: SdkInfo? = null,
     val exception: ExceptionInfo? = null,
+    @Serializable(with = SentryMessageSerializer::class)
     val message: String? = null,
     val environment: String? = null,
     val release: String? = null,
@@ -151,6 +158,30 @@ data class SentryEvent(
     val server_name: String? = null,
     val threads: JsonObject? = null
 )
+
+object SentryMessageSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("SentryMessage", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeString()
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            JsonNull -> null
+            is JsonPrimitive -> element.contentOrNull ?: element.toString()
+            is JsonObject -> {
+                element["formatted"]?.jsonPrimitive?.contentOrNull
+                    ?: element["message"]?.jsonPrimitive?.contentOrNull
+                    ?: element["text"]?.jsonPrimitive?.contentOrNull
+                    ?: element.toString()
+            }
+            else -> element.toString()
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        encoder.encodeString(value ?: "")
+    }
+}
 
 @Serializable
 data class SentryTransaction(

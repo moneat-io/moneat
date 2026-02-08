@@ -2,9 +2,11 @@ package com.moneat.services
 
 import com.moneat.config.RedisConfig
 import com.moneat.models.SentryEnvelope
+import com.moneat.utils.SentryUtils
+import io.sentry.Sentry
 import kotlinx.coroutines.*
 import mu.KotlinLogging
-import java.util.Base64
+import java.util.*
 
 private val logger = KotlinLogging.logger {}
 
@@ -27,6 +29,10 @@ class IngestionWorker(
 
     fun start() {
         logger.info { "Starting IngestionWorker with $workerCount workers, queue=$queueKey" }
+        SentryUtils.breadcrumb("worker", "IngestionWorker starting", mapOf(
+            "worker_count" to workerCount,
+            "queue" to queueKey
+        ))
         jobs = (1..workerCount).map { id ->
             scope.launch {
                 runWorker(id)
@@ -38,21 +44,41 @@ class IngestionWorker(
         jobs.forEach { it.cancel() }
         scope.cancel()
         logger.info { "IngestionWorker stopped" }
+        SentryUtils.breadcrumb("worker", "IngestionWorker stopped", emptyMap())
     }
 
     private suspend fun runWorker(workerId: Int) {
         while (scope.isActive) {
             try {
                 // BRPOP block with 5s timeout so we can check isActive periodically
-                val result = RedisConfig.sync().brpop(5, queueKey)
+                val result = RedisConfig.syncBlocking().brpop(5, queueKey)
                 val value = result?.value ?: continue
-                try {
-                    val (projectId, envelopeBytes) = decodeMessage(value)
-                    val envelope = SentryEnvelope.parse(envelopeBytes)
-                    eventService.processEnvelope(projectId, envelope)
-                } catch (e: Exception) {
-                    logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
-                    RedisConfig.sync().rpush(dlqKey, value)
+                
+                SentryUtils.withTransaction("ingestion.process", "background.job") { transaction ->
+                    transaction?.setData("worker_id", workerId)
+                    transaction?.setData("queue", queueKey)
+                    
+                    try {
+                        val (projectId, envelopeBytes) = decodeMessage(value)
+                        transaction?.setData("project_id", projectId)
+                        
+                        SentryUtils.breadcrumb("ingestion", "Processing envelope", mapOf(
+                            "project_id" to projectId,
+                            "size_bytes" to envelopeBytes.size
+                        ))
+                        
+                        val envelope = SentryEnvelope.parse(envelopeBytes)
+                        eventService.processEnvelope(projectId, envelope)
+                    } catch (e: Exception) {
+                        logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
+                        RedisConfig.syncBlocking().rpush(dlqKey, value)
+                        
+                        Sentry.captureException(e) { scope ->
+                            scope.setTag("worker.operation", "process_message")
+                            scope.setTag("worker.id", workerId.toString())
+                            scope.setExtra("queue", queueKey)
+                        }
+                    }
                 }
             } catch (e: CancellationException) {
                 break

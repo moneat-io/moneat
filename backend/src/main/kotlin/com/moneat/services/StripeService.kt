@@ -1,25 +1,26 @@
 package com.moneat.services
 
 import com.moneat.models.*
+import com.moneat.utils.SentryUtils
 import com.stripe.Stripe
 import com.stripe.exception.SignatureVerificationException
 import com.stripe.model.Customer
 import com.stripe.model.Event
 import com.stripe.model.Invoice
 import com.stripe.model.Subscription
-import com.stripe.model.billingportal.Session
 import com.stripe.model.billing.MeterEvent
+import com.stripe.model.billingportal.Session
 import com.stripe.net.Webhook
 import com.stripe.param.CustomerCreateParams
 import com.stripe.param.billing.MeterEventCreateParams
-import com.stripe.param.billingportal.SessionCreateParams as PortalSessionCreateParams
-import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
-import io.ktor.server.config.ApplicationConfig
+import io.ktor.server.config.*
+import io.sentry.Sentry
 import kotlinx.datetime.Instant
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.insertIgnore
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.stripe.param.billingportal.SessionCreateParams as PortalSessionCreateParams
+import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
 
@@ -48,6 +49,11 @@ class StripeService(
         cancelUrl: String
     ): CheckoutSessionResponse {
         ensureEnabled()
+        
+        SentryUtils.breadcrumb("stripe", "Creating checkout session", mapOf(
+            "organization_id" to organizationId,
+            "tier_name" to tierName
+        ))
 
         val tier = pricingTierService.getCurrentTier(tierName)
             ?: throw IllegalArgumentException("Unknown tier: $tierName")
@@ -92,11 +98,25 @@ class StripeService(
         }
         val params = paramsBuilder.build()
 
-        val session = com.stripe.model.checkout.Session.create(params)
-        return CheckoutSessionResponse(
-            sessionId = session.id,
-            url = session.url ?: ""
-        )
+        return try {
+            val session = com.stripe.model.checkout.Session.create(params)
+            SentryUtils.breadcrumb("stripe", "Checkout session created", mapOf(
+                "session_id" to session.id,
+                "customer_id" to customerId
+            ))
+            CheckoutSessionResponse(
+                sessionId = session.id,
+                url = session.url ?: ""
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to create Stripe checkout session" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "create_checkout_session")
+                scope.setExtra("organization_id", organizationId.toString())
+                scope.setExtra("tier_name", tierName)
+            }
+            throw e
+        }
     }
 
     fun createPortalSession(organizationId: Int, returnUrl: String): PortalSessionResponse {
