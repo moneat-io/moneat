@@ -10,7 +10,7 @@ import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
-import {Activity, AlertCircle, CheckCircle2, FolderKanban, Plus, Search, TrendingUp, Users} from 'lucide-react'
+import {Activity, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, FolderKanban, Plus, Search, TrendingUp, Users} from 'lucide-react'
 import {useState} from 'react'
 import {StatsCard} from '@/components/charts/stats-card'
 import {EventsChart} from '@/components/charts/events-chart'
@@ -87,6 +87,7 @@ function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set())
+  const [showStats, setShowStats] = useState(false)
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -172,8 +173,8 @@ function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="px-6 py-4 max-w-[1600px] mx-auto">
+        <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold">Dashboard</h2>
             <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
@@ -210,48 +211,72 @@ function DashboardPage() {
           </Card>
         ) : (
           <>
-            {/* Stats Tiles */}
+            {/* Collapsible Stats Overview */}
             {stats && (
-              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatsCard
-                  title="Events (24h)"
-                  value={stats.totalEvents.toLocaleString()}
-                  icon={Activity}
-                  accent="blue"
-                />
-                <StatsCard
-                  title="Unresolved Issues"
-                  value={stats.unresolvedIssues.toLocaleString()}
-                  icon={AlertCircle}
-                  accent="amber"
-                />
-                <StatsCard
-                  title="Affected Users (24h)"
-                  value={stats.affectedUsers.toLocaleString()}
-                  icon={Users}
-                  accent="emerald"
-                />
-                <StatsCard
-                  title="Total Issues"
-                  value={stats.totalIssues.toLocaleString()}
-                  icon={TrendingUp}
-                  accent="violet"
-                />
+              <div className="mb-3">
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg border border-border/60 bg-card/50 hover:bg-accent/50 transition text-sm"
+                >
+                  {showStats ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="font-medium">Overview</span>
+                  <div className="flex items-center gap-4 ml-auto text-muted-foreground">
+                    <span className="hidden sm:inline">
+                      <span className="font-semibold text-foreground">{stats.totalEvents.toLocaleString()}</span> events
+                    </span>
+                    <span>
+                      <span className="font-semibold text-foreground">{stats.unresolvedIssues.toLocaleString()}</span> unresolved
+                    </span>
+                    <span className="hidden sm:inline">
+                      <span className="font-semibold text-foreground">{stats.affectedUsers.toLocaleString()}</span> users
+                    </span>
+                  </div>
+                </button>
+                {showStats && (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <StatsCard
+                        title="Events (24h)"
+                        value={stats.totalEvents.toLocaleString()}
+                        icon={Activity}
+                        accent="blue"
+                      />
+                      <StatsCard
+                        title="Unresolved Issues"
+                        value={stats.unresolvedIssues.toLocaleString()}
+                        icon={AlertCircle}
+                        accent="amber"
+                      />
+                      <StatsCard
+                        title="Affected Users (24h)"
+                        value={stats.affectedUsers.toLocaleString()}
+                        icon={Users}
+                        accent="emerald"
+                      />
+                      <StatsCard
+                        title="Total Issues"
+                        value={stats.totalIssues.toLocaleString()}
+                        icon={TrendingUp}
+                        accent="violet"
+                      />
+                    </div>
+                    {stats.eventsTimeline.length > 0 && (
+                      <EventsChart
+                        data={stats.eventsTimeline}
+                        title="Events in Last 24 Hours"
+                        height={160}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Mini Events Chart */}
-            {stats && stats.eventsTimeline.length > 0 && (
-              <div className="mb-6">
-                <EventsChart
-                  data={stats.eventsTimeline}
-                  title="Events in Last 24 Hours"
-                  height={200}
-                />
-              </div>
-            )}
-
-            <div className="mb-4 flex gap-4 items-center">
+            <div className="mb-3 flex gap-3 items-center">
               {filteredIssues.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -328,51 +353,55 @@ function DashboardPage() {
                 </div>
               </Card>
             ) : (
-              <div className="space-y-2">
+              <div className="rounded-lg border border-border/60 bg-card overflow-hidden divide-y divide-border/40">
                 {filteredIssues.map((issue) => (
                   <div
                     key={issue.id}
-                    className="rounded-lg border border-border/80 bg-card hover:bg-accent hover:border-primary/20 transition"
+                    className="hover:bg-accent/60 transition"
                   >
-                    <div className="flex items-center gap-4 p-4">
-                      <div className="flex items-center">
-                        <Checkbox
-                          checked={selectedIssues.has(issue.id)}
-                          onCheckedChange={() => handleToggleIssue(issue.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={`Select ${issue.title}`}
-                        />
-                      </div>
+                    <div className="flex items-center gap-3 py-2.5 px-4">
+                      <Checkbox
+                        checked={selectedIssues.has(issue.id)}
+                        onCheckedChange={() => handleToggleIssue(issue.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${issue.title}`}
+                      />
                       <Link
                         to="/issues/$issueId"
                         params={{ issueId: issue.id }}
-                        className="flex-1 flex items-start gap-4"
+                        className="flex-1 flex items-center gap-3 min-w-0"
                       >
-                          <div className="flex-1">
-                            <div className="font-semibold">{issue.title}</div>
-                            <div className="text-sm text-muted-foreground">{issue.culprit}</div>
-                            <div className="mt-2 flex gap-2">
-                              <Badge className={getLevelColor(issue.level)}>
-                                {issue.level.toUpperCase()}
+                        <Badge className={`${getLevelColor(issue.level)} shrink-0 text-[11px] px-1.5 py-0`}>
+                          {issue.level.toUpperCase()}
+                        </Badge>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <span className="font-semibold truncate">{issue.title}</span>
+                            {issue.status === 'resolved' && (
+                              <Badge variant="default" className="bg-green-500 text-[11px] px-1.5 py-0 shrink-0">
+                                Resolved
                               </Badge>
-                              <Badge variant="outline">{issue.platform}</Badge>
-                              {issue.status === 'resolved' && (
-                                <Badge variant="default" className="bg-green-500">
-                                  Resolved
-                                </Badge>
-                              )}
-                            </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-6">
-                            <div className="text-center">
-                              <div className="text-xs text-muted-foreground mb-1">Frequency</div>
-                              <EventSparkline eventCount={issue.eventCount} />
-                            </div>
-                            <div className="text-right text-sm text-muted-foreground min-w-[100px]">
-                              <div className="font-semibold text-foreground">{issue.eventCount} events</div>
-                              <div>{formatRelativeTime(issue.lastSeen)}</div>
-                            </div>
+                          <div className="text-sm text-muted-foreground truncate">{issue.culprit}</div>
+                        </div>
+                        <div className="hidden lg:flex items-center gap-3 shrink-0">
+                          <Badge variant="outline" className="text-[11px] px-1.5 py-0">{issue.platform}</Badge>
+                          <EventSparkline eventCount={issue.eventCount} />
+                        </div>
+                        <div className="flex items-center gap-5 shrink-0 text-sm text-right">
+                          <div className="min-w-[55px]">
+                            <div className="font-semibold text-foreground">{issue.eventCount}</div>
+                            <div className="text-xs text-muted-foreground">events</div>
                           </div>
+                          <div className="hidden sm:block min-w-[45px]">
+                            <div className="font-semibold text-foreground">{issue.userCount ?? 0}</div>
+                            <div className="text-xs text-muted-foreground">users</div>
+                          </div>
+                          <div className="text-muted-foreground text-xs min-w-[70px]">
+                            {formatRelativeTime(issue.lastSeen)}
+                          </div>
+                        </div>
                       </Link>
                     </div>
                   </div>

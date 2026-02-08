@@ -249,26 +249,29 @@ function ReleasesPage() {
               >
                 <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 shrink-0">
                           <Package className="h-5 w-5 text-primary" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{release.version}</span>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold break-all">{release.version}</span>
                             {release.version === summary.latestVersion && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
                                 Latest
                               </span>
                             )}
                             {release.newIssueCount > 0 && (
-                              <Badge variant="outline" className="text-amber-700 border-amber-400/50">
+                              <Badge
+                                variant="outline"
+                                className="max-w-full whitespace-normal break-words text-amber-700 border-amber-400/50"
+                              >
                                 Regression risk
                               </Badge>
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground break-words">
                             {formatDate(release.firstSeen)}
                             {release.firstSeen !== release.lastSeen && (
                               <> – {formatDate(release.lastSeen)}</>
@@ -276,7 +279,7 @@ function ReleasesPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-6">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:justify-end md:gap-6">
                         <div className="flex items-center gap-2 text-sm">
                           <Activity className="h-4 w-4 text-muted-foreground" />
                           <span>{release.eventCount.toLocaleString()} events</span>

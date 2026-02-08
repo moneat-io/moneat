@@ -636,17 +636,17 @@ function ProjectsPage() {
                   className="block cursor-pointer"
                 >
                   <Card className="p-4 hover:bg-accent transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-4">
                         <div 
                           className="p-3 rounded-lg flex items-center justify-center w-12 h-12 flex-shrink-0"
                           style={{ backgroundColor: getProjectColor(project.name) }}
                         >
                           <span className="text-white font-semibold text-lg">{getProjectInitial(project.name)}</span>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{project.name}</h3>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold break-words">{project.name}</h3>
                             {project.platform && (() => {
                               const platformInfo = getPlatformInfo(project.platform)
                               if (!platformInfo) return null
@@ -669,7 +669,7 @@ function ProjectsPage() {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground break-words">
                             {(project.issueCount ?? 0) === 0 
                               ? 'No issues yet • Click to set up SDK' 
                               : `${project.issueCount} ${project.issueCount === 1 ? 'issue' : 'issues'}`
@@ -677,7 +677,7 @@ function ProjectsPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
                         <Button variant="ghost" size="icon" asChild title="Setup guide">
                           <Link
                             to="/projects/$projectId"
