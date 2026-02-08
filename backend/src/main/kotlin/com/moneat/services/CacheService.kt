@@ -37,7 +37,7 @@ object CacheService {
             withContext(Dispatchers.IO) {
                 if (RedisConfig.isConnected()) {
                     val value = if (parentSpan != null && io.sentry.Sentry.isEnabled()) {
-                        SentryUtils.withSpan(parentSpan as? io.sentry.ITransaction, "cache.get", "Redis GET $key") { span ->
+                        SentryUtils.withSpan(parentSpan, "cache.get", "Redis GET $key") { span ->
                             span?.setData("cache.key", key)
                             span?.setData("cache.hit", false)
                             RedisConfig.sync().get(key)
@@ -74,7 +74,7 @@ object CacheService {
                 if (RedisConfig.isConnected()) {
                     val encoded = cacheJson.encodeToString(serializer, value)
                     if (parentSpan != null && io.sentry.Sentry.isEnabled()) {
-                        SentryUtils.withSpan(parentSpan as? io.sentry.ITransaction, "cache.set", "Redis SETEX $key") { span ->
+                        SentryUtils.withSpan(parentSpan, "cache.set", "Redis SETEX $key") { span ->
                             span?.setData("cache.key", key)
                             span?.setData("cache.ttl", ttlSeconds)
                             RedisConfig.sync().setex(key, ttlSeconds, encoded)

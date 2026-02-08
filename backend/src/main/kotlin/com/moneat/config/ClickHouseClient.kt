@@ -37,7 +37,7 @@ object ClickHouseClient {
 
     suspend fun execute(query: String, span: ISpan? = null): HttpResponse {
         return if (span != null && Sentry.isEnabled()) {
-            SentryUtils.withSpan(span as? io.sentry.ITransaction, "db.clickhouse", "ClickHouse query") { childSpan ->
+            SentryUtils.withSpan(span, "db.clickhouse", "ClickHouse query") { childSpan ->
                 childSpan?.setData("db.system", "clickhouse")
                 childSpan?.setData("db.name", database)
                 childSpan?.setData("db.statement", query.take(200)) // Truncate long queries

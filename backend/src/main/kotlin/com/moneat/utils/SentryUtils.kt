@@ -10,16 +10,16 @@ object SentryUtils {
      * Execute a block within a Sentry span, automatically finishing it when complete
      */
     suspend fun <T> withSpan(
-        transaction: ITransaction?,
+        parent: ISpan?,
         operation: String,
         description: String? = null,
         block: suspend (ISpan?) -> T
     ): T {
-        if (transaction == null || !Sentry.isEnabled()) {
+        if (parent == null || !Sentry.isEnabled()) {
             return block(null)
         }
         
-        val span = transaction.startChild(operation, description)
+        val span = parent.startChild(operation, description)
         return try {
             block(span).also {
                 span.status = SpanStatus.OK

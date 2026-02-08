@@ -1,6 +1,7 @@
 package com.moneat.routes
 
 import com.moneat.models.*
+import com.moneat.plugins.getSentryTransaction
 import com.moneat.services.DashboardService
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -252,7 +253,7 @@ fun Route.apiRoutes() {
                 }
                 
                 val period = call.request.queryParameters["period"] ?: "7d"
-                val stats = dashboardService.getProjectStats(projectId, period)
+                val stats = dashboardService.getProjectStats(projectId, period, call.getSentryTransaction())
                 call.respond(stats)
             }
 
@@ -582,7 +583,7 @@ fun Route.apiRoutes() {
                     return@get
                 }
                 
-                val releases = dashboardService.getReleases(projectId)
+                val releases = dashboardService.getReleases(projectId, call.getSentryTransaction())
                 call.respond(releases)
             }
             

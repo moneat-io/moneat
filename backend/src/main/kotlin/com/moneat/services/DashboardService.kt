@@ -5,6 +5,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.sentry.ISpan
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.*
@@ -1018,8 +1019,8 @@ class DashboardService {
         }
     }
     
-    suspend fun getProjectStats(projectId: Long, period: String = "7d"): ProjectStatsResponse =
-        CacheService.cached("cache:project_stats:$projectId:$period", 60) {
+    suspend fun getProjectStats(projectId: Long, period: String = "7d", parentSpan: ISpan? = null): ProjectStatsResponse =
+        CacheService.cached("cache:project_stats:$projectId:$period", 60, parentSpan) {
         val retentionDays = getProjectRetentionDays(projectId)
         val hoursBack = when (period) {
             "24h" -> 24
@@ -1201,19 +1202,19 @@ class DashboardService {
         try {
             // Execute all queries in parallel
             coroutineScope {
-                val totalEventsDeferred = async { executeScalarQuery(totalEventsQuery) }
-                val totalIssuesDeferred = async { executeScalarQuery(totalIssuesQuery) }
-                val unresolvedIssuesDeferred = async { executeScalarQuery(unresolvedIssuesQuery) }
-                val affectedUsersDeferred = async { executeScalarQuery(affectedUsersQuery) }
-                val eventsTimelineDeferred = async { executeTimelineQuery(eventsTimelineQuery) }
-                val eventsByLevelDeferred = async { executeMapQuery(eventsByLevelQuery, "level") }
-                val eventsByPlatformDeferred = async { executeMapQuery(eventsByPlatformQuery, "platform") }
-                val eventsByBrowserDeferred = async { executeMapQuery(eventsByBrowserQuery, "browser_name") }
-                val eventsByEnvironmentDeferred = async { executeMapQuery(eventsByEnvironmentQuery, "environment") }
-                val issuesByStatusDeferred = async { executeMapQuery(issuesByStatusQuery, "status") }
-                val topIssuesDeferred = async { executeTopIssuesQuery(topIssuesQuery) }
-                val usersTimelineDeferred = async { executeTimelineQuery(usersTimelineQuery) }
-                val releaseMarkersDeferred = async { executeReleaseMarkersQuery(projectId, hoursBack, retentionDays) }
+                val totalEventsDeferred = async { executeScalarQuery(totalEventsQuery, parentSpan) }
+                val totalIssuesDeferred = async { executeScalarQuery(totalIssuesQuery, parentSpan) }
+                val unresolvedIssuesDeferred = async { executeScalarQuery(unresolvedIssuesQuery, parentSpan) }
+                val affectedUsersDeferred = async { executeScalarQuery(affectedUsersQuery, parentSpan) }
+                val eventsTimelineDeferred = async { executeTimelineQuery(eventsTimelineQuery, parentSpan) }
+                val eventsByLevelDeferred = async { executeMapQuery(eventsByLevelQuery, "level", parentSpan) }
+                val eventsByPlatformDeferred = async { executeMapQuery(eventsByPlatformQuery, "platform", parentSpan) }
+                val eventsByBrowserDeferred = async { executeMapQuery(eventsByBrowserQuery, "browser_name", parentSpan) }
+                val eventsByEnvironmentDeferred = async { executeMapQuery(eventsByEnvironmentQuery, "environment", parentSpan) }
+                val issuesByStatusDeferred = async { executeMapQuery(issuesByStatusQuery, "status", parentSpan) }
+                val topIssuesDeferred = async { executeTopIssuesQuery(topIssuesQuery, parentSpan) }
+                val usersTimelineDeferred = async { executeTimelineQuery(usersTimelineQuery, parentSpan) }
+                val releaseMarkersDeferred = async { executeReleaseMarkersQuery(projectId, hoursBack, retentionDays, parentSpan) }
                 
                 // Await all results
                 ProjectStatsResponse(
@@ -1252,8 +1253,8 @@ class DashboardService {
         }
         }
 
-    suspend fun getReleases(projectId: Long): List<ReleaseListResponse> =
-        CacheService.cached("cache:releases:$projectId", 120) {
+    suspend fun getReleases(projectId: Long, parentSpan: ISpan? = null): List<ReleaseListResponse> =
+        CacheService.cached("cache:releases:$projectId", 120, parentSpan) {
         val retentionDays = getProjectRetentionDays(projectId)
         val escapedProjectId = projectId
         val releasesQuery = """
@@ -1272,7 +1273,7 @@ class DashboardService {
         """.trimIndent()
 
         try {
-            val releases = executeReleasesListQuery(releasesQuery)
+            val releases = executeReleasesListQuery(releasesQuery, parentSpan)
             val result = mutableListOf<ReleaseListResponse>()
             for (r in releases) {
                 val newIssueCount = getNewIssueCountForRelease(projectId, r.version, retentionDays)
@@ -1378,7 +1379,7 @@ class DashboardService {
         }
     }
 
-    private suspend fun executeReleaseMarkersQuery(projectId: Long, hoursBack: Int, retentionDays: Int): List<ReleaseMarker> {
+    private suspend fun executeReleaseMarkersQuery(projectId: Long, hoursBack: Int, retentionDays: Int, parentSpan: ISpan? = null): List<ReleaseMarker> {
         val query = """
             SELECT version, formatDateTime(first_seen, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp
             FROM (
@@ -1394,7 +1395,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = ClickHouseClient.execute(query)
+            val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1425,8 +1426,8 @@ class DashboardService {
         val userCount: Long
     )
 
-    private suspend fun executeReleasesListQuery(query: String): List<ReleaseListRow> {
-        val response = ClickHouseClient.execute(query)
+    private suspend fun executeReleasesListQuery(query: String, parentSpan: ISpan? = null): List<ReleaseListRow> {
+        val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1553,8 +1554,8 @@ class DashboardService {
         return "$column >= now() - INTERVAL $retentionDays DAY"
     }
     
-    private suspend fun executeScalarQuery(query: String): Long {
-        val response = ClickHouseClient.execute(query)
+    private suspend fun executeScalarQuery(query: String, parentSpan: ISpan? = null): Long {
+        val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute scalar query: ${response.status} ${body.take(400)}" }
@@ -1565,8 +1566,8 @@ class DashboardService {
         return obj["total"]?.jsonPrimitive?.long ?: 0
     }
     
-    private suspend fun executeTimelineQuery(query: String): List<TimelinePoint> {
-        val response = ClickHouseClient.execute(query)
+    private suspend fun executeTimelineQuery(query: String, parentSpan: ISpan? = null): List<TimelinePoint> {
+        val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1590,8 +1591,8 @@ class DashboardService {
             }
     }
 
-    private suspend fun executeSlowestTransactionsQuery(query: String): List<SlowTransactionResponse> {
-        val response = ClickHouseClient.execute(query)
+    private suspend fun executeSlowestTransactionsQuery(query: String, parentSpan: ISpan? = null): List<SlowTransactionResponse> {
+        val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1620,8 +1621,8 @@ class DashboardService {
             }
     }
     
-    private suspend fun executeMapQuery(query: String, keyField: String): Map<String, Long> {
-        val response = ClickHouseClient.execute(query)
+    private suspend fun executeMapQuery(query: String, keyField: String, parentSpan: ISpan? = null): Map<String, Long> {
+        val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1639,8 +1640,8 @@ class DashboardService {
             }
     }
     
-    private suspend fun executeTopIssuesQuery(query: String): List<TopIssue> {
-        val response = ClickHouseClient.execute(query)
+    private suspend fun executeTopIssuesQuery(query: String, parentSpan: ISpan? = null): List<TopIssue> {
+        val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
