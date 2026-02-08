@@ -481,6 +481,8 @@ function ProjectsPage() {
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
+  const projectList = projects ?? []
+  const hasProjects = projectList.length > 0
 
   const { setSelectedProjectId } = useProject()
 
@@ -514,10 +516,12 @@ function ProjectsPage() {
       <div className="p-6 max-w-7xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Projects</h1>
-          <Button onClick={() => setShowCreateProject(true)} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            New Project
-          </Button>
+          {hasProjects && (
+            <Button onClick={() => setShowCreateProject(true)} size="sm">
+              <Plus className="h-4 w-4" />
+              New Project
+            </Button>
+          )}
         </div>
 
         {showCreateProject && (
@@ -595,7 +599,7 @@ function ProjectsPage() {
           </Card>
         )}
 
-        {!projects || projects.length === 0 ? (
+        {!hasProjects ? (
           showCreateProject ? null : (
             <Card className="p-12 text-center">
               <div className="max-w-2xl mx-auto space-y-6">
@@ -610,16 +614,22 @@ function ProjectsPage() {
                     Create your first project to start tracking errors and monitoring your applications.
                   </p>
                 </div>
-                <Button onClick={() => setShowCreateProject(true)} size="lg" className="mt-4">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Your First Project
-                </Button>
+                <div className="flex justify-center">
+                  <Button
+                    onClick={() => setShowCreateProject(true)}
+                    size="lg"
+                    className="mt-4 w-full max-w-sm sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Your First Project
+                  </Button>
+                </div>
               </div>
             </Card>
           )
         ) : (
           <div className="space-y-3">
-            {projects.map((project) => {
+            {projectList.map((project) => {
               const handleProjectClick = () => {
                 if ((project.issueCount ?? 0) > 0) {
                   setSelectedProjectId(project.id)

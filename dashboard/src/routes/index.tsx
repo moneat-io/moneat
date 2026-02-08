@@ -10,7 +10,18 @@ import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
-import {Activity, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, FolderKanban, Plus, Search, TrendingUp, Users} from 'lucide-react'
+import {
+    Activity,
+    AlertCircle,
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    FolderKanban,
+    Plus,
+    Search,
+    TrendingUp,
+    Users
+} from 'lucide-react'
 import {useState} from 'react'
 import {StatsCard} from '@/components/charts/stats-card'
 import {EventsChart} from '@/components/charts/events-chart'
@@ -96,6 +107,7 @@ function DashboardPage() {
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
+  const hasProjects = (projects?.length ?? 0) > 0
 
   const projectId = selectedProjectId || projects?.[0]?.id
 
@@ -179,15 +191,17 @@ function DashboardPage() {
             <h2 className="text-2xl font-bold">Dashboard</h2>
             <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
           </div>
-          <Link to="/projects">
-            <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary/10 hover:border-primary/50">
-              <Plus className="h-4 w-4 mr-2" />
-              New Project
-            </Button>
-          </Link>
+          {hasProjects && (
+            <Link to="/projects">
+              <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary/10 hover:border-primary/50">
+                <Plus className="h-4 w-4" />
+                New Project
+              </Button>
+            </Link>
+          )}
         </div>
 
-        {!projects || projects.length === 0 ? (
+        {!hasProjects ? (
           <Card className="p-12 text-center border-primary/20 bg-gradient-to-b from-card to-primary/5">
             <div className="max-w-md mx-auto space-y-4">
               <div className="flex justify-center">
@@ -201,9 +215,9 @@ function DashboardPage() {
                   Create your first project to start tracking errors and monitoring your applications.
                 </p>
               </div>
-              <Link to="/projects">
-                <Button size="lg">
-                  <Plus className="h-4 w-4 mr-2" />
+              <Link to="/projects" className="flex justify-center">
+                <Button size="lg" className="w-full max-w-sm sm:w-auto sm:mx-auto">
+                  <Plus className="h-4 w-4" />
                   Create Your First Project
                 </Button>
               </Link>
