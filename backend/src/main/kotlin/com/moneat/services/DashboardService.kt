@@ -1,13 +1,11 @@
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.models.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
+import com.moneat.services.CacheService
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
@@ -22,14 +20,8 @@ import java.util.*
 private val logger = KotlinLogging.logger {}
 
 class DashboardService {
-    private val config = ApplicationConfig("application.conf")
-    private val clickhouseUrl = config.property("database.clickhouse.url").getString()
-    private val clickhouseDb = config.property("database.clickhouse.database").getString()
-    private val clickhouseUser = config.property("database.clickhouse.user").getString()
-    private val clickhousePassword = config.property("database.clickhouse.password").getString()
+    private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val backendUrl = EnvConfig.get("BACKEND_URL", "http://ltocalhost:8080")
-    
-    private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
     
     fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
@@ -72,12 +64,7 @@ class DashboardService {
         """.trimIndent()
         
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -104,12 +91,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for event $eventId: ${response.status} ${body.take(400)}" }
@@ -135,12 +117,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get issue ID for event $eventId: ${response.status} ${body.take(400)}" }
@@ -166,12 +143,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -198,12 +170,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for feedback $feedbackId: ${response.status} ${body.take(400)}" }
@@ -230,12 +197,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -260,12 +222,7 @@ class DashboardService {
         """.trimIndent()
         
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -398,7 +355,8 @@ class DashboardService {
         }
     }
     
-    suspend fun getIssues(projectId: Long, page: Int, limit: Int, status: String?): List<IssueResponse> {
+    suspend fun getIssues(projectId: Long, page: Int, limit: Int, status: String?): List<IssueResponse> =
+        CacheService.cached("cache:issues:$projectId:$page:$limit:${status ?: ""}", 30) {
         val offset = (page - 1) * limit
         val validStatuses = setOf("unresolved", "resolved", "ignored")
         val statusFilter = if (status != null && status in validStatuses) {
@@ -432,21 +390,13 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
         
-        return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
-            
+        try {
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch issues for project $projectId: ${response.status} ${body.take(400)}" }
-                return emptyList()
+                return@cached emptyList<IssueResponse>()
             }
-            
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
@@ -468,8 +418,8 @@ class DashboardService {
             logger.error(e) { "Failed to fetch issues" }
             emptyList()
         }
-    }
-    
+        }
+
     suspend fun getIssue(issueId: String): IssueDetailResponse? {
         val escapedIssueId = issueId.replace("'", "''")
         
@@ -498,12 +448,7 @@ class DashboardService {
         """.trimIndent()
         
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             
             val body = response.bodyAsText()
             
@@ -561,12 +506,7 @@ class DashboardService {
         """.trimIndent()
         
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             
             val body = response.bodyAsText()
             
@@ -643,12 +583,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             
@@ -682,7 +617,8 @@ class DashboardService {
         period: String = "7d",
         environment: String? = null,
         operation: String? = null
-    ): List<TransactionSummaryResponse> {
+    ): List<TransactionSummaryResponse> =
+        CacheService.cached("cache:transactions:$projectId:$period:${environment ?: ""}:${operation ?: ""}", 60) {
         val periodConfig = getPeriodConfig(period)
         val filters = buildTransactionFilterClause(environment, operation)
         val query = """
@@ -707,50 +643,44 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
-
+        try {
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch transactions for project $projectId: ${response.status} ${body.take(400)}" }
-                return emptyList()
+                emptyList<TransactionSummaryResponse>()
+            } else {
+                body.lines()
+                    .filter { it.isNotBlank() }
+                    .map { line ->
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        TransactionSummaryResponse(
+                            name = obj["name"]?.jsonPrimitive?.content ?: "",
+                            op = obj["op"]?.jsonPrimitive?.content ?: "",
+                            latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull
+                                ?: obj["latestEventId"]?.jsonPrimitive?.contentOrNull,
+                            count = obj["count"]?.jsonPrimitive?.long ?: 0,
+                            p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            p95 = obj["p95"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            failureRate = obj["failure_rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            tpm = obj["tpm"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+                        )
+                    }
             }
-            
-            body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    TransactionSummaryResponse(
-                        name = obj["name"]?.jsonPrimitive?.content ?: "",
-                        op = obj["op"]?.jsonPrimitive?.content ?: "",
-                        latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull
-                            ?: obj["latestEventId"]?.jsonPrimitive?.contentOrNull,
-                        count = obj["count"]?.jsonPrimitive?.long ?: 0,
-                        p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        p95 = obj["p95"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        failureRate = obj["failure_rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        tpm = obj["tpm"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    )
-                }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch transactions for project $projectId" }
             emptyList()
         }
-    }
+        }
 
     suspend fun getPerformanceStats(
         projectId: Long,
         period: String = "7d",
         environment: String? = null,
         operation: String? = null
-    ): PerformanceStatsResponse {
+    ): PerformanceStatsResponse =
+        CacheService.cached("cache:perf_stats:$projectId:$period:${environment ?: ""}:${operation ?: ""}", 60) {
         val periodConfig = getPeriodConfig(period)
         val filters = buildTransactionFilterClause(environment, operation)
 
@@ -801,19 +731,12 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val aggregateResponse = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(aggregateQuery)
-            }
-
+        try {
+            val aggregateResponse = ClickHouseClient.execute(aggregateQuery)
             val aggregateBody = aggregateResponse.bodyAsText()
-            
             if (!aggregateResponse.status.isSuccess() || aggregateBody.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch aggregate performance stats for project $projectId: ${aggregateResponse.status} ${aggregateBody.take(400)}" }
-                return PerformanceStatsResponse(
+                return@cached PerformanceStatsResponse(
                     apdex = 0.0,
                     throughput = emptyList(),
                     slowestTransactions = emptyList(),
@@ -877,12 +800,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             if (!response.status.isSuccess()) {
@@ -950,12 +868,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             
@@ -1037,12 +950,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             body.lines()
                 .filter { it.isNotBlank() }
@@ -1075,7 +983,8 @@ class DashboardService {
         }
     }
     
-    suspend fun getProjectStats(projectId: Long, period: String = "7d"): ProjectStatsResponse {
+    suspend fun getProjectStats(projectId: Long, period: String = "7d"): ProjectStatsResponse =
+        CacheService.cached("cache:project_stats:$projectId:$period", 60) {
         val hoursBack = when (period) {
             "24h" -> 24
             "7d" -> 168
@@ -1239,7 +1148,7 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
         
-        return try {
+        try {
             val totalEvents = executeScalarQuery(totalEventsQuery)
             val totalIssues = executeScalarQuery(totalIssuesQuery)
             val unresolvedIssues = executeScalarQuery(unresolvedIssuesQuery)
@@ -1288,9 +1197,10 @@ class DashboardService {
                 releaseMarkers = emptyList()
             )
         }
-    }
+        }
 
-    suspend fun getReleases(projectId: Long): List<ReleaseListResponse> {
+    suspend fun getReleases(projectId: Long): List<ReleaseListResponse> =
+        CacheService.cached("cache:releases:$projectId", 120) {
         val escapedProjectId = projectId
         val releasesQuery = """
             SELECT
@@ -1306,7 +1216,7 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
+        try {
             val releases = executeReleasesListQuery(releasesQuery)
             val result = mutableListOf<ReleaseListResponse>()
             for (r in releases) {
@@ -1327,7 +1237,7 @@ class DashboardService {
             logger.error(e) { "Failed to fetch releases for project $projectId" }
             emptyList()
         }
-    }
+        }
 
     suspend fun getReleaseStats(projectId: Long, version: String): ReleaseDetailStats? {
         val escapedVersion = version.replace("'", "''")
@@ -1343,12 +1253,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(releasesQuery)
-            }
+            val response = ClickHouseClient.execute(releasesQuery)
             val body = response.bodyAsText()
             if (body.isBlank()) return null
 
@@ -1428,12 +1333,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1465,12 +1365,7 @@ class DashboardService {
     )
 
     private suspend fun executeReleasesListQuery(query: String): List<ReleaseListRow> {
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1516,12 +1411,7 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
@@ -1592,12 +1482,7 @@ class DashboardService {
     }
     
     private suspend fun executeScalarQuery(query: String): Long {
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute scalar query: ${response.status} ${body.take(400)}" }
@@ -1609,12 +1494,7 @@ class DashboardService {
     }
     
     private suspend fun executeTimelineQuery(query: String): List<TimelinePoint> {
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1639,12 +1519,7 @@ class DashboardService {
     }
 
     private suspend fun executeSlowestTransactionsQuery(query: String): List<SlowTransactionResponse> {
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1674,12 +1549,7 @@ class DashboardService {
     }
     
     private suspend fun executeMapQuery(query: String, keyField: String): Map<String, Long> {
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1698,12 +1568,7 @@ class DashboardService {
     }
     
     private suspend fun executeTopIssuesQuery(query: String): List<TopIssue> {
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -1768,12 +1633,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             if (!response.status.isSuccess()) return emptyList()
@@ -1847,12 +1707,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             if (!response.status.isSuccess()) return 0
             val line = response.bodyAsText().lines().firstOrNull { it.isNotBlank() } ?: return 0
             val obj = json.parseToJsonElement(line).jsonObject
@@ -1886,12 +1741,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             if (!response.status.isSuccess()) return emptyList()
             response.bodyAsText()
                 .lines()
@@ -1941,12 +1791,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
@@ -2054,12 +1899,7 @@ class DashboardService {
                     FORMAT JSONEachRow
                 """.trimIndent()
                 runCatching {
-                    val response = httpClient.post("$clickhouseUrl") {
-                        parameter("database", clickhouseDb)
-                        parameter("user", clickhouseUser)
-                        parameter("password", clickhousePassword)
-                        setBody(query)
-                    }
+                    val response = ClickHouseClient.execute(query)
                     val body = response.bodyAsText()
                     if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                         if (!response.status.isSuccess()) logger.error { "Replay timeline errors by IDs failed: ${response.status} ${body.take(400)}" }
@@ -2120,12 +1960,7 @@ class DashboardService {
                 FORMAT JSONEachRow
             """.trimIndent()
             runCatching {
-                val response = httpClient.post("$clickhouseUrl") {
-                    parameter("database", clickhouseDb)
-                    parameter("user", clickhouseUser)
-                    parameter("password", clickhousePassword)
-                    setBody(query)
-                }
+                val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
                 if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                     if (!response.status.isSuccess()) logger.error { "Replay timeline transactions by trace IDs failed: ${response.status} ${body.take(400)}" }
@@ -2178,12 +2013,7 @@ class DashboardService {
                 FORMAT JSONEachRow
             """.trimIndent()
             runCatching {
-                val response = httpClient.post("$clickhouseUrl") {
-                    parameter("database", clickhouseDb)
-                    parameter("user", clickhouseUser)
-                    parameter("password", clickhousePassword)
-                    setBody(query)
-                }
+                val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
                 if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                     if (!response.status.isSuccess()) logger.error { "Replay timeline spans by trace IDs failed: ${response.status} ${body.take(400)}" }
@@ -2240,12 +2070,7 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
         runCatching {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(errorsInRangeQuery)
-            }
+            val response = ClickHouseClient.execute(errorsInRangeQuery)
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 if (!response.status.isSuccess()) logger.error { "Replay timeline errors by time range failed: ${response.status} ${body.take(400)}" }
@@ -2299,12 +2124,7 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
         runCatching {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(transactionsInRangeQuery)
-            }
+            val response = ClickHouseClient.execute(transactionsInRangeQuery)
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 if (!response.status.isSuccess()) logger.error { "Replay timeline transactions by time range failed: ${response.status} ${body.take(400)}" }
@@ -2356,12 +2176,7 @@ class DashboardService {
             FORMAT JSONEachRow
         """.trimIndent()
         runCatching {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(spansInRangeQuery)
-            }
+            val response = ClickHouseClient.execute(spansInRangeQuery)
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
                 if (!response.status.isSuccess()) logger.error { "Replay timeline spans by time range failed: ${response.status} ${body.take(400)}" }
@@ -2559,12 +2374,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             val allEvents = mutableListOf<JsonElement>()
@@ -2618,12 +2428,7 @@ class DashboardService {
         """.trimIndent()
 
         val eventIds = try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(eventIdsQuery)
-            }
+            val response = ClickHouseClient.execute(eventIdsQuery)
             val body = response.bodyAsText()
             body.lines()
                 .filter { it.isNotBlank() }
@@ -2665,12 +2470,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
             if (!response.status.isSuccess()) return emptyList()
@@ -2748,12 +2548,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (!response.status.isSuccess()) return emptyList()
             body.lines()
@@ -2816,12 +2611,7 @@ class DashboardService {
         """.trimIndent()
 
         return try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
             val obj = json.parseToJsonElement(line).jsonObject
@@ -2875,12 +2665,7 @@ class DashboardService {
                 WHERE toString(feedback_id) = '$normalizedFeedbackId'
             """.trimIndent()
             try {
-                httpClient.post("$clickhouseUrl") {
-                    parameter("database", clickhouseDb)
-                    parameter("user", clickhouseUser)
-                    parameter("password", clickhousePassword)
-                    setBody(query)
-                }
+                ClickHouseClient.execute(query)
             } catch (e: Exception) {
                 logger.error(e) { "Failed to update feedback" }
                 throw e
@@ -2905,12 +2690,7 @@ class DashboardService {
             """.trimIndent()
             
             try {
-                httpClient.post("$clickhouseUrl") {
-                    parameter("database", clickhouseDb)
-                    parameter("user", clickhouseUser)
-                    parameter("password", clickhousePassword)
-                    setBody(query)
-                }
+                ClickHouseClient.execute(query)
             } catch (e: Exception) {
                 logger.error(e) { "Failed to update issue" }
                 throw e

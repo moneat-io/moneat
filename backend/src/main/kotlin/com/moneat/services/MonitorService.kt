@@ -1,12 +1,10 @@
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
+import com.moneat.services.CacheService
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -35,13 +33,8 @@ class MonitorService {
         const val ALERT_SCOPE_SYSTEM = "system"
     }
 
-    private val config = ApplicationConfig("application.conf")
-    private val clickhouseUrl = config.property("database.clickhouse.url").getString()
-    private val clickhouseDb = config.property("database.clickhouse.database").getString()
-    private val clickhouseUser = config.property("database.clickhouse.user").getString()
-    private val clickhousePassword = config.property("database.clickhouse.password").getString()
+    private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val pricingTierService = PricingTierService()
-    private val httpClient = HttpClient(CIO)
     private val defaultAlertTemplates = listOf(
         DefaultAlertTemplate(metric = "cpu_percent", condition = ">", threshold = 80.0),
         DefaultAlertTemplate(metric = "mem_percent", condition = ">", threshold = 80.0),
@@ -178,13 +171,7 @@ class MonitorService {
             )
         """.trimIndent()
         
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            contentType(ContentType.Text.Plain)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
@@ -216,13 +203,7 @@ class MonitorService {
                 )
             """.trimIndent()
             
-            val containerResponse = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(containerQuery)
-            }
+            val containerResponse = ClickHouseClient.execute(containerQuery)
             
             if (!containerResponse.status.isSuccess()) {
                 val errorBody = containerResponse.bodyAsText()
@@ -284,13 +265,7 @@ class MonitorService {
             FORMAT JSONCompact
         """.trimIndent()
         
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            contentType(ContentType.Text.Plain)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         
         if (!response.status.isSuccess()) {
             logger.warn { "Failed to fetch latest metrics for system $systemId" }
@@ -348,7 +323,8 @@ class MonitorService {
         fromTimestamp: Long,
         toTimestamp: Long,
         intervalSeconds: Int?
-    ): HistoricalMetricsResponse {
+    ): HistoricalMetricsResponse =
+        CacheService.cached("cache:monitor_hist:$systemId:$fromTimestamp:$toTimestamp:$intervalSeconds", 30) {
         // Auto-calculate interval if not provided
         val timeRange = toTimestamp - fromTimestamp
         val calculatedInterval = intervalSeconds ?: when {
@@ -382,18 +358,12 @@ class MonitorService {
             FORMAT JSONCompact
         """.trimIndent()
         
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            contentType(ContentType.Text.Plain)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             logger.error { "Failed to fetch historical metrics: $errorBody" }
-            return HistoricalMetricsResponse(
+            return@cached HistoricalMetricsResponse(
                 system_id = systemId.toString(),
                 from = fromTimestamp,
                 to = toTimestamp,
@@ -406,7 +376,7 @@ class MonitorService {
         val dataPoints = try {
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
-            val data = result["data"]?.jsonArray ?: return HistoricalMetricsResponse(
+            val data = result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
                 system_id = systemId.toString(),
                 from = fromTimestamp,
                 to = toTimestamp,
@@ -436,14 +406,14 @@ class MonitorService {
             emptyList()
         }
         
-        return HistoricalMetricsResponse(
+        HistoricalMetricsResponse(
             system_id = systemId.toString(),
             from = fromTimestamp,
             to = toTimestamp,
             interval_seconds = calculatedInterval,
             data_points = dataPoints
         )
-    }
+        }
     
     /**
      * Get latest container stats from ClickHouse.
@@ -463,13 +433,7 @@ class MonitorService {
             FORMAT JSONCompact
         """.trimIndent()
         
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            contentType(ContentType.Text.Plain)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
@@ -544,13 +508,7 @@ class MonitorService {
             FORMAT JSONCompact
         """.trimIndent()
         
-        val response = httpClient.post("$clickhouseUrl") {
-            parameter("database", clickhouseDb)
-            parameter("user", clickhouseUser)
-            parameter("password", clickhousePassword)
-            contentType(ContentType.Text.Plain)
-            setBody(query)
-        }
+        val response = ClickHouseClient.execute(query)
         
         if (!response.status.isSuccess()) {
             return ContainerMetricsResponse(

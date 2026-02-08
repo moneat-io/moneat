@@ -1,15 +1,13 @@
 package com.moneat.plugins
 
+import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
 import com.moneat.routes.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.ratelimit.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.lettuce.core.RedisURI
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -18,7 +16,8 @@ data class HealthResponse(
     val status: String,
     val postgres: String,
     val clickhouse: String,
-    val redis: String
+    val redis: String,
+    val ingestQueueDepth: Long = 0
 )
 
 fun Application.configureRouting() {
@@ -28,7 +27,6 @@ fun Application.configureRouting() {
         }
 
         get("/health") {
-            val config = call.application.environment.config
             val postgresStatus = try {
                 transaction { }
                 "ok"
@@ -36,31 +34,28 @@ fun Application.configureRouting() {
                 "error"
             }
             val clickhouseStatus = try {
-                val url = config.property("database.clickhouse.url").getString()
-                HttpClient(CIO).use { client ->
-                    val response = client.get("$url/ping")
-                    if (response.status == HttpStatusCode.OK) "ok" else "error"
-                }
+                if (ClickHouseClient.ping()) "ok" else "error"
             } catch (_: Exception) {
                 "error"
             }
             val redisStatus = try {
-                val redisUrl = config.property("redis.url").getString()
-                val uri = RedisURI.create(redisUrl)
-                val redisClient = io.lettuce.core.RedisClient.create(uri)
-                try {
-                    redisClient.connect().use { connection ->
-                        connection.sync().ping()
-                        "ok"
-                    }
-                } finally {
-                    redisClient.shutdown()
-                }
+                if (RedisConfig.isConnected()) {
+                    RedisConfig.sync().ping()
+                    "ok"
+                } else "error"
             } catch (_: Exception) {
                 "error"
             }
+            val ingestQueueDepth = try {
+                if (RedisConfig.isConnected()) {
+                    val queueKey = call.application.environment.config.property("ingest.queueKey").getString()
+                    RedisConfig.sync().llen(queueKey)
+                } else 0L
+            } catch (_: Exception) {
+                0L
+            }
             val status = if (postgresStatus == "ok" && clickhouseStatus == "ok" && redisStatus == "ok") "ok" else "degraded"
-            val response = HealthResponse(status, postgresStatus, clickhouseStatus, redisStatus)
+            val response = HealthResponse(status, postgresStatus, clickhouseStatus, redisStatus, ingestQueueDepth)
             if (status == "ok") {
                 call.respond(response)
             } else {
@@ -68,8 +63,10 @@ fun Application.configureRouting() {
             }
         }
 
-        // Sentry-compatible ingestion endpoints
-        ingestRoutes()
+        // Sentry-compatible ingestion endpoints (rate limited per project key)
+        rateLimit(RateLimitName("ingestion")) {
+            ingestRoutes()
+        }
 
         // Stripe webhooks
         stripeWebhookRoutes()

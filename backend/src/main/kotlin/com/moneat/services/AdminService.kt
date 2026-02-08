@@ -1,12 +1,9 @@
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import kotlinx.datetime.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -148,14 +145,9 @@ data class EmailTimelinePoint(
 )
 
 class AdminService {
-    private val config = ApplicationConfig("application.conf")
-    private val clickhouseUrl = config.property("database.clickhouse.url").getString()
-    private val clickhouseDb = config.property("database.clickhouse.database").getString()
-    private val clickhouseUser = config.property("database.clickhouse.user").getString()
-    private val clickhousePassword = config.property("database.clickhouse.password").getString()
+    private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val usageTracker = UsageTrackingService.instance
     private val pricingTierService = PricingTierService()
-    private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
 
     private val usableStorageBytes = 35L * 1024 * 1024 * 1024 // 35GB from MONETIZATION.md
@@ -384,12 +376,7 @@ class AdminService {
                 WHERE database = '$clickhouseDb' AND active
                 GROUP BY table
             """.trimIndent()
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             if (response.status.isSuccess()) {
                 val text = response.bodyAsText()
                 val lines = text.trim().split("\n").filter { it.isNotBlank() }
@@ -550,21 +537,11 @@ class AdminService {
     private suspend fun queryClickHouseEvents(startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): Triple<Long, Long, List<AdminTimelinePoint>> {
         return try {
             val totalQuery = "SELECT count() as c FROM $clickhouseDb.events"
-            val totalResp = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(totalQuery)
-            }
+            val totalResp = ClickHouseClient.execute(totalQuery)
             val allTime = totalResp.bodyAsText().trim().toLongOrNull() ?: 0L
 
             val last30Query = "SELECT count() as c FROM $clickhouseDb.events WHERE timestamp >= now() - INTERVAL 30 DAY"
-            val last30Resp = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(last30Query)
-            }
+            val last30Resp = ClickHouseClient.execute(last30Query)
             val last30Count = last30Resp.bodyAsText().trim().toLongOrNull() ?: 0L
 
             val timelineQuery = """
@@ -574,12 +551,7 @@ class AdminService {
                 GROUP BY d
                 ORDER BY d
             """.trimIndent()
-            val timelineResp = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                setBody(timelineQuery)
-            }
+            val timelineResp = ClickHouseClient.execute(timelineQuery)
             val timeline = if (timelineResp.status.isSuccess()) {
                 timelineResp.bodyAsText().trim().split("\n").filter { it.isNotBlank() }
                     .mapNotNull { line ->

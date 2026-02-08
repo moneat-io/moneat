@@ -1,6 +1,7 @@
 package com.moneat.plugins
 
 import com.moneat.services.BillingBackgroundService
+import com.moneat.services.IngestionWorker
 import com.moneat.services.MonitorAlertService
 import io.ktor.server.application.*
 import kotlinx.coroutines.CoroutineScope
@@ -13,19 +14,25 @@ private val logger = KotlinLogging.logger {}
 fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
     val billingBackgroundService = BillingBackgroundService()
-    
+    val queueKey = environment.config.property("ingest.queueKey").getString()
+    val dlqKey = environment.config.property("ingest.dlqKey").getString()
+    val workerCount = environment.config.property("ingest.workerCount").getString().toInt()
+    val ingestionWorker = IngestionWorker(queueKey, dlqKey, workerCount)
+
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    
-    // Start the monitor alert service
+
+    // Start the monitor alert service, billing service, and ingestion worker
     logger.info { "Starting background jobs" }
     monitorAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
-    
+    ingestionWorker.start()
+
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopped) {
         logger.info { "Stopping background jobs" }
         monitorAlertService.stop()
         billingBackgroundService.stop()
+        ingestionWorker.stop()
     }
 }

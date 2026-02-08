@@ -19,6 +19,9 @@ fun Application.configureDatabases() {
         username = config.property("database.postgres.user").getString()
         password = config.property("database.postgres.password").getString()
         maximumPoolSize = config.property("database.postgres.maxPoolSize").getString().toInt()
+        minimumIdle = 5
+        connectionTimeout = 10000
+        leakDetectionThreshold = 30000
         isAutoCommit = false
         transactionIsolation = "TRANSACTION_REPEATABLE_READ"
         validate()

@@ -1,9 +1,7 @@
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.server.config.*
 import kotlinx.coroutines.CoroutineScope
@@ -25,13 +23,8 @@ private val logger = KotlinLogging.logger {}
 
 class NotificationService(private val emailService: EmailService) {
     private val config = ApplicationConfig("application.conf")
-    private val clickhouseUrl = config.property("database.clickhouse.url").getString()
-    private val clickhouseDb = config.property("database.clickhouse.database").getString()
-    private val clickhouseUser = config.property("database.clickhouse.user").getString()
-    private val clickhousePassword = config.property("database.clickhouse.password").getString()
+    private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val frontendUrl = config.property("email.frontendUrl").getString()
-    
-    private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
     
     // Rate limiting: track last alert time per (user, project)
@@ -278,11 +271,7 @@ class NotificationService(private val emailService: EmailService) {
             FORMAT JSON
         """.trimIndent()
         
-        val response = httpClient.post("$clickhouseUrl?database=$clickhouseDb") {
-            basicAuth(clickhouseUser, clickhousePassword)
-            setBody(query)
-        }
-        
+        val response = ClickHouseClient.execute(query)
         val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
         
@@ -320,11 +309,7 @@ class NotificationService(private val emailService: EmailService) {
             FORMAT JSON
         """.trimIndent()
         
-        val response = httpClient.post("$clickhouseUrl?database=$clickhouseDb") {
-            basicAuth(clickhouseUser, clickhousePassword)
-            setBody(query)
-        }
-        
+        val response = ClickHouseClient.execute(query)
         val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         val rows = jsonResponse["data"]?.jsonArray ?: return emptyList()
         
@@ -454,6 +439,5 @@ class NotificationService(private val emailService: EmailService) {
     
     fun shutdown() {
         scheduler.shutdown()
-        httpClient.close()
     }
 }

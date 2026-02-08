@@ -1,6 +1,8 @@
 package com.moneat
 
 import com.moneat.config.EnvConfig
+import com.moneat.config.configureClickHouse
+import com.moneat.config.configureRedis
 import com.moneat.plugins.*
 import io.ktor.server.application.*
 import io.ktor.server.netty.*
@@ -20,6 +22,9 @@ fun Application.module() {
     configureHTTP()
     configureSerialization()
     configureMonitoring()
+    configureRateLimiting()
+    configureRedis()
+    configureClickHouse()
     configureRouting()
     configureDatabases()
     configureBackgroundJobs()

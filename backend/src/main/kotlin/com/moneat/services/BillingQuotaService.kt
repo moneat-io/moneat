@@ -118,7 +118,11 @@ class BillingQuotaService(
             .firstOrNull()
 
         if (lockRows && sub != null) {
-            TransactionManager.current().exec("SELECT id FROM subscriptions WHERE id = ${sub[Subscriptions.id]} FOR UPDATE")
+            val subId = sub[Subscriptions.id]
+            TransactionManager.current().exec(
+                "SELECT id FROM subscriptions WHERE id = ? FOR UPDATE",
+                listOf(Subscriptions.id.columnType to subId)
+            )
         }
 
         val tier = run {
@@ -173,8 +177,11 @@ class BillingQuotaService(
 
         if (lockRows) {
             TransactionManager.current().exec(
-                "SELECT id FROM org_usage_counters " +
-                    "WHERE organization_id = $organizationId AND period_start = '$periodStart' FOR UPDATE"
+                "SELECT id FROM org_usage_counters WHERE organization_id = ? AND period_start = ? FOR UPDATE",
+                listOf(
+                    OrgUsageCounters.organization_id.columnType to organizationId,
+                    OrgUsageCounters.period_start.columnType to periodStart
+                )
             )
         }
 

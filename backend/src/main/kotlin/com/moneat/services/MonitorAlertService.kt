@@ -1,9 +1,7 @@
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.config.*
@@ -24,11 +22,7 @@ private val logger = KotlinLogging.logger {}
 
 class MonitorAlertService {
     private val config = ApplicationConfig("application.conf")
-    private val clickhouseUrl = config.property("database.clickhouse.url").getString()
-    private val clickhouseDb = config.property("database.clickhouse.database").getString()
-    private val clickhouseUser = config.property("database.clickhouse.user").getString()
-    private val clickhousePassword = config.property("database.clickhouse.password").getString()
-    private val httpClient = HttpClient(CIO)
+    private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val emailService = EmailService()
     
     private var evaluationJob: Job? = null
@@ -305,13 +299,7 @@ class MonitorAlertService {
         """.trimIndent()
         
         return try {
-            val response = httpClient.post(clickhouseUrl) {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             
             if (!response.status.isSuccess()) {
                 logger.warn { "Failed to fetch metric value for alert" }
@@ -368,13 +356,7 @@ class MonitorAlertService {
         """.trimIndent()
         
         return try {
-            val response = httpClient.post(clickhouseUrl) {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(query)
-            }
+            val response = ClickHouseClient.execute(query)
             
             if (!response.status.isSuccess()) {
                 logger.warn { "Failed to check sustained condition" }

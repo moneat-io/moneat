@@ -6,6 +6,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import io.ktor.server.plugins.ratelimit.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -17,6 +18,7 @@ fun Route.apiRoutes() {
     val dashboardService = DashboardService()
     
     authenticate("auth-jwt") {
+        rateLimit(RateLimitName("api")) {
         route("/v1") {
             // Billing
             billingRoutes()
@@ -798,6 +800,7 @@ fun Route.apiRoutes() {
                 
                 call.respond(HttpStatusCode.NoContent)
             }
+        }
         }
     }
 }

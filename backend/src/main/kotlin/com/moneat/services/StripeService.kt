@@ -55,10 +55,14 @@ class StripeService(
             throw IllegalArgumentException("Checkout is only supported for paid tiers")
         }
         val basePriceId = tier.stripeBasePriceId ?: throw IllegalArgumentException("Tier missing Stripe base price ID")
+        val overagePriceId = tier.stripeOveragePriceId
+        if (tier.paygEnabled && overagePriceId.isNullOrBlank()) {
+            throw IllegalArgumentException("Tier missing Stripe overage price ID while PAYG is enabled")
+        }
 
         val customerId = getOrCreateCustomer(organizationId)
 
-        val params = CheckoutSessionCreateParams.builder()
+        val paramsBuilder = CheckoutSessionCreateParams.builder()
             .setMode(CheckoutSessionCreateParams.Mode.SUBSCRIPTION)
             .setCustomer(customerId)
             .setSuccessUrl(successUrl)
@@ -79,7 +83,14 @@ class StripeService(
                     .setQuantity(1L)
                     .build()
             )
-            .build()
+        if (tier.paygEnabled && !overagePriceId.isNullOrBlank()) {
+            paramsBuilder.addLineItem(
+                CheckoutSessionCreateParams.LineItem.builder()
+                    .setPrice(overagePriceId)
+                    .build()
+            )
+        }
+        val params = paramsBuilder.build()
 
         val session = com.stripe.model.checkout.Session.create(params)
         return CheckoutSessionResponse(

@@ -1,9 +1,11 @@
 package com.moneat.routes
 
+import com.moneat.config.RedisConfig
 import com.moneat.models.SentryEnvelope
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.EmailService
 import com.moneat.services.EventService
+import com.moneat.services.IngestionWorker
 import com.moneat.services.NotificationService
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -19,46 +21,47 @@ fun Route.ingestRoutes() {
     val notificationService = NotificationService(emailService)
     val eventService = EventService(notificationService)
     val quotaService = BillingQuotaService()
-    
+
     route("/api/{projectId}") {
-        // Sentry envelope endpoint (primary)
+        // Sentry envelope endpoint (primary) - enqueue for async processing, respond 202
         post("/envelope/") {
+            val queueKey = call.application.environment.config.property("ingest.queueKey").getString()
             val projectId = call.parameters["projectId"]?.toLongOrNull()
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
             }
-            
+
             // Extract auth from header or query param
             val authHeader = call.request.header("X-Sentry-Auth")
             val publicKey = extractPublicKey(authHeader)
-            
+
             if (publicKey == null) {
                 call.respond(HttpStatusCode.Unauthorized, "Missing or invalid authentication")
                 return@post
             }
-            
+
             // Verify DSN
             if (!eventService.verifyProjectKey(projectId, publicKey)) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
                 return@post
             }
-            
-            // Parse envelope - handle gzip compression
+
+            // Parse envelope - handle gzip compression (validates payload before enqueue)
             try {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
-                
+
                 val decompressedBytes = if (contentEncoding == "gzip") {
                     logger.debug { "Decompressing gzip envelope" }
                     java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
                 } else {
                     bodyBytes
                 }
-                
+
                 logger.debug { "Received envelope for project $projectId" }
                 logger.debug { "Envelope body:\n${decompressedBytes.decodeToString().take(500)}" }
-                
+
                 val envelope = SentryEnvelope.parse(decompressedBytes)
                 logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }
 
@@ -83,9 +86,10 @@ fun Route.ingestRoutes() {
                     }
                 }
 
-                eventService.processEnvelope(projectId, envelope)
-                
-                call.respond(HttpStatusCode.OK, mapOf("id" to envelope.eventId))
+                val message = IngestionWorker.encodeMessage(projectId, decompressedBytes)
+                RedisConfig.sync().lpush(queueKey, message)
+
+                call.respond(HttpStatusCode.Accepted, mapOf("id" to envelope.eventId))
             } catch (e: Exception) {
                 logger.error(e) { "Failed to process envelope: ${e.message}" }
                 e.printStackTrace()
@@ -148,7 +152,7 @@ fun Route.ingestRoutes() {
     }
 }
 
-private fun extractPublicKey(authHeader: String?): String? {
+internal fun extractPublicKey(authHeader: String?): String? {
     if (authHeader == null) return null
     
     // Parse "Sentry sentry_key=xxx, sentry_version=7"

@@ -1,12 +1,9 @@
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
@@ -23,13 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger
 private val logger = KotlinLogging.logger {}
 
 class EventService(private val notificationService: NotificationService? = null) {
-    private val config = ApplicationConfig("application.conf")
-    private val clickhouseUrl = config.property("database.clickhouse.url").getString()
-    private val clickhouseDb = config.property("database.clickhouse.database").getString()
-    private val clickhouseUser = config.property("database.clickhouse.user").getString()
-    private val clickhousePassword = config.property("database.clickhouse.password").getString()
-    
-    private val httpClient = HttpClient(CIO)
+    private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
     
@@ -205,13 +196,7 @@ class EventService(private val notificationService: NotificationService? = null)
         """.trimIndent()
 
         try {
-            val transactionResponse = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(transactionInsert)
-            }
+            val transactionResponse = ClickHouseClient.execute(transactionInsert)
 
             if (!transactionResponse.status.isSuccess()) {
                 val errorBody = transactionResponse.bodyAsText()
@@ -262,13 +247,7 @@ class EventService(private val notificationService: NotificationService? = null)
                         ${spanRows.joinToString(",\n")}
                     """.trimIndent()
 
-                    val spansResponse = httpClient.post("$clickhouseUrl") {
-                        parameter("database", clickhouseDb)
-                        parameter("user", clickhouseUser)
-                        parameter("password", clickhousePassword)
-                        contentType(ContentType.Text.Plain)
-                        setBody(spansInsert)
-                    }
+                    val spansResponse = ClickHouseClient.execute(spansInsert)
 
                     if (!spansResponse.status.isSuccess()) {
                         val errorBody = spansResponse.bodyAsText()
@@ -380,14 +359,7 @@ class EventService(private val notificationService: NotificationService? = null)
         """.trimIndent()
         
         try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(query)
-            }
-            
+            val response = ClickHouseClient.execute(query)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert event: $errorBody" }
@@ -473,13 +445,7 @@ class EventService(private val notificationService: NotificationService? = null)
         """.trimIndent()
 
         try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(insertQuery)
-            }
+            val response = ClickHouseClient.execute(insertQuery)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert feedback: $errorBody" }
@@ -556,13 +522,7 @@ class EventService(private val notificationService: NotificationService? = null)
         """.trimIndent()
 
         try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(replayEventInsert)
-            }
+            val response = ClickHouseClient.execute(replayEventInsert)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert replay event: $errorBody" }
@@ -592,13 +552,7 @@ class EventService(private val notificationService: NotificationService? = null)
         """.trimIndent()
 
         try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(recordingInsert)
-            }
+            val response = ClickHouseClient.execute(recordingInsert)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert replay recording: $errorBody" }
@@ -656,13 +610,7 @@ class EventService(private val notificationService: NotificationService? = null)
         """.trimIndent()
 
         try {
-            val response = httpClient.post("$clickhouseUrl") {
-                parameter("database", clickhouseDb)
-                parameter("user", clickhouseUser)
-                parameter("password", clickhousePassword)
-                contentType(ContentType.Text.Plain)
-                setBody(replayEventInsert)
-            }
+            val response = ClickHouseClient.execute(replayEventInsert)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert synthetic replay event: $errorBody" }
@@ -759,11 +707,7 @@ class EventService(private val notificationService: NotificationService? = null)
         """.trimIndent()
         
         return try {
-            val response = httpClient.post("$clickhouseUrl?database=$clickhouseDb") {
-                basicAuth(clickhouseUser, clickhousePassword)
-                setBody(query)
-            }
-            
+            val response = ClickHouseClient.execute(query)
             val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
             val count = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
                 ?.get("cnt")?.jsonPrimitive?.longOrNull ?: 0
