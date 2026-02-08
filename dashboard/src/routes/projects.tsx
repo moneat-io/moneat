@@ -61,7 +61,6 @@ function createMonogramIcon(label: string): React.ComponentType<{ className?: st
 }
 
 type PlatformCategory = 'mobile' | 'frontend' | 'backend' | 'desktop' | 'gaming'
-type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
 // Helper function to get platform info (with fallbacks for different naming conventions)
 export function getPlatformInfo(platformId?: string) {
