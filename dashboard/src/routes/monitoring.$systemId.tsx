@@ -1,36 +1,36 @@
-import {createFileRoute, redirect, Link} from '@tanstack/react-router'
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
-  Activity,
-  ArrowLeft,
-  Box,
-  Clock,
-  Cpu,
-  HardDrive,
-  MemoryStick,
-  Monitor,
-  Network,
-  Server,
-  Thermometer,
+    Activity,
+    ArrowLeft,
+    Box,
+    Clock,
+    Cpu,
+    HardDrive,
+    MemoryStick,
+    Monitor,
+    Network,
+    Server,
+    Thermometer,
 } from 'lucide-react'
 import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
+    Area,
+    AreaChart,
+    CartesianGrid,
+    Legend,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
 } from 'recharts'
 import {useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
@@ -853,8 +853,16 @@ function SystemDetailPage() {
                     <Box className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <h3 className="text-lg font-medium mb-1">No containers detected</h3>
-                  <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                    Make sure the Docker socket is mounted and the agent has read access to it.
+                  <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                    Mount Docker's socket into the agent (for example{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                      -v /var/run/docker.sock:/var/run/docker.sock:ro
+                    </code>
+                    ), then verify the agent can read it with{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                      docker exec &lt;agent&gt; ls -l /var/run/docker.sock
+                    </code>
+                    .
                   </p>
                 </CardContent>
               </Card>

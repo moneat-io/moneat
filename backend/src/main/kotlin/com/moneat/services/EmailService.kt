@@ -138,7 +138,7 @@ class EmailService {
             success = true
             logger.info { "Email sent to $to" }
         } catch (e: Exception) {
-            logger.error(e) { "Failed to send email to $to" }
+            logger.error("Failed to send email to $to", e)
             throw e
         } finally {
             trackEmailSent(to, emailType, success)

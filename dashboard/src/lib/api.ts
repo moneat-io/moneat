@@ -499,7 +499,7 @@ class ApiClient {
   }
 
   async signup(email: string, password: string, name?: string): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/signup', {
+    const response = await this.request<AuthResponse>(`${API_BASE.replace('/v1', '')}/auth/signup`, {
       method: 'POST',
       body: JSON.stringify({ email, password, name }),
     })
@@ -508,7 +508,7 @@ class ApiClient {
   }
 
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/login', {
+    const response = await this.request<AuthResponse>(`${API_BASE.replace('/v1', '')}/auth/login`, {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
@@ -583,7 +583,7 @@ class ApiClient {
   }
 
   async completeOnboarding(organizationName: string, companySize: string): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean }> {
-    return this.request('/auth/complete-onboarding', {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/complete-onboarding`, {
       method: 'POST',
       body: JSON.stringify({ organizationName, companySize }),
     })
@@ -594,28 +594,28 @@ class ApiClient {
   }
 
   async resendVerificationEmail(email: string): Promise<{ message: string }> {
-    return this.request('/auth/resend-verification', {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/resend-verification`, {
       method: 'POST',
       body: JSON.stringify({ email }),
     })
   }
 
   async verifyEmail(token: string): Promise<{ message: string }> {
-    return this.request('/auth/verify-email', {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/verify-email`, {
       method: 'POST',
       body: JSON.stringify({ token }),
     })
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {
-    return this.request('/auth/forgot-password', {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/forgot-password`, {
       method: 'POST',
       body: JSON.stringify({ email }),
     })
   }
 
   async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
-    return this.request('/auth/reset-password', {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/reset-password`, {
       method: 'POST',
       body: JSON.stringify({ token, newPassword }),
     })
