@@ -4,6 +4,7 @@ import com.moneat.models.*
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -27,6 +28,10 @@ class BillingBackgroundService(
 ) {
     private val config = ApplicationConfig("application.conf")
     private val billingEnabled = config.propertyOrNull("billing.backgroundJobsEnabled")?.getString()?.toBooleanStrictOrNull() ?: true
+    
+    private var meteredUsageJob: Job? = null
+    private var dunningDowngradeJob: Job? = null
+    private var quotaNotificationJob: Job? = null
 
     fun start(scope: CoroutineScope) {
         if (!billingEnabled) {
@@ -34,7 +39,7 @@ class BillingBackgroundService(
             return
         }
 
-        scope.launch(Dispatchers.IO) {
+        meteredUsageJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
                 try {
                     val flushed = stripeService.flushPendingMeteredUsage()
@@ -46,7 +51,7 @@ class BillingBackgroundService(
             }
         }
 
-        scope.launch(Dispatchers.IO) {
+        dunningDowngradeJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
                 try {
                     stripeService.applyDunningDowngrade()
@@ -57,7 +62,7 @@ class BillingBackgroundService(
             }
         }
 
-        scope.launch(Dispatchers.IO) {
+        quotaNotificationJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
                 try {
                     processQuotaThresholdNotifications()
@@ -67,6 +72,13 @@ class BillingBackgroundService(
                 delay(60_000L)
             }
         }
+    }
+
+    fun stop() {
+        logger.info { "Stopping BillingBackgroundService background jobs" }
+        meteredUsageJob?.cancel()
+        dunningDowngradeJob?.cancel()
+        quotaNotificationJob?.cancel()
     }
 
     private fun processQuotaThresholdNotifications() {

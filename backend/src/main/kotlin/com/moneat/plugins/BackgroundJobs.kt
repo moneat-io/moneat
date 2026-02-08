@@ -26,5 +26,6 @@ fun Application.configureBackgroundJobs() {
     environment.monitor.subscribe(ApplicationStopped) {
         logger.info { "Stopping background jobs" }
         monitorAlertService.stop()
+        billingBackgroundService.stop()
     }
 }
