@@ -4,22 +4,18 @@ import com.moneat.models.*
 import com.moneat.utils.SentryUtils
 import com.stripe.Stripe
 import com.stripe.exception.SignatureVerificationException
-import com.stripe.model.Customer
-import com.stripe.model.Event
-import com.stripe.model.Invoice
-import com.stripe.model.Subscription
+import com.stripe.model.*
 import com.stripe.model.billing.MeterEvent
-import com.stripe.model.billingportal.Session
 import com.stripe.net.Webhook
-import com.stripe.param.CustomerCreateParams
+import com.stripe.param.*
 import com.stripe.param.billing.MeterEventCreateParams
 import io.ktor.server.config.*
 import io.sentry.Sentry
 import kotlinx.datetime.Instant
+import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
-import com.stripe.param.billingportal.SessionCreateParams as PortalSessionCreateParams
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
@@ -119,24 +115,100 @@ class StripeService(
         }
     }
 
-    fun createPortalSession(organizationId: Int, returnUrl: String): PortalSessionResponse {
+    fun listInvoices(organizationId: Int, limit: Long = 20): List<InvoiceResponse> {
         ensureEnabled()
-        val customerId = transaction {
+        val customerId = findCustomerId(organizationId) ?: return emptyList()
+        val invoices = Invoice.list(
+            InvoiceListParams.builder()
+                .setCustomer(customerId)
+                .setLimit(limit.coerceIn(1, 100))
+                .build()
+        )
+        return invoices.data.map { invoice ->
+            InvoiceResponse(
+                id = invoice.id,
+                date = epochSecondsToIso(invoice.created) ?: "",
+                amountCents = (invoice.total ?: invoice.amountPaid ?: invoice.amountDue ?: 0L).toInt(),
+                status = invoice.status ?: "unknown",
+                pdfUrl = invoice.invoicePdf
+            )
+        }
+    }
+
+    fun getPaymentMethod(organizationId: Int): PaymentMethodResponse {
+        ensureEnabled()
+        val customerId = findCustomerId(organizationId) ?: return PaymentMethodResponse(
+            brand = null,
+            last4 = null,
+            expMonth = null,
+            expYear = null
+        )
+
+        val customer = Customer.retrieve(
+            customerId,
+            CustomerRetrieveParams.builder()
+                .addExpand("invoice_settings.default_payment_method")
+                .build(),
+            null
+        )
+        val paymentMethod = customer.invoiceSettings?.defaultPaymentMethodObject
+            ?: customer.invoiceSettings?.defaultPaymentMethod?.takeIf { it.isNotBlank() }?.let { PaymentMethod.retrieve(it) }
+        val card = paymentMethod?.card
+        return PaymentMethodResponse(
+            brand = card?.brand,
+            last4 = card?.last4,
+            expMonth = card?.expMonth?.toInt(),
+            expYear = card?.expYear?.toInt()
+        )
+    }
+
+    fun createSetupIntent(organizationId: Int): SetupIntentResponse {
+        ensureEnabled()
+        val customerId = getOrCreateCustomer(organizationId)
+        val intent = SetupIntent.create(
+            SetupIntentCreateParams.builder()
+                .setCustomer(customerId)
+                .setUsage(SetupIntentCreateParams.Usage.OFF_SESSION)
+                .putMetadata("organization_id", organizationId.toString())
+                .build()
+        )
+        val clientSecret = intent.clientSecret ?: throw IllegalStateException("Stripe setup intent missing client secret")
+        return SetupIntentResponse(clientSecret = clientSecret)
+    }
+
+    fun cancelSubscription(organizationId: Int): CancelSubscriptionResponse {
+        ensureEnabled()
+        val localSubscription = transaction {
             Subscriptions.select {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
-                ?.get(Subscriptions.stripe_customer_id)
-        } ?: throw IllegalStateException("No Stripe customer linked for this organization")
+        } ?: throw IllegalStateException("No active subscription found")
 
-        val params = PortalSessionCreateParams.builder()
-            .setCustomer(customerId)
-            .setReturnUrl(returnUrl)
-            .build()
-        val portalSession = Session.create(params)
-        return PortalSessionResponse(url = portalSession.url)
+        val stripeSubscriptionId = localSubscription[Subscriptions.stripe_subscription_id]
+            ?: throw IllegalStateException("No Stripe subscription linked for this organization")
+
+        val canceled = Subscription.retrieve(stripeSubscriptionId).update(
+            SubscriptionUpdateParams.builder()
+                .setCancelAtPeriodEnd(true)
+                .build()
+        )
+
+        val currentPeriodEnd = canceled.cancelAt?.let { Instant.fromEpochSeconds(it) }
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq localSubscription[Subscriptions.id] }) {
+                it[status] = canceled.status ?: localSubscription[Subscriptions.status]
+                it[current_period_end] = currentPeriodEnd
+            }
+        }
+
+        return CancelSubscriptionResponse(
+            status = canceled.status ?: localSubscription[Subscriptions.status],
+            cancelAtPeriodEnd = canceled.cancelAtPeriodEnd == true,
+            currentPeriodEnd = epochSecondsToIso(canceled.cancelAt)
+        )
     }
 
     fun verifyAndParseEvent(payload: String, signature: String?): Event {
@@ -468,7 +540,24 @@ class StripeService(
         }
     }
 
+    private fun findCustomerId(organizationId: Int): String? {
+        return transaction {
+            Subscriptions.select {
+                (Subscriptions.organization_id eq organizationId) and
+                    (Subscriptions.stripe_customer_id.isNotNull())
+            }
+                .orderBy(Subscriptions.id to SortOrder.DESC)
+                .firstOrNull()
+                ?.get(Subscriptions.stripe_customer_id)
+        }
+    }
+
     private fun addDays(instant: Instant, days: Int): Instant {
         return Instant.fromEpochSeconds(instant.epochSeconds + (days * 86_400L))
+    }
+
+    private fun epochSecondsToIso(epochSeconds: Long?): String? {
+        if (epochSeconds == null) return null
+        return Instant.fromEpochSeconds(epochSeconds).toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date.toString()
     }
 }

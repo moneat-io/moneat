@@ -28,13 +28,17 @@ class EventService(private val notificationService: NotificationService? = null)
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
     private val replaySegmentCounters = ConcurrentHashMap<String, AtomicInteger>()
     
-    fun verifyProjectKey(projectId: Long, publicKey: String): Boolean {
+    data class ProjectKeyVerification(val isValid: Boolean, val platformTarget: String?)
+    
+    fun verifyProjectKey(projectId: Long, publicKey: String): ProjectKeyVerification {
         return transaction {
             ProjectKeys.selectAll().where {
                 (ProjectKeys.project_id eq projectId) and
                         (ProjectKeys.public_key eq publicKey) and
                         (ProjectKeys.is_active eq true)
-            }.count() > 0
+            }.firstOrNull()?.let { row ->
+                ProjectKeyVerification(true, row[ProjectKeys.platform_target])
+            } ?: ProjectKeyVerification(false, null)
         }
     }
 

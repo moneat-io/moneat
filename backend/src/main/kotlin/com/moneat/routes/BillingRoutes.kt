@@ -1,20 +1,19 @@
 package com.moneat.routes
 
-import com.moneat.models.*
+import com.moneat.models.CheckoutSessionRequest
+import com.moneat.models.Subscriptions
+import com.moneat.models.UpdatePaygBudgetRequest
+import com.moneat.models.UpdatePaygBudgetResponse
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.PricingTierService
 import com.moneat.services.StripeService
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.call
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
-import io.ktor.server.request.receive
-import io.ktor.server.response.respond
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
-import io.ktor.server.routing.post
-import io.ktor.server.routing.put
-import io.ktor.server.routing.route
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.select
@@ -80,7 +79,43 @@ fun Route.billingRoutes() {
             }
         }
 
-        post("/portal") {
+        get("/invoices") {
+            val principal = call.principal<JWTPrincipal>() ?: run {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))
+                return@get
+            }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId = pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                return@get
+            }
+
+            try {
+                call.respond(stripeService.listInvoices(orgId))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to load invoices")))
+            }
+        }
+
+        get("/payment-method") {
+            val principal = call.principal<JWTPrincipal>() ?: run {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))
+                return@get
+            }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId = pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                return@get
+            }
+
+            try {
+                call.respond(stripeService.getPaymentMethod(orgId))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to load payment method")))
+            }
+        }
+
+        post("/setup-intent") {
             val principal = call.principal<JWTPrincipal>() ?: run {
                 call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))
                 return@post
@@ -91,12 +126,30 @@ fun Route.billingRoutes() {
                 return@post
             }
 
-            val request = call.receive<PortalSessionRequest>()
             try {
-                val response = stripeService.createPortalSession(orgId, request.returnUrl)
-                call.respond(response)
+                call.respond(stripeService.createSetupIntent(orgId))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to create portal session")))
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to create setup intent")))
+            }
+        }
+
+        post("/cancel") {
+            val principal = call.principal<JWTPrincipal>() ?: run {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))
+                return@post
+            }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId = pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                return@post
+            }
+
+            try {
+                call.respond(stripeService.cancelSubscription(orgId))
+            } catch (e: IllegalStateException) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "No cancelable subscription found")))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Failed to cancel subscription")))
             }
         }
 

@@ -15,6 +15,7 @@ private val logger = KotlinLogging.logger {}
 data class QuotaReservationResult(
     val allowed: Boolean,
     val reason: String? = null,
+    val eventType: String? = null,
     val usage: BillingUsageResponse
 )
 
@@ -34,8 +35,22 @@ class BillingQuotaService(
         }
     }
 
-    fun reserveUnits(organizationId: Int, requestedUnits: Int): QuotaReservationResult {
-        if (requestedUnits <= 0) {
+    fun reserveUnits(organizationId: Int, requestedUnits: Int, eventType: String = "error"): QuotaReservationResult {
+        return reserveUnitsBatch(
+            organizationId = organizationId,
+            requestedUnitsByType = mapOf(eventType to requestedUnits)
+        )
+    }
+
+    fun reserveUnitsBatch(organizationId: Int, requestedUnitsByType: Map<String, Int>): QuotaReservationResult {
+        val normalizedRequests = mutableMapOf<String, Long>()
+        for ((eventType, requestedUnits) in requestedUnitsByType) {
+            if (requestedUnits <= 0) continue
+            val normalizedType = normalizeEventType(eventType)
+            normalizedRequests[normalizedType] = (normalizedRequests[normalizedType] ?: 0L) + requestedUnits.toLong()
+        }
+
+        if (normalizedRequests.isEmpty()) {
             return QuotaReservationResult(
                 allowed = true,
                 usage = getUsageForOrganization(organizationId)
@@ -51,16 +66,42 @@ class BillingQuotaService(
 
         return transaction {
             val state = loadQuotaState(organizationId, lockRows = true)
-            val totalAfter = state.usedUnits + requestedUnits
+            val requestedTotal = normalizedRequests.values.sum()
+            val totalAfter = state.usedUnits + requestedTotal
+
+            for ((eventType, requestedUnits) in normalizedRequests) {
+                val usedForType = usedUnitsForType(state, eventType)
+                val typeLimit = baseLimitForType(state, eventType)
+                val typeAfter = usedForType + requestedUnits
+                val effectiveTypeLimit = if (typeLimit >= 0) typeLimit + state.paygLimitUnits else Long.MAX_VALUE
+
+                if (typeLimit >= 0 && typeAfter > effectiveTypeLimit) {
+                    SentryUtils.breadcrumb("billing", "Per-type quota exceeded", mapOf(
+                        "organization_id" to organizationId,
+                        "requested_units" to requestedUnits,
+                        "event_type" to eventType,
+                        "used_type_units" to usedForType,
+                        "type_limit" to typeLimit,
+                        "payg_limit_units" to state.paygLimitUnits
+                    ))
+
+                    return@transaction QuotaReservationResult(
+                        allowed = false,
+                        reason = "event_type_quota_exceeded",
+                        eventType = eventType,
+                        usage = toUsageResponse(state)
+                    )
+                }
+            }
 
             if (totalAfter > state.totalLimitUnits) {
                 SentryUtils.breadcrumb("billing", "Quota exceeded", mapOf(
                     "organization_id" to organizationId,
-                    "requested_units" to requestedUnits,
+                    "requested_units" to requestedTotal,
                     "used_units" to state.usedUnits,
                     "total_limit" to state.totalLimitUnits
                 ))
-                
+
                 return@transaction QuotaReservationResult(
                     allowed = false,
                     reason = "quota_exceeded",
@@ -68,11 +109,20 @@ class BillingQuotaService(
                 )
             }
 
+            val requestedErrors = normalizedRequests["error"] ?: 0L
+            val requestedTransactions = normalizedRequests["transaction"] ?: 0L
+            val requestedReplays = normalizedRequests["replay"] ?: 0L
+            val requestedFeedback = normalizedRequests["feedback"] ?: 0L
+
             OrgUsageCounters.update({
                 (OrgUsageCounters.organization_id eq organizationId) and
                     (OrgUsageCounters.period_start eq state.periodStart)
             }) {
                 it[used_units] = totalAfter
+                it[used_errors] = state.usedErrors + requestedErrors
+                it[used_transactions] = state.usedTransactions + requestedTransactions
+                it[used_replays] = state.usedReplays + requestedReplays
+                it[used_feedback] = state.usedFeedback + requestedFeedback
                 it[updated_at] = Clock.System.now()
             }
 
@@ -86,7 +136,7 @@ class BillingQuotaService(
                     "overage_delta" to overageDelta,
                     "subscription_id" to state.subscriptionId
                 ))
-                
+
                 val overageMicros = overageDelta * state.paygRateMicrosPerUnit
                 Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
                     it[payg_used_units] = state.paygUsedUnits + overageDelta
@@ -112,6 +162,14 @@ class BillingQuotaService(
         val periodStart: LocalDate,
         val periodEnd: LocalDate,
         val usedUnits: Long,
+        val usedErrors: Long,
+        val usedTransactions: Long,
+        val usedReplays: Long,
+        val usedFeedback: Long,
+        val errorLimit: Long,
+        val transactionLimit: Long,
+        val replayLimit: Long,
+        val feedbackLimit: Long,
         val baseLimitUnits: Long,
         val paygLimitUnits: Long,
         val totalLimitUnits: Long,
@@ -185,6 +243,10 @@ class BillingQuotaService(
                 it[OrgUsageCounters.period_start] = periodStart
                 it[OrgUsageCounters.period_end] = periodEnd
                 it[used_units] = 0
+                it[used_errors] = 0
+                it[used_transactions] = 0
+                it[used_replays] = 0
+                it[used_feedback] = 0
                 it[updated_at] = Clock.System.now()
             }
         }
@@ -205,6 +267,17 @@ class BillingQuotaService(
         }.first()
 
         val usedUnits = usageRow[OrgUsageCounters.used_units]
+        val usedErrors = usageRow[OrgUsageCounters.used_errors]
+        val usedTransactions = usageRow[OrgUsageCounters.used_transactions]
+        val usedReplays = usageRow[OrgUsageCounters.used_replays]
+        val usedFeedback = usageRow[OrgUsageCounters.used_feedback]
+        val errorLimit = tier.monthlyErrorLimit
+        val transactionLimit = tier.monthlyTransactionLimit
+        val replayLimit = tier.monthlyReplayLimit
+        val feedbackLimit = tier.monthlyFeedbackLimit
+        val aggregateBaseFromTypes = listOf(errorLimit, transactionLimit, replayLimit, feedbackLimit)
+            .filter { it >= 0 }
+            .sum()
         val paygBudgetCents = sub?.get(Subscriptions.payg_budget_cents) ?: 0
         val paygRateMicros = tier.paygRateMicrosPerUnit
         val paygEnabled = tier.paygEnabled
@@ -213,7 +286,7 @@ class BillingQuotaService(
         } else {
             0
         }
-        val baseLimit = tier.monthlyUnitLimit
+        val baseLimit = if (tier.monthlyUnitLimit > 0) tier.monthlyUnitLimit else aggregateBaseFromTypes
         val totalLimit = baseLimit + paygLimitUnits
 
         return QuotaState(
@@ -225,6 +298,14 @@ class BillingQuotaService(
             periodStart = periodStart,
             periodEnd = periodEnd,
             usedUnits = usedUnits,
+            usedErrors = usedErrors,
+            usedTransactions = usedTransactions,
+            usedReplays = usedReplays,
+            usedFeedback = usedFeedback,
+            errorLimit = errorLimit,
+            transactionLimit = transactionLimit,
+            replayLimit = replayLimit,
+            feedbackLimit = feedbackLimit,
             baseLimitUnits = baseLimit,
             paygLimitUnits = paygLimitUnits,
             totalLimitUnits = totalLimit,
@@ -237,12 +318,29 @@ class BillingQuotaService(
     }
 
     private fun toUsageResponse(state: QuotaState): BillingUsageResponse {
+        val eventLimitsWithinBudget = listOf(
+            state.usedErrors to state.errorLimit,
+            state.usedTransactions to state.transactionLimit,
+            state.usedReplays to state.replayLimit,
+            state.usedFeedback to state.feedbackLimit
+        ).all { (used, limit) ->
+            limit < 0 || used <= (limit + state.paygLimitUnits)
+        }
+
         return BillingUsageResponse(
             organizationId = state.organizationId,
             periodStart = state.periodStart.toString(),
             periodEnd = state.periodEnd.toString(),
             retentionDays = state.retentionDays,
             usedUnits = state.usedUnits,
+            usedErrors = state.usedErrors,
+            errorLimit = state.errorLimit,
+            usedTransactions = state.usedTransactions,
+            transactionLimit = state.transactionLimit,
+            usedReplays = state.usedReplays,
+            replayLimit = state.replayLimit,
+            usedFeedback = state.usedFeedback,
+            feedbackLimit = state.feedbackLimit,
             baseLimitUnits = state.baseLimitUnits,
             paygLimitUnits = state.paygLimitUnits,
             totalLimitUnits = state.totalLimitUnits,
@@ -251,7 +349,7 @@ class BillingQuotaService(
             paygUsedCentsEstimate = (state.paygUsedMicros / 10_000L).toInt(),
             plan = state.plan,
             status = state.status,
-            withinQuota = state.usedUnits <= state.totalLimitUnits
+            withinQuota = state.usedUnits <= state.totalLimitUnits && eventLimitsWithinBudget
         )
     }
 
@@ -261,6 +359,10 @@ class BillingQuotaService(
             tierName = row[PricingTierConfigs.tier_name],
             version = row[PricingTierConfigs.version],
             monthlyUnitLimit = row[PricingTierConfigs.monthly_unit_limit],
+            monthlyErrorLimit = row[PricingTierConfigs.monthly_error_limit],
+            monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
+            monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
+            monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
             maxProjects = row[PricingTierConfigs.max_projects],
             maxSystems = row[PricingTierConfigs.max_systems],
@@ -281,6 +383,10 @@ class BillingQuotaService(
             tierName = tier.name,
             version = 1,
             monthlyUnitLimit = tier.monthlyErrorLimit,
+            monthlyErrorLimit = tier.monthlyErrorLimit,
+            monthlyTransactionLimit = 0,
+            monthlyReplayLimit = tier.monthlyReplayLimit,
+            monthlyFeedbackLimit = 0,
             retentionDays = tier.retentionDays,
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
@@ -296,5 +402,35 @@ class BillingQuotaService(
             stripeOveragePriceId = null,
             isCurrent = true
         )
+    }
+
+    private fun normalizeEventType(eventType: String): String {
+        return when (eventType.lowercase()) {
+            "error" -> "error"
+            "transaction" -> "transaction"
+            "replay" -> "replay"
+            "feedback" -> "feedback"
+            else -> "error"
+        }
+    }
+
+    private fun usedUnitsForType(state: QuotaState, eventType: String): Long {
+        return when (eventType) {
+            "error" -> state.usedErrors
+            "transaction" -> state.usedTransactions
+            "replay" -> state.usedReplays
+            "feedback" -> state.usedFeedback
+            else -> state.usedErrors
+        }
+    }
+
+    private fun baseLimitForType(state: QuotaState, eventType: String): Long {
+        return when (eventType) {
+            "error" -> state.errorLimit
+            "transaction" -> state.transactionLimit
+            "replay" -> state.replayLimit
+            "feedback" -> state.feedbackLimit
+            else -> state.errorLimit
+        }
     }
 }

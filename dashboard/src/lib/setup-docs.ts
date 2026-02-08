@@ -177,6 +177,118 @@ Sentry.captureMessage("Moneat test event from KMP")`,
     },
   ]),
 
+  // Target-specific KMP docs
+  'kmp-android': createDocs('kmp-android', 'Sentry Kotlin Multiplatform (Android)', [
+    {
+      title: 'Add the dependency',
+      description: 'Add Sentry KMP to your shared module.',
+      code: `// build.gradle.kts (shared module)
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("io.sentry:sentry-kotlin-multiplatform:4.0.0")
+        }
+        androidMain.dependencies {
+            implementation("io.sentry:sentry-android:7.0.0")
+        }
+    }
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Initialize on Android',
+      description: 'Initialize in your Android Application class.',
+      code: `// androidMain
+import io.sentry.android.core.SentryAndroid
+
+SentryAndroid.init(context) { options ->
+    options.dsn = "${DSN_PLACEHOLDER}"
+    options.tracesSampleRate = 1.0
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Verify installation',
+      description: 'Capture a test event.',
+      code: `import io.sentry.Sentry
+
+Sentry.captureMessage("Moneat test from KMP Android")`,
+      language: 'kotlin',
+    },
+  ]),
+
+  'kmp-ios': createDocs('kmp-ios', 'Sentry Kotlin Multiplatform (iOS)', [
+    {
+      title: 'Add iOS dependency',
+      description: 'Add Sentry Cocoa SDK to your iOS project via SPM or CocoaPods.',
+      code: `# CocoaPods
+pod 'Sentry', '~> 8.0'
+
+# Or Swift Package Manager:
+# https://github.com/getsentry/sentry-cocoa`,
+      language: 'ruby',
+    },
+    {
+      title: 'Initialize on iOS',
+      description: 'Initialize Sentry in your iOS AppDelegate.',
+      code: `import Sentry
+
+SentrySDK.start { options in
+    options.dsn = "${DSN_PLACEHOLDER}"
+    options.tracesSampleRate = 1.0
+}`,
+      language: 'swift',
+    },
+    {
+      title: 'Verify installation',
+      description: 'Capture a test event from your shared code.',
+      code: `import io.sentry.Sentry
+
+Sentry.captureMessage("Moneat test from KMP iOS")`,
+      language: 'kotlin',
+    },
+  ]),
+
+  'kmp-desktop-jvm': createDocs('kmp-desktop-jvm', 'Sentry KMP (Desktop JVM)', [
+    {
+      title: 'Add the dependency',
+      description: 'Add Sentry KMP and JVM dependencies.',
+      code: `// build.gradle.kts (shared module)
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("io.sentry:sentry-kotlin-multiplatform:4.0.0")
+        }
+        jvmMain.dependencies {
+            implementation("io.sentry:sentry:7.0.0")
+        }
+    }
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Initialize on JVM',
+      description: 'Initialize in your main function.',
+      code: `import io.sentry.Sentry
+
+fun main() {
+    Sentry.init { options ->
+        options.dsn = "${DSN_PLACEHOLDER}"
+        options.tracesSampleRate = 1.0
+    }
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Verify installation',
+      description: 'Capture a test event.',
+      code: `import io.sentry.Sentry
+
+Sentry.captureMessage("Moneat test from KMP Desktop JVM")`,
+      language: 'kotlin',
+    },
+  ]),
+
   'react-native': createDocs('react-native', '@sentry/react-native', [
     {
       title: 'Install the package',
@@ -247,6 +359,143 @@ Future<void> main() async {
       code: `import 'package:sentry_flutter/sentry_flutter.dart';
 
 Sentry.captureMessage('Moneat test event from Flutter');`,
+      language: 'dart',
+    },
+  ]),
+
+  // Target-specific Flutter docs
+  'flutter-android': createDocs('flutter-android', 'sentry_flutter (Android)', [
+    {
+      title: 'Add the dependency',
+      description: 'Add sentry_flutter to your pubspec.yaml.',
+      code: `dependencies:
+  sentry_flutter: ^8.0.0`,
+      language: 'yaml',
+    },
+    {
+      title: 'Initialize for Android',
+      description: 'Initialize with platform-specific configuration for Android.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Future<void> main() async {
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = "${DSN_PLACEHOLDER}";
+      options.tracesSampleRate = 1.0;
+    },
+    appRunner: () => runApp(const MyApp()),
+  );
+}`,
+      language: 'dart',
+    },
+    {
+      title: 'Test on Android',
+      description: 'Run on Android device or emulator and trigger a test event.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Sentry.captureMessage('Moneat test from Flutter Android');`,
+      language: 'dart',
+    },
+  ]),
+
+  'flutter-ios': createDocs('flutter-ios', 'sentry_flutter (iOS)', [
+    {
+      title: 'Add the dependency',
+      description: 'Add sentry_flutter to your pubspec.yaml.',
+      code: `dependencies:
+  sentry_flutter: ^8.0.0`,
+      language: 'yaml',
+    },
+    {
+      title: 'Initialize for iOS',
+      description: 'Use the same initialization as Android - sentry_flutter handles both platforms.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Future<void> main() async {
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = "${DSN_PLACEHOLDER}";
+      options.tracesSampleRate = 1.0;
+    },
+    appRunner: () => runApp(const MyApp()),
+  );
+}`,
+      language: 'dart',
+    },
+    {
+      title: 'Test on iOS',
+      description: 'Run on iOS simulator or device and trigger a test event.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Sentry.captureMessage('Moneat test from Flutter iOS');`,
+      language: 'dart',
+    },
+  ]),
+
+  'flutter-web': createDocs('flutter-web', 'sentry_flutter (Web)', [
+    {
+      title: 'Add the dependency',
+      description: 'Add sentry_flutter to your pubspec.yaml.',
+      code: `dependencies:
+  sentry_flutter: ^8.0.0`,
+      language: 'yaml',
+    },
+    {
+      title: 'Initialize for Web',
+      description: 'Use the same initialization - sentry_flutter supports web.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Future<void> main() async {
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = "${DSN_PLACEHOLDER}";
+      options.tracesSampleRate = 1.0;
+    },
+    appRunner: () => runApp(const MyApp()),
+  );
+}`,
+      language: 'dart',
+    },
+    {
+      title: 'Test on Web',
+      description: 'Run flutter web and trigger a test event in your browser.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Sentry.captureMessage('Moneat test from Flutter Web');`,
+      language: 'dart',
+    },
+  ]),
+
+  'flutter-desktop': createDocs('flutter-desktop', 'sentry_flutter (Desktop)', [
+    {
+      title: 'Add the dependency',
+      description: 'Add sentry_flutter to your pubspec.yaml.',
+      code: `dependencies:
+  sentry_flutter: ^8.0.0`,
+      language: 'yaml',
+    },
+    {
+      title: 'Initialize for Desktop',
+      description: 'Use the same initialization - sentry_flutter supports desktop platforms.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Future<void> main() async {
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = "${DSN_PLACEHOLDER}";
+      options.tracesSampleRate = 1.0;
+    },
+    appRunner: () => runApp(const MyApp()),
+  );
+}`,
+      language: 'dart',
+    },
+    {
+      title: 'Test on Desktop',
+      description: 'Run on desktop (Windows, macOS, or Linux) and trigger a test event.',
+      code: `import 'package:sentry_flutter/sentry_flutter.dart';
+
+Sentry.captureMessage('Moneat test from Flutter Desktop');`,
       language: 'dart',
     },
   ]),

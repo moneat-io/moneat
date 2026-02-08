@@ -33,12 +33,19 @@ data class UserResponse(
 )
 
 @Serializable
+data class ProjectKeyResponse(
+    val platformTarget: String?,
+    val dsn: String
+)
+
+@Serializable
 data class ProjectResponse(
     val id: Long,
     val name: String,
     val slug: String,
-    val platform: String?,
-    val dsn: String,
+    val framework: String?,
+    val keys: List<ProjectKeyResponse>,
+    val dsn: String,  // First key's DSN for backward compatibility
     val issueCount: Long = 0
 )
 
@@ -205,13 +212,14 @@ data class IssueUpdateRequest(
 @Serializable
 data class CreateProjectRequest(
     val name: String,
-    val platform: String? = null
+    val framework: String? = null,
+    val targets: List<String>? = null
 )
 
 @Serializable
 data class UpdateProjectRequest(
     val name: String? = null,
-    val platform: String? = null
+    val framework: String? = null
 )
 
 @Serializable

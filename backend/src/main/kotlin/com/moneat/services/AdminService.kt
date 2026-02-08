@@ -75,7 +75,7 @@ data class AdminOrgProject(
     val id: Long,
     val name: String,
     val slug: String,
-    val platform: String?
+    val framework: String?
 )
 
 @Serializable
@@ -287,7 +287,7 @@ class AdminService {
                         id = p[Projects.id],
                         name = p[Projects.name],
                         slug = p[Projects.slug],
-                        platform = p[Projects.platform]
+                        framework = p[Projects.framework]
                     )
                 }
             )

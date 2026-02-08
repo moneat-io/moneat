@@ -5,6 +5,7 @@ import {getPlatformInfo} from '@/routes/projects'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Check, Copy} from 'lucide-react'
 import {useEffect, useState} from 'react'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
@@ -100,15 +101,44 @@ function CodeBlock({
 
 function SetupPage() {
   const { project } = Route.useLoaderData()
-  const platformInfo = getPlatformInfo(project.platform)
-  const docs = getSetupDocs(project.platform, project.dsn)
-  const [dsnCopied, setDsnCopied] = useState(false)
+  const platformInfo = getPlatformInfo(project.framework)
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
+  const [dsnCopiedMap, setDsnCopiedMap] = useState<Record<string, boolean>>({})
 
-  const handleCopyDSN = async () => {
-    await navigator.clipboard.writeText(project.dsn)
-    setDsnCopied(true)
-    setTimeout(() => setDsnCopied(false), 2000)
+  // Initialize selected target
+  useEffect(() => {
+    if (project.keys.length > 0 && !selectedTarget) {
+      setSelectedTarget(project.keys[0].platformTarget ?? 'default')
+    }
+  }, [project.keys, selectedTarget])
+
+  const handleCopyDSN = async (dsn: string, targetKey: string) => {
+    await navigator.clipboard.writeText(dsn)
+    setDsnCopiedMap(prev => ({ ...prev, [targetKey]: true }))
+    setTimeout(() => {
+      setDsnCopiedMap(prev => ({ ...prev, [targetKey]: false }))
+    }, 2000)
   }
+
+  const PlatformIcon = platformInfo?.icon
+  const accentColor = platformInfo?.color ?? '#6366f1'
+  const isMultiPlatform = project.keys.length > 1
+
+  // For multi-platform, get docs for each target
+  // For single-platform, use the framework platform
+  const getCurrentDocs = (targetId: string | null) => {
+    if (!targetId || targetId === 'default') {
+      return getSetupDocs(project.framework, project.dsn)
+    }
+    // Try to get target-specific docs (e.g., "kmp-android")
+    const targetSpecificDocs = getSetupDocs(`${project.framework}-${targetId}`, 
+      project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn)
+    // Fall back to framework docs if target-specific not found
+    return targetSpecificDocs || getSetupDocs(project.framework, 
+      project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn)
+  }
+
+  const docs = getCurrentDocs(selectedTarget)
 
   if (!docs) {
     return (
@@ -117,10 +147,6 @@ function SetupPage() {
       </div>
     )
   }
-
-  const PlatformIcon = platformInfo?.icon
-
-  const accentColor = platformInfo?.color ?? '#6366f1'
 
   return (
     <div className="min-h-screen bg-background">
@@ -154,30 +180,71 @@ function SetupPage() {
         <Card className="mb-8 overflow-hidden border-l-4 shadow-sm" style={{ borderLeftColor: accentColor }}>
           <CardHeader className="bg-muted/40">
             <CardTitle className="text-base flex items-center gap-2">
-              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Your DSN</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                {isMultiPlatform ? 'Your DSNs' : 'Your DSN'}
+              </span>
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Use this DSN to configure the {docs.sdkName} in your application.
+              {isMultiPlatform 
+                ? `Use the appropriate DSN for each target platform in your ${docs.sdkName}.`
+                : `Use this DSN to configure the ${docs.sdkName} in your application.`
+              }
             </p>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-muted/80 dark:bg-muted px-3 py-2.5 rounded-lg text-sm break-all font-mono text-foreground border border-border">
-                {project.dsn}
-              </code>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleCopyDSN}
-                className="flex-shrink-0"
-              >
-                {dsnCopied ? (
-                  <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
+            {isMultiPlatform ? (
+              <Tabs value={selectedTarget || 'default'} onValueChange={setSelectedTarget} className="w-full">
+                <TabsList className="mb-4">
+                  {project.keys.map(key => (
+                    <TabsTrigger key={key.platformTarget || 'default'} value={key.platformTarget || 'default'}>
+                      {key.platformTarget ? key.platformTarget.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Default'}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {project.keys.map(key => {
+                  const targetKey = key.platformTarget || 'default'
+                  return (
+                    <TabsContent key={targetKey} value={targetKey}>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-muted/80 dark:bg-muted px-3 py-2.5 rounded-lg text-sm break-all font-mono text-foreground border border-border">
+                          {key.dsn}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleCopyDSN(key.dsn, targetKey)}
+                          className="flex-shrink-0"
+                        >
+                          {dsnCopiedMap[targetKey] ? (
+                            <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </TabsContent>
+                  )
+                })}
+              </Tabs>
+            ) : (
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-muted/80 dark:bg-muted px-3 py-2.5 rounded-lg text-sm break-all font-mono text-foreground border border-border">
+                  {project.dsn}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleCopyDSN(project.dsn, 'default')}
+                  className="flex-shrink-0"
+                >
+                  {dsnCopiedMap['default'] ? (
+                    <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -40,7 +40,7 @@ object Projects : Table("projects") {
     val organization_id = integer("organization_id")
     val name = varchar("name", 255)
     val slug = varchar("slug", 255)
-    val platform = varchar("platform", 50).nullable()
+    val framework = varchar("framework", 50).nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -49,6 +49,7 @@ object ProjectKeys : Table("project_keys") {
     val project_id = long("project_id")
     val public_key = varchar("public_key", 255)
     val secret_key = varchar("secret_key", 255).nullable()
+    val platform_target = varchar("platform_target", 50).nullable()
     val is_active = bool("is_active")
     override val primaryKey = PrimaryKey(id)
 }

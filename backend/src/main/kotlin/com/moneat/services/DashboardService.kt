@@ -251,9 +251,13 @@ class DashboardService {
             Projects.select { Projects.organization_id inList orgIds }
                 .map { row ->
                     val projectId = row[Projects.id]
-                    val publicKey = ProjectKeys.select { ProjectKeys.project_id eq projectId }
-                        .firstOrNull()
-                        ?.get(ProjectKeys.public_key) ?: ""
+                    val keys = ProjectKeys.selectAll().where { ProjectKeys.project_id eq projectId }
+                        .map { keyRow ->
+                            ProjectKeyResponse(
+                                platformTarget = keyRow[ProjectKeys.platform_target],
+                                dsn = "http://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                            )
+                        }
                     
                     Triple(
                         projectId,
@@ -261,11 +265,12 @@ class DashboardService {
                             id = projectId,
                             name = row[Projects.name],
                             slug = row[Projects.slug],
-                            platform = row[Projects.platform],
-                            dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId",
+                            framework = row[Projects.framework],
+                            keys = keys,
+                            dsn = keys.firstOrNull()?.dsn ?: "",
                             issueCount = 0
                         ),
-                        publicKey
+                        keys.firstOrNull()?.dsn?.substringAfter("http://")?.substringBefore("@") ?: ""
                     )
                 }
         }
@@ -280,16 +285,21 @@ class DashboardService {
         val projectData = transaction {
             Projects.select { Projects.id eq projectId }
                 .map { row ->
-                    val publicKey = ProjectKeys.select { ProjectKeys.project_id eq projectId }
-                        .firstOrNull()
-                        ?.get(ProjectKeys.public_key) ?: ""
+                    val keys = ProjectKeys.selectAll().where { ProjectKeys.project_id eq projectId }
+                        .map { keyRow ->
+                            ProjectKeyResponse(
+                                platformTarget = keyRow[ProjectKeys.platform_target],
+                                dsn = "http://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                            )
+                        }
                     
                     ProjectResponse(
                         id = projectId,
                         name = row[Projects.name],
                         slug = row[Projects.slug],
-                        platform = row[Projects.platform],
-                        dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId",
+                        framework = row[Projects.framework],
+                        keys = keys,
+                        dsn = keys.firstOrNull()?.dsn ?: "",
                         issueCount = 0
                     )
                 }
@@ -315,26 +325,36 @@ class DashboardService {
                 it[organization_id] = orgId
                 it[name] = request.name
                 it[Projects.slug] = slug
-                it[platform] = request.platform
+                it[framework] = request.framework
             } get Projects.id
             
-            // Generate project key
-            val publicKey = java.util.UUID.randomUUID().toString().replace("-", "")
-            val secretKey = java.util.UUID.randomUUID().toString().replace("-", "")
+            // Generate project keys (one per target or single key if no targets)
+            val keys = mutableListOf<ProjectKeyResponse>()
+            val targets = request.targets?.takeIf { it.isNotEmpty() } ?: listOf(null)
             
-            ProjectKeys.insert {
-                it[project_id] = projectId
-                it[ProjectKeys.public_key] = publicKey
-                it[secret_key] = secretKey
-                it[is_active] = true
+            for (target in targets) {
+                val publicKey = java.util.UUID.randomUUID().toString().replace("-", "")
+                val secretKey = java.util.UUID.randomUUID().toString().replace("-", "")
+                
+                ProjectKeys.insert {
+                    it[project_id] = projectId
+                    it[ProjectKeys.public_key] = publicKey
+                    it[secret_key] = secretKey
+                    it[platform_target] = target
+                    it[is_active] = true
+                }
+                
+                val dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                keys.add(ProjectKeyResponse(platformTarget = target, dsn = dsn))
             }
             
             ProjectResponse(
                 id = projectId,
                 name = request.name,
                 slug = slug,
-                platform = request.platform,
-                dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId",
+                framework = request.framework,
+                keys = keys,
+                dsn = keys.firstOrNull()?.dsn ?: "",
                 issueCount = 0 // New projects always have 0 issues
             )
         }
@@ -347,8 +367,8 @@ class DashboardService {
                     it[name] = request.name
                     it[slug] = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
                 }
-                if (request.platform != null) {
-                    it[platform] = request.platform
+                if (request.framework != null) {
+                    it[framework] = request.framework
                 }
             }
         }

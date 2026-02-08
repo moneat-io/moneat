@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS projects (
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(255) NOT NULL,
-    platform VARCHAR(50),
+    framework VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(organization_id, slug)
@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS project_keys (
     public_key VARCHAR(255) UNIQUE NOT NULL,
     secret_key VARCHAR(255) NOT NULL,
     name VARCHAR(255),
+    platform_target VARCHAR(50),
     is_active BOOLEAN DEFAULT true,
     rate_limit INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS project_keys (
 
 CREATE INDEX idx_project_keys_public ON project_keys(public_key);
 CREATE INDEX idx_project_keys_project ON project_keys(project_id);
+CREATE UNIQUE INDEX idx_project_keys_platform_target ON project_keys(project_id, platform_target) WHERE platform_target IS NOT NULL;
 
 -- Releases
 CREATE TABLE IF NOT EXISTS releases (
@@ -134,6 +136,10 @@ CREATE TABLE IF NOT EXISTS pricing_tier_configs (
     tier_name VARCHAR(50) NOT NULL,
     version INT NOT NULL DEFAULT 1,
     monthly_unit_limit BIGINT NOT NULL,
+    monthly_error_limit BIGINT NOT NULL DEFAULT 0,
+    monthly_transaction_limit BIGINT NOT NULL DEFAULT 0,
+    monthly_replay_limit BIGINT NOT NULL DEFAULT 0,
+    monthly_feedback_limit BIGINT NOT NULL DEFAULT 0,
     retention_days INT NOT NULL,
     max_projects INT,
     max_systems INT NOT NULL,
@@ -186,6 +192,10 @@ CREATE TABLE IF NOT EXISTS org_usage_counters (
     period_start DATE NOT NULL,
     period_end DATE NOT NULL,
     used_units BIGINT NOT NULL DEFAULT 0,
+    used_errors BIGINT NOT NULL DEFAULT 0,
+    used_transactions BIGINT NOT NULL DEFAULT 0,
+    used_replays BIGINT NOT NULL DEFAULT 0,
+    used_feedback BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (organization_id, period_start)
 );
@@ -213,6 +223,10 @@ INSERT INTO pricing_tier_configs (
     tier_name,
     version,
     monthly_unit_limit,
+    monthly_error_limit,
+    monthly_transaction_limit,
+    monthly_replay_limit,
+    monthly_feedback_limit,
     retention_days,
     max_projects,
     max_systems,
@@ -224,7 +238,7 @@ INSERT INTO pricing_tier_configs (
     stripe_overage_price_id,
     is_current
 ) VALUES
-    ('FREE', 1, 10000, 30, 1, 1, 60, 0, false, 0, NULL, NULL, true),
-    ('PRO', 1, 500000, 90, NULL, 5, 15, 1900, true, 10, NULL, NULL, true),
-    ('TEAM', 1, 5000000, 90, NULL, 25, 10, 4900, true, 10, NULL, NULL, true)
+    ('FREE', 1, 10000, 10000, 0, 0, 0, 30, 1, 1, 60, 0, false, 0, NULL, NULL, true),
+    ('PRO', 1, 500000, 500000, 0, 0, 0, 90, NULL, 5, 15, 1900, true, 10, NULL, NULL, true),
+    ('TEAM', 1, 5000000, 5000000, 0, 0, 0, 90, NULL, 25, 10, 4900, true, 10, NULL, NULL, true)
 ON CONFLICT (tier_name, version) DO NOTHING;

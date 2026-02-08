@@ -67,7 +67,10 @@ const KNOWN_TIERS = ['FREE', 'PRO', 'TEAM', 'BUSINESS']
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 interface ValidationErrors {
-  monthlyUnitLimit?: string
+  monthlyErrorLimit?: string
+  monthlyTransactionLimit?: string
+  monthlyReplayLimit?: string
+  monthlyFeedbackLimit?: string
   retentionDays?: string
   maxSystems?: string
   monitorIntervalSeconds?: string
@@ -78,12 +81,10 @@ interface ValidationErrors {
 function validateCreateForm(form: CreateFormState): ValidationErrors {
   const errors: ValidationErrors = {}
 
-  if (form.monthlyUnitLimit < 1000) {
-    errors.monthlyUnitLimit = 'Must be at least 1,000 units'
-  }
-  if (form.monthlyUnitLimit > 100_000_000) {
-    errors.monthlyUnitLimit = 'Cannot exceed 100,000,000 units'
-  }
+  if (form.monthlyErrorLimit < 0) errors.monthlyErrorLimit = 'Cannot be negative'
+  if (form.monthlyTransactionLimit < 0) errors.monthlyTransactionLimit = 'Cannot be negative'
+  if (form.monthlyReplayLimit < 0) errors.monthlyReplayLimit = 'Cannot be negative'
+  if (form.monthlyFeedbackLimit < 0) errors.monthlyFeedbackLimit = 'Cannot be negative'
   if (form.retentionDays < 1) {
     errors.retentionDays = 'Must be at least 1 day'
   }
@@ -112,7 +113,10 @@ function validateCreateForm(form: CreateFormState): ValidationErrors {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CreateFormState {
-  monthlyUnitLimit: number
+  monthlyErrorLimit: number
+  monthlyTransactionLimit: number
+  monthlyReplayLimit: number
+  monthlyFeedbackLimit: number
   retentionDays: number
   maxProjects: string
   maxSystems: number
@@ -125,7 +129,10 @@ interface CreateFormState {
 }
 
 const DEFAULT_FORM: CreateFormState = {
-  monthlyUnitLimit: 500_000,
+  monthlyErrorLimit: 500_000,
+  monthlyTransactionLimit: 0,
+  monthlyReplayLimit: 0,
+  monthlyFeedbackLimit: 0,
   retentionDays: 30,
   maxProjects: '',
   maxSystems: 5,
@@ -236,7 +243,10 @@ function AdminBillingPage() {
   const prefillFromConfig = useCallback(
     (config: BillingTierConfig) => {
       setCreateForm({
-        monthlyUnitLimit: config.monthlyUnitLimit,
+        monthlyErrorLimit: config.monthlyErrorLimit,
+        monthlyTransactionLimit: config.monthlyTransactionLimit,
+        monthlyReplayLimit: config.monthlyReplayLimit,
+        monthlyFeedbackLimit: config.monthlyFeedbackLimit,
         retentionDays: config.retentionDays,
         maxProjects: config.maxProjects != null ? String(config.maxProjects) : '',
         maxSystems: config.maxSystems,
@@ -263,7 +273,15 @@ function AdminBillingPage() {
   const createVersionMutation = useMutation({
     mutationFn: () =>
       api.createAdminBillingTierVersion(createTier, {
-        monthlyUnitLimit: Number(createForm.monthlyUnitLimit),
+        monthlyUnitLimit:
+          Number(createForm.monthlyErrorLimit) +
+          Number(createForm.monthlyTransactionLimit) +
+          Number(createForm.monthlyReplayLimit) +
+          Number(createForm.monthlyFeedbackLimit),
+        monthlyErrorLimit: Number(createForm.monthlyErrorLimit),
+        monthlyTransactionLimit: Number(createForm.monthlyTransactionLimit),
+        monthlyReplayLimit: Number(createForm.monthlyReplayLimit),
+        monthlyFeedbackLimit: Number(createForm.monthlyFeedbackLimit),
         retentionDays: Number(createForm.retentionDays),
         maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
         maxSystems: Number(createForm.maxSystems),
@@ -352,7 +370,11 @@ function AdminBillingPage() {
                     <TableHead>Tier</TableHead>
                     <TableHead>Version</TableHead>
                     <TableHead>Price</TableHead>
-                    <TableHead>Unit Limit</TableHead>
+                    <TableHead>Total Limit</TableHead>
+                    <TableHead>Errors</TableHead>
+                    <TableHead>Transactions</TableHead>
+                    <TableHead>Replays</TableHead>
+                    <TableHead>Feedback</TableHead>
                     <TableHead>Retention</TableHead>
                     <TableHead>Max Systems</TableHead>
                     <TableHead>Interval</TableHead>
@@ -369,6 +391,10 @@ function AdminBillingPage() {
                       <TableCell>v{plan.tier.version}</TableCell>
                       <TableCell>${centsToDollars(plan.tier.monthlyPriceCents)}/mo</TableCell>
                       <TableCell>{plan.tier.monthlyUnitLimit.toLocaleString()}</TableCell>
+                      <TableCell>{plan.tier.monthlyErrorLimit.toLocaleString()}</TableCell>
+                      <TableCell>{plan.tier.monthlyTransactionLimit.toLocaleString()}</TableCell>
+                      <TableCell>{plan.tier.monthlyReplayLimit.toLocaleString()}</TableCell>
+                      <TableCell>{plan.tier.monthlyFeedbackLimit.toLocaleString()}</TableCell>
                       <TableCell>{plan.tier.retentionDays}d</TableCell>
                       <TableCell>{plan.tier.maxSystems}</TableCell>
                       <TableCell>{formatInterval(plan.tier.monitorIntervalSeconds)}</TableCell>
@@ -435,25 +461,94 @@ function AdminBillingPage() {
 
             {/* Form fields */}
             <div className="grid gap-4 sm:grid-cols-2">
-              {/* Monthly Unit Limit */}
+              {/* Per-type limits */}
               <div className="space-y-1.5">
-                <Label htmlFor="monthlyUnitLimit">
-                  Monthly Unit Limit
-                  <HelpTip text="Maximum number of events/units this tier can process per billing cycle. Each API request or monitored event consumes units." />
+                <Label htmlFor="monthlyErrorLimit">
+                  Error Limit
+                  <HelpTip text="Maximum error events included in the base monthly quota." />
                 </Label>
                 <Input
-                  id="monthlyUnitLimit"
+                  id="monthlyErrorLimit"
                   type="number"
-                  min={1000}
+                  min={0}
                   max={100_000_000}
-                  value={createForm.monthlyUnitLimit}
+                  value={createForm.monthlyErrorLimit}
                   onChange={(e) =>
-                    setCreateForm((p) => ({...p, monthlyUnitLimit: Number(e.target.value)}))
+                    setCreateForm((p) => ({...p, monthlyErrorLimit: Number(e.target.value)}))
                   }
                 />
-                <FieldHint>{Number(createForm.monthlyUnitLimit).toLocaleString()} units per month</FieldHint>
-                {validationErrors.monthlyUnitLimit && (
-                  <p className="text-xs text-destructive">{validationErrors.monthlyUnitLimit}</p>
+                {validationErrors.monthlyErrorLimit && (
+                  <p className="text-xs text-destructive">{validationErrors.monthlyErrorLimit}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="monthlyTransactionLimit">
+                  Transaction Limit
+                  <HelpTip text="Maximum transaction events included in the base monthly quota." />
+                </Label>
+                <Input
+                  id="monthlyTransactionLimit"
+                  type="number"
+                  min={0}
+                  max={100_000_000}
+                  value={createForm.monthlyTransactionLimit}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, monthlyTransactionLimit: Number(e.target.value)}))
+                  }
+                />
+                {validationErrors.monthlyTransactionLimit && (
+                  <p className="text-xs text-destructive">{validationErrors.monthlyTransactionLimit}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="monthlyReplayLimit">
+                  Replay Limit
+                  <HelpTip text="Maximum replay events included in the base monthly quota." />
+                </Label>
+                <Input
+                  id="monthlyReplayLimit"
+                  type="number"
+                  min={0}
+                  max={100_000_000}
+                  value={createForm.monthlyReplayLimit}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, monthlyReplayLimit: Number(e.target.value)}))
+                  }
+                />
+                {validationErrors.monthlyReplayLimit && (
+                  <p className="text-xs text-destructive">{validationErrors.monthlyReplayLimit}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="monthlyFeedbackLimit">
+                  Feedback Limit
+                  <HelpTip text="Maximum feedback events included in the base monthly quota." />
+                </Label>
+                <Input
+                  id="monthlyFeedbackLimit"
+                  type="number"
+                  min={0}
+                  max={100_000_000}
+                  value={createForm.monthlyFeedbackLimit}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, monthlyFeedbackLimit: Number(e.target.value)}))
+                  }
+                />
+                <FieldHint>
+                  Total base limit:{' '}
+                  {(
+                    createForm.monthlyErrorLimit +
+                    createForm.monthlyTransactionLimit +
+                    createForm.monthlyReplayLimit +
+                    createForm.monthlyFeedbackLimit
+                  ).toLocaleString()}{' '}
+                  units/month
+                </FieldHint>
+                {validationErrors.monthlyFeedbackLimit && (
+                  <p className="text-xs text-destructive">{validationErrors.monthlyFeedbackLimit}</p>
                 )}
               </div>
 
@@ -699,7 +794,16 @@ function AdminBillingPage() {
               <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
                 <p><strong>Tier:</strong> {createTier}</p>
                 <p><strong>Monthly Price:</strong> ${centsToDollars(createForm.monthlyPriceCents)}/mo</p>
-                <p><strong>Unit Limit:</strong> {Number(createForm.monthlyUnitLimit).toLocaleString()}</p>
+                <p><strong>Total Limit:</strong> {(
+                  createForm.monthlyErrorLimit +
+                  createForm.monthlyTransactionLimit +
+                  createForm.monthlyReplayLimit +
+                  createForm.monthlyFeedbackLimit
+                ).toLocaleString()}</p>
+                <p><strong>Errors:</strong> {createForm.monthlyErrorLimit.toLocaleString()}</p>
+                <p><strong>Transactions:</strong> {createForm.monthlyTransactionLimit.toLocaleString()}</p>
+                <p><strong>Replays:</strong> {createForm.monthlyReplayLimit.toLocaleString()}</p>
+                <p><strong>Feedback:</strong> {createForm.monthlyFeedbackLimit.toLocaleString()}</p>
                 <p><strong>Retention:</strong> {createForm.retentionDays} days</p>
                 <p><strong>Max Projects:</strong> {createForm.maxProjects || 'Unlimited'}</p>
                 <p><strong>Max Systems:</strong> {createForm.maxSystems}</p>
@@ -782,7 +886,7 @@ function AdminBillingPage() {
                     <SelectContent>
                       {migrateTierVersions.map((v) => (
                         <SelectItem key={v.id} value={String(v.version)}>
-                          v{v.version} {v.isCurrent ? '(current)' : '(legacy)'} &mdash; ${centsToDollars(v.monthlyPriceCents)}/mo, {v.monthlyUnitLimit.toLocaleString()} units
+                          v{v.version} {v.isCurrent ? '(current)' : '(legacy)'} &mdash; ${centsToDollars(v.monthlyPriceCents)}/mo, {v.monthlyUnitLimit.toLocaleString()} total units
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -798,7 +902,11 @@ function AdminBillingPage() {
               <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
                 <p className="font-medium mb-1">Target v{targetTierConfig.version} details:</p>
                 <p>Price: ${centsToDollars(targetTierConfig.monthlyPriceCents)}/mo</p>
-                <p>Unit Limit: {targetTierConfig.monthlyUnitLimit.toLocaleString()}</p>
+                <p>Total Limit: {targetTierConfig.monthlyUnitLimit.toLocaleString()}</p>
+                <p>Errors: {targetTierConfig.monthlyErrorLimit.toLocaleString()}</p>
+                <p>Transactions: {targetTierConfig.monthlyTransactionLimit.toLocaleString()}</p>
+                <p>Replays: {targetTierConfig.monthlyReplayLimit.toLocaleString()}</p>
+                <p>Feedback: {targetTierConfig.monthlyFeedbackLimit.toLocaleString()}</p>
                 <p>Retention: {targetTierConfig.retentionDays} days</p>
                 <p>Max Systems: {targetTierConfig.maxSystems}</p>
                 <p>PAYG: {targetTierConfig.paygEnabled ? 'Enabled' : 'Disabled'}</p>
@@ -986,12 +1094,45 @@ function AdminBillingPage() {
 
 function ChangeSummary({current, form}: {current: BillingTierConfig; form: CreateFormState}) {
   const changes: Array<{field: string; from: string; to: string}> = []
+  const formTotalLimit =
+    form.monthlyErrorLimit +
+    form.monthlyTransactionLimit +
+    form.monthlyReplayLimit +
+    form.monthlyFeedbackLimit
 
-  if (current.monthlyUnitLimit !== form.monthlyUnitLimit) {
+  if (current.monthlyUnitLimit !== formTotalLimit) {
     changes.push({
-      field: 'Monthly Unit Limit',
+      field: 'Total Unit Limit',
       from: current.monthlyUnitLimit.toLocaleString(),
-      to: Number(form.monthlyUnitLimit).toLocaleString(),
+      to: Number(formTotalLimit).toLocaleString(),
+    })
+  }
+  if (current.monthlyErrorLimit !== form.monthlyErrorLimit) {
+    changes.push({
+      field: 'Error Limit',
+      from: current.monthlyErrorLimit.toLocaleString(),
+      to: form.monthlyErrorLimit.toLocaleString(),
+    })
+  }
+  if (current.monthlyTransactionLimit !== form.monthlyTransactionLimit) {
+    changes.push({
+      field: 'Transaction Limit',
+      from: current.monthlyTransactionLimit.toLocaleString(),
+      to: form.monthlyTransactionLimit.toLocaleString(),
+    })
+  }
+  if (current.monthlyReplayLimit !== form.monthlyReplayLimit) {
+    changes.push({
+      field: 'Replay Limit',
+      from: current.monthlyReplayLimit.toLocaleString(),
+      to: form.monthlyReplayLimit.toLocaleString(),
+    })
+  }
+  if (current.monthlyFeedbackLimit !== form.monthlyFeedbackLimit) {
+    changes.push({
+      field: 'Feedback Limit',
+      from: current.monthlyFeedbackLimit.toLocaleString(),
+      to: form.monthlyFeedbackLimit.toLocaleString(),
     })
   }
   if (current.retentionDays !== form.retentionDays) {

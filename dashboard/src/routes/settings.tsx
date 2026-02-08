@@ -1,4 +1,4 @@
-import {Fragment, useEffect, useState} from 'react'
+import {type FormEvent, Fragment, useEffect, useMemo, useState} from 'react'
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type AuthToken} from '@/lib/api'
@@ -20,7 +20,9 @@ import {
 } from '@/components/ui/dialog'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {useToast} from '@/hooks/use-toast'
-import {AlertTriangle, Bell, Copy, CreditCard, ExternalLink, Key, Plus, Trash2} from 'lucide-react'
+import {AlertTriangle, Bell, CheckCircle2, Copy, CreditCard, Key, Loader2, Minus, Plus, Trash2} from 'lucide-react'
+import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
+import {loadStripe} from '@stripe/stripe-js'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -550,6 +552,9 @@ function BillingTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [budgetDollars, setBudgetDollars] = useState('0')
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [setupClientSecret, setSetupClientSecret] = useState<string | null>(null)
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
 
   const { data: usage, isLoading } = useQuery({
     queryKey: ['billingUsage'],
@@ -562,6 +567,23 @@ function BillingTab() {
     queryFn: () => api.getBillingPlans(),
     enabled: api.isAuthenticated(),
   })
+
+  const { data: invoices = [], isLoading: invoicesLoading } = useQuery({
+    queryKey: ['billingInvoices'],
+    queryFn: () => api.getBillingInvoices(),
+    enabled: api.isAuthenticated() && plansData?.stripeEnabled === true,
+  })
+
+  const { data: paymentMethod } = useQuery({
+    queryKey: ['billingPaymentMethod'],
+    queryFn: () => api.getBillingPaymentMethod(),
+    enabled: api.isAuthenticated() && plansData?.stripeEnabled === true,
+  })
+
+  const stripePromise = useMemo(() => {
+    if (!plansData?.publishableKey) return null
+    return loadStripe(plansData.publishableKey)
+  }, [plansData?.publishableKey])
 
   useEffect(() => {
     if (usage) {
@@ -578,22 +600,6 @@ function BillingTab() {
     onError: (err: Error) => {
       toast({
         title: 'Failed to update PAYG budget',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const portalMutation = useMutation({
-    mutationFn: () => api.createBillingPortalSession(window.location.href),
-    onSuccess: (response) => {
-      if (response.url) {
-        window.location.href = response.url
-      }
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Unable to open billing portal',
         description: err.message,
         variant: 'destructive',
       })
@@ -621,15 +627,57 @@ function BillingTab() {
     },
   })
 
+  const setupIntentMutation = useMutation({
+    mutationFn: () => api.createBillingSetupIntent(),
+    onSuccess: (response) => {
+      setSetupClientSecret(response.clientSecret)
+      setShowPaymentForm(true)
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to start payment method update',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const cancelSubscriptionMutation = useMutation({
+    mutationFn: () => api.cancelBillingSubscription(),
+    onSuccess: () => {
+      setShowCancelDialog(false)
+      queryClient.invalidateQueries({ queryKey: ['billingUsage'] })
+      queryClient.invalidateQueries({ queryKey: ['billingInvoices'] })
+      toast({
+        title: 'Subscription cancellation scheduled',
+        description: 'Your subscription is set to end at the close of the current billing period.',
+      })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to cancel subscription',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
   if (isLoading || !usage) {
     return <p className="text-sm text-muted-foreground">Loading billing details...</p>
   }
 
-  const usagePercent = usage.totalLimitUnits > 0
-    ? Math.min(100, (usage.usedUnits / usage.totalLimitUnits) * 100)
-    : 0
   const isPaidTier = usage.plan !== 'free'
+  const currentPlan = plansData?.plans?.find((p) => p.tier.tierName.toLowerCase() === usage.plan.toLowerCase())
+  const paygAvailable = isPaidTier && (currentPlan?.tier.paygEnabled ?? false)
   const billablePlans = plansData?.plans?.filter((p) => p.tier.tierName !== 'FREE') ?? []
+  const periodLabel = `${formatDate(usage.periodStart)} – ${formatDate(usage.periodEnd)}`
+
+  const usageRows = [
+    { key: 'error', label: 'Errors', used: usage.usedErrors, limit: usage.errorLimit },
+    { key: 'transaction', label: 'Transactions', used: usage.usedTransactions, limit: usage.transactionLimit },
+    { key: 'replay', label: 'Replays', used: usage.usedReplays, limit: usage.replayLimit },
+    { key: 'feedback', label: 'Feedback', used: usage.usedFeedback, limit: usage.feedbackLimit },
+  ] as const
 
   const saveBudget = () => {
     const cents = Math.round(Number(budgetDollars) * 100)
@@ -644,98 +692,403 @@ function BillingTab() {
     updateBudgetMutation.mutate(cents)
   }
 
+  const incrementBudget = (deltaDollars: number) => {
+    const current = Number(budgetDollars)
+    const next = Number.isFinite(current) ? Math.max(0, current + deltaDollars) : Math.max(0, deltaDollars)
+    setBudgetDollars(next.toString())
+  }
+
+  const onPaymentMethodUpdated = () => {
+    setShowPaymentForm(false)
+    setSetupClientSecret(null)
+    queryClient.invalidateQueries({ queryKey: ['billingPaymentMethod'] })
+    queryClient.invalidateQueries({ queryKey: ['billingInvoices'] })
+  }
+
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`
+  const statusBadgeVariant = usage.status === 'active' || usage.status === 'trialing' ? 'default' : 'secondary'
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            <CardTitle>Subscription</CardTitle>
+            <CardTitle>Plan Overview</CardTitle>
           </div>
           <CardDescription>
-            Manage your plan, monthly usage, and PAYG budget.
+            Current subscription, billing period, and monthly base price.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div>
+            <p className="text-sm text-muted-foreground">Current plan</p>
+            <p className="text-lg font-semibold">{currentPlan?.tier.tierName ?? usage.plan.toUpperCase()}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Billing period</p>
+            <p className="text-base font-medium">{periodLabel}</p>
+          </div>
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm text-muted-foreground">Current plan</p>
-              <p className="text-lg font-semibold capitalize">{usage.plan}</p>
+              <p className="text-sm text-muted-foreground">Monthly price</p>
+              <p className="text-base font-medium">{formatCurrency(currentPlan?.tier.monthlyPriceCents ?? 0)}/mo</p>
             </div>
-            <Badge variant={usage.status === 'active' ? 'default' : 'secondary'}>
-              {usage.status}
-            </Badge>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span>Usage</span>
-              <span>{usage.usedUnits.toLocaleString()} / {usage.totalLimitUnits.toLocaleString()} units</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-muted">
-              <div
-                className={`h-2 rounded-full ${usagePercent >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                style={{ width: `${usagePercent}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-            <div>
-              <Label htmlFor="payg-budget">PAYG budget (USD, $5 increments)</Label>
-              <Input
-                id="payg-budget"
-                value={budgetDollars}
-                onChange={(e) => setBudgetDollars(e.target.value)}
-                disabled={!isPaidTier}
-              />
-            </div>
-            <Button onClick={saveBudget} disabled={!isPaidTier || updateBudgetMutation.isPending}>
-              Save budget
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => portalMutation.mutate()} disabled={portalMutation.isPending}>
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open Customer Portal
-            </Button>
+            <Badge variant={statusBadgeVariant}>{usage.status}</Badge>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Upgrade or Change Plan</CardTitle>
+          <CardTitle>Usage Breakdown</CardTitle>
           <CardDescription>
-            Paid plans include a 14-day trial.
+            Quota usage by event type for the current billing period.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {billablePlans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No paid plans configured yet.</p>
-          ) : (
-            billablePlans.map((plan) => (
-              <div key={plan.tier.id} className="flex items-center justify-between rounded border p-3">
-                <div>
-                  <p className="font-medium">{plan.tier.tierName}</p>
+        <CardContent className="space-y-5">
+          {usageRows.map((row) => {
+            const isUnlimited = row.limit < 0
+            const percent = row.limit > 0
+              ? Math.min(100, (row.used / row.limit) * 100)
+              : row.limit === 0
+                ? (row.used > 0 ? 100 : 0)
+                : 0
+            const barClass = percent >= 100
+              ? 'bg-red-500'
+              : percent >= 80
+                ? 'bg-amber-500'
+                : 'bg-emerald-500'
+            const overageUnits = row.limit > 0 ? Math.max(0, row.used - row.limit) : 0
+
+            return (
+              <div key={row.key} className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{row.label}</span>
+                  <span>
+                    {row.used.toLocaleString()} / {isUnlimited ? 'Unlimited' : row.limit.toLocaleString()}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted">
+                  <div className={`h-2 rounded-full ${barClass}`} style={{ width: `${percent}%` }} />
+                </div>
+                {overageUnits > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    ${(plan.tier.monthlyPriceCents / 100).toFixed(2)}/mo · {plan.tier.monthlyUnitLimit.toLocaleString()} units
+                    {overageUnits.toLocaleString()} over base limit (PAYG overage).
                   </p>
+                )}
+              </div>
+            )
+          })}
+
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Total usage</span>
+              <span className="font-medium">
+                {usage.usedUnits.toLocaleString()} / {usage.totalLimitUnits.toLocaleString()} units
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {paygAvailable && (
+        <Card>
+          <CardHeader>
+            <CardTitle>PAYG Budget</CardTitle>
+            <CardDescription>
+              Set a monthly overage budget in $5 increments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="payg-budget">PAYG budget (USD, $5 increments)</Label>
+              <Input
+                id="payg-budget"
+                value={budgetDollars}
+                onChange={(e) => setBudgetDollars(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => incrementBudget(-5)}
+                disabled={updateBudgetMutation.isPending}
+              >
+                <Minus className="h-4 w-4 mr-1" />
+                $5
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => incrementBudget(5)}
+                disabled={updateBudgetMutation.isPending}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                $5
+              </Button>
+              <Button onClick={saveBudget} disabled={updateBudgetMutation.isPending}>
+                {updateBudgetMutation.isPending ? 'Saving...' : 'Save budget'}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Current PAYG spend: {formatCurrency(usage.paygUsedCentsEstimate)}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment & Invoices</CardTitle>
+          <CardDescription>
+            Manage payment method and review recent invoices.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {!plansData?.stripeEnabled ? (
+            <p className="text-sm text-muted-foreground">
+              Stripe billing is currently disabled for this environment.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded border p-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Default payment method</p>
+                  {paymentMethod?.brand && paymentMethod.last4 ? (
+                    <p className="font-medium">
+                      {paymentMethod.brand.toUpperCase()} ending in {paymentMethod.last4}
+                      {paymentMethod.expMonth && paymentMethod.expYear
+                        ? ` · exp ${paymentMethod.expMonth}/${String(paymentMethod.expYear).slice(-2)}`
+                        : ''}
+                    </p>
+                  ) : (
+                    <p className="font-medium">No payment method on file</p>
+                  )}
                 </div>
                 <Button
-                  size="sm"
-                  disabled={checkoutMutation.isPending}
-                  onClick={() => checkoutMutation.mutate(plan.tier.tierName)}
+                  variant="outline"
+                  onClick={() => setupIntentMutation.mutate()}
+                  disabled={setupIntentMutation.isPending || !plansData.publishableKey}
                 >
-                  Select
+                  {setupIntentMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading
+                    </>
+                  ) : (
+                    'Update Payment Method'
+                  )}
                 </Button>
               </div>
-            ))
+
+              {showPaymentForm && setupClientSecret && stripePromise && (
+                <div className="rounded border p-3">
+                  <Elements stripe={stripePromise} options={{ clientSecret: setupClientSecret }}>
+                    <PaymentMethodSetupForm
+                      onCancel={() => {
+                        setShowPaymentForm(false)
+                        setSetupClientSecret(null)
+                      }}
+                      onSuccess={onPaymentMethodUpdated}
+                    />
+                  </Elements>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Recent invoices</p>
+                {invoicesLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading invoices...</p>
+                ) : invoices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No invoices available yet.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Invoice</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.map((invoice) => (
+                        <TableRow key={invoice.id}>
+                          <TableCell>{formatDate(invoice.date)}</TableCell>
+                          <TableCell>{formatCurrency(invoice.amountCents)}</TableCell>
+                          <TableCell>
+                            <Badge variant={invoice.status === 'paid' ? 'default' : 'secondary'}>
+                              {invoice.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {invoice.pdfUrl ? (
+                              <a
+                                href={invoice.pdfUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm text-primary underline-offset-2 hover:underline"
+                              >
+                                Download
+                              </a>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Plan Management</CardTitle>
+          <CardDescription>
+            Compare plans, switch tiers, or cancel your subscription.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {billablePlans.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No paid plans configured yet.</p>
+          ) : (
+            billablePlans.map((plan) => {
+              const isCurrentPlan = plan.tier.tierName.toLowerCase() === usage.plan.toLowerCase()
+              return (
+                <div key={plan.tier.id} className="flex items-center justify-between rounded border p-3">
+                  <div>
+                    <p className="font-medium">{plan.tier.tierName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrency(plan.tier.monthlyPriceCents)}/mo · {plan.tier.monthlyUnitLimit.toLocaleString()} total units
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={isCurrentPlan ? 'secondary' : 'default'}
+                    disabled={checkoutMutation.isPending || isCurrentPlan}
+                    onClick={() => checkoutMutation.mutate(plan.tier.tierName)}
+                  >
+                    {isCurrentPlan ? 'Current plan' : 'Select'}
+                  </Button>
+                </div>
+              )
+            })
+          )}
+
+          {isPaidTier && (
+            <div className="pt-2">
+              <Button
+                variant="destructive"
+                onClick={() => setShowCancelDialog(true)}
+                disabled={cancelSubscriptionMutation.isPending}
+              >
+                Cancel Subscription
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel subscription</DialogTitle>
+            <DialogDescription>
+              Your subscription will stay active until the current period ends, then switch to free.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelDialog(false)}
+              disabled={cancelSubscriptionMutation.isPending}
+            >
+              Keep subscription
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => cancelSubscriptionMutation.mutate()}
+              disabled={cancelSubscriptionMutation.isPending}
+            >
+              {cancelSubscriptionMutation.isPending ? 'Canceling...' : 'Confirm cancel'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+function PaymentMethodSetupForm({
+  onSuccess,
+  onCancel,
+}: {
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const { toast } = useToast()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!stripe || !elements) return
+
+    setIsSubmitting(true)
+    const result = await stripe.confirmSetup({
+      elements,
+      redirect: 'if_required',
+    })
+    setIsSubmitting(false)
+
+    if (result.error) {
+      toast({
+        title: 'Payment method update failed',
+        description: result.error.message || 'Stripe could not confirm this payment method.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    toast({
+      title: 'Payment method saved',
+      description: 'Your default payment method has been updated.',
+    })
+    onSuccess()
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <PaymentElement />
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={!stripe || isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Saving
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              Save payment method
+            </>
+          )}
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   )
 }
 
@@ -981,7 +1334,7 @@ function NotificationsTab() {
                         size="sm"
                         onClick={() => deleteProjectMutation.mutate(project.projectId)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        Reset
                       </Button>
                     </TableCell>
                   </TableRow>

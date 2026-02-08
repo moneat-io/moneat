@@ -110,6 +110,8 @@ export type PlatformType = {
   color: string
   category: PlatformCategory
   alwaysVisible?: boolean
+  targets?: { id: string; name: string }[]
+  defaultTargets?: string[]
 }
 
 // Platform configurations with custom SVG icons
@@ -148,7 +150,16 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#9333ea',
-    category: 'mobile'
+    category: 'mobile',
+    targets: [
+      { id: 'android', name: 'Android' },
+      { id: 'ios', name: 'iOS' },
+      { id: 'desktop-jvm', name: 'Desktop (JVM)' },
+      { id: 'desktop-native', name: 'Desktop (Native)' },
+      { id: 'web-js', name: 'Web (JS)' },
+      { id: 'web-wasm', name: 'Web (Wasm)' },
+    ],
+    defaultTargets: ['android', 'ios']
   },
   {
     id: 'react-native',
@@ -160,7 +171,12 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#06b6d4',
-    category: 'mobile'
+    category: 'mobile',
+    targets: [
+      { id: 'android', name: 'Android' },
+      { id: 'ios', name: 'iOS' },
+    ],
+    defaultTargets: ['android', 'ios']
   },
   {
     id: 'flutter',
@@ -172,7 +188,14 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#3b82f6',
-    category: 'mobile'
+    category: 'mobile',
+    targets: [
+      { id: 'android', name: 'Android' },
+      { id: 'ios', name: 'iOS' },
+      { id: 'web', name: 'Web' },
+      { id: 'desktop', name: 'Desktop' },
+    ],
+    defaultTargets: ['android', 'ios']
   },
   {
     id: 'web',
@@ -418,7 +441,15 @@ export const platforms: PlatformType[] = [
     description: 'Unity games and apps',
     icon: createMonogramIcon('Un'),
     color: '#111111',
-    category: 'gaming'
+    category: 'gaming',
+    targets: [
+      { id: 'android', name: 'Android' },
+      { id: 'ios', name: 'iOS' },
+      { id: 'desktop', name: 'Desktop' },
+      { id: 'web', name: 'Web' },
+      { id: 'console', name: 'Console' },
+    ],
+    defaultTargets: ['android', 'ios']
   },
   {
     id: 'unreal',
@@ -426,7 +457,15 @@ export const platforms: PlatformType[] = [
     description: 'Unreal Engine games',
     icon: createMonogramIcon('UE'),
     color: '#0f172a',
-    category: 'gaming'
+    category: 'gaming',
+    targets: [
+      { id: 'windows', name: 'Windows' },
+      { id: 'macos', name: 'macOS' },
+      { id: 'linux', name: 'Linux' },
+      { id: 'console', name: 'Console' },
+      { id: 'mobile', name: 'Mobile' },
+    ],
+    defaultTargets: ['windows', 'mobile']
   },
   {
     id: 'godot',
@@ -475,6 +514,7 @@ function ProjectsPage() {
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
+  const [selectedTargets, setSelectedTargets] = useState<string[]>([])
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
 
   const { data: projects, isLoading } = useQuery({
@@ -487,8 +527,8 @@ function ProjectsPage() {
   const { setSelectedProjectId } = useProject()
 
   const createProjectMutation = useMutation({
-    mutationFn: (data: { name: string; platform: string }) => 
-      api.createProject(data.name, data.platform),
+    mutationFn: (data: { name: string; framework: string; targets?: string[] }) => 
+      api.createProject(data.name, data.framework, data.targets),
     onSuccess: (project) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       navigate({ to: `/projects/${project.id}` })
@@ -497,8 +537,32 @@ function ProjectsPage() {
 
   const handleCreateProject = () => {
     if (newProjectName && selectedPlatform) {
-      createProjectMutation.mutate({ name: newProjectName, platform: selectedPlatform })
+      const platform = platforms.find(p => p.id === selectedPlatform)
+      const targets = platform?.targets && selectedTargets.length > 0 ? selectedTargets : undefined
+      createProjectMutation.mutate({ 
+        name: newProjectName, 
+        framework: selectedPlatform,
+        targets 
+      })
     }
+  }
+
+  const handlePlatformSelect = (platformId: string) => {
+    setSelectedPlatform(platformId)
+    const platform = platforms.find(p => p.id === platformId)
+    if (platform?.targets && platform.defaultTargets) {
+      setSelectedTargets(platform.defaultTargets)
+    } else {
+      setSelectedTargets([])
+    }
+  }
+
+  const toggleTarget = (targetId: string) => {
+    setSelectedTargets(prev => 
+      prev.includes(targetId) 
+        ? prev.filter(id => id !== targetId)
+        : [...prev, targetId]
+    )
   }
 
   const filteredPlatforms = platforms.filter((platform) => {
@@ -559,7 +623,7 @@ function ProjectsPage() {
                         return (
                           <button
                             key={platform.id}
-                            onClick={() => setSelectedPlatform(platform.id)}
+                            onClick={() => handlePlatformSelect(platform.id)}
                             className={`
                               relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all
                               ${selectedPlatform === platform.id
@@ -579,10 +643,54 @@ function ProjectsPage() {
                   </div>
                 </div>
 
+                {/* Target selection for multi-platform frameworks */}
+                {selectedPlatform && platforms.find(p => p.id === selectedPlatform)?.targets && (
+                  <div>
+                    <label className="text-sm font-medium mb-3 block">Select Target Platforms</label>
+                    <div className="rounded-lg border p-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {platforms.find(p => p.id === selectedPlatform)?.targets?.map(target => (
+                          <button
+                            key={target.id}
+                            type="button"
+                            onClick={() => toggleTarget(target.id)}
+                            className={`
+                              flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all text-sm font-medium
+                              ${selectedTargets.includes(target.id)
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:border-primary/50 hover:bg-accent'
+                              }
+                            `}
+                          >
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                              selectedTargets.includes(target.id) ? 'bg-primary border-primary' : 'border-border'
+                            }`}>
+                              {selectedTargets.includes(target.id) && (
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                            {target.name}
+                          </button>
+                        ))}
+                      </div>
+                      {selectedTargets.length === 0 && (
+                        <p className="text-sm text-destructive mt-2">Please select at least one target platform</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2 pt-2">
                   <Button
                     onClick={handleCreateProject}
-                    disabled={!newProjectName || !selectedPlatform || createProjectMutation.isPending}
+                    disabled={
+                      !newProjectName || 
+                      !selectedPlatform || 
+                      (platforms.find(p => p.id === selectedPlatform)?.targets && selectedTargets.length === 0) ||
+                      createProjectMutation.isPending
+                    }
                   >
                     Create Project
                   </Button>
@@ -590,6 +698,7 @@ function ProjectsPage() {
                     setShowCreateProject(false)
                     setNewProjectName('')
                     setSelectedPlatform(null)
+                    setSelectedTargets([])
                   }}>
                     Cancel
                   </Button>
@@ -657,20 +766,33 @@ function ProjectsPage() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-semibold break-words">{project.name}</h3>
-                            {project.platform && (() => {
-                              const platformInfo = getPlatformInfo(project.platform)
+                            {project.framework && (() => {
+                              const platformInfo = getPlatformInfo(project.framework)
                               if (!platformInfo) return null
                               const PlatformIcon = platformInfo.icon
                               return (
-                                <Badge 
-                                  className="flex items-center gap-1.5 px-2 py-0.5 text-white border-0"
-                                  style={{ backgroundColor: platformInfo.color }}
-                                >
-                                  <div className="w-3.5 h-3.5 flex items-center justify-center">
-                                    <PlatformIcon className="w-full h-full" />
-                                  </div>
-                                  <span className="text-xs font-medium">{platformInfo.name}</span>
-                                </Badge>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Badge 
+                                    className="flex items-center gap-1.5 px-2 py-0.5 text-white border-0"
+                                    style={{ backgroundColor: platformInfo.color }}
+                                  >
+                                    <div className="w-3.5 h-3.5 flex items-center justify-center">
+                                      <PlatformIcon className="w-full h-full" />
+                                    </div>
+                                    <span className="text-xs font-medium">{platformInfo.name}</span>
+                                  </Badge>
+                                  {project.keys && project.keys.length > 1 && project.keys.map(key => 
+                                    key.platformTarget && (
+                                      <Badge 
+                                        key={key.platformTarget}
+                                        variant="outline"
+                                        className="text-xs px-1.5 py-0"
+                                      >
+                                        {key.platformTarget.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                      </Badge>
+                                    )
+                                  )}
+                                </div>
                               )
                             })()}
                             {(project.issueCount ?? 0) === 0 && (

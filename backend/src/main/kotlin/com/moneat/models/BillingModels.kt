@@ -10,6 +10,10 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val tier_name = varchar("tier_name", 50)
     val version = integer("version").default(1)
     val monthly_unit_limit = long("monthly_unit_limit")
+    val monthly_error_limit = long("monthly_error_limit").default(0)
+    val monthly_transaction_limit = long("monthly_transaction_limit").default(0)
+    val monthly_replay_limit = long("monthly_replay_limit").default(0)
+    val monthly_feedback_limit = long("monthly_feedback_limit").default(0)
     val retention_days = integer("retention_days")
     val max_projects = integer("max_projects").nullable()
     val max_systems = integer("max_systems")
@@ -30,6 +34,10 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val period_start = date("period_start")
     val period_end = date("period_end")
     val used_units = long("used_units").default(0)
+    val used_errors = long("used_errors").default(0)
+    val used_transactions = long("used_transactions").default(0)
+    val used_replays = long("used_replays").default(0)
+    val used_feedback = long("used_feedback").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -60,6 +68,10 @@ data class PricingTierConfigResponse(
     val tierName: String,
     val version: Int,
     val monthlyUnitLimit: Long,
+    val monthlyErrorLimit: Long,
+    val monthlyTransactionLimit: Long,
+    val monthlyReplayLimit: Long,
+    val monthlyFeedbackLimit: Long,
     val retentionDays: Int,
     val maxProjects: Int?,
     val maxSystems: Int,
@@ -85,6 +97,14 @@ data class BillingUsageResponse(
     val periodEnd: String,
     val retentionDays: Int,
     val usedUnits: Long,
+    val usedErrors: Long,
+    val errorLimit: Long,
+    val usedTransactions: Long,
+    val transactionLimit: Long,
+    val usedReplays: Long,
+    val replayLimit: Long,
+    val usedFeedback: Long,
+    val feedbackLimit: Long,
     val baseLimitUnits: Long,
     val paygLimitUnits: Long,
     val totalLimitUnits: Long,
@@ -110,16 +130,6 @@ data class CheckoutSessionResponse(
 )
 
 @Serializable
-data class PortalSessionRequest(
-    val returnUrl: String
-)
-
-@Serializable
-data class PortalSessionResponse(
-    val url: String
-)
-
-@Serializable
 data class UpdatePaygBudgetRequest(
     val paygBudgetCents: Int
 )
@@ -130,8 +140,41 @@ data class UpdatePaygBudgetResponse(
 )
 
 @Serializable
+data class InvoiceResponse(
+    val id: String,
+    val date: String,
+    val amountCents: Int,
+    val status: String,
+    val pdfUrl: String?
+)
+
+@Serializable
+data class PaymentMethodResponse(
+    val brand: String?,
+    val last4: String?,
+    val expMonth: Int?,
+    val expYear: Int?
+)
+
+@Serializable
+data class SetupIntentResponse(
+    val clientSecret: String
+)
+
+@Serializable
+data class CancelSubscriptionResponse(
+    val status: String,
+    val cancelAtPeriodEnd: Boolean,
+    val currentPeriodEnd: String?
+)
+
+@Serializable
 data class CreateTierVersionRequest(
     val monthlyUnitLimit: Long,
+    val monthlyErrorLimit: Long = 0,
+    val monthlyTransactionLimit: Long = 0,
+    val monthlyReplayLimit: Long = 0,
+    val monthlyFeedbackLimit: Long = 0,
     val retentionDays: Int,
     val maxProjects: Int? = null,
     val maxSystems: Int,

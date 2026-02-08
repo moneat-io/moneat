@@ -2,11 +2,7 @@ package com.moneat.routes
 
 import com.moneat.config.RedisConfig
 import com.moneat.models.SentryEnvelope
-import com.moneat.services.BillingQuotaService
-import com.moneat.services.EmailService
-import com.moneat.services.EventService
-import com.moneat.services.IngestionWorker
-import com.moneat.services.NotificationService
+import com.moneat.services.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -42,7 +38,8 @@ fun Route.ingestRoutes() {
             }
 
             // Verify DSN
-            if (!eventService.verifyProjectKey(projectId, publicKey)) {
+            val verification = eventService.verifyProjectKey(projectId, publicKey)
+            if (!verification.isValid) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
                 return@post
             }
@@ -71,14 +68,18 @@ fun Route.ingestRoutes() {
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
                         return@post
                     }
-                    val units = envelope.items.size
-                    val reservation = quotaService.reserveUnits(orgId, units)
+                    val groupedReservations = envelope.items
+                        .groupingBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                        .eachCount()
+
+                    val reservation = quotaService.reserveUnitsBatch(orgId, groupedReservations)
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
                             mapOf(
                                 "error" to "Quota exceeded",
                                 "reason" to reservation.reason,
+                                "eventType" to reservation.eventType,
                                 "usage" to reservation.usage
                             )
                         )
@@ -107,8 +108,13 @@ fun Route.ingestRoutes() {
             
             val authHeader = call.request.header("X-Sentry-Auth")
             val publicKey = extractPublicKey(authHeader)
-            
-            if (publicKey == null || !eventService.verifyProjectKey(projectId, publicKey)) {
+
+            if (publicKey == null) {
+                call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
+                return@post
+            }
+            val verification = eventService.verifyProjectKey(projectId, publicKey)
+            if (!verification.isValid) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
                 return@post
             }
@@ -123,7 +129,7 @@ fun Route.ingestRoutes() {
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
                         return@post
                     }
-                    val reservation = quotaService.reserveUnits(orgId, 1)
+                    val reservation = quotaService.reserveUnits(orgId, 1, "error")
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
@@ -158,4 +164,13 @@ internal fun extractPublicKey(authHeader: String?): String? {
     // Parse "Sentry sentry_key=xxx, sentry_version=7"
     val keyRegex = "sentry_key=([a-f0-9]+)".toRegex()
     return keyRegex.find(authHeader)?.groupValues?.get(1)
+}
+
+private fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
+    return when (itemType) {
+        "transaction" -> "transaction"
+        "replay_event", "replay_recording", "replay_video" -> "replay"
+        "feedback" -> "feedback"
+        else -> "error"
+    }
 }

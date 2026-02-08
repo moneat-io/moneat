@@ -12,12 +12,18 @@ interface AuthResponse {
   }
 }
 
+interface ProjectKey {
+  platformTarget: string | null
+  dsn: string
+}
+
 interface Project {
   id: number
   name: string
   slug: string
-  platform?: string
-  dsn: string
+  framework?: string
+  keys: ProjectKey[]
+  dsn: string  // First key's DSN for backward compatibility
   issueCount?: number
 }
 
@@ -285,6 +291,10 @@ interface BillingTierConfig {
   tierName: string
   version: number
   monthlyUnitLimit: number
+  monthlyErrorLimit: number
+  monthlyTransactionLimit: number
+  monthlyReplayLimit: number
+  monthlyFeedbackLimit: number
   retentionDays: number
   maxProjects: number | null
   maxSystems: number
@@ -314,6 +324,14 @@ interface BillingUsage {
   periodEnd: string
   retentionDays: number
   usedUnits: number
+  usedErrors: number
+  errorLimit: number
+  usedTransactions: number
+  transactionLimit: number
+  usedReplays: number
+  replayLimit: number
+  usedFeedback: number
+  feedbackLimit: number
   baseLimitUnits: number
   paygLimitUnits: number
   totalLimitUnits: number
@@ -336,8 +354,29 @@ interface CheckoutSessionResponse {
   url: string
 }
 
-interface PortalSessionResponse {
-  url: string
+interface Invoice {
+  id: string
+  date: string
+  amountCents: number
+  status: string
+  pdfUrl?: string | null
+}
+
+interface PaymentMethod {
+  brand?: string | null
+  last4?: string | null
+  expMonth?: number | null
+  expYear?: number | null
+}
+
+interface SetupIntentResponse {
+  clientSecret: string
+}
+
+interface CancelSubscriptionResponse {
+  status: string
+  cancelAtPeriodEnd: boolean
+  currentPeriodEnd?: string | null
 }
 
 interface AdminBillingSubscription {
@@ -357,6 +396,10 @@ interface AdminBillingSubscription {
 
 interface CreateTierVersionRequest {
   monthlyUnitLimit: number
+  monthlyErrorLimit: number
+  monthlyTransactionLimit: number
+  monthlyReplayLimit: number
+  monthlyFeedbackLimit: number
   retentionDays: number
   maxProjects?: number | null
   maxSystems: number
@@ -627,16 +670,16 @@ class ApiClient {
     return this.request<Project>(`${API_BASE}/projects/${projectId}`)
   }
 
-  async createProject(name: string, platform?: string): Promise<Project> {
+  async createProject(name: string, framework?: string, targets?: string[]): Promise<Project> {
     return this.request<Project>(`${API_BASE}/projects`, {
       method: 'POST',
-      body: JSON.stringify({ name, platform }),
+      body: JSON.stringify({ name, framework, targets }),
     })
   }
 
   async updateProject(
     projectId: number,
-    updates: { name?: string; platform?: string }
+    updates: { name?: string; framework?: string }
   ): Promise<void> {
     await this.request(`${API_BASE}/projects/${projectId}`, {
       method: 'PUT',
@@ -897,10 +940,23 @@ class ApiClient {
     })
   }
 
-  async createBillingPortalSession(returnUrl: string) {
-    return this.request<PortalSessionResponse>(`${API_BASE}/billing/portal`, {
+  async getBillingInvoices() {
+    return this.request<Invoice[]>(`${API_BASE}/billing/invoices`)
+  }
+
+  async getBillingPaymentMethod() {
+    return this.request<PaymentMethod>(`${API_BASE}/billing/payment-method`)
+  }
+
+  async createBillingSetupIntent() {
+    return this.request<SetupIntentResponse>(`${API_BASE}/billing/setup-intent`, {
       method: 'POST',
-      body: JSON.stringify({returnUrl}),
+    })
+  }
+
+  async cancelBillingSubscription() {
+    return this.request<CancelSubscriptionResponse>(`${API_BASE}/billing/cancel`, {
+      method: 'POST',
     })
   }
 
@@ -1219,7 +1275,10 @@ export type {
   BillingUsage,
   CheckoutSessionRequest,
   CheckoutSessionResponse,
-  PortalSessionResponse,
+  Invoice,
+  PaymentMethod,
+  SetupIntentResponse,
+  CancelSubscriptionResponse,
   AdminBillingSubscription,
   CreateTierVersionRequest,
   TierMigrationResponse,

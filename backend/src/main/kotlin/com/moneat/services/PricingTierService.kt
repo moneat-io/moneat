@@ -125,6 +125,11 @@ class PricingTierService {
     fun createTierVersion(tierName: String, request: CreateTierVersionRequest): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
         validateCreateTierRequest(request)
+        val monthlyErrorLimit = if (request.monthlyErrorLimit > 0) request.monthlyErrorLimit else request.monthlyUnitLimit
+        val monthlyTransactionLimit = request.monthlyTransactionLimit
+        val monthlyReplayLimit = request.monthlyReplayLimit
+        val monthlyFeedbackLimit = request.monthlyFeedbackLimit
+        val monthlyUnitLimit = monthlyErrorLimit + monthlyTransactionLimit + monthlyReplayLimit + monthlyFeedbackLimit
         return transaction {
             val current = PricingTierConfigs.select { PricingTierConfigs.tier_name eq canonicalName }
                 .orderBy(PricingTierConfigs.version to SortOrder.DESC)
@@ -138,7 +143,11 @@ class PricingTierService {
             val id = PricingTierConfigs.insert {
                 it[PricingTierConfigs.tier_name] = canonicalName
                 it[version] = nextVersion
-                it[monthly_unit_limit] = request.monthlyUnitLimit
+                it[monthly_unit_limit] = monthlyUnitLimit
+                it[monthly_error_limit] = monthlyErrorLimit
+                it[monthly_transaction_limit] = monthlyTransactionLimit
+                it[monthly_replay_limit] = monthlyReplayLimit
+                it[monthly_feedback_limit] = monthlyFeedbackLimit
                 it[retention_days] = request.retentionDays
                 it[max_projects] = request.maxProjects
                 it[max_systems] = request.maxSystems
@@ -157,6 +166,11 @@ class PricingTierService {
 
     private fun validateCreateTierRequest(request: CreateTierVersionRequest) {
         require(request.retentionDays in 1..90) { "Retention days must be between 1 and 90" }
+        require(request.monthlyUnitLimit >= 0) { "Monthly unit limit must be non-negative" }
+        require(request.monthlyErrorLimit >= 0) { "Monthly error limit must be non-negative" }
+        require(request.monthlyTransactionLimit >= 0) { "Monthly transaction limit must be non-negative" }
+        require(request.monthlyReplayLimit >= 0) { "Monthly replay limit must be non-negative" }
+        require(request.monthlyFeedbackLimit >= 0) { "Monthly feedback limit must be non-negative" }
     }
 
     fun migrateSubscribers(tierName: String, request: TierMigrationRequest): TierMigrationResponse {
@@ -246,6 +260,10 @@ class PricingTierService {
             tierName = tier.name,
             version = 1,
             monthlyUnitLimit = tier.monthlyErrorLimit,
+            monthlyErrorLimit = tier.monthlyErrorLimit,
+            monthlyTransactionLimit = 0,
+            monthlyReplayLimit = tier.monthlyReplayLimit,
+            monthlyFeedbackLimit = 0,
             retentionDays = tier.retentionDays,
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
@@ -265,6 +283,10 @@ class PricingTierService {
             tierName = row[PricingTierConfigs.tier_name],
             version = row[PricingTierConfigs.version],
             monthlyUnitLimit = row[PricingTierConfigs.monthly_unit_limit],
+            monthlyErrorLimit = row[PricingTierConfigs.monthly_error_limit],
+            monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
+            monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
+            monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
             maxProjects = row[PricingTierConfigs.max_projects],
             maxSystems = row[PricingTierConfigs.max_systems],
