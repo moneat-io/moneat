@@ -362,9 +362,13 @@ class DashboardService {
     
     fun addProjectTarget(projectId: Long, target: String): ProjectKeyResponse {
         return transaction {
-            // Check if target already exists
+            // Check if target already exists (excluding NULL platform_target entries)
             val existing = ProjectKeys.selectAll()
-                .where { (ProjectKeys.project_id eq projectId) and (ProjectKeys.platform_target eq target) }
+                .where { 
+                    (ProjectKeys.project_id eq projectId) and 
+                    (ProjectKeys.platform_target eq target) and
+                    (ProjectKeys.platform_target.isNotNull())
+                }
                 .firstOrNull()
 
             if (existing != null) {

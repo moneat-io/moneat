@@ -69,6 +69,9 @@ export function Sidebar() {
     enabled: api.isAuthenticated(),
   })
 
+  const activeProject = projects?.find((project) => project.id === selectedProjectId) ?? projects?.[0] ?? null
+  const activeProjectId = activeProject?.id ?? null
+
   const createProjectMutation = useMutation({
     mutationFn: (data: { name: string; framework: string; targets?: string[] }) =>
       api.createProject(data.name, data.framework, data.targets),
@@ -146,8 +149,8 @@ export function Sidebar() {
     { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]
 
-  const projectNavItems = selectedProjectId ? [
-    { icon: BookOpen, label: 'Setup Guide', href: `/projects/${selectedProjectId}` }
+  const projectNavItems = activeProjectId ? [
+    { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` }
   ] : []
 
   const getProjectPlatform = (project: any) => {
@@ -266,7 +269,7 @@ export function Sidebar() {
                       onClick={() => handleProjectSelect(project.id)}
                       className={cn(
                         'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors text-left',
-                        project.id === selectedProjectId
+                        project.id === activeProjectId
                           ? 'bg-primary/10 text-primary font-medium'
                           : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                       )}
@@ -298,26 +301,39 @@ export function Sidebar() {
                 </TooltipContent>
               </Tooltip>
               <div className="max-h-32 overflow-y-auto space-y-1">
-                {projects?.map((project) => (
-                  <Tooltip key={project.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => handleProjectSelect(project.id)}
-                        className={cn(
-                          'w-full flex justify-center py-1 rounded-md transition-colors',
-                          project.id === selectedProjectId
-                            ? 'bg-primary/10'
-                            : 'hover:bg-accent'
-                        )}
-                      >
-                        {renderProjectPlatformIcon(project, 'h-3.5 w-3.5', 'h-7 w-7')}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <p>{project.name}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
+                {projects && projects.length > 0 && activeProject ? (
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="w-full flex justify-center py-1 rounded-md transition-colors bg-primary/10 hover:bg-primary/20"
+                          >
+                            {renderProjectPlatformIcon(activeProject, 'h-3.5 w-3.5', 'h-7 w-7')}
+                          </button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p>Switch Project ({activeProject.name})</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent side="right" align="start" className="w-56">
+                      {projects.map((project) => (
+                        <DropdownMenuItem
+                          key={project.id}
+                          className="flex items-center gap-2"
+                          onClick={() => handleProjectSelect(project.id)}
+                        >
+                          {renderProjectPlatformIcon(project, 'h-3 w-3', 'h-5 w-5')}
+                          <span className="flex-1 truncate">{project.name}</span>
+                          {project.id === activeProjectId && <Check className="h-3.5 w-3.5 text-primary" />}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <p className="text-[11px] text-center text-muted-foreground px-1 py-1">No projects</p>
+                )}
               </div>
             </div>
           )}
