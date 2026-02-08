@@ -46,11 +46,11 @@ export function EventsChart({
     })
 
   return (
-    <Card className="border-t-4 border-t-blue-500/50">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
+    <Card className="border-t-4 border-t-blue-500/50 h-full">
+      <CardHeader className="px-4 py-3">
+        <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-3 pt-0">
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />

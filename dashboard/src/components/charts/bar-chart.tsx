@@ -24,11 +24,11 @@ export function BarChart({
     .sort((a, b) => b.value - a.value)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
+    <Card className="h-full">
+      <CardHeader className="px-4 py-3">
+        <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-3 pt-0">
         <ResponsiveContainer width="100%" height={height}>
           <RechartsBarChart
             data={chartData}
