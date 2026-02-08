@@ -1,6 +1,7 @@
 package com.moneat.routes
 
 import com.moneat.models.SentryEnvelope
+import com.moneat.services.BillingQuotaService
 import com.moneat.services.EmailService
 import com.moneat.services.EventService
 import com.moneat.services.NotificationService
@@ -17,6 +18,7 @@ fun Route.ingestRoutes() {
     val emailService = EmailService()
     val notificationService = NotificationService(emailService)
     val eventService = EventService(notificationService)
+    val quotaService = BillingQuotaService()
     
     route("/api/{projectId}") {
         // Sentry envelope endpoint (primary)
@@ -59,6 +61,28 @@ fun Route.ingestRoutes() {
                 
                 val envelope = SentryEnvelope.parse(decompressedBytes)
                 logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }
+
+                if (quotaService.isEnforcementEnabled()) {
+                    val orgId = eventService.getOrganizationIdForProject(projectId)
+                    if (orgId == null) {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
+                        return@post
+                    }
+                    val units = envelope.items.size
+                    val reservation = quotaService.reserveUnits(orgId, units)
+                    if (!reservation.allowed) {
+                        call.respond(
+                            HttpStatusCode.TooManyRequests,
+                            mapOf(
+                                "error" to "Quota exceeded",
+                                "reason" to reservation.reason,
+                                "usage" to reservation.usage
+                            )
+                        )
+                        return@post
+                    }
+                }
+
                 eventService.processEnvelope(projectId, envelope)
                 
                 call.respond(HttpStatusCode.OK, mapOf("id" to envelope.eventId))
@@ -89,6 +113,26 @@ fun Route.ingestRoutes() {
             logger.debug { "Received store event for project $projectId" }
             
             try {
+                if (quotaService.isEnforcementEnabled()) {
+                    val orgId = eventService.getOrganizationIdForProject(projectId)
+                    if (orgId == null) {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
+                        return@post
+                    }
+                    val reservation = quotaService.reserveUnits(orgId, 1)
+                    if (!reservation.allowed) {
+                        call.respond(
+                            HttpStatusCode.TooManyRequests,
+                            mapOf(
+                                "error" to "Quota exceeded",
+                                "reason" to reservation.reason,
+                                "usage" to reservation.usage
+                            )
+                        )
+                        return@post
+                    }
+                }
+
                 eventService.processStoreEvent(projectId, body)
                 call.respond(HttpStatusCode.OK)
             } catch (e: Exception) {

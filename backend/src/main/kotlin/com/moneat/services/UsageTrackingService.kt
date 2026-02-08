@@ -49,6 +49,7 @@ class UsageTrackingService {
     private val scheduler = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "usage-tracking-flush").apply { isDaemon = true }
     }
+    private val billingQuotaService = BillingQuotaService()
 
     init {
         scheduler.scheduleAtFixedRate(
@@ -174,26 +175,12 @@ class UsageTrackingService {
     }
 
     fun checkQuota(orgId: Int): QuotaStatus {
-        flushBuffer()
-        val plan = getPlanForOrg(orgId)
-        val tier = PricingTier.entries.find { it.name.equals(plan, ignoreCase = true) } ?: PricingTier.FREE
-        val (periodStart, periodEnd) = getBillingPeriod(orgId)
-
-        val used = transaction {
-            UsageRecords.select {
-                (UsageRecords.organization_id eq orgId) and
-                    (UsageRecords.recordDate greaterEq periodStart) and
-                    (UsageRecords.recordDate lessEq periodEnd) and
-                    (UsageRecords.event_type eq "error")
-            }.sumOf { it[UsageRecords.event_count].toLong() }
-        }
-
-        val limit = tier.monthlyErrorLimit
+        val usage = billingQuotaService.getUsageForOrganization(orgId)
         return QuotaStatus(
-            withinQuota = used <= limit,
-            used = used,
-            limit = limit,
-            plan = plan
+            withinQuota = usage.withinQuota,
+            used = usage.usedUnits,
+            limit = usage.totalLimitUnits,
+            plan = usage.plan
         )
     }
 

@@ -39,6 +39,7 @@ import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
 import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastructure'
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
+import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -192,6 +193,11 @@ const AdminEmailsRoute = AdminEmailsRouteImport.update({
   path: '/emails',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminBillingRoute = AdminBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   id: '/$orgId',
   path: '/$orgId',
@@ -214,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
@@ -245,6 +252,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
@@ -279,6 +287,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
@@ -314,6 +323,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/admin/billing'
     | '/admin/emails'
     | '/admin/infrastructure'
     | '/admin/organizations'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/admin/billing'
     | '/admin/emails'
     | '/admin/infrastructure'
     | '/admin/organizations'
@@ -378,6 +389,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/verify-email'
+    | '/admin/billing'
     | '/admin/emails'
     | '/admin/infrastructure'
     | '/admin/organizations'
@@ -629,6 +641,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEmailsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/billing': {
+      id: '/admin/billing'
+      path: '/billing'
+      fullPath: '/admin/billing'
+      preLoaderRoute: typeof AdminBillingRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/organizations/$orgId': {
       id: '/admin/organizations/$orgId'
       path: '/$orgId'
@@ -651,6 +670,7 @@ const AdminOrganizationsRouteWithChildren =
   AdminOrganizationsRoute._addFileChildren(AdminOrganizationsRouteChildren)
 
 interface AdminRouteChildren {
+  AdminBillingRoute: typeof AdminBillingRoute
   AdminEmailsRoute: typeof AdminEmailsRoute
   AdminInfrastructureRoute: typeof AdminInfrastructureRoute
   AdminOrganizationsRoute: typeof AdminOrganizationsRouteWithChildren
@@ -660,6 +680,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminBillingRoute: AdminBillingRoute,
   AdminEmailsRoute: AdminEmailsRoute,
   AdminInfrastructureRoute: AdminInfrastructureRoute,
   AdminOrganizationsRoute: AdminOrganizationsRouteWithChildren,

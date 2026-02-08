@@ -75,6 +75,9 @@ dependencies {
     // Security
     implementation("org.mindrot:jbcrypt:0.4")
     implementation("commons-codec:commons-codec:1.16.0")
+
+    // Billing
+    implementation("com.stripe:stripe-java:29.5.0")
     
     // MessagePack for mobile replay decoding
     implementation("org.msgpack:msgpack-core:0.9.8")

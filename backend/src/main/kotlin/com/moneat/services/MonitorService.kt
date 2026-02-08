@@ -40,6 +40,7 @@ class MonitorService {
     private val clickhouseDb = config.property("database.clickhouse.database").getString()
     private val clickhouseUser = config.property("database.clickhouse.user").getString()
     private val clickhousePassword = config.property("database.clickhouse.password").getString()
+    private val pricingTierService = PricingTierService()
     private val httpClient = HttpClient(CIO)
     private val defaultAlertTemplates = listOf(
         DefaultAlertTemplate(metric = "cpu_percent", condition = ">", threshold = 80.0),
@@ -113,7 +114,7 @@ class MonitorService {
      * Check if organization can add more systems.
      */
     fun checkSystemQuota(organizationId: Int): Boolean {
-        val tier = getPricingTier(organizationId)
+        val tier = getTierConfig(organizationId)
         val currentCount = transaction {
             Systems.select { Systems.organization_id eq organizationId }.count()
         }
@@ -230,7 +231,7 @@ class MonitorService {
         }
         
         // Return the poll interval for this organization's tier
-        val tier = getPricingTier(organizationId)
+        val tier = getTierConfig(organizationId)
         return tier.monitorIntervalSeconds
     }
     
@@ -965,18 +966,8 @@ class MonitorService {
         return hash.joinToString("") { "%02x".format(it) }
     }
     
-    private fun getPricingTier(organizationId: Int): PricingTier {
-        val plan = transaction {
-            Subscriptions.select { 
-                (Subscriptions.organization_id eq organizationId) and 
-                (Subscriptions.status eq "active") 
-            }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
-                ?.get(Subscriptions.plan)
-                ?.lowercase() ?: "free"
-        }
-        return PricingTier.entries.find { it.name.equals(plan, ignoreCase = true) } ?: PricingTier.FREE
+    private fun getTierConfig(organizationId: Int): PricingTierConfigResponse {
+        return pricingTierService.getEffectiveTierForOrganization(organizationId).tier
     }
     
     private fun rowToSystemData(row: ResultRow): SystemData {

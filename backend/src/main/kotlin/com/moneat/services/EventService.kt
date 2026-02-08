@@ -46,6 +46,14 @@ class EventService(private val notificationService: NotificationService? = null)
             }.count() > 0
         }
     }
+
+    fun getOrganizationIdForProject(projectId: Long): Int? {
+        return transaction {
+            Projects.selectAll().where { Projects.id eq projectId }
+                .firstOrNull()
+                ?.get(Projects.organization_id)
+        }
+    }
     
     suspend fun processEnvelope(projectId: Long, envelope: SentryEnvelope) {
         var lastReplayId: String? = null

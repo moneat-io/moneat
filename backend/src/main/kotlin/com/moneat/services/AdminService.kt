@@ -154,6 +154,7 @@ class AdminService {
     private val clickhouseUser = config.property("database.clickhouse.user").getString()
     private val clickhousePassword = config.property("database.clickhouse.password").getString()
     private val usageTracker = UsageTrackingService.instance
+    private val pricingTierService = PricingTierService()
     private val httpClient = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -222,11 +223,10 @@ class AdminService {
                 val usage = UsageRecords.select {
                     (UsageRecords.organization_id eq orgId) and
                         (UsageRecords.recordDate greaterEq monthStart) and
-                        (UsageRecords.recordDate lessEq today) and
-                        (UsageRecords.event_type eq "error")
+                        (UsageRecords.recordDate lessEq today)
                 }.sumOf { it[UsageRecords.event_count].toLong() }
-                val tier = PricingTier.entries.find { it.name.equals(plan, ignoreCase = true) } ?: PricingTier.FREE
-                val quotaPct = if (tier.monthlyErrorLimit > 0) (usage.toDouble() / tier.monthlyErrorLimit * 100).coerceAtMost(100.0) else null
+                val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
+                val quotaPct = if (tier.monthlyUnitLimit > 0) (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0) else null
 
                 AdminOrgSummary(
                     id = orgId,
@@ -261,16 +261,10 @@ class AdminService {
                     (UsageRecords.recordDate greaterEq monthStart) and
                     (UsageRecords.recordDate lessEq today)
             }.toList()
-            val errorCount = UsageRecords.select {
-                (UsageRecords.organization_id eq orgId) and
-                    (UsageRecords.recordDate greaterEq monthStart) and
-                    (UsageRecords.recordDate lessEq today) and
-                    (UsageRecords.event_type eq "error")
-            }.sumOf { it[UsageRecords.event_count].toLong() }
             val eventCount = usageRows.sumOf { it[UsageRecords.event_count].toLong() }
             val bytesCount = usageRows.sumOf { it[UsageRecords.bytes_ingested] }
-            val tier = PricingTier.entries.find { it.name.equals(plan, ignoreCase = true) } ?: PricingTier.FREE
-            val quotaPct = if (tier.monthlyErrorLimit > 0) (errorCount.toDouble() / tier.monthlyErrorLimit * 100).coerceAtMost(100.0) else null
+            val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
+            val quotaPct = if (tier.monthlyUnitLimit > 0) (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0) else null
 
             val members = Memberships.select { Memberships.organization_id eq orgId }
                 .mapNotNull { mRow ->

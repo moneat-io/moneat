@@ -70,6 +70,9 @@ fun Application.configureRouting() {
 
         // Sentry-compatible ingestion endpoints
         ingestRoutes()
+
+        // Stripe webhooks
+        stripeWebhookRoutes()
         
         // Dashboard API endpoints
         apiRoutes()

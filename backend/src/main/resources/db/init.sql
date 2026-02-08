@@ -113,6 +113,14 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     status VARCHAR(50) NOT NULL,
     current_period_start TIMESTAMP,
     current_period_end TIMESTAMP,
+    pricing_tier_config_id INTEGER,
+    payg_budget_cents INT NOT NULL DEFAULT 0,
+    payg_used_units BIGINT NOT NULL DEFAULT 0,
+    payg_used_micros BIGINT NOT NULL DEFAULT 0,
+    pending_meter_units BIGINT NOT NULL DEFAULT 0,
+    stripe_base_item_id VARCHAR(255),
+    stripe_overage_item_id VARCHAR(255),
+    billing_grace_until TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -120,15 +128,103 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX idx_subscriptions_org ON subscriptions(organization_id);
 CREATE INDEX idx_subscriptions_stripe ON subscriptions(stripe_subscription_id);
 
+-- Versioned billing tier configuration
+CREATE TABLE IF NOT EXISTS pricing_tier_configs (
+    id SERIAL PRIMARY KEY,
+    tier_name VARCHAR(50) NOT NULL,
+    version INT NOT NULL DEFAULT 1,
+    monthly_unit_limit BIGINT NOT NULL,
+    retention_days INT NOT NULL,
+    max_projects INT,
+    max_systems INT NOT NULL,
+    monitor_interval_seconds INT NOT NULL,
+    monthly_price_cents INT NOT NULL,
+    payg_enabled BOOLEAN NOT NULL DEFAULT false,
+    payg_rate_micros_per_unit BIGINT NOT NULL DEFAULT 0,
+    stripe_base_price_id VARCHAR(255),
+    stripe_overage_price_id VARCHAR(255),
+    is_current BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tier_name, version)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pricing_tier_current_per_name
+    ON pricing_tier_configs (tier_name)
+    WHERE is_current = true;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_subscriptions_pricing_tier'
+    ) THEN
+        ALTER TABLE subscriptions
+            ADD CONSTRAINT fk_subscriptions_pricing_tier
+            FOREIGN KEY (pricing_tier_config_id) REFERENCES pricing_tier_configs(id);
+    END IF;
+END$$;
+
 -- Usage records
 CREATE TABLE IF NOT EXISTS usage_records (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL DEFAULT 'error',
     event_count INTEGER NOT NULL DEFAULT 0,
+    bytes_ingested BIGINT NOT NULL DEFAULT 0,
     date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(organization_id, project_id, date)
+    UNIQUE(organization_id, project_id, date, event_type)
 );
 
 CREATE INDEX idx_usage_org_date ON usage_records(organization_id, date);
+
+CREATE TABLE IF NOT EXISTS org_usage_counters (
+    id SERIAL PRIMARY KEY,
+    organization_id INT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    used_units BIGINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (organization_id, period_start)
+);
+
+CREATE TABLE IF NOT EXISTS quota_notifications_sent (
+    id SERIAL PRIMARY KEY,
+    organization_id INT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    period_start DATE NOT NULL,
+    notification_type VARCHAR(50) NOT NULL,
+    sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (organization_id, period_start, notification_type)
+);
+
+CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+    id SERIAL PRIMARY KEY,
+    event_id VARCHAR(255) NOT NULL UNIQUE,
+    event_type VARCHAR(255) NOT NULL,
+    processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) NOT NULL,
+    error_message TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO pricing_tier_configs (
+    tier_name,
+    version,
+    monthly_unit_limit,
+    retention_days,
+    max_projects,
+    max_systems,
+    monitor_interval_seconds,
+    monthly_price_cents,
+    payg_enabled,
+    payg_rate_micros_per_unit,
+    stripe_base_price_id,
+    stripe_overage_price_id,
+    is_current
+) VALUES
+    ('FREE', 1, 10000, 7, 1, 1, 60, 0, false, 0, NULL, NULL, true),
+    ('PRO', 1, 500000, 30, NULL, 5, 15, 1900, true, 10, NULL, NULL, true),
+    ('TEAM', 1, 5000000, 90, NULL, 25, 10, 4900, true, 10, NULL, NULL, true)
+ON CONFLICT (tier_name, version) DO NOTHING;

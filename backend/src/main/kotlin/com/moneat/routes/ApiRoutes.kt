@@ -18,6 +18,9 @@ fun Route.apiRoutes() {
     
     authenticate("auth-jwt") {
         route("/v1") {
+            // Billing
+            billingRoutes()
+
             // User profile
             get("/user") {
                 val principal = call.principal<JWTPrincipal>()

@@ -109,6 +109,14 @@ object Subscriptions : Table("subscriptions") {
     val status = varchar("status", 50)
     val current_period_start = timestamp("current_period_start").nullable()
     val current_period_end = timestamp("current_period_end").nullable()
+    val pricing_tier_config_id = integer("pricing_tier_config_id").nullable()
+    val payg_budget_cents = integer("payg_budget_cents").default(0)
+    val payg_used_units = long("payg_used_units").default(0)
+    val payg_used_micros = long("payg_used_micros").default(0)
+    val pending_meter_units = long("pending_meter_units").default(0)
+    val stripe_base_item_id = varchar("stripe_base_item_id", 255).nullable()
+    val stripe_overage_item_id = varchar("stripe_overage_item_id", 255).nullable()
+    val billing_grace_until = timestamp("billing_grace_until").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

@@ -2,10 +2,12 @@ package com.moneat.routes
 
 import com.moneat.models.Users
 import com.moneat.services.AdminService
+import com.moneat.services.PricingTierService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import io.ktor.server.request.receive
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.selectAll
@@ -13,6 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Route.adminRoutes() {
     val adminService = AdminService()
+    val pricingTierService = PricingTierService()
     
     authenticate("auth-jwt") {
         route("/v1/admin") {
@@ -106,6 +109,44 @@ fun Route.adminRoutes() {
                 val period = call.request.queryParameters["period"] ?: "30d"
                 val stats = adminService.getEmailStats(period)
                 call.respond(stats)
+            }
+
+            route("/billing") {
+                get("/tiers") {
+                    val tierName = call.request.queryParameters["tier"]?.uppercase()
+                    if (tierName.isNullOrBlank()) {
+                        call.respond(pricingTierService.getCurrentPlans())
+                    } else {
+                        call.respond(pricingTierService.getTierVersions(tierName))
+                    }
+                }
+
+                post("/tiers/{tierName}/versions") {
+                    val tierName = call.parameters["tierName"]?.uppercase()
+                    if (tierName.isNullOrBlank()) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing tier name"))
+                        return@post
+                    }
+                    val request = call.receive<com.moneat.models.CreateTierVersionRequest>()
+                    val created = pricingTierService.createTierVersion(tierName, request)
+                    call.respond(HttpStatusCode.Created, created)
+                }
+
+                post("/tiers/{tierName}/migrate") {
+                    val tierName = call.parameters["tierName"]?.uppercase()
+                    if (tierName.isNullOrBlank()) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing tier name"))
+                        return@post
+                    }
+                    val request = call.receive<com.moneat.models.TierMigrationRequest>()
+                    val response = pricingTierService.migrateSubscribers(tierName, request)
+                    call.respond(response)
+                }
+
+                get("/subscriptions") {
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
+                    call.respond(pricingTierService.listAdminSubscriptions(limit))
+                }
             }
         }
     }

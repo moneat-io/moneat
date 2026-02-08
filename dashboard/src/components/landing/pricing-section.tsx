@@ -1,9 +1,12 @@
 import {Link} from '@tanstack/react-router'
+import {useMutation, useQuery} from '@tanstack/react-query'
 import {Check} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,} from '@/components/ui/card'
+import {api} from '@/lib/api'
+import {useToast} from '@/hooks/use-toast'
 
-const tiers = [
+const fallbackTiers = [
   {
     name: 'Free',
     price: '$0',
@@ -58,6 +61,72 @@ const tiers = [
 ]
 
 export function PricingSection() {
+  const {toast} = useToast()
+  const isAuthenticated = api.isAuthenticated()
+  const {data: billingPlans} = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: () => api.getBillingPlans(),
+    enabled: isAuthenticated,
+  })
+  const checkoutMutation = useMutation({
+    mutationFn: (tierName: string) =>
+      api.createBillingCheckoutSession({
+        tierName,
+        successUrl: `${window.location.origin}/settings`,
+        cancelUrl: `${window.location.origin}/#pricing`,
+      }),
+    onSuccess: (session) => {
+      if (session.url) {
+        window.location.href = session.url
+      }
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to start checkout',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const tiers = billingPlans?.plans?.length
+    ? billingPlans.plans.map((plan) => {
+      const tier = plan.tier
+      const price = tier.monthlyPriceCents === 0 ? '$0' : `$${(tier.monthlyPriceCents / 100).toFixed(0)}`
+      const featureLimit = `${Intl.NumberFormat('en-US').format(tier.monthlyUnitLimit)} events per month`
+      const paygLine = tier.paygEnabled
+        ? `PAYG available at $${((tier.paygRateMicrosPerUnit * 10000) / 1_000_000).toFixed(2)}/10K units`
+        : 'No PAYG overage'
+      return {
+        name: tier.tierName.charAt(0) + tier.tierName.slice(1).toLowerCase(),
+        period: '/mo',
+        price,
+        description: tier.tierName === 'FREE'
+          ? 'Perfect for side projects and getting started'
+          : tier.tierName === 'PRO'
+            ? 'For growing teams shipping production apps'
+            : 'For teams that need scale and compliance',
+        features: [
+          featureLimit,
+          `${tier.retentionDays}-day retention`,
+          tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`,
+          `${tier.maxSystems} monitored system${tier.maxSystems === 1 ? '' : 's'}`,
+          `Monitor interval: ${tier.monitorIntervalSeconds}s`,
+          paygLine,
+        ],
+        cta: tier.monthlyPriceCents === 0 ? 'Start Free' : `Start ${plan.trialDays}-Day Trial`,
+        tierName: tier.tierName,
+        ctaLink: '/signup',
+        highlight: tier.tierName === 'PRO',
+      }
+    })
+    : fallbackTiers.map((tier) => ({...tier, tierName: tier.name.toUpperCase()}))
+
+  const handlePaidTierClick = (tierName: string) => {
+    if (!isAuthenticated) return
+    checkoutMutation.mutate(tierName)
+  }
+
   return (
     <section
       id="pricing"
@@ -118,18 +187,34 @@ export function PricingSection() {
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button
-                  asChild
-                  className={`w-full ${
-                    tier.highlight
-                      ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
-                      : ''
-                  }`}
-                  variant={tier.highlight ? 'default' : 'outline'}
-                  size="lg"
-                >
-                  <Link to={tier.ctaLink}>{tier.cta}</Link>
-                </Button>
+                {isAuthenticated && tier.tierName !== 'FREE' ? (
+                  <Button
+                    className={`w-full ${
+                      tier.highlight
+                        ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
+                        : ''
+                    }`}
+                    variant={tier.highlight ? 'default' : 'outline'}
+                    size="lg"
+                    disabled={checkoutMutation.isPending}
+                    onClick={() => handlePaidTierClick(tier.tierName)}
+                  >
+                    {checkoutMutation.isPending ? 'Opening Checkout...' : tier.cta}
+                  </Button>
+                ) : (
+                  <Button
+                    asChild
+                    className={`w-full ${
+                      tier.highlight
+                        ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
+                        : ''
+                    }`}
+                    variant={tier.highlight ? 'default' : 'outline'}
+                    size="lg"
+                  >
+                    <Link to={tier.ctaLink}>{tier.cta}</Link>
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           ))}

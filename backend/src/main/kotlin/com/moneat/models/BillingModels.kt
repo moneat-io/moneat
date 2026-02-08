@@ -1,0 +1,174 @@
+package com.moneat.models
+
+import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.kotlin.datetime.date
+import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+
+object PricingTierConfigs : Table("pricing_tier_configs") {
+    val id = integer("id").autoIncrement()
+    val tier_name = varchar("tier_name", 50)
+    val version = integer("version").default(1)
+    val monthly_unit_limit = long("monthly_unit_limit")
+    val retention_days = integer("retention_days")
+    val max_projects = integer("max_projects").nullable()
+    val max_systems = integer("max_systems")
+    val monitor_interval_seconds = integer("monitor_interval_seconds")
+    val monthly_price_cents = integer("monthly_price_cents")
+    val payg_enabled = bool("payg_enabled").default(false)
+    val payg_rate_micros_per_unit = long("payg_rate_micros_per_unit").default(0)
+    val stripe_base_price_id = varchar("stripe_base_price_id", 255).nullable()
+    val stripe_overage_price_id = varchar("stripe_overage_price_id", 255).nullable()
+    val is_current = bool("is_current").default(true)
+    val created_at = timestamp("created_at").nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+object OrgUsageCounters : Table("org_usage_counters") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val period_start = date("period_start")
+    val period_end = date("period_end")
+    val used_units = long("used_units").default(0)
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object QuotaNotificationsSent : Table("quota_notifications_sent") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val period_start = date("period_start")
+    val notification_type = varchar("notification_type", 50)
+    val sent_at = timestamp("sent_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object StripeWebhookEvents : Table("stripe_webhook_events") {
+    val id = integer("id").autoIncrement()
+    val event_id = varchar("event_id", 255).uniqueIndex()
+    val event_type = varchar("event_type", 255)
+    val processed_at = timestamp("processed_at")
+    val status = varchar("status", 50)
+    val error_message = text("error_message").nullable()
+    val created_at = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+@Serializable
+data class PricingTierConfigResponse(
+    val id: Int,
+    val tierName: String,
+    val version: Int,
+    val monthlyUnitLimit: Long,
+    val retentionDays: Int,
+    val maxProjects: Int?,
+    val maxSystems: Int,
+    val monitorIntervalSeconds: Int,
+    val monthlyPriceCents: Int,
+    val paygEnabled: Boolean,
+    val paygRateMicrosPerUnit: Long,
+    val stripeBasePriceId: String? = null,
+    val stripeOveragePriceId: String? = null,
+    val isCurrent: Boolean
+)
+
+@Serializable
+data class BillingPlanResponse(
+    val tier: PricingTierConfigResponse,
+    val trialDays: Int = 14
+)
+
+@Serializable
+data class BillingUsageResponse(
+    val organizationId: Int,
+    val periodStart: String,
+    val periodEnd: String,
+    val usedUnits: Long,
+    val baseLimitUnits: Long,
+    val paygLimitUnits: Long,
+    val totalLimitUnits: Long,
+    val paygBudgetCents: Int,
+    val paygUsedUnits: Long,
+    val paygUsedCentsEstimate: Int,
+    val plan: String,
+    val status: String,
+    val withinQuota: Boolean
+)
+
+@Serializable
+data class CheckoutSessionRequest(
+    val tierName: String,
+    val successUrl: String,
+    val cancelUrl: String
+)
+
+@Serializable
+data class CheckoutSessionResponse(
+    val sessionId: String,
+    val url: String
+)
+
+@Serializable
+data class PortalSessionRequest(
+    val returnUrl: String
+)
+
+@Serializable
+data class PortalSessionResponse(
+    val url: String
+)
+
+@Serializable
+data class UpdatePaygBudgetRequest(
+    val paygBudgetCents: Int
+)
+
+@Serializable
+data class UpdatePaygBudgetResponse(
+    val paygBudgetCents: Int
+)
+
+@Serializable
+data class CreateTierVersionRequest(
+    val monthlyUnitLimit: Long,
+    val retentionDays: Int,
+    val maxProjects: Int? = null,
+    val maxSystems: Int,
+    val monitorIntervalSeconds: Int,
+    val monthlyPriceCents: Int,
+    val paygEnabled: Boolean,
+    val paygRateMicrosPerUnit: Long,
+    val stripeBasePriceId: String? = null,
+    val stripeOveragePriceId: String? = null
+)
+
+@Serializable
+data class TierMigrationRequest(
+    val targetVersion: Int,
+    val dryRun: Boolean = true
+)
+
+@Serializable
+data class TierMigrationResponse(
+    val tierName: String,
+    val targetVersion: Int,
+    val affectedSubscriptions: Int,
+    val dryRun: Boolean
+)
+
+@Serializable
+data class AdminBillingSubscriptionResponse(
+    val subscriptionId: Int,
+    val organizationId: Int,
+    val organizationName: String,
+    val plan: String,
+    val status: String,
+    val pricingTierConfigId: Int?,
+    val paygBudgetCents: Int,
+    val paygUsedUnits: Long,
+    val paygUsedMicros: Long,
+    val pendingMeterUnits: Long,
+    val currentPeriodStart: String? = null,
+    val currentPeriodEnd: String? = null
+)
+

@@ -280,6 +280,100 @@ interface AuthToken {
   createdAt: string
 }
 
+interface BillingTierConfig {
+  id: number
+  tierName: string
+  version: number
+  monthlyUnitLimit: number
+  retentionDays: number
+  maxProjects: number | null
+  maxSystems: number
+  monitorIntervalSeconds: number
+  monthlyPriceCents: number
+  paygEnabled: boolean
+  paygRateMicrosPerUnit: number
+  stripeBasePriceId?: string | null
+  stripeOveragePriceId?: string | null
+  isCurrent: boolean
+}
+
+interface BillingPlan {
+  tier: BillingTierConfig
+  trialDays: number
+}
+
+interface BillingPlansResponse {
+  plans: BillingPlan[]
+  stripeEnabled: boolean
+  publishableKey?: string | null
+}
+
+interface BillingUsage {
+  organizationId: number
+  periodStart: string
+  periodEnd: string
+  usedUnits: number
+  baseLimitUnits: number
+  paygLimitUnits: number
+  totalLimitUnits: number
+  paygBudgetCents: number
+  paygUsedUnits: number
+  paygUsedCentsEstimate: number
+  plan: string
+  status: string
+  withinQuota: boolean
+}
+
+interface CheckoutSessionRequest {
+  tierName: string
+  successUrl: string
+  cancelUrl: string
+}
+
+interface CheckoutSessionResponse {
+  sessionId: string
+  url: string
+}
+
+interface PortalSessionResponse {
+  url: string
+}
+
+interface AdminBillingSubscription {
+  subscriptionId: number
+  organizationId: number
+  organizationName: string
+  plan: string
+  status: string
+  pricingTierConfigId?: number | null
+  paygBudgetCents: number
+  paygUsedUnits: number
+  paygUsedMicros: number
+  pendingMeterUnits: number
+  currentPeriodStart?: string | null
+  currentPeriodEnd?: string | null
+}
+
+interface CreateTierVersionRequest {
+  monthlyUnitLimit: number
+  retentionDays: number
+  maxProjects?: number | null
+  maxSystems: number
+  monitorIntervalSeconds: number
+  monthlyPriceCents: number
+  paygEnabled: boolean
+  paygRateMicrosPerUnit: number
+  stripeBasePriceId?: string | null
+  stripeOveragePriceId?: string | null
+}
+
+interface TierMigrationResponse {
+  tierName: string
+  targetVersion: number
+  affectedSubscriptions: number
+  dryRun: boolean
+}
+
 // Monitoring types
 interface MonitorSystem {
   id: string
@@ -786,6 +880,36 @@ class ApiClient {
     })
   }
 
+  // Billing API
+  async getBillingPlans() {
+    return this.request<BillingPlansResponse>(`${API_BASE}/billing/plans`)
+  }
+
+  async getBillingUsage() {
+    return this.request<BillingUsage>(`${API_BASE}/billing/usage`)
+  }
+
+  async createBillingCheckoutSession(body: CheckoutSessionRequest) {
+    return this.request<CheckoutSessionResponse>(`${API_BASE}/billing/checkout`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  async createBillingPortalSession(returnUrl: string) {
+    return this.request<PortalSessionResponse>(`${API_BASE}/billing/portal`, {
+      method: 'POST',
+      body: JSON.stringify({returnUrl}),
+    })
+  }
+
+  async updatePaygBudget(paygBudgetCents: number) {
+    return this.request<{paygBudgetCents: number}>(`${API_BASE}/billing/payg-budget`, {
+      method: 'PUT',
+      body: JSON.stringify({paygBudgetCents}),
+    })
+  }
+
   // Admin API
   async getAdminOverview() {
     return this.request<{
@@ -893,6 +1017,29 @@ class ApiClient {
       last30Days: Array<{ date: string; count: number }>
       estimatedCost: number
     }>(`${API_BASE}/admin/emails?period=${period}`)
+  }
+
+  async getAdminBillingTiers(tier?: string) {
+    const query = tier ? `?tier=${encodeURIComponent(tier)}` : ''
+    return this.request<BillingPlan[] | BillingTierConfig[]>(`${API_BASE}/admin/billing/tiers${query}`)
+  }
+
+  async createAdminBillingTierVersion(tierName: string, body: CreateTierVersionRequest) {
+    return this.request<BillingTierConfig>(`${API_BASE}/admin/billing/tiers/${encodeURIComponent(tierName)}/versions`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  async migrateAdminBillingTier(tierName: string, targetVersion: number, dryRun = true) {
+    return this.request<TierMigrationResponse>(`${API_BASE}/admin/billing/tiers/${encodeURIComponent(tierName)}/migrate`, {
+      method: 'POST',
+      body: JSON.stringify({targetVersion, dryRun}),
+    })
+  }
+
+  async getAdminBillingSubscriptions(limit = 500) {
+    return this.request<AdminBillingSubscription[]>(`${API_BASE}/admin/billing/subscriptions?limit=${limit}`)
   }
 
   // Notification Preferences
@@ -1065,6 +1212,16 @@ export type {
   ReplayTimelineItem,
   ReplayTimelineResponse,
   AuthToken,
+  BillingTierConfig,
+  BillingPlan,
+  BillingPlansResponse,
+  BillingUsage,
+  CheckoutSessionRequest,
+  CheckoutSessionResponse,
+  PortalSessionResponse,
+  AdminBillingSubscription,
+  CreateTierVersionRequest,
+  TierMigrationResponse,
   NotificationPreference,
   ProjectNotificationPreference,
   NotificationPreferences,

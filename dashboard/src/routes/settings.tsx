@@ -1,4 +1,4 @@
-import {Fragment, useState} from 'react'
+import {Fragment, useEffect, useState} from 'react'
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type AuthToken} from '@/lib/api'
@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {useToast} from '@/hooks/use-toast'
-import {AlertTriangle, Bell, Copy, Key, Plus, Trash2} from 'lucide-react'
+import {AlertTriangle, Bell, Copy, CreditCard, ExternalLink, Key, Plus, Trash2} from 'lucide-react'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -90,12 +90,16 @@ function SettingsPage() {
           <TabsList>
             <TabsTrigger value="auth-tokens">Auth Tokens</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="billing">Billing</TabsTrigger>
           </TabsList>
           <TabsContent value="auth-tokens" className="space-y-4">
             <AuthTokensTab />
           </TabsContent>
           <TabsContent value="notifications" className="space-y-4">
             <NotificationsTab />
+          </TabsContent>
+          <TabsContent value="billing" className="space-y-4">
+            <BillingTab />
           </TabsContent>
         </Tabs>
       </div>
@@ -539,6 +543,199 @@ function RevokeTokenDialog({ token, onClose, onConfirm, isRevoking }: RevokeToke
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function BillingTab() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [budgetDollars, setBudgetDollars] = useState('0')
+
+  const { data: usage, isLoading } = useQuery({
+    queryKey: ['billingUsage'],
+    queryFn: () => api.getBillingUsage(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const { data: plansData } = useQuery({
+    queryKey: ['billingPlans'],
+    queryFn: () => api.getBillingPlans(),
+    enabled: api.isAuthenticated(),
+  })
+
+  useEffect(() => {
+    if (usage) {
+      setBudgetDollars((usage.paygBudgetCents / 100).toString())
+    }
+  }, [usage?.paygBudgetCents])
+
+  const updateBudgetMutation = useMutation({
+    mutationFn: (paygBudgetCents: number) => api.updatePaygBudget(paygBudgetCents),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billingUsage'] })
+      toast({ title: 'PAYG budget updated' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to update PAYG budget',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const portalMutation = useMutation({
+    mutationFn: () => api.createBillingPortalSession(window.location.href),
+    onSuccess: (response) => {
+      if (response.url) {
+        window.location.href = response.url
+      }
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to open billing portal',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const checkoutMutation = useMutation({
+    mutationFn: (tierName: string) =>
+      api.createBillingCheckoutSession({
+        tierName,
+        successUrl: `${window.location.origin}/settings`,
+        cancelUrl: `${window.location.origin}/settings`,
+      }),
+    onSuccess: (session) => {
+      if (session.url) {
+        window.location.href = session.url
+      }
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to start checkout',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  if (isLoading || !usage) {
+    return <p className="text-sm text-muted-foreground">Loading billing details...</p>
+  }
+
+  const usagePercent = usage.totalLimitUnits > 0
+    ? Math.min(100, (usage.usedUnits / usage.totalLimitUnits) * 100)
+    : 0
+  const isPaidTier = usage.plan !== 'free'
+  const billablePlans = plansData?.plans?.filter((p) => p.tier.tierName !== 'FREE') ?? []
+
+  const saveBudget = () => {
+    const cents = Math.round(Number(budgetDollars) * 100)
+    if (!Number.isFinite(cents) || cents < 0 || cents % 500 !== 0) {
+      toast({
+        title: 'Invalid budget',
+        description: 'Budget must be in $5 increments.',
+        variant: 'destructive',
+      })
+      return
+    }
+    updateBudgetMutation.mutate(cents)
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            <CardTitle>Subscription</CardTitle>
+          </div>
+          <CardDescription>
+            Manage your plan, monthly usage, and PAYG budget.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Current plan</p>
+              <p className="text-lg font-semibold capitalize">{usage.plan}</p>
+            </div>
+            <Badge variant={usage.status === 'active' ? 'default' : 'secondary'}>
+              {usage.status}
+            </Badge>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span>Usage</span>
+              <span>{usage.usedUnits.toLocaleString()} / {usage.totalLimitUnits.toLocaleString()} units</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-muted">
+              <div
+                className={`h-2 rounded-full ${usagePercent >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                style={{ width: `${usagePercent}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div>
+              <Label htmlFor="payg-budget">PAYG budget (USD, $5 increments)</Label>
+              <Input
+                id="payg-budget"
+                value={budgetDollars}
+                onChange={(e) => setBudgetDollars(e.target.value)}
+                disabled={!isPaidTier}
+              />
+            </div>
+            <Button onClick={saveBudget} disabled={!isPaidTier || updateBudgetMutation.isPending}>
+              Save budget
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => portalMutation.mutate()} disabled={portalMutation.isPending}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open Customer Portal
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Upgrade or Change Plan</CardTitle>
+          <CardDescription>
+            Paid plans include a 14-day trial.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {billablePlans.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No paid plans configured yet.</p>
+          ) : (
+            billablePlans.map((plan) => (
+              <div key={plan.tier.id} className="flex items-center justify-between rounded border p-3">
+                <div>
+                  <p className="font-medium">{plan.tier.tierName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    ${(plan.tier.monthlyPriceCents / 100).toFixed(2)}/mo · {plan.tier.monthlyUnitLimit.toLocaleString()} units
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={checkoutMutation.isPending}
+                  onClick={() => checkoutMutation.mutate(plan.tier.tierName)}
+                >
+                  Select
+                </Button>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

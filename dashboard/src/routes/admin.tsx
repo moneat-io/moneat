@@ -1,6 +1,6 @@
 import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import {ArrowLeft, BarChart3, Building2, DollarSign, LayoutDashboard, Mail, Server, Shield} from 'lucide-react'
+import {ArrowLeft, BarChart3, Building2, CreditCard, DollarSign, LayoutDashboard, Mail, Server, Shield} from 'lucide-react'
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
@@ -25,6 +25,7 @@ const adminNavItems = [
   { icon: Building2, label: 'Organizations', href: '/admin/organizations' },
   { icon: BarChart3, label: 'Usage', href: '/admin/usage' },
   { icon: DollarSign, label: 'Revenue', href: '/admin/revenue' },
+  { icon: CreditCard, label: 'Billing', href: '/admin/billing' },
   { icon: Mail, label: 'Emails', href: '/admin/emails' },
   { icon: Server, label: 'Infrastructure', href: '/admin/infrastructure' },
 ]
