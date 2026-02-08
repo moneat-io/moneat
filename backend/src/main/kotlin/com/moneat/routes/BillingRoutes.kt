@@ -16,7 +16,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 
@@ -176,7 +176,7 @@ fun Route.billingRoutes() {
             }
 
             val updated = transaction {
-                val sub = Subscriptions.select {
+                val sub = Subscriptions.selectAll().where {
                     (Subscriptions.organization_id eq orgId) and
                         (Subscriptions.status inList listOf("active", "trialing", "past_due"))
                 }

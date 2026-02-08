@@ -181,7 +181,7 @@ class NotificationService(private val emailService: EmailService) {
     private suspend fun sendUserWeeklySummary(
         userId: Int,
         email: String,
-        userName: String?,
+        @Suppress("UNUSED_PARAMETER") userName: String?,
         startDate: Instant,
         endDate: Instant,
         priorStartDate: Instant

@@ -14,7 +14,7 @@ import jakarta.mail.internet.MimeMultipart
 import kotlinx.datetime.Clock
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 import java.util.*
@@ -167,10 +167,10 @@ class EmailService {
         try {
             transaction {
                 // Try to find organization for the recipient
-                val orgId = Users.select { Users.email eq recipient }
+                val orgId = Users.selectAll().where { Users.email eq recipient }
                     .firstOrNull()
                     ?.let { user ->
-                        Memberships.select { Memberships.user_id eq user[Users.id] }
+                        Memberships.selectAll().where { Memberships.user_id eq user[Users.id] }
                             .firstOrNull()
                             ?.get(Memberships.organization_id)
                     }

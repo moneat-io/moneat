@@ -12,8 +12,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -84,17 +87,17 @@ class MonitorAlertService {
         val alerts = transaction {
             val results = mutableListOf<Triple<AlertData, String, Int>>()
 
-            val globalScopeSystemIds = SystemAlertSettings.select {
+            val globalScopeSystemIds = SystemAlertSettings.selectAll().where {
                 SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL
             }.map { it[SystemAlertSettings.system_id] }
 
             val systemScopedAlerts = if (globalScopeSystemIds.isEmpty()) {
                 SystemAlerts.innerJoin(Systems)
-                    .select { SystemAlerts.enabled eq true }
+                    .selectAll().where { SystemAlerts.enabled eq true }
                     .toList()
             } else {
                 SystemAlerts.innerJoin(Systems)
-                    .select {
+                    .selectAll().where {
                         (SystemAlerts.enabled eq true) and
                         (SystemAlerts.system_id notInList globalScopeSystemIds)
                     }
@@ -123,13 +126,13 @@ class MonitorAlertService {
             }
 
             if (globalScopeSystemIds.isNotEmpty()) {
-                val globalTemplates = OrganizationAlertTemplates.select {
+                val globalTemplates = OrganizationAlertTemplates.selectAll().where {
                     OrganizationAlertTemplates.enabled eq true
                 }.toList()
 
                 if (globalTemplates.isNotEmpty()) {
                     val globalSystems = Systems.innerJoin(SystemAlertSettings)
-                        .select {
+                        .selectAll().where {
                             (SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL) and
                             (SystemAlertSettings.system_id inList globalScopeSystemIds)
                         }
@@ -139,7 +142,7 @@ class MonitorAlertService {
                     val stateMap = if (templateIds.isEmpty()) {
                         emptyMap()
                     } else {
-                        SystemAlertTemplateStates.select {
+                        SystemAlertTemplateStates.selectAll().where {
                             (SystemAlertTemplateStates.template_alert_id inList templateIds) and
                             (SystemAlertTemplateStates.system_id inList globalScopeSystemIds)
                         }.associate {
@@ -240,7 +243,7 @@ class MonitorAlertService {
         // Update last triggered timestamp
         if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
             transaction {
-                val existing = SystemAlertTemplateStates.select {
+                val existing = SystemAlertTemplateStates.selectAll().where {
                     (SystemAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
                     (SystemAlertTemplateStates.system_id eq alert.systemId)
                 }.firstOrNull()
@@ -393,7 +396,7 @@ class MonitorAlertService {
         // Get all users in the organization who should receive alerts
         val recipients = transaction {
             Users.innerJoin(Memberships)
-                .select { Memberships.organization_id eq organizationId }
+                .selectAll().where { Memberships.organization_id eq organizationId }
                 .map { it[Users.email] }
         }
         
@@ -519,7 +522,7 @@ class MonitorAlertService {
     ) {
         val recipients = transaction {
             Users.innerJoin(Memberships)
-                .select { Memberships.organization_id eq organizationId }
+                .selectAll().where { Memberships.organization_id eq organizationId }
                 .map { it[Users.email] }
         }
         
@@ -587,7 +590,7 @@ class MonitorAlertService {
     ) {
         val recipients = transaction {
             Users.innerJoin(Memberships)
-                .select { Memberships.organization_id eq organizationId }
+                .selectAll().where { Memberships.organization_id eq organizationId }
                 .map { it[Users.email] }
         }
         

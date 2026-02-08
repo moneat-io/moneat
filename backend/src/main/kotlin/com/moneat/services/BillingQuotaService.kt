@@ -182,7 +182,7 @@ class BillingQuotaService(
 
     private fun loadQuotaState(organizationId: Int, lockRows: Boolean): QuotaState {
         val now = Clock.System.todayIn(TimeZone.UTC)
-        val sub = Subscriptions.select {
+        val sub = Subscriptions.selectAll().where {
             (Subscriptions.organization_id eq organizationId) and
                 (Subscriptions.status inList listOf("active", "trialing", "past_due"))
         }
@@ -199,11 +199,11 @@ class BillingQuotaService(
 
         val tier = run {
             val byId = sub?.get(Subscriptions.pricing_tier_config_id)?.let { tierId ->
-                PricingTierConfigs.select { PricingTierConfigs.id eq tierId }.firstOrNull()
+                PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq tierId }.firstOrNull()
             }
 
             val byPlan = if (byId == null && sub != null) {
-                PricingTierConfigs.select {
+                PricingTierConfigs.selectAll().where {
                     (PricingTierConfigs.tier_name eq sub[Subscriptions.plan].uppercase()) and
                         (PricingTierConfigs.is_current eq true)
                 }.firstOrNull()
@@ -212,7 +212,7 @@ class BillingQuotaService(
             }
 
             val free = if (byId == null && byPlan == null) {
-                PricingTierConfigs.select {
+                PricingTierConfigs.selectAll().where {
                     (PricingTierConfigs.tier_name eq "FREE") and
                         (PricingTierConfigs.is_current eq true)
                 }.firstOrNull()
@@ -232,7 +232,7 @@ class BillingQuotaService(
         val periodEnd = sub?.get(Subscriptions.current_period_end)?.toLocalDateTime(TimeZone.UTC)?.date
             ?: periodStart.plus(DatePeriod(months = 1, days = -1))
 
-        val existingCounter = OrgUsageCounters.select {
+        val existingCounter = OrgUsageCounters.selectAll().where {
             (OrgUsageCounters.organization_id eq organizationId) and
                 (OrgUsageCounters.period_start eq periodStart)
         }.firstOrNull()
@@ -261,7 +261,7 @@ class BillingQuotaService(
             )
         }
 
-        val usageRow = OrgUsageCounters.select {
+        val usageRow = OrgUsageCounters.selectAll().where {
             (OrgUsageCounters.organization_id eq organizationId) and
                 (OrgUsageCounters.period_start eq periodStart)
         }.first()

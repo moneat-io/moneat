@@ -248,7 +248,7 @@ class DashboardService {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
             
-            Projects.select { Projects.organization_id inList orgIds }
+            Projects.selectAll().where { Projects.organization_id inList orgIds }
                 .map { row ->
                     val projectId = row[Projects.id]
                     val keys = ProjectKeys.selectAll().where { ProjectKeys.project_id eq projectId }
@@ -283,7 +283,7 @@ class DashboardService {
     
     suspend fun getProject(projectId: Long): ProjectResponse? {
         val projectData = transaction {
-            Projects.select { Projects.id eq projectId }
+            Projects.selectAll().where { Projects.id eq projectId }
                 .map { row ->
                     val keys = ProjectKeys.selectAll().where { ProjectKeys.project_id eq projectId }
                         .map { keyRow ->
@@ -312,7 +312,7 @@ class DashboardService {
     fun createProject(userId: Int, request: com.moneat.models.CreateProjectRequest): ProjectResponse {
         return transaction {
             // Get user's first organization
-            val orgId = Memberships.select { Memberships.user_id eq userId }
+            val orgId = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .firstOrNull()
                 ?.get(Memberships.organization_id)
                 ?: throw IllegalStateException("User has no organization")

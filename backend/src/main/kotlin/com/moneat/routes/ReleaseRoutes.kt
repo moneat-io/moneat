@@ -102,9 +102,6 @@ fun Route.releaseRoutes() {
                     return@get
                 }
                 
-                val orgSlug = call.parameters["orgSlug"] ?: return@get
-                val version = call.parameters["version"] ?: return@get
-                
                 // For this endpoint, we'd need to know which project
                 // Sentry CLI typically uses project-specific endpoints
                 call.respond(HttpStatusCode.NotImplemented, mapOf("error" to "Use project-specific endpoint"))

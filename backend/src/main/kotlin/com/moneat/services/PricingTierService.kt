@@ -25,7 +25,7 @@ data class EffectiveTierContext(
 class PricingTierService {
     fun getPrimaryOrganizationIdForUser(userId: Int): Int? {
         return transaction {
-            Memberships.select { Memberships.user_id eq userId }
+            Memberships.selectAll().where { Memberships.user_id eq userId }
                 .orderBy(Memberships.id to SortOrder.ASC)
                 .firstOrNull()
                 ?.get(Memberships.organization_id)
@@ -34,7 +34,7 @@ class PricingTierService {
 
     fun getCurrentPlans(): List<BillingPlanResponse> {
         return transaction {
-            PricingTierConfigs.select { PricingTierConfigs.is_current eq true }
+            PricingTierConfigs.selectAll().where { PricingTierConfigs.is_current eq true }
                 .orderBy(PricingTierConfigs.monthly_price_cents to SortOrder.ASC)
                 .map { BillingPlanResponse(rowToResponse(it)) }
         }
@@ -42,7 +42,7 @@ class PricingTierService {
 
     fun getTierVersions(tierName: String): List<PricingTierConfigResponse> {
         return transaction {
-            PricingTierConfigs.select { PricingTierConfigs.tier_name eq tierName.uppercase() }
+            PricingTierConfigs.selectAll().where { PricingTierConfigs.tier_name eq tierName.uppercase() }
                 .orderBy(PricingTierConfigs.version to SortOrder.DESC)
                 .map { rowToResponse(it) }
         }
@@ -50,7 +50,7 @@ class PricingTierService {
 
     fun getCurrentTier(tierName: String): PricingTierConfigResponse? {
         return transaction {
-            PricingTierConfigs.select {
+            PricingTierConfigs.selectAll().where {
                 (PricingTierConfigs.tier_name eq tierName.uppercase()) and
                     (PricingTierConfigs.is_current eq true)
             }
@@ -61,7 +61,7 @@ class PricingTierService {
 
     fun getTierById(id: Int): PricingTierConfigResponse? {
         return transaction {
-            PricingTierConfigs.select { PricingTierConfigs.id eq id }
+            PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }
                 .firstOrNull()
                 ?.let { rowToResponse(it) }
         }
@@ -70,7 +70,7 @@ class PricingTierService {
     fun getEffectiveTierForOrganization(organizationId: Int): EffectiveTierContext {
         return transaction {
             val subscription = Subscriptions
-                .select {
+                .selectAll().where {
                     (Subscriptions.organization_id eq organizationId) and
                         (Subscriptions.status inList listOf("active", "trialing", "past_due"))
                 }
@@ -93,15 +93,15 @@ class PricingTierService {
             }
 
             val byId = subscription[Subscriptions.pricing_tier_config_id]?.let { id ->
-                PricingTierConfigs.select { PricingTierConfigs.id eq id }.firstOrNull()
+                PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }.firstOrNull()
             }
 
             val tierRow = byId
-                ?: PricingTierConfigs.select {
+                ?: PricingTierConfigs.selectAll().where {
                     (PricingTierConfigs.is_current eq true) and
                         (PricingTierConfigs.tier_name eq subscription[Subscriptions.plan].uppercase())
                 }.firstOrNull()
-                ?: PricingTierConfigs.select {
+                ?: PricingTierConfigs.selectAll().where {
                     (PricingTierConfigs.is_current eq true) and
                         (PricingTierConfigs.tier_name eq "FREE")
                 }.firstOrNull()
@@ -131,7 +131,7 @@ class PricingTierService {
         val monthlyFeedbackLimit = request.monthlyFeedbackLimit
         val monthlyUnitLimit = monthlyErrorLimit + monthlyTransactionLimit + monthlyReplayLimit + monthlyFeedbackLimit
         return transaction {
-            val current = PricingTierConfigs.select { PricingTierConfigs.tier_name eq canonicalName }
+            val current = PricingTierConfigs.selectAll().where { PricingTierConfigs.tier_name eq canonicalName }
                 .orderBy(PricingTierConfigs.version to SortOrder.DESC)
                 .firstOrNull()
             val nextVersion = (current?.get(PricingTierConfigs.version) ?: 0) + 1
@@ -160,7 +160,7 @@ class PricingTierService {
                 it[is_current] = true
             } get PricingTierConfigs.id
 
-            rowToResponse(PricingTierConfigs.select { PricingTierConfigs.id eq id }.first())
+            rowToResponse(PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }.first())
         }
     }
 
@@ -176,13 +176,13 @@ class PricingTierService {
     fun migrateSubscribers(tierName: String, request: TierMigrationRequest): TierMigrationResponse {
         val canonicalName = tierName.uppercase()
         return transaction {
-            val targetTierId = PricingTierConfigs.select {
+            val targetTierId = PricingTierConfigs.selectAll().where {
                 (PricingTierConfigs.tier_name eq canonicalName) and
                     (PricingTierConfigs.version eq request.targetVersion)
             }.firstOrNull()?.get(PricingTierConfigs.id)
                 ?: throw IllegalArgumentException("Target tier version not found")
 
-            val candidateIds = Subscriptions.select {
+            val candidateIds = Subscriptions.selectAll().where {
                 Subscriptions.status inList listOf("active", "trialing", "past_due")
             }
                 .filter { row ->
@@ -190,7 +190,7 @@ class PricingTierService {
                     if (configId == null) {
                         row[Subscriptions.plan].equals(canonicalName, ignoreCase = true)
                     } else {
-                        PricingTierConfigs.select { PricingTierConfigs.id eq configId }
+                        PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq configId }
                             .firstOrNull()
                             ?.get(PricingTierConfigs.tier_name)
                             ?.equals(canonicalName, ignoreCase = true) == true
@@ -240,7 +240,7 @@ class PricingTierService {
     }
 
     private fun currentFallbackTier(tierName: String): PricingTierConfigResponse {
-        val row = PricingTierConfigs.select {
+        val row = PricingTierConfigs.selectAll().where {
             (PricingTierConfigs.tier_name eq tierName.uppercase()) and
                 (PricingTierConfigs.is_current eq true)
         }.firstOrNull()

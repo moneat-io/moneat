@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 val kotlin_version: String by project
 val ktor_version: String by project
 val logback_version: String by project
@@ -109,4 +111,10 @@ tasks.register<JavaExec>("seedE2EData") {
     
     standardOutput = System.out
     errorOutput = System.err
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+    kotlinOptions {
+        allWarningsAsErrors = true
+    }
 }

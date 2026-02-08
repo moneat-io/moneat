@@ -466,12 +466,11 @@ class EventService(private val notificationService: NotificationService? = null)
         val segmentId = replayEvent.segment_id ?: 0
         val ts = replayEvent.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
         val startTs = replayEvent.replay_start_timestamp?.let { unixSecondsToMillis(it) } ?: ts
-        val durationMs = durationMs(replayEvent.replay_start_timestamp, replayEvent.timestamp)
 
         val urls = replayEvent.urls?.take(100) ?: emptyList()
         val errorIds = replayEvent.error_ids ?: emptyList()
         val traceIds = replayEvent.trace_ids ?: emptyList()
-        val tags = replayEvent.tags?.let { JsonObject(it.mapValues { (_, v) -> JsonPrimitive(v) })?.toString() } ?: "{}"
+        val tags = replayEvent.tags?.let { JsonObject(it.mapValues { (_, v) -> JsonPrimitive(v) }).toString() } ?: "{}"
 
         val contexts = replayEvent.contexts
         val browser = contexts?.get("browser") as? JsonObject
@@ -568,7 +567,12 @@ class EventService(private val notificationService: NotificationService? = null)
         }
     }
 
-    private suspend fun storeSyntheticReplayEvent(projectId: Long, replayId: String, segmentId: Int, envelope: SentryEnvelope) {
+    private suspend fun storeSyntheticReplayEvent(
+        projectId: Long,
+        replayId: String,
+        segmentId: Int,
+        @Suppress("UNUSED_PARAMETER") envelope: SentryEnvelope
+    ) {
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
         

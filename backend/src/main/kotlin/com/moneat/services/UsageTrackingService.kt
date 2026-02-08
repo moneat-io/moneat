@@ -1,10 +1,12 @@
 package com.moneat.services
 
-import com.moneat.models.PricingTier
 import com.moneat.models.Projects
 import com.moneat.models.Subscriptions
 import com.moneat.models.UsageRecords
-import kotlinx.datetime.*
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.todayIn
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -86,8 +88,8 @@ class UsageTrackingService {
 
     private fun getOrganizationId(projectId: Long): Int? {
         return transaction {
-            Projects.slice(Projects.organization_id)
-                .select { Projects.id eq projectId }
+            Projects.select(Projects.organization_id)
+                .where { Projects.id eq projectId }
                 .firstOrNull()
                 ?.get(Projects.organization_id)
         }
@@ -125,7 +127,7 @@ class UsageTrackingService {
 
     private fun upsertUsage(rec: UsageRecord) {
         val projectIdInt = rec.projectId.toInt()
-        val existing = UsageRecords.select {
+        val existing = UsageRecords.selectAll().where {
             (UsageRecords.organization_id eq rec.organizationId) and
                 (UsageRecords.project_id eq projectIdInt) and
                 (UsageRecords.recordDate eq rec.recordDate) and
@@ -157,7 +159,7 @@ class UsageTrackingService {
     fun getUsageForOrg(orgId: Int, startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): List<OrgUsageSummary> {
         flushBuffer()
         return transaction {
-            UsageRecords.select {
+            UsageRecords.selectAll().where {
                 (UsageRecords.organization_id eq orgId) and
                     (UsageRecords.recordDate greaterEq startDate) and
                     (UsageRecords.recordDate lessEq endDate)
@@ -186,7 +188,7 @@ class UsageTrackingService {
 
     private fun getPlanForOrg(orgId: Int): String {
         return transaction {
-            Subscriptions.select { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+            Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
                 ?.get(Subscriptions.plan)
@@ -196,14 +198,14 @@ class UsageTrackingService {
 
     private fun getBillingPeriod(orgId: Int): Pair<kotlinx.datetime.LocalDate, kotlinx.datetime.LocalDate> {
         return transaction {
-            val sub = Subscriptions.select { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+            val sub = Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
             val startTs = sub?.get(Subscriptions.current_period_start)
             val endTs = sub?.get(Subscriptions.current_period_end)
             if (startTs != null && endTs != null) {
-                val start = (startTs as Instant).toLocalDateTime(TimeZone.UTC).date
-                val end = (endTs as Instant).toLocalDateTime(TimeZone.UTC).date
+                val start = startTs.toLocalDateTime(TimeZone.UTC).date
+                val end = endTs.toLocalDateTime(TimeZone.UTC).date
                 Pair(start, end)
             } else {
                 val today = Clock.System.todayIn(TimeZone.UTC)

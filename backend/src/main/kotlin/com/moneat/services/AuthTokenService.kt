@@ -161,10 +161,10 @@ class AuthTokenService {
     fun revokeToken(userId: Int, tokenId: Int): Boolean {
         return transaction {
             // Verify the token belongs to the user before revoking
-            val token = AuthTokens.selectAll()
+            val tokenExists = AuthTokens.selectAll()
                 .where { (AuthTokens.id eq tokenId) and (AuthTokens.user_id eq userId) }
-                .firstOrNull()
-                ?: return@transaction false
+                .empty().not()
+            if (!tokenExists) return@transaction false
             
             AuthTokens.deleteWhere { id eq tokenId } > 0
         }
@@ -184,10 +184,10 @@ class AuthTokenService {
         
         return transaction {
             // Verify the token belongs to the user before updating
-            val token = AuthTokens.selectAll()
+            val tokenExists = AuthTokens.selectAll()
                 .where { (AuthTokens.id eq tokenId) and (AuthTokens.user_id eq userId) }
-                .firstOrNull()
-                ?: return@transaction false
+                .empty().not()
+            if (!tokenExists) return@transaction false
             
             AuthTokens.update({ AuthTokens.id eq tokenId }) {
                 name?.let { newName -> it[AuthTokens.name] = newName }

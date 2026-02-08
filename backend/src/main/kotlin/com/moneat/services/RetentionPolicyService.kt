@@ -4,7 +4,6 @@ import com.moneat.models.Organizations
 import com.moneat.models.PricingTier
 import com.moneat.models.Projects
 import com.moneat.models.Systems
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
@@ -21,7 +20,7 @@ class RetentionPolicyService(
     suspend fun getRetentionDaysForProject(projectId: Long): Int? {
         return CacheService.cached("cache:retention:project:$projectId", 300) {
             val organizationId = transaction {
-                Projects.select { Projects.id eq projectId }
+                Projects.selectAll().where { Projects.id eq projectId }
                     .firstOrNull()
                     ?.get(Projects.organization_id)
             }
@@ -32,7 +31,7 @@ class RetentionPolicyService(
     suspend fun getRetentionDaysForSystem(systemId: UUID): Int? {
         return CacheService.cached("cache:retention:system:$systemId", 300) {
             val organizationId = transaction {
-                Systems.select { Systems.id eq systemId }
+                Systems.selectAll().where { Systems.id eq systemId }
                     .firstOrNull()
                     ?.get(Systems.organization_id)
             }

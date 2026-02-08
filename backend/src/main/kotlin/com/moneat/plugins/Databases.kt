@@ -40,7 +40,7 @@ fun Application.configureDatabases() {
     val migrationsApplied = flyway.migrate()
     log.info("Applied ${migrationsApplied.migrationsExecuted} database migration(s)")
     
-    val database = Database.connect(dataSource)
+    Database.connect(dataSource)
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ
     
     log.info("PostgreSQL database connected")

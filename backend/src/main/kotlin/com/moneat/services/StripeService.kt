@@ -179,7 +179,7 @@ class StripeService(
     fun cancelSubscription(organizationId: Int): CancelSubscriptionResponse {
         ensureEnabled()
         val localSubscription = transaction {
-            Subscriptions.select {
+            Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }
@@ -220,7 +220,7 @@ class StripeService(
 
     fun wasEventProcessed(eventId: String): Boolean {
         return transaction {
-            StripeWebhookEvents.select { StripeWebhookEvents.event_id eq eventId }.count() > 0
+            StripeWebhookEvents.selectAll().where { StripeWebhookEvents.event_id eq eventId }.count() > 0
         }
     }
 
@@ -242,7 +242,7 @@ class StripeService(
             ?: return
 
         val currentTier = transaction {
-            val subRow = Subscriptions.select {
+            val subRow = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }.orderBy(Subscriptions.id to SortOrder.DESC).firstOrNull()
@@ -262,7 +262,7 @@ class StripeService(
         }
 
         transaction {
-            val existing = Subscriptions.select {
+            val existing = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.stripe_subscription_id eq subscription.id)
             }.orderBy(Subscriptions.id to SortOrder.DESC).firstOrNull()
@@ -324,7 +324,7 @@ class StripeService(
     fun handleInvoicePaid(invoice: Invoice) {
         val organizationId = resolveOrganizationId(invoice.metadata["organization_id"], invoice.customer) ?: return
         transaction {
-            val q = Subscriptions.select {
+            val q = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }.orderBy(Subscriptions.id to SortOrder.DESC)
@@ -388,7 +388,7 @@ class StripeService(
         if (!isStripeEnabled()) return 0
         val meterEventName = config.propertyOrNull("stripe.meterEventName")?.getString() ?: "moneat_overage_units"
         val rows = transaction {
-            Subscriptions.select {
+            Subscriptions.selectAll().where {
                 (Subscriptions.pending_meter_units greater 0L) and
                     (Subscriptions.stripe_customer_id.isNotNull()) and
                     (Subscriptions.status inList listOf("active", "trialing"))
@@ -427,11 +427,11 @@ class StripeService(
         return flushed
     }
 
-    fun applyDunningDowngrade(graceDays: Int = 7): Int {
+    fun applyDunningDowngrade(@Suppress("UNUSED_PARAMETER") graceDays: Int = 7): Int {
         val freeTier = pricingTierService.getCurrentTier("FREE")
         val now = kotlinx.datetime.Clock.System.now()
         val downgraded = transaction {
-            val pastDueRows = Subscriptions.select {
+            val pastDueRows = Subscriptions.selectAll().where {
                 (Subscriptions.status eq "past_due") and
                     (Subscriptions.billing_grace_until.isNotNull()) and
                     (Subscriptions.billing_grace_until lessEq now)
@@ -464,7 +464,7 @@ class StripeService(
 
     private fun getOrCreateCustomer(organizationId: Int): String {
         val existing = transaction {
-            Subscriptions.select {
+            Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.stripe_customer_id.isNotNull())
             }
@@ -475,23 +475,23 @@ class StripeService(
         if (!existing.isNullOrBlank()) return existing
 
         val (orgName, ownerEmail) = transaction {
-            val orgName = Organizations.select { Organizations.id eq organizationId }
+            val orgName = Organizations.selectAll().where { Organizations.id eq organizationId }
                 .firstOrNull()
                 ?.get(Organizations.name)
                 ?: "Moneat Organization $organizationId"
-            val ownerUserId = Memberships.select {
+            val ownerUserId = Memberships.selectAll().where {
                 (Memberships.organization_id eq organizationId) and (Memberships.role eq "owner")
             }
                 .orderBy(Memberships.id to SortOrder.ASC)
                 .firstOrNull()
                 ?.get(Memberships.user_id)
-            val fallbackUserId = Memberships.select { Memberships.organization_id eq organizationId }
+            val fallbackUserId = Memberships.selectAll().where { Memberships.organization_id eq organizationId }
                 .orderBy(Memberships.id to SortOrder.ASC)
                 .firstOrNull()
                 ?.get(Memberships.user_id)
             val userId = ownerUserId ?: fallbackUserId
             val email = userId?.let { id ->
-                Users.select { Users.id eq id }.firstOrNull()?.get(Users.email)
+                Users.selectAll().where { Users.id eq id }.firstOrNull()?.get(Users.email)
             }
             Pair(orgName, email)
         }
@@ -505,7 +505,7 @@ class StripeService(
         val customer = Customer.create(paramsBuilder.build())
 
         transaction {
-            val sub = Subscriptions.select {
+            val sub = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }
@@ -527,7 +527,7 @@ class StripeService(
         if (byMetadata != null) return byMetadata
         if (customerId.isNullOrBlank()) return null
         return transaction {
-            Subscriptions.select { Subscriptions.stripe_customer_id eq customerId }
+            Subscriptions.selectAll().where { Subscriptions.stripe_customer_id eq customerId }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
                 ?.get(Subscriptions.organization_id)
@@ -542,7 +542,7 @@ class StripeService(
 
     private fun findCustomerId(organizationId: Int): String? {
         return transaction {
-            Subscriptions.select {
+            Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.stripe_customer_id.isNotNull())
             }

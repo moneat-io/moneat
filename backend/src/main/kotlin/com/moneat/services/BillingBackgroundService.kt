@@ -1,21 +1,14 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import io.ktor.server.config.ApplicationConfig
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import io.ktor.server.config.*
+import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.todayIn
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insertIgnore
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
@@ -83,7 +76,7 @@ class BillingBackgroundService(
 
     private fun processQuotaThresholdNotifications() {
         val orgIds = transaction {
-            Subscriptions.select {
+            Subscriptions.selectAll().where {
                 Subscriptions.status inList listOf("active", "trialing", "past_due")
             }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
@@ -131,22 +124,22 @@ class BillingBackgroundService(
         if (inserted == 0) return
 
         val recipients = transaction {
-            val ownerIds = Memberships.select {
+            val ownerIds = Memberships.selectAll().where {
                 (Memberships.organization_id eq organizationId) and (Memberships.role eq "owner")
             }.map { it[Memberships.user_id] }
             val userIds = if (ownerIds.isNotEmpty()) {
                 ownerIds
             } else {
-                Memberships.select { Memberships.organization_id eq organizationId }.map { it[Memberships.user_id] }
+                Memberships.selectAll().where { Memberships.organization_id eq organizationId }.map { it[Memberships.user_id] }
             }
-            Users.select { Users.id inList userIds }
+            Users.selectAll().where { Users.id inList userIds }
                 .map { it[Users.email] }
                 .distinct()
         }
         if (recipients.isEmpty()) return
 
         val orgName = transaction {
-            Organizations.select { Organizations.id eq organizationId }.firstOrNull()?.get(Organizations.name)
+            Organizations.selectAll().where { Organizations.id eq organizationId }.firstOrNull()?.get(Organizations.name)
         } ?: "Organization $organizationId"
 
         val subject = when (notificationType) {
@@ -181,4 +174,3 @@ class BillingBackgroundService(
         }
     }
 }
-

@@ -10,7 +10,6 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -156,12 +155,11 @@ class AdminService {
     suspend fun getOverviewStats(): AdminOverviewStats {
         usageTracker.flushBuffer()
         val today = Clock.System.todayIn(TimeZone.UTC)
-        val thirtyDaysAgo = today.minus(30, DateTimeUnit.DAY)
 
         val (totalOrgs, totalUsers, subsByPlan) = transaction {
             val orgs = Organizations.selectAll().count().toInt()
             val users = Users.selectAll().count().toInt()
-            val subs = Subscriptions.select { Subscriptions.status eq "active" }
+            val subs = Subscriptions.selectAll().where { Subscriptions.status eq "active" }
                 .map { it[Subscriptions.plan].lowercase() }
                 .groupingBy { it }
                 .eachCount()
@@ -171,7 +169,7 @@ class AdminService {
         val (allTimeEvents, last30Events, eventsTimeline) = queryClickHouseEvents(today.minus(365, DateTimeUnit.DAY), today)
 
         val mrr = transaction {
-            Subscriptions.select { Subscriptions.status eq "active" }
+            Subscriptions.selectAll().where { Subscriptions.status eq "active" }
                 .mapNotNull { row ->
                     when (row[Subscriptions.plan].lowercase()) {
                         "pro" -> 19.0
@@ -206,14 +204,15 @@ class AdminService {
 
             orgs.map { row ->
                 val orgId = row[Organizations.id]
-                val plan = Subscriptions.select { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+                val plan = Subscriptions.selectAll()
+                    .where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
                     .orderBy(Subscriptions.id to SortOrder.DESC)
                     .firstOrNull()
                     ?.get(Subscriptions.plan)
                     ?.lowercase() ?: "free"
-                val projectCount = Projects.select { Projects.organization_id eq orgId }.count().toInt()
-                val memberCount = Memberships.select { Memberships.organization_id eq orgId }.count().toInt()
-                val usageRows = UsageRecords.select {
+                val projectCount = Projects.selectAll().where { Projects.organization_id eq orgId }.count().toInt()
+                val memberCount = Memberships.selectAll().where { Memberships.organization_id eq orgId }.count().toInt()
+                val usageRows = UsageRecords.selectAll().where {
                     (UsageRecords.organization_id eq orgId) and
                         (UsageRecords.recordDate greaterEq monthStart) and
                         (UsageRecords.recordDate lessEq today)
@@ -244,15 +243,15 @@ class AdminService {
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
-            val org = Organizations.select { Organizations.id eq orgId }.firstOrNull() ?: return@transaction null
-            val sub = Subscriptions.select { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+            val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@transaction null
+            val sub = Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
             val plan = sub?.get(Subscriptions.plan)?.lowercase() ?: "free"
             val subStatus = sub?.get(Subscriptions.status)
-            val memberCount = Memberships.select { Memberships.organization_id eq orgId }.count().toInt()
-            val projects = Projects.select { Projects.organization_id eq orgId }.toList()
-            val usageRows = UsageRecords.select {
+            val memberCount = Memberships.selectAll().where { Memberships.organization_id eq orgId }.count().toInt()
+            val projects = Projects.selectAll().where { Projects.organization_id eq orgId }.toList()
+            val usageRows = UsageRecords.selectAll().where {
                 (UsageRecords.organization_id eq orgId) and
                     (UsageRecords.recordDate greaterEq monthStart) and
                     (UsageRecords.recordDate lessEq today)
@@ -262,9 +261,9 @@ class AdminService {
             val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
             val quotaPct = if (tier.monthlyUnitLimit > 0) (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0) else null
 
-            val members = Memberships.select { Memberships.organization_id eq orgId }
+            val members = Memberships.selectAll().where { Memberships.organization_id eq orgId }
                 .mapNotNull { mRow ->
-                    val u = Users.select { Users.id eq mRow[Memberships.user_id] }.firstOrNull() ?: return@mapNotNull null
+                    val u = Users.selectAll().where { Users.id eq mRow[Memberships.user_id] }.firstOrNull() ?: return@mapNotNull null
                     AdminOrgMember(
                         userId = u[Users.id],
                         email = u[Users.email],
@@ -310,7 +309,7 @@ class AdminService {
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
 
         return transaction {
-            val rows = UsageRecords.select {
+            val rows = UsageRecords.selectAll().where {
                 (UsageRecords.recordDate greaterEq startDate) and
                     (UsageRecords.recordDate lessEq today)
             }.toList()
@@ -340,7 +339,7 @@ class AdminService {
     fun getRevenueMetrics(): AdminRevenueMetrics {
         usageTracker.flushBuffer()
         val subsByPlan = transaction {
-            Subscriptions.select { Subscriptions.status eq "active" }
+            Subscriptions.selectAll().where { Subscriptions.status eq "active" }
                 .map { it[Subscriptions.plan].lowercase() }
                 .groupingBy { it }
                 .eachCount()
@@ -353,7 +352,7 @@ class AdminService {
             }
         }
         val churn = transaction {
-            Subscriptions.select { Subscriptions.status inList listOf("canceled", "past_due") }.count().toInt()
+            Subscriptions.selectAll().where { Subscriptions.status inList listOf("canceled", "past_due") }.count().toInt()
         }
         val costPerPlan = mapOf(
             "free" to 0.0,
@@ -427,7 +426,7 @@ class AdminService {
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
-            val usageByOrg = UsageRecords.select {
+            val usageByOrg = UsageRecords.selectAll().where {
                 (UsageRecords.recordDate greaterEq monthStart) and
                     (UsageRecords.recordDate lessEq today)
             }.toList()
@@ -441,8 +440,8 @@ class AdminService {
                 .take(limit)
                 .mapNotNull { (orgId, pair) ->
                     val (events, bytes) = pair
-                    val org = Organizations.select { Organizations.id eq orgId }.firstOrNull() ?: return@mapNotNull null
-                    val plan = Subscriptions.select { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+                    val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@mapNotNull null
+                    val plan = Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
                         .orderBy(Subscriptions.id to SortOrder.DESC)
                         .firstOrNull()
                         ?.get(Subscriptions.plan)
@@ -538,7 +537,10 @@ class AdminService {
         }
     }
 
-    private suspend fun queryClickHouseEvents(startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): Triple<Long, Long, List<AdminTimelinePoint>> {
+    private suspend fun queryClickHouseEvents(
+        @Suppress("UNUSED_PARAMETER") startDate: kotlinx.datetime.LocalDate,
+        @Suppress("UNUSED_PARAMETER") endDate: kotlinx.datetime.LocalDate
+    ): Triple<Long, Long, List<AdminTimelinePoint>> {
         return try {
             val totalQuery = "SELECT count() as c FROM $clickhouseDb.events"
             val totalResp = ClickHouseClient.execute(totalQuery)

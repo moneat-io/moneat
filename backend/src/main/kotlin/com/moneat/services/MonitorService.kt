@@ -94,7 +94,7 @@ class MonitorService {
     fun validateAgentKey(agentKey: String): Pair<UUID, Int>? {
         val keyHash = hashAgentKey(agentKey)
         return transaction {
-            Systems.select { Systems.agent_key_hash eq keyHash }
+            Systems.selectAll().where { Systems.agent_key_hash eq keyHash }
                 .firstOrNull()
                 ?.let {
                     Pair(
@@ -111,7 +111,7 @@ class MonitorService {
     fun checkSystemQuota(organizationId: Int): Boolean {
         val tier = getTierConfig(organizationId)
         val currentCount = transaction {
-            Systems.select { Systems.organization_id eq organizationId }.count()
+            Systems.selectAll().where { Systems.organization_id eq organizationId }.count()
         }
         return currentCount < tier.maxSystems
     }
@@ -223,7 +223,7 @@ class MonitorService {
      */
     fun listSystems(organizationId: Int): List<SystemData> {
         return transaction {
-            Systems.select { Systems.organization_id eq organizationId }
+            Systems.selectAll().where { Systems.organization_id eq organizationId }
                 .orderBy(Systems.created_at to SortOrder.DESC)
                 .map { rowToSystemData(it) }
         }
@@ -234,7 +234,7 @@ class MonitorService {
      */
     fun getSystemById(systemId: UUID): SystemData? {
         return transaction {
-            Systems.select { Systems.id eq systemId }
+            Systems.selectAll().where { Systems.id eq systemId }
                 .firstOrNull()
                 ?.let { rowToSystemData(it) }
         }
@@ -620,7 +620,7 @@ class MonitorService {
 
         val now = Clock.System.now()
         transaction {
-            val existing = SystemAlertSettings.select {
+            val existing = SystemAlertSettings.selectAll().where {
                 (SystemAlertSettings.system_id eq systemId) and
                 (SystemAlertSettings.organization_id eq organizationId)
             }.firstOrNull()
@@ -793,7 +793,7 @@ class MonitorService {
 
     private fun ensureOrganizationAlertTemplates(organizationId: Int) {
         transaction {
-            val existingCount = OrganizationAlertTemplates.select {
+            val existingCount = OrganizationAlertTemplates.selectAll().where {
                 OrganizationAlertTemplates.organization_id eq organizationId
             }.count()
             if (existingCount > 0) {
@@ -818,7 +818,7 @@ class MonitorService {
 
     private fun ensureSystemAlertsSeeded(systemId: UUID, organizationId: Int) {
         transaction {
-            val existingCount = SystemAlerts.select {
+            val existingCount = SystemAlerts.selectAll().where {
                 (SystemAlerts.system_id eq systemId) and
                 (SystemAlerts.organization_id eq organizationId)
             }.count()
@@ -827,7 +827,7 @@ class MonitorService {
             }
 
             val now = Clock.System.now()
-            val templates = OrganizationAlertTemplates.select {
+            val templates = OrganizationAlertTemplates.selectAll().where {
                 OrganizationAlertTemplates.organization_id eq organizationId
             }.toList()
 
@@ -866,7 +866,7 @@ class MonitorService {
 
     private fun getSystemAlertScope(systemId: UUID, organizationId: Int): String {
         return transaction {
-            val existing = SystemAlertSettings.select {
+            val existing = SystemAlertSettings.selectAll().where {
                 (SystemAlertSettings.system_id eq systemId) and
                 (SystemAlertSettings.organization_id eq organizationId)
             }.firstOrNull()
@@ -888,7 +888,7 @@ class MonitorService {
 
     private fun listSystemAlerts(systemId: UUID): List<AlertResponse> {
         return transaction {
-            SystemAlerts.select { SystemAlerts.system_id eq systemId }
+            SystemAlerts.selectAll().where { SystemAlerts.system_id eq systemId }
                 .orderBy(SystemAlerts.created_at to SortOrder.DESC)
                 .map { row ->
                     AlertResponse(
@@ -909,14 +909,14 @@ class MonitorService {
 
     private fun listGlobalAlerts(systemId: UUID, organizationId: Int): List<AlertResponse> {
         return transaction {
-            val templateStates = SystemAlertTemplateStates.select {
+            val templateStates = SystemAlertTemplateStates.selectAll().where {
                 SystemAlertTemplateStates.system_id eq systemId
             }.associateBy(
                 keySelector = { it[SystemAlertTemplateStates.template_alert_id] },
                 valueTransform = { it[SystemAlertTemplateStates.last_triggered_at] }
             )
 
-            OrganizationAlertTemplates.select {
+            OrganizationAlertTemplates.selectAll().where {
                 OrganizationAlertTemplates.organization_id eq organizationId
             }
                 .orderBy(OrganizationAlertTemplates.created_at to SortOrder.DESC)
