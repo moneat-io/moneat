@@ -1,7 +1,9 @@
 package com.moneat.e2e.android
 
 import android.app.Application
+import io.sentry.Sentry
 import io.sentry.android.core.SentryAndroid
+import io.sentry.protocol.User
 
 class MoneatApp : Application() {
     override fun onCreate() {
@@ -30,5 +32,12 @@ class MoneatApp : Application() {
             options.setTag("platform", "android")
             options.setTag("test_type", "e2e")
         }
+
+        // Use a fixed user for deterministic E2E replay attribution.
+        Sentry.setUser(User().apply {
+            id = "android-e2e-user-001"
+            email = "android-e2e@example.com"
+            username = "android_e2e_tester"
+        })
     }
 }

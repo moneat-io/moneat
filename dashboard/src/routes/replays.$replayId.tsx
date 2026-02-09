@@ -2,12 +2,27 @@ import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {useMemo, useRef, useState} from 'react'
 import {api} from '@/lib/api'
+import {formatRelativeTime} from '@/lib/utils'
 import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/replay-player'
 import {MobileReplayViewer, type MobileReplayViewerHandle} from '@/components/mobile-replay-viewer'
 import {ReplayTimelinePanel} from '@/components/replay-timeline-panel'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
-import {AlertCircle, ChevronLeft, DatabaseZap, Globe, Monitor, Tag, User} from 'lucide-react'
+import {
+  Activity,
+  AlertCircle,
+  ArrowUpRight,
+  ChevronLeft,
+  Clock3,
+  DatabaseZap,
+  Globe,
+  Layers,
+  Monitor,
+  Play,
+  Smartphone,
+  Tag,
+  User,
+} from 'lucide-react'
 
 export const Route = createFileRoute('/replays/$replayId')({
   beforeLoad: () => {
@@ -364,39 +379,114 @@ function ReplayDetailPage() {
   if (isLoading || !replay) {
     return (
       <div className="min-h-screen bg-background p-6">
-        <div className="max-w-7xl mx-auto">Loading replay...</div>
+        <div className="px-3 py-3 lg:px-5 lg:py-4">Loading replay...</div>
       </div>
     )
   }
 
   const hasRecording = events.length > 0 && !isMobileReplay
+  const platformLabel = replay.platform
+    ? replay.platform.charAt(0).toUpperCase() + replay.platform.slice(1)
+    : null
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto p-6">
-        <Link
-          to="/replays"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to Replays
-        </Link>
+      <div className="px-3 py-3 lg:px-5 lg:py-4">
+        {/* Breadcrumb nav */}
+        <nav className="mb-3 flex items-center gap-2 text-sm">
+          <Link
+            to="/replays"
+            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Replays
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="text-foreground font-medium truncate max-w-[200px] sm:max-w-none font-mono text-xs" title={replayId}>
+            {replayId.slice(0, 8)}...
+          </span>
+        </nav>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
+        {/* Replay Header - colored border top */}
+        <div className={`mb-3 bg-card rounded-lg border border-t-2 px-4 py-3 sm:px-5 sm:py-3.5 ${replay.errorCount > 0 ? 'border-t-red-500' : 'border-t-indigo-500'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <Play className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+                <h2 className="text-lg sm:text-xl font-bold leading-tight">Session Replay</h2>
+                {replay.errorCount > 0 && (
+                  <Badge variant="destructive" className="flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {replay.errorCount} error{replay.errorCount !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+                {platformLabel && (
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    {(replay.platform === 'android' || replay.platform === 'ios') ? (
+                      <Smartphone className="h-3 w-3" />
+                    ) : (
+                      <Monitor className="h-3 w-3" />
+                    )}
+                    {platformLabel}
+                  </Badge>
+                )}
+                {replay.environment && (
+                  <Badge variant="outline">{replay.environment}</Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">
+                {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous user'}
+                {replay.release ? ` — ${replay.release}` : ''}
+              </p>
+            </div>
+          </div>
+
+          {/* Compact inline stats */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5 pt-2.5 border-t text-sm">
+            <span className="inline-flex items-center gap-1.5">
+              <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatDuration(durationMs)}</span>
+              <span className="text-muted-foreground">duration</span>
+            </span>
+            {replay.errorCount > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-semibold text-red-600 dark:text-red-400">{replay.errorCount}</span>
+                <span className="text-muted-foreground">error{replay.errorCount !== 1 ? 's' : ''}</span>
+              </span>
+            )}
+            {replay.urls && replay.urls.length > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-semibold text-blue-600 dark:text-blue-400">{replay.urls.length}</span>
+                <span className="text-muted-foreground">URL{replay.urls.length !== 1 ? 's' : ''}</span>
+              </span>
+            )}
+            {replay.segmentCount > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-semibold text-violet-600 dark:text-violet-400">{replay.segmentCount}</span>
+                <span className="text-muted-foreground">segment{replay.segmentCount !== 1 ? 's' : ''}</span>
+              </span>
+            )}
+            <span className="text-muted-foreground/40 hidden sm:inline">|</span>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              Started <span className="text-foreground font-medium">{formatRelativeTime(replay.startedAt)}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              Finished <span className="text-foreground font-medium">{formatRelativeTime(replay.finishedAt)}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+          {/* Main column */}
+          <div className="lg:col-span-3 space-y-3">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span>Session Replay</span>
-                  {replay.errorCount > 0 && (
-                    <Badge variant="destructive" className="flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      {replay.errorCount} error{replay.errorCount !== 1 ? 's' : ''}
-                    </Badge>
-                  )}
+              <CardHeader className="pb-2 px-3 pt-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Play className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+                  Recording
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 pb-3">
                 {recordingLoading ? (
                   <div className="flex items-center justify-center h-[400px] rounded border bg-muted">
                     <p className="text-muted-foreground">Loading recording...</p>
@@ -431,10 +521,13 @@ function ReplayDetailPage() {
 
             {timeline ? (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Timeline</CardTitle>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Activity className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                    Timeline
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-3 pb-3">
                   <ReplayTimelinePanel
                     items={timelineItems}
                     currentOffsetMs={currentOffsetMs}
@@ -445,47 +538,67 @@ function ReplayDetailPage() {
             ) : null}
           </div>
 
-          <div className="space-y-4">
+          {/* Sidebar */}
+          <div className="lg:col-span-2 space-y-3">
+            {/* Session Details */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Details</CardTitle>
+              <CardHeader className="pb-2 px-3 pt-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Layers className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                  Session Details
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">Duration</div>
-                  <div>{formatDuration(replay.durationMs)}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">Started</div>
-                  <div className="text-sm">{formatDate(replay.startedAt)}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">Finished</div>
-                  <div className="text-sm">{formatDate(replay.finishedAt)}</div>
-                </div>
-                {replay.environment && (
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">Environment</div>
-                    <Badge variant="outline">{replay.environment}</Badge>
+              <CardContent className="px-3 pb-3">
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground flex-shrink-0">Duration</span>
+                    <span className="font-medium">{formatDuration(durationMs)}</span>
                   </div>
-                )}
-                {replay.release && (
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">Release</div>
-                    <div className="text-sm">{replay.release}</div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground flex-shrink-0">Started</span>
+                    <span className="text-xs">{formatDate(replay.startedAt)}</span>
                   </div>
-                )}
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground flex-shrink-0">Finished</span>
+                    <span className="text-xs">{formatDate(replay.finishedAt)}</span>
+                  </div>
+                  {replay.environment && (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Environment</span>
+                      <Badge variant="outline" className="text-xs">{replay.environment}</Badge>
+                    </div>
+                  )}
+                  {replay.release && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-muted-foreground">Release</span>
+                      <span className="text-right min-w-0 max-w-[65%] break-words [overflow-wrap:anywhere] text-xs">{replay.release}</span>
+                    </div>
+                  )}
+                  {platformLabel && (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Platform</span>
+                      <span>{platformLabel}</span>
+                    </div>
+                  )}
+                  {replay.segmentCount > 0 && (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Segments</span>
+                      <span>{replay.segmentCount}</span>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
+            {/* User */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <User className="h-4 w-4" />
+              <CardHeader className="pb-2 px-3 pt-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <User className="h-4 w-4 text-violet-500 dark:text-violet-400" />
                   User
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 pb-3">
                 {replay.user?.email || replay.user?.username || replay.user?.id ? (
                   <div className="space-y-1 text-sm">
                     {replay.user.email && <div>{replay.user.email}</div>}
@@ -500,14 +613,15 @@ function ReplayDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Browser / OS */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Monitor className="h-4 w-4" />
+              <CardHeader className="pb-2 px-3 pt-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Monitor className="h-4 w-4 text-cyan-500 dark:text-cyan-400" />
                   Browser / OS
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 pb-3">
                 <div className="space-y-1 text-sm">
                   {replay.browserName && (
                     <div>
@@ -528,16 +642,17 @@ function ReplayDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Visited URLs */}
             {replay.urls && replay.urls.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Globe className="h-4 w-4" />
-                    Visited URLs
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Globe className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+                    Visited URLs ({replay.urls.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <ul className="space-y-1 text-sm max-h-32 overflow-y-auto">
+                <CardContent className="px-3 pb-3">
+                  <ul className="space-y-1 text-sm max-h-40 overflow-y-auto">
                     {replay.urls.map((url, i) => (
                       <li key={i} className="truncate text-muted-foreground" title={url}>
                         {url}
@@ -548,16 +663,44 @@ function ReplayDetailPage() {
               </Card>
             )}
 
-            {replay.traceIds && replay.traceIds.length > 0 && (
+            {/* Error IDs - linked to issues */}
+            {replay.errorIds && replay.errorIds.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <DatabaseZap className="h-4 w-4" />
-                    Trace IDs
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <AlertCircle className="h-4 w-4 text-red-500 dark:text-red-400" />
+                    Errors ({replay.errorIds.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <ul className="space-y-1 font-mono text-xs text-muted-foreground">
+                <CardContent className="px-3 pb-3">
+                  <div className="space-y-1.5 max-h-[200px] overflow-auto">
+                    {replay.errorIds.map((errorId) => (
+                      <Link
+                        key={errorId}
+                        to="/issues/$issueId"
+                        params={{ issueId: errorId }}
+                        className="flex items-center justify-between rounded border p-2 transition-colors hover:bg-accent group"
+                      >
+                        <span className="font-mono text-xs text-muted-foreground truncate min-w-0">{errorId}</span>
+                        <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Link>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Trace IDs */}
+            {replay.traceIds && replay.traceIds.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <DatabaseZap className="h-4 w-4 text-cyan-500 dark:text-cyan-400" />
+                    Trace IDs ({replay.traceIds.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <ul className="space-y-1 font-mono text-xs text-muted-foreground max-h-[200px] overflow-auto">
                     {replay.traceIds.map((traceId) => (
                       <li key={traceId} className="truncate" title={traceId}>
                         {traceId}
@@ -568,20 +711,26 @@ function ReplayDetailPage() {
               </Card>
             )}
 
+            {/* Tags */}
             {replay.tags && Object.keys(replay.tags).length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Tag className="h-4 w-4" />
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Tag className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                     Tags
+                    <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{Object.keys(replay.tags).length}</Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
+                <CardContent className="px-3 pb-3">
+                  <div className="flex flex-wrap gap-1.5">
                     {Object.entries(replay.tags).map(([key, value]) => (
-                      <Badge key={key} variant="secondary" className="font-mono text-xs">
-                        {key}: {value}
-                      </Badge>
+                      <div
+                        key={key}
+                        className="inline-flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-0.5 text-[11px]"
+                      >
+                        <span className="text-muted-foreground">{key}:</span>
+                        <span className="font-mono font-medium">{value}</span>
+                      </div>
                     ))}
                   </div>
                 </CardContent>
