@@ -11,7 +11,7 @@ fun main(args: Array<String>) {
     // Load .env file into system properties before starting the server
     EnvConfig.initialize()
     
-    // Initialize Sentry for error monitoring
+    // Initialize Sentry for error monitoring (points to Moneat via SENTRY_DSN)
     com.moneat.config.SentryConfig.initialize()
     
     EngineMain.main(args)

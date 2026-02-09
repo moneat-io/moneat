@@ -31,18 +31,18 @@ const TIME_PRESETS: TimeRangePreset[] = [
 const LEVEL_OPTIONS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal']
 
 const levelColors: Record<string, string> = {
-  trace: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-500/25',
-  debug: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 hover:bg-cyan-500/25',
-  info: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 hover:bg-blue-500/25',
-  warn: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 hover:bg-amber-500/25',
-  error: 'bg-red-500/15 text-red-600 dark:text-red-300 hover:bg-red-500/25',
-  fatal: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 hover:bg-rose-500/25',
+  trace: 'bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-500/10',
+  debug: 'bg-transparent text-teal-600 dark:text-teal-300 hover:bg-teal-500/10',
+  info: 'bg-transparent text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/10',
+  warn: 'bg-transparent text-amber-600 dark:text-amber-300 hover:bg-amber-500/10',
+  error: 'bg-transparent text-red-600 dark:text-red-300 hover:bg-red-500/10',
+  fatal: 'bg-transparent text-rose-600 dark:text-rose-300 hover:bg-rose-500/10',
 }
 
 const levelActiveColors: Record<string, string> = {
   trace: 'bg-zinc-500/30 text-zinc-700 dark:text-zinc-200 border-zinc-500/50 ring-1 ring-zinc-500/20',
-  debug: 'bg-cyan-500/30 text-cyan-700 dark:text-cyan-200 border-cyan-500/50 ring-1 ring-cyan-500/20',
-  info: 'bg-blue-500/30 text-blue-700 dark:text-blue-200 border-blue-500/50 ring-1 ring-blue-500/20',
+  debug: 'bg-teal-500/30 text-teal-700 dark:text-teal-100 border-teal-500/50 ring-1 ring-teal-500/20',
+  info: 'bg-indigo-500/30 text-indigo-700 dark:text-indigo-100 border-indigo-500/50 ring-1 ring-indigo-500/20',
   warn: 'bg-amber-500/30 text-amber-700 dark:text-amber-200 border-amber-500/50 ring-1 ring-amber-500/20',
   error: 'bg-red-500/30 text-red-700 dark:text-red-200 border-red-500/50 ring-1 ring-red-500/20',
   fatal: 'bg-rose-500/40 text-rose-700 dark:text-rose-200 border-rose-500/50 ring-1 ring-rose-500/20',
@@ -259,7 +259,16 @@ export function LogSearchBar({
     return preset?.label ?? 'Last 15 minutes'
   }, [timePreset])
 
-  const hasActiveFilters = query || facetFilters.length > 0 || levels.length > 0
+  const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
+
+  const resetLevelFilter = useCallback(() => {
+    if (!hasCustomLevelFilter) return
+    const selectedLevels = [...levels]
+    selectedLevels.forEach((level) => onToggleLevel(level))
+    LEVEL_OPTIONS.forEach((level) => onToggleLevel(level))
+  }, [hasCustomLevelFilter, levels, onToggleLevel])
+
+  const hasActiveFilters = query || facetFilters.length > 0 || hasCustomLevelFilter
 
   return (
     <div className="space-y-2.5">
@@ -334,6 +343,7 @@ export function LogSearchBar({
                 onClick={() => {
                   onQueryChange('')
                   onFacetFiltersChange([])
+                  resetLevelFilter()
                   setInputValue('')
                 }}
                 className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -481,10 +491,10 @@ export function LogSearchBar({
             </button>
           )
         })}
-        {levels.length > 0 && (
+        {hasCustomLevelFilter && (
           <button
             type="button"
-            onClick={() => levels.forEach((l) => onToggleLevel(l))}
+            onClick={resetLevelFilter}
             className="ml-1 text-[11px] text-muted-foreground hover:text-foreground"
           >
             Clear
@@ -495,4 +505,4 @@ export function LogSearchBar({
   )
 }
 
-export {TIME_PRESETS}
+export {LEVEL_OPTIONS, TIME_PRESETS}

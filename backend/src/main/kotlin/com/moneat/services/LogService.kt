@@ -209,7 +209,7 @@ class LogService {
         val query = """
             SELECT
                 toString(log_id) AS log_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp_formatted,
                 toString(level) AS level,
                 message,
                 body,
@@ -364,7 +364,7 @@ class LogService {
                     val timestampMs = obj["timestamp_ms"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
                     val log = LogEntryResponse(
                         logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
+                        timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
                         level = normalizeLevel(obj["level"]?.jsonPrimitive?.content),
                         message = obj["message"]?.jsonPrimitive?.content ?: "",
                         body = obj["body"]?.jsonPrimitive?.content ?: "",

@@ -3,7 +3,7 @@ import {useQuery} from '@tanstack/react-query'
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {api, formatErrorForLogging, type LogEntry} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
-import {type FacetFilter, LogSearchBar, TIME_PRESETS} from '@/components/logs/LogSearchBar'
+import {type FacetFilter, LEVEL_OPTIONS, LogSearchBar, TIME_PRESETS} from '@/components/logs/LogSearchBar'
 import {TagFacets} from '@/components/logs/TagFacets'
 import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
@@ -82,7 +82,7 @@ function ProjectLogsPage() {
   // Search / filter state
   const [query, setQuery] = useState('')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
-  const [levels, setLevels] = useState<string[]>([])
+  const [levels, setLevels] = useState<string[]>(() => [...LEVEL_OPTIONS])
   const [timePreset, setTimePreset] = useState('15m')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -135,7 +135,8 @@ function ProjectLogsPage() {
     return {service, environment, tags}
   }, [facetFilters])
 
-  const levelsKey = levels.join(',')
+  const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
+  const levelsKey = hasCustomLevelFilter ? levels.join(',') : '__all__'
 
   useEffect(() => {
     pausedRef.current = tailPaused
@@ -184,7 +185,7 @@ function ProjectLogsPage() {
         cursor: cursor || undefined,
         limit: 150,
         query: query || undefined,
-        levels: levels.length > 0 ? levels : undefined,
+        levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
         from: timeRange.from,
@@ -209,7 +210,7 @@ function ProjectLogsPage() {
     setTailStatus('connecting')
     const source = api.createProjectLogTailStream(numericProjectId, {
       query: query || undefined,
-      levels: levels.length > 0 ? levels : undefined,
+      levels: hasCustomLevelFilter ? levels : undefined,
       service: derivedFilters.service,
       environment: derivedFilters.environment,
     })
@@ -248,7 +249,7 @@ function ProjectLogsPage() {
       source.close()
       setTailStatus('closed')
     }
-  }, [liveTailEnabled, numericProjectId, query, derivedFilters.service, derivedFilters.environment, levelsKey, levels])
+  }, [liveTailEnabled, numericProjectId, query, derivedFilters.service, derivedFilters.environment, levelsKey, levels, hasCustomLevelFilter])
 
   const toggleLevel = (level: string) => {
     setLevels((current) =>
@@ -314,7 +315,7 @@ function ProjectLogsPage() {
     }
   }
 
-  const showEmptyState = !isLoading && logs.length === 0 && !query && facetFilters.length === 0 && levels.length === 0
+  const showEmptyState = !isLoading && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]">
@@ -450,7 +451,9 @@ function ProjectLogsPage() {
             {/* Log table or empty state */}
             <div className="flex-1 overflow-y-auto">
               {showEmptyState ? (
-                <LogSetupGuide dsn={project.dsn} sdkVersions={sdkVersionsResponse?.versions} />
+                <div className="px-3 pb-6 sm:px-4 sm:pb-8">
+                  <LogSetupGuide dsn={project.dsn} sdkVersions={sdkVersionsResponse?.versions} />
+                </div>
               ) : isLoading ? (
                 <div className="flex items-center justify-center py-24">
                   <div className="text-center">
@@ -516,8 +519,8 @@ function ProjectLogsPage() {
                                     'min-w-[44px] justify-center font-mono text-[9px] uppercase py-0 px-1',
                                     normalizedLevel === 'error' && 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
                                     normalizedLevel === 'warn' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-                                    normalizedLevel === 'info' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-                                    normalizedLevel === 'debug' && 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+                                    normalizedLevel === 'info' && 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+                                    normalizedLevel === 'debug' && 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20'
                                   )}
                                 >
                                   {normalizedLevel}

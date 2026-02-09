@@ -1,40 +1,43 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
-import {formatRelativeTime} from '@/lib/utils'
+import {api, type MonitorSystemWithMetrics} from '@/lib/api'
+import {cn, formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Separator} from '@/components/ui/separator'
 import {Switch} from '@/components/ui/switch'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
-    Activity,
-    ArrowUpRight,
-    Check,
-    CheckCircle2,
-    Copy,
-    Cpu,
-    HardDrive,
-    MemoryStick,
-    Network,
-    Plus,
-    Server,
-    ServerOff,
-    Terminal,
-    Thermometer,
-    Trash2,
-    Zap,
+  Activity,
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  Copy,
+  Cpu,
+  HardDrive,
+  LayoutGrid,
+  MemoryStick,
+  Network,
+  Plus,
+  Rows3,
+  Server,
+  ServerOff,
+  Terminal,
+  Thermometer,
+  Trash2,
+  Zap,
 } from 'lucide-react'
 import {useEffect, useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
@@ -74,6 +77,23 @@ function getPercentColor(value: number | undefined): string {
   if (value >= 75) return 'text-orange-500'
   if (value >= 50) return 'text-yellow-500'
   return 'text-emerald-500'
+}
+
+function getPercentBarColor(value: number | undefined): string {
+  if (value === undefined) return 'bg-muted-foreground/30'
+  if (value >= 90) return 'bg-red-500'
+  if (value >= 75) return 'bg-orange-500'
+  if (value >= 50) return 'bg-yellow-500'
+  return 'bg-emerald-500'
+}
+
+type MonitoringViewMode = 'cards' | 'compact'
+
+const MONITORING_VIEW_MODE_STORAGE_KEY = 'monitoring-systems-view-mode'
+
+function getInitialMonitoringViewMode(): MonitoringViewMode {
+  if (typeof window === 'undefined') return 'cards'
+  return window.localStorage.getItem(MONITORING_VIEW_MODE_STORAGE_KEY) === 'compact' ? 'compact' : 'cards'
 }
 
 function MiniGauge({value, size = 40}: {value: number | undefined; size?: number}) {
@@ -610,16 +630,187 @@ function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, nam
   )
 }
 
+function SystemsCompactTable({
+  systems,
+  onDelete,
+}: {
+  systems: MonitorSystemWithMetrics[]
+  onDelete: (id: string, name: string) => void
+}) {
+  return (
+    <Card className="overflow-hidden border-border/60 shadow-sm">
+      <CardContent className="p-0">
+        <Table className="min-w-[860px]">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent bg-muted/30">
+              <TableHead className="pl-4">System</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>CPU</TableHead>
+              <TableHead className="hidden sm:table-cell">Memory</TableHead>
+              <TableHead className="hidden md:table-cell">Disk</TableHead>
+              <TableHead className="hidden lg:table-cell">Network</TableHead>
+              <TableHead className="text-right">Last Seen</TableHead>
+              <TableHead className="pr-4 text-right w-[80px]">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {systems.map((system) => {
+              const metrics = system.latest_metrics
+              const memPercent =
+                metrics?.mem_used && metrics?.mem_total ? (metrics.mem_used / metrics.mem_total) * 100 : undefined
+              const diskPercent =
+                metrics?.disk_used && metrics?.disk_total ? (metrics.disk_used / metrics.disk_total) * 100 : undefined
+              const cpuPercent = metrics?.cpu_percent
+              const isOnline = system.status === 'up'
+
+              return (
+                <TableRow key={system.id} className="group">
+                  <TableCell className="pl-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={cn(
+                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+                          isOnline
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : system.status === 'down'
+                              ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                              : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                        )}
+                      >
+                        {isOnline ? <Server className="h-4 w-4" /> : <ServerOff className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <Link
+                          to="/monitoring/$systemId"
+                          params={{systemId: system.id}}
+                          className="inline-flex items-center gap-1 font-medium hover:underline underline-offset-4"
+                        >
+                          <span className="truncate max-w-[230px]">{system.name}</span>
+                          <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                        </Link>
+                        <p className="truncate text-xs text-muted-foreground mt-0.5">
+                          {system.host || `ID: ${system.id}`}
+                        </p>
+                      </div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell>
+                    <Badge
+                      variant={isOnline ? 'default' : 'secondary'}
+                      className={cn(
+                        'text-xs',
+                        isOnline
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/20'
+                          : system.status === 'down'
+                            ? 'bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/20 border-red-500/20'
+                            : ''
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'h-1.5 w-1.5 rounded-full mr-1.5',
+                          isOnline ? 'bg-emerald-500 animate-pulse' : system.status === 'down' ? 'bg-red-500' : 'bg-yellow-500'
+                        )}
+                      />
+                      {system.status}
+                    </Badge>
+                  </TableCell>
+
+                  <TableCell className="min-w-[120px]">
+                    <div className="space-y-1">
+                      <p className={cn('text-xs font-medium tabular-nums', getPercentColor(cpuPercent))}>
+                        {formatPercent(cpuPercent)}
+                      </p>
+                      <div className="h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all', getPercentBarColor(cpuPercent))}
+                          style={{width: `${Math.min(100, Math.max(0, cpuPercent || 0))}%`}}
+                        />
+                      </div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="hidden sm:table-cell min-w-[170px]">
+                    <div className="space-y-1">
+                      <p className={cn('text-xs font-medium tabular-nums', getPercentColor(memPercent))}>
+                        {formatBytes(metrics?.mem_used)} / {formatBytes(metrics?.mem_total)}
+                      </p>
+                      <div className="h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all', getPercentBarColor(memPercent))}
+                          style={{width: `${Math.min(100, Math.max(0, memPercent || 0))}%`}}
+                        />
+                      </div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="hidden md:table-cell min-w-[170px]">
+                    <div className="space-y-1">
+                      <p className={cn('text-xs font-medium tabular-nums', getPercentColor(diskPercent))}>
+                        {formatBytes(metrics?.disk_used)} / {formatBytes(metrics?.disk_total)}
+                      </p>
+                      <div className="h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all', getPercentBarColor(diskPercent))}
+                          style={{width: `${Math.min(100, Math.max(0, diskPercent || 0))}%`}}
+                        />
+                      </div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="hidden lg:table-cell">
+                    <div className="text-xs font-medium tabular-nums leading-5">
+                      <div className="text-sky-600 dark:text-sky-400">↓ {formatBytesPerSec(metrics?.net_recv_bytes)}</div>
+                      <div className="text-indigo-600 dark:text-indigo-400">↑ {formatBytesPerSec(metrics?.net_sent_bytes)}</div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="text-right text-xs text-muted-foreground">
+                    {system.lastSeenAt ? formatRelativeTime(system.lastSeenAt) : 'Never seen'}
+                  </TableCell>
+
+                  <TableCell className="pr-4 text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onDelete(system.id, system.name)
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+}
+
 function MonitoringListPage() {
   const {toast} = useToast()
   const queryClient = useQueryClient()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<MonitoringViewMode>(getInitialMonitoringViewMode)
 
   const {data: systems = [], isLoading} = useQuery({
     queryKey: ['monitor-systems'],
     queryFn: () => api.getMonitorSystems(),
     refetchInterval: 30000,
   })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(MONITORING_VIEW_MODE_STORAGE_KEY, viewMode)
+    }
+  }, [viewMode])
 
   const deleteMutation = useMutation({
     mutationFn: (systemId: string) => api.deleteMonitorSystem(systemId),
@@ -656,14 +847,36 @@ function MonitoringListPage() {
       {/* Header */}
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Server Monitoring</h1>
               <p className="text-muted-foreground mt-1">
                 Monitor system metrics, containers, and receive alerts
               </p>
             </div>
-            <AddSystemButton onClick={() => setAddDialogOpen(true)} />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center rounded-lg border bg-background p-1">
+                <Button
+                  variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => setViewMode('cards')}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Cards
+                </Button>
+                <Button
+                  variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => setViewMode('compact')}
+                >
+                  <Rows3 className="h-3.5 w-3.5" />
+                  Compact
+                </Button>
+              </div>
+              <AddSystemButton onClick={() => setAddDialogOpen(true)} />
+            </div>
           </div>
         </div>
       </div>
@@ -759,6 +972,8 @@ function MonitoringListPage() {
               <AddSystemButton onClick={() => setAddDialogOpen(true)} />
             </CardContent>
           </Card>
+        ) : viewMode === 'compact' ? (
+          <SystemsCompactTable systems={systems} onDelete={handleDelete} />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {systems.map((system) => (

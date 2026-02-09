@@ -6,20 +6,44 @@
         </encoder>
     </appender>
     
-    <!-- Sentry Appender: Sends WARN and ERROR logs to Sentry as breadcrumbs/events -->
+    <!-- Sentry Appender: Sends errors as events (optional, keep for error tracking) -->
     <appender name="SENTRY" class="io.sentry.logback.SentryAppender">
         <options>
             <minimumEventLevel>WARN</minimumEventLevel>
-            <minimumBreadcrumbLevel>INFO</minimumBreadcrumbLevel>
+            <minimumBreadcrumbLevel>DEBUG</minimumBreadcrumbLevel>
         </options>
     </appender>
+    
+    <!-- Moneat Log Appender: Sends logs to the logs table via OTLP -->
+    <appender name="MONEAT" class="com.moneat.logging.MoneatLogAppender">
+        <endpoint>http://localhost:8080/v1/logs/otlp</endpoint>
+        <dsn>https://b422c0677570443e8ab25450d20b0f0c@localhost:8080/3</dsn>
+        <serviceName>moneat-backend</serviceName>
+        <environment>development</environment>
+    </appender>
 
+    <!-- Default to INFO for all libraries to reduce noise -->
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="SENTRY"/>
+        <appender-ref ref="MONEAT"/>
     </root>
 
+    <!-- Enable DEBUG only for your application code -->
     <logger name="com.moneat" level="DEBUG"/>
+    
+    <!-- Keep common noisy libraries at WARN level -->
+    <logger name="io.lettuce" level="WARN"/>
+    <logger name="io.netty" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
     <logger name="io.ktor" level="INFO"/>
     <logger name="Exposed" level="INFO"/>
+    <logger name="org.flywaydb" level="INFO"/>
+    <logger name="io.opentelemetry" level="WARN"/>
+    
+    <!-- Prevent infinite loop: don't send Application request logs to MONEAT appender -->
+    <logger name="Application" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="SENTRY"/>
+    </logger>
 </configuration>

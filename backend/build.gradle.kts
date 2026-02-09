@@ -91,6 +91,12 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:$logback_version")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
     
+    // OpenTelemetry for logging to Moneat
+    implementation("io.opentelemetry:opentelemetry-api:1.34.0")
+    implementation("io.opentelemetry:opentelemetry-sdk:1.34.0")
+    implementation("io.opentelemetry:opentelemetry-exporter-otlp:1.34.0")
+    implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.1.0-alpha")
+    
     // Sentry - Error monitoring
     implementation("io.sentry:sentry-kotlin-extensions:7.6.0")
     implementation("io.sentry:sentry-logback:7.6.0")
