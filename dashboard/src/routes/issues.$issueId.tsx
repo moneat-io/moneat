@@ -11,27 +11,29 @@ import {Checkbox} from '@/components/ui/checkbox'
 import {Label} from '@/components/ui/label'
 import {SpanWaterfall} from '@/components/span-waterfall'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {EmbeddedLogs} from '@/components/logs/EmbeddedLogs'
 import {
-  Activity,
-  AlertCircle,
-  ArrowUpRight,
-  Battery,
-  CheckCircle2,
-  ChevronRight,
-  ChevronLeft,
-  Circle,
-  Clock3,
-  DatabaseZap,
-  Globe,
-  Info,
-  Layers,
-  MessageSquare,
-  MousePointer,
-  Navigation,
-  Play,
-  Smartphone,
-  Tag,
-  Zap,
+    Activity,
+    AlertCircle,
+    ArrowUpRight,
+    Battery,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    Circle,
+    Clock3,
+    DatabaseZap,
+    Globe,
+    Info,
+    Layers,
+    MessageSquare,
+    MousePointer,
+    Navigation,
+    Play,
+    Smartphone,
+    Tag,
+    TerminalSquare,
+    Zap,
 } from 'lucide-react'
 
 // Helper function to get level color
@@ -256,6 +258,28 @@ function IssueDetailPage() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Logs Context */}
+                <Card>
+                  <CardHeader className="pb-2 px-3 pt-3">
+                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                      <TerminalSquare className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+                      Logs Context
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-0 pb-0">
+                    <EmbeddedLogs
+                      projectId={issue.projectId}
+                      centerTimestamp={latestEvent.timestamp}
+                      contextMinutes={5}
+                      environment={latestEvent.environment}
+                      service={latestEventTags.service}
+                      maxHeight="500px"
+                      showHeader={false}
+                      className="border-0 rounded-none"
+                    />
+                  </CardContent>
+                </Card>
               </>
             )}
 
@@ -568,7 +592,14 @@ function formatAsStackTrace(exception: any): JSX.Element[] {
 }
 
 function StackTraceViewer({ exception }: { exception: string }) {
+  const STACK_TRACE_VIEW_KEY = 'issue-stack-trace-view-preference'
+  const savedView = localStorage.getItem(STACK_TRACE_VIEW_KEY) || 'formatted'
+  
   const rawContent = typeof exception === 'string' ? exception : JSON.stringify(exception, null, 2)
+  
+  const handleValueChange = (value: string) => {
+    localStorage.setItem(STACK_TRACE_VIEW_KEY, value)
+  }
   
   try {
     const parsed = typeof exception === 'string' ? JSON.parse(exception) : exception
@@ -576,7 +607,7 @@ function StackTraceViewer({ exception }: { exception: string }) {
     const stackTraceText = formatAsStackTrace(exception)
     
     return (
-      <Tabs defaultValue="formatted" className="w-full">
+      <Tabs defaultValue={savedView} onValueChange={handleValueChange} className="w-full">
         <TabsList>
           <TabsTrigger value="formatted">Formatted</TabsTrigger>
           <TabsTrigger value="raw">Raw</TabsTrigger>

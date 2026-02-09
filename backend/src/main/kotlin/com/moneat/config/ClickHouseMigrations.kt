@@ -8,7 +8,13 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import java.nio.file.FileSystems
+import java.nio.file.Files
 import java.security.MessageDigest
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.name
+import kotlin.io.path.nameWithoutExtension
+import kotlin.io.path.readText
 
 /**
  * ClickHouse migration system similar to Flyway for PostgreSQL.
@@ -95,25 +101,48 @@ object ClickHouseMigrations {
         val url = classLoader.getResource(MIGRATIONS_PATH)
             ?: throw IllegalStateException("Migrations directory not found: $MIGRATIONS_PATH")
         
-        val migrationsDir = File(url.toURI())
-        if (!migrationsDir.exists() || !migrationsDir.isDirectory) {
-            throw IllegalStateException("Migrations directory not found: ${migrationsDir.absolutePath}")
+        val uri = url.toURI()
+        val migrationPaths = if (uri.scheme == "jar") {
+            // Running from JAR - use FileSystem to read resources
+            val env = mapOf<String, Any>()
+            FileSystems.newFileSystem(uri, env).use { fs ->
+                val migrationsPath = fs.getPath("/$MIGRATIONS_PATH")
+                Files.walk(migrationsPath, 1)
+                    .filter { it.isRegularFile() && it.name.matches(Regex("^V\\d+__.+\\.sql$")) }
+                    .map { path ->
+                        val name = path.nameWithoutExtension
+                        val parts = name.split("__", limit = 2)
+                        val version = parts[0].substring(1).toInt()
+                        val description = parts.getOrNull(1) ?: ""
+                        val sql = path.readText()
+                        val checksum = calculateChecksum(sql)
+                        Migration(version, description, path.name, sql, checksum)
+                    }
+                    .toList()
+            }
+        } else {
+            // Running from filesystem (development)
+            val migrationsDir = File(uri)
+            if (!migrationsDir.exists() || !migrationsDir.isDirectory) {
+                throw IllegalStateException("Migrations directory not found: ${migrationsDir.absolutePath}")
+            }
+            
+            val migrationFiles = migrationsDir.listFiles { file ->
+                file.isFile && file.name.matches(Regex("^V\\d+__.+\\.sql$"))
+            } ?: emptyArray()
+            
+            migrationFiles.map { file ->
+                val name = file.nameWithoutExtension
+                val parts = name.split("__", limit = 2)
+                val version = parts[0].substring(1).toInt()
+                val description = parts.getOrNull(1) ?: ""
+                val sql = file.readText()
+                val checksum = calculateChecksum(sql)
+                Migration(version, description, file.name, sql, checksum)
+            }
         }
         
-        val migrationFiles = migrationsDir.listFiles { file ->
-            file.isFile && file.name.matches(Regex("^V\\d+__.+\\.sql$"))
-        } ?: emptyArray()
-        
-        return migrationFiles.map { file ->
-            val name = file.nameWithoutExtension
-            val parts = name.split("__", limit = 2)
-            val version = parts[0].substring(1).toInt() // Remove 'V' prefix
-            val description = parts.getOrNull(1) ?: ""
-            val sql = file.readText()
-            val checksum = calculateChecksum(sql)
-            
-            Migration(version, description, file.name, sql, checksum)
-        }.sortedBy { it.version }
+        return migrationPaths.sortedBy { it.version }
     }
     
     private suspend fun getAppliedMigrations(): List<AppliedMigration> {

@@ -56,6 +56,7 @@ data class ProjectResponse(
 @Serializable
 data class IssueResponse(
     val id: String,
+    val projectId: Long,
     val title: String,
     val culprit: String,
     val level: String,
@@ -70,6 +71,7 @@ data class IssueResponse(
 @Serializable
 data class IssueDetailResponse(
     val id: String,
+    val projectId: Long,
     val title: String,
     val culprit: String,
     val level: String,

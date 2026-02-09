@@ -1,0 +1,236 @@
+import {useQuery} from '@tanstack/react-query'
+import {useMemo, useState} from 'react'
+import {api, type LogEntry} from '@/lib/api'
+import {LogTable} from '@/components/logs/LogTable'
+import {LogDetail} from '@/components/logs/LogDetail'
+import {Button} from '@/components/ui/button'
+import {cn} from '@/lib/utils'
+import {ChevronLeft, ChevronRight, Loader2, TerminalSquare} from 'lucide-react'
+
+interface EmbeddedLogsProps {
+  projectId: number
+  /**
+   * Filter logs by time range around a specific timestamp
+   * Shows logs from [centerTimestamp - contextMinutes] to [centerTimestamp + contextMinutes]
+   */
+  centerTimestamp?: string
+  /**
+   * How many minutes before and after centerTimestamp to show (default: 5)
+   */
+  contextMinutes?: number
+  /**
+   * Additional filters
+   */
+  query?: string
+  levels?: string[]
+  service?: string
+  environment?: string
+  tags?: Record<string, string>
+  /**
+   * Maximum height of the logs container (default: '400px')
+   */
+  maxHeight?: string
+  /**
+   * Show/hide the header (default: true)
+   */
+  showHeader?: boolean
+  /**
+   * Compact mode - smaller text and padding (default: false)
+   */
+  compact?: boolean
+  className?: string
+}
+
+export function EmbeddedLogs({
+  projectId,
+  centerTimestamp,
+  contextMinutes = 5,
+  query,
+  levels,
+  service,
+  environment,
+  tags,
+  maxHeight = '400px',
+  showHeader = true,
+  className,
+}: EmbeddedLogsProps) {
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([])
+  const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  // Calculate time range based on centerTimestamp and contextMinutes
+  const timeRange = useMemo(() => {
+    if (!centerTimestamp) {
+      return {}
+    }
+
+    const center = new Date(centerTimestamp)
+    if (Number.isNaN(center.getTime())) {
+      return {}
+    }
+
+    const contextMs = contextMinutes * 60 * 1000
+    const from = new Date(center.getTime() - contextMs)
+    const to = new Date(center.getTime() + contextMs)
+
+    return {
+      from: from.toISOString(),
+      to: to.toISOString(),
+    }
+  }, [centerTimestamp, contextMinutes])
+
+  // Fetch logs
+  const {
+    data: logPage,
+    isLoading,
+  } = useQuery({
+    queryKey: [
+      'embedded-logs',
+      projectId,
+      cursor,
+      query,
+      levels?.join(','),
+      timeRange.from,
+      timeRange.to,
+      service,
+      environment,
+      JSON.stringify(tags),
+    ],
+    queryFn: () =>
+      api.getProjectLogs(projectId, {
+        cursor: cursor || undefined,
+        limit: 100,
+        query: query || undefined,
+        levels,
+        service,
+        environment,
+        from: timeRange.from,
+        to: timeRange.to,
+        tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
+      }),
+    enabled: Number.isFinite(projectId),
+  })
+
+  const logs = logPage?.logs ?? []
+
+  const handleSelectLog = (log: LogEntry) => {
+    setSelectedLog(log)
+    setDetailOpen(true)
+  }
+
+  const handleNextPage = () => {
+    if (!logPage?.hasMore) return
+    setCursorHistory((current) => [...current, cursor])
+    setCursor(logPage.nextCursor || null)
+  }
+
+  const handlePreviousPage = () => {
+    if (cursorHistory.length === 0) return
+    const previous = cursorHistory[cursorHistory.length - 1] ?? null
+    setCursorHistory((current) => current.slice(0, -1))
+    setCursor(previous)
+  }
+
+  return (
+    <div className={cn('flex flex-col overflow-hidden rounded-lg border bg-card', className)}>
+      {/* Header */}
+      {showHeader && (
+        <div className="flex items-center justify-between gap-4 border-b bg-muted/30 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <TerminalSquare className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">
+              {centerTimestamp ? (
+                <>
+                  Logs ±{contextMinutes}min around{' '}
+                  {new Date(centerTimestamp).toLocaleString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
+                </>
+              ) : (
+                'Logs'
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-muted-foreground">
+              {isLoading ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading...
+                </span>
+              ) : (
+                <span>
+                  {logs.length} log{logs.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handlePreviousPage}
+                disabled={cursorHistory.length === 0}
+                className="h-6 w-6 p-0"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={!logPage?.hasMore}
+                className="h-6 w-6 p-0"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log content */}
+      <div
+        className="overflow-y-auto"
+        style={{maxHeight}}
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+              <p className="mt-2 text-xs text-muted-foreground">Loading logs...</p>
+            </div>
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <TerminalSquare className="mx-auto h-8 w-8 text-muted-foreground/30" />
+              <p className="mt-2 text-sm font-medium text-muted-foreground">No logs found</p>
+              {centerTimestamp && (
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  No logs in the ±{contextMinutes} minute window
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <LogTable
+            logs={logs}
+            selectedLogId={selectedLog?.logId}
+            onSelectLog={handleSelectLog}
+          />
+        )}
+      </div>
+
+      {/* Log detail sheet */}
+      <LogDetail log={selectedLog} open={detailOpen} onClose={() => setDetailOpen(false)} />
+    </div>
+  )
+}

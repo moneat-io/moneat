@@ -317,51 +317,6 @@ val loggerProvider = SdkLoggerProvider.builder()
   },
 ]
 
-const migrationGuides = [
-  {
-    id: 'datadog',
-    name: 'Datadog',
-    icon: Server,
-    color: 'text-sky-500',
-    bgColor: 'bg-sky-500/10',
-    rollout: [
-      'Start with dual shipping for 7-14 days: keep Datadog as the source of truth while sending the same application logs to Moneat via OTLP.',
-      'Map Datadog fields to OpenTelemetry attributes before export: dd.service -> service.name, dd.env -> deployment.environment, dd.version -> service.version.',
-      'Preserve trace correlation by forwarding dd.trace_id and dd.span_id as trace_id/span_id attributes so issue and trace pivots continue working.',
-      'Validate parity using a fixed query pack (error rate, top services, noisy endpoints) before cutting production alerts and dashboards to Moneat.',
-    ],
-    cutover: 'Cut over team-by-team. Keep Datadog dual shipping enabled for one release cycle as rollback protection.',
-  },
-  {
-    id: 'graylog',
-    name: 'Graylog',
-    icon: Globe,
-    color: 'text-zinc-500',
-    bgColor: 'bg-zinc-500/10',
-    rollout: [
-      'Keep your current Graylog inputs (GELF/syslog/Beats) and introduce a parallel OTLP path from the same emitters or sidecar collector.',
-      'Normalize custom GELF fields to OTLP attributes early (_service, _env, _team, _trace_id) so search behavior stays consistent.',
-      'Mirror Graylog streams in Moneat using service/environment filters first, then recreate only high-value pipelines and alerts.',
-      'If you rely on extractors, implement equivalent parsing at the shipper/collector layer before data reaches Moneat.',
-    ],
-    cutover: 'Move retained streams in batches. Keep Graylog ingestion for long-retention compliance until your archive/export policy is verified.',
-  },
-  {
-    id: 'loki',
-    name: 'Loki',
-    icon: Cpu,
-    color: 'text-emerald-500',
-    bgColor: 'bg-emerald-500/10',
-    rollout: [
-      'Continue collecting with Promtail or Grafana Alloy, then dual ship to Moneat through an OTLP-capable collector/exporter.',
-      'Translate Loki labels to OTLP attributes: job -> service.name, namespace -> k8s.namespace.name, pod -> k8s.pod.name.',
-      'Reduce high-cardinality labels before export (request_id/session_id/user_id) and keep them as searchable attributes only when needed.',
-      'Port critical LogQL dashboards by starting with label-equivalent filters, then refine for full-text and structured field search in Moneat.',
-    ],
-    cutover: 'Cut ingestion over per cluster or environment. Keep Loki read-only until on-call teams validate parity on live incidents.',
-  },
-]
-
 export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
   return (
     <div className="mx-auto max-w-3xl py-8">
@@ -371,8 +326,7 @@ export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
         </div>
         <h3 className="mb-2 text-xl font-semibold">Get Started with Log Ingestion</h3>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto">
-          Choose your ingestion path: use the Sentry SDK for application logs with built-in
-          Sentry context, or use OTLP for collector and platform pipelines.
+          Ship your application logs to Moneat using OpenTelemetry (OTLP). Works with any language and integrates with your existing logging framework.
         </p>
       </div>
 
@@ -382,10 +336,85 @@ export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
             <BookOpen className="h-4 w-4 text-blue-500" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-foreground">Sentry SDK Logs (Recommended)</h4>
+            <h4 className="text-sm font-semibold text-foreground">OpenTelemetry Logs (Recommended)</h4>
             <p className="mt-1 text-sm text-muted-foreground">
-              Best for application logs. This keeps logs in the same SDK pipeline as your errors and
-              traces, so correlation works out of the box.
+              Best for application logs. Uses the OpenTelemetry standard and works with your existing logging framework -- Python logging, Winston, log4j, slog, and more.
+            </p>
+          </div>
+        </div>
+
+        <Tabs defaultValue="python" className="w-full">
+          <TabsList className="mx-auto mb-6 flex w-full flex-wrap justify-center gap-1 bg-transparent h-auto p-0">
+            {platforms.map((platform) => {
+              const Icon = platform.icon
+              return (
+                <TabsTrigger
+                  key={platform.id}
+                  value={platform.id}
+                  className={cn(
+                    'gap-2 rounded-lg border px-4 py-2.5 text-sm data-[state=active]:shadow-sm',
+                    'data-[state=active]:border-border data-[state=active]:bg-card',
+                    'data-[state=inactive]:border-transparent data-[state=inactive]:bg-transparent'
+                  )}
+                >
+                  <Icon className={cn('h-4 w-4', platform.color)} />
+                  {platform.name}
+                </TabsTrigger>
+              )
+            })}
+          </TabsList>
+
+          {platforms.map((platform) => (
+            <TabsContent key={platform.id} value={platform.id} className="space-y-6">
+              {platform.steps.map((step, index) => (
+                <div key={index} className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+                      'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                    )}>
+                      {index + 1}
+                    </div>
+                    <h4 className="text-sm font-medium">{step.title}</h4>
+                  </div>
+                  <div className="ml-9">
+                    <CopyBlock
+                      code={applySdkVersionsToSnippet(
+                        dsn ? step.code.replace(/YOUR_DSN_HERE/g, dsn) : step.code,
+                        sdkVersions
+                      )}
+                      language={step.language}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <div className="ml-9 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <div className="flex items-start gap-3">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">That&apos;s it!</p>
+                    <p className="mt-1">
+                      Once your application sends its first log, it will appear here automatically.
+                      Logs are indexed and searchable within seconds.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          ))}
+        </Tabs>
+      </div>
+
+      <div className="mb-4 rounded-lg border bg-card p-5">
+        <div className="mb-3 flex items-start gap-3">
+          <div className="mt-0.5 rounded-md bg-muted p-2">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">Sentry SDK Logs</h4>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Already using Sentry for error tracking? The SDK can also forward structured log messages to the Log Explorer. Best for lightweight diagnostic context -- for full application logging, use OTLP above.
             </p>
           </div>
         </div>
@@ -394,7 +423,7 @@ export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
           {sentrySdkSteps.map((step, index) => (
             <div key={step.title} className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">
                   {index + 1}
                 </div>
                 <h5 className="text-sm font-medium">{step.title}</h5>
@@ -411,138 +440,6 @@ export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="mb-4 text-center">
-        <h4 className="text-base font-semibold">OTLP / Collector Ingestion</h4>
-        <p className="mx-auto mt-1 max-w-2xl text-sm text-muted-foreground">
-          Use this path when you already have OpenTelemetry or collector-based pipelines and want to
-          ship logs to Moneat.
-        </p>
-      </div>
-
-      <Tabs defaultValue="python" className="w-full">
-        <TabsList className="mx-auto mb-6 flex w-full flex-wrap justify-center gap-1 bg-transparent h-auto p-0">
-          {platforms.map((platform) => {
-            const Icon = platform.icon
-            return (
-              <TabsTrigger
-                key={platform.id}
-                value={platform.id}
-                className={cn(
-                  'gap-2 rounded-lg border px-4 py-2.5 text-sm data-[state=active]:shadow-sm',
-                  'data-[state=active]:border-border data-[state=active]:bg-card',
-                  'data-[state=inactive]:border-transparent data-[state=inactive]:bg-transparent'
-                )}
-              >
-                <Icon className={cn('h-4 w-4', platform.color)} />
-                {platform.name}
-              </TabsTrigger>
-            )
-          })}
-        </TabsList>
-
-        {platforms.map((platform) => (
-          <TabsContent key={platform.id} value={platform.id} className="space-y-6">
-            {platform.steps.map((step, index) => (
-              <div key={index} className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                    platform.bgColor, platform.color
-                  )}>
-                    {index + 1}
-                  </div>
-                  <h4 className="text-sm font-medium">{step.title}</h4>
-                </div>
-                <div className="ml-9">
-                  <CopyBlock
-                    code={applySdkVersionsToSnippet(
-                      dsn ? step.code.replace(/YOUR_DSN_HERE/g, dsn) : step.code,
-                      sdkVersions
-                    )}
-                    language={step.language}
-                  />
-                </div>
-              </div>
-            ))}
-
-            <div className="ml-9 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
-              <div className="flex items-start gap-3">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                <div className="text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">That&apos;s it!</p>
-                  <p className="mt-1">
-                    Once your application sends its first log, it will appear here automatically.
-                    Logs are indexed and searchable within seconds.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
-
-      <div className="mt-12 border-t pt-8">
-        <div className="mb-6 text-center">
-          <h4 className="text-base font-semibold">Migrating from Datadog, Graylog, or Loki</h4>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-muted-foreground">
-            Use a phased rollout: dual ship first, verify parity with a fixed query set, then cut over by team or environment.
-          </p>
-        </div>
-
-        <Tabs defaultValue="datadog" className="w-full">
-          <TabsList className="mx-auto mb-4 flex w-full flex-wrap justify-center gap-1 bg-transparent h-auto p-0">
-            {migrationGuides.map((guide) => {
-              const Icon = guide.icon
-              return (
-                <TabsTrigger
-                  key={guide.id}
-                  value={guide.id}
-                  className={cn(
-                    'gap-2 rounded-lg border px-4 py-2.5 text-sm data-[state=active]:shadow-sm',
-                    'data-[state=active]:border-border data-[state=active]:bg-card',
-                    'data-[state=inactive]:border-transparent data-[state=inactive]:bg-transparent'
-                  )}
-                >
-                  <Icon className={cn('h-4 w-4', guide.color)} />
-                  {guide.name}
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
-
-          {migrationGuides.map((guide) => {
-            const GuideIcon = guide.icon
-            return (
-              <TabsContent key={guide.id} value={guide.id} className="space-y-4">
-                <div className="rounded-lg border bg-card p-4">
-                  <div className="mb-3 flex items-center gap-3">
-                    <div className={cn('flex h-7 w-7 items-center justify-center rounded-md', guide.bgColor)}>
-                      <GuideIcon className={cn('h-4 w-4', guide.color)} />
-                    </div>
-                    <p className="text-sm font-medium">{guide.name} migration playbook</p>
-                  </div>
-
-                  <ol className="space-y-2 text-sm text-muted-foreground">
-                    {guide.rollout.map((step, index) => (
-                      <li key={step} className="flex items-start gap-2">
-                        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground">
-                          {index + 1}
-                        </span>
-                        <span>{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-
-                  <p className="mt-4 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Cutover strategy:</span> {guide.cutover}
-                  </p>
-                </div>
-              </TabsContent>
-            )
-          })}
-        </Tabs>
       </div>
     </div>
   )

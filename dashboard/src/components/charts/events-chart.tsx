@@ -1,6 +1,7 @@
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
 import type {TimelinePoint} from '@/lib/api'
+import {cn} from '@/lib/utils'
 
 interface ReleaseMarker {
   version: string
@@ -12,6 +13,8 @@ interface EventsChartProps {
   title?: string
   height?: number
   releaseMarkers?: ReleaseMarker[]
+  /** When true, the chart fills its parent container's height instead of using a fixed height */
+  fillHeight?: boolean
 }
 
 const formatTime = (timestamp: string) =>
@@ -26,6 +29,7 @@ export function EventsChart({
   title = 'Events Over Time',
   height = 300,
   releaseMarkers = [],
+  fillHeight = false,
 }: EventsChartProps) {
   const chartData = data.map((point) => ({
     timestamp: new Date(point.timestamp).getTime(),
@@ -46,12 +50,12 @@ export function EventsChart({
     })
 
   return (
-    <Card className="border-t-4 border-t-blue-500/50 h-full">
-      <CardHeader className="px-4 py-3">
+    <Card className={cn("border-t-4 border-t-blue-500/50", fillHeight ? "h-full flex flex-col" : "h-full")}>
+      <CardHeader className="px-4 py-2 shrink-0">
         <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-3 pt-0">
-        <ResponsiveContainer width="100%" height={height}>
+      <CardContent className={cn("px-4 pb-3 pt-0", fillHeight && "flex-1 min-h-0")}>
+        <ResponsiveContainer width="100%" height={fillHeight ? "100%" : height}>
           <AreaChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis

@@ -15,11 +15,12 @@
     </appender>
     
     <!-- Moneat Log Appender: Sends logs to the logs table via OTLP -->
+    <!-- Override these via env vars in production: MONEAT_LOGS_ENDPOINT, MONEAT_LOGS_DSN, MONEAT_LOGS_SERVICE_NAME, MONEAT_LOGS_ENVIRONMENT -->
     <appender name="MONEAT" class="com.moneat.logging.MoneatLogAppender">
-        <endpoint>http://localhost:8080/v1/logs/otlp</endpoint>
-        <dsn>https://b422c0677570443e8ab25450d20b0f0c@localhost:8080/3</dsn>
-        <serviceName>moneat-backend</serviceName>
-        <environment>development</environment>
+        <endpoint>${MONEAT_LOGS_ENDPOINT:-http://localhost:8080/v1/logs/otlp}</endpoint>
+        <dsn>${MONEAT_LOGS_DSN:-https://b422c0677570443e8ab25450d20b0f0c@localhost:8080/3}</dsn>
+        <serviceName>${MONEAT_LOGS_SERVICE_NAME:-moneat-backend}</serviceName>
+        <environment>${MONEAT_LOGS_ENVIRONMENT:-development}</environment>
     </appender>
 
     <!-- Default to INFO for all libraries to reduce noise -->

@@ -47,6 +47,7 @@ interface Project {
 
 interface Issue {
   id: string
+  projectId: number
   title: string
   culprit: string
   level: string

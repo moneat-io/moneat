@@ -463,6 +463,7 @@ class DashboardService {
                     val obj = json.parseToJsonElement(line).jsonObject
                     IssueResponse(
                         id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
+                        projectId = projectId,
                         title = obj["title"]?.jsonPrimitive?.content ?: "",
                         culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
                         level = obj["level"]?.jsonPrimitive?.content ?: "error",
@@ -527,6 +528,7 @@ class DashboardService {
             
             IssueDetailResponse(
                 id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
+                projectId = projectId,
                 title = obj["title"]?.jsonPrimitive?.content ?: "",
                 culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
                 level = obj["level"]?.jsonPrimitive?.content ?: "error",
@@ -638,7 +640,7 @@ class DashboardService {
                 transaction_name as name,
                 transaction_op as op,
                 duration_ms as duration,
-                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp,
+                timestamp,
                 JSONExtractString(contexts, 'trace', 'status') as status,
                 JSONExtractString(contexts, 'trace', 'trace_id') as trace_id
             FROM $clickhouseDb.events
