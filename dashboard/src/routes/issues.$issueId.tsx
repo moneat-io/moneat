@@ -135,9 +135,9 @@ function IssueDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="px-4 py-4 lg:px-6 lg:py-5 max-w-screen-2xl mx-auto">
+      <div className="px-3 py-3 lg:px-5 lg:py-4">
         {/* Breadcrumb nav */}
-        <nav className="mb-4 flex items-center gap-2 text-sm">
+        <nav className="mb-3 flex items-center gap-2 text-sm">
           <Link
             to="/"
             className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -152,7 +152,7 @@ function IssueDetailPage() {
         </nav>
 
         {/* Issue Header - compact */}
-        <div className={`mb-4 bg-card rounded-lg border border-l-4 px-4 py-3 sm:px-5 sm:py-4 ${issue.level.toLowerCase() === 'fatal' || issue.level.toLowerCase() === 'error' ? 'border-l-red-500' : issue.level.toLowerCase() === 'warning' ? 'border-l-amber-500' : issue.level.toLowerCase() === 'info' ? 'border-l-blue-500' : 'border-l-muted-foreground/40'}`}>
+        <div className={`mb-3 bg-card rounded-lg border border-t-2 px-4 py-3 sm:px-5 sm:py-3.5 ${issue.level.toLowerCase() === 'fatal' || issue.level.toLowerCase() === 'error' ? 'border-t-red-500' : issue.level.toLowerCase() === 'warning' ? 'border-t-amber-500' : issue.level.toLowerCase() === 'info' ? 'border-t-blue-500' : 'border-t-muted-foreground/40'}`}>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -197,7 +197,7 @@ function IssueDetailPage() {
           </div>
 
           {/* Compact inline stats */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 pt-3 border-t text-sm">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5 pt-2.5 border-t text-sm">
             <span className="inline-flex items-center gap-1.5">
               <span className="font-semibold text-blue-600 dark:text-blue-400">{issue.eventCount}</span>
               <span className="text-muted-foreground">events</span>
@@ -217,20 +217,20 @@ function IssueDetailPage() {
         </div>
 
         {/* Two-column layout: main content + sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
           {/* Main column */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-3 space-y-3">
             {/* Exception */}
             {latestEvent && (
               <>
-                <Card className="border-l-4 border-l-red-400 dark:border-l-red-600">
-                  <CardHeader className="pb-2 px-4 pt-3">
-                    <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-400 text-base">
-                      <AlertCircle className="h-4 w-4" />
+                <Card>
+                  <CardHeader className="pb-2 px-3 pt-3">
+                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                      <AlertCircle className="h-4 w-4 text-red-500 dark:text-red-400" />
                       Exception
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-4 pb-3">
+                  <CardContent className="px-3 pb-3">
                     {latestEvent.exception ? (
                       <div className="max-h-[500px] overflow-auto">
                         <StackTraceViewer exception={latestEvent.exception} />
@@ -242,14 +242,14 @@ function IssueDetailPage() {
                 </Card>
 
                 {latestEvent.breadcrumbs && (
-                  <Card className="border-l-4 border-l-amber-400 dark:border-l-amber-600">
-                    <CardHeader className="pb-2 px-4 pt-3">
-                      <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-300 text-base">
-                        <Navigation className="h-4 w-4" />
+                  <Card>
+                    <CardHeader className="pb-2 px-3 pt-3">
+                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                        <Navigation className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                         Breadcrumbs
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="px-4 pb-3">
+                    <CardContent className="px-3 pb-3">
                       <div className="max-h-[400px] overflow-auto">
                         <BreadcrumbsViewer breadcrumbs={latestEvent.breadcrumbs} />
                       </div>
@@ -261,14 +261,14 @@ function IssueDetailPage() {
 
             {/* Spans Preview - wide content, keep in main column */}
             {primaryTransactionSpans && (
-              <Card className="border-l-4 border-l-cyan-400 dark:border-l-cyan-600">
-                <CardHeader className="pb-2 px-4 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-cyan-700 dark:text-cyan-300 text-base">
-                    <DatabaseZap className="h-4 w-4" />
+              <Card>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <DatabaseZap className="h-4 w-4 text-cyan-500 dark:text-cyan-400" />
                     Spans Preview ({primaryTransactionSpans.spans.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3 space-y-3">
+                <CardContent className="px-3 pb-3 space-y-3">
                   <div className="max-h-[350px] overflow-auto">
                     <SpanWaterfall
                       transaction={primaryTransactionSpans.transaction}
@@ -289,17 +289,17 @@ function IssueDetailPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-4">
+          <div className="lg:col-span-2 space-y-3">
             {/* Event Details */}
             {latestEvent && (
-              <Card className="border-l-4 border-l-slate-400 dark:border-l-slate-500">
-                <CardHeader className="pb-2 px-4 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-base">
-                    <Activity className="h-4 w-4" />
+              <Card>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Activity className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                     Event Details
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3">
+                <CardContent className="px-3 pb-3">
                   <div className="space-y-1.5 text-sm">
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-muted-foreground flex-shrink-0">Event ID</span>
@@ -334,14 +334,14 @@ function IssueDetailPage() {
 
             {/* Tags & Context */}
             {latestEvent && (Object.keys(latestEventTags).length > 0 || contextEntries.length > 0) && (
-              <Card className="border-l-4 border-l-blue-400 dark:border-l-blue-600">
-                <CardHeader className="pb-2 px-4 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300 text-base">
-                    <Info className="h-4 w-4" />
+              <Card>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Info className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                     Tags & Context
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3 space-y-3">
+                <CardContent className="px-3 pb-3 space-y-3">
                   <div>
                     <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                       <Tag className="h-3 w-3" />
@@ -406,14 +406,14 @@ function IssueDetailPage() {
 
             {/* Related Transactions */}
             {relatedTransactions.length > 0 && (
-              <Card className="border-l-4 border-l-indigo-400 dark:border-l-indigo-600">
-                <CardHeader className="pb-2 px-4 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 text-base">
-                    <Activity className="h-4 w-4" />
+              <Card>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Activity className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
                     Transactions ({relatedTransactions.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3">
+                <CardContent className="px-3 pb-3">
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
                     {relatedTransactions.map((tx) => (
                       <Link
@@ -445,14 +445,14 @@ function IssueDetailPage() {
 
             {/* Session Replays */}
             {linkedReplays.length > 0 && (
-              <Card className="border-l-4 border-l-emerald-400 dark:border-l-emerald-600">
-                <CardHeader className="pb-2 px-4 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-base">
-                    <Play className="h-4 w-4" />
+              <Card>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Play className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
                     Replays ({linkedReplays.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3">
+                <CardContent className="px-3 pb-3">
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
                     {linkedReplays.map((replay) => (
                       <Link
@@ -491,14 +491,14 @@ function IssueDetailPage() {
 
             {/* Recent Events */}
             {events.length > 1 && (
-              <Card className="border-l-4 border-l-violet-400 dark:border-l-violet-600">
-                <CardHeader className="pb-2 px-4 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-violet-700 dark:text-violet-300 text-base">
-                    <Activity className="h-4 w-4" />
+              <Card>
+                <CardHeader className="pb-2 px-3 pt-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Activity className="h-4 w-4 text-violet-500 dark:text-violet-400" />
                     Recent Events ({events.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3">
+                <CardContent className="px-3 pb-3">
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
                     {events.map((event) => (
                       <div
