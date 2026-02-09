@@ -176,7 +176,8 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for feedback $feedbackId: ${response.status} ${body.take(400)}" }
+                logger.error { "Failed to get project ID for feedback $feedbackId: ${response.status} ${
+                    body.take(400)}" }
                 return null
             }
             if (body.isBlank()) return null
@@ -255,7 +256,7 @@ class DashboardService {
                         .map { keyRow ->
                             ProjectKeyResponse(
                                 platformTarget = keyRow[ProjectKeys.platform_target],
-                                dsn = "http://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                                dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
                             )
                         }
                     

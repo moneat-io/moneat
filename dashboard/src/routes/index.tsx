@@ -46,6 +46,25 @@ function getLevelColor(level: string): string {
   }
 }
 
+function getIssueDisplayTitle(issue: { title: string; culprit: string }): string {
+  const title = issue.title?.trim() ?? ''
+  const culprit = issue.culprit?.trim() ?? ''
+
+  if (!title) return culprit || 'Unknown error'
+  if (!culprit) return title
+
+  const normalizedTitle = title.toLowerCase()
+  const normalizedCulprit = culprit.toLowerCase()
+  if (
+    normalizedTitle.startsWith(`${normalizedCulprit}:`) ||
+    normalizedTitle.startsWith(`${normalizedCulprit} `)
+  ) {
+    return title
+  }
+
+  return `${culprit}: ${title}`
+}
+
 // Simple sparkline component
 function EventSparkline({ eventCount }: { eventCount: number }) {
   // Generate a simple frequency visualization
@@ -405,14 +424,18 @@ function DashboardPage() {
                         </Badge>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 min-w-0">
-                            <span className="font-semibold truncate">{issue.title}</span>
+                            <span className="font-semibold break-words [overflow-wrap:anywhere]">
+                              {getIssueDisplayTitle(issue)}
+                            </span>
                             {issue.status === 'resolved' && (
                               <Badge variant="default" className="bg-green-500 text-[11px] px-1.5 py-0 shrink-0">
                                 Resolved
                               </Badge>
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground truncate">{issue.culprit}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            First seen {formatRelativeTime(issue.firstSeen)} • Last seen {formatRelativeTime(issue.lastSeen)}
+                          </div>
                         </div>
                         <div className="hidden lg:flex items-center gap-3 shrink-0">
                           <Badge variant="outline" className="text-[11px] px-1.5 py-0">{issue.platform}</Badge>
@@ -426,9 +449,6 @@ function DashboardPage() {
                           <div className="hidden sm:block min-w-[45px]">
                             <div className="font-semibold text-foreground">{issue.userCount ?? 0}</div>
                             <div className="text-xs text-muted-foreground">users</div>
-                          </div>
-                          <div className="text-muted-foreground text-xs min-w-[70px]">
-                            {formatRelativeTime(issue.lastSeen)}
                           </div>
                         </div>
                       </Link>

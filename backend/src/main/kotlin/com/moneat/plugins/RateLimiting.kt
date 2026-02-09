@@ -13,7 +13,8 @@ fun Application.configureRateLimiting() {
             requestKey { call ->
                 val projectId = call.parameters["projectId"] ?: "unknown"
                 val auth = call.request.headers.get("X-Sentry-Auth")
-                val key = auth?.let { h: String -> extractPublicKey(h) } ?: "anon"
+                val sentryKey = call.request.queryParameters["sentry_key"]
+                val key = extractPublicKey(auth, sentryKey) ?: "anon"
                 "$projectId:$key"
             }
             rateLimiter(limit = 100, refillPeriod = 1.seconds)

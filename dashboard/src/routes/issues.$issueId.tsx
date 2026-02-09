@@ -1,4 +1,5 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
@@ -6,6 +7,8 @@ import {useToast} from '@/hooks/use-toast'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Checkbox} from '@/components/ui/checkbox'
+import {Label} from '@/components/ui/label'
 import {SpanWaterfall} from '@/components/span-waterfall'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {
@@ -14,17 +17,20 @@ import {
   ArrowUpRight,
   Battery,
   CheckCircle2,
+  ChevronRight,
   ChevronLeft,
   Circle,
   Clock3,
   DatabaseZap,
   Globe,
   Info,
+  Layers,
   MessageSquare,
   MousePointer,
   Navigation,
   Play,
   Smartphone,
+  Tag,
   Zap,
 } from 'lucide-react'
 
@@ -51,6 +57,18 @@ function formatDuration(ms: number) {
   return `${ms.toFixed(1)}ms`
 }
 
+function parseContextEntries(rawContexts: unknown): [string, unknown][] {
+  if (!rawContexts) return []
+
+  try {
+    const parsed = typeof rawContexts === 'string' ? JSON.parse(rawContexts || '{}') : rawContexts
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return []
+    return Object.entries(parsed as Record<string, unknown>)
+  } catch {
+    return []
+  }
+}
+
 export const Route = createFileRoute('/issues/$issueId')({
   beforeLoad: () => {
     if (!api.isAuthenticated()) {
@@ -64,6 +82,7 @@ function IssueDetailPage() {
   const { issueId } = Route.useParams()
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const [expandContextsByDefault, setExpandContextsByDefault] = useState(true)
 
   const { data: issue, isLoading } = useQuery({
     queryKey: ['issue', issueId],
@@ -111,6 +130,8 @@ function IssueDetailPage() {
   if (!issue) return <div className="p-8">Issue not found</div>
 
   const latestEvent = events[0] || issue.latestEvent
+  const latestEventTags = latestEvent?.tags ?? {}
+  const contextEntries = parseContextEntries(latestEvent?.contexts)
 
   return (
     <div className="min-h-screen bg-background">
@@ -311,23 +332,73 @@ function IssueDetailPage() {
               </Card>
             )}
 
-            {/* Tags */}
-            {latestEvent && Object.keys(latestEvent.tags).length > 0 && (
+            {/* Tags & Context */}
+            {latestEvent && (Object.keys(latestEventTags).length > 0 || contextEntries.length > 0) && (
               <Card className="border-l-4 border-l-blue-400 dark:border-l-blue-600">
                 <CardHeader className="pb-2 px-4 pt-3">
                   <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300 text-base">
                     <Info className="h-4 w-4" />
-                    Tags
+                    Tags & Context
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-3">
-                  <div className="space-y-1.5 text-sm">
-                    {Object.entries(latestEvent.tags).map(([key, value]) => (
-                      <div key={key} className="flex items-start justify-between gap-2">
-                        <span className="text-muted-foreground flex-shrink-0">{key}</span>
-                        <span className="font-mono text-xs text-right min-w-0 max-w-[65%] break-all">{value}</span>
+                <CardContent className="px-4 pb-3 space-y-3">
+                  <div>
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Tag className="h-3 w-3" />
+                      Tags
+                      {Object.keys(latestEventTags).length > 0 && (
+                        <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{Object.keys(latestEventTags).length}</Badge>
+                      )}
+                    </div>
+                    {Object.keys(latestEventTags).length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No tags</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(latestEventTags).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="inline-flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-0.5 text-[11px]"
+                          >
+                            <span className="text-muted-foreground">{key}:</span>
+                            <span className="font-mono font-medium">{value}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Layers className="h-3 w-3" />
+                        Contexts
+                        {contextEntries.length > 0 && (
+                          <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{contextEntries.length}</Badge>
+                        )}
+                      </div>
+                      {contextEntries.length > 0 && (
+                        <label className="flex cursor-pointer items-center gap-1.5">
+                          <Checkbox
+                            checked={expandContextsByDefault}
+                            onCheckedChange={(checked) => setExpandContextsByDefault(checked === true)}
+                            className="h-3.5 w-3.5"
+                          />
+                          <Label className="cursor-pointer text-[11px] font-normal text-muted-foreground">
+                            Expand
+                          </Label>
+                        </label>
+                      )}
+                    </div>
+
+                    {contextEntries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No context entries</p>
+                    ) : (
+                      <div key={String(expandContextsByDefault)} className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                        {contextEntries.map(([key, value]) => (
+                          <ContextSection key={key} name={key} data={value} defaultOpen={expandContextsByDefault} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -604,6 +675,68 @@ function StackFrame({ frame }: { frame: any }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function formatContextValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value
+  return JSON.stringify(value)
+}
+
+function ContextSection({ name, data, depth = 0, defaultOpen = true }: { name: string; data: unknown; depth?: number; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const isNested = depth > 0
+
+  const entries = typeof data === 'object' && data !== null
+    ? Object.entries(data as Record<string, unknown>)
+    : [['value', data]]
+
+  return (
+    <div className={`rounded-lg border border-border bg-card shadow-sm ${isNested ? 'ml-4 mt-2 mb-3 border-l-2 border-l-primary/20 first:mt-0' : ''}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-2 rounded-t-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        <span className="capitalize">{name.replace(/_/g, ' ')}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">
+            {entries.length} {entries.length === 1 ? 'field' : 'fields'}
+          </span>
+          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
+        </div>
+      </button>
+      {open && (
+        <div className="overflow-hidden rounded-b-lg border-y border-border bg-muted/10">
+          <div className="divide-y pb-2">
+            {entries.map(([key, value]) => {
+              const isNestedObject = typeof value === 'object' && value !== null && !Array.isArray(value)
+              const isArray = Array.isArray(value)
+
+              if (isNestedObject) {
+                return (
+                  <ContextSection key={String(key)} name={String(key)} data={value as Record<string, unknown>} depth={depth + 1} defaultOpen={defaultOpen} />
+                )
+              }
+
+              return (
+                <div key={String(key)} className="flex items-start justify-between gap-4 px-3 py-1.5">
+                  <span className="shrink-0 text-xs text-muted-foreground">{String(key)}</span>
+                  <span className="break-all text-right font-mono text-xs">
+                    {isArray
+                      ? (value as unknown[]).map(formatContextValue).join(', ')
+                      : formatContextValue(value)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

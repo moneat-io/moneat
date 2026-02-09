@@ -30,7 +30,8 @@ fun Route.ingestRoutes() {
 
             // Extract auth from header or query param
             val authHeader = call.request.header("X-Sentry-Auth")
-            val publicKey = extractPublicKey(authHeader)
+            val sentryKey = call.request.queryParameters["sentry_key"]
+            val publicKey = extractPublicKey(authHeader, sentryKey)
 
             if (publicKey == null) {
                 call.respond(HttpStatusCode.Unauthorized, "Missing or invalid authentication")
@@ -107,7 +108,8 @@ fun Route.ingestRoutes() {
             }
             
             val authHeader = call.request.header("X-Sentry-Auth")
-            val publicKey = extractPublicKey(authHeader)
+            val sentryKey = call.request.queryParameters["sentry_key"]
+            val publicKey = extractPublicKey(authHeader, sentryKey)
 
             if (publicKey == null) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
@@ -158,12 +160,18 @@ fun Route.ingestRoutes() {
     }
 }
 
-internal fun extractPublicKey(authHeader: String?): String? {
-    if (authHeader == null) return null
-    
-    // Parse "Sentry sentry_key=xxx, sentry_version=7"
-    val keyRegex = "sentry_key=([a-f0-9]+)".toRegex()
-    return keyRegex.find(authHeader)?.groupValues?.get(1)
+internal fun extractPublicKey(authHeader: String?, sentryKeyParam: String? = null): String? {
+    val headerKey = authHeader?.let { header ->
+        // Parse "Sentry sentry_key=xxx, sentry_version=7"
+        val keyRegex = "(?i)sentry_key=([a-z0-9]+)".toRegex()
+        keyRegex.find(header)?.groupValues?.get(1)
+    }
+    if (headerKey != null) return headerKey
+
+    // Fallback for SDKs that pass auth in query params:
+    // ?sentry_key=xxx&sentry_version=7&sentry_client=...
+    val keyRegex = "^[a-zA-Z0-9]+$".toRegex()
+    return sentryKeyParam?.takeIf { keyRegex.matches(it) }
 }
 
 private fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
