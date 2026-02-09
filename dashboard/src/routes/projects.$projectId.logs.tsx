@@ -196,6 +196,7 @@ function ProjectLogsPage() {
   })
 
   const logs = logPage?.logs ?? []
+  const totalCount = logPage?.totalCount ?? null
 
   // Open detail when selecting a log
   const handleSelectLog = useCallback((log: LogEntry) => {
@@ -315,7 +316,7 @@ function ProjectLogsPage() {
     }
   }
 
-  const showEmptyState = !isLoading && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter
+  const showEmptyState = !isLoading && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && totalCount === 0
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]">

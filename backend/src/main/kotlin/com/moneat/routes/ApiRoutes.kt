@@ -657,18 +657,18 @@ fun Route.apiRoutes() {
                         .firstOrNull()
                     
                     val globalPrefs = if (global != null) {
-                        mapOf(
-                            "issueAlerts" to global[NotificationPreferences.issue_alerts],
-                            "errorAlerts" to global[NotificationPreferences.error_alerts],
-                            "weeklySummary" to global[NotificationPreferences.weekly_summary],
-                            "alertFrequencyMinutes" to global[NotificationPreferences.alert_frequency_minutes]
+                        NotificationPreferencesData(
+                            issueAlerts = global[NotificationPreferences.issue_alerts],
+                            errorAlerts = global[NotificationPreferences.error_alerts],
+                            weeklySummary = global[NotificationPreferences.weekly_summary],
+                            alertFrequencyMinutes = global[NotificationPreferences.alert_frequency_minutes]
                         )
                     } else {
-                        mapOf(
-                            "issueAlerts" to true,
-                            "errorAlerts" to true,
-                            "weeklySummary" to true,
-                            "alertFrequencyMinutes" to 30
+                        NotificationPreferencesData(
+                            issueAlerts = true,
+                            errorAlerts = true,
+                            weeklySummary = true,
+                            alertFrequencyMinutes = 30
                         )
                     }
                     
@@ -684,19 +684,19 @@ fun Route.apiRoutes() {
                                 .where { Projects.id eq projectId }
                                 .firstOrNull()?.get(Projects.name) ?: "Unknown"
                             
-                            mapOf(
-                                "projectId" to projectId,
-                                "projectName" to projectName,
-                                "issueAlerts" to pref[NotificationPreferences.issue_alerts],
-                                "errorAlerts" to pref[NotificationPreferences.error_alerts],
-                                "weeklySummary" to pref[NotificationPreferences.weekly_summary],
-                                "alertFrequencyMinutes" to pref[NotificationPreferences.alert_frequency_minutes]
+                            ProjectNotificationPreferences(
+                                projectId = projectId,
+                                projectName = projectName,
+                                issueAlerts = pref[NotificationPreferences.issue_alerts],
+                                errorAlerts = pref[NotificationPreferences.error_alerts],
+                                weeklySummary = pref[NotificationPreferences.weekly_summary],
+                                alertFrequencyMinutes = pref[NotificationPreferences.alert_frequency_minutes]
                             )
                         }
                     
-                    mapOf(
-                        "global" to globalPrefs,
-                        "projects" to projects
+                    NotificationPreferencesResponse(
+                        global = globalPrefs,
+                        projects = projects
                     )
                 }
                 

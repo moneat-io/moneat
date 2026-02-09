@@ -318,6 +318,7 @@ interface LogQueryResponse {
   logs: LogEntry[]
   nextCursor?: string | null
   hasMore: boolean
+  totalCount?: number | null
 }
 
 interface LogFilterOptions {

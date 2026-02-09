@@ -245,10 +245,32 @@ class LogService {
             if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
         }
 
+        // Query total count for the project (no filters except project_id) to determine if any logs exist
+        val totalCountQuery = """
+            SELECT count() as count
+            FROM $clickhouseDb.logs
+            WHERE project_id = $projectId
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        val totalCountResponse = ClickHouseClient.execute(totalCountQuery)
+        val totalCountBody = totalCountResponse.bodyAsText()
+        val totalCount = if (totalCountResponse.status.isSuccess() && !totalCountBody.trimStart().startsWith("Code:")) {
+            try {
+                val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
+                jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
+            } catch (_: Exception) {
+                0L
+            }
+        } else {
+            0L
+        }
+
         return LogQueryResponse(
             logs = pageRows.map { it.log },
             nextCursor = nextCursor,
-            hasMore = hasMore
+            hasMore = hasMore,
+            totalCount = totalCount
         )
     }
 

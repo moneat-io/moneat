@@ -460,3 +460,27 @@ data class SdkVersionsResponse(
     val cacheTtlSeconds: Int,
     val versions: Map<String, String>,
 )
+
+@Serializable
+data class NotificationPreferencesData(
+    val issueAlerts: Boolean,
+    val errorAlerts: Boolean,
+    val weeklySummary: Boolean,
+    val alertFrequencyMinutes: Int
+)
+
+@Serializable
+data class ProjectNotificationPreferences(
+    val projectId: Long,
+    val projectName: String,
+    val issueAlerts: Boolean,
+    val errorAlerts: Boolean,
+    val weeklySummary: Boolean,
+    val alertFrequencyMinutes: Int
+)
+
+@Serializable
+data class NotificationPreferencesResponse(
+    val global: NotificationPreferencesData,
+    val projects: List<ProjectNotificationPreferences>
+)
