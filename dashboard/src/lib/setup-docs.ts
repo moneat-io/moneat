@@ -2,6 +2,7 @@
  * Platform-specific setup documentation for Moneat SDK integration.
  * Uses {{DSN}} as placeholder for the project's DSN - replace when rendering.
  */
+import {applySdkVersionsToSnippet, type SdkVersionMap} from '@/lib/sdk-versions'
 
 export interface SetupStep {
   title: string
@@ -1524,7 +1525,11 @@ const platformAliases: Record<string, string> = {
   'c++': 'native',
 }
 
-export function getSetupDocs(platformId?: string, dsn: string = ''): PlatformSetupDocs | null {
+export function getSetupDocs(
+  platformId?: string,
+  dsn: string = '',
+  sdkVersions?: SdkVersionMap
+): PlatformSetupDocs | null {
   if (!platformId) return setupDocs.other
 
   const lower = platformId.toLowerCase()
@@ -1537,7 +1542,9 @@ export function getSetupDocs(platformId?: string, dsn: string = ''): PlatformSet
     ...docs,
     steps: docs.steps.map((step) => ({
       ...step,
-      code: step.code?.split(DSN_PLACEHOLDER).join(dsn),
+      code: step.code
+        ? applySdkVersionsToSnippet(step.code.split(DSN_PLACEHOLDER).join(dsn), sdkVersions)
+        : step.code,
     })),
   }
 }

@@ -326,6 +326,12 @@ interface LogFilterOptions {
   tagKeys: string[]
 }
 
+interface SdkVersionsResponse {
+  fetchedAt: string
+  cacheTtlSeconds: number
+  versions: Record<string, string>
+}
+
 interface AuthToken {
   id: number
   name: string
@@ -570,6 +576,23 @@ interface ContainerStats {
   netSentBytes?: number
 }
 
+interface RawContainerStats {
+  name: string
+  id: string
+  image: string
+  status: string
+  cpuPercent?: number
+  cpu_percent?: number
+  memUsed?: number
+  mem_used?: number
+  memLimit?: number
+  mem_limit?: number
+  netRecvBytes?: number
+  net_recv_bytes?: number
+  netSentBytes?: number
+  net_sent_bytes?: number
+}
+
 interface ContainerHistoricalDataPoint {
   timestamp: number
   cpu_percent: number
@@ -726,6 +749,10 @@ class ApiClient {
 
   async getProject(projectId: number): Promise<Project> {
     return this.request<Project>(`${API_BASE}/projects/${projectId}`)
+  }
+
+  async getSdkVersions(): Promise<SdkVersionsResponse> {
+    return this.request<SdkVersionsResponse>(`${API_BASE}/sdk-versions`)
   }
 
   async createProject(name: string, framework?: string, targets?: string[]): Promise<Project> {
@@ -904,6 +931,21 @@ class ApiClient {
       levels: response.levels ?? [],
       tagKeys: response.tagKeys ?? response.tag_keys ?? [],
     }
+  }
+
+  async getProjectLogTagValues(
+    projectId: number,
+    key: string,
+    options: { from?: string; to?: string; limit?: number } = {}
+  ): Promise<{ key: string; values: string[] }> {
+    const params = new URLSearchParams()
+    params.set('key', key)
+    if (options.from) params.set('from', options.from)
+    if (options.to) params.set('to', options.to)
+    if (options.limit) params.set('limit', String(options.limit))
+    return this.request<{ key: string; values: string[] }>(
+      `${API_BASE}/projects/${projectId}/logs/tag-values?${params.toString()}`
+    )
   }
 
   createProjectLogTailStream(
@@ -1333,10 +1375,20 @@ class ApiClient {
   }
 
   async getSystemContainers(systemId: string) {
-    const response = await this.request<{containers: ContainerStats[]}>(
+    const response = await this.request<{containers: RawContainerStats[]}>(
       `${API_BASE}/monitor/systems/${systemId}/containers`
     )
-    return response.containers
+    return response.containers.map((row) => ({
+      name: row.name,
+      id: row.id,
+      image: row.image,
+      status: row.status,
+      cpuPercent: row.cpuPercent ?? row.cpu_percent,
+      memUsed: row.memUsed ?? row.mem_used,
+      memLimit: row.memLimit ?? row.mem_limit,
+      netRecvBytes: row.netRecvBytes ?? row.net_recv_bytes,
+      netSentBytes: row.netSentBytes ?? row.net_sent_bytes,
+    }))
   }
 
   async getContainerMetrics(
@@ -1442,6 +1494,7 @@ export type {
   LogEntry,
   LogQueryResponse,
   LogFilterOptions,
+  SdkVersionsResponse,
   AuthToken,
   BillingTierConfig,
   BillingPlan,

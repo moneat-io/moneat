@@ -183,39 +183,122 @@ class MonitorService {
         
         // Insert container metrics if present
         payload.containers?.forEach { container ->
-            val containerQuery = """
-                INSERT INTO $clickhouseDb.container_metrics (
-                    system_id, org_id, timestamp,
-                    container_name, container_id, image, status,
-                    cpu_percent, mem_used, mem_limit,
-                    net_recv_bytes, net_sent_bytes
-                ) VALUES (
-                    toUUID('$systemId'),
-                    $organizationId,
-                    fromUnixTimestamp($timestamp),
-                    '${escapeSql(container.name)}',
-                    '${escapeSql(container.id)}',
-                    '${escapeSql(container.image)}',
-                    '${escapeSql(container.status)}',
-                    ${container.cpu_percent},
-                    ${container.mem_used},
-                    ${container.mem_limit},
-                    ${container.net_recv_bytes},
-                    ${container.net_sent_bytes}
-                )
-            """.trimIndent()
-            
-            val containerResponse = ClickHouseClient.execute(containerQuery)
-            
-            if (!containerResponse.status.isSuccess()) {
-                val errorBody = containerResponse.bodyAsText()
-                logger.warn { "Failed to insert container metrics: $errorBody" }
-            }
+            insertContainerMetric(systemId, organizationId, timestamp, container)
         }
         
         // Return the poll interval for this organization's tier
         val tier = getTierConfig(organizationId)
         return tier.monitorIntervalSeconds
+    }
+
+    private suspend fun insertContainerMetric(
+        systemId: UUID,
+        organizationId: Int,
+        timestamp: Long,
+        container: ContainerMetricsPayload
+    ) {
+        val fullQuery = buildContainerInsertQuery(
+            systemId = systemId,
+            organizationId = organizationId,
+            timestamp = timestamp,
+            container = container,
+            includeNetwork = true
+        )
+        var response = ClickHouseClient.execute(fullQuery)
+        if (response.status.isSuccess()) return
+
+        var errorBody = response.bodyAsText()
+
+        if (
+            errorBody.contains("UNKNOWN_TABLE", ignoreCase = true) ||
+            errorBody.contains("doesn't exist", ignoreCase = true)
+        ) {
+            ensureContainerMetricsTableExists()
+            response = ClickHouseClient.execute(fullQuery)
+            if (response.status.isSuccess()) return
+            errorBody = response.bodyAsText()
+        }
+
+        if (
+            errorBody.contains("UNKNOWN_IDENTIFIER", ignoreCase = true) ||
+            errorBody.contains("unknown column", ignoreCase = true) ||
+            errorBody.contains("no column", ignoreCase = true)
+        ) {
+            // Backward compatibility for older schemas missing network byte columns.
+            val legacyQuery = buildContainerInsertQuery(
+                systemId = systemId,
+                organizationId = organizationId,
+                timestamp = timestamp,
+                container = container,
+                includeNetwork = false
+            )
+            response = ClickHouseClient.execute(legacyQuery)
+            if (response.status.isSuccess()) return
+            errorBody = response.bodyAsText()
+        }
+
+        logger.warn {
+            "Failed to insert container metrics for system=$systemId container=${container.name}: $errorBody"
+        }
+    }
+
+    private fun buildContainerInsertQuery(
+        systemId: UUID,
+        organizationId: Int,
+        timestamp: Long,
+        container: ContainerMetricsPayload,
+        includeNetwork: Boolean
+    ): String {
+        val networkColumns = if (includeNetwork) ", net_recv_bytes, net_sent_bytes" else ""
+        val networkValues = if (includeNetwork) ", ${container.net_recv_bytes}, ${container.net_sent_bytes}" else ""
+
+        return """
+            INSERT INTO $clickhouseDb.container_metrics (
+                system_id, org_id, timestamp,
+                container_name, container_id, image, status,
+                cpu_percent, mem_used, mem_limit$networkColumns
+            ) VALUES (
+                toUUID('$systemId'),
+                $organizationId,
+                fromUnixTimestamp($timestamp),
+                '${escapeSql(container.name)}',
+                '${escapeSql(container.id)}',
+                '${escapeSql(container.image)}',
+                '${escapeSql(container.status)}',
+                ${container.cpu_percent},
+                ${container.mem_used},
+                ${container.mem_limit}$networkValues
+            )
+        """.trimIndent()
+    }
+
+    private suspend fun ensureContainerMetricsTableExists() {
+        val query = """
+            CREATE TABLE IF NOT EXISTS $clickhouseDb.container_metrics (
+                system_id UUID,
+                org_id UInt32,
+                timestamp DateTime,
+                container_name String,
+                container_id String,
+                image String,
+                status String,
+                cpu_percent Float32,
+                mem_used UInt64,
+                mem_limit UInt64,
+                net_recv_bytes UInt64,
+                net_sent_bytes UInt64
+            ) ENGINE = MergeTree()
+            PARTITION BY toYYYYMM(timestamp)
+            ORDER BY (org_id, system_id, timestamp, container_name)
+            TTL timestamp + INTERVAL 90 DAY
+            SETTINGS index_granularity = 8192
+        """.trimIndent()
+
+        val response = ClickHouseClient.execute(query)
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            logger.warn { "Failed to auto-create container_metrics table: $errorBody" }
+        }
     }
     
     /**
@@ -436,27 +519,44 @@ class MonitorService {
      */
     suspend fun getLatestContainers(systemId: UUID): List<ContainerStats> {
         val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
-        val query = """
-            SELECT 
-                container_name, container_id, image, status,
-                cpu_percent, mem_used, mem_limit
-            FROM (
-                SELECT *,
-                    ROW_NUMBER() OVER (PARTITION BY container_name ORDER BY timestamp DESC) as rn
-                FROM $clickhouseDb.container_metrics
-                WHERE system_id = toUUID('$systemId')
-                  AND timestamp >= now() - INTERVAL $retentionDays DAY
-                  AND timestamp >= now() - INTERVAL 5 MINUTE
-            ) WHERE rn = 1
-            FORMAT JSONCompact
-        """.trimIndent()
-        
-        val response = ClickHouseClient.execute(query)
-        
+        fun buildQuery(includeNetwork: Boolean): String {
+            val networkColumns = if (includeNetwork) ", net_recv_bytes, net_sent_bytes" else ""
+            return """
+                SELECT 
+                    container_name, container_id, image, status,
+                    cpu_percent, mem_used, mem_limit$networkColumns
+                FROM (
+                    SELECT *,
+                        ROW_NUMBER() OVER (PARTITION BY container_name ORDER BY timestamp DESC) as rn
+                    FROM $clickhouseDb.container_metrics
+                    WHERE system_id = toUUID('$systemId')
+                      AND timestamp >= now() - INTERVAL $retentionDays DAY
+                ) WHERE rn = 1
+                FORMAT JSONCompact
+            """.trimIndent()
+        }
+
+        var includeNetwork = true
+        var response = ClickHouseClient.execute(buildQuery(includeNetwork))
+
         if (!response.status.isSuccess()) {
-            val errorBody = response.bodyAsText()
-            logger.warn { "Failed to fetch containers: $errorBody" }
-            return emptyList()
+            var errorBody = response.bodyAsText()
+            if (
+                errorBody.contains("UNKNOWN_IDENTIFIER", ignoreCase = true) ||
+                errorBody.contains("unknown column", ignoreCase = true) ||
+                errorBody.contains("no column", ignoreCase = true)
+            ) {
+                includeNetwork = false
+                response = ClickHouseClient.execute(buildQuery(includeNetwork))
+                if (!response.status.isSuccess()) {
+                    errorBody = response.bodyAsText()
+                    logger.warn { "Failed to fetch containers: $errorBody" }
+                    return emptyList()
+                }
+            } else {
+                logger.warn { "Failed to fetch containers: $errorBody" }
+                return emptyList()
+            }
         }
         
         val body = response.bodyAsText()
@@ -471,6 +571,8 @@ class MonitorService {
                 val arr = row.jsonArray
                 val memUsed = arr[5].toString().replace("\"", "").toLongOrNull() ?: 0
                 val memLimit = arr[6].toString().replace("\"", "").toLongOrNull() ?: 1
+                val netRecvBytes = if (includeNetwork) arr.getOrNull(7)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0 else 0
+                val netSentBytes = if (includeNetwork) arr.getOrNull(8)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0 else 0
                 
                 ContainerStats(
                     name = arr[0].toString().replace("\"", ""),
@@ -480,6 +582,8 @@ class MonitorService {
                     cpu_percent = arr[4].toString().toFloatOrNull() ?: 0f,
                     mem_used = memUsed,
                     mem_limit = memLimit,
+                    net_recv_bytes = netRecvBytes,
+                    net_sent_bytes = netSentBytes,
                     mem_percent = if (memLimit > 0) (memUsed.toFloat() / memLimit * 100) else 0f
                 )
             }

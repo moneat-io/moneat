@@ -451,3 +451,10 @@ data class FeedbackDetailResponse(
 data class FeedbackUpdateRequest(
     val status: String? = null
 )
+
+@Serializable
+data class SdkVersionsResponse(
+    val fetchedAt: String,
+    val cacheTtlSeconds: Int,
+    val versions: Map<String, String>,
+)

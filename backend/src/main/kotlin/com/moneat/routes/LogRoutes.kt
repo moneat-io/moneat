@@ -8,22 +8,13 @@ import com.moneat.services.BillingQuotaService
 import com.moneat.services.DashboardService
 import com.moneat.services.EventService
 import com.moneat.services.LogService
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.call
-import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
-import io.ktor.server.request.receive
-import io.ktor.server.request.header
-import io.ktor.server.response.respond
-import io.ktor.server.response.respondTextWriter
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
-import io.ktor.server.routing.post
-import io.ktor.server.routing.route
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.pubsub.RedisPubSubAdapter
@@ -140,6 +131,37 @@ fun Route.logRoutes() {
                 )
 
                 val result = logService.queryLogs(projectId, request)
+                call.respond(HttpStatusCode.OK, result)
+            }
+
+            get("/projects/{projectId}/logs/tag-values") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val key = call.request.queryParameters["key"]
+                if (key.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing tag key parameter"))
+                    return@get
+                }
+
+                val result = logService.getTagValues(
+                    projectId = projectId,
+                    key = key,
+                    from = call.request.queryParameters["from"],
+                    to = call.request.queryParameters["to"],
+                    limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                )
                 call.respond(HttpStatusCode.OK, result)
             }
 

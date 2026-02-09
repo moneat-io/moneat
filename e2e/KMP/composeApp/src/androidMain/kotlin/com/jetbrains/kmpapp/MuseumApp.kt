@@ -10,7 +10,7 @@ class MuseumApp : Application() {
         // Initialize Sentry
         SentryAndroid.init(this) { options ->
             // DSN will be loaded from local.properties or can be set here
-            // options.dsn = "http://PUBLIC_KEY@localhost:8080/PROJECT_ID"
+            // options.dsn = "https://PUBLIC_KEY@localhost:8080/PROJECT_ID"
             
             options.environment = "e2e-testing"
             options.release = "kmp-e2e@1.0.0"

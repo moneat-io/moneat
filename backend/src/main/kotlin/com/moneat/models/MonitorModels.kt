@@ -140,6 +140,8 @@ data class ContainerStats(
     val cpu_percent: Float,
     val mem_used: Long,
     val mem_limit: Long,
+    val net_recv_bytes: Long,
+    val net_sent_bytes: Long,
     val mem_percent: Float
 )
 

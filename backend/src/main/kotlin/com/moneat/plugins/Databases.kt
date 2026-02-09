@@ -1,9 +1,11 @@
 package com.moneat.plugins
 
+import com.moneat.config.configureClickHouseMigrations
 import com.moneat.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.*
+import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.TransactionManager
@@ -23,27 +25,32 @@ fun Application.configureDatabases() {
         connectionTimeout = 10000
         leakDetectionThreshold = 30000
         isAutoCommit = false
-        transactionIsolation = "TRANSACTION_REPEATABLE_READ"
+        transactionIsolation = "TRANSACTION_READ_COMMITTED"
         validate()
     }
     
     val dataSource = HikariDataSource(hikariConfig)
     
-    // Run Flyway migrations
-    log.info("Running database migrations...")
+    // Run Flyway migrations for PostgreSQL
+    log.info("Running PostgreSQL migrations...")
     val flyway = Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration")
-        .baselineOnMigrate(true) // Allow migrations on existing databases
+        .baselineOnMigrate(true)
         .load()
     
     val migrationsApplied = flyway.migrate()
-    log.info("Applied ${migrationsApplied.migrationsExecuted} database migration(s)")
+    log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
     
     Database.connect(dataSource)
-    TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ
+    TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED
     
     log.info("PostgreSQL database connected")
+    
+    // Run ClickHouse migrations
+    runBlocking {
+        configureClickHouseMigrations()
+    }
     
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopped) {

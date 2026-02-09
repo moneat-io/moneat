@@ -8,29 +8,29 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
-  Activity,
-  ArrowLeft,
-  Box,
-  Clock,
-  Cpu,
-  HardDrive,
-  MemoryStick,
-  Monitor,
-  Network,
-  Server,
-  Thermometer,
+    Activity,
+    ArrowLeft,
+    Box,
+    Clock,
+    Cpu,
+    HardDrive,
+    MemoryStick,
+    Monitor,
+    Network,
+    Server,
+    Thermometer,
 } from 'lucide-react'
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+    Area,
+    AreaChart,
+    CartesianGrid,
+    Legend,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
 } from 'recharts'
 import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
@@ -867,23 +867,34 @@ function SystemDetailPage() {
                 })}
               </div>
             ) : (
-              <Card className="border-dashed">
-                <CardContent className="py-16 text-center">
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
-                    <Box className="h-8 w-8 text-muted-foreground" />
+              <Card className="border-dashed bg-gradient-to-br from-cyan-500/5 via-background to-blue-500/5">
+                <CardContent className="py-12">
+                  <div className="mx-auto max-w-2xl text-center">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20">
+                      <Box className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2">No containers detected</h3>
+                    <p className="text-muted-foreground text-sm mb-6">
+                      The agent is online, but it can’t read Docker container metadata yet.
+                    </p>
                   </div>
-                  <h3 className="text-lg font-medium mb-1">No containers detected</h3>
-                  <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                    Mount Docker's socket into the agent (for example{' '}
-                    <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                      -v /var/run/docker.sock:/var/run/docker.sock:ro
-                    </code>
-                    ), then verify the agent can read it with{' '}
-                    <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                      docker exec &lt;agent&gt; ls -l /var/run/docker.sock
-                    </code>
-                    .
-                  </p>
+                  <div className="mx-auto max-w-2xl space-y-3">
+                    <div className="rounded-lg border bg-background/80 p-3">
+                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">1. Resolve Docker socket path</p>
+                      <code className="block rounded bg-muted px-2.5 py-2 text-xs font-mono overflow-x-auto">
+                        {"docker context inspect --format '{{.Endpoints.docker.Host}}'"}
+                      </code>
+                    </div>
+                    <div className="rounded-lg border bg-background/80 p-3">
+                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">2. Verify the agent can read the socket</p>
+                      <code className="block rounded bg-muted px-2.5 py-2 text-xs font-mono overflow-x-auto">
+                        docker exec moneat-agent ls -l /var/run/docker.sock
+                      </code>
+                    </div>
+                    <p className="text-xs text-muted-foreground px-1">
+                      If you just created this system, regenerate the setup command with container monitoring enabled and redeploy the agent.
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             )}

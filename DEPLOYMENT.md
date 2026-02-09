@@ -296,6 +296,15 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
 
    Ensure `.env.prod` exists and sets `DATABASE_PASSWORD` and `CLICKHOUSE_PASSWORD` (see below). Init scripts are mounted from the repo (`backend/src/main/resources/db/init.sql` and `clickhouse_init.sql`) and run automatically on first start when the data directories are empty.
 
+   **Important**: If you update the schema files after initial deployment, re-run the init scripts:
+   ```bash
+   # For ClickHouse schema updates
+   cat backend/src/main/resources/db/clickhouse_init.sql | docker exec -i moneat-clickhouse clickhouse-client --database=moneat --multiquery
+   
+   # For Postgres schema updates  
+   docker exec -i moneat-postgres psql -U moneat -d moneat < backend/src/main/resources/db/init.sql
+   ```
+
 2. **Verify** (optional):
 
    - Postgres:  

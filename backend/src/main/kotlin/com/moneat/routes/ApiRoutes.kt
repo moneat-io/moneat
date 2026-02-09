@@ -3,6 +3,7 @@ package com.moneat.routes
 import com.moneat.models.*
 import com.moneat.plugins.getSentryTransaction
 import com.moneat.services.DashboardService
+import com.moneat.services.SdkVersionService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -45,6 +46,12 @@ fun Route.apiRoutes() {
                         user[Users.is_admin]
                     ))
                 }
+            }
+
+            // SDK versions used in setup documentation
+            get("/sdk-versions") {
+                val versions = SdkVersionService.getSdkVersions()
+                call.respond(versions)
             }
             
             // Projects

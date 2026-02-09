@@ -10,7 +10,7 @@ import {Check, Copy, Plus, Settings, X} from 'lucide-react'
 import {useEffect, useState} from 'react'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
-import {useMutation, useQueryClient} from '@tanstack/react-query'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/projects/$projectId')({
@@ -107,6 +107,12 @@ function SetupPage() {
   const { project } = Route.useLoaderData()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const {data: sdkVersionsResponse} = useQuery({
+    queryKey: ['sdk-versions'],
+    queryFn: () => api.getSdkVersions(),
+    staleTime: 30 * 60 * 1000,
+  })
+  const sdkVersions = sdkVersionsResponse?.versions
   const platformInfo = getPlatformInfo(project.framework)
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
   const [dsnCopiedMap, setDsnCopiedMap] = useState<Record<string, boolean>>({})
@@ -153,14 +159,16 @@ function SetupPage() {
   // For single-platform, use the framework platform
   const getCurrentDocs = (targetId: string | null) => {
     if (!targetId || targetId === 'default') {
-      return getSetupDocs(project.framework, project.dsn)
+      return getSetupDocs(project.framework, project.dsn, sdkVersions)
     }
     // Try to get target-specific docs (e.g., "kmp-android")
     const targetSpecificDocs = getSetupDocs(`${project.framework}-${targetId}`,
-      project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn)
+      project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn,
+      sdkVersions)
     // Fall back to framework docs if target-specific not found
     return targetSpecificDocs || getSetupDocs(project.framework,
-      project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn)
+      project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn,
+      sdkVersions)
   }
 
   const docs = getCurrentDocs(selectedTarget)

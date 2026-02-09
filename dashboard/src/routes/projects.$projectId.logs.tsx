@@ -1,15 +1,18 @@
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {useEffect, useMemo, useRef, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {api, formatErrorForLogging, type LogEntry} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
-import {LogFilters} from '@/components/logs/LogFilters'
+import {type FacetFilter, LogSearchBar, TIME_PRESETS} from '@/components/logs/LogSearchBar'
+import {TagFacets} from '@/components/logs/TagFacets'
 import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
 import {LiveTailToggle} from '@/components/logs/LiveTailToggle'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {LogSetupGuide} from '@/components/logs/LogSetupGuide'
 import {Button} from '@/components/ui/button'
-import {TerminalSquare} from 'lucide-react'
+import {Badge} from '@/components/ui/badge'
+import {cn} from '@/lib/utils'
+import {ChevronLeft, ChevronRight, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare,} from 'lucide-react'
 
 export const Route = createFileRoute('/projects/$projectId/logs')({
   beforeLoad: async () => {
@@ -17,29 +20,12 @@ export const Route = createFileRoute('/projects/$projectId/logs')({
       throw redirect({to: '/login'})
     }
   },
+  loader: async ({params}) => {
+    const project = await api.getProject(Number(params.projectId))
+    return {project}
+  },
   component: ProjectLogsPage,
 })
-
-function parseTagFilter(raw: string): Record<string, string> {
-  if (!raw.trim()) return {}
-  return raw
-    .split(',')
-    .map((pair) => pair.trim())
-    .filter(Boolean)
-    .map((pair) => {
-      const idx = pair.indexOf(':')
-      if (idx <= 0) return null
-      const key = pair.slice(0, idx).trim()
-      const value = pair.slice(idx + 1).trim()
-      if (!key) return null
-      return [key, value] as const
-    })
-    .filter((entry): entry is readonly [string, string] => entry !== null)
-    .reduce<Record<string, string>>((acc, [key, value]) => {
-      acc[key] = value
-      return acc
-    }, {})
-}
 
 function toIsoOrUndefined(value: string): string | undefined {
   if (!value) return undefined
@@ -48,30 +34,71 @@ function toIsoOrUndefined(value: string): string | undefined {
   return date.toISOString()
 }
 
+function computeTimeRange(
+  preset: string,
+  customFrom: string,
+  customTo: string
+): {from?: string; to?: string} {
+  if (preset === 'custom') {
+    return {
+      from: toIsoOrUndefined(customFrom),
+      to: toIsoOrUndefined(customTo),
+    }
+  }
+
+  const match = TIME_PRESETS.find((p) => p.value === preset)
+  if (match) {
+    const now = new Date()
+    const from = new Date(now.getTime() - match.minutes * 60_000)
+    return {from: from.toISOString(), to: undefined}
+  }
+
+  return {}
+}
+
 function formatLiveTime(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleTimeString()
+  const base = date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const ms = String(date.getMilliseconds()).padStart(3, '0')
+  return `${base}.${ms}`
 }
 
 function ProjectLogsPage() {
+  const {project} = Route.useLoaderData()
   const {projectId} = Route.useParams()
   const numericProjectId = Number(projectId)
   const {setSelectedProjectId} = useProject()
+  const {data: sdkVersionsResponse} = useQuery({
+    queryKey: ['sdk-versions'],
+    queryFn: () => api.getSdkVersions(),
+    staleTime: 30 * 60 * 1000,
+  })
 
+  // Search / filter state
   const [query, setQuery] = useState('')
-  const [service, setService] = useState('all')
-  const [environment, setEnvironment] = useState('all')
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
   const [levels, setLevels] = useState<string[]>([])
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [tagFilter, setTagFilter] = useState('')
+  const [timePreset, setTimePreset] = useState('15m')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
+  // Pagination
   const [cursor, setCursor] = useState<string | null>(null)
   const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([])
 
+  // Detail panel
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
 
+  // Facets sidebar
+  const [showFacets, setShowFacets] = useState(true)
+
+  // Live tail state
   const [liveTailEnabled, setLiveTailEnabled] = useState(false)
   const [tailPaused, setTailPaused] = useState(false)
   const [tailBufferedCount, setTailBufferedCount] = useState(0)
@@ -82,10 +109,33 @@ function ProjectLogsPage() {
   const pausedRef = useRef(false)
   const tailScrollRef = useRef<HTMLDivElement>(null)
 
+  // Derive API params from state
+  const timeRange = useMemo(
+    () => computeTimeRange(timePreset, customFrom, customTo),
+    [timePreset, customFrom, customTo]
+  )
+
+  // Derive service/environment/tags from facetFilters
+  const derivedFilters = useMemo(() => {
+    let service: string | undefined
+    let environment: string | undefined
+    const tags: Record<string, string> = {}
+
+    for (const filter of facetFilters) {
+      if (filter.exclude) continue // Exclude is handled differently if needed
+      if (filter.key === 'service') {
+        service = filter.value
+      } else if (filter.key === 'environment') {
+        environment = filter.value
+      } else {
+        tags[filter.key] = filter.value
+      }
+    }
+
+    return {service, environment, tags}
+  }, [facetFilters])
+
   const levelsKey = levels.join(',')
-  const tagMap = useMemo(() => parseTagFilter(tagFilter), [tagFilter])
-  const fromIso = useMemo(() => toIsoOrUndefined(from), [from])
-  const toIso = useMemo(() => toIsoOrUndefined(to), [to])
 
   useEffect(() => {
     pausedRef.current = tailPaused
@@ -97,50 +147,62 @@ function ProjectLogsPage() {
     }
   }, [numericProjectId, setSelectedProjectId])
 
+  // Reset pagination when filters change
   useEffect(() => {
     setCursor(null)
     setCursorHistory([])
-  }, [numericProjectId, query, service, environment, levelsKey, fromIso, toIso, tagFilter])
+  }, [numericProjectId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
 
+  // Fetch filter options
   const {data: filterOptions} = useQuery({
-    queryKey: ['project-log-filters', numericProjectId, fromIso, toIso],
-    queryFn: () => api.getProjectLogFilters(numericProjectId, {from: fromIso, to: toIso}),
+    queryKey: ['project-log-filters', numericProjectId, timeRange.from, timeRange.to],
+    queryFn: () =>
+      api.getProjectLogFilters(numericProjectId, {from: timeRange.from, to: timeRange.to}),
     enabled: Number.isFinite(numericProjectId),
   })
 
+  // Fetch logs
   const {
     data: logPage,
     isLoading,
     isFetching,
   } = useQuery({
-    queryKey: ['project-logs', numericProjectId, cursor, query, service, environment, levelsKey, fromIso, toIso, tagFilter],
+    queryKey: [
+      'project-logs',
+      numericProjectId,
+      cursor,
+      query,
+      levelsKey,
+      timeRange.from,
+      timeRange.to,
+      derivedFilters.service,
+      derivedFilters.environment,
+      JSON.stringify(derivedFilters.tags),
+    ],
     queryFn: () =>
       api.getProjectLogs(numericProjectId, {
         cursor: cursor || undefined,
         limit: 150,
         query: query || undefined,
         levels: levels.length > 0 ? levels : undefined,
-        service: service === 'all' ? undefined : service,
-        environment: environment === 'all' ? undefined : environment,
-        from: fromIso,
-        to: toIso,
-        tags: Object.keys(tagMap).length > 0 ? tagMap : undefined,
+        service: derivedFilters.service,
+        environment: derivedFilters.environment,
+        from: timeRange.from,
+        to: timeRange.to,
+        tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
       }),
     enabled: Number.isFinite(numericProjectId),
   })
 
   const logs = logPage?.logs ?? []
 
-  useEffect(() => {
-    if (logs.length === 0) {
-      setSelectedLog(null)
-      return
-    }
-    if (!selectedLog || !logs.some((log) => log.logId === selectedLog.logId)) {
-      setSelectedLog(logs[0] ?? null)
-    }
-  }, [logs, selectedLog])
+  // Open detail when selecting a log
+  const handleSelectLog = useCallback((log: LogEntry) => {
+    setSelectedLog(log)
+    setDetailOpen(true)
+  }, [])
 
+  // Live tail
   useEffect(() => {
     if (!liveTailEnabled || !Number.isFinite(numericProjectId)) return
 
@@ -148,8 +210,8 @@ function ProjectLogsPage() {
     const source = api.createProjectLogTailStream(numericProjectId, {
       query: query || undefined,
       levels: levels.length > 0 ? levels : undefined,
-      service: service === 'all' ? undefined : service,
-      environment: environment === 'all' ? undefined : environment,
+      service: derivedFilters.service,
+      environment: derivedFilters.environment,
     })
 
     source.onopen = () => {
@@ -186,13 +248,11 @@ function ProjectLogsPage() {
       source.close()
       setTailStatus('closed')
     }
-  }, [liveTailEnabled, numericProjectId, query, service, environment, levelsKey])
+  }, [liveTailEnabled, numericProjectId, query, derivedFilters.service, derivedFilters.environment, levelsKey, levels])
 
   const toggleLevel = (level: string) => {
     setLevels((current) =>
-      current.includes(level)
-        ? current.filter((item) => item !== level)
-        : [...current, level]
+      current.includes(level) ? current.filter((item) => item !== level) : [...current, level]
     )
   }
 
@@ -230,7 +290,9 @@ function ProjectLogsPage() {
 
     setTailPaused(false)
     if (bufferedTailLogsRef.current.length > 0) {
-      setTailLogs((current) => [...current, ...bufferedTailLogsRef.current].slice(-400))
+      setTailLogs((current) =>
+        [...current, ...bufferedTailLogsRef.current].slice(-400)
+      )
       bufferedTailLogsRef.current = []
       setTailBufferedCount(0)
       requestAnimationFrame(() => {
@@ -252,116 +314,232 @@ function ProjectLogsPage() {
     }
   }
 
+  const showEmptyState = !isLoading && logs.length === 0 && !query && facetFilters.length === 0 && levels.length === 0
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-blue-500/5">
-      <div className="mx-auto max-w-[1500px] space-y-4 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-blue-500/15 p-2.5 ring-1 ring-blue-500/30">
-              <TerminalSquare className="h-6 w-6 text-blue-600 dark:text-blue-300" />
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]">
+      {/* Header bar */}
+      <div className="shrink-0 border-b bg-background/95 backdrop-blur-sm z-20">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-gradient-to-br from-blue-500/15 to-violet-500/15 p-2 ring-1 ring-blue-500/20">
+                <TerminalSquare className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold leading-tight">Log Explorer</h2>
+                <p className="text-[11px] text-muted-foreground">
+                  Search, filter, and stream logs in real time
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold">Log Explorer</h2>
-              <p className="text-sm text-muted-foreground">Search, filter, and tail project logs in real time.</p>
-            </div>
+
+            <LiveTailToggle
+              enabled={liveTailEnabled}
+              paused={tailPaused}
+              bufferedCount={tailBufferedCount}
+              status={tailStatus}
+              onToggleEnabled={handleToggleLiveTail}
+              onTogglePaused={handleTogglePause}
+            />
           </div>
 
-          <LiveTailToggle
-            enabled={liveTailEnabled}
-            paused={tailPaused}
-            bufferedCount={tailBufferedCount}
-            status={tailStatus}
-            onToggleEnabled={handleToggleLiveTail}
-            onTogglePaused={handleTogglePause}
-          />
-        </div>
+          {/* Search bar */}
+          <div className="border-t bg-card/40 px-4 py-3 lg:px-6">
+            <LogSearchBar
+              query={query}
+              onQueryChange={setQuery}
+              facetFilters={facetFilters}
+              onFacetFiltersChange={setFacetFilters}
+              levels={levels}
+              onToggleLevel={toggleLevel}
+              availableTagKeys={filterOptions?.tagKeys ?? []}
+              availableServices={filterOptions?.services ?? []}
+              availableEnvironments={filterOptions?.environments ?? []}
+              timePreset={timePreset}
+              onTimePresetChange={setTimePreset}
+              customFrom={customFrom}
+              customTo={customTo}
+              onCustomFromChange={setCustomFrom}
+              onCustomToChange={setCustomTo}
+            />
+          </div>
+      </div>
 
-        <LogFilters
-          query={query}
-          onQueryChange={setQuery}
-          service={service}
-          onServiceChange={setService}
-          environment={environment}
-          onEnvironmentChange={setEnvironment}
-          levels={levels}
-          onToggleLevel={toggleLevel}
-          availableServices={filterOptions?.services ?? []}
-          availableEnvironments={filterOptions?.environments ?? []}
-          from={from}
-          onFromChange={setFrom}
-          to={to}
-          onToChange={setTo}
-          tagFilter={tagFilter}
-          onTagFilterChange={setTagFilter}
-        />
-
-        <div className="grid gap-4 xl:grid-cols-[2fr,1fr]">
-          <div className="space-y-3">
-            {isLoading ? (
-              <div className="rounded-xl border bg-card p-12 text-center text-sm text-muted-foreground">
-                Loading logs...
-              </div>
-            ) : (
-              <LogTable
-                logs={logs}
-                selectedLogId={selectedLog?.logId}
-                onSelectLog={setSelectedLog}
+      {/* Main content */}
+      <div className="flex flex-1 overflow-hidden">
+          {/* Facets sidebar */}
+          <div
+            className={cn(
+              'shrink-0 border-r transition-all duration-200',
+              showFacets ? 'w-[240px]' : 'w-0 overflow-hidden border-r-0'
+            )}
+          >
+            {showFacets && (
+              <TagFacets
+                projectId={numericProjectId}
+                availableTagKeys={filterOptions?.tagKeys ?? []}
+                availableServices={filterOptions?.services ?? []}
+                availableEnvironments={filterOptions?.environments ?? []}
+                facetFilters={facetFilters}
+                onFacetFiltersChange={setFacetFilters}
+                from={timeRange.from}
+                to={timeRange.to}
               />
             )}
+          </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3 text-sm">
-              <div className="text-muted-foreground">
-                {logs.length} logs shown{isFetching ? ' • refreshing...' : ''}
+          {/* Log content area */}
+          <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+            {/* Facets toggle + status bar */}
+            <div className="flex h-11 items-center gap-2 border-b bg-card/30 px-3">
+              <button
+                type="button"
+                onClick={() => setShowFacets(!showFacets)}
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                title={showFacets ? 'Hide facets' : 'Show facets'}
+              >
+                {showFacets ? (
+                  <PanelLeftClose className="h-4 w-4" />
+                ) : (
+                  <PanelLeftOpen className="h-4 w-4" />
+                )}
+              </button>
+
+              <div className="flex-1 text-xs text-muted-foreground">
+                {isLoading ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading logs...
+                  </span>
+                ) : (
+                  <span>
+                    {logs.length} log{logs.length !== 1 ? 's' : ''} shown
+                    {isFetching && (
+                      <span className="ml-2 inline-flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        refreshing
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={cursorHistory.length === 0}>
-                  Previous
+
+              {/* Pagination */}
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePreviousPage}
+                  disabled={cursorHistory.length === 0}
+                  className="h-7 w-7 p-0"
+                >
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleNextPage} disabled={!logPage?.hasMore}>
-                  Next
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={!logPage?.hasMore}
+                  className="h-7 w-7 p-0"
+                >
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
 
-            {liveTailEnabled && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Live Tail Stream</CardTitle>
-                </CardHeader>
-                <CardContent>
+            {/* Log table or empty state */}
+            <div className="flex-1 overflow-y-auto">
+              {showEmptyState ? (
+                <LogSetupGuide dsn={project.dsn} sdkVersions={sdkVersionsResponse?.versions} />
+              ) : isLoading ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="text-center">
+                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                    <p className="mt-3 text-sm text-muted-foreground">Loading logs...</p>
+                  </div>
+                </div>
+              ) : logs.length === 0 ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="text-center">
+                    <TerminalSquare className="mx-auto h-10 w-10 text-muted-foreground/30" />
+                    <p className="mt-3 text-sm font-medium text-muted-foreground">No logs match your filters</p>
+                    <p className="mt-1 text-xs text-muted-foreground/70">
+                      Try adjusting your search query, time range, or filters
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <LogTable
+                  logs={logs}
+                  selectedLogId={selectedLog?.logId}
+                  onSelectLog={handleSelectLog}
+                />
+              )}
+
+              {/* Live tail stream */}
+              {liveTailEnabled && (
+                <div className="border-t">
+                  <div className="flex items-center gap-2 border-b bg-card/50 px-4 py-2">
+                    <span className={cn('h-2 w-2 rounded-full', tailStatus === 'open' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400')} />
+                    <span className="text-xs font-medium">Live Tail Stream</span>
+                    {tailLogs.length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] font-mono">{tailLogs.length} events</Badge>
+                    )}
+                  </div>
                   <div
                     ref={tailScrollRef}
                     onScroll={handleTailScroll}
-                    className="max-h-[320px] overflow-auto rounded-lg border bg-muted/20"
+                    className="max-h-[320px] overflow-auto"
                   >
                     {tailLogs.length === 0 ? (
-                      <div className="p-6 text-sm text-muted-foreground">Waiting for live log events...</div>
+                      <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Waiting for live log events...
+                      </div>
                     ) : (
-                      <div className="divide-y">
-                        {tailLogs.map((log) => (
-                          <button
-                            key={`${log.logId}-${log.timestamp}`}
-                            className="w-full px-3 py-2 text-left hover:bg-accent/60"
-                            onClick={() => setSelectedLog(log)}
-                          >
-                            <div className="flex items-start gap-3">
-                              <span className="min-w-[72px] font-mono text-xs text-muted-foreground">{formatLiveTime(log.timestamp)}</span>
-                              <span className="min-w-[50px] font-mono text-xs uppercase text-muted-foreground">{log.level}</span>
-                              <span className="font-mono text-xs break-all">{log.message}</span>
-                            </div>
-                          </button>
-                        ))}
+                      <div className="divide-y divide-border/30">
+                        {tailLogs.map((log) => {
+                          const normalizedLevel = (log.level || 'info').toLowerCase()
+                          return (
+                            <button
+                              key={`${log.logId}-${log.timestamp}`}
+                              className="w-full px-4 py-1.5 text-left transition-colors hover:bg-accent/40"
+                              onClick={() => handleSelectLog(log)}
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="min-w-[90px] font-mono text-[11px] text-muted-foreground">
+                                  {formatLiveTime(log.timestamp)}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'min-w-[44px] justify-center font-mono text-[9px] uppercase py-0 px-1',
+                                    normalizedLevel === 'error' && 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+                                    normalizedLevel === 'warn' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+                                    normalizedLevel === 'info' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+                                    normalizedLevel === 'debug' && 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+                                  )}
+                                >
+                                  {normalizedLevel}
+                                </Badge>
+                                <span className="font-mono text-xs break-all text-foreground/80">
+                                  {log.message}
+                                </span>
+                              </div>
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </div>
+              )}
+            </div>
           </div>
-
-          <LogDetail log={selectedLog} />
         </div>
-      </div>
+
+      {/* Log detail sheet */}
+      <LogDetail log={selectedLog} open={detailOpen} onClose={() => setDetailOpen(false)} />
     </div>
   )
 }

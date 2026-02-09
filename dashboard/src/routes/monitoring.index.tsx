@@ -16,6 +16,7 @@ import {
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Separator} from '@/components/ui/separator'
+import {Switch} from '@/components/ui/switch'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
     Activity,
@@ -35,8 +36,10 @@ import {
     Trash2,
     Zap,
 } from 'lucide-react'
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
+import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
+import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 export const Route = createFileRoute('/monitoring/')({
   beforeLoad: () => {
@@ -137,12 +140,80 @@ function AddSystemButton({onClick}: {onClick: () => void}) {
   )
 }
 
+const DOCKER_SOCKET_REFERENCE_REGEX = /\/var\/run\/docker\.sock/
+const SOCK_PATH_ASSIGNMENT_REGEX = /^\s*SOCK_PATH=/
+const DOCKER_HOST_LINE_REGEX = /^\s*-e\s+DOCKER_HOST="unix:\/\/\/var\/run\/docker\.sock"\s*\\?\s*$/
+const SOCK_PATH_LOOKUP_LINE = `SOCK_PATH="$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"`
+const SOCK_PATH_STRIP_UNIX_LINE = 'SOCK_PATH="${SOCK_PATH#unix://}"'
+const SOCK_PATH_MAC_NORMALIZE_LINE = `case "$SOCK_PATH" in /Users/*/.docker/run/docker.sock) SOCK_PATH="/var/run/docker.sock" ;; esac`
+const SOCK_PATH_FALLBACK_LINE = '[ -S "$SOCK_PATH" ] || SOCK_PATH="/var/run/docker.sock"'
+const AGENT_ROOT_USER_LINE = '--user 0:0 \\'
+
+function getInstallCommand(baseCommand: string, enableContainerMonitoring: boolean): string {
+  const lines = baseCommand.split('\n')
+  const withoutDockerSocket = lines.filter(
+    (line) =>
+      !SOCK_PATH_ASSIGNMENT_REGEX.test(line) &&
+      !DOCKER_SOCKET_REFERENCE_REGEX.test(line) &&
+      line.trim() !== '--user 0:0 \\' &&
+      !DOCKER_HOST_LINE_REGEX.test(line)
+  )
+
+  if (!enableContainerMonitoring) {
+    return withoutDockerSocket.join('\n')
+  }
+
+  const runLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('docker run '))
+  const insertLookupAt = runLineIndex >= 0 ? runLineIndex : 0
+
+  withoutDockerSocket.splice(
+    insertLookupAt,
+    0,
+    SOCK_PATH_LOOKUP_LINE,
+    SOCK_PATH_STRIP_UNIX_LINE,
+    SOCK_PATH_MAC_NORMALIZE_LINE,
+    SOCK_PATH_FALLBACK_LINE,
+    ''
+  )
+
+  const updatedRunLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('docker run '))
+  const userLineInsertAt = updatedRunLineIndex >= 0 ? updatedRunLineIndex + 1 : 4
+  const userLineIndentation = (withoutDockerSocket[userLineInsertAt - 1]?.match(/^\s*/) || ['  '])[0]
+  withoutDockerSocket.splice(userLineInsertAt, 0, `${userLineIndentation}${AGENT_ROOT_USER_LINE}`)
+
+  const restartLineIndex = withoutDockerSocket.findIndex(
+    (line, idx) => idx > userLineInsertAt && line.trim().startsWith('--restart ')
+  )
+  const insertMountAt = restartLineIndex >= 0 ? restartLineIndex + 1 : userLineInsertAt + 1
+  const indentation = (withoutDockerSocket[insertMountAt - 1]?.match(/^\s*/) || ['  '])[0]
+
+  withoutDockerSocket.splice(insertMountAt, 0, `${indentation}-v "\${SOCK_PATH}:/var/run/docker.sock:ro" \\`)
+
+  const keyEnvLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('-e MONEAT_KEY='))
+  const imageLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('adrianelder/moneat-agent:'))
+  const insertDockerHostAt = keyEnvLineIndex >= 0 ? keyEnvLineIndex : imageLineIndex >= 0 ? imageLineIndex : withoutDockerSocket.length
+  const envIndentation = (withoutDockerSocket[Math.max(insertDockerHostAt - 1, 0)]?.match(/^\s*/) || ['  '])[0]
+  withoutDockerSocket.splice(insertDockerHostAt, 0, `${envIndentation}-e DOCKER_HOST="unix:///var/run/docker.sock" \\`)
+
+  return withoutDockerSocket.join('\n')
+}
+
 function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: boolean) => void}) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
   const [systemName, setSystemName] = useState('')
   const [createdSystem, setCreatedSystem] = useState<{id: string; dockerCommand: string} | null>(null)
+  const [containerMonitoringEnabled, setContainerMonitoringEnabled] = useState(true)
+  const [isDark, setIsDark] = useState(true)
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    const root = document.documentElement
+    setIsDark(root.classList.contains('dark'))
+    const observer = new MutationObserver(() => setIsDark(root.classList.contains('dark')))
+    observer.observe(root, {attributes: true, attributeFilter: ['class']})
+    return () => observer.disconnect()
+  }, [])
 
   const createMutation = useMutation({
     mutationFn: (name: string) => api.createMonitorSystem(name),
@@ -172,13 +243,14 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
     setTimeout(() => {
       setCreatedSystem(null)
       setSystemName('')
+      setContainerMonitoringEnabled(true)
       setCopied(false)
     }, 200)
   }
 
   const handleCopyCommand = async () => {
     if (createdSystem) {
-      await navigator.clipboard.writeText(createdSystem.dockerCommand)
+      await navigator.clipboard.writeText(getInstallCommand(createdSystem.dockerCommand, containerMonitoringEnabled))
       setCopied(true)
       toast({title: 'Copied!', description: 'Docker command copied to clipboard'})
       setTimeout(() => setCopied(false), 2000)
@@ -246,10 +318,43 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
                   <Terminal className="h-3.5 w-3.5 text-blue-500" />
                   Installation Command
                 </Label>
+                <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 px-3 py-2.5">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">Enable container monitoring</p>
+                    <p className="text-xs text-muted-foreground">
+                      Auto-detects Docker socket path and uses Docker Engine API via <code className="rounded bg-muted px-1 py-0.5">DOCKER_HOST</code>.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={containerMonitoringEnabled}
+                    onCheckedChange={setContainerMonitoringEnabled}
+                    aria-label="Toggle container monitoring"
+                  />
+                </div>
                 <div className="relative group">
-                  <pre className="bg-zinc-950 text-zinc-100 dark:bg-zinc-900 p-4 rounded-lg text-sm overflow-x-auto leading-relaxed border border-zinc-800">
-                    <code>{createdSystem.dockerCommand}</code>
-                  </pre>
+                  <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
+                    <SyntaxHighlighter
+                      language="bash"
+                      style={isDark ? oneDark : oneLight}
+                      customStyle={{
+                        margin: 0,
+                        padding: '1rem',
+                        paddingRight: '5rem',
+                        fontSize: '0.8125rem',
+                        lineHeight: 1.6,
+                        background: 'transparent',
+                      }}
+                      codeTagProps={{
+                        style: {
+                          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                        },
+                      }}
+                      showLineNumbers={false}
+                      wrapLongLines={false}
+                    >
+                      {getInstallCommand(createdSystem.dockerCommand, containerMonitoringEnabled)}
+                    </SyntaxHighlighter>
+                  </div>
                   <Button
                     size="sm"
                     variant="secondary"

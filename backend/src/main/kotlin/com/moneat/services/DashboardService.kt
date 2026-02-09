@@ -290,7 +290,7 @@ class DashboardService {
                         .map { keyRow ->
                             ProjectKeyResponse(
                                 platformTarget = keyRow[ProjectKeys.platform_target],
-                                dsn = "http://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                                dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
                             )
                         }
                     
@@ -345,7 +345,7 @@ class DashboardService {
                     it[is_active] = true
                 }
                 
-                val dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                val dsn = "https://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
                 keys.add(ProjectKeyResponse(platformTarget = target, dsn = dsn))
             }
             
@@ -387,7 +387,7 @@ class DashboardService {
                 it[is_active] = true
             }
 
-            val dsn = "http://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+            val dsn = "https://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
             ProjectKeyResponse(platformTarget = target, dsn = dsn)
         }
     }

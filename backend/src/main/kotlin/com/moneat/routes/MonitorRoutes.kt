@@ -12,12 +12,11 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
 
@@ -262,8 +261,10 @@ fun Route.monitorRoutes() {
                 val apiUrl = System.getenv("API_URL") ?: "https://api.moneat.io"
                 val dockerCommand = """
                     docker run -d --name moneat-agent \
+                      --user 0:0 \
                       --restart unless-stopped \
                       -v /var/run/docker.sock:/var/run/docker.sock:ro \
+                      -e DOCKER_HOST="unix:///var/run/docker.sock" \
                       -e MONEAT_KEY="$agentKey" \
                       -e MONEAT_URL="$apiUrl" \
                       adrianelder/moneat-agent:latest

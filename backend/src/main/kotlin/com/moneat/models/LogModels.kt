@@ -111,6 +111,12 @@ data class LogFilterOptionsResponse(
     @SerialName("tag_keys") val tagKeys: List<String>
 )
 
+@Serializable
+data class LogTagValuesResponse(
+    val key: String,
+    val values: List<String>
+)
+
 data class LogQueryRequest(
     val limit: Int = 100,
     val cursor: String? = null,

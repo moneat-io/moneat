@@ -3,23 +3,13 @@ package com.moneat.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.models.*
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
-import kotlinx.serialization.decodeFromString
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import java.time.Instant
-import java.util.Base64
-import java.util.UUID
+import java.util.*
 
 private val logger = KotlinLogging.logger {}
 
@@ -317,6 +307,35 @@ class LogService {
             levels = listOf("trace", "debug", "info", "warn", "error", "fatal"),
             tagKeys = tagKeys
         )
+    }
+
+    suspend fun getTagValues(projectId: Long, key: String, from: String?, to: String?, limit: Int = 50): LogTagValuesResponse {
+        val escapedKey = escapeSql(key.trim())
+        if (escapedKey.isBlank()) return LogTagValuesResponse(key = key, values = emptyList())
+
+        val conditions = mutableListOf("project_id = $projectId", "mapContains(tags, '$escapedKey')")
+        val fromMs = parseTimeToMillis(from)
+        if (fromMs != null) {
+            conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
+        }
+        val toMs = parseTimeToMillis(to)
+        if (toMs != null) {
+            conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
+        }
+        val whereClause = conditions.joinToString(" AND ")
+
+        val values = queryDistinctLines(
+            """
+            SELECT DISTINCT tags['$escapedKey'] AS tag_value
+            FROM $clickhouseDb.logs
+            WHERE $whereClause AND tags['$escapedKey'] != ''
+            ORDER BY tag_value
+            LIMIT ${limit.coerceIn(1, 200)}
+            FORMAT TSV
+            """.trimIndent()
+        )
+
+        return LogTagValuesResponse(key = key, values = values)
     }
 
     private suspend fun queryDistinctLines(query: String): List<String> {
