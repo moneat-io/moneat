@@ -1,6 +1,17 @@
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'}/v1`
 const AUTH_PAGE_PATHS = new Set(['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
 
+// Helper to format errors for logging without massive stack traces
+export function formatErrorForLogging(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message === 'NETWORK_ERROR') {
+      return 'Network error: Unable to connect to server'
+    }
+    return error.message
+  }
+  return String(error)
+}
+
 interface AuthResponse {
   token: string
   user: { 
@@ -281,6 +292,38 @@ interface NotificationPreferences {
 interface ReplayTimelineResponse {
   items: ReplayTimelineItem[]
   replayStartMs: number
+}
+
+interface LogEntry {
+  logId: string
+  timestamp: string
+  level: string
+  message: string
+  body: string
+  service: string
+  environment: string
+  host: string
+  source: string
+  containerName: string
+  containerId: string
+  containerImage: string
+  traceId: string
+  spanId: string
+  tags: Record<string, string>
+  resourceAttributes: Record<string, string>
+}
+
+interface LogQueryResponse {
+  logs: LogEntry[]
+  nextCursor?: string | null
+  hasMore: boolean
+}
+
+interface LogFilterOptions {
+  services: string[]
+  environments: string[]
+  levels: string[]
+  tagKeys: string[]
 }
 
 interface AuthToken {
@@ -575,7 +618,15 @@ class ApiClient {
     }
     if (token) headers['Authorization'] = `Bearer ${token}`
 
-    const response = await fetch(endpoint, { ...options, headers })
+    let response: Response
+    try {
+      response = await fetch(endpoint, { ...options, headers })
+    } catch (err) {
+      // Create a clean error without the massive stack trace from fetch
+      const networkError = new Error('NETWORK_ERROR')
+      networkError.stack = undefined // Remove stack trace to keep error small
+      throw networkError
+    }
 
     if (response.status === 401 && token) {
       this.logout()
@@ -775,6 +826,110 @@ class ApiClient {
 
   async getProjectStats(projectId: number, period: '24h' | '7d' | '30d' | '90d' = '7d'): Promise<ProjectStats> {
     return this.request<ProjectStats>(`${API_BASE}/projects/${projectId}/stats?period=${period}`)
+  }
+
+  async getProjectLogs(
+    projectId: number,
+    options: {
+      cursor?: string
+      limit?: number
+      query?: string
+      levels?: string[]
+      service?: string
+      environment?: string
+      from?: string
+      to?: string
+      tags?: Record<string, string>
+    } = {}
+  ): Promise<LogQueryResponse> {
+    const params = new URLSearchParams()
+    if (options.cursor) params.set('cursor', options.cursor)
+    params.set('limit', String(options.limit ?? 100))
+    if (options.query) params.set('q', options.query)
+    if (options.levels && options.levels.length > 0) {
+      options.levels.forEach((level) => params.append('level', level))
+    }
+    if (options.service) params.set('service', options.service)
+    if (options.environment) params.set('environment', options.environment)
+    if (options.from) params.set('from', options.from)
+    if (options.to) params.set('to', options.to)
+    if (options.tags) {
+      Object.entries(options.tags).forEach(([key, value]) => {
+        if (key) params.append('tag', `${key}:${value}`)
+      })
+    }
+
+    const response = await this.request<any>(`${API_BASE}/projects/${projectId}/logs?${params.toString()}`)
+    const rows: any[] = response.logs ?? []
+    const logs = rows.map((row) => ({
+      logId: row.logId ?? row.log_id,
+      timestamp: row.timestamp,
+      level: row.level,
+      message: row.message,
+      body: row.body ?? '',
+      service: row.service ?? '',
+      environment: row.environment ?? '',
+      host: row.host ?? '',
+      source: row.source ?? 'sdk',
+      containerName: row.containerName ?? row.container_name ?? '',
+      containerId: row.containerId ?? row.container_id ?? '',
+      containerImage: row.containerImage ?? row.container_image ?? '',
+      traceId: row.traceId ?? row.trace_id ?? '',
+      spanId: row.spanId ?? row.span_id ?? '',
+      tags: row.tags ?? {},
+      resourceAttributes: row.resourceAttributes ?? row.resource_attributes ?? {},
+    })) as LogEntry[]
+
+    return {
+      logs,
+      nextCursor: response.nextCursor ?? response.next_cursor ?? null,
+      hasMore: response.hasMore ?? response.has_more ?? false,
+    }
+  }
+
+  async getProjectLogFilters(
+    projectId: number,
+    options: { from?: string; to?: string } = {}
+  ): Promise<LogFilterOptions> {
+    const params = new URLSearchParams()
+    if (options.from) params.set('from', options.from)
+    if (options.to) params.set('to', options.to)
+    const query = params.toString()
+    const response = await this.request<any>(
+      `${API_BASE}/projects/${projectId}/logs/filters${query ? `?${query}` : ''}`
+    )
+    return {
+      services: response.services ?? [],
+      environments: response.environments ?? [],
+      levels: response.levels ?? [],
+      tagKeys: response.tagKeys ?? response.tag_keys ?? [],
+    }
+  }
+
+  createProjectLogTailStream(
+    projectId: number,
+    options: {
+      query?: string
+      levels?: string[]
+      service?: string
+      environment?: string
+    } = {}
+  ): EventSource {
+    const token = this.getToken()
+    if (!token) {
+      throw new Error('Missing auth token')
+    }
+
+    const params = new URLSearchParams()
+    params.set('token', token)
+    if (options.query) params.set('q', options.query)
+    if (options.levels && options.levels.length > 0) {
+      options.levels.forEach((level) => params.append('level', level))
+    }
+    if (options.service) params.set('service', options.service)
+    if (options.environment) params.set('environment', options.environment)
+
+    return new EventSource(`${API_BASE}/projects/${projectId}/logs/tail?${params.toString()}`)
   }
 
   async getTransactions(
@@ -1284,6 +1439,9 @@ export type {
   ReplayRecordingResponse,
   ReplayTimelineItem,
   ReplayTimelineResponse,
+  LogEntry,
+  LogQueryResponse,
+  LogFilterOptions,
   AuthToken,
   BillingTierConfig,
   BillingPlan,

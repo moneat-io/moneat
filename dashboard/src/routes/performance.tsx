@@ -1,5 +1,5 @@
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {api, formatErrorForLogging} from '@/lib/api'
 
 export const Route = createFileRoute('/performance')({
   beforeLoad: async () => {
@@ -13,7 +13,7 @@ export const Route = createFileRoute('/performance')({
         throw redirect({ to: '/onboarding' })
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error)
+      console.error('Failed to fetch user:', formatErrorForLogging(error))
     }
   },
   component: PerformanceLayout,

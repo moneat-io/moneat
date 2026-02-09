@@ -61,6 +61,7 @@ function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
   }
 
   const dynamicMatchers: Array<[RegExp, (matches: RegExpMatchArray) => string]> = [
+    [/^\/projects\/([^/]+)\/logs$/, (match) => `Project ${formatEntityId(match[1])} Logs`],
     [/^\/projects\/([^/]+)\/settings$/, (match) => `Project ${formatEntityId(match[1])} Settings`],
     [/^\/projects\/([^/]+)$/, (match) => `Project ${formatEntityId(match[1])}`],
     [/^\/issues\/([^/]+)$/, (match) => `Issue ${formatEntityId(match[1])}`],

@@ -31,7 +31,12 @@ function LoginPage() {
       await api.login(email, password)
       navigate({ to: '/' })
     } catch (err) {
-      setError('Invalid email or password. Please try again.')
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      if (errorMessage === 'NETWORK_ERROR') {
+        setError('Unable to connect to the server. Please check your connection and try again.')
+      } else {
+        setError('Invalid email or password. Please try again.')
+      }
     } finally {
       setLoading(false)
     }

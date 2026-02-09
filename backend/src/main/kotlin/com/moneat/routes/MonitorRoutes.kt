@@ -1,6 +1,8 @@
 package com.moneat.routes
 
 import com.moneat.models.*
+import com.moneat.services.BillingQuotaService
+import com.moneat.services.LogService
 import com.moneat.services.MonitorService
 import com.moneat.services.UsageTrackingService
 import io.ktor.http.*
@@ -10,9 +12,12 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
 
@@ -31,9 +36,31 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     }
 }
 
+private fun resolveProjectForOrganization(organizationId: Int, requestedProjectId: Long?): Long? {
+    return transaction {
+        if (requestedProjectId != null) {
+            val exists = Projects
+                .selectAll()
+                .where { (Projects.id eq requestedProjectId) and (Projects.organization_id eq organizationId) }
+                .count() > 0
+            if (exists) {
+                return@transaction requestedProjectId
+            }
+        }
+
+        Projects.selectAll()
+            .where { Projects.organization_id eq organizationId }
+            .orderBy(Projects.id to SortOrder.ASC)
+            .firstOrNull()
+            ?.get(Projects.id)
+    }
+}
+
 fun Route.monitorRoutes() {
     val monitorService = MonitorService()
     val usageTracking = UsageTrackingService.instance
+    val quotaService = BillingQuotaService()
+    val logService = LogService()
     
     route("/v1/monitor") {
         
@@ -99,6 +126,70 @@ fun Route.monitorRoutes() {
                         message = e.message
                     )
                 )
+            }
+        }
+
+        /**
+         * Agent-facing log ingestion endpoint.
+         * Auth: Bearer token (agent key)
+         */
+        post("/logs") {
+            try {
+                val authHeader = call.request.header("Authorization")
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing or invalid Authorization header"))
+                    return@post
+                }
+
+                val agentKey = authHeader.removePrefix("Bearer ").trim()
+                val (_, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid agent key"))
+                    return@post
+                }
+
+                val contentEncoding = call.request.header("Content-Encoding")
+                val bodyBytes = call.receive<ByteArray>()
+
+                val decompressedBytes = if (contentEncoding == "gzip") {
+                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
+                } else {
+                    bodyBytes
+                }
+
+                val payload = json.decodeFromString<AgentLogsRequest>(decompressedBytes.decodeToString())
+                if (payload.logs.isEmpty()) {
+                    call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
+                    return@post
+                }
+
+                val projectId = resolveProjectForOrganization(organizationId, payload.projectId)
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "No project available for organization"))
+                    return@post
+                }
+
+                if (quotaService.isEnforcementEnabled()) {
+                    val reservation = quotaService.reserveUnits(organizationId, payload.logs.size, "log")
+                    if (!reservation.allowed) {
+                        call.respond(
+                            HttpStatusCode.TooManyRequests,
+                            mapOf(
+                                "error" to "Quota exceeded",
+                                "reason" to reservation.reason,
+                                "usage" to reservation.usage
+                            )
+                        )
+                        return@post
+                    }
+                }
+
+                val queueKey = call.application.environment.config.propertyOrNull("logs.queueKey")?.getString()
+                    ?: "moneat:logs:queue"
+                val accepted = logService.enqueueAgentLogs(projectId, payload.logs, queueKey)
+                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted, "project_id" to projectId))
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to ingest agent logs: ${e.message}" }
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid log payload", "message" to (e.message ?: "Unknown error")))
             }
         }
         

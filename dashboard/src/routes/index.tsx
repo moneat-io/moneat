@@ -1,7 +1,7 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {LandingPage} from '@/components/landing/landing-page'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, formatErrorForLogging} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
@@ -101,7 +101,7 @@ export const Route = createFileRoute('/')({
       }
     } catch (error) {
       if (error instanceof Error && 'redirect' in error) throw error
-      console.error('Failed to fetch user:', error)
+      console.error('Failed to fetch user:', formatErrorForLogging(error))
     }
   },
   component: IndexPage,

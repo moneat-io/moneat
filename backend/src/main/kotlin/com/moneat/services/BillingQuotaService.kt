@@ -410,6 +410,7 @@ class BillingQuotaService(
             "transaction" -> "transaction"
             "replay" -> "replay"
             "feedback" -> "feedback"
+            "log", "logs" -> "error"
             else -> "error"
         }
     }

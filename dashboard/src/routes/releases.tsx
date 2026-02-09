@@ -1,6 +1,6 @@
 import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, formatErrorForLogging} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {useMemo, useState} from 'react'
 import {Card, CardContent} from '@/components/ui/card'
@@ -21,7 +21,7 @@ export const Route = createFileRoute('/releases')({
         throw redirect({ to: '/onboarding' })
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error)
+      console.error('Failed to fetch user:', formatErrorForLogging(error))
     }
   },
   component: ReleasesLayout,
@@ -62,7 +62,7 @@ function ReleasesPage() {
   })
   
   if (error) {
-    console.error('Error loading releases:', error)
+    console.error('Error loading releases:', formatErrorForLogging(error))
   }
 
   const releaseList = releases ?? []

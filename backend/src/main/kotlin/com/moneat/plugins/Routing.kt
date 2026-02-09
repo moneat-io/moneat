@@ -88,5 +88,8 @@ fun Application.configureRouting() {
         
         // Server monitoring endpoints
         monitorRoutes()
+
+        // Logging ingestion and query endpoints
+        logRoutes()
     }
 }

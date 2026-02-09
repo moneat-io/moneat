@@ -91,6 +91,21 @@ CREATE INDEX idx_project_keys_public ON project_keys(public_key);
 CREATE INDEX idx_project_keys_project ON project_keys(project_id);
 CREATE UNIQUE INDEX idx_project_keys_platform_target ON project_keys(project_id, platform_target) WHERE platform_target IS NOT NULL;
 
+-- Optional metadata for declared log sources
+CREATE TABLE IF NOT EXISTS log_sources (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    source_type VARCHAR(50) NOT NULL,
+    source_name VARCHAR(255),
+    config JSONB,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_log_sources_project ON log_sources(project_id);
+CREATE INDEX IF NOT EXISTS idx_log_sources_active ON log_sources(project_id, is_active);
+
 -- Releases
 CREATE TABLE IF NOT EXISTS releases (
     id SERIAL PRIMARY KEY,

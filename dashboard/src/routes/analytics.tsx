@@ -1,6 +1,6 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, formatErrorForLogging} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {useEffect, useMemo, useState} from 'react'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
@@ -23,7 +23,7 @@ export const Route = createFileRoute('/analytics')({
         throw redirect({ to: '/onboarding' })
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error)
+      console.error('Failed to fetch user:', formatErrorForLogging(error))
     }
   },
   component: AnalyticsPage,

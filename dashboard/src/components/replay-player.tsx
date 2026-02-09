@@ -1,6 +1,7 @@
 import {forwardRef, useEffect, useImperativeHandle, useRef} from 'react'
 import rrwebPlayer from 'rrweb-player'
 import 'rrweb-player/dist/style.css'
+import {formatErrorForLogging} from '@/lib/api'
 
 interface ReplayPlayerProps {
   events: unknown[]
@@ -80,7 +81,7 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
         }
       }
     } catch (error) {
-      console.error('Failed to initialize replay player:', error)
+      console.error('Failed to initialize replay player:', formatErrorForLogging(error))
       target.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; height: 400px; background: #f5f5f5; border-radius: 8px; padding: 2rem;">
           <div style="text-align: center; max-width: 400px;">

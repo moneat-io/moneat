@@ -1,6 +1,6 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, formatErrorForLogging} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {EventsChart} from '@/components/charts/events-chart'
@@ -19,7 +19,7 @@ export const Route = createFileRoute('/releases/$version')({
         throw redirect({ to: '/onboarding' })
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error)
+      console.error('Failed to fetch user:', formatErrorForLogging(error))
     }
   },
   component: ReleaseDetailPage,

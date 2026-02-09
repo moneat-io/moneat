@@ -45,6 +45,7 @@ import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastr
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
+import { Route as ProjectsProjectIdLogsRouteImport } from './routes/projects.$projectId.logs'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -229,6 +230,11 @@ const ProjectsProjectIdSettingsRoute =
     path: '/settings',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdLogsRoute = ProjectsProjectIdLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
 const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   id: '/$orgId',
   path: '/$orgId',
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
 export interface FileRoutesByTo {
@@ -309,6 +316,7 @@ export interface FileRoutesByTo {
   '/monitoring': typeof MonitoringIndexRoute
   '/performance': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
 export interface FileRoutesById {
@@ -349,6 +357,7 @@ export interface FileRoutesById {
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
 export interface FileRouteTypes {
@@ -390,6 +399,7 @@ export interface FileRouteTypes {
     | '/monitoring/'
     | '/performance/'
     | '/admin/organizations/$orgId'
+    | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -427,6 +437,7 @@ export interface FileRouteTypes {
     | '/monitoring'
     | '/performance'
     | '/admin/organizations/$orgId'
+    | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
   id:
     | '__root__'
@@ -466,6 +477,7 @@ export interface FileRouteTypes {
     | '/monitoring/'
     | '/performance/'
     | '/admin/organizations/$orgId'
+    | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
   fileRoutesById: FileRoutesById
 }
@@ -748,6 +760,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/logs': {
+      id: '/projects/$projectId/logs'
+      path: '/logs'
+      fullPath: '/projects/$projectId/logs'
+      preLoaderRoute: typeof ProjectsProjectIdLogsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/admin/organizations/$orgId': {
       id: '/admin/organizations/$orgId'
       path: '/$orgId'
@@ -818,10 +837,12 @@ const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(
 )
 
 interface ProjectsProjectIdRouteChildren {
+  ProjectsProjectIdLogsRoute: typeof ProjectsProjectIdLogsRoute
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
+  ProjectsProjectIdLogsRoute: ProjectsProjectIdLogsRoute,
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
 }
 

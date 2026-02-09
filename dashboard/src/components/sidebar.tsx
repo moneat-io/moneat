@@ -19,6 +19,7 @@ import {
   Play,
   Plus,
   Server,
+  ScrollText,
   Settings,
   Shield,
   Timer,
@@ -143,6 +144,10 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
       navigate({ to: '/projects/$projectId/settings', params: { projectId: String(projectId) } })
       return
     }
+    if (/^\/projects\/[^/]+\/logs\/?$/.test(currentPath)) {
+      navigate({ to: '/projects/$projectId/logs', params: { projectId: String(projectId) } })
+      return
+    }
     if (/^\/projects\/[^/]+\/?$/.test(currentPath) || currentPath === '/projects') {
       navigate({ to: '/projects/$projectId', params: { projectId: String(projectId) } })
     }
@@ -152,6 +157,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
     { icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false },
     { icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
+    { icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
     { icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
     { icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
     { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
@@ -161,7 +167,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   ]
 
   const projectNavItems = activeProjectId ? [
-    { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` }
+    { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` },
   ] : []
 
   const getProjectPlatform = (project: any) => {
