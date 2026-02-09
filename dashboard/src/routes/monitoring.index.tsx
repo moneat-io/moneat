@@ -242,12 +242,28 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
       setCreatedSystem({id: data.system.id, dockerCommand: data.docker_command})
       setSystemName('')
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to create system. Please try again.',
-        variant: 'destructive',
-      })
+    onError: (error: Error) => {
+      if (error.message.includes('System limit reached')) {
+        toast({
+          title: 'System Limit Reached',
+          description: (
+            <>
+              You've reached the maximum number of systems for your plan.{' '}
+              <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
+                Upgrade your plan
+              </Link>{' '}
+              to add more systems.
+            </>
+          ),
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to create system. Please try again.',
+          variant: 'destructive',
+        })
+      }
     },
   })
 
@@ -794,6 +810,12 @@ function SystemsCompactTable({
   )
 }
 
+const TIER_SYSTEM_LIMITS: Record<string, number> = {
+  FREE: 1,
+  PRO: 5,
+  TEAM: 25,
+}
+
 function MonitoringListPage() {
   const {toast} = useToast()
   const queryClient = useQueryClient()
@@ -805,6 +827,17 @@ function MonitoringListPage() {
     queryFn: () => api.getMonitorSystems(),
     refetchInterval: 30000,
   })
+
+  const {data: billingUsage} = useQuery({
+    queryKey: ['billingUsage'],
+    queryFn: () => api.getBillingUsage(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const currentPlan = billingUsage?.plan || 'FREE'
+  const systemLimit = TIER_SYSTEM_LIMITS[currentPlan] || 1
+  const systemCount = systems.length
+  const isAtLimit = systemCount >= systemLimit
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -855,6 +888,22 @@ function MonitoringListPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium",
+                      isAtLimit ? "border-orange-500/50 bg-orange-500/10 text-orange-700 dark:text-orange-400" : "bg-muted"
+                    )}>
+                      <Server className="h-3.5 w-3.5" />
+                      {systemCount} / {systemLimit}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Systems: {systemCount} of {systemLimit} used ({currentPlan} plan)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <div className="inline-flex items-center rounded-lg border bg-background p-1">
                 <Button
                   variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
@@ -875,7 +924,25 @@ function MonitoringListPage() {
                   Compact
                 </Button>
               </div>
-              <AddSystemButton onClick={() => setAddDialogOpen(true)} />
+              {isAtLimit ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link to="/settings" search={{tab: 'billing'}}>
+                        <Button variant="default" className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          Upgrade to Add More
+                        </Button>
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>You've reached the limit for your {currentPlan} plan</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <AddSystemButton onClick={() => setAddDialogOpen(true)} />
+              )}
             </div>
           </div>
         </div>

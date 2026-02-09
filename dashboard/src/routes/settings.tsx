@@ -1,5 +1,5 @@
 import {type FormEvent, Fragment, useEffect, useMemo, useState} from 'react'
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute, redirect, useSearch} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type AuthToken} from '@/lib/api'
 import {Button} from '@/components/ui/button'
@@ -75,6 +75,11 @@ function isExpired(expiresAt: string | null | undefined): boolean {
 }
 
 export const Route = createFileRoute('/settings')({
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      tab: (search.tab as string) || 'auth-tokens',
+    }
+  },
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
       throw redirect({ to: '/login' })
@@ -84,11 +89,12 @@ export const Route = createFileRoute('/settings')({
 })
 
 function SettingsPage() {
+  const search = useSearch({ from: '/settings' })
   return (
     <div className="min-h-screen bg-background">
       <div className="p-6 max-w-7xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Settings</h1>
-        <Tabs defaultValue="auth-tokens" className="space-y-4">
+        <Tabs defaultValue={search.tab || 'auth-tokens'} className="space-y-4">
           <TabsList>
             <TabsTrigger value="auth-tokens">Auth Tokens</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>

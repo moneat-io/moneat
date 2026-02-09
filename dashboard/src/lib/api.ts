@@ -667,7 +667,20 @@ class ApiClient {
       throw new Error('Unauthorized')
     }
 
-    if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`)
+    if (!response.ok) {
+      let errorMessage = `API Error: ${response.status} ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        if (errorData.error) {
+          errorMessage = errorData.error
+        }
+      } catch {
+        // If parsing fails, use the default message
+      }
+      const error = new Error(errorMessage)
+      ;(error as any).status = response.status
+      throw error
+    }
     if (response.status === 204) return undefined as T
     return response.json()
   }

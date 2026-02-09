@@ -100,7 +100,8 @@ data class LogEntryResponse(
 data class LogQueryResponse(
     val logs: List<LogEntryResponse>,
     @SerialName("next_cursor") val nextCursor: String? = null,
-    @SerialName("has_more") val hasMore: Boolean
+    @SerialName("has_more") val hasMore: Boolean,
+    @SerialName("total_count") val totalCount: Long? = null
 )
 
 @Serializable
