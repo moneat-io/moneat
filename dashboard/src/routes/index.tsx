@@ -11,16 +11,16 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
 import {
-    Activity,
-    AlertCircle,
-    CheckCircle2,
-    Clock,
-    FolderKanban,
-    Plus,
-    Search,
-    Settings,
-    TrendingUp,
-    Users
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  FolderKanban,
+  Plus,
+  Search,
+  Settings,
+  TrendingUp,
+  Users
 } from 'lucide-react'
 import {useState} from 'react'
 import {StatsCard} from '@/components/charts/stats-card'
@@ -459,19 +459,21 @@ function DashboardPage() {
                           </Badge>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-semibold truncate" title={getIssueDisplayTitle(issue)}>
+                              <span className="font-semibold truncate flex-1 min-w-0" title={getIssueDisplayTitle(issue)}>
                                 {getIssueDisplayTitle(issue)}
                               </span>
-                              {isNewIssue(issue.firstSeen) && (
-                                <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase shrink-0">
-                                  New
-                                </span>
-                              )}
-                              {issue.status === 'resolved' && (
-                                <Badge variant="default" className="bg-green-600 text-[11px] px-1.5 py-0 shrink-0">
-                                  Resolved
-                                </Badge>
-                              )}
+                              <div className="flex items-center gap-2 shrink-0">
+                                {isNewIssue(issue.firstSeen) && (
+                                  <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase">
+                                    New
+                                  </span>
+                                )}
+                                {issue.status === 'resolved' && (
+                                  <Badge variant="default" className="bg-green-600 text-[11px] px-1.5 py-0">
+                                    Resolved
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
                               <Clock className="inline h-3 w-3 mr-1 -mt-0.5" />

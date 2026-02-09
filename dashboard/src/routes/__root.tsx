@@ -20,7 +20,6 @@ const STATIC_TITLES: Record<string, string> = {
   '/forgot-password': 'Forgot Password',
   '/reset-password': 'Reset Password',
   '/onboarding': 'Get Started',
-  '/analytics': 'Analytics',
   '/projects': 'Projects',
   '/feedback': 'Feedback',
   '/performance': 'Performance',

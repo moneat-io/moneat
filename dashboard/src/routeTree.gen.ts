@@ -8,45 +8,44 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as ReplaysRouteImport } from './routes/replays'
-import { Route as ReleasesRouteImport } from './routes/releases'
-import { Route as ProjectsRouteImport } from './routes/projects'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as PerformanceRouteImport } from './routes/performance'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as FeedbackRouteImport } from './routes/feedback'
-import { Route as AnalyticsRouteImport } from './routes/analytics'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
-import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
-import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
-import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
-import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
-import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
-import { Route as LegalTermsRouteImport } from './routes/legal.terms'
-import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
-import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
-import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
-import { Route as AdminUsageRouteImport } from './routes/admin.usage'
-import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
-import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
-import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastructure'
-import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
-import { Route as AdminBillingRouteImport } from './routes/admin.billing'
-import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
-import { Route as ProjectsProjectIdLogsRouteImport } from './routes/projects.$projectId.logs'
-import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
+import {Route as rootRouteImport} from './routes/__root'
+import {Route as VerifyEmailRouteImport} from './routes/verify-email'
+import {Route as TermsRouteImport} from './routes/terms'
+import {Route as SignupRouteImport} from './routes/signup'
+import {Route as SettingsRouteImport} from './routes/settings'
+import {Route as ResetPasswordRouteImport} from './routes/reset-password'
+import {Route as ReplaysRouteImport} from './routes/replays'
+import {Route as ReleasesRouteImport} from './routes/releases'
+import {Route as ProjectsRouteImport} from './routes/projects'
+import {Route as PrivacyRouteImport} from './routes/privacy'
+import {Route as PerformanceRouteImport} from './routes/performance'
+import {Route as OnboardingRouteImport} from './routes/onboarding'
+import {Route as LoginRouteImport} from './routes/login'
+import {Route as ForgotPasswordRouteImport} from './routes/forgot-password'
+import {Route as FeedbackRouteImport} from './routes/feedback'
+import {Route as AdminRouteImport} from './routes/admin'
+import {Route as IndexRouteImport} from './routes/index'
+import {Route as PerformanceIndexRouteImport} from './routes/performance.index'
+import {Route as MonitoringIndexRouteImport} from './routes/monitoring.index'
+import {Route as AdminIndexRouteImport} from './routes/admin.index'
+import {Route as ReplaysReplayIdRouteImport} from './routes/replays.$replayId'
+import {Route as ReleasesVersionRouteImport} from './routes/releases.$version'
+import {Route as ProjectsProjectIdRouteImport} from './routes/projects.$projectId'
+import {Route as PerformanceTransactionIdRouteImport} from './routes/performance.$transactionId'
+import {Route as MonitoringSystemIdRouteImport} from './routes/monitoring.$systemId'
+import {Route as LegalTermsRouteImport} from './routes/legal.terms'
+import {Route as LegalPrivacyRouteImport} from './routes/legal.privacy'
+import {Route as IssuesIssueIdRouteImport} from './routes/issues.$issueId'
+import {Route as FeedbackFeedbackIdRouteImport} from './routes/feedback.$feedbackId'
+import {Route as AdminUsageRouteImport} from './routes/admin.usage'
+import {Route as AdminRevenueRouteImport} from './routes/admin.revenue'
+import {Route as AdminOrganizationsRouteImport} from './routes/admin.organizations'
+import {Route as AdminInfrastructureRouteImport} from './routes/admin.infrastructure'
+import {Route as AdminEmailsRouteImport} from './routes/admin.emails'
+import {Route as AdminBillingRouteImport} from './routes/admin.billing'
+import {Route as ProjectsProjectIdSettingsRouteImport} from './routes/projects.$projectId.settings'
+import {Route as ProjectsProjectIdLogsRouteImport} from './routes/projects.$projectId.logs'
+import {Route as AdminOrganizationsOrgIdRouteImport} from './routes/admin.organizations.$orgId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -116,11 +115,6 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const FeedbackRoute = FeedbackRouteImport.update({
   id: '/feedback',
   path: '/feedback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AnalyticsRoute = AnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -244,7 +238,6 @@ const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/analytics': typeof AnalyticsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -283,7 +276,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/analytics': typeof AnalyticsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -323,7 +315,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/analytics': typeof AnalyticsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -365,7 +356,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
-    | '/analytics'
     | '/feedback'
     | '/forgot-password'
     | '/login'
@@ -404,7 +394,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/analytics'
     | '/feedback'
     | '/forgot-password'
     | '/login'
@@ -443,7 +432,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
-    | '/analytics'
     | '/feedback'
     | '/forgot-password'
     | '/login'
@@ -484,7 +472,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
-  AnalyticsRoute: typeof AnalyticsRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
@@ -604,13 +591,6 @@ declare module '@tanstack/react-router' {
       path: '/feedback'
       fullPath: '/feedback'
       preLoaderRoute: typeof FeedbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/analytics': {
-      id: '/analytics'
-      path: '/analytics'
-      fullPath: '/analytics'
-      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -887,7 +867,6 @@ const ReplaysRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
-  AnalyticsRoute: AnalyticsRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,

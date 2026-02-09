@@ -7,23 +7,22 @@ import {ThemeToggle} from '@/components/theme-toggle'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {
-  BarChart3,
-  BookOpen,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Home,
-  LogOut,
-  MessageSquare,
-  Package,
-  Play,
-  Plus,
-  Server,
-  ScrollText,
-  Settings,
-  Shield,
-  Timer,
-  User,
+    BookOpen,
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    Home,
+    LogOut,
+    MessageSquare,
+    Package,
+    Play,
+    Plus,
+    ScrollText,
+    Server,
+    Settings,
+    Shield,
+    Timer,
+    User,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
@@ -155,7 +154,6 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
 
   const navItems = [
     { icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
-    { icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false },
     { icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
     { icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
