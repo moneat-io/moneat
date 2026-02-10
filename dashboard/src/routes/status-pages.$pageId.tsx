@@ -65,6 +65,7 @@ function StatusPageDetailPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [copiedUrl, setCopiedUrl] = useState(false)
+  const [showPreview, setShowPreview] = useState(true)
 
   const {data: statusPage, isLoading} = useQuery({
     queryKey: ['status-page', pageId],
@@ -262,37 +263,58 @@ function StatusPageDetailPage() {
       {/* Tabs Content */}
       <div className="px-6 lg:px-8 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 h-11">
-            <TabsTrigger value="overview" className="gap-2 px-4">
-              <Layout className="h-4 w-4" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="monitors" className="gap-2 px-4">
-              <Activity className="h-4 w-4" />
-              Monitors
-              {statusPage.monitors.length > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {statusPage.monitors.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="incidents" className="gap-2 px-4">
-              <AlertCircle className="h-4 w-4" />
-              Incidents
-            </TabsTrigger>
-            <TabsTrigger value="domains" className="gap-2 px-4">
-              <Link2 className="h-4 w-4" />
-              Domains
-              {statusPage.customDomains.length > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {statusPage.customDomains.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex items-center justify-between mb-6">
+            <TabsList className="h-11">
+              <TabsTrigger value="overview" className="gap-2 px-4">
+                <Layout className="h-4 w-4" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="monitors" className="gap-2 px-4">
+                <Activity className="h-4 w-4" />
+                Monitors
+                {statusPage.monitors.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                    {statusPage.monitors.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="incidents" className="gap-2 px-4">
+                <AlertCircle className="h-4 w-4" />
+                Incidents
+              </TabsTrigger>
+              <TabsTrigger value="domains" className="gap-2 px-4">
+                <Link2 className="h-4 w-4" />
+                Domains
+                {statusPage.customDomains.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                    {statusPage.customDomains.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+            {activeTab === 'overview' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPreview(!showPreview)}
+              >
+                {showPreview ? (
+                  <>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Hide Preview
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Show Preview
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
 
           <TabsContent value="overview">
-            <OverviewTab statusPage={statusPage} onUpdate={(data) => updateMutation.mutate(data)} isSaving={updateMutation.isPending} />
+            <OverviewTab statusPage={statusPage} onUpdate={(data) => updateMutation.mutate(data)} isSaving={updateMutation.isPending} showPreview={showPreview} />
           </TabsContent>
 
           <TabsContent value="monitors">
@@ -339,7 +361,7 @@ function StatusPageDetailPage() {
 // OVERVIEW TAB
 // ==========================================
 
-function OverviewTab({statusPage, onUpdate, isSaving}: {statusPage: StatusPageDetail; onUpdate: (data: any) => void; isSaving?: boolean}) {
+function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage: StatusPageDetail; onUpdate: (data: any) => void; isSaving?: boolean; showPreview: boolean}) {
   const [formData, setFormData] = useState({
     name: statusPage.name,
     description: statusPage.description || '',
@@ -351,8 +373,6 @@ function OverviewTab({statusPage, onUpdate, isSaving}: {statusPage: StatusPageDe
     historyDays: statusPage.historyDays,
     isPublic: statusPage.isPublic,
   })
-
-  const [showPreview, setShowPreview] = useState(true)
 
   const handleSave = () => {
     onUpdate(formData)
@@ -384,27 +404,6 @@ function OverviewTab({statusPage, onUpdate, isSaving}: {statusPage: StatusPageDe
 
   return (
     <div className="space-y-6">
-      {/* Preview Toggle */}
-      <div className="flex items-center justify-end">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowPreview(!showPreview)}
-        >
-          {showPreview ? (
-            <>
-              <EyeOff className="mr-2 h-4 w-4" />
-              Hide Preview
-            </>
-          ) : (
-            <>
-              <Eye className="mr-2 h-4 w-4" />
-              Show Preview
-            </>
-          )}
-        </Button>
-      </div>
-
       {/* Split View Container */}
       <div className={`grid gap-6 ${showPreview ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
         {/* Left Column: Form Fields */}
