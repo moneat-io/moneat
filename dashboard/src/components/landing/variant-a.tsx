@@ -468,13 +468,13 @@ const secondaryFeatures: Feature[] = [
   },
   {
     icon: Bell,
-    title: 'Alerting & Slack',
+    title: 'Alerting & Integrations',
     description:
-      'Multi-channel alerts with Slack integration. Acknowledge and resolve incidents directly from chat.',
+      'Multi-channel alerts with Slack and incident.io integrations. Route alerts to the right teams and create incidents automatically.',
     gradient: 'from-rose-500 to-pink-400',
     iconBg: 'bg-rose-500/10',
     iconColor: 'text-rose-400',
-    mock: <img src="/screenshots/alerting.png" alt="Alert configuration with Slack integration settings" className="w-full h-full object-cover" />,
+    mock: <img src="/screenshots/alerting.png" alt="Integration dashboard showing Slack and incident.io configurations" className="w-full h-full object-cover" />,
   },
 ]
 
