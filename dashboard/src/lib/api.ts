@@ -358,6 +358,8 @@ interface BillingTierConfig {
   maxSystems: number
   monitorIntervalSeconds: number
   monthlyPriceCents: number
+  yearlyPriceCents: number
+  monthlyGbLimit: number
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
   stripeBasePriceId?: string | null
@@ -403,6 +405,7 @@ interface BillingUsage {
 
 interface CheckoutSessionRequest {
   tierName: string
+  billingInterval?: string  // 'monthly' or 'yearly'
   successUrl: string
   cancelUrl: string
 }
@@ -626,6 +629,143 @@ interface SystemAlertConfig {
   globalAlerts: SystemAlert[]
   systemAlerts: SystemAlert[]
   effectiveAlerts: SystemAlert[]
+}
+
+// Uptime Monitoring Interfaces
+
+interface UptimeMonitor {
+  id: string
+  organizationId: number
+  name: string
+  type: string
+  active: boolean
+  
+  // Connection
+  url?: string
+  hostname?: string
+  port?: number
+  
+  // HTTP
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+  authMethod?: string
+  authUser?: string
+  expectedStatusCodes?: string
+  maxRedirects?: number
+  ignoreTls?: boolean
+  
+  // Keyword
+  keyword?: string
+  keywordInverse?: boolean
+  
+  // JSON Query
+  jsonPath?: string
+  jsonExpectedValue?: string
+  
+  // DNS
+  dnsRecordType?: string
+  dnsExpectedValue?: string
+  dnsServer?: string
+  
+  // SSL
+  sslExpiryWarnDays?: number
+  
+  // Database
+  dbConnectionString?: string
+  dbQuery?: string
+  
+  // Docker
+  dockerContainerName?: string
+  dockerHost?: string
+  
+  // Check config
+  intervalSeconds: number
+  timeoutSeconds: number
+  retries: number
+  retryIntervalSeconds: number
+  
+  // Status
+  status: string
+  lastCheckAt?: number
+  lastStatusChangeAt?: number
+  consecutiveFailures: number
+  
+  // Push token (only for push monitors)
+  pushToken?: string
+  
+  // Stats
+  uptime24h?: number
+  uptime7d?: number
+  uptime30d?: number
+  avgResponseTime?: number
+  
+  createdAt: number
+  updatedAt: number
+}
+
+interface CreateUptimeMonitorRequest {
+  name: string
+  type: string
+  
+  // Connection
+  url?: string
+  hostname?: string
+  port?: number
+  
+  // HTTP
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+  authMethod?: string
+  authUser?: string
+  authPass?: string
+  expectedStatusCodes?: string
+  maxRedirects?: number
+  ignoreTls?: boolean
+  
+  // Keyword
+  keyword?: string
+  keywordInverse?: boolean
+  
+  // JSON Query
+  jsonPath?: string
+  jsonExpectedValue?: string
+  
+  // DNS
+  dnsRecordType?: string
+  dnsExpectedValue?: string
+  dnsServer?: string
+  
+  // SSL
+  sslExpiryWarnDays?: number
+  
+  // Database
+  dbConnectionString?: string
+  dbQuery?: string
+  
+  // Docker
+  dockerContainerName?: string
+  dockerHost?: string
+  
+  // Check config
+  intervalSeconds?: number
+  timeoutSeconds?: number
+  retries?: number
+  retryIntervalSeconds?: number
+}
+
+interface UpdateUptimeMonitorRequest extends Partial<CreateUptimeMonitorRequest> {
+  active?: boolean
+}
+
+interface UptimeHeartbeat {
+  timestamp: number
+  status: number
+  responseTimeMs: number
+  statusCode: number
+  message: string
+  pingMs?: number
 }
 
 class ApiClient {
@@ -1479,6 +1619,58 @@ class ApiClient {
       method: 'DELETE',
     })
   }
+
+  // Uptime Monitoring Methods
+
+  async getUptimeMonitors() {
+    return this.request<UptimeMonitor[]>(`${API_BASE}/uptime/monitors`)
+  }
+
+  async getUptimeMonitor(monitorId: string) {
+    return this.request<UptimeMonitor>(`${API_BASE}/uptime/monitors/${monitorId}`)
+  }
+
+  async createUptimeMonitor(data: CreateUptimeMonitorRequest) {
+    return this.request<UptimeMonitor>(`${API_BASE}/uptime/monitors`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateUptimeMonitor(monitorId: string, data: UpdateUptimeMonitorRequest) {
+    return this.request<UptimeMonitor>(`${API_BASE}/uptime/monitors/${monitorId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteUptimeMonitor(monitorId: string) {
+    return this.request<void>(`${API_BASE}/uptime/monitors/${monitorId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async pauseUptimeMonitor(monitorId: string) {
+    return this.request<void>(`${API_BASE}/uptime/monitors/${monitorId}/pause`, {
+      method: 'POST',
+    })
+  }
+
+  async resumeUptimeMonitor(monitorId: string) {
+    return this.request<void>(`${API_BASE}/uptime/monitors/${monitorId}/resume`, {
+      method: 'POST',
+    })
+  }
+
+  async getUptimeHeartbeats(monitorId: string, from?: number, to?: number) {
+    const params = new URLSearchParams()
+    if (from) params.append('from', from.toString())
+    if (to) params.append('to', to.toString())
+    const query = params.toString()
+    return this.request<UptimeHeartbeat[]>(
+      `${API_BASE}/uptime/monitors/${monitorId}/heartbeats${query ? `?${query}` : ''}`
+    )
+  }
 }
 
 export const api = new ApiClient()
@@ -1537,4 +1729,8 @@ export type {
   ContainerMetricsHistory,
   SystemAlert,
   SystemAlertConfig,
+  UptimeMonitor,
+  CreateUptimeMonitorRequest,
+  UpdateUptimeMonitorRequest,
+  UptimeHeartbeat,
 }

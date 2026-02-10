@@ -119,6 +119,7 @@ object Subscriptions : Table("subscriptions") {
     val stripe_customer_id = varchar("stripe_customer_id", 255).nullable()
     val plan = varchar("plan", 50)
     val status = varchar("status", 50)
+    val billing_interval = varchar("billing_interval", 20).default("monthly")
     val current_period_start = timestamp("current_period_start").nullable()
     val current_period_end = timestamp("current_period_end").nullable()
     val pricing_tier_config_id = integer("pricing_tier_config_id").nullable()

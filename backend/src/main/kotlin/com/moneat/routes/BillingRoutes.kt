@@ -68,6 +68,7 @@ fun Route.billingRoutes() {
                 val response = stripeService.createCheckoutSession(
                     organizationId = orgId,
                     tierName = request.tierName,
+                    billingInterval = request.billingInterval,
                     successUrl = request.successUrl,
                     cancelUrl = request.cancelUrl
                 )

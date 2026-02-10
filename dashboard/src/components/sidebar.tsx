@@ -7,6 +7,7 @@ import {ThemeToggle} from '@/components/theme-toggle'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {
+    Activity,
     BookOpen,
     Check,
     ChevronLeft,
@@ -159,6 +160,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
     { icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
     { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
+    { icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
     { icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
     ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },

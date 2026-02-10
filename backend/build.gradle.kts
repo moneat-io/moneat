@@ -84,6 +84,9 @@ dependencies {
     // MessagePack for mobile replay decoding
     implementation("org.msgpack:msgpack-core:0.9.8")
 
+    // JSON path query for uptime monitoring
+    implementation("com.jayway.jsonpath:json-path:2.9.0")
+
     // Environment variables
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
 

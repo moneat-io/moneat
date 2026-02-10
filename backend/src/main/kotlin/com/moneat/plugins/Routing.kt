@@ -91,5 +91,8 @@ fun Application.configureRouting() {
 
         // Logging ingestion and query endpoints
         logRoutes()
+        
+        // Uptime monitoring endpoints
+        uptimeRoutes()
     }
 }

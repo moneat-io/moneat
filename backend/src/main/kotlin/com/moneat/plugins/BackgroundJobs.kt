@@ -5,6 +5,7 @@ import com.moneat.services.IngestionWorker
 import com.moneat.services.LogIngestionWorker
 import com.moneat.services.MonitorAlertService
 import com.moneat.services.RetentionBackgroundService
+import com.moneat.services.UptimeScheduler
 import io.ktor.server.application.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
     val billingBackgroundService = BillingBackgroundService()
     val retentionBackgroundService = RetentionBackgroundService()
+    val uptimeScheduler = UptimeScheduler()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
     val workerCount = environment.config.property("ingest.workerCount").getString().toInt()
@@ -29,11 +31,12 @@ fun Application.configureBackgroundJobs() {
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    // Start the monitor alert service, billing service, retention service, and ingestion workers
+    // Start the monitor alert service, billing service, retention service, uptime scheduler, and ingestion workers
     logger.info { "Starting background jobs" }
     monitorAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
     retentionBackgroundService.start(jobScope)
+    uptimeScheduler.start()
     ingestionWorker.start()
     logIngestionWorker.start()
 
@@ -43,6 +46,7 @@ fun Application.configureBackgroundJobs() {
         monitorAlertService.stop()
         billingBackgroundService.stop()
         retentionBackgroundService.stop()
+        uptimeScheduler.stop()
         ingestionWorker.stop()
         logIngestionWorker.stop()
     }

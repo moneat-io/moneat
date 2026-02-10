@@ -41,6 +41,7 @@ class StripeService(
     fun createCheckoutSession(
         organizationId: Int,
         tierName: String,
+        billingInterval: String = "monthly",
         successUrl: String,
         cancelUrl: String
     ): CheckoutSessionResponse {
@@ -48,7 +49,8 @@ class StripeService(
         
         SentryUtils.breadcrumb("stripe", "Creating checkout session", mapOf(
             "organization_id" to organizationId,
-            "tier_name" to tierName
+            "tier_name" to tierName,
+            "billing_interval" to billingInterval
         ))
 
         val tier = pricingTierService.getCurrentTier(tierName)
@@ -56,8 +58,20 @@ class StripeService(
         if (tier.tierName.equals("FREE", ignoreCase = true)) {
             throw IllegalArgumentException("Checkout is only supported for paid tiers")
         }
-        val basePriceId = tier.stripeBasePriceId ?: throw IllegalArgumentException("Tier missing Stripe base price ID")
-        val overagePriceId = tier.stripeOveragePriceId
+        
+        val isYearly = billingInterval.equals("yearly", ignoreCase = true)
+        val basePriceId = if (isYearly) {
+            tier.stripeYearlyBasePriceId ?: tier.stripeBasePriceId
+        } else {
+            tier.stripeBasePriceId
+        } ?: throw IllegalArgumentException("Tier missing Stripe base price ID for $billingInterval")
+        
+        val overagePriceId = if (isYearly) {
+            tier.stripeYearlyOveragePriceId ?: tier.stripeOveragePriceId
+        } else {
+            tier.stripeOveragePriceId
+        }
+        
         if (tier.paygEnabled && overagePriceId.isNullOrBlank()) {
             throw IllegalArgumentException("Tier missing Stripe overage price ID while PAYG is enabled")
         }
@@ -75,10 +89,12 @@ class StripeService(
                     .setTrialPeriodDays(14L)
                     .putMetadata("organization_id", organizationId.toString())
                     .putMetadata("tier_name", tier.tierName)
+                    .putMetadata("billing_interval", billingInterval)
                     .build()
             )
             .putMetadata("organization_id", organizationId.toString())
             .putMetadata("tier_name", tier.tierName)
+            .putMetadata("billing_interval", billingInterval)
             .addLineItem(
                 CheckoutSessionCreateParams.LineItem.builder()
                     .setPrice(basePriceId)
@@ -110,6 +126,7 @@ class StripeService(
                 scope.setTag("stripe.operation", "create_checkout_session")
                 scope.setExtra("organization_id", organizationId.toString())
                 scope.setExtra("tier_name", tierName)
+                scope.setExtra("billing_interval", billingInterval)
             }
             throw e
         }

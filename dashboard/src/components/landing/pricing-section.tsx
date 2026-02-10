@@ -5,20 +5,23 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,} from '@/components/ui/card'
 import {api} from '@/lib/api'
 import {useToast} from '@/hooks/use-toast'
+import {useState} from 'react'
 
 const fallbackTiers = [
   {
     name: 'Free',
-    price: '$0',
-    period: '/mo',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    gbLimit: 1,
+    retentionDays: 7,
     description: 'Perfect for side projects and getting started',
     features: [
-      '10K errors per month',
+      '1 GB/mo data',
       '1 project',
-      '30-day retention',
+      '3 monitors (60s interval)',
       'Unlimited team members',
       'Email alerts',
-      'Sentry-compatible SDKs',
+      'Sentry SDK compatibility',
     ],
     cta: 'Start Free',
     ctaLink: '/signup',
@@ -26,35 +29,59 @@ const fallbackTiers = [
   },
   {
     name: 'Pro',
-    price: '$19',
-    period: '/mo',
+    monthlyPrice: 29,
+    yearlyPrice: 24,
+    gbLimit: 50,
+    retentionDays: 30,
     description: 'For growing teams shipping production apps',
     features: [
-      '500K errors per month',
+      '50 GB/mo data',
       'Unlimited projects',
-      '90-day retention',
+      '10 monitors (30s interval)',
       'Performance monitoring',
-      'Session replay (50/month)',
+      'Session replay',
+      'Slack integration',
       'Priority email support',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Start 14-Day Trial',
     ctaLink: '/signup',
     highlight: true,
   },
   {
     name: 'Team',
-    price: '$49',
-    period: '/mo',
+    monthlyPrice: 79,
+    yearlyPrice: 66,
+    gbLimit: 200,
+    retentionDays: 90,
     description: 'For teams that need scale and compliance',
     features: [
-      '5M errors per month',
+      '200 GB/mo data',
       'Unlimited projects',
-      '90-day retention',
+      '25 monitors (10s interval)',
       'Advanced dashboards',
       'SAML SSO',
       'Priority support',
     ],
-    cta: 'Contact Sales',
+    cta: 'Start 14-Day Trial',
+    ctaLink: '/signup',
+    highlight: false,
+  },
+  {
+    name: 'Business',
+    monthlyPrice: 199,
+    yearlyPrice: 166,
+    gbLimit: 1024,
+    retentionDays: 180,
+    description: 'For enterprises with custom requirements',
+    features: [
+      '1 TB/mo data',
+      'Unlimited everything',
+      'Custom monitor intervals',
+      'Dedicated support',
+      'SLA guarantee',
+      'Custom data retention',
+    ],
+    cta: 'Start 14-Day Trial',
     ctaLink: '/signup',
     highlight: false,
   },
@@ -62,6 +89,7 @@ const fallbackTiers = [
 
 export function PricingSection() {
   const {toast} = useToast()
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
   const isAuthenticated = api.isAuthenticated()
   const {data: billingPlans} = useQuery({
     queryKey: ['billing-plans'],
@@ -69,9 +97,10 @@ export function PricingSection() {
     enabled: isAuthenticated,
   })
   const checkoutMutation = useMutation({
-    mutationFn: (tierName: string) =>
+    mutationFn: ({tierName, interval}: {tierName: string; interval: string}) =>
       api.createBillingCheckoutSession({
         tierName,
+        billingInterval: interval,
         successUrl: `${window.location.origin}/settings`,
         cancelUrl: `${window.location.origin}/#pricing`,
       }),
@@ -92,27 +121,31 @@ export function PricingSection() {
   const tiers = billingPlans?.plans?.length
     ? billingPlans.plans.map((plan) => {
       const tier = plan.tier
-      const price = tier.monthlyPriceCents === 0 ? '$0' : `$${(tier.monthlyPriceCents / 100).toFixed(0)}`
-      const featureLimit = `${Intl.NumberFormat('en-US').format(tier.monthlyUnitLimit)} events per month`
-      const paygLine = tier.paygEnabled
-        ? `PAYG available at $${((tier.paygRateMicrosPerUnit * 10000) / 1_000_000).toFixed(2)}/10K units`
-        : 'No PAYG overage'
+      const monthlyPrice = tier.monthlyPriceCents / 100
+      const yearlyPrice = tier.yearlyPriceCents / (100 * 12)  // Display as monthly equivalent
+      const gbLimit = tier.monthlyGbLimit / (1024 * 1024 * 1024)  // Convert bytes to GB
+      
       return {
         name: tier.tierName.charAt(0) + tier.tierName.slice(1).toLowerCase(),
-        period: '/mo',
-        price,
+        monthlyPrice,
+        yearlyPrice,
+        gbLimit,
+        retentionDays: tier.retentionDays,
         description: tier.tierName === 'FREE'
           ? 'Perfect for side projects and getting started'
           : tier.tierName === 'PRO'
             ? 'For growing teams shipping production apps'
-            : 'For teams that need scale and compliance',
+            : tier.tierName === 'TEAM'
+              ? 'For teams that need scale and compliance'
+              : 'For enterprises with custom requirements',
         features: [
-          featureLimit,
+          `${gbLimit >= 1024 ? `${gbLimit / 1024} TB` : `${gbLimit} GB`}/mo data`,
           `${tier.retentionDays}-day retention`,
           tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`,
-          `${tier.maxSystems} monitored system${tier.maxSystems === 1 ? '' : 's'}`,
-          `Monitor interval: ${tier.monitorIntervalSeconds}s`,
-          paygLine,
+          `${tier.maxSystems} monitors (${tier.monitorIntervalSeconds}s interval)`,
+          ...(tier.tierName !== 'FREE' ? ['Performance monitoring', 'Session replay'] : []),
+          ...(tier.tierName === 'TEAM' || tier.tierName === 'BUSINESS' ? ['SAML SSO', 'Priority support'] : []),
+          ...(tier.tierName === 'BUSINESS' ? ['SLA guarantee', 'Custom retention'] : []),
         ],
         cta: tier.monthlyPriceCents === 0 ? 'Start Free' : `Start ${plan.trialDays}-Day Trial`,
         tierName: tier.tierName,
@@ -124,102 +157,154 @@ export function PricingSection() {
 
   const handlePaidTierClick = (tierName: string) => {
     if (!isAuthenticated) return
-    checkoutMutation.mutate(tierName)
+    checkoutMutation.mutate({tierName, interval: billingInterval})
   }
+
+  const savingsPercent = 17  // 17% discount for yearly billing
 
   return (
     <section
       id="pricing"
       className="py-28 px-4 sm:px-6 lg:px-8 scroll-mt-24 bg-background"
     >
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
           <p className="text-sm font-semibold text-sky-500 tracking-wide uppercase mb-3">
             Pricing
           </p>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-            Simple, transparent pricing
+            Simple GB-based pricing
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            10x the error quota at half the price. No per-seat pricing — your
-            whole team included.
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+            Pay for what you use. No per-seat fees — your whole team included.
           </p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-8">
-          {tiers.map((tier) => (
-            <Card
-              key={tier.name}
-              className={
-                tier.highlight
-                  ? 'relative border-sky-500/50 shadow-xl shadow-sky-500/10 scale-[1.02]'
-                  : 'border-border/60'
-              }
+          
+          {/* Monthly/Yearly Toggle */}
+          <div className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-1">
+            <button
+              onClick={() => setBillingInterval('monthly')}
+              className={`relative rounded-md px-4 py-2 text-sm font-medium transition-all ${
+                billingInterval === 'monthly'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
-              {tier.highlight && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-4 py-1 text-xs font-semibold text-white shadow-md shadow-sky-500/20">
-                    Most popular
-                  </span>
-                </div>
-              )}
-              <CardHeader>
-                <CardTitle className="text-lg">{tier.name}</CardTitle>
-                <CardDescription>{tier.description}</CardDescription>
-                <div className="mt-4">
-                  <span className="text-4xl font-bold">{tier.price}</span>
-                  <span className="text-muted-foreground">{tier.period}</span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5">
-                      <div
-                        className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'}`}
-                      >
-                        <Check
-                          className={`h-3.5 w-3.5 ${tier.highlight ? 'text-sky-500' : 'text-emerald-500'}`}
-                        />
-                      </div>
-                      <span className="text-sm">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              <CardFooter>
-                {isAuthenticated && tier.tierName !== 'FREE' ? (
-                  <Button
-                    className={`w-full ${
-                      tier.highlight
-                        ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
-                        : ''
-                    }`}
-                    variant={tier.highlight ? 'default' : 'outline'}
-                    size="lg"
-                    disabled={checkoutMutation.isPending}
-                    onClick={() => handlePaidTierClick(tier.tierName)}
-                  >
-                    {checkoutMutation.isPending ? 'Opening Checkout...' : tier.cta}
-                  </Button>
-                ) : (
-                  <Button
-                    asChild
-                    className={`w-full ${
-                      tier.highlight
-                        ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
-                        : ''
-                    }`}
-                    variant={tier.highlight ? 'default' : 'outline'}
-                    size="lg"
-                  >
-                    <Link to={tier.ctaLink}>{tier.cta}</Link>
-                  </Button>
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingInterval('yearly')}
+              className={`relative rounded-md px-4 py-2 text-sm font-medium transition-all ${
+                billingInterval === 'yearly'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Yearly
+              <span className="ml-1.5 inline-flex items-center rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-600 dark:text-sky-400">
+                Save {savingsPercent}%
+              </span>
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {tiers.map((tier) => {
+            const displayPrice = billingInterval === 'yearly' ? tier.yearlyPrice : tier.monthlyPrice
+            const isYearly = billingInterval === 'yearly'
+            
+            return (
+              <Card
+                key={tier.name}
+                className={
+                  tier.highlight
+                    ? 'relative border-sky-500/50 shadow-xl shadow-sky-500/10'
+                    : 'border-border/60'
+                }
+              >
+                {tier.highlight && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-4 py-1 text-xs font-semibold text-white shadow-md shadow-sky-500/20">
+                      Most popular
+                    </span>
+                  </div>
                 )}
-              </CardFooter>
-            </Card>
-          ))}
+                <CardHeader>
+                  <CardTitle className="text-lg">{tier.name}</CardTitle>
+                  <CardDescription className="text-xs">{tier.description}</CardDescription>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold">
+                      ${displayPrice === 0 ? '0' : displayPrice.toFixed(0)}
+                    </span>
+                    <span className="text-muted-foreground text-sm">
+                      /mo{isYearly && displayPrice > 0 ? (
+                        <span className="block text-xs mt-1">
+                          billed ${(tier.yearlyPrice * 12).toFixed(0)}/yr
+                        </span>
+                      ) : ''}
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2.5">
+                    {tier.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2">
+                        <div
+                          className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'}`}
+                        >
+                          <Check
+                            className={`h-3 w-3 ${tier.highlight ? 'text-sky-500' : 'text-emerald-500'}`}
+                          />
+                        </div>
+                        <span className="text-xs leading-tight">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  {isAuthenticated && tier.tierName !== 'FREE' ? (
+                    <Button
+                      className={`w-full ${
+                        tier.highlight
+                          ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
+                          : ''
+                      }`}
+                      variant={tier.highlight ? 'default' : 'outline'}
+                      size="lg"
+                      disabled={checkoutMutation.isPending}
+                      onClick={() => handlePaidTierClick(tier.tierName)}
+                    >
+                      {tier.cta}
+                    </Button>
+                  ) : (
+                    <Button
+                      asChild
+                      className={`w-full ${
+                        tier.highlight
+                          ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
+                          : ''
+                      }`}
+                      variant={tier.highlight ? 'default' : 'outline'}
+                      size="lg"
+                    >
+                      <Link to={tier.ctaLink}>{tier.cta}</Link>
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            )
+          })}
+        </div>
+        
+        {/* Overage Pricing */}
+        <div className="text-center mt-8 pt-8 border-t border-border/40">
+          <p className="text-sm text-muted-foreground">
+            Need more data? <span className="font-semibold text-foreground">$0.40/GB</span> for overage
+            <span className="mx-2">•</span>
+            <span className="text-xs">30-day money-back guarantee</span>
+          </p>
         </div>
       </div>
     </section>
   )
 }
+

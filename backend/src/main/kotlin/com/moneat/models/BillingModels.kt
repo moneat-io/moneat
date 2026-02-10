@@ -14,15 +14,20 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val monthly_transaction_limit = long("monthly_transaction_limit").default(0)
     val monthly_replay_limit = long("monthly_replay_limit").default(0)
     val monthly_feedback_limit = long("monthly_feedback_limit").default(0)
+    val monthly_gb_limit = long("monthly_gb_limit").default(0)
     val retention_days = integer("retention_days")
     val max_projects = integer("max_projects").nullable()
     val max_systems = integer("max_systems")
     val monitor_interval_seconds = integer("monitor_interval_seconds")
     val monthly_price_cents = integer("monthly_price_cents")
+    val yearly_price_cents = integer("yearly_price_cents").default(0)
     val payg_enabled = bool("payg_enabled").default(false)
     val payg_rate_micros_per_unit = long("payg_rate_micros_per_unit").default(0)
+    val overage_rate_cents_per_gb = integer("overage_rate_cents_per_gb").default(0)
     val stripe_base_price_id = varchar("stripe_base_price_id", 255).nullable()
     val stripe_overage_price_id = varchar("stripe_overage_price_id", 255).nullable()
+    val stripe_yearly_base_price_id = varchar("stripe_yearly_base_price_id", 255).nullable()
+    val stripe_yearly_overage_price_id = varchar("stripe_yearly_overage_price_id", 255).nullable()
     val is_current = bool("is_current").default(true)
     val created_at = timestamp("created_at").nullable()
     override val primaryKey = PrimaryKey(id)
@@ -38,6 +43,7 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_transactions = long("used_transactions").default(0)
     val used_replays = long("used_replays").default(0)
     val used_feedback = long("used_feedback").default(0)
+    val used_bytes = long("used_bytes").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -72,15 +78,20 @@ data class PricingTierConfigResponse(
     val monthlyTransactionLimit: Long,
     val monthlyReplayLimit: Long,
     val monthlyFeedbackLimit: Long,
+    val monthlyGbLimit: Long,
     val retentionDays: Int,
     val maxProjects: Int?,
     val maxSystems: Int,
     val monitorIntervalSeconds: Int,
     val monthlyPriceCents: Int,
+    val yearlyPriceCents: Int,
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
+    val overageRateCentsPerGb: Int,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
+    val stripeYearlyBasePriceId: String? = null,
+    val stripeYearlyOveragePriceId: String? = null,
     val isCurrent: Boolean
 )
 
@@ -105,6 +116,8 @@ data class BillingUsageResponse(
     val replayLimit: Long,
     val usedFeedback: Long,
     val feedbackLimit: Long,
+    val usedBytes: Long,
+    val bytesLimit: Long,
     val baseLimitUnits: Long,
     val paygLimitUnits: Long,
     val totalLimitUnits: Long,
@@ -119,6 +132,7 @@ data class BillingUsageResponse(
 @Serializable
 data class CheckoutSessionRequest(
     val tierName: String,
+    val billingInterval: String = "monthly",  // "monthly" or "yearly"
     val successUrl: String,
     val cancelUrl: String
 )
@@ -175,15 +189,20 @@ data class CreateTierVersionRequest(
     val monthlyTransactionLimit: Long = 0,
     val monthlyReplayLimit: Long = 0,
     val monthlyFeedbackLimit: Long = 0,
+    val monthlyGbLimit: Long = 0,
     val retentionDays: Int,
     val maxProjects: Int? = null,
     val maxSystems: Int,
     val monitorIntervalSeconds: Int,
     val monthlyPriceCents: Int,
+    val yearlyPriceCents: Int = 0,
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
+    val overageRateCentsPerGb: Int = 0,
     val stripeBasePriceId: String? = null,
-    val stripeOveragePriceId: String? = null
+    val stripeOveragePriceId: String? = null,
+    val stripeYearlyBasePriceId: String? = null,
+    val stripeYearlyOveragePriceId: String? = null
 )
 
 @Serializable

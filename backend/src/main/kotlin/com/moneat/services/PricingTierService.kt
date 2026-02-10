@@ -148,15 +148,20 @@ class PricingTierService {
                 it[monthly_transaction_limit] = monthlyTransactionLimit
                 it[monthly_replay_limit] = monthlyReplayLimit
                 it[monthly_feedback_limit] = monthlyFeedbackLimit
+                it[monthly_gb_limit] = request.monthlyGbLimit
                 it[retention_days] = request.retentionDays
                 it[max_projects] = request.maxProjects
                 it[max_systems] = request.maxSystems
                 it[monitor_interval_seconds] = request.monitorIntervalSeconds
                 it[monthly_price_cents] = request.monthlyPriceCents
+                it[yearly_price_cents] = request.yearlyPriceCents
                 it[payg_enabled] = request.paygEnabled
                 it[payg_rate_micros_per_unit] = request.paygRateMicrosPerUnit
+                it[overage_rate_cents_per_gb] = request.overageRateCentsPerGb
                 it[stripe_base_price_id] = request.stripeBasePriceId
                 it[stripe_overage_price_id] = request.stripeOveragePriceId
+                it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
+                it[stripe_yearly_overage_price_id] = request.stripeYearlyOveragePriceId
                 it[is_current] = true
             } get PricingTierConfigs.id
 
@@ -252,8 +257,15 @@ class PricingTierService {
         val tier = PricingTier.entries.find { it.name.equals(tierName, ignoreCase = true) } ?: PricingTier.FREE
         val monthlyPrice = when (tier) {
             PricingTier.FREE -> 0
-            PricingTier.PRO -> 1900
-            PricingTier.TEAM -> 4900
+            PricingTier.PRO -> 2900
+            PricingTier.TEAM -> 7900
+            PricingTier.BUSINESS -> 19900
+        }
+        val yearlyPrice = when (tier) {
+            PricingTier.FREE -> 0
+            PricingTier.PRO -> 28800  // $288/yr
+            PricingTier.TEAM -> 79200  // $792/yr
+            PricingTier.BUSINESS -> 199200  // $1992/yr
         }
         return PricingTierConfigResponse(
             id = 0,
@@ -264,15 +276,20 @@ class PricingTierService {
             monthlyTransactionLimit = 0,
             monthlyReplayLimit = tier.monthlyReplayLimit,
             monthlyFeedbackLimit = 0,
+            monthlyGbLimit = tier.monthlyGbBytes,
             retentionDays = tier.retentionDays,
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
             monitorIntervalSeconds = tier.monitorIntervalSeconds,
             monthlyPriceCents = monthlyPrice,
+            yearlyPriceCents = yearlyPrice,
             paygEnabled = tier != PricingTier.FREE,
-            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 10,
+            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,  // $0.40/GB in micros
+            overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,  // $0.40/GB
             stripeBasePriceId = null,
             stripeOveragePriceId = null,
+            stripeYearlyBasePriceId = null,
+            stripeYearlyOveragePriceId = null,
             isCurrent = true
         )
     }
@@ -287,15 +304,20 @@ class PricingTierService {
             monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
             monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
             monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
+            monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
             maxProjects = row[PricingTierConfigs.max_projects],
             maxSystems = row[PricingTierConfigs.max_systems],
             monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
             monthlyPriceCents = row[PricingTierConfigs.monthly_price_cents],
+            yearlyPriceCents = row[PricingTierConfigs.yearly_price_cents],
             paygEnabled = row[PricingTierConfigs.payg_enabled],
             paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
+            overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
             stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
             stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
+            stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
+            stripeYearlyOveragePriceId = row[PricingTierConfigs.stripe_yearly_overage_price_id],
             isCurrent = row[PricingTierConfigs.is_current]
         )
     }

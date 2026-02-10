@@ -11,7 +11,7 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
-import {Activity, AlertTriangle, ArrowUpDown, Clock, Gauge, Hash, Timer, TrendingUp, Zap} from 'lucide-react'
+import {Activity, AlertTriangle, ArrowUpDown, ChevronLeft, ChevronRight, Clock, Gauge, Hash, Timer, TrendingUp, Zap} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
 
@@ -93,6 +93,8 @@ function PerformancePage() {
   const [operation, setOperation] = useState('all')
   const [sortKey, setSortKey] = useState<SortKey>('p95')
   const [sortAsc, setSortAsc] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 20
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -158,6 +160,17 @@ function PerformancePage() {
     return sorted
   }, [transactions, sortAsc, sortKey])
 
+  // Paginate sorted transactions
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return sortedTransactions.slice(startIndex, endIndex)
+  }, [sortedTransactions, currentPage, pageSize])
+
+  const totalPages = Math.ceil(sortedTransactions.length / pageSize)
+  const startIndex = sortedTransactions.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const endIndex = Math.min(currentPage * pageSize, sortedTransactions.length)
+
   const durationDistribution = useMemo(() => {
     const buckets: Record<string, number> = {
       '<100ms': 0,
@@ -195,6 +208,11 @@ function PerformancePage() {
     setSortKey(key)
     setSortAsc(false)
   }
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [period, environment, operation])
 
   if (!projects || projects.length === 0) {
     return (
@@ -372,7 +390,7 @@ function PerformancePage() {
                       Transaction Groups
                     </CardTitle>
                     <span className="text-xs text-muted-foreground">
-                      {transactions.length} group{transactions.length !== 1 && 's'}
+                      {transactions.length === 0 ? '0 groups' : `${startIndex}-${endIndex} of ${transactions.length} group${transactions.length !== 1 ? 's' : ''}`}
                     </span>
                   </div>
                 </CardHeader>
@@ -422,14 +440,14 @@ function PerformancePage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedTransactions.length === 0 ? (
+                        {paginatedTransactions.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                               No transaction data for this period
                             </TableCell>
                           </TableRow>
                         ) : (
-                          sortedTransactions.map((transaction) => {
+                          paginatedTransactions.map((transaction) => {
                             const maxP95 = derivedStats?.maxP95 || 1
                             const barWidth = Math.min(100, (transaction.p95 / maxP95) * 100)
                             return (
@@ -508,6 +526,37 @@ function PerformancePage() {
                       </TableBody>
                     </Table>
                   </div>
+
+                  {/* Pagination Controls */}
+                  {transactions.length > pageSize && (
+                    <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="h-8"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          <span className="hidden sm:inline ml-1">Previous</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="h-8"
+                        >
+                          <span className="hidden sm:inline mr-1">Next</span>
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Page {currentPage} of {totalPages}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

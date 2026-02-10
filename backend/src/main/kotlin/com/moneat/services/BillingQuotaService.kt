@@ -166,10 +166,12 @@ class BillingQuotaService(
         val usedTransactions: Long,
         val usedReplays: Long,
         val usedFeedback: Long,
+        val usedBytes: Long,
         val errorLimit: Long,
         val transactionLimit: Long,
         val replayLimit: Long,
         val feedbackLimit: Long,
+        val bytesLimit: Long,
         val baseLimitUnits: Long,
         val paygLimitUnits: Long,
         val totalLimitUnits: Long,
@@ -271,10 +273,12 @@ class BillingQuotaService(
         val usedTransactions = usageRow[OrgUsageCounters.used_transactions]
         val usedReplays = usageRow[OrgUsageCounters.used_replays]
         val usedFeedback = usageRow[OrgUsageCounters.used_feedback]
+        val usedBytes = usageRow[OrgUsageCounters.used_bytes]
         val errorLimit = tier.monthlyErrorLimit
         val transactionLimit = tier.monthlyTransactionLimit
         val replayLimit = tier.monthlyReplayLimit
         val feedbackLimit = tier.monthlyFeedbackLimit
+        val bytesLimit = tier.monthlyGbLimit
         val aggregateBaseFromTypes = listOf(errorLimit, transactionLimit, replayLimit, feedbackLimit)
             .filter { it >= 0 }
             .sum()
@@ -302,10 +306,12 @@ class BillingQuotaService(
             usedTransactions = usedTransactions,
             usedReplays = usedReplays,
             usedFeedback = usedFeedback,
+            usedBytes = usedBytes,
             errorLimit = errorLimit,
             transactionLimit = transactionLimit,
             replayLimit = replayLimit,
             feedbackLimit = feedbackLimit,
+            bytesLimit = bytesLimit,
             baseLimitUnits = baseLimit,
             paygLimitUnits = paygLimitUnits,
             totalLimitUnits = totalLimit,
@@ -341,6 +347,8 @@ class BillingQuotaService(
             replayLimit = state.replayLimit,
             usedFeedback = state.usedFeedback,
             feedbackLimit = state.feedbackLimit,
+            usedBytes = state.usedBytes,
+            bytesLimit = state.bytesLimit,
             baseLimitUnits = state.baseLimitUnits,
             paygLimitUnits = state.paygLimitUnits,
             totalLimitUnits = state.totalLimitUnits,
@@ -363,15 +371,20 @@ class BillingQuotaService(
             monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
             monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
             monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
+            monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
             maxProjects = row[PricingTierConfigs.max_projects],
             maxSystems = row[PricingTierConfigs.max_systems],
             monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
             monthlyPriceCents = row[PricingTierConfigs.monthly_price_cents],
+            yearlyPriceCents = row[PricingTierConfigs.yearly_price_cents],
             paygEnabled = row[PricingTierConfigs.payg_enabled],
             paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
+            overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
             stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
             stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
+            stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
+            stripeYearlyOveragePriceId = row[PricingTierConfigs.stripe_yearly_overage_price_id],
             isCurrent = row[PricingTierConfigs.is_current]
         )
     }
@@ -387,19 +400,30 @@ class BillingQuotaService(
             monthlyTransactionLimit = 0,
             monthlyReplayLimit = tier.monthlyReplayLimit,
             monthlyFeedbackLimit = 0,
+            monthlyGbLimit = tier.monthlyGbBytes,
             retentionDays = tier.retentionDays,
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
             monitorIntervalSeconds = tier.monitorIntervalSeconds,
             monthlyPriceCents = when (tier) {
                 PricingTier.FREE -> 0
-                PricingTier.PRO -> 1900
-                PricingTier.TEAM -> 4900
+                PricingTier.PRO -> 2900
+                PricingTier.TEAM -> 7900
+                PricingTier.BUSINESS -> 19900
+            },
+            yearlyPriceCents = when (tier) {
+                PricingTier.FREE -> 0
+                PricingTier.PRO -> 28800
+                PricingTier.TEAM -> 79200
+                PricingTier.BUSINESS -> 199200
             },
             paygEnabled = tier != PricingTier.FREE,
-            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 10,
+            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,
+            overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
             stripeBasePriceId = null,
             stripeOveragePriceId = null,
+            stripeYearlyBasePriceId = null,
+            stripeYearlyOveragePriceId = null,
             isCurrent = true
         )
     }

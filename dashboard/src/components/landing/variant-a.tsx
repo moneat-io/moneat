@@ -1,5 +1,5 @@
 import {Link} from '@tanstack/react-router'
-import {Activity, ArrowRight, GitBranch, MessageSquare, Play, Shield, Zap,} from 'lucide-react'
+import {Activity, ArrowRight, GitBranch, MessageSquare, Play, Shield, Zap, FileText, Globe, Bell,} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 
 const features = [
@@ -13,6 +13,15 @@ const features = [
     iconColor: 'text-sky-400',
   },
   {
+    icon: FileText,
+    title: 'Log management',
+    description:
+      'Structured JSON logs with live tail, search, and filtering. All your observability data in one place.',
+    color: 'from-blue-500 to-indigo-400',
+    iconBg: 'bg-blue-500/10',
+    iconColor: 'text-blue-400',
+  },
+  {
     icon: Zap,
     title: 'Performance monitoring',
     description:
@@ -20,6 +29,15 @@ const features = [
     color: 'from-amber-500 to-orange-400',
     iconBg: 'bg-amber-500/10',
     iconColor: 'text-amber-400',
+  },
+  {
+    icon: Globe,
+    title: 'Uptime monitoring',
+    description:
+      'Monitor your services 24/7. Get alerted when something goes down, with customizable check intervals.',
+    color: 'from-green-500 to-emerald-400',
+    iconBg: 'bg-green-500/10',
+    iconColor: 'text-green-400',
   },
   {
     icon: Play,
@@ -32,18 +50,18 @@ const features = [
   },
   {
     icon: GitBranch,
-    title: 'Release tracking',
+    title: 'Status pages',
     description:
-      'Tie errors to deploys. Crash-free rates and version analytics built in.',
-    color: 'from-emerald-500 to-green-400',
-    iconBg: 'bg-emerald-500/10',
-    iconColor: 'text-emerald-400',
+      'Public status pages with custom domains. Automated from your monitors, free on all tiers.',
+    color: 'from-cyan-500 to-teal-400',
+    iconBg: 'bg-cyan-500/10',
+    iconColor: 'text-cyan-400',
   },
   {
-    icon: MessageSquare,
-    title: 'User feedback',
+    icon: Bell,
+    title: 'Alerting & Slack',
     description:
-      'Let users report issues in context. Feedback linked to the exact error.',
+      'Multi-channel alerts with Slack integration. Error notifications, incident acknowledgment from chat.',
     color: 'from-rose-500 to-pink-400',
     iconBg: 'bg-rose-500/10',
     iconColor: 'text-rose-400',
@@ -60,9 +78,9 @@ const features = [
 ]
 
 const stats = [
-  { value: '10x', label: 'More error quota' },
-  { value: '50%', label: 'Lower cost' },
-  { value: '<5min', label: 'To switch from Sentry' },
+  { value: '$0.40/GB', label: 'vs $0.60+ on BetterStack' },
+  { value: '1 GB free', label: 'No credit card required' },
+  { value: 'Zero', label: 'Per-seat fees' },
   { value: '99.9%', label: 'Uptime SLA' },
 ]
 
@@ -122,16 +140,16 @@ export function VariantA() {
           </div>
 
           <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl mb-6 animate-fade-in-up animation-delay-100">
-            Stop guessing.
+            Monitor everything.
             <br />
             <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-sky-400 bg-clip-text text-transparent">
-              Start monitoring.
+              Pay for what you use.
             </span>
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up animation-delay-200">
-            10x the error quota at half the price. Drop-in replacement for Sentry
-            SDKs — your code stays the same, your bill doesn't.
+            Errors, logs, uptime, and status pages — one platform, simple GB pricing.
+            Switch from Sentry in minutes.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up animation-delay-300">
@@ -187,14 +205,13 @@ export function VariantA() {
               Features
             </p>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-              Everything you need
+              All-in-one observability
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Error monitoring, performance, replays, and releases. One
-              platform, zero lock-in.
+              Errors, logs, uptime, replays, and status pages. Everything you need to monitor your apps.
             </p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature) => (
               <div
                 key={feature.title}

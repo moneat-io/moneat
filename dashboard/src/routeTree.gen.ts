@@ -25,9 +25,11 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
@@ -127,6 +129,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UptimeIndexRoute = UptimeIndexRouteImport.update({
+  id: '/uptime/',
+  path: '/uptime/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -141,6 +148,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
+} as any)
+const UptimeMonitorIdRoute = UptimeMonitorIdRouteImport.update({
+  id: '/uptime/$monitorId',
+  path: '/uptime/$monitorId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ReplaysReplayIdRoute = ReplaysReplayIdRouteImport.update({
   id: '/$replayId',
@@ -267,9 +279,11 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -304,9 +318,11 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin': typeof AdminIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/performance': typeof PerformanceIndexRoute
+  '/uptime': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -344,9 +360,11 @@ export interface FileRoutesById {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -385,9 +403,11 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/uptime/$monitorId'
     | '/admin/'
     | '/monitoring/'
     | '/performance/'
+    | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
@@ -422,9 +442,11 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/uptime/$monitorId'
     | '/admin'
     | '/monitoring'
     | '/performance'
+    | '/uptime'
     | '/admin/organizations/$orgId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
@@ -461,9 +483,11 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/uptime/$monitorId'
     | '/admin/'
     | '/monitoring/'
     | '/performance/'
+    | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
@@ -490,7 +514,9 @@ export interface RootRouteChildren {
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
   MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
+  UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
+  UptimeIndexRoute: typeof UptimeIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -607,6 +633,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/uptime/': {
+      id: '/uptime/'
+      path: '/uptime'
+      fullPath: '/uptime/'
+      preLoaderRoute: typeof UptimeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/performance/': {
       id: '/performance/'
       path: '/'
@@ -627,6 +660,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/uptime/$monitorId': {
+      id: '/uptime/$monitorId'
+      path: '/uptime/$monitorId'
+      fullPath: '/uptime/$monitorId'
+      preLoaderRoute: typeof UptimeMonitorIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/replays/$replayId': {
       id: '/replays/$replayId'
@@ -885,7 +925,9 @@ const rootRouteChildren: RootRouteChildren = {
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,
   MonitoringSystemIdRoute: MonitoringSystemIdRoute,
+  UptimeMonitorIdRoute: UptimeMonitorIdRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
+  UptimeIndexRoute: UptimeIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
