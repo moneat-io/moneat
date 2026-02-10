@@ -27,6 +27,7 @@ class MonitorAlertService {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val emailService = EmailService()
+    private val slackService = SlackService()
     
     private var evaluationJob: Job? = null
     private var statusCheckJob: Job? = null
@@ -387,7 +388,7 @@ class MonitorAlertService {
     /**
      * Send alert notification via email.
      */
-    private fun sendAlertNotification(
+    private suspend fun sendAlertNotification(
         alert: AlertData,
         systemName: String,
         organizationId: Int,
@@ -406,6 +407,7 @@ class MonitorAlertService {
         val formattedValue = formatMetricValue(alert.metric, currentValue)
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
         
+        // Send email notifications
         for (recipient in recipients) {
             try {
                 val htmlBody = """
@@ -452,6 +454,23 @@ class MonitorAlertService {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to send alert notification to $recipient" }
             }
+        }
+        
+        // Send Slack notification
+        try {
+            val baseUrl = config.property("email.frontendUrl").getString()
+            slackService.sendSystemAlert(
+                organizationId = organizationId,
+                systemName = systemName,
+                metric = metricLabel,
+                condition = alert.condition,
+                threshold = formattedThreshold,
+                currentValue = formattedValue,
+                systemId = alert.systemId,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Slack notification for system alert" }
         }
     }
     
@@ -514,7 +533,7 @@ class MonitorAlertService {
     /**
      * Send system down notification.
      */
-    private fun sendSystemDownNotification(
+    private suspend fun sendSystemDownNotification(
         systemId: UUID,
         systemName: String,
         organizationId: Int,
@@ -534,6 +553,7 @@ class MonitorAlertService {
             "Never reported metrics"
         }
         
+        // Send email notifications
         for (recipient in recipients) {
             try {
                 val htmlBody = """
@@ -578,12 +598,26 @@ class MonitorAlertService {
                 logger.error(e) { "Failed to send system down notification to $recipient" }
             }
         }
+        
+        // Send Slack notification
+        try {
+            val baseUrl = config.property("email.frontendUrl").getString()
+            slackService.sendSystemDown(
+                organizationId = organizationId,
+                systemName = systemName,
+                lastSeen = lastSeenText,
+                systemId = systemId,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Slack notification for system down" }
+        }
     }
     
     /**
      * Send system up notification.
      */
-    private fun sendSystemUpNotification(
+    private suspend fun sendSystemUpNotification(
         systemId: UUID,
         systemName: String,
         organizationId: Int
@@ -596,6 +630,7 @@ class MonitorAlertService {
         
         val subject = "✅ System Recovered: $systemName"
         
+        // Send email notifications
         for (recipient in recipients) {
             try {
                 val htmlBody = """
@@ -637,6 +672,19 @@ class MonitorAlertService {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to send system up notification to $recipient" }
             }
+        }
+        
+        // Send Slack notification
+        try {
+            val baseUrl = config.property("email.frontendUrl").getString()
+            slackService.sendSystemUp(
+                organizationId = organizationId,
+                systemName = systemName,
+                systemId = systemId,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Slack notification for system up" }
         }
     }
     

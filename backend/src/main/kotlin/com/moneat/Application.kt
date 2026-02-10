@@ -18,14 +18,19 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
-    configureSecurity()
-    configureHTTP()
-    configureSerialization()
-    configureMonitoring()
-    configureRateLimiting()
-    configureRedis()
-    configureClickHouse()
-    configureRouting()
-    configureDatabases()
-    configureBackgroundJobs()
+    try {
+        configureSecurity()
+        configureHTTP()
+        configureSerialization()
+        configureMonitoring()
+        configureRateLimiting()
+        configureRedis()
+        configureClickHouse()
+        configureRouting()
+        configureDatabases()
+        configureBackgroundJobs()
+    } catch (e: Exception) {
+        log.error("Failed to start application", e)
+        throw e
+    }
 }

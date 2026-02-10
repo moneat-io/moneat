@@ -213,3 +213,27 @@ object SystemAlertTemplateStates : Table("system_alert_template_states") {
     val last_triggered_at = timestamp("last_triggered_at").nullable()
     override val primaryKey = PrimaryKey(template_alert_id, system_id)
 }
+
+object OrganizationIntegrations : Table("organization_integrations") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val integration_type = varchar("integration_type", 50)
+    
+    // OAuth data (for Slack App)
+    val access_token = text("access_token").nullable()
+    val bot_user_id = varchar("bot_user_id", 255).nullable()
+    val team_id = varchar("team_id", 255).nullable()
+    val team_name = varchar("team_name", 255).nullable()
+    
+    // Channel configuration
+    val channel_id = varchar("channel_id", 255).nullable()
+    val channel_name = varchar("channel_name", 255).nullable()
+    
+    // Legacy webhook support (deprecated)
+    val webhook_url = text("webhook_url").nullable()
+    
+    val enabled = bool("enabled").default(true)
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}

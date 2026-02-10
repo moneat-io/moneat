@@ -85,13 +85,20 @@ object ClickHouseClient {
 }
 
 fun Application.configureClickHouse() {
-    val config = environment.config
-    val url = config.property("database.clickhouse.url").getString()
-    val database = config.property("database.clickhouse.database").getString()
-    val user = config.property("database.clickhouse.user").getString()
-    val password = config.property("database.clickhouse.password").getString()
-    ClickHouseClient.init(url, database, user, password)
-    environment.monitor.subscribe(ApplicationStopped) {
-        ClickHouseClient.close()
+    try {
+        val config = environment.config
+        val url = config.property("database.clickhouse.url").getString()
+        val database = config.property("database.clickhouse.database").getString()
+        val user = config.property("database.clickhouse.user").getString()
+        val password = config.property("database.clickhouse.password").getString()
+        log.info("Initializing ClickHouse client for $url...")
+        ClickHouseClient.init(url, database, user, password)
+        log.info("ClickHouse client initialized")
+        environment.monitor.subscribe(ApplicationStopped) {
+            ClickHouseClient.close()
+        }
+    } catch (e: Exception) {
+        log.error("Failed to initialize ClickHouse client. Make sure ClickHouse is running and accessible.", e)
+        throw e
     }
 }

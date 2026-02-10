@@ -15,6 +15,7 @@ class UptimeScheduler(
     private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor()
 ) {
     
+    private val slackService = SlackService()
     private var schedulerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val runningChecks = Collections.synchronizedSet(mutableSetOf<UUID>())
@@ -200,36 +201,35 @@ class UptimeScheduler(
     
     /**
      * Notify about status changes.
-     * This is a placeholder for integration with notification system.
      */
-    private fun notifyStatusChange(
+    private suspend fun notifyStatusChange(
         monitor: com.moneat.models.UptimeMonitorData,
         oldStatus: String,
         newStatus: String,
         result: com.moneat.models.CheckResult
     ) {
-        // TODO: Integrate with existing MonitorAlertService or notification system
-        // For now, just log
         logger.info {
             "Uptime alert: Monitor '${monitor.name}' (${monitor.type}) changed from $oldStatus to $newStatus. " +
             "Message: ${result.message}"
         }
         
-        // Example integration (commented out):
-        /*
-        val notificationService = NotificationService()
-        val message = if (newStatus == "down") {
-            "🔴 Monitor '${monitor.name}' is DOWN\n${result.message}"
-        } else {
-            "🟢 Monitor '${monitor.name}' is back UP"
+        // Send Slack notification
+        try {
+            // Get base URL from config
+            val config = io.ktor.server.config.ApplicationConfig("application.conf")
+            val baseUrl = config.property("email.frontendUrl").getString()
+            
+            slackService.sendUptimeAlert(
+                organizationId = monitor.organizationId,
+                monitorName = monitor.name,
+                oldStatus = oldStatus,
+                newStatus = newStatus,
+                message = result.message,
+                monitorId = monitor.id,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
         }
-        
-        notificationService.sendAlert(
-            organizationId = monitor.organizationId,
-            title = "Uptime Monitor Alert",
-            message = message,
-            severity = if (newStatus == "down") "critical" else "info"
-        )
-        */
     }
 }

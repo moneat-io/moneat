@@ -455,6 +455,26 @@ data class FeedbackUpdateRequest(
 )
 
 @Serializable
+data class TestNotificationRequest(
+    val type: String,  // error_alert, weekly_summary, system_up, system_down, uptime_alert, verification, password_reset
+    val channel: String,  // email, slack, both
+    val testEmail: String? = null  // Optional test email address
+)
+
+@Serializable
+data class TestNotificationResponse(
+    val success: Boolean,
+    val emailSent: Boolean,
+    val slackSent: Boolean,
+    val errors: List<String> = emptyList()
+)
+
+@Serializable
+data class ErrorResponse(
+    val error: String
+)
+
+@Serializable
 data class SdkVersionsResponse(
     val fetchedAt: String,
     val cacheTtlSeconds: Int,

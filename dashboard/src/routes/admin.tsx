@@ -3,6 +3,7 @@ import {api} from '@/lib/api'
 import {
     ArrowLeft,
     BarChart3,
+    Bell,
     Building2,
     CreditCard,
     DollarSign,
@@ -52,6 +53,7 @@ const adminNavSections = [
     label: 'Comms',
     items: [
       {icon: Mail, label: 'Emails', href: '/admin/emails'},
+      {icon: Bell, label: 'Notifications', href: '/admin/notifications'},
     ],
   },
 ]

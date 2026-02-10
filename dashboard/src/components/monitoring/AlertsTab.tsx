@@ -58,6 +58,14 @@ export function AlertsTab({systemId}: AlertsTabProps) {
     queryFn: () => api.getSystemAlertConfig(systemId),
   })
 
+  const {data: integrations = []} = useQuery({
+    queryKey: ['integrations'],
+    queryFn: () => api.getIntegrations(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const slackEnabled = integrations.some(i => i.integrationType === 'slack' && i.enabled)
+
   const activeScope: AlertScope = alertConfig?.scope ?? 'global'
 
   const alerts = useMemo(() => {
@@ -516,9 +524,12 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                 <Mail className="h-4 w-4 text-blue-500" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-sm font-medium">Email Notifications</h4>
+                <h4 className="text-sm font-medium">
+                  {slackEnabled ? 'Email & Slack Notifications' : 'Email Notifications'}
+                </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Alert notifications are sent to all members of your organization via email.
+                  Alert notifications are sent to all members of your organization via email
+                  {slackEnabled && ' and to your configured Slack channel'}. 
                   Alerts are throttled to prevent spam (minimum 15 minutes between notifications
                   for the same alert).
                 </p>
@@ -537,7 +548,8 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                 <h4 className="text-sm font-medium">System Status Notifications</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   You'll also receive notifications when systems go down (no metrics for 5+
-                  minutes) or come back online after being offline.
+                  minutes) or come back online after being offline
+                  {slackEnabled && ', both via email and Slack'}.
                 </p>
               </div>
             </div>

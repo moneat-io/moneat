@@ -2,6 +2,10 @@
 export default {
   build: {
     content: ['src/templates/**/*.html'],
+    output: {
+      path: 'build/templates/email',
+      from: ['src/templates'],
+    },
   },
   // Use [[ ]] for Maizzle expressions, leaving {{ }} for backend substitution
   expressions: {

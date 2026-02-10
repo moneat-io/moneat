@@ -28,6 +28,7 @@ class AuthService {
     private val legalPrivacyVersion = config.property("legal.privacyVersion").getString()
     private val emailService = EmailService()
     private val secureRandom = SecureRandom()
+    private val ssoService by lazy { SsoService() }
     
     fun signup(request: SignupRequest, context: SignupRequestContext = SignupRequestContext()): AuthResponse {
         if (request.email.isBlank() || request.password.length < 8) {
@@ -190,6 +191,11 @@ class AuthService {
     }
     
     fun login(request: LoginRequest): AuthResponse? {
+        // Check if SSO is required for this email domain
+        if (ssoService.checkSsoRequired(request.email)) {
+            throw IllegalArgumentException("SSO is required for your organization. Please use the 'Login with SSO' option.")
+        }
+        
         return transaction {
             val user = Users.selectAll().where { Users.email eq request.email }.firstOrNull()
                 ?: return@transaction null

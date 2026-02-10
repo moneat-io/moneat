@@ -120,7 +120,7 @@ class EmailService {
         var success = false
         try {
             val message = MimeMessage(mailSession).apply {
-                setFrom(InternetAddress(fromEmail))
+                setFrom(InternetAddress(fromEmail, "Moneat"))
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
                 setSubject(subject)
                 
@@ -190,11 +190,11 @@ class EmailService {
     
     private fun loadVerificationTemplate(userName: String, verificationUrl: String): String {
         // Try to load the built email template
-        val templatePath = "emails/build/templates/email/verify-email.html"
-        val templateFile = File(templatePath)
+        val projectRoot = File(System.getProperty("user.dir")).parentFile
+        val templatePath = File(projectRoot, "emails/build/templates/email/verify-email.html")
         
-        return if (templateFile.exists()) {
-            templateFile.readText()
+        return if (templatePath.exists()) {
+            templatePath.readText()
                 .replace("{{ userName }}", userName)
                 .replace("{{ verificationUrl }}", verificationUrl)
         } else {
@@ -227,11 +227,11 @@ class EmailService {
     
     private fun loadPasswordResetTemplate(userName: String, resetUrl: String): String {
         // Try to load the built email template
-        val templatePath = "emails/build/templates/email/reset-password.html"
-        val templateFile = File(templatePath)
+        val projectRoot = File(System.getProperty("user.dir")).parentFile
+        val templatePath = File(projectRoot, "emails/build/templates/email/reset-password.html")
         
-        return if (templateFile.exists()) {
-            templateFile.readText()
+        return if (templatePath.exists()) {
+            templatePath.readText()
                 .replace("{{ userName }}", userName)
                 .replace("{{ resetUrl }}", resetUrl)
         } else {
@@ -351,12 +351,13 @@ class EmailService {
     }
     
     private fun loadErrorAlertTemplate(data: ErrorAlertData): String {
-        val templatePath = "emails/build/templates/email/error-alert.html"
-        val templateFile = File(templatePath)
+        // Use absolute path from project root
+        val projectRoot = File(System.getProperty("user.dir")).parentFile
+        val templatePath = File(projectRoot, "emails/build/templates/email/error-alert.html")
         val year = java.time.Year.now().value.toString()
         
-        return if (templateFile.exists()) {
-            templateFile.readText()
+        return if (templatePath.exists()) {
+            templatePath.readText()
                 .replace("{{ issueTitle }}", data.issueTitle)
                 .replace("{{ issueLevel }}", data.issueLevel)
                 .replace("{{ issueCulprit }}", data.issueCulprit)
@@ -389,12 +390,12 @@ class EmailService {
     }
     
     private fun loadWeeklySummaryTemplate(data: WeeklySummaryData): String {
-        val templatePath = "emails/build/templates/email/weekly-summary.html"
-        val templateFile = File(templatePath)
+        val projectRoot = File(System.getProperty("user.dir")).parentFile
+        val templatePath = File(projectRoot, "emails/build/templates/email/weekly-summary.html")
         val year = java.time.Year.now().value.toString()
         
-        return if (templateFile.exists()) {
-            var html = templateFile.readText()
+        return if (templatePath.exists()) {
+            var html = templatePath.readText()
                 .replace("{{ startDate }}", data.startDate)
                 .replace("{{ endDate }}", data.endDate)
                 .replace("{{ totalEvents }}", data.totalEvents)

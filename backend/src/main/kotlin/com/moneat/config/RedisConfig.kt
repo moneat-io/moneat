@@ -50,9 +50,16 @@ object RedisConfig {
 }
 
 fun Application.configureRedis() {
-    val redisUrl = environment.config.property("redis.url").getString()
-    RedisConfig.init(redisUrl)
-    environment.monitor.subscribe(ApplicationStopped) {
-        RedisConfig.close()
+    try {
+        val redisUrl = environment.config.property("redis.url").getString()
+        log.info("Connecting to Redis at $redisUrl...")
+        RedisConfig.init(redisUrl)
+        log.info("Redis connection established")
+        environment.monitor.subscribe(ApplicationStopped) {
+            RedisConfig.close()
+        }
+    } catch (e: Exception) {
+        log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
+        throw e
     }
 }

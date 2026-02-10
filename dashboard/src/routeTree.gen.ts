@@ -42,11 +42,13 @@ import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedb
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
 import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
+import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastructure'
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdLogsRouteImport } from './routes/projects.$projectId.logs'
+import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -215,6 +217,11 @@ const AdminOrganizationsRoute = AdminOrganizationsRouteImport.update({
   path: '/organizations',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminInfrastructureRoute = AdminInfrastructureRouteImport.update({
   id: '/infrastructure',
   path: '/infrastructure',
@@ -240,6 +247,11 @@ const ProjectsProjectIdLogsRoute = ProjectsProjectIdLogsRouteImport.update({
   id: '/logs',
   path: '/logs',
   getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
+const AuthSsoCallbackRoute = AuthSsoCallbackRouteImport.update({
+  id: '/auth/sso/callback',
+  path: '/auth/sso/callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   id: '/$orgId',
@@ -267,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
@@ -285,6 +298,7 @@ export interface FileRoutesByFullPath {
   '/performance/': typeof PerformanceIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
@@ -306,6 +320,7 @@ export interface FileRoutesByTo {
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
@@ -324,6 +339,7 @@ export interface FileRoutesByTo {
   '/performance': typeof PerformanceIndexRoute
   '/uptime': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
@@ -348,6 +364,7 @@ export interface FileRoutesById {
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
@@ -366,6 +383,7 @@ export interface FileRoutesById {
   '/performance/': typeof PerformanceIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
 }
@@ -391,6 +409,7 @@ export interface FileRouteTypes {
     | '/admin/billing'
     | '/admin/emails'
     | '/admin/infrastructure'
+    | '/admin/notifications'
     | '/admin/organizations'
     | '/admin/revenue'
     | '/admin/usage'
@@ -409,6 +428,7 @@ export interface FileRouteTypes {
     | '/performance/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
+    | '/auth/sso/callback'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
   fileRoutesByTo: FileRoutesByTo
@@ -430,6 +450,7 @@ export interface FileRouteTypes {
     | '/admin/billing'
     | '/admin/emails'
     | '/admin/infrastructure'
+    | '/admin/notifications'
     | '/admin/organizations'
     | '/admin/revenue'
     | '/admin/usage'
@@ -448,6 +469,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/uptime'
     | '/admin/organizations/$orgId'
+    | '/auth/sso/callback'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
   id:
@@ -471,6 +493,7 @@ export interface FileRouteTypes {
     | '/admin/billing'
     | '/admin/emails'
     | '/admin/infrastructure'
+    | '/admin/notifications'
     | '/admin/organizations'
     | '/admin/revenue'
     | '/admin/usage'
@@ -489,6 +512,7 @@ export interface FileRouteTypes {
     | '/performance/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
+    | '/auth/sso/callback'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
   fileRoutesById: FileRoutesById
@@ -517,6 +541,7 @@ export interface RootRouteChildren {
   UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
   UptimeIndexRoute: typeof UptimeIndexRoute
+  AuthSsoCallbackRoute: typeof AuthSsoCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -752,6 +777,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrganizationsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/notifications': {
+      id: '/admin/notifications'
+      path: '/notifications'
+      fullPath: '/admin/notifications'
+      preLoaderRoute: typeof AdminNotificationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/infrastructure': {
       id: '/admin/infrastructure'
       path: '/infrastructure'
@@ -787,6 +819,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdLogsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/auth/sso/callback': {
+      id: '/auth/sso/callback'
+      path: '/auth/sso/callback'
+      fullPath: '/auth/sso/callback'
+      preLoaderRoute: typeof AuthSsoCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/organizations/$orgId': {
       id: '/admin/organizations/$orgId'
       path: '/$orgId'
@@ -812,6 +851,7 @@ interface AdminRouteChildren {
   AdminBillingRoute: typeof AdminBillingRoute
   AdminEmailsRoute: typeof AdminEmailsRoute
   AdminInfrastructureRoute: typeof AdminInfrastructureRoute
+  AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrganizationsRoute: typeof AdminOrganizationsRouteWithChildren
   AdminRevenueRoute: typeof AdminRevenueRoute
   AdminUsageRoute: typeof AdminUsageRoute
@@ -822,6 +862,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminBillingRoute: AdminBillingRoute,
   AdminEmailsRoute: AdminEmailsRoute,
   AdminInfrastructureRoute: AdminInfrastructureRoute,
+  AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrganizationsRoute: AdminOrganizationsRouteWithChildren,
   AdminRevenueRoute: AdminRevenueRoute,
   AdminUsageRoute: AdminUsageRoute,
@@ -928,6 +969,7 @@ const rootRouteChildren: RootRouteChildren = {
   UptimeMonitorIdRoute: UptimeMonitorIdRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
   UptimeIndexRoute: UptimeIndexRoute,
+  AuthSsoCallbackRoute: AuthSsoCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

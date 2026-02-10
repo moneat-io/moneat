@@ -25,6 +25,9 @@ fun Route.apiRoutes() {
             // Billing
             billingRoutes()
 
+            // Integrations
+            integrationRoutes()
+
             // User profile
             get("/user") {
                 val principal = call.principal<JWTPrincipal>()
@@ -834,5 +837,10 @@ fun Route.apiRoutes() {
             }
         }
         }
+    }
+    
+    // Unauthenticated routes (OAuth callbacks)
+    route("/v1") {
+        integrationCallbackRoutes()
     }
 }

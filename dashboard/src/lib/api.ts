@@ -392,6 +392,8 @@ interface BillingUsage {
   replayLimit: number
   usedFeedback: number
   feedbackLimit: number
+  usedBytes: number
+  bytesLimit: number
   baseLimitUnits: number
   paygLimitUnits: number
   totalLimitUnits: number
@@ -768,6 +770,45 @@ interface UptimeHeartbeat {
   pingMs?: number
 }
 
+interface OrganizationIntegration {
+  id: number
+  integrationType: string
+  teamName: string | null
+  channelId: string | null
+  channelName: string | null
+  enabled: boolean
+  isConfigured: boolean
+}
+
+interface SlackOAuthStartResponse {
+  authUrl: string
+}
+
+interface SlackChannel {
+  id: string
+  name: string
+}
+
+interface SlackChannelList {
+  channels: SlackChannel[]
+}
+
+interface SlackChannelSelection {
+  channelId: string
+  channelName: string
+}
+
+interface UpdateSlackIntegrationRequest {
+  webhookUrl: string
+  channelName?: string
+  enabled?: boolean
+}
+
+interface TestIntegrationResponse {
+  success: boolean
+  message: string
+}
+
 class ApiClient {
   private authRedirectInProgress = false
 
@@ -890,6 +931,37 @@ class ApiClient {
     return response
   }
 
+  async initSso(email?: string, orgSlug?: string): Promise<{ redirectUrl: string; providerType: string; state?: string }> {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/sso/init`, {
+      method: 'POST',
+      body: JSON.stringify({ email, orgSlug }),
+    })
+  }
+
+  async checkSsoRequired(email: string): Promise<{ required: boolean }> {
+    return this.request(`${API_BASE}/sso/check-required`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async getSsoConfig(organizationId: number): Promise<any> {
+    return this.request(`${API_BASE}/sso/config?organizationId=${organizationId}`)
+  }
+
+  async configureSso(organizationId: number, config: any): Promise<any> {
+    return this.request(`${API_BASE}/sso/config?organizationId=${organizationId}`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    })
+  }
+
+  async deleteSsoConfig(organizationId: number): Promise<void> {
+    await this.request(`${API_BASE}/sso/config?organizationId=${organizationId}`, {
+      method: 'DELETE',
+    })
+  }
+
   logout() {
     localStorage.removeItem('auth_token')
   }
@@ -976,6 +1048,14 @@ class ApiClient {
 
   async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean }> {
     return this.request(`${API_BASE}/user`)
+  }
+
+  async getOrganizations(): Promise<Array<{ id: number; name: string; slug: string }>> {
+    // This will get the user's organizations - for now return just the primary org
+    const user = await this.getCurrentUser()
+    // Backend should have an endpoint for this, but for now we can derive from other calls
+    // This is a placeholder that the SSO settings component needs
+    return [{ id: 1, name: "Default Organization", slug: "default" }]
   }
 
   async resendVerificationEmail(email: string): Promise<{ message: string }> {
@@ -1443,6 +1523,18 @@ class ApiClient {
     }>(`${API_BASE}/admin/emails?period=${period}`)
   }
 
+  async testNotification(type: string, channel: string, testEmail?: string) {
+    return this.request<{
+      success: boolean
+      emailSent: boolean
+      slackSent: boolean
+      errors?: string[]
+    }>(`${API_BASE}/admin/test-notification`, {
+      method: 'POST',
+      body: JSON.stringify({ type, channel, testEmail }),
+    })
+  }
+
   async getAdminBillingTiers(tier?: string) {
     const query = tier ? `?tier=${encodeURIComponent(tier)}` : ''
     return this.request<BillingPlan[] | BillingTierConfig[]>(`${API_BASE}/admin/billing/tiers${query}`)
@@ -1671,6 +1763,45 @@ class ApiClient {
       `${API_BASE}/uptime/monitors/${monitorId}/heartbeats${query ? `?${query}` : ''}`
     )
   }
+
+  // Integration Management Methods
+
+  async getIntegrations() {
+    return this.request<OrganizationIntegration[]>(`${API_BASE}/integrations`)
+  }
+
+  async startSlackOAuth() {
+    return this.request<SlackOAuthStartResponse>(`${API_BASE}/integrations/slack/oauth/start`)
+  }
+
+  async getSlackChannels() {
+    return this.request<SlackChannelList>(`${API_BASE}/integrations/slack/channels`)
+  }
+
+  async updateSlackChannel(channelId: string, channelName: string) {
+    return this.request<void>(`${API_BASE}/integrations/slack/channel`, {
+      method: 'PUT',
+      body: JSON.stringify({ channelId, channelName }),
+    })
+  }
+
+  async toggleSlackIntegration() {
+    return this.request<void>(`${API_BASE}/integrations/slack/toggle`, {
+      method: 'PUT',
+    })
+  }
+
+  async deleteSlackIntegration() {
+    return this.request<void>(`${API_BASE}/integrations/slack`, {
+      method: 'DELETE',
+    })
+  }
+
+  async testSlackIntegration() {
+    return this.request<TestIntegrationResponse>(`${API_BASE}/integrations/slack/test`, {
+      method: 'POST',
+    })
+  }
 }
 
 export const api = new ApiClient()
@@ -1733,4 +1864,11 @@ export type {
   CreateUptimeMonitorRequest,
   UpdateUptimeMonitorRequest,
   UptimeHeartbeat,
+  OrganizationIntegration,
+  SlackOAuthStartResponse,
+  SlackChannel,
+  SlackChannelList,
+  SlackChannelSelection,
+  UpdateSlackIntegrationRequest,
+  TestIntegrationResponse,
 }

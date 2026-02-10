@@ -77,6 +77,9 @@ fun Application.configureRouting() {
         // Authentication endpoints
         authRoutes()
         
+        // SSO endpoints
+        ssoRoutes()
+        
         // Auth token management endpoints
         authTokenRoutes()
         

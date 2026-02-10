@@ -40,10 +40,12 @@ import {
     Check,
     Clock,
     Wallet,
-    Layers
+    Layers,
+    ExternalLink
 } from 'lucide-react'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {loadStripe} from '@stripe/stripe-js'
+import {SsoTab} from '@/components/sso-settings'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -111,6 +113,20 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
   const search = useSearch({ from: '/settings' })
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => api.getCurrentUser(),
+  })
+  
+  const { data: subscription } = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => api.getSubscription(),
+    enabled: api.isAuthenticated(),
+  })
+  
+  const tier = subscription?.tier?.tierName || 'FREE'
+  const canUseSso = tier === 'TEAM' || tier === 'BUSINESS'
+  
   return (
     <div className="min-h-screen bg-background">
       <div className="p-6 max-w-7xl mx-auto">
@@ -118,11 +134,16 @@ function SettingsPage() {
         <Tabs defaultValue={search.tab || 'auth-tokens'} className="space-y-4">
           <TabsList>
             <TabsTrigger value="auth-tokens">Auth Tokens</TabsTrigger>
+            <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="billing">Billing</TabsTrigger>
+            {canUseSso && <TabsTrigger value="sso">SSO</TabsTrigger>}
           </TabsList>
           <TabsContent value="auth-tokens" className="space-y-4">
             <AuthTokensTab />
+          </TabsContent>
+          <TabsContent value="integrations" className="space-y-4">
+            <IntegrationsTab />
           </TabsContent>
           <TabsContent value="notifications" className="space-y-4">
             <NotificationsTab />
@@ -130,6 +151,11 @@ function SettingsPage() {
           <TabsContent value="billing" className="space-y-4">
             <BillingTab />
           </TabsContent>
+          {canUseSso && (
+            <TabsContent value="sso" className="space-y-4">
+              <SsoTab />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>
@@ -734,6 +760,25 @@ function BillingTab() {
 
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`
   const statusBadgeVariant = usage.status === 'active' || usage.status === 'trialing' ? 'default' : 'secondary'
+  
+  // GB conversion: 1 GB = 1,073,741,824 bytes (binary)
+  const formatGB = (bytes: number) => (bytes / 1073741824).toFixed(2)
+  const usedGB = formatGB(usage.usedBytes)
+  const limitGB = usage.bytesLimit > 0 ? formatGB(usage.bytesLimit) : null
+  const isUnlimitedGB = !usage.bytesLimit || usage.bytesLimit <= 0
+  const gbPercent = usage.bytesLimit > 0
+    ? Math.min(100, (usage.usedBytes / usage.bytesLimit) * 100)
+    : usage.bytesLimit === 0
+      ? (usage.usedBytes > 0 ? 100 : 0)
+      : 0
+  const gbBarClass = gbPercent >= 100
+    ? 'bg-red-500'
+    : gbPercent >= 80
+      ? 'bg-amber-500'
+      : 'bg-emerald-500'
+  const overageGB = usage.bytesLimit > 0 && usage.usedBytes > usage.bytesLimit
+    ? formatGB(usage.usedBytes - usage.bytesLimit)
+    : null
 
   return (
     <div className="space-y-6">
@@ -778,67 +823,55 @@ function BillingTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <div className="p-2 bg-blue-500/10 rounded-full">
-              <Activity className="h-5 w-5 text-blue-500" />
+              <Layers className="h-5 w-5 text-blue-500" />
             </div>
             <div>
-              <CardTitle>Usage Breakdown</CardTitle>
+              <CardTitle>Data Usage</CardTitle>
               <CardDescription>
-                Quota usage by event type for the current billing period.
+                Includes all data ingested in this billing period, even if older data has expired from retention.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {usageRows.map((row) => {
-            const isUnlimited = row.limit < 0
-            const percent = row.limit > 0
-              ? Math.min(100, (row.used / row.limit) * 100)
-              : row.limit === 0
-                ? (row.used > 0 ? 100 : 0)
-                : 0
-            const barClass = percent >= 100
-              ? 'bg-red-500'
-              : percent >= 80
-                ? 'bg-amber-500'
-                : 'bg-emerald-500'
-            const overageUnits = row.limit > 0 ? Math.max(0, row.used - row.limit) : 0
-            const Icon = row.icon
-
-            return (
-              <div key={row.key} className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${row.color}`} />
-                    <span className="font-medium">{row.label}</span>
-                  </div>
-                  <span className="text-muted-foreground">
-                    <span className="font-medium text-foreground">{row.used.toLocaleString()}</span>
-                    {' / '}
-                    {isUnlimited ? 'Unlimited' : row.limit.toLocaleString()}
-                  </span>
-                </div>
-                <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${percent}%` }} />
-                </div>
-                {overageUnits > 0 && (
-                  <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded w-fit">
-                    <AlertTriangle className="h-3 w-3" />
-                    <span>{overageUnits.toLocaleString()} over base limit (PAYG overage).</span>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          <div className="mt-6 pt-6 border-t">
-            <div className="flex items-center justify-between rounded-lg bg-muted/50 p-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">Total usage</span>
+                <Layers className="h-4 w-4 text-blue-500" />
+                <span className="font-medium">Data ingested</span>
               </div>
-              <span className="font-mono font-medium">
-                {usage.usedUnits.toLocaleString()} / {usage.totalLimitUnits.toLocaleString()} units
+              <span className="text-muted-foreground">
+                <span className="font-medium text-foreground">{usedGB} GB</span>
+                {' / '}
+                {isUnlimitedGB ? 'Unlimited' : `${limitGB} GB`}
               </span>
+            </div>
+            <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${gbBarClass}`} style={{ width: `${gbPercent}%` }} />
+            </div>
+            {overageGB && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded w-fit">
+                <AlertTriangle className="h-3 w-3" />
+                <span>{overageGB} GB over base limit.</span>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-6 border-t">
+            <p className="text-sm font-medium text-muted-foreground mb-4">Event counts (for reference)</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {usageRows.map((row) => {
+                const Icon = row.icon
+                return (
+                  <div key={row.key} className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Icon className={`h-3.5 w-3.5 ${row.color}`} />
+                      <span className="text-xs text-muted-foreground">{row.label}</span>
+                    </div>
+                    <p className="text-lg font-semibold">{row.used.toLocaleString()}</p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </CardContent>
@@ -1070,7 +1103,7 @@ function BillingTab() {
                   <div>
                     <p className="font-medium">{plan.tier.tierName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatCurrency(plan.tier.monthlyPriceCents)}/mo · {plan.tier.monthlyUnitLimit.toLocaleString()} total units
+                      {formatCurrency(plan.tier.monthlyPriceCents)}/mo · {(plan.tier.monthlyGbLimit / 1).toFixed(0)} GB included
                     </p>
                   </div>
                   <Button
@@ -1191,6 +1224,293 @@ function PaymentMethodSetupForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+const SlackLogo = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+    <path fill="#E01E5A" d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.52 2.52 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.522 2.522 0 0 1 2.521 2.52v6.313A2.52 2.52 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
+    <path fill="#36C5F0" d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.52 2.52 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52h-2.521zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.522 2.522 0 0 1-2.521 2.521H2.522A2.52 2.52 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
+    <path fill="#2EB67D" d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.52 2.52 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.522 2.522 0 0 1-2.52-2.521V2.522A2.52 2.52 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
+    <path fill="#ECB22E" d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.52 2.52 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.52 2.52 0 0 1 2.52-2.52h6.313A2.52 2.52 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+  </svg>
+)
+
+function IntegrationsTab() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
+  const { data: integrations = [], isLoading } = useQuery({
+    queryKey: ['integrations'],
+    queryFn: () => api.getIntegrations(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const slackIntegration = integrations.find(i => i.integrationType === 'slack')
+
+  const { data: channelsData, isLoading: channelsLoading } = useQuery({
+    queryKey: ['slackChannels'],
+    queryFn: () => api.getSlackChannels(),
+    enabled: !!slackIntegration?.isConfigured,
+  })
+
+  const oauthMutation = useMutation({
+    mutationFn: () => api.startSlackOAuth(),
+    onSuccess: (data) => {
+      window.location.href = data.authUrl
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to start Slack OAuth',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const updateChannelMutation = useMutation({
+    mutationFn: ({ channelId, channelName }: { channelId: string, channelName: string }) => 
+      api.updateSlackChannel(channelId, channelName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      toast({ title: 'Slack channel updated' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to update channel',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: () => api.toggleSlackIntegration(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      toast({ title: 'Slack integration updated' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to update integration',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteSlackIntegration(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      setShowDeleteDialog(false)
+      toast({ title: 'Slack integration removed' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to remove integration',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const testMutation = useMutation({
+    mutationFn: () => api.testSlackIntegration(),
+    onSuccess: (response) => {
+      toast({
+        title: response.success ? 'Test successful' : 'Test failed',
+        description: response.message,
+        variant: response.success ? 'default' : 'destructive',
+      })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Test failed',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  if (isLoading) {
+    return <div className="text-sm text-muted-foreground">Loading integrations...</div>
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-l-4 border-l-[#4A154B] overflow-hidden">
+        <CardHeader className="bg-muted/10 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-white shadow-sm border flex items-center justify-center p-2">
+                <SlackLogo className="h-full w-full" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">Slack</CardTitle>
+                <CardDescription className="mt-1">
+                  Receive real-time alerts and notifications directly in your Slack workspace.
+                </CardDescription>
+              </div>
+            </div>
+            {slackIntegration?.isConfigured && (
+              <div className="flex items-center gap-2">
+                 <Badge variant={slackIntegration.enabled ? 'default' : 'secondary'} className={slackIntegration.enabled ? 'bg-[#4A154B] hover:bg-[#4A154B]/90' : ''}>
+                  {slackIntegration.enabled ? 'Active' : 'Disabled'}
+                </Badge>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6 pt-6">
+          {!slackIntegration?.isConfigured ? (
+             <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+                <div className="p-4 bg-muted/30 rounded-full">
+                   <SlackLogo className="h-12 w-12 opacity-80" />
+                </div>
+                <div className="max-w-md space-y-2">
+                   <h3 className="font-semibold text-lg">Connect your Slack Workspace</h3>
+                   <p className="text-muted-foreground text-sm">
+                      Install the Moneat app to your Slack workspace to start receiving critical alerts and notifications where your team works.
+                   </p>
+                </div>
+                <Button 
+                   size="lg" 
+                   variant="outline"
+                   className="border-[#4A154B] text-[#4A154B] hover:bg-[#4A154B]/5 mt-4 font-semibold"
+                   onClick={() => oauthMutation.mutate()}
+                   disabled={oauthMutation.isPending}
+                >
+                   {oauthMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Connecting...
+                      </>
+                   ) : (
+                      <>
+                        <SlackLogo className="h-4 w-4 mr-2" />
+                        Add to Slack
+                      </>
+                   )}
+                </Button>
+             </div>
+          ) : (
+             <div className="space-y-6">
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
+                   <div className="space-y-1">
+                      <p className="font-medium">Connected Workspace</p>
+                      <p className="text-sm text-muted-foreground">
+                         Connected to <strong>{slackIntegration.teamName || 'Slack'}</strong>
+                      </p>
+                   </div>
+                   <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowDeleteDialog(true)}
+                   >
+                      Disconnect
+                   </Button>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                   <div className="space-y-2">
+                      <Label>Notification Channel</Label>
+                      <Select 
+                         value={slackIntegration.channelId || ''} 
+                         onValueChange={(val) => {
+                            const channel = channelsData?.channels.find(c => c.id === val)
+                            if (channel) {
+                               updateChannelMutation.mutate({ 
+                                  channelId: channel.id, 
+                                  channelName: channel.name 
+                               })
+                            }
+                         }}
+                         disabled={channelsLoading || updateChannelMutation.isPending}
+                      >
+                         <SelectTrigger>
+                            <SelectValue placeholder="Select a channel" />
+                         </SelectTrigger>
+                         <SelectContent>
+                            {channelsLoading ? (
+                               <div className="p-2 text-center text-xs text-muted-foreground">Loading channels...</div>
+                            ) : (
+                               channelsData?.channels.map(channel => (
+                                  <SelectItem key={channel.id} value={channel.id}>
+                                     #{channel.name}
+                                  </SelectItem>
+                               ))
+                            )}
+                         </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                         Select the channel where Moneat should post alerts.
+                      </p>
+                   </div>
+
+                   <div className="space-y-2">
+                      <Label className="block">Status</Label>
+                      <div className="flex items-center space-x-2 border rounded-md p-2.5 bg-muted/10 h-10">
+                          <Checkbox
+                            id="slack-enabled"
+                            checked={slackIntegration.enabled}
+                            onCheckedChange={() => toggleMutation.mutate()}
+                            disabled={toggleMutation.isPending}
+                          />
+                          <Label htmlFor="slack-enabled" className="font-normal cursor-pointer">
+                              Enable Slack notifications
+                          </Label>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-4 border-t">
+                   <Button
+                     variant="outline"
+                     onClick={() => testMutation.mutate()}
+                     disabled={testMutation.isPending}
+                   >
+                     {testMutation.isPending ? (
+                       <>
+                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                         Testing...
+                       </>
+                     ) : (
+                       'Test Connection'
+                     )}
+                   </Button>
+                </div>
+             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Slack integration?</DialogTitle>
+            <DialogDescription>
+              This will disconnect your Slack workspace and stop sending notifications.
+              You can reconnect at any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 

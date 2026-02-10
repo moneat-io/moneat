@@ -7,6 +7,7 @@ import com.moneat.models.UpdatePaygBudgetResponse
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.PricingTierService
 import com.moneat.services.StripeService
+import com.moneat.services.UsageTrackingService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -14,16 +15,22 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import mu.KotlinLogging
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 
+private val logger = KotlinLogging.logger {}
+
 fun Route.billingRoutes() {
     val pricingTierService = PricingTierService()
     val quotaService = BillingQuotaService(pricingTierService)
     val stripeService = StripeService(pricingTierService)
+    val usageTrackingService = UsageTrackingService.instance
 
     route("/billing") {
         get("/plans") {
@@ -49,7 +56,17 @@ fun Route.billingRoutes() {
             }
 
             val usage = quotaService.getUsageForOrganization(orgId)
-            call.respond(usage)
+            
+            // Compute accurate usedBytes from usage_records
+            try {
+                val startDate = kotlinx.datetime.Instant.parse(usage.periodStart).toLocalDateTime(TimeZone.UTC).date
+                val endDate = kotlinx.datetime.Instant.parse(usage.periodEnd).toLocalDateTime(TimeZone.UTC).date
+                val computedBytes = usageTrackingService.getTotalBytesForOrg(orgId, startDate, endDate)
+                call.respond(usage.copy(usedBytes = computedBytes))
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
+                call.respond(usage)
+            }
         }
 
         post("/checkout") {

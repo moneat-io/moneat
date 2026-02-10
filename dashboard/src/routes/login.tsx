@@ -21,6 +21,9 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ssoLoading, setSsoLoading] = useState(false)
+  const [showSsoInput, setShowSsoInput] = useState(false)
+  const [ssoEmail, setSsoEmail] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,6 +42,26 @@ function LoginPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSsoLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSsoLoading(true)
+    setError('')
+
+    try {
+      const response = await api.initSso(ssoEmail)
+      // Redirect to SSO provider
+      window.location.href = response.redirectUrl
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      if (errorMessage === 'NETWORK_ERROR') {
+        setError('Unable to connect to the server. Please check your connection and try again.')
+      } else {
+        setError(errorMessage || 'SSO login failed. Please try again.')
+      }
+      setSsoLoading(false)
     }
   }
 
@@ -109,6 +132,57 @@ function LoginPage() {
                 {loading ? 'Signing in...' : 'Sign in'}
               </Button>
             </form>
+
+            <div className="mt-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or</span>
+                </div>
+              </div>
+
+              {!showSsoInput ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full mt-4"
+                  onClick={() => setShowSsoInput(true)}
+                >
+                  Login with SSO
+                </Button>
+              ) : (
+                <form onSubmit={handleSsoLogin} className="mt-4 space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="sso-email">Work Email</Label>
+                    <Input
+                      id="sso-email"
+                      type="email"
+                      placeholder="you@company.com"
+                      value={ssoEmail}
+                      onChange={(e) => setSsoEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="submit" className="flex-1" disabled={ssoLoading}>
+                      {ssoLoading ? 'Redirecting...' : 'Continue with SSO'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setShowSsoInput(false)
+                        setSsoEmail('')
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
 
             <div className="mt-6 flex justify-center text-sm text-muted-foreground">
               Don't have an account?

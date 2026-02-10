@@ -77,6 +77,10 @@ dependencies {
     // Security
     implementation("org.mindrot:jbcrypt:0.4")
     implementation("commons-codec:commons-codec:1.16.0")
+    
+    // SSO
+    implementation("com.onelogin:java-saml-core:2.9.0")
+    implementation("com.nimbusds:oauth2-oidc-sdk:11.10")
 
     // Billing
     implementation("com.stripe:stripe-java:29.5.0")

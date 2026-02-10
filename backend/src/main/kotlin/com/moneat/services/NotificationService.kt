@@ -26,6 +26,7 @@ class NotificationService(private val emailService: EmailService) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val frontendUrl = config.property("email.frontendUrl").getString()
     private val json = Json { ignoreUnknownKeys = true }
+    private val slackService = SlackService()
     
     // Rate limiting: track last alert time per (user, project)
     private val lastAlertTimes = ConcurrentHashMap<Pair<Int, Long>, Instant>()
@@ -134,6 +135,26 @@ class NotificationService(private val emailService: EmailService) {
                         logger.error(e) { "Failed to send issue alert to $email" }
                     }
                 }
+            }
+            
+            // Send Slack notification
+            try {
+                slackService.sendErrorAlert(
+                    organizationId = orgId,
+                    projectName = projectName,
+                    issueTitle = emailData.issueTitle,
+                    level = emailData.issueLevel,
+                    culprit = culprit,
+                    issueId = issueId.toLongOrNull() ?: 0L,
+                    projectId = projectId,
+                    baseUrl = frontendUrl,
+                    occurrenceCount = 1,
+                    environment = emailData.environment,
+                    timestamp = emailData.timestamp,
+                    stackTrace = stackTrace
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Slack notification for new issue" }
             }
         } catch (e: Exception) {
             logger.error(e) { "Error in onNewIssue handler" }

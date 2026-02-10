@@ -176,6 +176,17 @@ class UsageTrackingService {
         }
     }
 
+    fun getTotalBytesForOrg(orgId: Int, startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): Long {
+        flushBuffer()
+        return transaction {
+            UsageRecords.selectAll().where {
+                (UsageRecords.organization_id eq orgId) and
+                    (UsageRecords.recordDate greaterEq startDate) and
+                    (UsageRecords.recordDate lessEq endDate)
+            }.sumOf { it[UsageRecords.bytes_ingested] }
+        }
+    }
+
     fun checkQuota(orgId: Int): QuotaStatus {
         val usage = billingQuotaService.getUsageForOrganization(orgId)
         return QuotaStatus(
