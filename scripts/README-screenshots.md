@@ -69,7 +69,8 @@ The script captures these pages (matching the landing page features):
 5. **performance.png** - Performance monitoring
 6. **uptime.png** - Uptime monitoring
 7. **status-pages.png** - Public status pages
-8. **alerting.png** - Integrations (Slack & incident.io)
+8. **slack-integration.png** - Slack integration tile (cropped)
+9. **incident-io-integration.png** - Incident.io integration tile (cropped)
 
 ## Configuration
 

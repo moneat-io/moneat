@@ -42,8 +42,8 @@ const SCREENSHOT_MAPPING = {
     alt: 'Public status page showing service health and incidents',
   },
   'AlertingMock': {
-    screenshot: 'alerting.png',
-    alt: 'Alert configuration with Slack integration settings',
+    screenshots: ['slack-integration.png', 'incident-io-integration.png'],
+    alts: ['Slack integration tile showing connection setup', 'Incident.io integration tile showing incident creation setup'],
   },
   'HeroDashboardMock': {
     screenshot: 'dashboard.png',
