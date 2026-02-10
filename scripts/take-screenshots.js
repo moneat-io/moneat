@@ -30,8 +30,8 @@ const SCREENSHOTS = [
   {
     name: 'dashboard',
     description: 'Main dashboard overview',
-    path: '/',
-    waitFor: 'text=Projects', // Wait for projects to load
+    path: '/', // After login, this shows the authenticated dashboard
+    waitFor: 'text=Recent Issues', 
     viewport: { width: 1920, height: 1080 },
   },
   {
@@ -43,49 +43,110 @@ const SCREENSHOTS = [
   },
   {
     name: 'error-tracking',
-    description: 'Error tracking / Issues list',
-    path: '/projects',
-    clickSelector: 'a[href*="/projects/"]', // Click first project
-    waitFor: 'text=Issues, .issue, [data-testid="issue"]',
+    description: 'Error tracking / Issues list (navigate via first project)',
+    navigate: async (page) => {
+      // Go to projects page
+      await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1000);
+      
+      // Click on the first project
+      const projectLink = await page.locator('a[href^="/projects/"]:not([href*="/settings"])').first();
+      if (projectLink) {
+        await projectLink.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+      }
+    },
     viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'issue-detail',
     description: 'Individual issue detail page',
-    path: '/projects',
-    clickSelector: 'a[href*="/projects/"]', // Will navigate to project then find issue
-    waitFor: 'a[href*="/issues/"]',
-    additionalClick: 'a[href*="/issues/"]:first-of-type', // Then click first issue
+    navigate: async (page) => {
+      // Go to projects page
+      await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      
+      // Click on the first project
+      const projectLink = await page.locator('a[href^="/projects/"]:not([href*="/settings"])').first();
+      const projectExists = await projectLink.count() > 0;
+      if (projectExists) {
+        await projectLink.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(2000);
+        
+        // Wait for and click on the first issue
+        try {
+          await page.waitForSelector('a[href*="/issues/"]', { timeout: 5000 });
+          const issueLink = await page.locator('a[href*="/issues/"]').first();
+          const issueExists = await issueLink.count() > 0;
+          if (issueExists) {
+            await issueLink.click();
+            await page.waitForLoadState('networkidle');
+            await page.waitForTimeout(1500);
+          } else {
+            console.log('   ⚠️  No issues found in project');
+          }
+        } catch (e) {
+          console.log('   ⚠️  No issues found - demo data may not be seeded');
+        }
+      }
+    },
     viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'log-management',
     description: 'Log management page',
-    path: '/projects',
-    clickSelector: 'a[href*="/projects/"]',
-    waitFor: 'text=Logs, a[href*="/logs"]',
-    additionalClick: 'a[href*="/logs"]',
+    navigate: async (page) => {
+      // Go to projects page
+      await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1000);
+      
+      // Click on the first project
+      const projectLink = await page.locator('a[href^="/projects/"]:not([href*="/settings"])').first();
+      const projectExists = await projectLink.count() > 0;
+      if (projectExists) {
+        await projectLink.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        
+        // Try to find and click logs link/tab
+        try {
+          const logsLink = await page.locator('a[href*="/logs"]').first();
+          const logsExists = await logsLink.count() > 0;
+          if (logsExists) {
+            await logsLink.click();
+            await page.waitForLoadState('networkidle');
+            await page.waitForTimeout(1500);
+          } else {
+            console.log('   ⚠️  Logs tab not found in project navigation');
+          }
+        } catch (e) {
+          console.log('   ⚠️  Could not navigate to logs');
+        }
+      }
+    },
     viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'session-replay',
     description: 'Session replay list',
     path: '/replays',
-    waitFor: 'text=Replays, text=Session',
+    waitFor: 'text=Replays',
     viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'performance',
     description: 'Performance monitoring',
     path: '/performance',
-    waitFor: 'text=Performance, text=Transactions',
+    waitFor: 'text=Performance',
     viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'releases',
     description: 'Releases page',
     path: '/releases',
-    waitFor: 'text=Releases, text=Version',
+    waitFor: 'text=Releases',
     viewport: { width: 1920, height: 1080 },
   },
 ];
@@ -93,19 +154,39 @@ const SCREENSHOTS = [
 async function login(page) {
   console.log('🔐 Logging in as demo user...');
   
-  await page.goto(`${BASE_URL}/login`);
-  
-  // Fill in login form
-  await page.fill('input[type="email"], input[name="email"]', DEMO_EMAIL);
-  await page.fill('input[type="password"], input[name="password"]', DEMO_PASSWORD);
-  
-  // Click login button
-  await page.click('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")');
-  
-  // Wait for navigation to complete
-  await page.waitForURL(/\/(dashboard|projects|issues)?/, { timeout: 10000 });
-  
-  console.log('✅ Logged in successfully');
+  try {
+    await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
+    
+    // Wait for login form to be visible
+    await page.waitForSelector('#email', { timeout: 10000 });
+    
+    // Fill in login form using the actual IDs from the form
+    await page.fill('#email', DEMO_EMAIL);
+    await page.fill('#password', DEMO_PASSWORD);
+    
+    console.log(`   Email: ${DEMO_EMAIL}`);
+    
+    // Click the sign in button
+    const signInButton = await page.locator('button[type="submit"]:has-text("Sign in")').first();
+    await signInButton.click();
+    
+    // Wait for navigation away from login page (could go to / or /projects)
+    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
+    
+    // Wait a bit for the page to fully load
+    await page.waitForTimeout(2000);
+    
+    console.log(`✅ Logged in successfully - now at: ${page.url()}`);
+  } catch (error) {
+    console.error('❌ Login failed:', error.message);
+    
+    // Take a debug screenshot
+    const debugPath = path.join(SCREENSHOTS_DIR, 'debug-login-error.png');
+    await page.screenshot({ path: debugPath });
+    console.log(`📸 Debug screenshot saved to: ${debugPath}`);
+    
+    throw error;
+  }
 }
 
 async function takeScreenshot(page, config) {
@@ -115,45 +196,22 @@ async function takeScreenshot(page, config) {
     // Set viewport
     await page.setViewportSize(config.viewport);
     
-    // Navigate to page
-    if (config.path) {
-      await page.goto(`${BASE_URL}${config.path}`, { waitUntil: 'networkidle' });
+    // Custom navigation function if provided
+    if (config.navigate) {
+      await config.navigate(page);
     }
-    
-    // Click element if specified
-    if (config.clickSelector) {
-      const element = await page.$(config.clickSelector);
-      if (element) {
-        await element.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1000);
-      } else {
-        console.log(`⚠️  Element not found: ${config.clickSelector}, skipping click`);
-      }
+    // Otherwise use simple path navigation
+    else if (config.path) {
+      await page.goto(`${BASE_URL}${config.path}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1000);
     }
     
     // Wait for specific element/text if specified
     if (config.waitFor) {
       try {
-        await page.waitForSelector(config.waitFor, { timeout: 5000 });
+        await page.waitForSelector(config.waitFor, { timeout: 3000 });
       } catch (e) {
         console.log(`⚠️  Wait condition not met: ${config.waitFor}, proceeding anyway`);
-      }
-    }
-
-    // Additional click if specified (for nested navigation)
-    if (config.additionalClick) {
-      try {
-        const element = await page.$(config.additionalClick);
-        if (element) {
-          await element.click();
-          await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(1000);
-        } else {
-          console.log(`⚠️  Additional click element not found: ${config.additionalClick}`);
-        }
-      } catch (e) {
-        console.log(`⚠️  Additional click failed: ${e.message}`);
       }
     }
     
@@ -172,6 +230,16 @@ async function takeScreenshot(page, config) {
     return true;
   } catch (error) {
     console.error(`❌ Failed to capture ${config.name}:`, error.message);
+    
+    // Take a debug screenshot anyway
+    try {
+      const debugPath = path.join(SCREENSHOTS_DIR, `debug-${config.name}.png`);
+      await page.screenshot({ path: debugPath });
+      console.log(`📸 Debug screenshot: ${debugPath}`);
+    } catch (e) {
+      // Ignore debug screenshot errors
+    }
+    
     return false;
   }
 }
@@ -201,7 +269,15 @@ async function main() {
     // Login
     await login(page);
     
-    console.log('\n📸 Starting screenshot capture...\n');
+    // Verify we're logged in by checking for common authenticated elements
+    console.log('🔍 Verifying authentication...');
+    const currentUrl = page.url();
+    if (currentUrl.includes('/login')) {
+      throw new Error('Still on login page - authentication may have failed');
+    }
+    console.log('✅ Authentication verified\n');
+    
+    console.log('📸 Starting screenshot capture...\n');
     
     // Take screenshots
     let successCount = 0;
