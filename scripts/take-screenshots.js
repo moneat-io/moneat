@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Automated screenshot generator for Moneat homepage
+ * Automated screenshot generator for Moneat landing page features
  * 
- * This script:
- * 1. Logs in as the demo user (demo@moneat.dev / demo123)
- * 2. Navigates to various pages
- * 3. Takes high-quality screenshots
- * 4. Saves them to dashboard/public/screenshots/
+ * This script captures screenshots of only the features shown on the landing page:
+ * - Error tracking
+ * - Log management
+ * - Session replay
+ * - Performance monitoring
  * 
  * Prerequisites:
  * - Run `npm install --save-dev playwright` in the scripts directory
@@ -25,53 +25,13 @@ const DEMO_EMAIL = 'demo@moneat.dev';
 const DEMO_PASSWORD = 'demo123';
 const SCREENSHOTS_DIR = path.join(__dirname, '../dashboard/public/screenshots');
 
-// Screenshot configurations
+// Screenshot configurations - only features shown on landing page
 const SCREENSHOTS = [
   {
-    name: 'dashboard',
-    description: 'Main dashboard overview with issues list',
-    path: '/', // After login, shows authenticated dashboard with issues
-    waitFor: 'text=Recent Issues',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'projects',
-    description: 'Projects overview',
-    path: '/projects',
-    waitFor: 'text=Projects',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
     name: 'error-tracking',
-    description: 'Error tracking / Issues list (same as dashboard)',
+    description: 'Error tracking / Issues list',
     path: '/', // Issues list is on the main dashboard
     waitFor: 'text=Recent Issues',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'issue-detail',
-    description: 'Individual issue detail page',
-    navigate: async (page) => {
-      // Go to dashboard which shows issues list
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      
-      // Wait for and click on the first issue link
-      try {
-        await page.waitForSelector('a[href^="/issues/"]', { timeout: 5000 });
-        const issueLink = await page.locator('a[href^="/issues/"]').first();
-        const issueExists = await issueLink.count() > 0;
-        if (issueExists) {
-          await issueLink.click();
-          await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(1500);
-        } else {
-          console.log('   ⚠️  No issues found - demo data may not be seeded');
-        }
-      } catch (e) {
-        console.log('   ⚠️  No issues found - demo data may not be seeded');
-      }
-    },
     viewport: { width: 1920, height: 1080 },
   },
   {
@@ -120,13 +80,6 @@ const SCREENSHOTS = [
     description: 'Performance monitoring',
     path: '/performance',
     waitFor: 'text=Performance',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'releases',
-    description: 'Releases page',
-    path: '/releases',
-    waitFor: 'text=Releases',
     viewport: { width: 1920, height: 1080 },
   },
 ];

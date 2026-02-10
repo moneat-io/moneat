@@ -14,6 +14,9 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.days
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 
 /**
  * Demo Data Seeder for Moneat
@@ -151,6 +154,23 @@ object DemoDataSeeder {
                 it[role] = "owner"
             }
             
+            // Add PRO subscription for demo user (so screenshots don't show upgrade prompts)
+            println("Creating PRO subscription for demo org...")
+            val now = Clock.System.now()
+            val periodEnd = now + 30.days
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "pro"
+                it[status] = "active"
+                it[billing_interval] = "monthly"
+                it[current_period_start] = now
+                it[current_period_end] = periodEnd
+                it[payg_budget_cents] = 0
+                it[payg_used_units] = 0
+                it[payg_used_micros] = 0
+                it[pending_meter_units] = 0
+            }
+            
             // Create projects with keys
             println("Creating demo projects...")
             val projects = mutableMapOf<String, Pair<Long, String>>()
@@ -252,6 +272,18 @@ object DemoDataSeeder {
         // Always seed logs data (they're time-sensitive for demo)
         println("\nSeeding log data...")
         seedLogData(projects)
+        
+        // Seed performance/transaction data
+        println("\nSeeding performance/transaction data...")
+        seedTransactionData(projects)
+        
+        // Seed session replay data
+        println("\nSeeding session replay data...")
+        seedReplayData(projects)
+        
+        // Seed user feedback data
+        println("\nSeeding user feedback data...")
+        seedFeedbackData(projects)
         
         // Always seed uptime monitors and monitoring systems (or update if they exist)
         println("\nSeeding uptime monitors...")
@@ -501,12 +533,18 @@ object DemoDataSeeder {
                 "\"${it.replace("'", "''")}\""
             }
             
+            // Generate realistic breadcrumbs
+            val breadcrumbs = generateBreadcrumbs(template.platform, template.title)
+            
+            // Generate realistic contexts
+            val contexts = generateContexts(template.platform, device, osVersion)
+            
             val eventQuery = """
                 INSERT INTO $db.events (
                     event_id, project_id, issue_id, timestamp, received_at, event_type,
                     platform, level, message, exception_type, exception_value,
                     stack_trace, environment, release, user_id, user_email,
-                    device_model, os_name, os_version
+                    device_model, os_name, os_version, breadcrumbs, contexts
                 ) VALUES (
                     '$eventId',
                     $projectId,
@@ -526,7 +564,9 @@ object DemoDataSeeder {
                     '$userEmail',
                     '$device',
                     '${if (template.platform == "android") "Android" else if (template.platform == "cocoa") "iOS" else "JavaScript"}',
-                    '$osVersion'
+                    '$osVersion',
+                    '${breadcrumbs.replace("'", "\\'")}',
+                    '${contexts.replace("'", "\\'")}'
                 )
             """.trimIndent()
             
@@ -682,6 +722,419 @@ object DemoDataSeeder {
         println("✅ Seeded $logCount realistic log entries (spread over last 15 minutes)")
     }
     
+    private suspend fun seedTransactionData(projects: Map<String, Pair<Long, String>>) {
+        val db = ClickHouseClient.getDatabase()
+        
+        // Transaction templates with realistic operations and timings
+        data class TransactionTemplate(
+            val name: String,
+            val op: String,
+            val avgDuration: Double,
+            val variance: Double,
+            val failureRate: Double,
+            val platform: String
+        )
+        
+        val transactionTemplates = listOf(
+            // API endpoints
+            TransactionTemplate("GET /api/products", "http.server", 145.0, 50.0, 0.5, "android"),
+            TransactionTemplate("POST /api/checkout", "http.server", 320.0, 120.0, 2.3, "android"),
+            TransactionTemplate("GET /api/user/profile", "http.server", 89.0, 30.0, 0.2, "android"),
+            TransactionTemplate("PUT /api/cart/items", "http.server", 210.0, 80.0, 1.1, "android"),
+            TransactionTemplate("GET /api/search", "http.server", 780.0, 300.0, 3.5, "android"),
+            
+            // Database queries
+            TransactionTemplate("SELECT products WHERE category", "db.sql.query", 45.0, 15.0, 0.1, "android"),
+            TransactionTemplate("INSERT INTO orders", "db.sql.query", 120.0, 40.0, 0.8, "android"),
+            TransactionTemplate("UPDATE cart_items", "db.sql.query", 67.0, 20.0, 0.3, "android"),
+            
+            // UI screens/navigation
+            TransactionTemplate("ProductListActivity", "navigation", 234.0, 90.0, 1.2, "android"),
+            TransactionTemplate("ProductDetailActivity", "navigation", 189.0, 70.0, 0.7, "android"),
+            TransactionTemplate("CheckoutActivity", "navigation", 456.0, 150.0, 2.1, "android"),
+            TransactionTemplate("CartActivity", "navigation", 123.0, 50.0, 0.4, "android"),
+            
+            // Background tasks
+            TransactionTemplate("sync_user_data", "task", 567.0, 200.0, 1.8, "android"),
+            TransactionTemplate("upload_analytics", "task", 890.0, 350.0, 4.2, "android"),
+            TransactionTemplate("refresh_product_cache", "task", 1240.0, 500.0, 2.9, "android"),
+        )
+        
+        val (androidProjectId, _) = projects["android"] ?: return
+        var totalTransactions = 0
+        
+        // Seed transactions for the past 7 days
+        transactionTemplates.forEach { template ->
+            // Number of transactions varies by template (more popular endpoints have more data)
+            val transactionCount = when {
+                template.op == "http.server" && "GET" in template.name -> random.nextInt(200, 400)
+                template.op == "http.server" -> random.nextInt(100, 250)
+                template.op == "navigation" -> random.nextInt(150, 300)
+                template.op == "db.sql.query" -> random.nextInt(300, 600)
+                else -> random.nextInt(50, 150)
+            }
+            
+            repeat(transactionCount) { i ->
+                val eventId = UUID.randomUUID().toString()
+                // Distribute over last 7 days, with more recent data
+                val daysAgo = when {
+                    i < transactionCount * 0.3 -> random.nextInt(0, 1) // 30% in last day
+                    i < transactionCount * 0.6 -> random.nextInt(1, 3) // 30% in last 2 days
+                    else -> random.nextInt(3, 7) // rest distributed over week
+                }
+                val timestamp = randomTime(daysAgo)
+                
+                // Calculate duration with variance
+                val baseDuration = template.avgDuration + (random.nextDouble(-template.variance, template.variance))
+                val duration = maxOf(10.0, baseDuration) // minimum 10ms
+                
+                // Determine if this is a failure
+                val isFailed = random.nextDouble() * 100 < template.failureRate
+                val level = if (isFailed) "error" else "info"
+                
+                val userEmail = userEmails.random(random)
+                val device = androidDevices.random(random)
+                val osVersion = "Android ${androidVersions.random(random)}"
+                val environment = if (random.nextDouble() < 0.85) "production" else "staging"
+                
+                val eventQuery = """
+                    INSERT INTO $db.events (
+                        event_id, project_id, timestamp, received_at, event_type,
+                        level, platform, environment, release, 
+                        transaction_name, transaction_op, duration_ms,
+                        user_id, user_email, device_model, os_name, os_version,
+                        browser_name, browser_version, message
+                    ) VALUES (
+                        '$eventId',
+                        $androidProjectId,
+                        toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
+                        toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
+                        'transaction',
+                        '$level',
+                        '${template.platform}',
+                        '$environment',
+                        '1.${random.nextInt(0, 4)}.${random.nextInt(0, 2)}',
+                        '${template.name.replace("'", "''")}',
+                        '${template.op}',
+                        $duration,
+                        '${UUID.randomUUID()}',
+                        '$userEmail',
+                        '$device',
+                        'Android',
+                        '$osVersion',
+                        '',
+                        '',
+                        ''
+                    )
+                """.trimIndent()
+                
+                try {
+                    ClickHouseClient.execute(eventQuery)
+                    totalTransactions++
+                } catch (e: Exception) {
+                    if (i < 2) println("❌ Error inserting transaction: ${e.message}")
+                }
+            }
+        }
+        
+        println("✅ Seeded $totalTransactions transaction events across ${transactionTemplates.size} transaction types")
+    }
+    
+    private suspend fun seedReplayData(projects: Map<String, Pair<Long, String>>) {
+        val db = ClickHouseClient.getDatabase()
+        val (androidProjectId, _) = projects["android"] ?: return
+        
+        val browsers = listOf("Chrome", "Firefox", "Safari", "Edge")
+        val browserVersions = mapOf(
+            "Chrome" to listOf("120.0", "119.0", "118.0"),
+            "Firefox" to listOf("121.0", "120.0"),
+            "Safari" to listOf("17.2", "17.1", "16.6"),
+            "Edge" to listOf("120.0", "119.0")
+        )
+        
+        val osOptions = listOf(
+            "Windows" to listOf("10", "11"),
+            "macOS" to listOf("14.2", "13.6", "12.7"),
+            "Linux" to listOf("Ubuntu 22.04", "Fedora 39")
+        )
+        
+        val urls = listOf(
+            "https://acme-shopping.com/",
+            "https://acme-shopping.com/products",
+            "https://acme-shopping.com/products/electronics",
+            "https://acme-shopping.com/products/123/details",
+            "https://acme-shopping.com/cart",
+            "https://acme-shopping.com/checkout",
+            "https://acme-shopping.com/account",
+            "https://acme-shopping.com/orders"
+        )
+        
+        val replayCount = 60
+        var totalSegments = 0
+        
+        repeat(replayCount) { i ->
+            val replayId = UUID.randomUUID().toString()
+            
+            // Session timing
+            val daysAgo = when {
+                i < replayCount * 0.4 -> random.nextInt(0, 1) // 40% in last day
+                i < replayCount * 0.7 -> random.nextInt(1, 3) // 30% in days 1-3
+                else -> random.nextInt(3, 7) // rest over week
+            }
+            val startTime = randomTime(daysAgo)
+            
+            // Session duration (10 seconds to 20 minutes)
+            val durationSeconds = when {
+                random.nextDouble() < 0.15 -> random.nextInt(10, 30) // 15% very short (bounced)
+                random.nextDouble() < 0.50 -> random.nextInt(30, 180) // 35% short (30s-3min)
+                random.nextDouble() < 0.80 -> random.nextInt(180, 600) // 30% medium (3-10min)
+                else -> random.nextInt(600, 1200) // 20% long sessions (10-20min)
+            }
+            
+            // User info
+            val userEmail = userEmails.random(random)
+            val userId = UUID.randomUUID().toString()
+            val username = userEmail.substringBefore("@")
+            
+            // Device/browser info
+            val browser = browsers.random(random)
+            val browserVersion = browserVersions[browser]!!.random(random)
+            val (osName, osVersionList) = osOptions.random(random)
+            val osVersion = osVersionList.random(random)
+            
+            // Activity level (0-100, higher = more interactions)
+            val activity = when {
+                durationSeconds < 30 -> random.nextInt(0, 20) // Low activity for short sessions
+                durationSeconds < 180 -> random.nextInt(20, 60) // Medium for medium sessions
+                else -> random.nextInt(60, 100) // High for long sessions
+            }
+            
+            // Determine if session had errors
+            val hasErrors = random.nextDouble() < 0.25 // 25% of replays have errors
+            val errorCount = if (hasErrors) random.nextInt(1, 4) else 0
+            val errorIds = if (hasErrors) {
+                (1..errorCount).map { UUID.randomUUID().toString() }
+            } else emptyList()
+            
+            // URLs visited during session (1-6 pages)
+            val pageCount = when {
+                durationSeconds < 60 -> random.nextInt(1, 3)
+                durationSeconds < 300 -> random.nextInt(2, 5)
+                else -> random.nextInt(3, 7)
+            }.coerceAtMost(urls.size)
+            
+            val visitedUrls = urls.shuffled(random).take(pageCount)
+            
+            val environment = if (random.nextDouble() < 0.90) "production" else "staging"
+            
+            // Generate 1-3 segments for this replay (simulating chunks of replay data)
+            val segmentCount = when {
+                durationSeconds < 120 -> 1
+                durationSeconds < 600 -> random.nextInt(1, 3)
+                else -> random.nextInt(2, 4)
+            }
+            
+            repeat(segmentCount) { segmentIndex ->
+                val segmentId = segmentIndex.toUInt()
+                val segmentDuration = durationSeconds / segmentCount
+                val segmentTime = startTime.plus((segmentDuration * segmentIndex).toLong(), ChronoUnit.SECONDS)
+                
+                // Format arrays for ClickHouse
+                val urlsArray = visitedUrls.joinToString(",") { "'${it.replace("'", "''")}'" }
+                val errorIdsArray = errorIds.joinToString(",") { "'$it'" }
+                
+                val replayQuery = """
+                    INSERT INTO $db.replay_events (
+                        replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
+                        urls, error_ids, trace_ids, environment, release, platform,
+                        user_id, user_email, user_username, user_ip_address,
+                        sdk_name, sdk_version, browser_name, browser_version,
+                        os_name, os_version, device_name, device_family, activity, tags
+                    ) VALUES (
+                        '$replayId',
+                        $androidProjectId,
+                        $segmentId,
+                        toDateTime64(${segmentTime.epochSecond}, 3, 'UTC'),
+                        toDateTime64(${startTime.epochSecond}, 3, 'UTC'),
+                        [$urlsArray],
+                        [$errorIdsArray],
+                        [],
+                        '$environment',
+                        '1.${random.nextInt(0, 4)}.${random.nextInt(0, 2)}',
+                        'javascript',
+                        '$userId',
+                        '$userEmail',
+                        '$username',
+                        '${random.nextInt(1, 255)}.${random.nextInt(1, 255)}.${random.nextInt(1, 255)}.${random.nextInt(1, 255)}',
+                        'sentry.javascript.react',
+                        '7.99.0',
+                        '$browser',
+                        '$browserVersion',
+                        '$osName',
+                        '$osVersion',
+                        '',
+                        '',
+                        $activity,
+                        ''
+                    )
+                """.trimIndent()
+                
+                try {
+                    ClickHouseClient.execute(replayQuery)
+                    totalSegments++
+                } catch (e: Exception) {
+                    if (segmentIndex == 0) println("❌ Error inserting replay: ${e.message}")
+                }
+            }
+        }
+        
+        println("✅ Seeded $replayCount session replays ($totalSegments segments total)")
+    }
+    
+    private suspend fun seedFeedbackData(projects: Map<String, Pair<Long, String>>) {
+        val db = ClickHouseClient.getDatabase()
+        val (androidProjectId, _) = projects["android"] ?: return
+        
+        // Feedback message templates with realistic user feedback
+        val feedbackTemplates = listOf(
+            Triple("App crashes when trying to checkout with saved card", "sarah.johnson@example.com", "Sarah J."),
+            Triple("Great app but the product images take too long to load", "mike.chen@example.com", "Mike Chen"),
+            Triple("Cart doesn't update after adding items, have to refresh", "alex.rivera@example.com", "Alex R."),
+            Triple("Love the new UI! Much cleaner than before", "priya.patel@example.com", "Priya Patel"),
+            Triple("Can't apply discount code at checkout - keeps saying invalid", "john.smith@example.com", "John Smith"),
+            Triple("App froze on payment screen - lost my order", "emma.williams@example.com", "Emma W."),
+            Triple("Search results are not relevant to what I'm looking for", "mike.chen@example.com", "Mike Chen"),
+            Triple("Would be great to have a wishlist feature!", "sarah.johnson@example.com", "Sarah Johnson"),
+            Triple("The app is very slow when scrolling through products", "alex.rivera@example.com", "Alex Rivera"),
+            Triple("Got an error message when viewing product details", "priya.patel@example.com", "Priya P."),
+            Triple("Unable to login with Google - keeps timing out", "john.smith@example.com", "John S."),
+            Triple("Product recommendations are really helpful!", "emma.williams@example.com", "Emma Williams"),
+            Triple("App crashed while browsing electronics category", "sarah.johnson@example.com", "Sarah J."),
+            Triple("Missing product images on several items", "mike.chen@example.com", "Mike C."),
+            Triple("Filter options don't work properly", "alex.rivera@example.com", "Alex"),
+        )
+        
+        val urls = listOf(
+            "https://acme-shopping.com/products",
+            "https://acme-shopping.com/cart",
+            "https://acme-shopping.com/checkout",
+            "https://acme-shopping.com/products/123/details",
+            "https://acme-shopping.com/account",
+            "https://acme-shopping.com/search",
+            "https://acme-shopping.com/products/electronics"
+        )
+        
+        // Get some event IDs to associate feedback with
+        val eventIdsQuery = """
+            SELECT toString(event_id) as event_id
+            FROM $db.events
+            WHERE project_id = $androidProjectId
+                AND event_type = 'error'
+            LIMIT 8
+            FORMAT TabSeparated
+        """.trimIndent()
+        
+        val eventIds = try {
+            val response = ClickHouseClient.executeWithFormat(eventIdsQuery, "TabSeparated")
+            response.lines().filter { it.isNotBlank() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        
+        // Get some replay IDs to associate feedback with
+        val replayIdsQuery = """
+            SELECT DISTINCT toString(replay_id) as replay_id
+            FROM $db.replay_events
+            WHERE project_id = $androidProjectId
+            LIMIT 5
+            FORMAT TabSeparated
+        """.trimIndent()
+        
+        val replayIds = try {
+            val response = ClickHouseClient.executeWithFormat(replayIdsQuery, "TabSeparated")
+            response.lines().filter { it.isNotBlank() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        
+        var feedbackCount = 0
+        
+        feedbackTemplates.forEachIndexed { index, (message, email, name) ->
+            val feedbackId = UUID.randomUUID().toString()
+            
+            // Distribute over last 14 days
+            val daysAgo = when {
+                index < 5 -> random.nextInt(0, 2)  // 5 recent
+                index < 10 -> random.nextInt(2, 7) // 5 medium
+                else -> random.nextInt(7, 14)      // rest older
+            }
+            val timestamp = randomTime(daysAgo)
+            
+            // Some feedback has associated events or replays
+            val associatedEventId = if (eventIds.isNotEmpty() && random.nextDouble() < 0.4) {
+                eventIds.random(random)
+            } else ""
+            
+            val associatedReplayId = if (replayIds.isNotEmpty() && random.nextDouble() < 0.3) {
+                replayIds.random(random)
+            } else ""
+            
+            val url = urls.random(random)
+            val environment = if (random.nextDouble() < 0.9) "production" else "staging"
+            
+            // Status distribution: 60% unresolved, 30% resolved, 10% archived
+            val status = when {
+                random.nextDouble() < 0.6 -> "unresolved"
+                random.nextDouble() < 0.9 -> "resolved"
+                else -> "archived"
+            }
+            
+            val userId = UUID.randomUUID().toString()
+            
+            val feedbackQuery = """
+                INSERT INTO $db.user_feedback (
+                    feedback_id, project_id, timestamp, received_at,
+                    message, contact_email, name, url,
+                    associated_event_id, replay_id, environment, release,
+                    platform, user_id, user_email, user_username, user_ip_address,
+                    sdk_name, sdk_version, tags, status, updated_at
+                ) VALUES (
+                    '$feedbackId',
+                    $androidProjectId,
+                    toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
+                    toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
+                    '${message.replace("'", "\\'")}',
+                    '$email',
+                    '${name.replace("'", "\\'")}',
+                    '$url',
+                    '$associatedEventId',
+                    '$associatedReplayId',
+                    '$environment',
+                    '1.${random.nextInt(0, 4)}.${random.nextInt(0, 2)}',
+                    'android',
+                    '$userId',
+                    '$email',
+                    '${name.replace("'", "\\'")}',
+                    '${random.nextInt(1, 255)}.${random.nextInt(1, 255)}.${random.nextInt(1, 255)}.${random.nextInt(1, 255)}',
+                    'sentry.java.android',
+                    '6.34.0',
+                    map(),
+                    '$status',
+                    toDateTime64(${timestamp.epochSecond}, 3, 'UTC')
+                )
+            """.trimIndent()
+            
+            try {
+                ClickHouseClient.execute(feedbackQuery)
+                feedbackCount++
+            } catch (e: Exception) {
+                if (index == 0) println("❌ Error inserting feedback: ${e.message}")
+            }
+        }
+        
+        println("✅ Seeded $feedbackCount user feedback items")
+    }
+    
     private suspend fun seedUptimeMonitors(organizationId: Int) {
         val db = ClickHouseClient.getDatabase()
         
@@ -787,6 +1240,162 @@ object DemoDataSeeder {
         }
         
         println("✅ Seeded ${systemsList.size} monitoring systems")
+    }
+    
+    private fun generateBreadcrumbs(platform: String, @Suppress("UNUSED_PARAMETER") errorTitle: String): String {
+        val breadcrumbs = mutableListOf<String>()
+        val now = System.currentTimeMillis()
+        
+        when (platform) {
+            "android" -> {
+                // Android-specific breadcrumbs
+                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 30000}}""")
+                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped product item #123","level":"info","timestamp":${now - 25000}}""")
+                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductListFragment -> ProductDetailFragment","level":"info","timestamp":${now - 20000}}""")
+                breadcrumbs.add("""{"type":"http","category":"http","message":"GET /api/products/123","level":"info","data":{"status_code":200,"method":"GET"},"timestamp":${now - 18000}}""")
+                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped add to cart button","level":"info","timestamp":${now - 12000}}""")
+                breadcrumbs.add("""{"type":"http","category":"http","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"method":"POST"},"timestamp":${now - 10000}}""")
+                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductDetailFragment -> CartFragment","level":"info","timestamp":${now - 5000}}""")
+                breadcrumbs.add("""{"type":"debug","category":"lifecycle","message":"CartFragment.onViewCreated called","level":"debug","timestamp":${now - 3000}}""")
+            }
+            "cocoa" -> {
+                // iOS-specific breadcrumbs
+                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"HomeViewController -> ProductListViewController","level":"info","timestamp":${now - 28000}}""")
+                breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped product cell","level":"info","timestamp":${now - 22000}}""")
+                breadcrumbs.add("""{"type":"http","category":"network","message":"GET /api/products/456","level":"info","data":{"status_code":200},"timestamp":${now - 20000}}""")
+                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductListViewController -> ProductDetailViewController","level":"info","timestamp":${now - 15000}}""")
+                breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped Add to Cart","level":"info","timestamp":${now - 8000}}""")
+                breadcrumbs.add("""{"type":"debug","category":"app.lifecycle","message":"viewWillAppear called","level":"debug","timestamp":${now - 2000}}""")
+            }
+            else -> {
+                // React Native / JS breadcrumbs
+                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /products","level":"info","timestamp":${now - 25000}}""")
+                breadcrumbs.add("""{"type":"http","category":"fetch","message":"GET /api/products","level":"info","data":{"status":200},"timestamp":${now - 23000}}""")
+                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click on product item","level":"info","timestamp":${now - 18000}}""")
+                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /products/789","level":"info","timestamp":${now - 15000}}""")
+                breadcrumbs.add("""{"type":"console","category":"console","message":"Product data loaded successfully","level":"log","timestamp":${now - 12000}}""")
+                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click add to cart","level":"info","timestamp":${now - 6000}}""")
+            }
+        }
+        
+        return "[${breadcrumbs.joinToString(",")}]"
+    }
+    
+    private fun generateContexts(platform: String, device: String, osVersion: String): String {
+        val contexts = when (platform) {
+            "android" -> """
+{
+  "device": {
+    "family": "Android",
+    "model": "$device",
+    "model_id": "${device.replace(" ", "_").lowercase()}",
+    "arch": "arm64-v8a",
+    "battery_level": ${70 + random.nextInt(30)}.0,
+    "orientation": "portrait",
+    "manufacturer": "${device.split(" ").firstOrNull() ?: "Unknown"}",
+    "brand": "${device.split(" ").firstOrNull() ?: "Unknown"}",
+    "screen_resolution": "1080x2400",
+    "screen_density": 3.0,
+    "online": true,
+    "charging": ${random.nextBoolean()},
+    "low_memory": false,
+    "simulator": false,
+    "memory_size": ${4 + random.nextInt(12)}000000000,
+    "free_memory": ${2 + random.nextInt(4)}000000000,
+    "storage_size": ${64 + random.nextInt(192)}000000000,
+    "free_storage": ${32 + random.nextInt(96)}000000000,
+    "boot_time": "2024-01-${10 + random.nextInt(20)}T08:${random.nextInt(60)}:${random.nextInt(60)}.000Z"
+  },
+  "os": {
+    "name": "Android",
+    "version": "$osVersion",
+    "build": "API ${osVersion.substringAfter("Android ").trim()}",
+    "kernel_version": "5.${random.nextInt(10)}.${random.nextInt(100)}"
+  },
+  "app": {
+    "app_start_time": "2024-01-${15 + random.nextInt(15)}T${random.nextInt(24)}:${random.nextInt(60)}:${random.nextInt(60)}.000Z",
+    "app_name": "Acme Shopping",
+    "app_version": "1.${random.nextInt(4)}.${random.nextInt(3)}",
+    "app_build": "${1000 + random.nextInt(200)}",
+    "app_identifier": "com.acme.shopping",
+    "app_memory": ${150 + random.nextInt(100)}000000
+  },
+  "culture": {
+    "locale": "en_US",
+    "timezone": "America/New_York"
+  }
+}
+            """.trimIndent()
+            
+            "cocoa" -> """
+{
+  "device": {
+    "family": "iOS",
+    "model": "$device",
+    "model_id": "${device.replace(" ", "").replace("\"", "")}",
+    "arch": "arm64",
+    "battery_level": ${65 + random.nextInt(35)}.0,
+    "orientation": "portrait",
+    "manufacturer": "Apple",
+    "brand": "Apple",
+    "screen_resolution": "${if (device.contains("iPad")) "1668x2388" else "1170x2532"}",
+    "online": true,
+    "charging": ${random.nextBoolean()},
+    "low_memory": false,
+    "simulator": false,
+    "memory_size": ${6 + random.nextInt(10)}000000000,
+    "free_memory": ${3 + random.nextInt(3)}000000000,
+    "storage_size": ${128 + random.nextInt(384)}000000000,
+    "free_storage": ${64 + random.nextInt(128)}000000000
+  },
+  "os": {
+    "name": "iOS",
+    "version": "$osVersion",
+    "build": "${random.nextInt(20)}A${random.nextInt(1000)}",
+    "kernel_version": "Darwin ${random.nextInt(23)}.${random.nextInt(6)}.0"
+  },
+  "app": {
+    "app_start_time": "2024-01-${15 + random.nextInt(15)}T${random.nextInt(24)}:${random.nextInt(60)}:${random.nextInt(60)}.000Z",
+    "app_name": "Acme Shopping",
+    "app_version": "1.${random.nextInt(4)}.${random.nextInt(3)}",
+    "app_build": "${1000 + random.nextInt(200)}",
+    "app_identifier": "com.acme.shopping.ios",
+    "app_memory": ${120 + random.nextInt(80)}000000
+  },
+  "culture": {
+    "locale": "en_US",
+    "timezone": "America/Los_Angeles"
+  }
+}
+            """.trimIndent()
+            
+            else -> """
+{
+  "browser": {
+    "name": "Chrome",
+    "version": "120.0.${random.nextInt(6000)}.${random.nextInt(200)}"
+  },
+  "os": {
+    "name": "Windows",
+    "version": "10.0.${random.nextInt(20000)}"
+  },
+  "runtime": {
+    "name": "javascript",
+    "version": "ES2021"
+  },
+  "app": {
+    "app_name": "Acme Shopping Web",
+    "app_version": "1.${random.nextInt(4)}.${random.nextInt(3)}"
+  },
+  "culture": {
+    "locale": "en-US",
+    "timezone": "America/Chicago"
+  }
+}
+            """.trimIndent()
+        }
+        
+        return contexts
     }
     
     private data class IssueTemplate(
