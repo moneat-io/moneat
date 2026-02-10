@@ -41,7 +41,6 @@ import {
     Clock,
     Wallet,
     Layers,
-    ExternalLink,
     Plug,
     Shield,
     Settings
@@ -116,10 +115,6 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
   const search = useSearch({ from: '/settings' })
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api.getCurrentUser(),
-  })
   
   const { data: subscription } = useQuery({
     queryKey: ['subscription'],

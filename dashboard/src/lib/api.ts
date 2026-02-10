@@ -1208,10 +1208,17 @@ class ApiClient {
 
   async getOrganizations(): Promise<Array<{ id: number; name: string; slug: string }>> {
     // This will get the user's organizations - for now return just the primary org
-    const user = await this.getCurrentUser()
     // Backend should have an endpoint for this, but for now we can derive from other calls
     // This is a placeholder that the SSO settings component needs
     return [{ id: 1, name: "Default Organization", slug: "default" }]
+  }
+
+  async getSubscription(): Promise<{ tier: { tierName: string } } | null> {
+    try {
+      return this.request(`${API_BASE}/subscription`)
+    } catch {
+      return null
+    }
   }
 
   async resendVerificationEmail(email: string): Promise<{ message: string }> {

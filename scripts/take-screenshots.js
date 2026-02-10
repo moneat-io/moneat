@@ -67,6 +67,64 @@ const SCREENSHOTS = [
             await logsLink.click();
             await page.waitForLoadState('networkidle');
             await page.waitForTimeout(1500);
+            
+            // Set custom time range to show demo data (last 15 minutes)
+            try {
+              // Calculate time range (now and 15 minutes ago)
+              const now = new Date();
+              const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+              
+              // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+              const formatDatetimeLocal = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                return `${year}-${month}-${day}T${hours}:${minutes}`;
+              };
+              
+              const fromValue = formatDatetimeLocal(fifteenMinutesAgo);
+              const toValue = formatDatetimeLocal(now);
+              
+              // Click the time range dropdown button (has Clock icon)
+              const timeButton = page.locator('button:has(svg.lucide-clock)').first();
+              if (await timeButton.count() > 0) {
+                await timeButton.click();
+                await page.waitForTimeout(500);
+                
+                // Click "Custom range..." option
+                const customRangeOption = page.locator('text=Custom range...').first();
+                if (await customRangeOption.count() > 0) {
+                  await customRangeOption.click();
+                  await page.waitForTimeout(500);
+                  
+                  // Fill in the datetime inputs
+                  const fromInput = page.locator('input[type="datetime-local"]').first();
+                  const toInput = page.locator('input[type="datetime-local"]').nth(1);
+                  
+                  if (await fromInput.count() > 0 && await toInput.count() > 0) {
+                    await fromInput.fill(fromValue);
+                    await toInput.fill(toValue);
+                    await page.waitForTimeout(1000);
+                    
+                    // Click outside to close dropdown and apply the range
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(1500);
+                    
+                    console.log(`   ✅ Set custom time range: ${fromValue} to ${toValue}`);
+                  } else {
+                    console.log('   ⚠️  Could not find datetime inputs');
+                  }
+                } else {
+                  console.log('   ⚠️  Could not find Custom range option');
+                }
+              } else {
+                console.log('   ⚠️  Could not find time range button');
+              }
+            } catch (e) {
+              console.log('   ⚠️  Could not set custom time range:', e.message);
+            }
           } else {
             console.log('   ⚠️  Logs tab not found in project navigation');
           }
@@ -102,34 +160,8 @@ const SCREENSHOTS = [
   {
     name: 'status-pages',
     description: 'Public status pages',
-    navigate: async (page) => {
-      // Navigate to uptime page first
-      await page.goto(`${BASE_URL}/uptime`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      
-      // Try to find and click on a monitor to see status page
-      try {
-        const monitorLink = await page.locator('a[href^="/uptime/"]').first();
-        const monitorExists = await monitorLink.count() > 0;
-        if (monitorExists) {
-          await monitorLink.click();
-          await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(1500);
-          
-          // Look for status page tab/link
-          const statusLink = await page.locator('a[href*="status"], button:has-text("Status Page"), a:has-text("Status Page")').first();
-          const statusExists = await statusLink.count() > 0;
-          if (statusExists) {
-            await statusLink.click();
-            await page.waitForTimeout(1500);
-          }
-        } else {
-          console.log('   ⚠️  No uptime monitors found for status page screenshot');
-        }
-      } catch (e) {
-        console.log('   ⚠️  Could not navigate to status page:', e.message);
-      }
-    },
+    path: '/s/acme-status',
+    waitFor: 'text=Status',
     viewport: { width: 1920, height: 1080 },
   },
   {

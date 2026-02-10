@@ -535,6 +535,202 @@ object DemoDataSeeder {
                 eventCount = 167,
                 userCount = 58,
                 level = "warning"
+            ),
+            IssueTemplate(
+                "ClassCastException: Cannot cast String to Integer",
+                "java.lang.ClassCastException",
+                "java.lang.String cannot be cast to java.lang.Integer",
+                "android",
+                listOf(
+                    "at com.acme.shopping.util.DataConverter.convertToInt(DataConverter.kt:34)",
+                    "at com.acme.shopping.ui.OrderHistoryFragment.parseOrderId(OrderHistoryFragment.kt:89)",
+                    "at com.acme.shopping.ui.OrderHistoryFragment.onBindViewHolder(OrderHistoryFragment.kt:123)"
+                ),
+                eventCount = 78,
+                userCount = 31,
+                level = "error"
+            ),
+            IssueTemplate(
+                "BadTokenException: Unable to add window",
+                "android.view.WindowManager\$BadTokenException",
+                "Unable to add window -- token android.os.BinderProxy@abc123 is not valid",
+                "android",
+                listOf(
+                    "at android.view.ViewRootImpl.setView(ViewRootImpl.java:958)",
+                    "at com.acme.shopping.ui.dialogs.PromoDialog.show(PromoDialog.kt:45)",
+                    "at com.acme.shopping.ui.HomeFragment.showPromotion(HomeFragment.kt:167)"
+                ),
+                eventCount = 43,
+                userCount = 22,
+                level = "error"
+            ),
+            IssueTemplate(
+                "SSLHandshakeException: Trust anchor not found",
+                "javax.net.ssl.SSLHandshakeException",
+                "java.security.cert.CertPathValidatorException: Trust anchor for certification path not found",
+                "android",
+                listOf(
+                    "at com.android.org.conscrypt.SSLUtils.toSSLHandshakeException(SSLUtils.java:384)",
+                    "at com.acme.shopping.api.SecureApiClient.makeRequest(SecureApiClient.kt:123)",
+                    "at com.acme.shopping.repository.UserRepository.fetchProfile(UserRepository.kt:67)"
+                ),
+                eventCount = 29,
+                userCount = 17,
+                level = "error"
+            ),
+            IssueTemplate(
+                "ViewPager2 adapter not set",
+                "java.lang.IllegalStateException",
+                "ViewPager2 adapter is not set",
+                "android",
+                listOf(
+                    "at androidx.viewpager2.widget.ViewPager2.checkAdapter(ViewPager2.java:567)",
+                    "at com.acme.shopping.ui.ProductGalleryFragment.setupViewPager(ProductGalleryFragment.kt:78)",
+                    "at com.acme.shopping.ui.ProductGalleryFragment.onViewCreated(ProductGalleryFragment.kt:45)"
+                ),
+                eventCount = 56,
+                userCount = 24,
+                level = "error"
+            ),
+            IssueTemplate(
+                "CursorIndexOutOfBoundsException in order history",
+                "android.database.CursorIndexOutOfBoundsException",
+                "Index 0 requested, with a size of 0",
+                "android",
+                listOf(
+                    "at android.database.AbstractCursor.checkPosition(AbstractCursor.java:468)",
+                    "at com.acme.shopping.data.local.OrderDao.getLastOrder(OrderDao.kt:89)",
+                    "at com.acme.shopping.ui.OrderHistoryFragment.loadOrders(OrderHistoryFragment.kt:123)"
+                ),
+                eventCount = 95,
+                userCount = 38,
+                level = "error"
+            ),
+            IssueTemplate(
+                "ArithmeticException: Division by zero in discount calculation",
+                "java.lang.ArithmeticException",
+                "divide by zero",
+                "android",
+                listOf(
+                    "at com.acme.shopping.util.DiscountCalculator.calculatePercentage(DiscountCalculator.kt:45)",
+                    "at com.acme.shopping.ui.CheckoutFragment.applyDiscount(CheckoutFragment.kt:189)",
+                    "at com.acme.shopping.ui.CheckoutFragment.updateTotal(CheckoutFragment.kt:234)"
+                ),
+                eventCount = 31,
+                userCount = 18,
+                level = "error"
+            ),
+            IssueTemplate(
+                "UnknownHostException: Unable to resolve host",
+                "java.net.UnknownHostException",
+                "Unable to resolve host 'api.acme-shopping.com': No address associated with hostname",
+                "android",
+                listOf(
+                    "at java.net.Inet6AddressImpl.lookupHostByName(Inet6AddressImpl.java:117)",
+                    "at com.acme.shopping.api.ApiClient.connect(ApiClient.kt:67)",
+                    "at com.acme.shopping.repository.ProductRepository.syncProducts(ProductRepository.kt:145)"
+                ),
+                eventCount = 124,
+                userCount = 51,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "MalformedURLException: Invalid product URL",
+                "java.net.MalformedURLException",
+                "no protocol: /products/invalid",
+                "android",
+                listOf(
+                    "at java.net.URL.<init>(URL.java:600)",
+                    "at com.acme.shopping.util.ImageLoader.loadFromUrl(ImageLoader.kt:56)",
+                    "at com.acme.shopping.ui.ProductAdapter.bindImage(ProductAdapter.kt:89)"
+                ),
+                eventCount = 67,
+                userCount = 29,
+                level = "error"
+            ),
+            IssueTemplate(
+                "NoSuchElementException in wishlist",
+                "java.util.NoSuchElementException",
+                "Collection is empty",
+                "android",
+                listOf(
+                    "at kotlin.collections.CollectionsKt___CollectionsKt.first(_Collections.kt:208)",
+                    "at com.acme.shopping.ui.WishlistFragment.getFirstItem(WishlistFragment.kt:123)",
+                    "at com.acme.shopping.ui.WishlistFragment.onResume(WishlistFragment.kt:78)"
+                ),
+                eventCount = 84,
+                userCount = 36,
+                level = "error"
+            ),
+            IssueTemplate(
+                "ParseException: Unparseable date format",
+                "java.text.ParseException",
+                "Unparseable date: '2024-13-45T25:99:99Z'",
+                "android",
+                listOf(
+                    "at java.text.DateFormat.parse(DateFormat.java:396)",
+                    "at com.acme.shopping.util.DateParser.parseIso8601(DateParser.kt:45)",
+                    "at com.acme.shopping.ui.OrderDetailFragment.formatDeliveryDate(OrderDetailFragment.kt:123)"
+                ),
+                eventCount = 52,
+                userCount = 23,
+                level = "error"
+            ),
+            IssueTemplate(
+                "SocketTimeoutException: Read timed out",
+                "java.net.SocketTimeoutException",
+                "timeout",
+                "android",
+                listOf(
+                    "at java.net.SocketInputStream.socketRead0(Native Method)",
+                    "at okhttp3.internal.http.RetryAndFollowUpInterceptor.intercept(RetryAndFollowUpInterceptor.kt:89)",
+                    "at com.acme.shopping.api.ApiClient.syncInventory(ApiClient.kt:234)"
+                ),
+                eventCount = 143,
+                userCount = 47,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "RecyclerView no adapter attached",
+                "java.lang.IllegalStateException",
+                "RecyclerView has no adapter attached; skipping layout",
+                "android",
+                listOf(
+                    "at androidx.recyclerview.widget.RecyclerView.onLayout(RecyclerView.java:4321)",
+                    "at com.acme.shopping.ui.CategoryFragment.onViewCreated(CategoryFragment.kt:67)",
+                    "at androidx.fragment.app.Fragment.performViewCreated(Fragment.java:2987)"
+                ),
+                eventCount = 38,
+                userCount = 19,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "SQLiteDiskIOException: Disk I/O error",
+                "android.database.sqlite.SQLiteDiskIOException",
+                "disk I/O error (code 1034 SQLITE_IOERR_READ)",
+                "android",
+                listOf(
+                    "at android.database.sqlite.SQLiteConnection.nativeExecuteForString(Native Method)",
+                    "at com.acme.shopping.data.local.ProductDao.getAllProducts(ProductDao.kt:78)",
+                    "at com.acme.shopping.repository.ProductRepository.loadFromCache(ProductRepository.kt:145)"
+                ),
+                eventCount = 14,
+                userCount = 8,
+                level = "fatal"
+            ),
+            IssueTemplate(
+                "URISyntaxException: Illegal character in path",
+                "java.net.URISyntaxException",
+                "Illegal character in path at index 12: /product/[id]",
+                "android",
+                listOf(
+                    "at java.net.URI.create(URI.java:894)",
+                    "at com.acme.shopping.util.UrlBuilder.buildProductUrl(UrlBuilder.kt:45)",
+                    "at com.acme.shopping.ui.ProductListFragment.navigateToProduct(ProductListFragment.kt:189)"
+                ),
+                eventCount = 47,
+                userCount = 21,
+                level = "error"
             )
         )
         
@@ -581,6 +777,160 @@ object DemoDataSeeder {
                 eventCount = 91,
                 userCount = 31,
                 level = "warning"
+            ),
+            IssueTemplate(
+                "Fatal error: Unexpectedly found nil while unwrapping",
+                "Swift.fatalError",
+                "Fatal error: Unexpectedly found nil while unwrapping an Optional value",
+                "cocoa",
+                listOf(
+                    "CartViewController.swift:78 - calculateTotal()",
+                    "CartViewController.swift:123 - updateUI()",
+                    "UIKit - UIViewController.viewDidLoad()"
+                ),
+                eventCount = 134,
+                userCount = 42,
+                level = "fatal"
+            ),
+            IssueTemplate(
+                "NSRangeException: Array index out of bounds",
+                "NSRangeException",
+                "Index 5 beyond bounds [0 .. 3]",
+                "cocoa",
+                listOf(
+                    "Foundation - __NSArrayM.objectAtIndexedSubscript(_:)",
+                    "OrderHistoryViewController.swift:56 - displayOrder(at:)",
+                    "OrderHistoryViewController.swift:89 - tableView(_:cellForRowAt:)"
+                ),
+                eventCount = 87,
+                userCount = 33,
+                level = "error"
+            ),
+            IssueTemplate(
+                "NSInternalInconsistencyException: Could not dequeue cell",
+                "NSInternalInconsistencyException",
+                "unable to dequeue a cell with identifier ProductCell",
+                "cocoa",
+                listOf(
+                    "UIKit - UITableView.dequeueReusableCell(withIdentifier:for:)",
+                    "ProductListViewController.swift:67 - tableView(_:cellForRowAt:)",
+                    "UIKit - UITableView.reloadData()"
+                ),
+                eventCount = 29,
+                userCount = 14,
+                level = "error"
+            ),
+            IssueTemplate(
+                "NSURLError: No internet connection",
+                "NSURLError",
+                "The Internet connection appears to be offline",
+                "cocoa",
+                listOf(
+                    "CFNetwork - URLSession:task:didCompleteWithError:",
+                    "NetworkService.swift:178 - uploadImage(_:completion:)",
+                    "ProfileViewController.swift:234 - updateProfilePicture()"
+                ),
+                eventCount = 163,
+                userCount = 58,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "CoreData save failure",
+                "NSError",
+                "The operation couldn't be completed. (Cocoa error 134060.)",
+                "cocoa",
+                listOf(
+                    "CoreData - NSManagedObjectContext.save()",
+                    "DataManager.swift:89 - saveProduct(_:)",
+                    "ProductRepository.swift:123 - cacheProducts(_:)"
+                ),
+                eventCount = 45,
+                userCount = 19,
+                level = "error"
+            ),
+            IssueTemplate(
+                "NSDecimalNumberException: Division by zero",
+                "NSDecimalNumberException",
+                "Attempt to divide by zero",
+                "cocoa",
+                listOf(
+                    "Foundation - NSDecimalNumber.dividing(by:)",
+                    "PriceCalculator.swift:45 - calculateDiscount()",
+                    "CheckoutViewController.swift:178 - applyPromoCode(_:)"
+                ),
+                eventCount = 23,
+                userCount = 11,
+                level = "error"
+            ),
+            IssueTemplate(
+                "JSONDecoder typeMismatch error",
+                "DecodingError.typeMismatch",
+                "Expected to decode String but found a number instead",
+                "cocoa",
+                listOf(
+                    "Foundation - JSONDecoder.decode(_:from:)",
+                    "ProductParser.swift:56 - parseProduct(from:)",
+                    "NetworkService.swift:234 - fetchProductDetails(id:completion:)"
+                ),
+                eventCount = 112,
+                userCount = 38,
+                level = "error"
+            ),
+            IssueTemplate(
+                "UIImage initialization failed",
+                "Swift.fatalError",
+                "Fatal error: Unable to load image asset",
+                "cocoa",
+                listOf(
+                    "UIKit - UIImage.init(named:)",
+                    "ImageAssets.swift:23 - loadPlaceholder()",
+                    "ProductCell.swift:67 - configure(with:)"
+                ),
+                eventCount = 78,
+                userCount = 31,
+                level = "error"
+            ),
+            IssueTemplate(
+                "Keychain access error",
+                "NSError",
+                "The operation couldn't be completed. (OSStatus error -25300.)",
+                "cocoa",
+                listOf(
+                    "Security - SecItemCopyMatching(_:_:)",
+                    "KeychainManager.swift:45 - getToken()",
+                    "AuthService.swift:89 - refreshSession()"
+                ),
+                eventCount = 56,
+                userCount = 24,
+                level = "error"
+            ),
+            IssueTemplate(
+                "AVFoundation playback error",
+                "NSError",
+                "The operation couldn't be completed. (AVFoundationErrorDomain error -11800.)",
+                "cocoa",
+                listOf(
+                    "AVFoundation - AVPlayer.play()",
+                    "VideoPlayerViewController.swift:123 - playProductVideo()",
+                    "ProductDetailViewController.swift:234 - showVideo(at:)"
+                ),
+                eventCount = 34,
+                userCount = 16,
+                level = "error"
+            ),
+            IssueTemplate(
+                "File Manager error: File not found",
+                "NSError",
+                "The file doesn't exist",
+                "cocoa",
+                listOf(
+                    "Foundation - FileManager.contentsOfDirectory(at:)",
+                    "CacheManager.swift:67 - loadCachedImages()",
+                    "ProductListViewController.swift:145 - loadFromCache()"
+                ),
+                eventCount = 91,
+                userCount = 36,
+                level = "warning"
             )
         )
         
@@ -611,6 +961,188 @@ object DemoDataSeeder {
                 ),
                 eventCount = 15,
                 userCount = 8,
+                level = "error"
+            ),
+            IssueTemplate(
+                "ReferenceError: product is not defined",
+                "ReferenceError",
+                "product is not defined",
+                "javascript",
+                listOf(
+                    "at ProductList.js:67:23",
+                    "at renderProduct (ProductList.js:45:5)",
+                    "at Array.map (native)"
+                ),
+                eventCount = 124,
+                userCount = 39,
+                level = "error"
+            ),
+            IssueTemplate(
+                "TypeError: Cannot read property 'map' of null",
+                "TypeError",
+                "Cannot read property 'map' of null",
+                "javascript",
+                listOf(
+                    "at OrderHistory.render (OrderHistory.js:56:18)",
+                    "at finishClassComponent (react-reconciler.js:234:11)",
+                    "at updateClassComponent (react-reconciler.js:189:23)"
+                ),
+                eventCount = 167,
+                userCount = 52,
+                level = "error"
+            ),
+            IssueTemplate(
+                "RangeError: Maximum call stack size exceeded",
+                "RangeError",
+                "Maximum call stack size exceeded",
+                "javascript",
+                listOf(
+                    "at calculateDiscount (PriceUtils.js:23:5)",
+                    "at calculateDiscount (PriceUtils.js:28:12)",
+                    "at CheckoutScreen.js:145:19"
+                ),
+                eventCount = 34,
+                userCount = 15,
+                level = "error"
+            ),
+            IssueTemplate(
+                "SyntaxError: Unexpected token '<'",
+                "SyntaxError",
+                "Unexpected token '<' at position 0 in JSON",
+                "javascript",
+                listOf(
+                    "at JSON.parse (native)",
+                    "at parseResponse (ApiClient.js:78:19)",
+                    "at fetchProducts (ProductService.js:45:23)"
+                ),
+                eventCount = 89,
+                userCount = 31,
+                level = "error"
+            ),
+            IssueTemplate(
+                "TypeError: Network request failed",
+                "TypeError",
+                "Network request failed",
+                "javascript",
+                listOf(
+                    "at fetch (native)",
+                    "at ApiClient.js:123:12",
+                    "at syncInventory (InventoryService.js:67:8)"
+                ),
+                eventCount = 156,
+                userCount = 47,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "TypeError: undefined is not a function",
+                "TypeError",
+                "undefined is not a function (near '...product.getPrice...')",
+                "javascript",
+                listOf(
+                    "at ProductCard.js:89:23",
+                    "at renderPrice (ProductCard.js:67:5)",
+                    "at ProductList.js:145:12"
+                ),
+                eventCount = 112,
+                userCount = 38,
+                level = "error"
+            ),
+            IssueTemplate(
+                "Error: Request timeout of 5000ms exceeded",
+                "Error",
+                "Request timeout of 5000ms exceeded",
+                "javascript",
+                listOf(
+                    "at createError (createError.js:16:15)",
+                    "at settle (settle.js:17:12)",
+                    "at fetchUserProfile (UserService.js:234:8)"
+                ),
+                eventCount = 98,
+                userCount = 34,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "TypeError: Cannot destructure property 'id' of 'undefined'",
+                "TypeError",
+                "Cannot destructure property 'id' of 'undefined' as it is undefined",
+                "javascript",
+                listOf(
+                    "at WishlistScreen.js:45:9",
+                    "at removeFromWishlist (WishlistScreen.js:89:5)",
+                    "at TouchableOpacity.onPress (WishlistScreen.js:123:12)"
+                ),
+                eventCount = 76,
+                userCount = 28,
+                level = "error"
+            ),
+            IssueTemplate(
+                "Error: Invalid navigation state",
+                "Error",
+                "The navigation state is invalid",
+                "javascript",
+                listOf(
+                    "at navigation.navigate (react-navigation.js:456:12)",
+                    "at navigateToProduct (ProductList.js:178:5)",
+                    "at ProductCard.onPress (ProductCard.js:89:7)"
+                ),
+                eventCount = 67,
+                userCount = 25,
+                level = "error"
+            ),
+            IssueTemplate(
+                "Error: Image loading failed",
+                "Error",
+                "Failed to load image from URL",
+                "javascript",
+                listOf(
+                    "at Image.onError (Image.js:234:9)",
+                    "at ProductImage.js:56:12",
+                    "at ProductDetail.js:178:5"
+                ),
+                eventCount = 143,
+                userCount = 49,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "TypeError: Cannot convert undefined to object",
+                "TypeError",
+                "Cannot convert undefined or null to object",
+                "javascript",
+                listOf(
+                    "at Object.keys (native)",
+                    "at validateFormData (FormUtils.js:23:18)",
+                    "at CheckoutScreen.handleSubmit (CheckoutScreen.js:234:5)"
+                ),
+                eventCount = 54,
+                userCount = 22,
+                level = "error"
+            ),
+            IssueTemplate(
+                "Error: Animated value already attached",
+                "Error",
+                "Animated value already attached to node",
+                "javascript",
+                listOf(
+                    "at Animated.Value.attach (AnimatedValue.js:67:12)",
+                    "at AnimatedProductCard.js:45:9",
+                    "at ProductList.js:123:5"
+                ),
+                eventCount = 41,
+                userCount = 18,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "URIError: Failed to decode URI component",
+                "URIError",
+                "URI malformed",
+                "javascript",
+                listOf(
+                    "at decodeURIComponent (native)",
+                    "at parseQueryString (UrlUtils.js:34:12)",
+                    "at DeepLinkHandler.js:67:8"
+                ),
+                eventCount = 29,
+                userCount = 14,
                 level = "error"
             )
         )
