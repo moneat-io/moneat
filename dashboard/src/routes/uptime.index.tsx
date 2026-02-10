@@ -3,11 +3,11 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
-import {Separator} from '@/components/ui/separator'
-import {Activity, CheckCircle2, Globe, Pause, Plus, XCircle} from 'lucide-react'
-import {useState} from 'react'
+import {Activity, CheckCircle2, Globe, LayoutGrid, Pause, Plus, Rows3, XCircle} from 'lucide-react'
+import {useEffect, useState} from 'react'
 import AddMonitorDialog from '@/components/uptime/add-monitor-dialog'
 import MonitorListItem from '@/components/uptime/monitor-list-item'
+import MonitorCompactTable from '@/components/uptime/monitor-compact-table'
 
 export const Route = createFileRoute('/uptime/')({
   beforeLoad: () => {
@@ -18,8 +18,23 @@ export const Route = createFileRoute('/uptime/')({
   component: UptimeListPage,
 })
 
+type UptimeViewMode = 'cards' | 'compact'
+const UPTIME_VIEW_MODE_STORAGE_KEY = 'uptime-monitors-view-mode'
+
+function getInitialViewMode(): UptimeViewMode {
+  if (typeof window === 'undefined') return 'compact'
+  return window.localStorage.getItem(UPTIME_VIEW_MODE_STORAGE_KEY) === 'cards' ? 'cards' : 'compact'
+}
+
 function UptimeListPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<UptimeViewMode>(getInitialViewMode)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(UPTIME_VIEW_MODE_STORAGE_KEY, viewMode)
+    }
+  }, [viewMode])
 
   const {data: monitors = [], isLoading} = useQuery({
     queryKey: ['uptime-monitors'],
@@ -52,10 +67,32 @@ function UptimeListPage() {
                 Monitor your websites, APIs, and services
               </p>
             </div>
-            <Button onClick={() => setAddDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Monitor
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center rounded-lg border bg-background p-1">
+                <Button
+                  variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => setViewMode('cards')}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Cards
+                </Button>
+                <Button
+                  variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => setViewMode('compact')}
+                >
+                  <Rows3 className="h-3.5 w-3.5" />
+                  Compact
+                </Button>
+              </div>
+              <Button onClick={() => setAddDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Monitor
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -136,6 +173,8 @@ function UptimeListPage() {
               </Button>
             </CardContent>
           </Card>
+        ) : viewMode === 'compact' ? (
+          <MonitorCompactTable monitors={monitors} />
         ) : (
           <div className="grid gap-4">
             {monitors.map((monitor) => (

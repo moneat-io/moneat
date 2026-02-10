@@ -214,7 +214,7 @@ function FeedbackPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="container mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6 flex items-center gap-3">
           <div className="rounded-xl bg-violet-500/15 p-2.5 ring-1 ring-violet-500/20">

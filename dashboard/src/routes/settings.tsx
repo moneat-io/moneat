@@ -132,7 +132,7 @@ function SettingsPage() {
   
   return (
     <div className="min-h-screen bg-background">
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="container mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
           <Settings className="h-6 w-6 text-muted-foreground" />
           Settings

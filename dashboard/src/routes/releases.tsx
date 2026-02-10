@@ -138,7 +138,7 @@ function ReleasesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="container mx-auto px-4 py-6">
         <div className="mb-6">
           <h2 className="text-2xl font-bold">Releases</h2>
           <p className="text-muted-foreground mt-1">

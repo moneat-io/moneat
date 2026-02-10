@@ -229,7 +229,7 @@ function ReplaysPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-blue-500/5">
-      <div className="mx-auto max-w-7xl p-6">
+      <div className="container mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6 flex items-center gap-3">
           <div className="rounded-xl bg-blue-500/15 p-2.5 ring-1 ring-blue-500/20">

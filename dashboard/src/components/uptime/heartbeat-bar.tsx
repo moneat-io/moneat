@@ -6,7 +6,7 @@ interface HeartbeatBarProps {
   maxBars?: number
 }
 
-export default function HeartbeatBar({heartbeats, maxBars = 100}: HeartbeatBarProps) {
+export default function HeartbeatBar({heartbeats, maxBars = 100, className}: HeartbeatBarProps & {className?: string}) {
   // Group heartbeats into time slots
   const now = Date.now()
   const slotDuration = 24 * 60 * 60 * 1000 / maxBars // 24 hours divided into slots
@@ -36,7 +36,7 @@ export default function HeartbeatBar({heartbeats, maxBars = 100}: HeartbeatBarPr
   }).reverse()
 
   return (
-    <div className="flex gap-[2px] h-10 items-end">
+    <div className={cn("flex gap-[2px] h-10 items-end", className)}>
       {slots.map((slot, i) => (
         <div
           key={i}
