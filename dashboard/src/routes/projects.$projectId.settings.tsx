@@ -1,7 +1,7 @@
 import {useEffect, useMemo, useState} from 'react'
 import {createFileRoute, Link, redirect, useNavigate, useRouter} from '@tanstack/react-router'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
-import {AlertTriangle, ArrowLeft, Loader2, Save, Trash2} from 'lucide-react'
+import {AlertTriangle, ArrowLeft, Loader2, Save, Trash2, Layers, Smartphone, Monitor, Server, Gamepad2} from 'lucide-react'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
@@ -16,12 +16,12 @@ import {cn} from '@/lib/utils'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
-const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'mobile', label: 'Mobile' },
-  { id: 'frontend', label: 'Frontend' },
-  { id: 'backend', label: 'Backend' },
-  { id: 'desktop-gaming', label: 'Desktop & Gaming' },
+const platformFilterTabs: Array<{ id: PlatformFilter; label: string; icon: React.ElementType }> = [
+  { id: 'all', label: 'All', icon: Layers },
+  { id: 'mobile', label: 'Mobile', icon: Smartphone },
+  { id: 'frontend', label: 'Frontend', icon: Monitor },
+  { id: 'backend', label: 'Backend', icon: Server },
+  { id: 'desktop-gaming', label: 'Desktop & Gaming', icon: Gamepad2 },
 ]
 
 export const Route = createFileRoute('/projects/$projectId/settings')({
@@ -211,16 +211,21 @@ function ProjectSettingsPage() {
               </div>
 
               <div className="flex flex-wrap gap-1">
-                {platformFilterTabs.map((tab) => (
-                  <Button
-                    key={tab.id}
-                    variant={platformFilter === tab.id ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPlatformFilter(tab.id)}
-                  >
-                    {tab.label}
-                  </Button>
-                ))}
+                {platformFilterTabs.map((tab) => {
+                  const Icon = tab.icon
+                  return (
+                    <Button
+                      key={tab.id}
+                      variant={platformFilter === tab.id ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setPlatformFilter(tab.id)}
+                      className="gap-2"
+                    >
+                      <Icon className="h-4 w-4" />
+                      {tab.label}
+                    </Button>
+                  )
+                })}
               </div>
 
               <div className="max-h-96 overflow-y-auto rounded-lg border border-border p-2 pr-1">

@@ -41,7 +41,10 @@ import {
     Clock,
     Wallet,
     Layers,
-    ExternalLink
+    ExternalLink,
+    Plug,
+    Shield,
+    Settings
 } from 'lucide-react'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {loadStripe} from '@stripe/stripe-js'
@@ -130,14 +133,49 @@ function SettingsPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="p-6 max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Settings</h1>
-        <Tabs defaultValue={search.tab || 'auth-tokens'} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="auth-tokens">Auth Tokens</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="billing">Billing</TabsTrigger>
-            {canUseSso && <TabsTrigger value="sso">SSO</TabsTrigger>}
+        <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
+          <Settings className="h-6 w-6 text-muted-foreground" />
+          Settings
+        </h1>
+        <Tabs defaultValue={search.tab || 'auth-tokens'} className="space-y-6">
+          <TabsList className="w-full justify-start h-auto p-1 bg-muted/50">
+            <TabsTrigger 
+              value="auth-tokens" 
+              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-900/20 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm"
+            >
+              <Key className="h-4 w-4" />
+              Auth Tokens
+            </TabsTrigger>
+            <TabsTrigger 
+              value="integrations" 
+              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 dark:data-[state=active]:bg-purple-900/20 dark:data-[state=active]:text-purple-400 data-[state=active]:shadow-sm"
+            >
+              <Plug className="h-4 w-4" />
+              Integrations
+            </TabsTrigger>
+            <TabsTrigger 
+              value="notifications" 
+              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-900/20 dark:data-[state=active]:text-amber-400 data-[state=active]:shadow-sm"
+            >
+              <Bell className="h-4 w-4" />
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger 
+              value="billing" 
+              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-900/20 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm"
+            >
+              <CreditCard className="h-4 w-4" />
+              Billing
+            </TabsTrigger>
+            {canUseSso && (
+              <TabsTrigger 
+                value="sso" 
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 dark:data-[state=active]:bg-rose-900/20 dark:data-[state=active]:text-rose-400 data-[state=active]:shadow-sm"
+              >
+                <Shield className="h-4 w-4" />
+                SSO
+              </TabsTrigger>
+            )}
           </TabsList>
           <TabsContent value="auth-tokens" className="space-y-4">
             <AuthTokensTab />
