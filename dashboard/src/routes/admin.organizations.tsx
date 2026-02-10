@@ -1,4 +1,4 @@
-import {createFileRoute, Link} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useMatches} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
@@ -17,8 +17,19 @@ import {
 } from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/organizations')({
-  component: AdminOrganizationsPage,
+  component: AdminOrganizationsLayout,
 })
+
+function AdminOrganizationsLayout() {
+  const matches = useMatches()
+  const showingChildRoute = matches.some((match) => match.id.includes('/admin/organizations/$orgId'))
+
+  if (showingChildRoute) {
+    return <Outlet />
+  }
+
+  return <AdminOrganizationsPage />
+}
 
 function AdminOrganizationsPage() {
   const [search, setSearch] = useState('')

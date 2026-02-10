@@ -23,7 +23,7 @@ private val logger = KotlinLogging.logger {}
 
 class DashboardService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
-    private val backendUrl = EnvConfig.get("BACKEND_URL", "http://ltocalhost:8080")
+    private val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
     private val json = Json { ignoreUnknownKeys = true }
     private val retentionPolicyService = RetentionPolicyService()
     

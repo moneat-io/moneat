@@ -17,8 +17,8 @@
     <!-- Moneat Log Appender: Sends logs to the logs table via OTLP -->
     <!-- Override these via env vars in production: MONEAT_LOGS_ENDPOINT, MONEAT_LOGS_DSN, MONEAT_LOGS_SERVICE_NAME, MONEAT_LOGS_ENVIRONMENT -->
     <appender name="MONEAT" class="com.moneat.logging.MoneatLogAppender">
-        <endpoint>${MONEAT_LOGS_ENDPOINT:-http://localhost:8080/v1/logs/otlp}</endpoint>
-        <dsn>${MONEAT_LOGS_DSN:-https://b422c0677570443e8ab25450d20b0f0c@localhost:8080/3}</dsn>
+        <endpoint>${MONEAT_LOGS_ENDPOINT:-https://api.moneat.io/v1/logs/otlp}</endpoint>
+        <dsn>${MONEAT_LOGS_DSN:-}</dsn>
         <serviceName>${MONEAT_LOGS_SERVICE_NAME:-moneat-backend}</serviceName>
         <environment>${MONEAT_LOGS_ENVIRONMENT:-development}</environment>
     </appender>

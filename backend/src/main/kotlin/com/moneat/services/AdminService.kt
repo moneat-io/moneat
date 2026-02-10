@@ -79,6 +79,14 @@ data class AdminOrgProject(
 )
 
 @Serializable
+data class AdminOrgUsagePoint(
+    val date: String,
+    val eventType: String,
+    val eventCount: Int,
+    val bytesIngested: Long
+)
+
+@Serializable
 data class AdminUsageBreakdown(
     val daily: List<DailyUsageByType>,
     val totalBytes: Long
@@ -261,7 +269,7 @@ class AdminService {
             val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
             val quotaPct = if (tier.monthlyUnitLimit > 0) (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0) else null
 
-            val members = Memberships.selectAll().where { Memberships.organization_id eq orgId }
+            val membersList = Memberships.selectAll().where { Memberships.organization_id eq orgId }
                 .mapNotNull { mRow ->
                     val u = Users.selectAll().where { Users.id eq mRow[Memberships.user_id] }.firstOrNull() ?: return@mapNotNull null
                     AdminOrgMember(
@@ -271,6 +279,16 @@ class AdminService {
                         role = mRow[Memberships.role]
                     )
                 }
+                .let { listOf(*it.toTypedArray()) }
+
+            val projectsList = projects.map { p ->
+                AdminOrgProject(
+                    id = p[Projects.id],
+                    name = p[Projects.name],
+                    slug = p[Projects.slug],
+                    framework = p[Projects.framework]
+                )
+            }.let { listOf(*it.toTypedArray()) }
 
             AdminOrgDetail(
                 id = orgId,
@@ -284,15 +302,8 @@ class AdminService {
                 eventCountThisMonth = eventCount,
                 bytesIngestedThisMonth = bytesCount,
                 quotaUsedPercent = quotaPct,
-                members = members,
-                projects = projects.map { p ->
-                    AdminOrgProject(
-                        id = p[Projects.id],
-                        name = p[Projects.name],
-                        slug = p[Projects.slug],
-                        framework = p[Projects.framework]
-                    )
-                }
+                members = membersList,
+                projects = projectsList
             )
         }
     }

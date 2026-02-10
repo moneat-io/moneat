@@ -1,7 +1,10 @@
 package com.moneat.routes
 
 import com.moneat.models.Users
+import com.moneat.services.AdminOrgDetail
+import com.moneat.services.AdminOrgUsagePoint
 import com.moneat.services.AdminService
+import com.moneat.services.AuthService
 import com.moneat.services.PricingTierService
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -16,6 +19,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Route.adminRoutes() {
     val adminService = AdminService()
+    val authService = AuthService()
     val pricingTierService = PricingTierService()
     
     authenticate("auth-jwt") {
@@ -61,7 +65,7 @@ fun Route.adminRoutes() {
                 if (detail == null) {
                     call.respond(HttpStatusCode.NotFound, "Organization not found")
                 } else {
-                    call.respond(detail)
+                    call.respond<AdminOrgDetail>(detail)
                 }
             }
             
@@ -74,11 +78,11 @@ fun Route.adminRoutes() {
                 val period = call.request.queryParameters["period"] ?: "7d"
                 val usage = adminService.getOrgUsage(orgId, period)
                 val response = usage.map { u ->
-                    mapOf(
-                        "date" to u.date.toString(),
-                        "eventType" to u.eventType,
-                        "eventCount" to u.eventCount,
-                        "bytesIngested" to u.bytesIngested
+                    AdminOrgUsagePoint(
+                        date = u.date.toString(),
+                        eventType = u.eventType,
+                        eventCount = u.eventCount,
+                        bytesIngested = u.bytesIngested
                     )
                 }
                 call.respond(response)
@@ -110,6 +114,21 @@ fun Route.adminRoutes() {
                 val period = call.request.queryParameters["period"] ?: "30d"
                 val stats = adminService.getEmailStats(period)
                 call.respond(stats)
+            }
+            
+            post("/impersonate/{userId}") {
+                val targetUserId = call.parameters["userId"]?.toIntOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid user ID"))
+                
+                val targetUser = transaction {
+                    Users.selectAll().where { Users.id eq targetUserId }.firstOrNull()
+                } ?: return@post call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("User not found"))
+                
+                val token = authService.generateImpersonationToken(
+                    targetUser[Users.id],
+                    targetUser[Users.email]
+                )
+                call.respond(mapOf("token" to token))
             }
             
             post("/test-notification") {
@@ -315,9 +334,9 @@ fun Route.adminRoutes() {
                 get("/tiers") {
                     val tierName = call.request.queryParameters["tier"]?.uppercase()
                     if (tierName.isNullOrBlank()) {
-                        call.respond(pricingTierService.getCurrentPlans())
+                        call.respond<List<com.moneat.models.BillingPlanResponse>>(pricingTierService.getCurrentPlans())
                     } else {
-                        call.respond(pricingTierService.getTierVersions(tierName))
+                        call.respond<List<com.moneat.models.PricingTierConfigResponse>>(pricingTierService.getTierVersions(tierName))
                     }
                 }
 

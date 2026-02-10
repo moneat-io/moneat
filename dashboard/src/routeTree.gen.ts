@@ -21,6 +21,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -109,6 +110,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImpersonateCallbackRoute = ImpersonateCallbackRouteImport.update({
+  id: '/impersonate-callback',
+  path: '/impersonate-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -264,6 +270,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
+  '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -306,6 +313,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
+  '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
@@ -349,6 +357,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
+  '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -394,6 +403,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/feedback'
     | '/forgot-password'
+    | '/impersonate-callback'
     | '/login'
     | '/onboarding'
     | '/performance'
@@ -436,6 +446,7 @@ export interface FileRouteTypes {
     | '/'
     | '/feedback'
     | '/forgot-password'
+    | '/impersonate-callback'
     | '/login'
     | '/onboarding'
     | '/privacy'
@@ -478,6 +489,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/feedback'
     | '/forgot-password'
+    | '/impersonate-callback'
     | '/login'
     | '/onboarding'
     | '/performance'
@@ -522,6 +534,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
@@ -628,6 +641,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/impersonate-callback': {
+      id: '/impersonate-callback'
+      path: '/impersonate-callback'
+      fullPath: '/impersonate-callback'
+      preLoaderRoute: typeof ImpersonateCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -950,6 +970,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  ImpersonateCallbackRoute: ImpersonateCallbackRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,

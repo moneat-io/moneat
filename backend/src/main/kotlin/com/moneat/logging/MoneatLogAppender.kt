@@ -8,7 +8,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
-    var endpoint: String = "http://localhost:8080/v1/logs/otlp"
+    var endpoint: String = "https://api.moneat.io/v1/logs/otlp"
     var dsn: String = ""
     var serviceName: String = "moneat-backend"
     var environment: String = "development"

@@ -73,8 +73,10 @@ data class SlackChannel(
 private val secureRandom = SecureRandom()
 
 private fun getStateSecret(): String {
-    // Use JWT secret or another dedicated secret for state signing
-    return System.getenv("JWT_SECRET") ?: "default-secret-change-in-production"
+    // Fail fast if the signing secret is not configured.
+    return System.getenv("JWT_SECRET")
+        ?.takeIf { it.isNotBlank() }
+        ?: throw IllegalStateException("JWT_SECRET environment variable is required for integration state signing")
 }
 
 private fun generateSecureState(userId: Int, organizationId: Int): String {
@@ -481,11 +483,11 @@ fun Route.integrationCallbackRoutes() {
                 logger.info("Slack OAuth completed for organization $organizationId")
                 
                 // Redirect to frontend settings page
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "http://localhost:5173")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&slack=connected")
             } else {
                 logger.error("Slack OAuth failed: ${oauthResponse.error}")
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "http://localhost:5173")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&slack=error&message=${URLEncoder.encode(oauthResponse.error ?: "Unknown error", "UTF-8")}")
             }
         }

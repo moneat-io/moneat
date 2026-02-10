@@ -103,7 +103,35 @@ Fingerprint logic is in `EventService.kt` - modify carefully as it affects group
 ### Environment Configuration
 - Development: `.env` file (not committed; see `.env.example`)
 - Production: Environment variables passed to Docker containers
-- Required vars: `DATABASE_URL`, `CLICKHOUSE_URL`, `REDIS_URL`, `JWT_SECRET`
+- **CRITICAL**: See `ESSENTIAL_ENV_VARS.md` for complete list of required variables
+- Required vars: `JWT_SECRET`, `DATABASE_PASSWORD`, `CLICKHOUSE_PASSWORD`, `FRONTEND_URL`, `BACKEND_URL`
+- Application validates environment on startup and fails fast if critical variables are missing or unsafe
+
+### Production Safety Rules
+**IMPORTANT:** When writing code that uses environment variables or configurable URLs:
+
+1. **Never use localhost defaults for production-facing configurations**
+   - ❌ BAD: `val frontendUrl = EnvConfig.get("FRONTEND_URL", "http://localhost:5173")`
+   - ✅ GOOD: `val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")`
+
+2. **Always use production URLs as defaults in code**
+   - Frontend URL should default to `https://moneat.io`
+   - Backend URL should default to `https://api.moneat.io`
+   - Localhost URLs should ONLY be in `.env.example` files for local development
+
+3. **Add validation for critical environment variables**
+   - Any new critical config (secrets, passwords, keys) must be added to `EnvironmentValidator.kt`
+   - Validation should fail fast on application startup if missing
+   - Reference: `backend/src/main/kotlin/com/moneat/config/EnvironmentValidator.kt`
+
+4. **Document new environment variables**
+   - Update `ESSENTIAL_ENV_VARS.md` with any new required variables
+   - Mark as CRITICAL if the application cannot run safely without it
+   - Mark as CONDITIONAL if only required when a feature is enabled
+
+5. **Local development should be explicit**
+   - Developers should explicitly set `FRONTEND_URL=http://localhost:5173` in their local `.env`
+   - Do not force localhost defaults in code just for convenience
 
 ### Self-Monitoring
 Moneat can monitor itself using Sentry SDK:

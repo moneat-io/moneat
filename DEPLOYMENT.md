@@ -186,12 +186,14 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
    nano .env
    ```
 
-   **Update these production values:**
+   **IMPORTANT:** See [`ESSENTIAL_ENV_VARS.md`](ESSENTIAL_ENV_VARS.md) for a complete list of required environment variables.
+   
+   **Critical production values that MUST be set:**
 
    ```bash
    # URLs - Use your actual domain
    FRONTEND_URL=https://moneat.io
-   BACKEND_URL=https://moneat.io
+   BACKEND_URL=https://api.moneat.io
    
    # Database - Use Docker service names (from docker-compose.prod.yml)
    DATABASE_URL=jdbc:postgresql://postgres:5432/moneat
@@ -202,7 +204,7 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
    
    REDIS_URL=redis://redis:6379
    
-   # Security
+   # Security - CRITICAL: Must be changed from default!
    JWT_SECRET=STRONG_RANDOM_SECRET_HERE
    
    # Email
@@ -211,12 +213,22 @@ This guide walks through setting up the Moneat app on an Ubuntu droplet with blu
    SMTP_PORT=587
    SMTP_USERNAME=your-email@example.com
    SMTP_PASSWORD=your-smtp-password
+   
+   # Slack Integration (optional - set SLACK_ENABLED=false to disable)
+   SLACK_ENABLED=true
+   SLACK_CLIENT_ID=your_slack_client_id
+   SLACK_CLIENT_SECRET=your_slack_client_secret
+   SLACK_REDIRECT_URI=https://api.moneat.io/v1/integrations/slack/oauth/callback
    ```
 
    **Generate strong passwords:**
    ```bash
-   openssl rand -base64 32  # Run this 3 times for DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, JWT_SECRET
+   openssl rand -base64 64  # For JWT_SECRET
+   openssl rand -base64 32  # For DATABASE_PASSWORD
+   openssl rand -base64 32  # For CLICKHOUSE_PASSWORD
    ```
+   
+   **Validation:** The application will automatically validate these environment variables on startup and **fail to start** if critical variables are missing or use unsafe defaults. Check the logs if the backend container fails to start.
 
 4. **Make the deploy script executable**:
 

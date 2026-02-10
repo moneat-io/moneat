@@ -126,6 +126,18 @@ tasks.register<JavaExec>("seedE2EData") {
     errorOutput = System.err
 }
 
+// Task to run the Demo data seeder
+tasks.register<JavaExec>("seedDemoData") {
+    group = "demo"
+    description = "Seeds realistic demo data for screenshots and demos"
+    
+    classpath = sourceSets["main"].runtimeClasspath + sourceSets["test"].runtimeClasspath
+    mainClass.set("com.moneat.demo.DemoDataSeederKt")
+    
+    standardOutput = System.out
+    errorOutput = System.err
+}
+
 tasks.withType<KotlinCompile>().configureEach {
     kotlinOptions {
         allWarningsAsErrors = true

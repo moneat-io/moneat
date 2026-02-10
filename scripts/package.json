@@ -1,0 +1,14 @@
+{
+  "name": "moneat-scripts",
+  "version": "1.0.0",
+  "description": "Automation scripts for Moneat",
+  "private": true,
+  "scripts": {
+    "screenshots": "node take-screenshots.js",
+    "screenshots:debug": "HEADLESS=false node take-screenshots.js",
+    "update-landing": "node update-landing-screenshots.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  }
+}

@@ -240,7 +240,7 @@ class PricingTierService {
                         currentPeriodStart = row[Subscriptions.current_period_start]?.toString(),
                         currentPeriodEnd = row[Subscriptions.current_period_end]?.toString()
                     )
-                }
+                }.toList()
         }
     }
 

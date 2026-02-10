@@ -3,6 +3,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
@@ -10,6 +11,7 @@ import {
     AlertCircle,
     ArrowLeft,
     ArrowRightLeft,
+    Eye,
     FolderKanban,
     HardDrive,
     MessageSquare,
@@ -297,6 +299,7 @@ function AdminOrgDetailPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead className="text-right">Role</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -308,6 +311,46 @@ function AdminOrgDetailPage() {
                         <Badge variant={m.role === 'owner' ? 'default' : 'secondary'} className="capitalize">
                           {m.role}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const { token } = await api.impersonateUser(m.userId)
+                              const impersonationWindow = window.open('/impersonate-callback', '_blank')
+                              if (!impersonationWindow) {
+                                console.error('Failed to open impersonation window')
+                                return
+                              }
+
+                              const expectedOrigin = window.location.origin
+                              const timeoutId = window.setTimeout(() => {
+                                window.removeEventListener('message', handleReady)
+                              }, 10000)
+
+                              const handleReady = (event: MessageEvent) => {
+                                if (event.origin !== expectedOrigin) return
+                                if (event.source !== impersonationWindow) return
+                                if (event.data?.type !== 'MONEAT_IMPERSONATION_READY') return
+
+                                impersonationWindow.postMessage(
+                                  { type: 'MONEAT_IMPERSONATION_TOKEN', token },
+                                  expectedOrigin
+                                )
+                                window.clearTimeout(timeoutId)
+                                window.removeEventListener('message', handleReady)
+                              }
+
+                              window.addEventListener('message', handleReady)
+                            } catch (err) {
+                              console.error('Failed to impersonate user:', err)
+                            }
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}

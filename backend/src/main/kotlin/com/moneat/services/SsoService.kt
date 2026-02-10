@@ -40,8 +40,8 @@ class SsoService {
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
-    private val baseUrl = config.propertyOrNull("app.baseUrl")?.getString() ?: "http://localhost:8080"
-    private val dashboardUrl = config.propertyOrNull("app.dashboardUrl")?.getString() ?: "http://localhost:5173"
+    private val baseUrl = config.propertyOrNull("app.baseUrl")?.getString() ?: "https://api.moneat.io"
+    private val dashboardUrl = config.propertyOrNull("app.dashboardUrl")?.getString() ?: "https://moneat.io"
     private val secureRandom = SecureRandom()
     private val pricingTierService = PricingTierService()
     

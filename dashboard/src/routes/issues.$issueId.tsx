@@ -22,6 +22,7 @@ import {
     ChevronRight,
     Circle,
     Clock3,
+    Copy,
     DatabaseZap,
     Globe,
     Info,
@@ -365,11 +366,27 @@ function IssueDetailPage() {
                 </CardHeader>
                 <CardContent className="px-3 pb-3 space-y-3">
                   <div>
-                    <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                      <Tag className="h-3 w-3" />
-                      Tags
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Tag className="h-3 w-3" />
+                        Tags
+                        {Object.keys(latestEventTags).length > 0 && (
+                          <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{Object.keys(latestEventTags).length}</Badge>
+                        )}
+                      </div>
                       {Object.keys(latestEventTags).length > 0 && (
-                        <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{Object.keys(latestEventTags).length}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(JSON.stringify(latestEventTags, null, 2))
+                            toast({ title: 'Copied', description: 'Tags copied to clipboard.' })
+                          }}
+                          className="h-6 gap-1 px-2"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span className="text-[11px]">Copy</span>
+                        </Button>
                       )}
                     </div>
                     {Object.keys(latestEventTags).length === 0 ? (
@@ -398,18 +415,35 @@ function IssueDetailPage() {
                           <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{contextEntries.length}</Badge>
                         )}
                       </div>
-                      {contextEntries.length > 0 && (
-                        <label className="flex cursor-pointer items-center gap-1.5">
-                          <Checkbox
-                            checked={expandContextsByDefault}
-                            onCheckedChange={(checked) => setExpandContextsByDefault(checked === true)}
-                            className="h-3.5 w-3.5"
-                          />
-                          <Label className="cursor-pointer text-[11px] font-normal text-muted-foreground">
-                            Expand
-                          </Label>
-                        </label>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {contextEntries.length > 0 && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const contextsObj = Object.fromEntries(contextEntries)
+                                navigator.clipboard.writeText(JSON.stringify(contextsObj, null, 2))
+                                toast({ title: 'Copied', description: 'Contexts copied to clipboard.' })
+                              }}
+                              className="h-6 gap-1 px-2"
+                            >
+                              <Copy className="h-3 w-3" />
+                              <span className="text-[11px]">Copy</span>
+                            </Button>
+                            <label className="flex cursor-pointer items-center gap-1.5">
+                              <Checkbox
+                                checked={expandContextsByDefault}
+                                onCheckedChange={(checked) => setExpandContextsByDefault(checked === true)}
+                                className="h-3.5 w-3.5"
+                              />
+                              <Label className="cursor-pointer text-[11px] font-normal text-muted-foreground">
+                                Expand
+                              </Label>
+                            </label>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {contextEntries.length === 0 ? (
@@ -589,14 +623,49 @@ function formatAsStackTrace(exception: any): JSX.Element[] {
   }
 }
 
+function formatAsStackTraceText(exception: any): string {
+  try {
+    const parsed = typeof exception === 'string' ? JSON.parse(exception) : exception
+    const exceptions = parsed.values || [parsed]
+    
+    return exceptions.map((value: any, exIdx: number) => {
+      const frames = value.stacktrace?.frames ? [...value.stacktrace.frames].reverse() : []
+      let text = `${value.type}: ${value.value}\n`
+      
+      frames.forEach((frame: any) => {
+        const method = frame.function || '<unknown>'
+        const file = frame.filename || frame.module || '<unknown>'
+        const line = frame.lineno ? `:${frame.lineno}` : ''
+        const module = frame.module ? `${frame.module}.` : ''
+        text += `  at ${module}${method}(${file}${line})\n`
+      })
+      
+      if (exIdx < exceptions.length - 1) {
+        text += '\nCaused by:\n'
+      }
+      
+      return text
+    }).join('\n')
+  } catch (e) {
+    return typeof exception === 'string' ? exception : JSON.stringify(exception, null, 2)
+  }
+}
+
 function StackTraceViewer({ exception }: { exception: string }) {
   const STACK_TRACE_VIEW_KEY = 'issue-stack-trace-view-preference'
   const savedView = localStorage.getItem(STACK_TRACE_VIEW_KEY) || 'formatted'
+  const { toast } = useToast()
   
   const rawContent = typeof exception === 'string' ? exception : JSON.stringify(exception, null, 2)
   
   const handleValueChange = (value: string) => {
     localStorage.setItem(STACK_TRACE_VIEW_KEY, value)
+  }
+  
+  const copyRawToClipboard = () => {
+    const stackTraceText = formatAsStackTraceText(exception)
+    navigator.clipboard.writeText(stackTraceText)
+    toast({ title: 'Copied', description: 'Stack trace copied to clipboard.' })
   }
   
   try {
@@ -606,10 +675,21 @@ function StackTraceViewer({ exception }: { exception: string }) {
     
     return (
       <Tabs defaultValue={savedView} onValueChange={handleValueChange} className="w-full">
-        <TabsList>
-          <TabsTrigger value="formatted">Formatted</TabsTrigger>
-          <TabsTrigger value="raw">Raw</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="formatted">Formatted</TabsTrigger>
+            <TabsTrigger value="raw">Raw</TabsTrigger>
+          </TabsList>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={copyRawToClipboard}
+            className="gap-1.5"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            Copy Raw
+          </Button>
+        </div>
         
         <TabsContent value="formatted" className="mt-4">
           <div className="space-y-6">

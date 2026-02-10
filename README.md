@@ -147,6 +147,43 @@ moneat/
 
 ## Development
 
+### Demo Data & Screenshots
+
+To seed realistic demo data for taking screenshots and demos:
+
+```bash
+# Start services first
+docker-compose up -d
+
+# Seed demo data
+./scripts/seed-demo-data.sh
+```
+
+This creates:
+- Demo user: `demo@moneat.dev` / `demo123`
+- Organization: "Acme Mobile Inc"
+- 3 projects (Android, iOS, React Native)
+- ~10 realistic issues with varied error types
+- Hundreds of events with realistic device info
+- Multiple releases
+
+#### Automated Screenshot Generation
+
+To generate screenshots for the homepage/marketing site:
+
+```bash
+# Make sure dashboard is running
+cd dashboard && npm run dev
+
+# In another terminal, run screenshot automation
+./scripts/take-screenshots.sh
+
+# Or run in debug mode to watch the browser
+./scripts/take-screenshots.sh --debug
+```
+
+The script uses Playwright to automatically log in, navigate pages, and capture screenshots to `dashboard/public/screenshots/`. See [scripts/README-screenshots.md](scripts/README-screenshots.md) for details.
+
 ### E2E Testing
 
 Moneat includes end-to-end testing apps for Android and Kotlin Multiplatform:

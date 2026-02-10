@@ -813,7 +813,7 @@ class ApiClient {
   private authRedirectInProgress = false
 
   private getToken(): string | null {
-    return localStorage.getItem('auth_token')
+    return sessionStorage.getItem('impersonate_token') || localStorage.getItem('auth_token')
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -962,7 +962,12 @@ class ApiClient {
     })
   }
 
+  async impersonateUser(userId: number): Promise<{ token: string }> {
+    return this.request(`${API_BASE}/admin/impersonate/${userId}`, { method: 'POST' })
+  }
+
   logout() {
+    sessionStorage.removeItem('impersonate_token')
     localStorage.removeItem('auth_token')
   }
 

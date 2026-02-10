@@ -15,6 +15,7 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
@@ -59,8 +60,8 @@ fun Route.billingRoutes() {
             
             // Compute accurate usedBytes from usage_records
             try {
-                val startDate = kotlinx.datetime.Instant.parse(usage.periodStart).toLocalDateTime(TimeZone.UTC).date
-                val endDate = kotlinx.datetime.Instant.parse(usage.periodEnd).toLocalDateTime(TimeZone.UTC).date
+                val startDate = LocalDate.parse(usage.periodStart)
+                val endDate = LocalDate.parse(usage.periodEnd)
                 val computedBytes = usageTrackingService.getTotalBytesForOrg(orgId, startDate, endDate)
                 call.respond(usage.copy(usedBytes = computedBytes))
             } catch (e: Exception) {

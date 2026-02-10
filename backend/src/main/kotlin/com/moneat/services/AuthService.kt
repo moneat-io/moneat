@@ -234,6 +234,10 @@ class AuthService {
             .sign(Algorithm.HMAC256(jwtSecret))
     }
     
+    fun generateImpersonationToken(userId: Int, email: String): String {
+        return generateToken(userId, email)
+    }
+    
     private fun generateVerificationToken(): String {
         val bytes = ByteArray(32)
         secureRandom.nextBytes(bytes)
