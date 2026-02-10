@@ -70,13 +70,10 @@ class UptimeScheduler(
         
         if (monitors.isEmpty()) return
         
-        logger.debug { "Checking ${monitors.size} monitor(s)" }
-        
         // Launch check for each monitor in parallel
         monitors.forEach { monitor ->
             // Skip if already running a check for this monitor
             if (!runningChecks.add(monitor.id)) {
-                logger.debug { "Skipping monitor ${monitor.id} - check already in progress" }
                 return@forEach
             }
             
@@ -113,8 +110,6 @@ class UptimeScheduler(
         if (monitor.type.lowercase() == "push") {
             return
         }
-        
-        logger.debug { "Checking monitor ${monitor.name} (${monitor.type})" }
         
         // Execute the check
         val result = try {
@@ -174,8 +169,6 @@ class UptimeScheduler(
         var lastResult = initialResult
         
         for (retry in 1..monitor.retries) {
-            logger.debug { "Retrying monitor ${monitor.name} (attempt $retry/${monitor.retries})" }
-            
             delay(monitor.retryIntervalSeconds * 1000L)
             
             val retryResult = try {
@@ -191,7 +184,7 @@ class UptimeScheduler(
             
             // If check succeeded, stop retrying
             if (retryResult.status == 1) {
-                logger.debug { "Monitor ${monitor.name} succeeded on retry $retry" }
+                logger.debug { "Monitor ${monitor.name} recovered on retry $retry/${monitor.retries}" }
                 break
             }
         }
