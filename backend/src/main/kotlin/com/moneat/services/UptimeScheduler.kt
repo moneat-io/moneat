@@ -16,6 +16,7 @@ class UptimeScheduler(
 ) {
     
     private val slackService = SlackService()
+    private val incidentService = com.moneat.services.incident.IncidentService()
     private var schedulerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val runningChecks = Collections.synchronizedSet(mutableSetOf<UUID>())
@@ -223,6 +224,52 @@ class UptimeScheduler(
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
+        }
+        
+        // Fire or resolve incident alert
+        try {
+            val config = io.ktor.server.config.ApplicationConfig("application.conf")
+            val frontendUrl = config.property("email.frontendUrl").getString()
+            
+            if (newStatus == "down") {
+                // Get severity from monitor override or fall back to routing rules
+                // We always fire the incident; IncidentService will check routing rules
+                val severityOverride = monitor.incidentSeverity?.let {
+                    com.moneat.models.IncidentSeverity.fromString(it)
+                }
+                
+                // Use override severity if set, otherwise use a default that routing rules can override
+                val severity = severityOverride ?: com.moneat.models.IncidentSeverity.HIGH
+                
+                val incidentEvent = com.moneat.models.IncidentEvent(
+                    title = "Uptime Monitor Down: ${monitor.name}",
+                    description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",
+                    severity = severity,
+                    status = com.moneat.models.IncidentStatus.FIRING,
+                    source = com.moneat.models.AlertSource.UPTIME_MONITOR,
+                    deduplicationKey = "moneat-uptime-${monitor.id}",
+                    organizationId = monitor.organizationId,
+                    metadata = mapOf(
+                        "monitor_id" to monitor.id.toString(),
+                        "monitor_name" to monitor.name,
+                        "monitor_type" to monitor.type,
+                        "error_message" to result.message,
+                        "response_time_ms" to result.responseTimeMs.toString()
+                    ),
+                    moneatUrl = "$frontendUrl/uptime/${monitor.id}"
+                )
+                // IncidentService will check routing rules and only fire if configured
+                incidentService.fireAlert(incidentEvent)
+            } else if (newStatus == "up") {
+                // Resolve the incident
+                incidentService.resolveAlert(
+                    organizationId = monitor.organizationId,
+                    source = com.moneat.models.AlertSource.UPTIME_MONITOR,
+                    deduplicationKey = "moneat-uptime-${monitor.id}"
+                )
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
         }
     }
 }

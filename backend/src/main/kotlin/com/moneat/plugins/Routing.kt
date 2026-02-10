@@ -100,5 +100,8 @@ fun Application.configureRouting() {
         
         // Status page endpoints
         statusPageRoutes()
+        
+        // Incident provider integration endpoints
+        incidentProviderRoutes()
     }
 }

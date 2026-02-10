@@ -622,6 +622,7 @@ interface SystemAlert {
   threshold: number
   durationSeconds: number
   enabled: boolean
+  incidentSeverity?: string | null
   lastTriggeredAt?: number
   createdAt: number
 }
@@ -696,6 +697,9 @@ interface UptimeMonitor {
   // Push token (only for push monitors)
   pushToken?: string
   
+  // Incident severity override
+  incidentSeverity?: string | null
+  
   // Stats
   uptime24h?: number
   uptime7d?: number
@@ -755,6 +759,9 @@ interface CreateUptimeMonitorRequest {
   timeoutSeconds?: number
   retries?: number
   retryIntervalSeconds?: number
+  
+  // Incident severity override
+  incidentSeverity?: string
 }
 
 interface UpdateUptimeMonitorRequest extends Partial<CreateUptimeMonitorRequest> {
@@ -807,6 +814,59 @@ interface UpdateSlackIntegrationRequest {
 interface TestIntegrationResponse {
   success: boolean
   message: string
+}
+
+// Incident Provider Types
+
+interface IncidentProviderConfig {
+  id: number
+  providerType: string
+  name: string
+  configJson: Record<string, string>
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+interface CreateIncidentProviderRequest {
+  providerType: string
+  name: string
+  apiKey: string
+  configJson: Record<string, string>
+}
+
+interface UpdateIncidentProviderRequest {
+  name?: string
+  apiKey?: string
+  configJson?: Record<string, string>
+  enabled?: boolean
+}
+
+interface IncidentRoutingRule {
+  id: number
+  alertSource: string
+  alertType?: string | null
+  incidentSeverity: string
+}
+
+interface UpsertRoutingRuleRequest {
+  alertSource: string
+  alertType?: string | null
+  incidentSeverity: string
+}
+
+interface IncidentEventLogEntry {
+  id: number
+  alertSource: string
+  deduplicationKey: string
+  incidentSeverity: string
+  incidentStatus: string
+  title: string
+  description?: string | null
+  providerIncidentId?: string | null
+  success: boolean
+  errorMessage?: string | null
+  createdAt: number
 }
 
 // Status Page Interfaces
@@ -1059,6 +1119,7 @@ class ApiClient {
       threshold: row.threshold,
       durationSeconds: row.durationSeconds ?? row.duration_seconds ?? 0,
       enabled: row.enabled === true,
+      incidentSeverity: row.incidentSeverity ?? row.incident_severity ?? null,
       lastTriggeredAt: row.lastTriggeredAt ?? row.last_triggered_at,
       createdAt: row.createdAt ?? row.created_at,
     }
@@ -1966,6 +2027,53 @@ class ApiClient {
     })
   }
 
+  // Incident Provider Methods
+
+  async getIncidentProviders(): Promise<IncidentProviderConfig[]> {
+    return this.request<IncidentProviderConfig[]>(`${API_BASE.replace('/v1', '')}/api/incident-providers`)
+  }
+
+  async createIncidentProvider(data: CreateIncidentProviderRequest): Promise<{ id: number }> {
+    return this.request<{ id: number }>(`${API_BASE.replace('/v1', '')}/api/incident-providers`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateIncidentProvider(id: number, data: UpdateIncidentProviderRequest): Promise<void> {
+    await this.request(`${API_BASE.replace('/v1', '')}/api/incident-providers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteIncidentProvider(id: number): Promise<void> {
+    await this.request(`${API_BASE.replace('/v1', '')}/api/incident-providers/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async testIncidentProvider(id: number): Promise<{ success: boolean; error?: string }> {
+    return this.request<{ success: boolean; error?: string }>(`${API_BASE.replace('/v1', '')}/api/incident-providers/${id}/test`, {
+      method: 'POST',
+    })
+  }
+
+  async getIncidentProviderRules(id: number): Promise<IncidentRoutingRule[]> {
+    return this.request<IncidentRoutingRule[]>(`${API_BASE.replace('/v1', '')}/api/incident-providers/${id}/rules`)
+  }
+
+  async updateIncidentProviderRules(id: number, rules: UpsertRoutingRuleRequest[]): Promise<void> {
+    await this.request(`${API_BASE.replace('/v1', '')}/api/incident-providers/${id}/rules`, {
+      method: 'PUT',
+      body: JSON.stringify(rules),
+    })
+  }
+
+  async getIncidentProviderEvents(id: number, limit = 50): Promise<IncidentEventLogEntry[]> {
+    return this.request<IncidentEventLogEntry[]>(`${API_BASE.replace('/v1', '')}/api/incident-providers/${id}/events?limit=${limit}`)
+  }
+
   // Status Page Management Methods
 
   async getStatusPages() {
@@ -2141,6 +2249,12 @@ export type {
   SlackChannelSelection,
   UpdateSlackIntegrationRequest,
   TestIntegrationResponse,
+  IncidentProviderConfig,
+  CreateIncidentProviderRequest,
+  UpdateIncidentProviderRequest,
+  IncidentRoutingRule,
+  UpsertRoutingRuleRequest,
+  IncidentEventLogEntry,
   StatusPage,
   StatusPageDetail,
   StatusPageMonitor,

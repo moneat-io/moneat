@@ -68,6 +68,9 @@ object UptimeMonitors : Table("uptime_monitors") {
     // Push monitor token
     val pushToken = varchar("push_token", 64).nullable()
     
+    // Incident severity override
+    val incidentSeverity = varchar("incident_severity", 20).nullable()
+    
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
     
@@ -344,6 +347,7 @@ data class UptimeMonitorData(
     val consecutiveFailures: Int = 0,
     
     val pushToken: String? = null,
+    val incidentSeverity: String? = null,
     val createdAt: kotlinx.datetime.Instant,
     val updatedAt: kotlinx.datetime.Instant
 )

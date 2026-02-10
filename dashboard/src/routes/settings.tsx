@@ -43,7 +43,14 @@ import {
     Layers,
     Plug,
     Shield,
-    Settings
+    Settings,
+    Flame,
+    Eye,
+    EyeOff,
+    RotateCcw,
+    ChevronDown,
+    ChevronUp,
+    X,
 } from 'lucide-react'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {loadStripe} from '@stripe/stripe-js'
@@ -1372,7 +1379,7 @@ function IntegrationsTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="grid gap-6 md:grid-cols-2">
       <Card className="border-l-4 border-l-[#4A154B] overflow-hidden">
         <CardHeader className="bg-muted/10 pb-4">
           <div className="flex items-center justify-between">
@@ -1543,7 +1550,622 @@ function IntegrationsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <IncidentIoCard />
     </div>
+  )
+}
+
+const ALERT_SOURCE_OPTIONS = [
+  { value: 'SYSTEM_ALERT', label: 'System Alert' },
+  { value: 'SYSTEM_DOWN', label: 'System Down' },
+  { value: 'UPTIME_MONITOR', label: 'Uptime Monitor' },
+  { value: 'ERROR_ALERT', label: 'Error Alert' },
+] as const
+
+const INCIDENT_SEVERITY_OPTIONS = [
+  { value: 'CRITICAL', label: 'Critical', color: 'bg-red-500' },
+  { value: 'HIGH', label: 'High', color: 'bg-orange-500' },
+  { value: 'MEDIUM', label: 'Medium', color: 'bg-yellow-500' },
+  { value: 'LOW', label: 'Low', color: 'bg-blue-500' },
+] as const
+
+const IncidentIoLogo = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className={className}>
+    <rect width="24" height="24" rx="4" fill="#F25533" />
+    <path d="M7 6h2v12H7V6zm4 2h2v8h-2V8zm4-1h2v10h-2V7z" fill="white" />
+  </svg>
+)
+
+function IncidentIoCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [showSetupForm, setShowSetupForm] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [setupName, setSetupName] = useState('incident.io')
+  const [setupApiKey, setSetupApiKey] = useState('')
+  const [setupAlertSourceConfigId, setSetupAlertSourceConfigId] = useState('')
+  const [showRoutingRules, setShowRoutingRules] = useState(false)
+  const [showEventLog, setShowEventLog] = useState(false)
+  const [editingRules, setEditingRules] = useState<Array<{ alertSource: string; alertType?: string | null; incidentSeverity: string }>>([])
+  const [isEditingRules, setIsEditingRules] = useState(false)
+
+  const { data: providers = [], isLoading } = useQuery({
+    queryKey: ['incidentProviders'],
+    queryFn: () => api.getIncidentProviders(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const provider = providers.find(p => p.providerType === 'incident_io')
+
+  const { data: rules = [] } = useQuery({
+    queryKey: ['incidentProviderRules', provider?.id],
+    queryFn: () => api.getIncidentProviderRules(provider!.id),
+    enabled: !!provider,
+  })
+
+  const { data: events = [] } = useQuery({
+    queryKey: ['incidentProviderEvents', provider?.id],
+    queryFn: () => api.getIncidentProviderEvents(provider!.id, 25),
+    enabled: !!provider && showEventLog,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; apiKey: string; alertSourceConfigId: string }) =>
+      api.createIncidentProvider({
+        providerType: 'incident_io',
+        name: data.name,
+        apiKey: data.apiKey,
+        configJson: { alert_source_config_id: data.alertSourceConfigId },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incidentProviders'] })
+      setShowSetupForm(false)
+      setSetupName('incident.io')
+      setSetupApiKey('')
+      setSetupAlertSourceConfigId('')
+      toast({ title: 'incident.io connected', description: 'Your incident.io integration is ready.' })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to connect', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: (enabled: boolean) => api.updateIncidentProvider(provider!.id, { enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incidentProviders'] })
+      toast({ title: 'Integration updated' })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to update', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteIncidentProvider(provider!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incidentProviders'] })
+      setShowDeleteDialog(false)
+      toast({ title: 'incident.io disconnected' })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to disconnect', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const testMutation = useMutation({
+    mutationFn: () => api.testIncidentProvider(provider!.id),
+    onSuccess: (response) => {
+      toast({
+        title: response.success ? 'Test successful' : 'Test failed',
+        description: response.success
+          ? 'A test alert was sent and resolved successfully.'
+          : (response.error || 'Connection test failed.'),
+        variant: response.success ? 'default' : 'destructive',
+      })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Test failed', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const saveRulesMutation = useMutation({
+    mutationFn: (newRules: Array<{ alertSource: string; alertType?: string | null; incidentSeverity: string }>) =>
+      api.updateIncidentProviderRules(provider!.id, newRules),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incidentProviderRules', provider?.id] })
+      setIsEditingRules(false)
+      toast({ title: 'Routing rules saved' })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to save rules', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const startEditingRules = () => {
+    setEditingRules(rules.map(r => ({
+      alertSource: r.alertSource,
+      alertType: r.alertType,
+      incidentSeverity: r.incidentSeverity,
+    })))
+    setIsEditingRules(true)
+  }
+
+  const addRule = () => {
+    setEditingRules([...editingRules, { alertSource: 'SYSTEM_ALERT', incidentSeverity: 'HIGH' }])
+  }
+
+  const removeRule = (index: number) => {
+    setEditingRules(editingRules.filter((_, i) => i !== index))
+  }
+
+  const updateRule = (index: number, field: string, value: string) => {
+    setEditingRules(editingRules.map((r, i) => i === index ? { ...r, [field]: value } : r))
+  }
+
+  const handleSetup = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!setupName.trim() || !setupApiKey.trim() || !setupAlertSourceConfigId.trim()) return
+    createMutation.mutate({
+      name: setupName.trim(),
+      apiKey: setupApiKey.trim(),
+      alertSourceConfigId: setupAlertSourceConfigId.trim(),
+    })
+  }
+
+  const formatEventTime = (ts: number) => {
+    try {
+      return new Date(ts).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
+    } catch { return '—' }
+  }
+
+  const getSeverityBadge = (severity: string) => {
+    const opt = INCIDENT_SEVERITY_OPTIONS.find(s => s.value === severity.toUpperCase())
+    return (
+      <Badge variant="outline" className="text-xs gap-1.5">
+        <span className={`h-2 w-2 rounded-full ${opt?.color ?? 'bg-gray-400'}`} />
+        {opt?.label ?? severity}
+      </Badge>
+    )
+  }
+
+  if (isLoading) return null
+
+  return (
+    <>
+      <Card className="border-l-4 border-l-[#F25533] overflow-hidden">
+        <CardHeader className="bg-muted/10 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-white shadow-sm border flex items-center justify-center p-1.5">
+                <IncidentIoLogo className="h-full w-full" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">incident.io</CardTitle>
+                <CardDescription className="mt-1">
+                  Automatically create and resolve incidents in incident.io when alerts fire.
+                </CardDescription>
+              </div>
+            </div>
+            {provider && (
+              <Badge
+                variant={provider.enabled ? 'default' : 'secondary'}
+                className={provider.enabled ? 'bg-[#F25533] hover:bg-[#F25533]/90' : ''}
+              >
+                {provider.enabled ? 'Active' : 'Disabled'}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6 pt-6">
+          {!provider ? (
+            !showSetupForm ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+                <div className="p-4 bg-muted/30 rounded-full">
+                  <Flame className="h-12 w-12 text-[#F25533] opacity-80" />
+                </div>
+                <div className="max-w-md space-y-2">
+                  <h3 className="font-semibold text-lg">Connect incident.io</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Connect your incident.io account to automatically create incidents when monitoring alerts fire.
+                    Incidents are resolved automatically when the alert clears.
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-[#F25533] text-[#F25533] hover:bg-[#F25533]/5 mt-4 font-semibold"
+                  onClick={() => setShowSetupForm(true)}
+                >
+                  <Flame className="h-4 w-4 mr-2" />
+                  Connect incident.io
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleSetup} className="space-y-4 max-w-lg mx-auto">
+                <div className="space-y-2">
+                  <Label htmlFor="iio-name">Display Name</Label>
+                  <Input
+                    id="iio-name"
+                    value={setupName}
+                    onChange={(e) => setSetupName(e.target.value)}
+                    placeholder="e.g. Production incident.io"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="iio-key">API Key</Label>
+                  <div className="relative">
+                    <Input
+                      id="iio-key"
+                      type={showApiKey ? 'text' : 'password'}
+                      value={setupApiKey}
+                      onChange={(e) => setSetupApiKey(e.target.value)}
+                      placeholder="Enter your incident.io API key"
+                      className="pr-10"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                    >
+                      {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Found in your incident.io dashboard under Settings &gt; API Keys.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="iio-source-id">Alert Source Config ID</Label>
+                  <Input
+                    id="iio-source-id"
+                    value={setupAlertSourceConfigId}
+                    onChange={(e) => setSetupAlertSourceConfigId(e.target.value)}
+                    placeholder="e.g. abc123def456"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Create an HTTP alert source in incident.io and paste the config ID here.
+                  </p>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowSetupForm(false)
+                      setSetupApiKey('')
+                      setSetupAlertSourceConfigId('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createMutation.isPending || !setupApiKey.trim() || !setupAlertSourceConfigId.trim()}
+                    className="bg-[#F25533] hover:bg-[#F25533]/90"
+                  >
+                    {createMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      'Connect'
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )
+          ) : (
+            <div className="space-y-6">
+              {/* Connection info */}
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
+                <div className="space-y-1">
+                  <p className="font-medium">{provider.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Provider: <span className="font-mono text-xs">{provider.providerType}</span>
+                    {provider.configJson?.alert_source_config_id && (
+                      <> &middot; Source ID: <span className="font-mono text-xs">{provider.configJson.alert_source_config_id}</span></>
+                    )}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(true)}>
+                  Disconnect
+                </Button>
+              </div>
+
+              {/* Enable/Disable + Actions */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="block">Status</Label>
+                  <div className="flex items-center space-x-2 border rounded-md p-2.5 bg-muted/10 h-10">
+                    <Checkbox
+                      id="iio-enabled"
+                      checked={provider.enabled}
+                      onCheckedChange={(checked) => toggleMutation.mutate(checked === true)}
+                      disabled={toggleMutation.isPending}
+                    />
+                    <Label htmlFor="iio-enabled" className="font-normal cursor-pointer">
+                      Enable incident creation
+                    </Label>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="block">Actions</Label>
+                  <Button
+                    variant="outline"
+                    onClick={() => testMutation.mutate()}
+                    disabled={testMutation.isPending}
+                    className="h-10"
+                  >
+                    {testMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      'Test Connection'
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Routing Rules Section */}
+              <div className="border rounded-lg">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full p-4 hover:bg-muted/30 transition-colors text-left"
+                  onClick={() => setShowRoutingRules(!showRoutingRules)}
+                >
+                  <div className="flex items-center gap-2">
+                    <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Routing Rules</span>
+                    <Badge variant="secondary" className="text-xs">{rules.length}</Badge>
+                  </div>
+                  {showRoutingRules ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+                {showRoutingRules && (
+                  <div className="border-t p-4 space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Define which alert sources create incidents and at what severity. Alerts without a matching rule are skipped.
+                    </p>
+                    {!isEditingRules ? (
+                      <>
+                        {rules.length > 0 ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Alert Source</TableHead>
+                                <TableHead>Alert Type</TableHead>
+                                <TableHead>Incident Severity</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {rules.map((rule) => (
+                                <TableRow key={rule.id}>
+                                  <TableCell className="font-medium">
+                                    {ALERT_SOURCE_OPTIONS.find(s => s.value === rule.alertSource)?.label ?? rule.alertSource}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {rule.alertType || '—'}
+                                  </TableCell>
+                                  <TableCell>{getSeverityBadge(rule.incidentSeverity)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <div className="text-center py-6 border rounded-lg border-dashed">
+                            <RotateCcw className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+                            <p className="text-sm text-muted-foreground">No routing rules configured.</p>
+                            <p className="text-xs text-muted-foreground mt-1">Add rules to start routing alerts to incident.io.</p>
+                          </div>
+                        )}
+                        <Button variant="outline" size="sm" onClick={startEditingRules}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Edit Rules
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {editingRules.map((rule, idx) => (
+                          <div key={idx} className="flex items-end gap-3 flex-wrap">
+                            <div className="space-y-1 flex-1 min-w-[140px]">
+                              {idx === 0 && <Label className="text-xs">Alert Source</Label>}
+                              <Select
+                                value={rule.alertSource}
+                                onValueChange={(v) => updateRule(idx, 'alertSource', v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {ALERT_SOURCE_OPTIONS.map(s => (
+                                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1 flex-1 min-w-[140px]">
+                              {idx === 0 && <Label className="text-xs">Severity</Label>}
+                              <Select
+                                value={rule.incidentSeverity}
+                                onValueChange={(v) => updateRule(idx, 'incidentSeverity', v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {INCIDENT_SEVERITY_OPTIONS.map(s => (
+                                    <SelectItem key={s.value} value={s.value}>
+                                      <span className="flex items-center gap-2">
+                                        <span className={`h-2 w-2 rounded-full ${s.color}`} />
+                                        {s.label}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 shrink-0 text-destructive hover:text-destructive"
+                              onClick={() => removeRule(idx)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <div className="flex items-center gap-2 pt-2">
+                          <Button type="button" variant="outline" size="sm" onClick={addRule}>
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Rule
+                          </Button>
+                          <div className="flex-1" />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsEditingRules(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={saveRulesMutation.isPending}
+                            onClick={() => saveRulesMutation.mutate(editingRules)}
+                          >
+                            {saveRulesMutation.isPending ? 'Saving...' : 'Save Rules'}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Event Log Section */}
+              <div className="border rounded-lg">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full p-4 hover:bg-muted/30 transition-colors text-left"
+                  onClick={() => setShowEventLog(!showEventLog)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Event Log</span>
+                  </div>
+                  {showEventLog ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+                {showEventLog && (
+                  <div className="border-t">
+                    {events.length > 0 ? (
+                      <div className="overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="whitespace-nowrap">Time</TableHead>
+                              <TableHead>Source</TableHead>
+                              <TableHead>Title</TableHead>
+                              <TableHead>Severity</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-center">Result</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {events.map((event) => (
+                              <TableRow key={event.id}>
+                                <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatEventTime(event.createdAt)}
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  {ALERT_SOURCE_OPTIONS.find(s => s.value === event.alertSource)?.label ?? event.alertSource}
+                                </TableCell>
+                                <TableCell className="text-sm max-w-[200px] truncate" title={event.title}>
+                                  {event.title}
+                                </TableCell>
+                                <TableCell>{getSeverityBadge(event.incidentSeverity)}</TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={event.incidentStatus === 'FIRING' ? 'destructive' : 'secondary'}
+                                    className="text-xs"
+                                  >
+                                    {event.incidentStatus === 'FIRING' ? 'Firing' : 'Resolved'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {event.success ? (
+                                    <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
+                                  ) : (
+                                    <span title={event.errorMessage || 'Failed'}>
+                                      <AlertCircle className="h-4 w-4 text-red-500 mx-auto" />
+                                    </span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Activity className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+                        <p className="text-sm text-muted-foreground">No events dispatched yet.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* incident.io Delete confirmation dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove incident.io integration?</DialogTitle>
+            <DialogDescription>
+              This will remove your incident.io configuration, routing rules, and stop creating incidents.
+              Event history will be preserved. You can reconnect at any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

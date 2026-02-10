@@ -338,6 +338,30 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
                 onChange={(e) => setFormData({...formData, timeoutSeconds: parseInt(e.target.value)})}
               />
             </div>
+
+            <div>
+              <Label htmlFor="incidentSeverity">Incident Severity</Label>
+              <Select
+                value={formData.incidentSeverity || ''}
+                onValueChange={(value) =>
+                  setFormData({...formData, incidentSeverity: value === 'none' ? undefined : value})
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Use routing rule default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Use routing rule default</SelectItem>
+                  <SelectItem value="CRITICAL">Critical</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Override the default incident severity when this monitor triggers an alert.
+              </p>
+            </div>
           </div>
         )}
 

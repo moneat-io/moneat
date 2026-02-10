@@ -27,6 +27,7 @@ class NotificationService(private val emailService: EmailService) {
     private val frontendUrl = config.property("email.frontendUrl").getString()
     private val json = Json { ignoreUnknownKeys = true }
     private val slackService = SlackService()
+    private val incidentService = com.moneat.services.incident.IncidentService()
     
     // Rate limiting: track last alert time per (user, project)
     private val lastAlertTimes = ConcurrentHashMap<Pair<Int, Long>, Instant>()
@@ -155,6 +156,38 @@ class NotificationService(private val emailService: EmailService) {
                 )
             } catch (e: Exception) {
                 logger.error(e) { "Failed to send Slack notification for new issue" }
+            }
+            
+            // Fire incident alert for error
+            try {
+                val severityFromLevel = when (emailData.issueLevel.lowercase()) {
+                    "fatal", "critical" -> com.moneat.models.IncidentSeverity.CRITICAL
+                    "error" -> com.moneat.models.IncidentSeverity.HIGH
+                    "warning" -> com.moneat.models.IncidentSeverity.MEDIUM
+                    else -> com.moneat.models.IncidentSeverity.LOW
+                }
+                
+                val incidentEvent = com.moneat.models.IncidentEvent(
+                    title = "[$projectName] ${emailData.issueTitle}",
+                    description = "Level: ${emailData.issueLevel}\nEnvironment: ${emailData.environment}\nCulprit: $culprit\n\nStack trace:\n$stackTrace",
+                    severity = severityFromLevel,
+                    status = com.moneat.models.IncidentStatus.FIRING,
+                    source = com.moneat.models.AlertSource.ERROR_ALERT,
+                    deduplicationKey = "moneat-error-$projectId-$issueId",
+                    organizationId = orgId,
+                    metadata = mapOf(
+                        "project_id" to projectId.toString(),
+                        "project_name" to projectName,
+                        "issue_id" to issueId,
+                        "level" to emailData.issueLevel,
+                        "environment" to emailData.environment,
+                        "culprit" to culprit
+                    ),
+                    moneatUrl = issueUrl
+                )
+                incidentService.fireAlert(incidentEvent)
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to fire incident alert for error" }
             }
         } catch (e: Exception) {
             logger.error(e) { "Error in onNewIssue handler" }

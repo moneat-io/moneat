@@ -91,6 +91,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
         threshold: number
         durationSeconds: number
         enabled: boolean
+        incidentSeverity?: string
       }
     }) => api.createSystemAlert(systemId, alert, scope),
     onSuccess: () => {
@@ -128,6 +129,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
   const handleCreateAlert = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    const severity = formData.get('incidentSeverity') as string
 
     createMutation.mutate({
       scope: activeScope,
@@ -137,6 +139,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
         threshold: parseFloat(formData.get('threshold') as string),
         durationSeconds: parseInt(formData.get('durationSeconds') as string) || 0,
         enabled: createEnabled,
+        incidentSeverity: severity && severity !== 'none' ? severity : undefined,
       },
     })
   }
@@ -146,6 +149,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
     if (!editingAlert) return
 
     const formData = new FormData(e.currentTarget)
+    const severity = formData.get('incidentSeverity') as string
     updateMutation.mutate({
       alert: editingAlert,
       updates: {
@@ -153,6 +157,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
         condition: formData.get('condition') as string,
         threshold: parseFloat(formData.get('threshold') as string),
         durationSeconds: parseInt(formData.get('durationSeconds') as string) || 0,
+        incidentSeverity: severity && severity !== 'none' ? severity : null,
       },
     })
   }
@@ -293,6 +298,24 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                           placeholder="0 (immediate)"
                           defaultValue="0"
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="incidentSeverity">Incident Severity</Label>
+                        <Select name="incidentSeverity" defaultValue="">
+                          <SelectTrigger>
+                            <SelectValue placeholder="Use routing rule default" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Use routing rule default</SelectItem>
+                            <SelectItem value="CRITICAL">Critical</SelectItem>
+                            <SelectItem value="HIGH">High</SelectItem>
+                            <SelectItem value="MEDIUM">Medium</SelectItem>
+                            <SelectItem value="LOW">Low</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Override the default severity when this alert triggers an incident.
+                        </p>
                       </div>
                       <div className="flex items-center justify-between rounded-lg border p-3">
                         <div className="space-y-0.5">
@@ -494,6 +517,24 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                     type="number"
                     defaultValue={editingAlert.durationSeconds}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-incidentSeverity">Incident Severity</Label>
+                  <Select name="incidentSeverity" defaultValue={editingAlert.incidentSeverity || ''}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Use routing rule default" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Use routing rule default</SelectItem>
+                      <SelectItem value="CRITICAL">Critical</SelectItem>
+                      <SelectItem value="HIGH">High</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="LOW">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Override the default severity when this alert triggers an incident.
+                  </p>
                 </div>
               </div>
               <DialogFooter className="mt-4">

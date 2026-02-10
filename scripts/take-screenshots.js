@@ -170,7 +170,7 @@ const SCREENSHOTS = [
   },
   {
     name: 'alerting',
-    description: 'Alerting & Slack integration',
+    description: 'Alerting & integrations (Slack + incident.io)',
     navigate: async (page) => {
       // Navigate to settings page
       await page.goto(`${BASE_URL}/settings`, { waitUntil: 'networkidle' });
@@ -190,7 +190,6 @@ const SCREENSHOTS = [
         console.log('   ⚠️  Could not navigate to integrations:', e.message);
       }
     },
-    elementSelector: 'text=Connect your workspace to Slack',
     viewport: { width: 1920, height: 1080 },
   },
 ];

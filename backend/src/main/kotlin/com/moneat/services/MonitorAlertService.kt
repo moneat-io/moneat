@@ -28,6 +28,7 @@ class MonitorAlertService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val emailService = EmailService()
     private val slackService = SlackService()
+    private val incidentService = com.moneat.services.incident.IncidentService()
     
     private var evaluationJob: Job? = null
     private var statusCheckJob: Job? = null
@@ -472,6 +473,40 @@ class MonitorAlertService {
         } catch (e: Exception) {
             logger.error(e) { "Failed to send Slack notification for system alert" }
         }
+        
+        // Fire incident alert
+        try {
+            val incidentSeverity = transaction {
+                SystemAlerts.select(SystemAlerts.incident_severity)
+                    .where { SystemAlerts.id eq alert.id }
+                    .firstOrNull()?.get(SystemAlerts.incident_severity)
+                    ?.let { com.moneat.models.IncidentSeverity.fromString(it) }
+            }
+            
+            if (incidentSeverity != null) {
+                val frontendUrl = config.property("email.frontendUrl").getString()
+                val incidentEvent = com.moneat.models.IncidentEvent(
+                    title = "$systemName - $metricLabel ${alert.condition} ${alert.threshold}",
+                    description = "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold\nCurrent Value: $formattedValue",
+                    severity = incidentSeverity,
+                    status = com.moneat.models.IncidentStatus.FIRING,
+                    source = com.moneat.models.AlertSource.SYSTEM_ALERT,
+                    deduplicationKey = "moneat-system-alert-${alert.id}",
+                    organizationId = organizationId,
+                    metadata = mapOf(
+                        "system_id" to alert.systemId.toString(),
+                        "system_name" to systemName,
+                        "metric" to alert.metric,
+                        "current_value" to formattedValue,
+                        "threshold" to formattedThreshold
+                    ),
+                    moneatUrl = "$frontendUrl/monitoring/${alert.systemId}"
+                )
+                incidentService.fireAlert(incidentEvent)
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fire incident alert" }
+        }
     }
     
     /**
@@ -612,6 +647,29 @@ class MonitorAlertService {
         } catch (e: Exception) {
             logger.error(e) { "Failed to send Slack notification for system down" }
         }
+        
+        // Fire incident alert for system down
+        try {
+            val frontendUrl = config.property("email.frontendUrl").getString()
+            val incidentEvent = com.moneat.models.IncidentEvent(
+                title = "System Down: $systemName",
+                description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
+                severity = com.moneat.models.IncidentSeverity.CRITICAL,
+                status = com.moneat.models.IncidentStatus.FIRING,
+                source = com.moneat.models.AlertSource.SYSTEM_DOWN,
+                deduplicationKey = "moneat-system-down-$systemId",
+                organizationId = organizationId,
+                metadata = mapOf(
+                    "system_id" to systemId.toString(),
+                    "system_name" to systemName,
+                    "last_seen" to lastSeenText
+                ),
+                moneatUrl = "$frontendUrl/monitoring/$systemId"
+            )
+            incidentService.fireAlert(incidentEvent)
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fire incident alert for system down" }
+        }
     }
     
     /**
@@ -685,6 +743,17 @@ class MonitorAlertService {
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to send Slack notification for system up" }
+        }
+        
+        // Resolve incident alert for system up
+        try {
+            incidentService.resolveAlert(
+                organizationId = organizationId,
+                source = com.moneat.models.AlertSource.SYSTEM_DOWN,
+                deduplicationKey = "moneat-system-down-$systemId"
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to resolve incident alert for system up" }
         }
     }
     
