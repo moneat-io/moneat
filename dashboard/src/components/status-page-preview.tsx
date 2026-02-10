@@ -2,8 +2,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Clock,
-  Globe,
   Activity,
   AlertCircle,
 } from 'lucide-react'

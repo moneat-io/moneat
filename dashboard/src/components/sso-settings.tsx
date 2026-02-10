@@ -16,19 +16,9 @@ export function SsoTab() {
   const { toast } = useToast()
   const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc')
 
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api.getCurrentUser(),
-  })
-
-  const { data: subscription } = useQuery({
-    queryKey: ['subscription'],
-    queryFn: () => api.getSubscription(),
-    enabled: api.isAuthenticated(),
-  })
-
-  // Use subscription's organization ID if available
-  const orgId = subscription?.organizationId || 1
+  // TODO: Get organization ID from user context or organization endpoint
+  // For now, use default organization ID
+  const orgId = 1
 
   const { data: ssoConfig, isLoading: configLoading } = useQuery({
     queryKey: ['ssoConfig', orgId],

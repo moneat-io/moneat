@@ -68,66 +68,33 @@ const SCREENSHOTS = [
             await page.waitForLoadState('networkidle');
             await page.waitForTimeout(1500);
             
-            // Set custom time range to show demo data (last 15 minutes)
+            // Set time range to show demo data (last 15 minutes preset)
             try {
-              // Calculate time range (now and 15 minutes ago)
-              const now = new Date();
-              const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
-              
-              // Format for datetime-local input (YYYY-MM-DDTHH:mm)
-              const formatDatetimeLocal = (date) => {
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                return `${year}-${month}-${day}T${hours}:${minutes}`;
-              };
-              
-              const fromValue = formatDatetimeLocal(fifteenMinutesAgo);
-              const toValue = formatDatetimeLocal(now);
-              
               // Click the time range dropdown button (has Clock icon)
               const timeButton = page.locator('button:has(svg.lucide-clock)').first();
               if (await timeButton.count() > 0) {
                 await timeButton.click();
                 await page.waitForTimeout(500);
                 
-                // Click "Custom range..." option
-                const customRangeOption = page.locator('text=Custom range...').first();
-                if (await customRangeOption.count() > 0) {
-                  await customRangeOption.click();
-                  await page.waitForTimeout(500);
+                // Click the "15m" preset option (auto-applies and closes dropdown)
+                const fifteenMinPreset = page.locator('button:has-text("15m")').first();
+                if (await fifteenMinPreset.count() > 0) {
+                  await fifteenMinPreset.click();
+                  await page.waitForTimeout(1500); // Wait for data to reload
                   
-                  // Fill in the datetime inputs
-                  const fromInput = page.locator('input[type="datetime-local"]').first();
-                  const toInput = page.locator('input[type="datetime-local"]').nth(1);
-                  
-                  if (await fromInput.count() > 0 && await toInput.count() > 0) {
-                    await fromInput.fill(fromValue);
-                    await toInput.fill(toValue);
-                    await page.waitForTimeout(1000);
-                    
-                    // Click outside to close dropdown and apply the range
-                    await page.keyboard.press('Escape');
-                    await page.waitForTimeout(500);
-                    
-                    // Ensure dropdown is closed by clicking on the main content area
-                    await page.mouse.click(100, 100);
-                    await page.waitForTimeout(1000);
-                    
-                    console.log(`   ✅ Set custom time range: ${fromValue} to ${toValue}`);
-                  } else {
-                    console.log('   ⚠️  Could not find datetime inputs');
-                  }
+                  console.log('   ✅ Set time range to last 15 minutes');
                 } else {
-                  console.log('   ⚠️  Could not find Custom range option');
+                  console.log('   ⚠️  Could not find 15m preset option');
+                  
+                  // Close dropdown if still open
+                  await page.keyboard.press('Escape');
+                  await page.waitForTimeout(500);
                 }
               } else {
                 console.log('   ⚠️  Could not find time range button');
               }
             } catch (e) {
-              console.log('   ⚠️  Could not set custom time range:', e.message);
+              console.log('   ⚠️  Could not set time range:', e.message);
             }
           } else {
             console.log('   ⚠️  Logs tab not found in project navigation');
@@ -169,8 +136,8 @@ const SCREENSHOTS = [
     viewport: { width: 1920, height: 1080 },
   },
   {
-    name: 'alerting',
-    description: 'Alerting & integrations (Slack + incident.io)',
+    name: 'slack-integration',
+    description: 'Slack integration tile',
     navigate: async (page) => {
       // Navigate to settings page
       await page.goto(`${BASE_URL}/settings`, { waitUntil: 'networkidle' });
@@ -190,6 +157,32 @@ const SCREENSHOTS = [
         console.log('   ⚠️  Could not navigate to integrations:', e.message);
       }
     },
+    elementSelector: 'h3:has-text("Slack")',
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    name: 'incident-io-integration',
+    description: 'Incident.io integration tile',
+    navigate: async (page) => {
+      // Navigate to settings page
+      await page.goto(`${BASE_URL}/settings`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      
+      // Click on Integrations tab
+      try {
+        const integrationsTab = await page.locator('button[value="integrations"], [role="tab"]:has-text("Integrations")').first();
+        const tabExists = await integrationsTab.count() > 0;
+        if (tabExists) {
+          await integrationsTab.click();
+          await page.waitForTimeout(1500);
+        } else {
+          console.log('   ⚠️  Integrations tab not found in settings');
+        }
+      } catch (e) {
+        console.log('   ⚠️  Could not navigate to integrations:', e.message);
+      }
+    },
+    elementSelector: 'h3:has-text("incident.io")',
     viewport: { width: 1920, height: 1080 },
   },
 ];
@@ -264,29 +257,42 @@ async function takeScreenshot(page, config) {
     // Take screenshot
     const screenshotPath = path.join(SCREENSHOTS_DIR, `${config.name}.png`);
     
-    // If elementSelector is provided, screenshot only that element
+    // If elementSelector is provided, screenshot only that element's parent card
     if (config.elementSelector) {
       const element = page.locator(config.elementSelector).first();
       const elementExists = await element.count() > 0;
       
       if (elementExists) {
-        // Find the parent container (usually a Card or section)
-        const container = element.locator('xpath=ancestor::*[contains(@class, "border") or contains(@class, "card") or contains(@class, "bg-")]').first();
-        const containerExists = await container.count() > 0;
+        // Find the parent Card container (looking for the rounded border card that contains this element)
+        // Navigate up to find the card with border-l-4 class (integration cards have colored left borders)
+        const cardContainer = page.locator('[class*="border-l-4"]').filter({ has: element }).first();
+        const cardExists = await cardContainer.count() > 0;
         
-        if (containerExists) {
-          await container.screenshot({
+        if (cardExists) {
+          await cardContainer.screenshot({
             path: screenshotPath,
             type: 'png',
           });
-          console.log(`✅ Saved (element): ${screenshotPath}`);
+          console.log(`✅ Saved (card): ${screenshotPath}`);
         } else {
-          // Fallback to the element itself
-          await element.screenshot({
-            path: screenshotPath,
-            type: 'png',
-          });
-          console.log(`✅ Saved (text element): ${screenshotPath}`);
+          // Fallback: try generic card/border container
+          const genericContainer = page.locator('[class*="border"][class*="rounded"]').filter({ has: element }).first();
+          const genericExists = await genericContainer.count() > 0;
+          
+          if (genericExists) {
+            await genericContainer.screenshot({
+              path: screenshotPath,
+              type: 'png',
+            });
+            console.log(`✅ Saved (container): ${screenshotPath}`);
+          } else {
+            console.log(`⚠️  Card container not found for ${config.elementSelector}, taking full page`);
+            await page.screenshot({
+              path: screenshotPath,
+              fullPage: false,
+              type: 'png',
+            });
+          }
         }
       } else {
         console.log(`⚠️  Element not found: ${config.elementSelector}, taking full page screenshot`);

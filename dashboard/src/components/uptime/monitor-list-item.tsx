@@ -5,7 +5,7 @@ import {cn, formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
-import {CheckCircle2, Pause, Play, Trash2, XCircle, Clock, Activity} from 'lucide-react'
+import {CheckCircle2, Pause, Play, Trash2, XCircle, Clock} from 'lucide-react'
 import {useToast} from '@/hooks/use-toast'
 import HeartbeatBar from './heartbeat-bar'
 
