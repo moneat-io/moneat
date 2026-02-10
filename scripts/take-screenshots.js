@@ -25,12 +25,21 @@ const DEMO_EMAIL = 'demo@moneat.dev';
 const DEMO_PASSWORD = 'demo123';
 const SCREENSHOTS_DIR = path.join(__dirname, '../dashboard/public/screenshots');
 
-// Screenshot configurations - only features shown on landing page
+// Screenshot configurations - all features shown on landing page
 const SCREENSHOTS = [
+  // Hero section
+  {
+    name: 'dashboard',
+    description: 'Main dashboard overview',
+    path: '/',
+    waitFor: 'text=Recent Issues',
+    viewport: { width: 1920, height: 1080 },
+  },
+  // Primary features
   {
     name: 'error-tracking',
     description: 'Error tracking / Issues list',
-    path: '/', // Issues list is on the main dashboard
+    path: '/',
     waitFor: 'text=Recent Issues',
     viewport: { width: 1920, height: 1080 },
   },
@@ -75,11 +84,76 @@ const SCREENSHOTS = [
     waitFor: 'text=Replays',
     viewport: { width: 1920, height: 1080 },
   },
+  // Secondary features
   {
     name: 'performance',
     description: 'Performance monitoring',
     path: '/performance',
     waitFor: 'text=Performance',
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    name: 'uptime',
+    description: 'Uptime monitoring',
+    path: '/uptime',
+    waitFor: 'text=Uptime',
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    name: 'status-pages',
+    description: 'Public status pages',
+    navigate: async (page) => {
+      // Navigate to uptime page first
+      await page.goto(`${BASE_URL}/uptime`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      
+      // Try to find and click on a monitor to see status page
+      try {
+        const monitorLink = await page.locator('a[href^="/uptime/"]').first();
+        const monitorExists = await monitorLink.count() > 0;
+        if (monitorExists) {
+          await monitorLink.click();
+          await page.waitForLoadState('networkidle');
+          await page.waitForTimeout(1500);
+          
+          // Look for status page tab/link
+          const statusLink = await page.locator('a[href*="status"], button:has-text("Status Page"), a:has-text("Status Page")').first();
+          const statusExists = await statusLink.count() > 0;
+          if (statusExists) {
+            await statusLink.click();
+            await page.waitForTimeout(1500);
+          }
+        } else {
+          console.log('   ⚠️  No uptime monitors found for status page screenshot');
+        }
+      } catch (e) {
+        console.log('   ⚠️  Could not navigate to status page:', e.message);
+      }
+    },
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    name: 'alerting',
+    description: 'Alerting & Slack integration',
+    navigate: async (page) => {
+      // Navigate to settings page
+      await page.goto(`${BASE_URL}/settings`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      
+      // Click on Integrations tab
+      try {
+        const integrationsTab = await page.locator('button[value="integrations"], [role="tab"]:has-text("Integrations")').first();
+        const tabExists = await integrationsTab.count() > 0;
+        if (tabExists) {
+          await integrationsTab.click();
+          await page.waitForTimeout(1500);
+        } else {
+          console.log('   ⚠️  Integrations tab not found in settings');
+        }
+      } catch (e) {
+        console.log('   ⚠️  Could not navigate to integrations:', e.message);
+      }
+    },
     viewport: { width: 1920, height: 1080 },
   },
 ];

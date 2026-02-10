@@ -330,8 +330,8 @@ object DemoDataSeeder {
                     "at androidx.fragment.app.Fragment.performViewCreated(Fragment.java:2987)",
                     "at androidx.fragment.app.FragmentStateManager.createView(FragmentStateManager.java:551)"
                 ),
-                eventCount = 127,
-                userCount = 23,
+                eventCount = 347,
+                userCount = 89,
                 level = "error"
             ),
             IssueTemplate(
@@ -345,8 +345,8 @@ object DemoDataSeeder {
                     "at com.acme.shopping.util.ImageLoader.loadBitmap(ImageLoader.kt:34)",
                     "at com.acme.shopping.ui.ProductListAdapter.onBindViewHolder(ProductListAdapter.kt:56)"
                 ),
-                eventCount = 43,
-                userCount = 12,
+                eventCount = 156,
+                userCount = 42,
                 level = "fatal"
             ),
             IssueTemplate(
@@ -360,8 +360,8 @@ object DemoDataSeeder {
                     "at com.acme.shopping.api.CheckoutService.processPayment(CheckoutService.kt:89)",
                     "at com.acme.shopping.ui.CheckoutActivity.onPayButtonClick(CheckoutActivity.kt:145)"
                 ),
-                eventCount = 8,
-                userCount = 6,
+                eventCount = 89,
+                userCount = 34,
                 level = "error"
             ),
             IssueTemplate(
@@ -374,9 +374,163 @@ object DemoDataSeeder {
                     "at com.acme.shopping.ui.CartFragment.updateCartTotal(CartFragment.kt:123)",
                     "at com.acme.shopping.ui.CartFragment\$observeCart\$1.invoke(CartFragment.kt:78)"
                 ),
-                eventCount = 34,
-                userCount = 18,
+                eventCount = 234,
+                userCount = 67,
                 level = "error"
+            ),
+            IssueTemplate(
+                "SQLiteException: database is locked",
+                "android.database.sqlite.SQLiteException",
+                "database is locked (code 5 SQLITE_BUSY)",
+                "android",
+                listOf(
+                    "at android.database.sqlite.SQLiteConnection.nativeExecute(Native Method)",
+                    "at com.acme.shopping.data.local.CartDao.updateQuantity(CartDao.kt:67)",
+                    "at com.acme.shopping.repository.CartRepository.updateItem(CartRepository.kt:89)"
+                ),
+                eventCount = 178,
+                userCount = 54,
+                level = "error"
+            ),
+            IssueTemplate(
+                "ConcurrentModificationException in WishlistAdapter",
+                "java.util.ConcurrentModificationException",
+                "Collection was modified during iteration",
+                "android",
+                listOf(
+                    "at java.util.ArrayList\$Itr.checkForComodification(ArrayList.java:911)",
+                    "at com.acme.shopping.ui.WishlistAdapter.notifyDataChanged(WishlistAdapter.kt:123)",
+                    "at com.acme.shopping.ui.WishlistFragment.onItemRemoved(WishlistFragment.kt:156)"
+                ),
+                eventCount = 92,
+                userCount = 38,
+                level = "error"
+            ),
+            IssueTemplate(
+                "JSONException: No value for 'price'",
+                "org.json.JSONException",
+                "No value for price",
+                "android",
+                listOf(
+                    "at org.json.JSONObject.get(JSONObject.java:389)",
+                    "at com.acme.shopping.api.ProductParser.parseProduct(ProductParser.kt:45)",
+                    "at com.acme.shopping.api.ApiClient.fetchProductDetails(ApiClient.kt:234)"
+                ),
+                eventCount = 267,
+                userCount = 71,
+                level = "error"
+            ),
+            IssueTemplate(
+                "IndexOutOfBoundsException in SearchResultsAdapter",
+                "java.lang.IndexOutOfBoundsException",
+                "Index: 15, Size: 12",
+                "android",
+                listOf(
+                    "at java.util.ArrayList.get(ArrayList.java:437)",
+                    "at com.acme.shopping.ui.SearchResultsAdapter.onBindViewHolder(SearchResultsAdapter.kt:78)",
+                    "at androidx.recyclerview.widget.RecyclerView\$Adapter.onBindViewHolder(RecyclerView.java:7065)"
+                ),
+                eventCount = 143,
+                userCount = 49,
+                level = "error"
+            ),
+            IssueTemplate(
+                "ActivityNotFoundException: No Activity found to handle Intent",
+                "android.content.ActivityNotFoundException",
+                "No Activity found to handle Intent { act=android.intent.action.VIEW dat=acme://product/123 }",
+                "android",
+                listOf(
+                    "at android.app.Instrumentation.checkStartActivityResult(Instrumentation.java:2073)",
+                    "at com.acme.shopping.util.DeepLinkHandler.openProduct(DeepLinkHandler.kt:56)",
+                    "at com.acme.shopping.MainActivity.handleIntent(MainActivity.kt:234)"
+                ),
+                eventCount = 67,
+                userCount = 28,
+                level = "error"
+            ),
+            IssueTemplate(
+                "InflateException: Error inflating class ImageView",
+                "android.view.InflateException",
+                "Binary XML file line #23: Error inflating class ImageView",
+                "android",
+                listOf(
+                    "at android.view.LayoutInflater.createViewFromTag(LayoutInflater.java:829)",
+                    "at com.acme.shopping.ui.ProductListAdapter.onCreateViewHolder(ProductListAdapter.kt:45)",
+                    "at androidx.recyclerview.widget.RecyclerView\$Adapter.createViewHolder(RecyclerView.java:7078)"
+                ),
+                eventCount = 51,
+                userCount = 19,
+                level = "error"
+            ),
+            IssueTemplate(
+                "Resources$NotFoundException: Resource ID #0x7f080abc",
+                "android.content.res.Resources\$NotFoundException",
+                "Resource ID #0x7f080abc",
+                "android",
+                listOf(
+                    "at android.content.res.Resources.getValue(Resources.java:1351)",
+                    "at com.acme.shopping.ui.theme.ThemeManager.applyTheme(ThemeManager.kt:89)",
+                    "at com.acme.shopping.MainActivity.onCreate(MainActivity.kt:67)"
+                ),
+                eventCount = 34,
+                userCount = 15,
+                level = "error"
+            ),
+            IssueTemplate(
+                "TimeoutException: Coroutine timeout",
+                "kotlinx.coroutines.TimeoutCancellationException",
+                "Timed out waiting for 5000 ms",
+                "android",
+                listOf(
+                    "at kotlinx.coroutines.withTimeout(Timeout.kt:45)",
+                    "at com.acme.shopping.api.ApiClient.fetchWithTimeout(ApiClient.kt:123)",
+                    "at com.acme.shopping.repository.ProductRepository.loadProducts(ProductRepository.kt:89)"
+                ),
+                eventCount = 198,
+                userCount = 62,
+                level = "warning"
+            ),
+            IssueTemplate(
+                "NumberFormatException: For input string '€12.99'",
+                "java.lang.NumberFormatException",
+                "For input string: '€12.99'",
+                "android",
+                listOf(
+                    "at java.lang.Long.parseLong(Long.java:596)",
+                    "at com.acme.shopping.util.PriceFormatter.parsePrice(PriceFormatter.kt:34)",
+                    "at com.acme.shopping.ui.CartFragment.calculateTotal(CartFragment.kt:145)"
+                ),
+                eventCount = 112,
+                userCount = 41,
+                level = "error"
+            ),
+            IssueTemplate(
+                "SecurityException: Permission denied",
+                "java.lang.SecurityException",
+                "Permission denial: writing to settings requires android.permission.WRITE_SETTINGS",
+                "android",
+                listOf(
+                    "at android.os.Parcel.createException(Parcel.java:2071)",
+                    "at com.acme.shopping.util.SettingsManager.savePreference(SettingsManager.kt:78)",
+                    "at com.acme.shopping.ui.SettingsActivity.onToggleChanged(SettingsActivity.kt:123)"
+                ),
+                eventCount = 23,
+                userCount = 12,
+                level = "error"
+            ),
+            IssueTemplate(
+                "FileNotFoundException: /storage/emulated/0/cache/image.jpg",
+                "java.io.FileNotFoundException",
+                "/storage/emulated/0/cache/image.jpg: open failed: ENOENT (No such file or directory)",
+                "android",
+                listOf(
+                    "at java.io.FileInputStream.open0(Native Method)",
+                    "at com.acme.shopping.util.ImageCache.loadFromDisk(ImageCache.kt:89)",
+                    "at com.acme.shopping.ui.ProductDetailFragment.displayCachedImage(ProductDetailFragment.kt:156)"
+                ),
+                eventCount = 167,
+                userCount = 58,
+                level = "warning"
             )
         )
         

@@ -411,7 +411,7 @@ const primaryFeatures: Feature[] = [
     gradient: 'from-sky-500 to-cyan-400',
     iconBg: 'bg-sky-500/10',
     iconColor: 'text-sky-400',
-    mock: <ErrorTrackingMock />,
+    mock: <img src="/screenshots/error-tracking.png" alt="Error tracking dashboard showing issues list with stack traces and context" className="w-full h-full object-cover" />,
   },
   {
     icon: FileText,
@@ -421,7 +421,7 @@ const primaryFeatures: Feature[] = [
     gradient: 'from-blue-500 to-indigo-400',
     iconBg: 'bg-blue-500/10',
     iconColor: 'text-blue-400',
-    mock: <LogManagementMock />,
+    mock: <img src="/screenshots/log-management.png" alt="Log management interface with real-time log viewer and filtering" className="w-full h-full object-cover" />,
   },
   {
     icon: Play,
@@ -431,7 +431,7 @@ const primaryFeatures: Feature[] = [
     gradient: 'from-violet-500 to-purple-400',
     iconBg: 'bg-violet-500/10',
     iconColor: 'text-violet-400',
-    mock: <SessionReplayMock />,
+    mock: <img src="/screenshots/session-replay.png" alt="Session replay showing user interactions before errors occurred" className="w-full h-full object-cover" />,
   },
 ]
 
@@ -444,7 +444,7 @@ const secondaryFeatures: Feature[] = [
     gradient: 'from-amber-500 to-orange-400',
     iconBg: 'bg-amber-500/10',
     iconColor: 'text-amber-400',
-    mock: <PerformanceMock />,
+    mock: <img src="/screenshots/performance.png" alt="Performance monitoring dashboard with transaction timings" className="w-full h-full object-cover" />,
   },
   {
     icon: Globe,
@@ -454,7 +454,7 @@ const secondaryFeatures: Feature[] = [
     gradient: 'from-green-500 to-emerald-400',
     iconBg: 'bg-green-500/10',
     iconColor: 'text-green-400',
-    mock: <UptimeMock />,
+    mock: <img src="/screenshots/uptime.png" alt="Uptime monitoring with status checks and availability metrics" className="w-full h-full object-cover" />,
   },
   {
     icon: GitBranch,
@@ -464,7 +464,7 @@ const secondaryFeatures: Feature[] = [
     gradient: 'from-cyan-500 to-teal-400',
     iconBg: 'bg-cyan-500/10',
     iconColor: 'text-cyan-400',
-    mock: <StatusPagesMock />,
+    mock: <img src="/screenshots/status-pages.png" alt="Public status page showing service health and incidents" className="w-full h-full object-cover" />,
   },
   {
     icon: Bell,
@@ -474,7 +474,7 @@ const secondaryFeatures: Feature[] = [
     gradient: 'from-rose-500 to-pink-400',
     iconBg: 'bg-rose-500/10',
     iconColor: 'text-rose-400',
-    mock: <AlertingMock />,
+    mock: <img src="/screenshots/alerting.png" alt="Alert configuration with Slack integration settings" className="w-full h-full object-cover" />,
   },
 ]
 
@@ -587,7 +587,7 @@ export function VariantA() {
           <div style={{perspective: '2000px'}}>
             <div style={{transform: 'rotateX(8deg)', transformOrigin: 'center top'}}>
               <ScreenshotFrame gradient="from-sky-500 to-cyan-400">
-                <HeroDashboardMock />
+                <img src="/screenshots/dashboard.png" alt="Main dashboard overview with statistics and error trends" className="w-full h-full object-cover" />
               </ScreenshotFrame>
             </div>
           </div>

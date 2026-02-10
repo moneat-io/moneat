@@ -55,16 +55,21 @@ npm run screenshots
 
 ## What Screenshots Are Generated
 
-The script captures these pages:
+The script captures these pages (matching the landing page features):
 
+**Hero Section:**
 1. **dashboard.png** - Main dashboard overview
+
+**Primary Features:**
 2. **error-tracking.png** - Issues/error tracking list
-3. **issue-detail.png** - Individual issue detail page
-4. **log-management.png** - Log management page
-5. **session-replay.png** - Session replay list
-6. **performance.png** - Performance monitoring
-7. **releases.png** - Releases page
-8. **projects.png** - Projects overview
+3. **log-management.png** - Log management page
+4. **session-replay.png** - Session replay list
+
+**Secondary Features:**
+5. **performance.png** - Performance monitoring
+6. **uptime.png** - Uptime monitoring
+7. **status-pages.png** - Public status pages
+8. **alerting.png** - Alerting & Slack integration
 
 ## Configuration
 
