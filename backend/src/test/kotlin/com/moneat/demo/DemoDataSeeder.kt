@@ -269,33 +269,79 @@ object DemoDataSeeder {
             println("\nIssues already exist ($issueCount found). Skipping issue/event seeding.")
         }
         
+        // Check if other data already exists
+        val feedbackCountResult = ClickHouseClient.query(
+            "SELECT count() FROM $db.user_feedback WHERE project_id IN (${projects.values.map { it.first }.joinToString(",")})",
+            "TabSeparated"
+        )
+        val feedbackCount = feedbackCountResult.trim().toLongOrNull() ?: 0
+        
+        val replayCountResult = ClickHouseClient.query(
+            "SELECT count() FROM $db.replay_events WHERE project_id IN (${projects.values.map { it.first }.joinToString(",")})",
+            "TabSeparated"
+        )
+        val replayCount = replayCountResult.trim().toLongOrNull() ?: 0
+        
+        val monitorsExist = transaction {
+            UptimeMonitors.selectAll().where { UptimeMonitors.organizationId eq orgId }.count() > 0
+        }
+        
+        val statusPagesExist = transaction {
+            StatusPages.selectAll().where { StatusPages.organizationId eq orgId }.count() > 0
+        }
+        
         // Always seed logs data (they're time-sensitive for demo)
         println("\nSeeding log data...")
         seedLogData(projects)
         
-        // Seed performance/transaction data
-        println("\nSeeding performance/transaction data...")
-        seedTransactionData(projects)
+        // Seed performance/transaction data (only if not exists)
+        val transactionCountResult = ClickHouseClient.query(
+            "SELECT count() FROM $db.events WHERE event_type = 'transaction' AND project_id IN (${projects.values.map { it.first }.joinToString(",")})",
+            "TabSeparated"
+        )
+        val transactionCount = transactionCountResult.trim().toLongOrNull() ?: 0
+        if (transactionCount == 0L) {
+            println("\nSeeding performance/transaction data...")
+            seedTransactionData(projects)
+        } else {
+            println("\nTransactions already exist ($transactionCount found). Skipping transaction seeding.")
+        }
         
-        // Seed session replay data
-        println("\nSeeding session replay data...")
-        seedReplayData(projects)
+        // Seed session replay data (only if not exists)
+        if (replayCount == 0L) {
+            println("\nSeeding session replay data...")
+            seedReplayData(projects)
+        } else {
+            println("\nReplays already exist ($replayCount found). Skipping replay seeding.")
+        }
         
-        // Seed user feedback data
-        println("\nSeeding user feedback data...")
-        seedFeedbackData(projects)
+        // Seed user feedback data (only if not exists)
+        if (feedbackCount == 0L) {
+            println("\nSeeding user feedback data...")
+            seedFeedbackData(projects)
+        } else {
+            println("\nUser feedback already exists ($feedbackCount found). Skipping feedback seeding.")
+        }
         
-        // Always seed uptime monitors and monitoring systems (or update if they exist)
-        println("\nSeeding uptime monitors...")
-        seedUptimeMonitors(orgId)
+        // Seed uptime monitors (only if not exists)
+        if (!monitorsExist) {
+            println("\nSeeding uptime monitors...")
+            seedUptimeMonitors(orgId)
+        } else {
+            println("\nUptime monitors already exist. Skipping monitor seeding.")
+        }
         
-        // Seed monitoring systems
+        // Seed monitoring systems (always check for duplicates inside the function)
         println("\nSeeding monitoring systems...")
         seedMonitoringSystems(orgId)
         
-        // Seed status pages
-        println("\nSeeding status pages...")
-        seedStatusPages(orgId)
+        // Seed status pages (only if not exists)
+        if (!statusPagesExist) {
+            println("\nSeeding status pages...")
+            seedStatusPages(orgId)
+        } else {
+            println("\nStatus pages already exist. Skipping status page seeding.")
+        }
         
         val backendUrl = EnvConfig.get("BACKEND_URL", "http://localhost:8080")
         val backendHost = backendUrl.removePrefix("http://").removePrefix("https://")
@@ -1896,6 +1942,16 @@ object DemoDataSeeder {
     }
     
     private suspend fun seedMonitoringSystems(organizationId: Int) {
+        // Check if systems already exist
+        val existingSystemsCount = transaction {
+            Systems.selectAll().where { Systems.organization_id eq organizationId }.count()
+        }
+        
+        if (existingSystemsCount > 0) {
+            println("Monitoring systems already exist ($existingSystemsCount found). Skipping system seeding.")
+            return
+        }
+        
         val systemsList = listOf(
             Triple("api-prod-1.acme.com", "Ubuntu 22.04 LTS", "x86_64"),
             Triple("api-prod-2.acme.com", "Ubuntu 22.04 LTS", "x86_64"),
