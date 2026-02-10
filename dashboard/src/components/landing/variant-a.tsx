@@ -60,7 +60,7 @@ function ScreenshotFrame({
 // Mock UI compositions for screenshot stubs
 // ────────────────────────────────────────────────────────────────
 
-function HeroDashboardMock() {
+function _HeroDashboardMock() {
   const statCardColors = [
     'bg-sky-400/20',
     'bg-emerald-400/20',
@@ -110,7 +110,7 @@ function HeroDashboardMock() {
   )
 }
 
-function ErrorTrackingMock() {
+function _ErrorTrackingMock() {
   const errors = [
     {color: 'bg-red-400/60', w: 'w-48'},
     {color: 'bg-red-400/60', w: 'w-56'},
@@ -141,7 +141,7 @@ function ErrorTrackingMock() {
   )
 }
 
-function LogManagementMock() {
+function _LogManagementMock() {
   const logs: Array<{level: string; color: string}> = [
     {level: 'INFO', color: 'text-blue-400/50 bg-blue-400/10'},
     {level: 'INFO', color: 'text-blue-400/50 bg-blue-400/10'},
@@ -194,7 +194,7 @@ function LogManagementMock() {
   )
 }
 
-function SessionReplayMock() {
+function _SessionReplayMock() {
   return (
     <div className="absolute inset-0 flex flex-col">
       {/* Video area */}
@@ -241,7 +241,7 @@ function SessionReplayMock() {
   )
 }
 
-function PerformanceMock() {
+function _PerformanceMock() {
   const metrics = [
     {label: 'p50', color: 'bg-emerald-400/15'},
     {label: 'p95', color: 'bg-amber-400/15'},
@@ -284,7 +284,7 @@ function PerformanceMock() {
   )
 }
 
-function UptimeMock() {
+function _UptimeMock() {
   const monitors = [
     {status: 'green' as const},
     {status: 'green' as const},
@@ -324,7 +324,7 @@ function UptimeMock() {
   )
 }
 
-function StatusPagesMock() {
+function _StatusPagesMock() {
   return (
     <div className="absolute inset-0 p-3">
       {/* Status banner */}
@@ -351,7 +351,7 @@ function StatusPagesMock() {
   )
 }
 
-function AlertingMock() {
+function _AlertingMock() {
   return (
     <div className="absolute inset-0 p-3 space-y-1.5">
       {/* Alert card */}
