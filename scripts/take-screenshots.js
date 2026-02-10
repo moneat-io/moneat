@@ -110,7 +110,11 @@ const SCREENSHOTS = [
                     
                     // Click outside to close dropdown and apply the range
                     await page.keyboard.press('Escape');
-                    await page.waitForTimeout(1500);
+                    await page.waitForTimeout(500);
+                    
+                    // Ensure dropdown is closed by clicking on the main content area
+                    await page.mouse.click(100, 100);
+                    await page.waitForTimeout(1000);
                     
                     console.log(`   ✅ Set custom time range: ${fromValue} to ${toValue}`);
                   } else {
@@ -186,6 +190,7 @@ const SCREENSHOTS = [
         console.log('   ⚠️  Could not navigate to integrations:', e.message);
       }
     },
+    elementSelector: 'text=Connect your workspace to Slack',
     viewport: { width: 1920, height: 1080 },
   },
 ];
@@ -259,13 +264,49 @@ async function takeScreenshot(page, config) {
     
     // Take screenshot
     const screenshotPath = path.join(SCREENSHOTS_DIR, `${config.name}.png`);
-    await page.screenshot({
-      path: screenshotPath,
-      fullPage: false,
-      type: 'png',
-    });
     
-    console.log(`✅ Saved: ${screenshotPath}`);
+    // If elementSelector is provided, screenshot only that element
+    if (config.elementSelector) {
+      const element = page.locator(config.elementSelector).first();
+      const elementExists = await element.count() > 0;
+      
+      if (elementExists) {
+        // Find the parent container (usually a Card or section)
+        const container = element.locator('xpath=ancestor::*[contains(@class, "border") or contains(@class, "card") or contains(@class, "bg-")]').first();
+        const containerExists = await container.count() > 0;
+        
+        if (containerExists) {
+          await container.screenshot({
+            path: screenshotPath,
+            type: 'png',
+          });
+          console.log(`✅ Saved (element): ${screenshotPath}`);
+        } else {
+          // Fallback to the element itself
+          await element.screenshot({
+            path: screenshotPath,
+            type: 'png',
+          });
+          console.log(`✅ Saved (text element): ${screenshotPath}`);
+        }
+      } else {
+        console.log(`⚠️  Element not found: ${config.elementSelector}, taking full page screenshot`);
+        await page.screenshot({
+          path: screenshotPath,
+          fullPage: false,
+          type: 'png',
+        });
+      }
+    } else {
+      // Regular full viewport screenshot
+      await page.screenshot({
+        path: screenshotPath,
+        fullPage: false,
+        type: 'png',
+      });
+      console.log(`✅ Saved: ${screenshotPath}`);
+    }
+    
     return true;
   } catch (error) {
     console.error(`❌ Failed to capture ${config.name}:`, error.message);
