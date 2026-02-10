@@ -252,9 +252,7 @@ function IssueDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-3 pb-3">
-                      <div className="max-h-[400px] overflow-auto">
-                        <BreadcrumbsViewer breadcrumbs={latestEvent.breadcrumbs} />
-                      </div>
+                      <BreadcrumbsViewer breadcrumbs={latestEvent.breadcrumbs} />
                     </CardContent>
                   </Card>
                 )}
@@ -417,7 +415,7 @@ function IssueDetailPage() {
                     {contextEntries.length === 0 ? (
                       <p className="text-xs text-muted-foreground">No context entries</p>
                     ) : (
-                      <div key={String(expandContextsByDefault)} className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                      <div key={String(expandContextsByDefault)} className="space-y-2">
                         {contextEntries.map(([key, value]) => (
                           <ContextSection key={key} name={key} data={value} defaultOpen={expandContextsByDefault} />
                         ))}
