@@ -293,6 +293,10 @@ object DemoDataSeeder {
         println("\nSeeding monitoring systems...")
         seedMonitoringSystems(orgId)
         
+        // Seed status pages
+        println("\nSeeding status pages...")
+        seedStatusPages(orgId)
+        
         val backendUrl = EnvConfig.get("BACKEND_URL", "http://localhost:8080")
         val backendHost = backendUrl.removePrefix("http://").removePrefix("https://")
         
@@ -463,7 +467,7 @@ object DemoDataSeeder {
                 level = "error"
             ),
             IssueTemplate(
-                "Resources$NotFoundException: Resource ID #0x7f080abc",
+                "Resources\$NotFoundException: Resource ID #0x7f080abc",
                 "android.content.res.Resources\$NotFoundException",
                 "Resource ID #0x7f080abc",
                 "android",
@@ -1394,6 +1398,160 @@ object DemoDataSeeder {
         }
         
         println("✅ Seeded ${systemsList.size} monitoring systems")
+    }
+    
+    private suspend fun seedStatusPages(organizationId: Int) {
+        // Get existing monitors to associate with status page
+        val monitorIds = transaction {
+            UptimeMonitors.selectAll()
+                .where { UptimeMonitors.organizationId eq organizationId }
+                .map { it[UptimeMonitors.id] to it[UptimeMonitors.name] }
+        }
+        
+        if (monitorIds.isEmpty()) {
+            println("⚠️  No monitors found. Skipping status page seeding.")
+            return
+        }
+        
+        // Create a status page
+        val statusPageId = transaction {
+            val pageId = UUID.randomUUID()
+            val createdAt = Instant.now().minus(random.nextInt(14, 30).toLong(), ChronoUnit.DAYS)
+            
+            StatusPages.insert {
+                it[StatusPages.id] = pageId
+                it[StatusPages.organizationId] = organizationId
+                it[StatusPages.name] = "Acme Services Status"
+                it[StatusPages.slug] = "acme-status"
+                it[StatusPages.description] = "Real-time status and incident history for all Acme services"
+                it[StatusPages.logoUrl] = null
+                it[StatusPages.faviconUrl] = null
+                it[StatusPages.primaryColor] = "#3B82F6"
+                it[StatusPages.darkMode] = false
+                it[StatusPages.showUptimeHistory] = true
+                it[StatusPages.historyDays] = 90
+                it[StatusPages.isPublic] = true
+                it[StatusPages.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                it[StatusPages.updatedAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+            }
+            pageId
+        }
+        
+        // Associate all monitors with the status page
+        transaction {
+            monitorIds.forEachIndexed { index, (monitorId, _) ->
+                StatusPageMonitors.insert {
+                    it[StatusPageMonitors.statusPageId] = statusPageId
+                    it[StatusPageMonitors.monitorId] = monitorId
+                    it[StatusPageMonitors.displayName] = null // Use actual monitor name
+                    it[StatusPageMonitors.sortOrder] = index
+                    it[StatusPageMonitors.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                }
+            }
+        }
+        
+        // Create some realistic incidents
+        val incidents = listOf(
+            // Resolved incident from 2 days ago
+            listOf(
+                "Database Connection Pool Exhausted" to "resolved",
+                "Our primary database experienced connection pool exhaustion causing degraded performance." to "investigating",
+                "Database team has identified the issue as a connection leak in the payment service." to "identified",
+                "Fix deployed to production. Monitoring for stability." to "monitoring",
+                "All systems operating normally. Connection pool has stabilized." to "resolved"
+            ) to Pair("major", 2),
+            
+            // Recently resolved incident
+            listOf(
+                "API Gateway Timeout Issues" to "resolved",
+                "Investigating reports of increased timeout errors on API gateway." to "investigating",
+                "Root cause identified as upstream service degradation. Implementing retry logic." to "identified",
+                "Issue has been resolved. All API endpoints responding normally." to "resolved"
+            ) to Pair("minor", 0),
+            
+            // Ongoing minor incident
+            listOf(
+                "Elevated Error Rates on Mobile API" to "monitoring",
+                "We're seeing elevated error rates on the mobile API endpoint. Investigating the root cause." to "investigating",
+                "Issue identified as a cache invalidation problem. Applying fix now." to "identified",
+                "Fix applied. Monitoring error rates for the next hour to ensure stability." to "monitoring"
+            ) to Pair("minor", 0),
+            
+            // Scheduled maintenance (future)
+            listOf(
+                "Database Maintenance Window" to "scheduled",
+                "We will be performing routine database maintenance. Services may experience brief interruptions." to "scheduled"
+            ) to Pair("none", -1)
+        )
+        
+        transaction {
+            incidents.forEach { (updates, metadata) ->
+                val (impact, daysAgo) = metadata
+                val incidentId = UUID.randomUUID()
+                
+                val firstUpdate = updates.first()
+                val lastUpdate = updates.last()
+                val finalStatus = lastUpdate.second
+                val title = firstUpdate.first
+                
+                val createdAt = if (daysAgo >= 0) {
+                    Instant.now().minus(daysAgo.toLong(), ChronoUnit.DAYS)
+                        .minus(random.nextInt(1, 12).toLong(), ChronoUnit.HOURS)
+                } else {
+                    Instant.now().plus(7, ChronoUnit.DAYS) // Future maintenance
+                }
+                
+                val resolvedAt = if (finalStatus == "resolved" || finalStatus == "completed") {
+                    createdAt.plus(random.nextInt(30, 180).toLong(), ChronoUnit.MINUTES)
+                } else null
+                
+                val isScheduledMaintenance = finalStatus == "scheduled"
+                
+                StatusPageIncidents.insert {
+                    it[StatusPageIncidents.id] = incidentId
+                    it[StatusPageIncidents.statusPageId] = statusPageId
+                    it[StatusPageIncidents.title] = title
+                    it[StatusPageIncidents.status] = finalStatus
+                    it[StatusPageIncidents.type] = if (isScheduledMaintenance) "maintenance" else "incident"
+                    it[StatusPageIncidents.impact] = impact
+                    
+                    if (isScheduledMaintenance) {
+                        it[StatusPageIncidents.scheduledStartAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(
+                            Instant.now().plus(7, ChronoUnit.DAYS).toEpochMilli()
+                        )
+                        it[StatusPageIncidents.scheduledEndAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(
+                            Instant.now().plus(7, ChronoUnit.DAYS).plus(2, ChronoUnit.HOURS).toEpochMilli()
+                        )
+                    } else {
+                        it[StatusPageIncidents.scheduledStartAt] = null
+                        it[StatusPageIncidents.scheduledEndAt] = null
+                    }
+                    
+                    it[StatusPageIncidents.resolvedAt] = resolvedAt?.let { resolved ->
+                        kotlinx.datetime.Instant.fromEpochMilliseconds(resolved.toEpochMilli())
+                    }
+                    it[StatusPageIncidents.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                    it[StatusPageIncidents.updatedAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(
+                        resolvedAt?.toEpochMilli() ?: createdAt.toEpochMilli()
+                    )
+                }
+                
+                // Add incident updates
+                updates.forEachIndexed { index, (message, status) ->
+                    val updateTime = createdAt.plus((index * 30L), ChronoUnit.MINUTES)
+                    
+                    StatusPageIncidentUpdates.insert {
+                        it[StatusPageIncidentUpdates.id] = UUID.randomUUID()
+                        it[StatusPageIncidentUpdates.incidentId] = incidentId
+                        it[StatusPageIncidentUpdates.status] = status
+                        it[StatusPageIncidentUpdates.message] = message
+                        it[StatusPageIncidentUpdates.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(updateTime.toEpochMilli())
+                    }
+                }
+            }
+        }
+        
+        println("✅ Seeded 1 status page with ${monitorIds.size} monitors and ${incidents.size} incidents")
     }
     
     private fun generateBreadcrumbs(platform: String, @Suppress("UNUSED_PARAMETER") errorTitle: String): String {

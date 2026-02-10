@@ -97,5 +97,8 @@ fun Application.configureRouting() {
         
         // Uptime monitoring endpoints
         uptimeRoutes()
+        
+        // Status page endpoints
+        statusPageRoutes()
     }
 }

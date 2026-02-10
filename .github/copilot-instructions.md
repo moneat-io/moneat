@@ -86,6 +86,25 @@ dashboard/src/
 
 ## Key Conventions
 
+### Exposed DSL (Kotlin Database ORM)
+**CRITICAL:** Always use the current Exposed DSL syntax to avoid deprecation warnings:
+
+- ❌ **DEPRECATED**: `Table.select { condition }`
+- ✅ **CORRECT**: `Table.selectAll().where { condition }`
+
+**Examples:**
+```kotlin
+// BAD - deprecated
+Users.select { Users.id eq userId }
+Users.select { (Users.id eq userId) and (Users.active eq true) }
+
+// GOOD - current syntax
+Users.selectAll().where { Users.id eq userId }
+Users.selectAll().where { (Users.id eq userId) and (Users.active eq true) }
+```
+
+This applies to all tables and joins. The project uses `-Werror` (warnings as errors), so deprecated DSL will cause build failures.
+
 ### Database Migrations
 - **PostgreSQL**: Uses Flyway; migrations in `backend/src/main/resources/db/migration/*.sql`
 - **ClickHouse**: Custom versioned migrations in `backend/src/main/resources/db/clickhouse_migration/V*__*.sql`

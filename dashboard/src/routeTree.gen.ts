@@ -27,10 +27,13 @@ import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
+import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
+import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
+import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
@@ -142,6 +145,11 @@ const UptimeIndexRoute = UptimeIndexRouteImport.update({
   path: '/uptime/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StatusPagesIndexRoute = StatusPagesIndexRouteImport.update({
+  id: '/status-pages/',
+  path: '/status-pages/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -160,6 +168,16 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const UptimeMonitorIdRoute = UptimeMonitorIdRouteImport.update({
   id: '/uptime/$monitorId',
   path: '/uptime/$monitorId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatusPagesPageIdRoute = StatusPagesPageIdRouteImport.update({
+  id: '/status-pages/$pageId',
+  path: '/status-pages/$pageId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SSlugRoute = SSlugRouteImport.update({
+  id: '/s/$slug',
+  path: '/s/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReplaysReplayIdRoute = ReplaysReplayIdRouteImport.update({
@@ -299,10 +317,13 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/s/$slug': typeof SSlugRoute
+  '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
@@ -341,10 +362,13 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/s/$slug': typeof SSlugRoute
+  '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin': typeof AdminIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/performance': typeof PerformanceIndexRoute
+  '/status-pages': typeof StatusPagesIndexRoute
   '/uptime': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
@@ -386,10 +410,13 @@ export interface FileRoutesById {
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
+  '/s/$slug': typeof SSlugRoute
+  '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
@@ -432,10 +459,13 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/s/$slug'
+    | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
     | '/monitoring/'
     | '/performance/'
+    | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/auth/sso/callback'
@@ -474,10 +504,13 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/s/$slug'
+    | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin'
     | '/monitoring'
     | '/performance'
+    | '/status-pages'
     | '/uptime'
     | '/admin/organizations/$orgId'
     | '/auth/sso/callback'
@@ -518,10 +551,13 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
+    | '/s/$slug'
+    | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
     | '/monitoring/'
     | '/performance/'
+    | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/auth/sso/callback'
@@ -551,8 +587,11 @@ export interface RootRouteChildren {
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
   MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
+  SSlugRoute: typeof SSlugRoute
+  StatusPagesPageIdRoute: typeof StatusPagesPageIdRoute
   UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
+  StatusPagesIndexRoute: typeof StatusPagesIndexRoute
   UptimeIndexRoute: typeof UptimeIndexRoute
   AuthSsoCallbackRoute: typeof AuthSsoCallbackRoute
 }
@@ -685,6 +724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UptimeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/status-pages/': {
+      id: '/status-pages/'
+      path: '/status-pages'
+      fullPath: '/status-pages/'
+      preLoaderRoute: typeof StatusPagesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/performance/': {
       id: '/performance/'
       path: '/'
@@ -711,6 +757,20 @@ declare module '@tanstack/react-router' {
       path: '/uptime/$monitorId'
       fullPath: '/uptime/$monitorId'
       preLoaderRoute: typeof UptimeMonitorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/status-pages/$pageId': {
+      id: '/status-pages/$pageId'
+      path: '/status-pages/$pageId'
+      fullPath: '/status-pages/$pageId'
+      preLoaderRoute: typeof StatusPagesPageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/s/$slug': {
+      id: '/s/$slug'
+      path: '/s/$slug'
+      fullPath: '/s/$slug'
+      preLoaderRoute: typeof SSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/replays/$replayId': {
@@ -987,8 +1047,11 @@ const rootRouteChildren: RootRouteChildren = {
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,
   MonitoringSystemIdRoute: MonitoringSystemIdRoute,
+  SSlugRoute: SSlugRoute,
+  StatusPagesPageIdRoute: StatusPagesPageIdRoute,
   UptimeMonitorIdRoute: UptimeMonitorIdRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
+  StatusPagesIndexRoute: StatusPagesIndexRoute,
   UptimeIndexRoute: UptimeIndexRoute,
   AuthSsoCallbackRoute: AuthSsoCallbackRoute,
 }

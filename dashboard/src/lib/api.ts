@@ -809,6 +809,157 @@ interface TestIntegrationResponse {
   message: string
 }
 
+// Status Page Interfaces
+
+interface StatusPage {
+  id: string
+  organizationId: string
+  name: string
+  slug: string
+  description?: string
+  logoUrl?: string
+  faviconUrl?: string
+  primaryColor: string
+  darkMode: boolean
+  showUptimeHistory: boolean
+  historyDays: number
+  isPublic: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+interface StatusPageDetail extends StatusPage {
+  monitors: StatusPageMonitor[]
+  customDomains: CustomDomain[]
+}
+
+interface StatusPageMonitor {
+  id: number
+  monitorId: string
+  monitorName: string
+  displayName?: string
+  sortOrder: number
+  url?: string
+}
+
+interface MonitorAssignment {
+  monitorId: string
+  displayName?: string
+  sortOrder: number
+}
+
+interface StatusPageIncident {
+  id: string
+  statusPageId: string
+  title: string
+  status: string
+  type: string
+  impact: string
+  scheduledStartAt?: string
+  scheduledEndAt?: string
+  resolvedAt?: string
+  createdAt: string
+  updatedAt: string
+  updates: IncidentUpdate[]
+}
+
+interface IncidentUpdate {
+  id: string
+  status: string
+  message: string
+  createdAt: string
+}
+
+interface CustomDomain {
+  id: number
+  domain: string
+  verificationToken: string
+  verified: boolean
+  verifiedAt?: string
+  sslProvisioned: boolean
+  createdAt: string
+}
+
+interface PublicStatusPage {
+  name: string
+  description?: string
+  logoUrl?: string
+  faviconUrl?: string
+  primaryColor: string
+  darkMode: boolean
+  showUptimeHistory: boolean
+  historyDays: number
+  monitors: PublicMonitorStatus[]
+  activeIncidents: StatusPageIncident[]
+  scheduledMaintenance: StatusPageIncident[]
+}
+
+interface PublicMonitorStatus {
+  name: string
+  displayName?: string
+  status: string
+  uptimePercentage: number
+  uptimeHistory?: UptimeDataPoint[]
+}
+
+interface UptimeDataPoint {
+  date: string
+  uptime: number
+}
+
+interface CreateStatusPageRequest {
+  name: string
+  slug: string
+  description?: string
+  logoUrl?: string
+  faviconUrl?: string
+  primaryColor?: string
+  darkMode?: boolean
+  showUptimeHistory?: boolean
+  historyDays?: number
+  isPublic?: boolean
+}
+
+interface UpdateStatusPageRequest {
+  name?: string
+  slug?: string
+  description?: string
+  logoUrl?: string
+  faviconUrl?: string
+  primaryColor?: string
+  darkMode?: boolean
+  showUptimeHistory?: boolean
+  historyDays?: number
+  isPublic?: boolean
+}
+
+interface CreateIncidentRequest {
+  title: string
+  status: string
+  type?: string
+  impact?: string
+  message: string
+  scheduledStartAt?: string
+  scheduledEndAt?: string
+}
+
+interface UpdateIncidentRequest {
+  title?: string
+  status?: string
+  impact?: string
+  scheduledStartAt?: string
+  scheduledEndAt?: string
+}
+
+interface CreateIncidentUpdateRequest {
+  status: string
+  message: string
+}
+
+interface AddCustomDomainRequest {
+  domain: string
+}
+
 class ApiClient {
   private authRedirectInProgress = false
 
@@ -1807,6 +1958,113 @@ class ApiClient {
       method: 'POST',
     })
   }
+
+  // Status Page Management Methods
+
+  async getStatusPages() {
+    return this.request<StatusPage[]>(`${API_BASE}/status-pages`)
+  }
+
+  async getStatusPage(pageId: string) {
+    return this.request<StatusPageDetail>(`${API_BASE}/status-pages/${pageId}`)
+  }
+
+  async createStatusPage(data: CreateStatusPageRequest) {
+    return this.request<StatusPage>(`${API_BASE}/status-pages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateStatusPage(pageId: string, data: UpdateStatusPageRequest) {
+    return this.request<StatusPage>(`${API_BASE}/status-pages/${pageId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteStatusPage(pageId: string) {
+    return this.request<void>(`${API_BASE}/status-pages/${pageId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async addMonitorsToStatusPage(pageId: string, monitors: MonitorAssignment[]) {
+    return this.request<StatusPageMonitor[]>(`${API_BASE}/status-pages/${pageId}/monitors`, {
+      method: 'POST',
+      body: JSON.stringify({ monitors }),
+    })
+  }
+
+  async removeMonitorFromStatusPage(pageId: string, monitorId: string) {
+    return this.request<void>(`${API_BASE}/status-pages/${pageId}/monitors/${monitorId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getStatusPageIncidents(pageId: string) {
+    return this.request<StatusPageIncident[]>(`${API_BASE}/status-pages/${pageId}/incidents`)
+  }
+
+  async createIncident(pageId: string, data: CreateIncidentRequest) {
+    return this.request<StatusPageIncident>(`${API_BASE}/status-pages/${pageId}/incidents`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateIncident(pageId: string, incidentId: string, data: UpdateIncidentRequest) {
+    return this.request<StatusPageIncident>(`${API_BASE}/status-pages/${pageId}/incidents/${incidentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async createIncidentUpdate(pageId: string, incidentId: string, data: CreateIncidentUpdateRequest) {
+    return this.request<StatusPageIncident>(`${API_BASE}/status-pages/${pageId}/incidents/${incidentId}/updates`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async addCustomDomain(pageId: string, domain: string) {
+    return this.request<CustomDomain>(`${API_BASE}/status-pages/${pageId}/domains`, {
+      method: 'POST',
+      body: JSON.stringify({ domain }),
+    })
+  }
+
+  async verifyCustomDomain(pageId: string, domainId: number) {
+    return this.request<CustomDomain>(`${API_BASE}/status-pages/${pageId}/domains/${domainId}/verify`, {
+      method: 'POST',
+    })
+  }
+
+  async removeCustomDomain(pageId: string, domainId: number) {
+    return this.request<void>(`${API_BASE}/status-pages/${pageId}/domains/${domainId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Public Status Page Methods (no auth required)
+
+  async getPublicStatusPage(slug: string) {
+    const publicUrl = `${import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'}/public/status/${slug}`
+    const response = await fetch(publicUrl)
+    if (!response.ok) {
+      throw new Error('Failed to fetch public status page')
+    }
+    return response.json() as Promise<PublicStatusPage>
+  }
+
+  async getPublicStatusPageByDomain(domain: string) {
+    const publicUrl = `${import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'}/public/status/domain/${domain}`
+    const response = await fetch(publicUrl)
+    if (!response.ok) {
+      throw new Error('Failed to fetch public status page')
+    }
+    return response.json() as Promise<PublicStatusPage>
+  }
 }
 
 export const api = new ApiClient()
@@ -1876,4 +2134,20 @@ export type {
   SlackChannelSelection,
   UpdateSlackIntegrationRequest,
   TestIntegrationResponse,
+  StatusPage,
+  StatusPageDetail,
+  StatusPageMonitor,
+  MonitorAssignment,
+  StatusPageIncident,
+  IncidentUpdate,
+  CustomDomain,
+  PublicStatusPage,
+  PublicMonitorStatus,
+  UptimeDataPoint,
+  CreateStatusPageRequest,
+  UpdateStatusPageRequest,
+  CreateIncidentRequest,
+  UpdateIncidentRequest,
+  CreateIncidentUpdateRequest,
+  AddCustomDomainRequest,
 }

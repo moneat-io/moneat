@@ -97,10 +97,11 @@ function RootComponent() {
     document.title = getDocumentTitle(currentPath, isAuthenticated)
   }, [currentPath, isAuthenticated])
   
-  // Don't show sidebar on auth pages or landing page (when logged out)
+  // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
   const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'].includes(currentPath)
   const isLandingPage = currentPath === '/' && !isAuthenticated
-  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage
+  const isPublicStatusPage = currentPath.startsWith('/s/')
+  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   return (
