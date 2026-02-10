@@ -2015,7 +2015,7 @@ object DemoDataSeeder {
                 it[StatusPages.logoUrl] = null
                 it[StatusPages.faviconUrl] = null
                 it[StatusPages.primaryColor] = "#3B82F6"
-                it[StatusPages.darkMode] = false
+                it[StatusPages.darkMode] = true
                 it[StatusPages.showUptimeHistory] = true
                 it[StatusPages.historyDays] = 90
                 it[StatusPages.isPublic] = true
