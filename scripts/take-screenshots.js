@@ -29,9 +29,9 @@ const SCREENSHOTS_DIR = path.join(__dirname, '../dashboard/public/screenshots');
 const SCREENSHOTS = [
   {
     name: 'dashboard',
-    description: 'Main dashboard overview',
-    path: '/', // After login, this shows the authenticated dashboard
-    waitFor: 'text=Recent Issues', 
+    description: 'Main dashboard overview with issues list',
+    path: '/', // After login, shows authenticated dashboard with issues
+    waitFor: 'text=Recent Issues',
     viewport: { width: 1920, height: 1080 },
   },
   {
@@ -43,53 +43,33 @@ const SCREENSHOTS = [
   },
   {
     name: 'error-tracking',
-    description: 'Error tracking / Issues list (navigate via first project)',
-    navigate: async (page) => {
-      // Go to projects page
-      await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1000);
-      
-      // Click on the first project
-      const projectLink = await page.locator('a[href^="/projects/"]:not([href*="/settings"])').first();
-      if (projectLink) {
-        await projectLink.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-      }
-    },
+    description: 'Error tracking / Issues list (same as dashboard)',
+    path: '/', // Issues list is on the main dashboard
+    waitFor: 'text=Recent Issues',
     viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'issue-detail',
     description: 'Individual issue detail page',
     navigate: async (page) => {
-      // Go to projects page
-      await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle' });
+      // Go to dashboard which shows issues list
+      await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1500);
       
-      // Click on the first project
-      const projectLink = await page.locator('a[href^="/projects/"]:not([href*="/settings"])').first();
-      const projectExists = await projectLink.count() > 0;
-      if (projectExists) {
-        await projectLink.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(2000);
-        
-        // Wait for and click on the first issue
-        try {
-          await page.waitForSelector('a[href*="/issues/"]', { timeout: 5000 });
-          const issueLink = await page.locator('a[href*="/issues/"]').first();
-          const issueExists = await issueLink.count() > 0;
-          if (issueExists) {
-            await issueLink.click();
-            await page.waitForLoadState('networkidle');
-            await page.waitForTimeout(1500);
-          } else {
-            console.log('   ⚠️  No issues found in project');
-          }
-        } catch (e) {
+      // Wait for and click on the first issue link
+      try {
+        await page.waitForSelector('a[href^="/issues/"]', { timeout: 5000 });
+        const issueLink = await page.locator('a[href^="/issues/"]').first();
+        const issueExists = await issueLink.count() > 0;
+        if (issueExists) {
+          await issueLink.click();
+          await page.waitForLoadState('networkidle');
+          await page.waitForTimeout(1500);
+        } else {
           console.log('   ⚠️  No issues found - demo data may not be seeded');
         }
+      } catch (e) {
+        console.log('   ⚠️  No issues found - demo data may not be seeded');
       }
     },
     viewport: { width: 1920, height: 1080 },
@@ -102,7 +82,7 @@ const SCREENSHOTS = [
       await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1000);
       
-      // Click on the first project
+      // Click on the first project card/link to go to setup page
       const projectLink = await page.locator('a[href^="/projects/"]:not([href*="/settings"])').first();
       const projectExists = await projectLink.count() > 0;
       if (projectExists) {
