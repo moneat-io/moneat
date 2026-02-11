@@ -1,5 +1,6 @@
 package com.moneat.routes
 
+import com.moneat.models.BillingPlansListResponse
 import com.moneat.models.CheckoutSessionRequest
 import com.moneat.models.Subscriptions
 import com.moneat.models.UpdatePaygBudgetRequest
@@ -37,10 +38,10 @@ fun Route.billingRoutes() {
         get("/plans") {
             val plans = pricingTierService.getCurrentPlans()
             call.respond(
-                mapOf(
-                    "plans" to plans,
-                    "stripeEnabled" to stripeService.isStripeEnabled(),
-                    "publishableKey" to stripeService.getPublishableKey()
+                BillingPlansListResponse(
+                    plans = plans,
+                    stripeEnabled = stripeService.isStripeEnabled(),
+                    publishableKey = stripeService.getPublishableKey()
                 )
             )
         }
@@ -149,6 +150,27 @@ fun Route.billingRoutes() {
                 call.respond(stripeService.createSetupIntent(orgId))
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to create setup intent")))
+            }
+        }
+
+        post("/setup-intent/confirm") {
+            val principal = call.principal<JWTPrincipal>() ?: run {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))
+                return@post
+            }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId = pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                return@post
+            }
+
+            try {
+                val request = call.receive<Map<String, String>>()
+                val setupIntentId = request["setupIntentId"] ?: throw IllegalArgumentException("setupIntentId required")
+                stripeService.confirmSetupIntentAndUpdatePaymentMethod(orgId, setupIntentId)
+                call.respond(HttpStatusCode.OK, mapOf("success" to true))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to confirm setup intent")))
             }
         }
 

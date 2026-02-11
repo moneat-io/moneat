@@ -374,6 +374,22 @@ fun Route.adminRoutes() {
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
                     call.respond(pricingTierService.listAdminSubscriptions(limit))
                 }
+
+                patch("/tiers/{tierName}/versions/{version}") {
+                    val tierName = call.parameters["tierName"]?.uppercase()
+                    val version = call.parameters["version"]?.toIntOrNull()
+                    if (tierName.isNullOrBlank() || version == null) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Missing tier name or version"))
+                        return@patch
+                    }
+                    try {
+                        val request = call.receive<com.moneat.models.UpdateStripePriceIdsRequest>()
+                        val updated = pricingTierService.updateStripePriceIds(tierName, version, request)
+                        call.respond(updated)
+                    } catch (e: IllegalArgumentException) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                    }
+                }
             }
         }
     }

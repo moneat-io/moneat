@@ -219,6 +219,30 @@ class PricingTierService {
         }
     }
 
+    fun updateStripePriceIds(tierName: String, version: Int, request: UpdateStripePriceIdsRequest): PricingTierConfigResponse {
+        val canonicalName = tierName.uppercase()
+        return transaction {
+            val tier = PricingTierConfigs.selectAll().where {
+                (PricingTierConfigs.tier_name eq canonicalName) and
+                    (PricingTierConfigs.version eq version)
+            }.firstOrNull()
+                ?: throw IllegalArgumentException("Tier version not found: $canonicalName v$version")
+
+            val tierId = tier[PricingTierConfigs.id]
+
+            PricingTierConfigs.update({ PricingTierConfigs.id eq tierId }) {
+                it[stripe_base_price_id] = request.stripeBasePriceId
+                it[stripe_overage_price_id] = request.stripeOveragePriceId
+                it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
+                it[stripe_yearly_overage_price_id] = request.stripeYearlyOveragePriceId
+            }
+
+            logger.info { "Updated Stripe price IDs for $canonicalName v$version" }
+
+            rowToResponse(PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq tierId }.first())
+        }
+    }
+
     fun listAdminSubscriptions(limit: Int = 500): List<AdminBillingSubscriptionResponse> {
         return transaction {
             (Subscriptions innerJoin Organizations)

@@ -75,7 +75,15 @@ object SentryUtils {
             this.category = category
             this.level = level
             data?.forEach { (key, value) ->
-                this.setData(key, value.toString())
+                // Convert to string to avoid serialization issues with complex objects
+                // This ensures we never try to serialize Stripe SDK objects or LinkedHashMaps
+                val stringValue = when (value) {
+                    is String -> value
+                    is Number -> value.toString()
+                    is Boolean -> value.toString()
+                    else -> value.toString() // Safe fallback for any complex object
+                }
+                this.setData(key, stringValue)
             }
         })
     }

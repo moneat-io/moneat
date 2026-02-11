@@ -193,6 +193,36 @@ class StripeService(
         return SetupIntentResponse(clientSecret = clientSecret)
     }
 
+    fun confirmSetupIntentAndUpdatePaymentMethod(organizationId: Int, setupIntentId: String) {
+        ensureEnabled()
+        
+        logger.info { "Confirming setup intent and updating payment method: orgId=$organizationId, setupIntentId=$setupIntentId" }
+        
+        // Retrieve the setup intent to get the payment method and customer
+        val setupIntent = SetupIntent.retrieve(setupIntentId)
+        val customerId = setupIntent.customer ?: throw IllegalStateException("Setup intent has no customer")
+        val paymentMethodId = setupIntent.paymentMethod ?: throw IllegalStateException("Setup intent has no payment method")
+        
+        // Verify this customer belongs to the organization
+        val expectedCustomerId = getOrCreateCustomer(organizationId)
+        if (customerId != expectedCustomerId) {
+            throw IllegalStateException("Setup intent customer mismatch")
+        }
+        
+        // Update customer's default payment method
+        Customer.retrieve(customerId).update(
+            CustomerUpdateParams.builder()
+                .setInvoiceSettings(
+                    CustomerUpdateParams.InvoiceSettings.builder()
+                        .setDefaultPaymentMethod(paymentMethodId)
+                        .build()
+                )
+                .build()
+        )
+        
+        logger.info { "Successfully updated default payment method for customer $customerId to $paymentMethodId" }
+    }
+
     fun cancelSubscription(organizationId: Int): CancelSubscriptionResponse {
         ensureEnabled()
         val localSubscription = transaction {
@@ -372,6 +402,39 @@ class StripeService(
                 it[status] = "past_due"
                 it[billing_grace_until] = graceUntil
             }
+        }
+    }
+
+    fun handleSetupIntentSucceeded(setupIntent: SetupIntent) {
+        val customerId = setupIntent.customer ?: return
+        val paymentMethodId = setupIntent.paymentMethod ?: return
+        
+        SentryUtils.breadcrumb("stripe", "Setup intent succeeded", mapOf(
+            "customer_id" to customerId,
+            "payment_method_id" to paymentMethodId
+        ))
+        
+        try {
+            // Update customer's default payment method
+            Customer.retrieve(customerId).update(
+                CustomerUpdateParams.builder()
+                    .setInvoiceSettings(
+                        CustomerUpdateParams.InvoiceSettings.builder()
+                            .setDefaultPaymentMethod(paymentMethodId)
+                            .build()
+                    )
+                    .build()
+            )
+            
+            logger.info { "Updated default payment method for customer $customerId" }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to update default payment method for customer $customerId" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "update_default_payment_method")
+                scope.setExtra("customer_id", customerId)
+                scope.setExtra("payment_method_id", paymentMethodId)
+            }
+            throw e
         }
     }
 

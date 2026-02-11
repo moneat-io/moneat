@@ -102,6 +102,13 @@ data class BillingPlanResponse(
 )
 
 @Serializable
+data class BillingPlansListResponse(
+    val plans: List<BillingPlanResponse>,
+    val stripeEnabled: Boolean,
+    val publishableKey: String?
+)
+
+@Serializable
 data class BillingUsageResponse(
     val organizationId: Int,
     val periodStart: String,
@@ -199,6 +206,14 @@ data class CreateTierVersionRequest(
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
     val overageRateCentsPerGb: Int = 0,
+    val stripeBasePriceId: String? = null,
+    val stripeOveragePriceId: String? = null,
+    val stripeYearlyBasePriceId: String? = null,
+    val stripeYearlyOveragePriceId: String? = null
+)
+
+@Serializable
+data class UpdateStripePriceIdsRequest(
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,

@@ -364,6 +364,8 @@ interface BillingTierConfig {
   paygRateMicrosPerUnit: number
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
+  stripeYearlyBasePriceId?: string | null
+  stripeYearlyOveragePriceId?: string | null
   isCurrent: boolean
 }
 
@@ -472,6 +474,8 @@ interface CreateTierVersionRequest {
   paygRateMicrosPerUnit: number
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
+  stripeYearlyBasePriceId?: string | null
+  stripeYearlyOveragePriceId?: string | null
 }
 
 interface TierMigrationResponse {
@@ -479,6 +483,13 @@ interface TierMigrationResponse {
   targetVersion: number
   affectedSubscriptions: number
   dryRun: boolean
+}
+
+interface UpdateStripePriceIdsRequest {
+  stripeBasePriceId?: string | null
+  stripeOveragePriceId?: string | null
+  stripeYearlyBasePriceId?: string | null
+  stripeYearlyOveragePriceId?: string | null
 }
 
 // Monitoring types
@@ -1624,6 +1635,14 @@ class ApiClient {
     })
   }
 
+  async confirmBillingSetupIntent(setupIntentId: string) {
+    return this.request<{success: boolean}>(`${API_BASE}/billing/setup-intent/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupIntentId }),
+    })
+  }
+
   async cancelBillingSubscription() {
     return this.request<CancelSubscriptionResponse>(`${API_BASE}/billing/cancel`, {
       method: 'POST',
@@ -1776,6 +1795,16 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({targetVersion, dryRun}),
     })
+  }
+
+  async updateAdminBillingTierPriceIds(tierName: string, version: number, body: UpdateStripePriceIdsRequest) {
+    return this.request<BillingTierConfig>(
+      `${API_BASE}/admin/billing/tiers/${encodeURIComponent(tierName)}/versions/${version}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }
+    )
   }
 
   async getAdminBillingSubscriptions(limit = 500) {

@@ -153,7 +153,8 @@ class IncidentService {
                     name = row[IncidentProviderConfigs.name],
                     apiKey = row[IncidentProviderConfigs.apiKey],
                     configJson = try {
-                        json.parseToJsonElement(row[IncidentProviderConfigs.configJson]).jsonObject
+                        val jsonStr = row[IncidentProviderConfigs.configJson]
+                        json.parseToJsonElement(jsonStr).jsonObject
                     } catch (e: Exception) {
                         buildJsonObject {}
                     },

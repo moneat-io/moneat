@@ -14,6 +14,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import kotlinx.datetime.Clock
 
@@ -42,7 +43,10 @@ fun Route.incidentProviderRoutes() {
                             providerType = row[IncidentProviderConfigs.providerType],
                             name = row[IncidentProviderConfigs.name],
                             configJson = try {
-                                json.decodeFromString<Map<String, String>>(row[IncidentProviderConfigs.configJson])
+                                val jsonStr = row[IncidentProviderConfigs.configJson]
+                                json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues { 
+                                    it.value.toString().trim('"')
+                                }
                             } catch (e: Exception) {
                                 emptyMap()
                             },
@@ -69,17 +73,36 @@ fun Route.incidentProviderRoutes() {
                 val request = call.receive<CreateProviderConfigRequest>()
                 
                 val configId = transaction {
-                    IncidentProviderConfigs.insertAndGetId {
-                        it[IncidentProviderConfigs.organizationId] = organizationId
-                        it[IncidentProviderConfigs.providerType] = request.providerType
-                        it[IncidentProviderConfigs.name] = request.name
-                        it[IncidentProviderConfigs.apiKey] = request.apiKey
-                        it[IncidentProviderConfigs.configJson] = json.encodeToString(kotlinx.serialization.serializer(), request.configJson)
-                        it[IncidentProviderConfigs.enabled] = true
-                        it[IncidentProviderConfigs.createdAt] = Clock.System.now()
-                        it[IncidentProviderConfigs.updatedAt] = Clock.System.now()
+                    // Custom SQL for JSONB insertion
+                    val jsonString = request.configJson.toString()
+                    val sql = """
+                        INSERT INTO incident_provider_configs 
+                        (organization_id, provider_type, name, api_key, config_json, enabled, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, CAST(? AS JSONB), ?, CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP))
+                        RETURNING id
+                    """.trimIndent()
+                    
+                    val now = Clock.System.now()
+                    val nowStr = now.toString()
+                    
+                    var resultId: Int? = null
+                    TransactionManager.current().exec(sql, listOf(
+                        IntegerColumnType() to organizationId,
+                        VarCharColumnType(50) to request.providerType,
+                        VarCharColumnType(255) to request.name,
+                        TextColumnType() to request.apiKey,
+                        TextColumnType() to jsonString,
+                        BooleanColumnType() to true,
+                        TextColumnType() to nowStr,
+                        TextColumnType() to nowStr
+                    )) { rs ->
+                        if (rs.next()) {
+                            resultId = rs.getInt(1)
+                        }
                     }
-                }.value
+                    
+                    resultId ?: throw Exception("Failed to insert provider config")
+                }
                 
                 call.respond(HttpStatusCode.Created, mapOf("id" to configId))
             }
@@ -106,15 +129,41 @@ fun Route.incidentProviderRoutes() {
                     
                     if (!exists) return@transaction false
                     
-                    IncidentProviderConfigs.update({ IncidentProviderConfigs.id eq configId }) {
-                        request.name?.let { name -> it[IncidentProviderConfigs.name] = name }
-                        request.apiKey?.let { key -> it[IncidentProviderConfigs.apiKey] = key }
-                        request.configJson?.let { cfg -> 
-                            it[IncidentProviderConfigs.configJson] = json.encodeToString(kotlinx.serialization.serializer(), cfg)
-                        }
-                        request.enabled?.let { en -> it[IncidentProviderConfigs.enabled] = en }
-                        it[IncidentProviderConfigs.updatedAt] = Clock.System.now()
+                    // Build update SQL dynamically based on what's provided
+                    val setClauses = mutableListOf<String>()
+                    val params = mutableListOf<Pair<IColumnType, Any?>>()
+                    
+                    request.name?.let {
+                        setClauses.add("name = ?")
+                        params.add(VarCharColumnType(255) to it)
                     }
+                    request.apiKey?.let {
+                        setClauses.add("api_key = ?")
+                        params.add(TextColumnType() to it)
+                    }
+                    request.configJson?.let {
+                        setClauses.add("config_json = CAST(? AS JSONB)")
+                        params.add(TextColumnType() to it.toString())
+                    }
+                    request.enabled?.let {
+                        setClauses.add("enabled = ?")
+                        params.add(BooleanColumnType() to it)
+                    }
+                    
+                    if (setClauses.isNotEmpty()) {
+                        setClauses.add("updated_at = CAST(? AS TIMESTAMP)")
+                        params.add(TextColumnType() to Clock.System.now().toString())
+                        params.add(IntegerColumnType() to configId)
+                        
+                        val updateSql = """
+                            UPDATE incident_provider_configs
+                            SET ${setClauses.joinToString(", ")}
+                            WHERE id = ?
+                        """.trimIndent()
+                        
+                        TransactionManager.current().exec(updateSql, params) {}
+                    }
+                    
                     true
                 }
                 
@@ -174,7 +223,8 @@ fun Route.incidentProviderRoutes() {
                             name = row[IncidentProviderConfigs.name],
                             apiKey = row[IncidentProviderConfigs.apiKey],
                             configJson = try {
-                                json.parseToJsonElement(row[IncidentProviderConfigs.configJson]).jsonObject
+                                val jsonStr = row[IncidentProviderConfigs.configJson]
+                                json.parseToJsonElement(jsonStr).jsonObject
                             } catch (e: Exception) {
                                 buildJsonObject {}
                             },

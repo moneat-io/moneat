@@ -270,16 +270,20 @@ object DemoDataSeeder {
         }
         
         // Check if other data already exists
-        val feedbackCountResult = ClickHouseClient.query(
-            "SELECT count() FROM $db.user_feedback WHERE project_id IN (${projects.values.map { it.first }.joinToString(",")})",
-            "TabSeparated"
-        )
+        val feedbackCountResult = kotlinx.coroutines.runBlocking {
+            ClickHouseClient.executeWithFormat(
+                "SELECT count() FROM $db.user_feedback WHERE project_id IN (${projects.values.map { it.first }.joinToString(",")})",
+                "TabSeparated"
+            )
+        }
         val feedbackCount = feedbackCountResult.trim().toLongOrNull() ?: 0
         
-        val replayCountResult = ClickHouseClient.query(
-            "SELECT count() FROM $db.replay_events WHERE project_id IN (${projects.values.map { it.first }.joinToString(",")})",
-            "TabSeparated"
-        )
+        val replayCountResult = kotlinx.coroutines.runBlocking {
+            ClickHouseClient.executeWithFormat(
+                "SELECT count() FROM $db.replay_events WHERE project_id IN (${projects.values.map { it.first }.joinToString(",")})",
+                "TabSeparated"
+            )
+        }
         val replayCount = replayCountResult.trim().toLongOrNull() ?: 0
         
         val monitorsExist = transaction {
@@ -295,11 +299,13 @@ object DemoDataSeeder {
         seedLogData(projects)
         
         // Seed performance/transaction data (only if not exists)
-        val transactionCountResult = ClickHouseClient.query(
-            "SELECT count() FROM $db.events WHERE event_type = 'transaction' AND project_id IN (${projects.values.map { it.first }.joinToString(",")})",
-            "TabSeparated"
-        )
-        val transactionCount = transactionCountResult.trim().toLongOrNull() ?: 0
+        val transactionCountResult = kotlinx.coroutines.runBlocking {
+            ClickHouseClient.executeWithFormat(
+                "SELECT count() FROM $db.events WHERE event_type = 'transaction' AND project_id IN (${projects.values.map { it.first }.joinToString(",")})",
+                "TabSeparated"
+            )
+        }
+        val transactionCount = transactionCountResult.trim().toLongOrNull() ?: 0L
         if (transactionCount == 0L) {
             println("\nSeeding performance/transaction data...")
             seedTransactionData(projects)

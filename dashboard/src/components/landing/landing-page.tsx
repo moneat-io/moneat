@@ -53,7 +53,7 @@ export function LandingPage() {
                 <span className="text-lg font-semibold text-white">moneat</span>
               </div>
               <p className="text-sm text-slate-400 max-w-xs">
-                Open-source error monitoring built for developers who care about reliability.
+                Monitoring built for developers who care about reliability.
               </p>
             </div>
             <nav className="flex items-center gap-8">

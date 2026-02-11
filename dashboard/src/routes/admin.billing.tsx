@@ -126,6 +126,8 @@ interface CreateFormState {
   paygRateMicrosPerUnit: number
   stripeBasePriceId: string
   stripeOveragePriceId: string
+  stripeYearlyBasePriceId: string
+  stripeYearlyOveragePriceId: string
 }
 
 const DEFAULT_FORM: CreateFormState = {
@@ -142,6 +144,8 @@ const DEFAULT_FORM: CreateFormState = {
   paygRateMicrosPerUnit: 10,
   stripeBasePriceId: '',
   stripeOveragePriceId: '',
+  stripeYearlyBasePriceId: '',
+  stripeYearlyOveragePriceId: '',
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -153,8 +157,16 @@ function AdminBillingPage() {
   // Separate tier selectors for create vs. migrate sections
   const [createTier, setCreateTier] = useState('PRO')
   const [migrateTier, setMigrateTier] = useState('PRO')
+  const [updateTier, setUpdateTier] = useState('PRO')
+  const [updateVersion, setUpdateVersion] = useState<number | ''>('')
   const [targetVersion, setTargetVersion] = useState<number | ''>('')
   const [createForm, setCreateForm] = useState<CreateFormState>(DEFAULT_FORM)
+  const [updatePriceForm, setUpdatePriceForm] = useState({
+    stripeBasePriceId: '',
+    stripeOveragePriceId: '',
+    stripeYearlyBasePriceId: '',
+    stripeYearlyOveragePriceId: '',
+  })
   const [showCreateConfirm, setShowCreateConfirm] = useState(false)
   const [showMigrateConfirm, setShowMigrateConfirm] = useState(false)
   const [dryRunResult, setDryRunResult] = useState<{affected: number; version: number} | null>(null)
@@ -175,6 +187,11 @@ function AdminBillingPage() {
   const {data: migrateTierVersionsRaw} = useQuery({
     queryKey: ['admin-billing-tier-versions', migrateTier],
     queryFn: () => api.getAdminBillingTiers(migrateTier),
+  })
+
+  const {data: updateTierVersionsRaw} = useQuery({
+    queryKey: ['admin-billing-tier-versions', updateTier],
+    queryFn: () => api.getAdminBillingTiers(updateTier),
   })
 
   const {data: subscriptions = [], isLoading: subscriptionsLoading} = useQuery({
@@ -217,6 +234,16 @@ function AdminBillingPage() {
     [migrateTierVersions],
   )
 
+  const updateTierVersions = useMemo(
+    () => (Array.isArray(updateTierVersionsRaw) ? updateTierVersionsRaw : []) as BillingTierConfig[],
+    [updateTierVersionsRaw],
+  )
+
+  const selectedUpdateTierConfig = useMemo(
+    () => updateTierVersions.find((v) => v.version === Number(updateVersion)),
+    [updateTierVersions, updateVersion],
+  )
+
   const filteredSubscriptions = useMemo(() => {
     if (!subFilter) return subscriptions
     const lower = subFilter.toLowerCase()
@@ -256,6 +283,8 @@ function AdminBillingPage() {
         paygRateMicrosPerUnit: config.paygRateMicrosPerUnit,
         stripeBasePriceId: config.stripeBasePriceId ?? '',
         stripeOveragePriceId: config.stripeOveragePriceId ?? '',
+        stripeYearlyBasePriceId: config.stripeYearlyBasePriceId ?? '',
+        stripeYearlyOveragePriceId: config.stripeYearlyOveragePriceId ?? '',
       })
     },
     [],
@@ -267,6 +296,18 @@ function AdminBillingPage() {
       prefillFromConfig(currentTierConfig)
     }
   }, [currentTierConfig, prefillFromConfig])
+
+  // Pre-fill update form when version is selected
+  useEffect(() => {
+    if (selectedUpdateTierConfig) {
+      setUpdatePriceForm({
+        stripeBasePriceId: selectedUpdateTierConfig.stripeBasePriceId ?? '',
+        stripeOveragePriceId: selectedUpdateTierConfig.stripeOveragePriceId ?? '',
+        stripeYearlyBasePriceId: selectedUpdateTierConfig.stripeYearlyBasePriceId ?? '',
+        stripeYearlyOveragePriceId: selectedUpdateTierConfig.stripeYearlyOveragePriceId ?? '',
+      })
+    }
+  }, [selectedUpdateTierConfig])
 
   // ─── Mutations ────────────────────────────────────────────────────────────
 
@@ -291,6 +332,8 @@ function AdminBillingPage() {
         paygRateMicrosPerUnit: Number(createForm.paygRateMicrosPerUnit),
         stripeBasePriceId: createForm.stripeBasePriceId.trim() || null,
         stripeOveragePriceId: createForm.stripeOveragePriceId.trim() || null,
+        stripeYearlyBasePriceId: createForm.stripeYearlyBasePriceId.trim() || null,
+        stripeYearlyOveragePriceId: createForm.stripeYearlyOveragePriceId.trim() || null,
       }),
     onSuccess: (tier) => {
       queryClient.invalidateQueries({queryKey: ['admin-billing-current-plans']})
@@ -332,6 +375,27 @@ function AdminBillingPage() {
     },
     onError: (err: Error) => {
       toast({title: 'Migration failed', description: err.message, variant: 'destructive'})
+    },
+  })
+
+  const updatePriceIdsMutation = useMutation({
+    mutationFn: () =>
+      api.updateAdminBillingTierPriceIds(updateTier, Number(updateVersion), {
+        stripeBasePriceId: updatePriceForm.stripeBasePriceId.trim() || null,
+        stripeOveragePriceId: updatePriceForm.stripeOveragePriceId.trim() || null,
+        stripeYearlyBasePriceId: updatePriceForm.stripeYearlyBasePriceId.trim() || null,
+        stripeYearlyOveragePriceId: updatePriceForm.stripeYearlyOveragePriceId.trim() || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['admin-billing-tier-versions', updateTier]})
+      queryClient.invalidateQueries({queryKey: ['admin-billing-current-plans']})
+      toast({
+        title: 'Price IDs updated',
+        description: `Successfully updated Stripe price IDs for ${updateTier} v${updateVersion}`,
+      })
+    },
+    onError: (err: Error) => {
+      toast({title: 'Update failed', description: err.message, variant: 'destructive'})
     },
   })
 
@@ -723,7 +787,7 @@ function AdminBillingPage() {
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="stripeBasePriceId">Stripe Base Price ID</Label>
+                  <Label htmlFor="stripeBasePriceId">Stripe Base Price ID (Monthly)</Label>
                   <Input
                     id="stripeBasePriceId"
                     placeholder="price_..."
@@ -735,7 +799,7 @@ function AdminBillingPage() {
                   <FieldHint>The Stripe Price ID for the base monthly subscription</FieldHint>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="stripeOveragePriceId">Stripe Overage Price ID</Label>
+                  <Label htmlFor="stripeOveragePriceId">Stripe Overage Price ID (Monthly)</Label>
                   <Input
                     id="stripeOveragePriceId"
                     placeholder="price_..."
@@ -745,6 +809,30 @@ function AdminBillingPage() {
                     }
                   />
                   <FieldHint>The Stripe Price ID for metered PAYG overage charges</FieldHint>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="stripeYearlyBasePriceId">Stripe Base Price ID (Yearly)</Label>
+                  <Input
+                    id="stripeYearlyBasePriceId"
+                    placeholder="price_..."
+                    value={createForm.stripeYearlyBasePriceId}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, stripeYearlyBasePriceId: e.target.value}))
+                    }
+                  />
+                  <FieldHint>The Stripe Price ID for the base yearly subscription</FieldHint>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="stripeYearlyOveragePriceId">Stripe Overage Price ID (Yearly)</Label>
+                  <Input
+                    id="stripeYearlyOveragePriceId"
+                    placeholder="price_..."
+                    value={createForm.stripeYearlyOveragePriceId}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, stripeYearlyOveragePriceId: e.target.value}))
+                    }
+                  />
+                  <FieldHint>The Stripe Price ID for yearly metered PAYG overage charges</FieldHint>
                 </div>
               </div>
             </div>
@@ -831,6 +919,144 @@ function AdminBillingPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* ── Update Stripe Price IDs ──────────────────────────────────────── */}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Update Stripe Price IDs</CardTitle>
+            <CardDescription>
+              Update the Stripe price IDs for an existing tier version without creating a new version.
+              Useful for fixing mistakes or updating price IDs after creating them in Stripe.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>
+                  Tier
+                  <HelpTip text="Select which tier to update" />
+                </Label>
+                <Select value={updateTier} onValueChange={(v) => { setUpdateTier(v); setUpdateVersion('') }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTiers.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>
+                  Version
+                  <HelpTip text="Select which version to update" />
+                </Label>
+                {updateTierVersions.length > 0 ? (
+                  <Select
+                    value={updateVersion !== '' ? String(updateVersion) : undefined}
+                    onValueChange={(v) => setUpdateVersion(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select version..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {updateTierVersions.map((v) => (
+                        <SelectItem key={v.id} value={String(v.version)}>
+                          v{v.version} {v.isCurrent ? '(current)' : '(legacy)'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">No versions found for {updateTier}</p>
+                )}
+              </div>
+            </div>
+
+            {selectedUpdateTierConfig && (
+              <>
+                <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
+                  <p className="font-medium mb-1">Current configuration:</p>
+                  <p>Tier: {selectedUpdateTierConfig.tierName} v{selectedUpdateTierConfig.version}</p>
+                  <p>Monthly Price: ${centsToDollars(selectedUpdateTierConfig.monthlyPriceCents)}/mo</p>
+                  <p>Yearly Price: ${centsToDollars(selectedUpdateTierConfig.yearlyPriceCents)}/yr</p>
+                  <p>Status: {selectedUpdateTierConfig.isCurrent ? 'Current' : 'Legacy'}</p>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <p className="text-sm font-medium">Stripe Price IDs</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="updateStripeBasePriceId">Monthly Base Price ID</Label>
+                      <Input
+                        id="updateStripeBasePriceId"
+                        placeholder="price_..."
+                        value={updatePriceForm.stripeBasePriceId}
+                        onChange={(e) =>
+                          setUpdatePriceForm((p) => ({ ...p, stripeBasePriceId: e.target.value }))
+                        }
+                      />
+                      <FieldHint>Stripe Price ID for monthly base subscription</FieldHint>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="updateStripeOveragePriceId">Monthly Overage Price ID</Label>
+                      <Input
+                        id="updateStripeOveragePriceId"
+                        placeholder="price_..."
+                        value={updatePriceForm.stripeOveragePriceId}
+                        onChange={(e) =>
+                          setUpdatePriceForm((p) => ({ ...p, stripeOveragePriceId: e.target.value }))
+                        }
+                      />
+                      <FieldHint>Stripe Price ID for monthly metered overage</FieldHint>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="updateStripeYearlyBasePriceId">Yearly Base Price ID</Label>
+                      <Input
+                        id="updateStripeYearlyBasePriceId"
+                        placeholder="price_..."
+                        value={updatePriceForm.stripeYearlyBasePriceId}
+                        onChange={(e) =>
+                          setUpdatePriceForm((p) => ({ ...p, stripeYearlyBasePriceId: e.target.value }))
+                        }
+                      />
+                      <FieldHint>Stripe Price ID for yearly base subscription</FieldHint>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="updateStripeYearlyOveragePriceId">Yearly Overage Price ID</Label>
+                      <Input
+                        id="updateStripeYearlyOveragePriceId"
+                        placeholder="price_..."
+                        value={updatePriceForm.stripeYearlyOveragePriceId}
+                        onChange={(e) =>
+                          setUpdatePriceForm((p) => ({ ...p, stripeYearlyOveragePriceId: e.target.value }))
+                        }
+                      />
+                      <FieldHint>Stripe Price ID for yearly metered overage</FieldHint>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => updatePriceIdsMutation.mutate()}
+                    disabled={updatePriceIdsMutation.isPending || updateVersion === ''}
+                  >
+                    {updatePriceIdsMutation.isPending ? 'Updating...' : 'Update Price IDs'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ── Migrate Subscribers ──────────────────────────────────────────── */}
 

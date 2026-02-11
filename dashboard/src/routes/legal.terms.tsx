@@ -37,7 +37,7 @@ function TermsOfUsePage() {
           <section className="space-y-2">
             <h2 className="text-lg font-semibold">3. Acceptable Use</h2>
             <p>
-              You may not use Moneat to violate applicable law, interfere with service operation, attempt unauthorized access, transmit malicious code, or submit content you do not have the right to process.
+              You may not use Moneat to violate applicable law, interfere with service operation, attempt unauthorized access, transmit malicious code, or submit content you do not have the right to process. Excessive use that degrades service for others or abuses free or trial offerings may result in rate limiting, reduced functionality, or account restrictions.
             </p>
           </section>
 

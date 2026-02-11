@@ -1036,7 +1036,23 @@ function BillingTab() {
 
               {showPaymentForm && setupClientSecret && stripePromise && (
                 <div className="rounded-lg border p-4 bg-muted/20">
-                  <Elements stripe={stripePromise} options={{ clientSecret: setupClientSecret }}>
+                  <Elements 
+                    stripe={stripePromise} 
+                    options={{ 
+                      clientSecret: setupClientSecret,
+                      appearance: {
+                        theme: window.document.documentElement.classList.contains('dark') ? 'night' : 'stripe',
+                        variables: {
+                          colorPrimary: 'hsl(var(--primary))',
+                          colorBackground: 'hsl(var(--background))',
+                          colorText: 'hsl(var(--foreground))',
+                          colorDanger: 'hsl(var(--destructive))',
+                          fontFamily: 'system-ui, sans-serif',
+                          borderRadius: '0.5rem',
+                        },
+                      },
+                    }}
+                  >
                     <PaymentMethodSetupForm
                       onCancel={() => {
                         setShowPaymentForm(false)
@@ -1220,26 +1236,49 @@ function PaymentMethodSetupForm({
     if (!stripe || !elements) return
 
     setIsSubmitting(true)
-    const result = await stripe.confirmSetup({
-      elements,
-      redirect: 'if_required',
-    })
-    setIsSubmitting(false)
-
-    if (result.error) {
-      toast({
-        title: 'Payment method update failed',
-        description: result.error.message || 'Stripe could not confirm this payment method.',
-        variant: 'destructive',
+    
+    try {
+      const result = await stripe.confirmSetup({
+        elements,
+        redirect: 'if_required',
       })
-      return
-    }
 
-    toast({
-      title: 'Payment method saved',
-      description: 'Your default payment method has been updated.',
-    })
-    onSuccess()
+      if (result.error) {
+        toast({
+          title: 'Payment method update failed',
+          description: result.error.message || 'Stripe could not confirm this payment method.',
+          variant: 'destructive',
+        })
+        setIsSubmitting(false)
+        return
+      }
+
+      // Setup was confirmed successfully, now update the default payment method on the backend
+      if (result.setupIntent?.id) {
+        try {
+          await api.confirmBillingSetupIntent(result.setupIntent.id)
+          toast({
+            title: 'Payment method saved',
+            description: 'Your default payment method has been updated.',
+          })
+          onSuccess()
+        } catch (error) {
+          toast({
+            title: 'Payment method partially saved',
+            description: 'Card was added but may not be set as default. Please refresh the page.',
+            variant: 'destructive',
+          })
+        }
+      } else {
+        toast({
+          title: 'Payment method saved',
+          description: 'Your default payment method has been updated.',
+        })
+        onSuccess()
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -1820,20 +1859,25 @@ function IncidentIoCard() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Found in your incident.io dashboard under Settings &gt; API Keys.
+                    Found in your incident.io dashboard under Settings &gt; API Keys. The API key must have the <strong>Create incidents</strong> permission.
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="iio-source-id">Alert Source Config ID</Label>
+                  <Label htmlFor="iio-source-id">HTTP Alert Source URL</Label>
                   <Input
                     id="iio-source-id"
                     value={setupAlertSourceConfigId}
-                    onChange={(e) => setSetupAlertSourceConfigId(e.target.value)}
-                    placeholder="e.g. abc123def456"
+                    onChange={(e) => {
+                      const value = e.target.value
+                      // Auto-extract ID from URL if full URL is pasted
+                      const match = value.match(/\/http\/([A-Z0-9]+)/i)
+                      setSetupAlertSourceConfigId(match ? match[1] : value)
+                    }}
+                    placeholder="Paste the webhook URL or just the ID"
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    Create an HTTP alert source in incident.io and paste the config ID here.
+                    <a href="https://app.incident.io/moneatworkspace/settings/alerts/sources/create" target="_blank" rel="noopener noreferrer" className="underline">Create a new HTTP alert source</a> in incident.io and paste the webhook URL here.
                   </p>
                 </div>
                 <div className="flex gap-2 pt-2">
