@@ -22,7 +22,8 @@ import {
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {useToast} from '@/hooks/use-toast'
 import {AdminSkeleton, PlanBadge, SectionHeader} from '@/components/admin-components'
-import {AlertTriangle, HelpCircle, Info} from 'lucide-react'
+import {buildPricingCardModel, type BillingInterval, type PricingCardTierInput} from '@/lib/pricing-display'
+import {AlertTriangle, Check, HelpCircle, Info} from 'lucide-react'
 
 export const Route = createFileRoute('/admin/billing')({
   component: AdminBillingPage,
@@ -63,6 +64,8 @@ function HelpTip({text}: {text: string}) {
 
 // Known tier names for the dropdown
 const KNOWN_TIERS = ['FREE', 'PRO', 'TEAM', 'BUSINESS']
+const TIER_ORDER: Record<string, number> = {FREE: 0, PRO: 1, TEAM: 2, BUSINESS: 3}
+const BYTES_PER_GB = 1024 * 1024 * 1024
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -75,6 +78,9 @@ interface ValidationErrors {
   maxSystems?: string
   monitorIntervalSeconds?: string
   monthlyPriceCents?: string
+  yearlyPriceCents?: string
+  monthlyGbLimitGb?: string
+  trialDays?: string
   paygRateMicrosPerUnit?: string
 }
 
@@ -103,6 +109,18 @@ function validateCreateForm(form: CreateFormState): ValidationErrors {
   if (form.monthlyPriceCents < 0) {
     errors.monthlyPriceCents = 'Price cannot be negative'
   }
+  if (form.yearlyPriceCents < 0) {
+    errors.yearlyPriceCents = 'Yearly price cannot be negative'
+  }
+  if (form.monthlyGbLimitGb < 0) {
+    errors.monthlyGbLimitGb = 'Data limit cannot be negative'
+  }
+  if (form.trialDays < 0) {
+    errors.trialDays = 'Trial days cannot be negative'
+  }
+  if (form.trialDays > 60) {
+    errors.trialDays = 'Cannot exceed 60 days'
+  }
   if (form.paygEnabled && form.paygRateMicrosPerUnit < 1) {
     errors.paygRateMicrosPerUnit = 'PAYG rate must be at least 1 micro'
   }
@@ -122,6 +140,9 @@ interface CreateFormState {
   maxSystems: number
   monitorIntervalSeconds: number
   monthlyPriceCents: number
+  yearlyPriceCents: number
+  monthlyGbLimitGb: number
+  trialDays: number
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
   stripeBasePriceId: string
@@ -140,6 +161,9 @@ const DEFAULT_FORM: CreateFormState = {
   maxSystems: 5,
   monitorIntervalSeconds: 15,
   monthlyPriceCents: 1900,
+  yearlyPriceCents: 19_200,
+  monthlyGbLimitGb: 50,
+  trialDays: 14,
   paygEnabled: true,
   paygRateMicrosPerUnit: 10,
   stripeBasePriceId: '',
@@ -161,6 +185,7 @@ function AdminBillingPage() {
   const [updateVersion, setUpdateVersion] = useState<number | ''>('')
   const [targetVersion, setTargetVersion] = useState<number | ''>('')
   const [createForm, setCreateForm] = useState<CreateFormState>(DEFAULT_FORM)
+  const [previewInterval, setPreviewInterval] = useState<BillingInterval>('monthly')
   const [updatePriceForm, setUpdatePriceForm] = useState({
     stripeBasePriceId: '',
     stripeOveragePriceId: '',
@@ -265,6 +290,46 @@ function AdminBillingPage() {
     return Array.from(combined).sort()
   }, [currentPlans])
 
+  const previewCards = useMemo(() => {
+    const plansByTier = new Map(currentPlans.map((plan) => [plan.tier.tierName, plan]))
+    const sourceTiers = currentPlans.map((plan) => plan.tier)
+    const draftTier: PricingCardTierInput | null = currentTierConfig
+      ? {
+          tierName: createTier,
+          monthlyPriceCents: createForm.monthlyPriceCents,
+          yearlyPriceCents: createForm.yearlyPriceCents,
+          trialDays: createForm.trialDays,
+          monthlyGbLimit: Math.max(0, Math.round(createForm.monthlyGbLimitGb * BYTES_PER_GB)),
+          retentionDays: createForm.retentionDays,
+          maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
+          maxSystems: createForm.maxSystems,
+          monitorIntervalSeconds: createForm.monitorIntervalSeconds,
+          sessionReplayEnabled: currentTierConfig.sessionReplayEnabled,
+          statusPagesEnabled: currentTierConfig.statusPagesEnabled,
+          statusPageCustomDomainEnabled: currentTierConfig.statusPageCustomDomainEnabled,
+          slackEnabled: currentTierConfig.slackEnabled,
+          incidentIoEnabled: currentTierConfig.incidentIoEnabled,
+          samlEnabled: currentTierConfig.samlEnabled,
+          oidcEnabled: currentTierConfig.oidcEnabled,
+          prioritySupportEnabled: currentTierConfig.prioritySupportEnabled,
+          slaEnabled: currentTierConfig.slaEnabled,
+          customRetentionEnabled: currentTierConfig.customRetentionEnabled,
+        }
+      : null
+
+    const merged = sourceTiers.map((tier) => {
+      if (tier.tierName === createTier && draftTier) return draftTier
+      return {
+        ...tier,
+        trialDays: plansByTier.get(tier.tierName)?.trialDays ?? tier.trialDays,
+      }
+    })
+
+    return merged
+      .sort((a, b) => (TIER_ORDER[a.tierName] ?? 99) - (TIER_ORDER[b.tierName] ?? 99))
+      .map((tier) => buildPricingCardModel(tier, previewInterval))
+  }, [createForm, createTier, currentPlans, currentTierConfig, previewInterval])
+
   // ─── Pre-fill form from current tier config ───────────────────────────────
 
   const prefillFromConfig = useCallback(
@@ -279,6 +344,9 @@ function AdminBillingPage() {
         maxSystems: config.maxSystems,
         monitorIntervalSeconds: config.monitorIntervalSeconds,
         monthlyPriceCents: config.monthlyPriceCents,
+        yearlyPriceCents: config.yearlyPriceCents,
+        monthlyGbLimitGb: Math.max(0, config.monthlyGbLimit / BYTES_PER_GB),
+        trialDays: config.trialDays,
         paygEnabled: config.paygEnabled,
         paygRateMicrosPerUnit: config.paygRateMicrosPerUnit,
         stripeBasePriceId: config.stripeBasePriceId ?? '',
@@ -328,6 +396,9 @@ function AdminBillingPage() {
         maxSystems: Number(createForm.maxSystems),
         monitorIntervalSeconds: Number(createForm.monitorIntervalSeconds),
         monthlyPriceCents: Number(createForm.monthlyPriceCents),
+        yearlyPriceCents: Number(createForm.yearlyPriceCents),
+        monthlyGbLimit: Math.max(0, Math.round(createForm.monthlyGbLimitGb * BYTES_PER_GB)),
+        trialDays: Number(createForm.trialDays),
         paygEnabled: Boolean(createForm.paygEnabled),
         paygRateMicrosPerUnit: Number(createForm.paygRateMicrosPerUnit),
         stripeBasePriceId: createForm.stripeBasePriceId.trim() || null,
@@ -741,6 +812,77 @@ function AdminBillingPage() {
                   <p className="text-xs text-destructive">{validationErrors.monthlyPriceCents}</p>
                 )}
               </div>
+
+              {/* Yearly Price */}
+              <div className="space-y-1.5">
+                <Label htmlFor="yearlyPriceCents">
+                  Yearly Price
+                  <HelpTip text="Total yearly subscription price in US dollars charged once per year." />
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    id="yearlyPriceCents"
+                    type="number"
+                    min={0}
+                    step={100}
+                    className="pl-7"
+                    value={createForm.yearlyPriceCents}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, yearlyPriceCents: Number(e.target.value)}))
+                    }
+                  />
+                </div>
+                <FieldHint>
+                  ${centsToDollars(createForm.yearlyPriceCents)} / year (
+                  ${(createForm.yearlyPriceCents / (100 * 12)).toFixed(0)} / month effective)
+                </FieldHint>
+                {validationErrors.yearlyPriceCents && (
+                  <p className="text-xs text-destructive">{validationErrors.yearlyPriceCents}</p>
+                )}
+              </div>
+
+              {/* Monthly Data Limit */}
+              <div className="space-y-1.5">
+                <Label htmlFor="monthlyGbLimitGb">
+                  Monthly Data Limit (GB)
+                  <HelpTip text="Customer-facing monthly GB quota used in pricing cards and quota enforcement." />
+                </Label>
+                <Input
+                  id="monthlyGbLimitGb"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={createForm.monthlyGbLimitGb}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, monthlyGbLimitGb: Number(e.target.value)}))
+                  }
+                />
+                {validationErrors.monthlyGbLimitGb && (
+                  <p className="text-xs text-destructive">{validationErrors.monthlyGbLimitGb}</p>
+                )}
+              </div>
+
+              {/* Trial Days */}
+              <div className="space-y-1.5">
+                <Label htmlFor="trialDays">
+                  Trial Days
+                  <HelpTip text="Days shown in CTA for paid plans and used for checkout trial defaults." />
+                </Label>
+                <Input
+                  id="trialDays"
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={createForm.trialDays}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, trialDays: Number(e.target.value)}))
+                  }
+                />
+                {validationErrors.trialDays && (
+                  <p className="text-xs text-destructive">{validationErrors.trialDays}</p>
+                )}
+              </div>
             </div>
 
             <Separator />
@@ -855,6 +997,45 @@ function AdminBillingPage() {
               <ChangeSummary current={currentTierConfig} form={createForm} />
             )}
 
+            <Separator />
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Pricing Preview</p>
+                <div className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-1">
+                  <button
+                    onClick={() => setPreviewInterval('monthly')}
+                    className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                      previewInterval === 'monthly'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    type="button"
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setPreviewInterval('yearly')}
+                    className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                      previewInterval === 'yearly'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    type="button"
+                  >
+                    Yearly
+                  </button>
+                </div>
+              </div>
+              {previewCards.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No current plans available to preview yet.
+                </p>
+              ) : (
+                <PricingPreviewGrid cards={previewCards} interval={previewInterval} />
+              )}
+            </div>
+
             {/* Create button */}
             <div className="flex items-center gap-3">
               <Button
@@ -893,6 +1074,9 @@ function AdminBillingPage() {
               <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
                 <p><strong>Tier:</strong> {createTier}</p>
                 <p><strong>Monthly Price:</strong> ${centsToDollars(createForm.monthlyPriceCents)}/mo</p>
+                <p><strong>Yearly Price:</strong> ${centsToDollars(createForm.yearlyPriceCents)}/yr</p>
+                <p><strong>Monthly Data Limit:</strong> {createForm.monthlyGbLimitGb} GB</p>
+                <p><strong>Trial:</strong> {createForm.trialDays} day(s)</p>
                 <p><strong>Total Limit:</strong> {(
                   createForm.monthlyErrorLimit +
                   createForm.monthlyTransactionLimit +
@@ -1408,6 +1592,28 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
       to: `$${centsToDollars(form.monthlyPriceCents)}`,
     })
   }
+  if (current.yearlyPriceCents !== form.yearlyPriceCents) {
+    changes.push({
+      field: 'Yearly Price',
+      from: `$${centsToDollars(current.yearlyPriceCents)}`,
+      to: `$${centsToDollars(form.yearlyPriceCents)}`,
+    })
+  }
+  const formMonthlyGbLimit = Math.max(0, Math.round(form.monthlyGbLimitGb * BYTES_PER_GB))
+  if (current.monthlyGbLimit !== formMonthlyGbLimit) {
+    changes.push({
+      field: 'Monthly Data Limit',
+      from: `${(current.monthlyGbLimit / BYTES_PER_GB).toFixed(0)} GB`,
+      to: `${form.monthlyGbLimitGb} GB`,
+    })
+  }
+  if (current.trialDays !== form.trialDays) {
+    changes.push({
+      field: 'Trial Days',
+      from: `${current.trialDays}`,
+      to: `${form.trialDays}`,
+    })
+  }
   if (current.paygEnabled !== form.paygEnabled) {
     changes.push({
       field: 'PAYG',
@@ -1447,6 +1653,68 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function PricingPreviewGrid({
+  cards,
+  interval,
+}: {
+  cards: ReturnType<typeof buildPricingCardModel>[]
+  interval: BillingInterval
+}) {
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {cards.map((tier) => (
+        <Card
+          key={tier.tierName}
+          className={tier.highlight ? 'relative border-sky-500/50 shadow-md shadow-sky-500/10' : 'border-border/60'}
+        >
+          {tier.highlight && (
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+              <span className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-3 py-1 text-[10px] font-semibold text-white">
+                Most popular
+              </span>
+            </div>
+          )}
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{tier.name}</CardTitle>
+            <CardDescription className="text-xs">{tier.description}</CardDescription>
+            <div className="mt-2">
+              <span className="text-3xl font-bold">${tier.displayPrice === 0 ? '0' : tier.displayPrice.toFixed(0)}</span>
+              <span className="text-muted-foreground text-xs">
+                /mo
+                {interval === 'yearly' && tier.displayPrice > 0 && (
+                  <span className="block text-[11px] mt-1">billed ${tier.yearlyTotalPrice.toFixed(0)}/yr</span>
+                )}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <ul className="space-y-1.5">
+              {tier.features.slice(0, 6).map((feature) => (
+                <li key={feature} className="flex items-start gap-2">
+                  <div className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'}`}>
+                    <Check className={`h-3 w-3 ${tier.highlight ? 'text-sky-500' : 'text-emerald-500'}`} />
+                  </div>
+                  <span className="text-xs leading-tight">{feature}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="pt-2 text-center">
+              <Button
+                className={`w-full ${tier.highlight ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25' : ''}`}
+                variant={tier.highlight ? 'default' : 'outline'}
+                size="sm"
+                disabled
+              >
+                {tier.cta}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   )
 }

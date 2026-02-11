@@ -370,6 +370,7 @@ interface BillingTierConfig {
   monitorIntervalSeconds: number
   monthlyPriceCents: number
   yearlyPriceCents: number
+  trialDays: number
   monthlyGbLimit: number
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
@@ -494,6 +495,7 @@ interface CreateTierVersionRequest {
   monitorIntervalSeconds: number
   monthlyPriceCents: number
   yearlyPriceCents?: number | null
+  trialDays?: number | null
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
   overageRateCentsPerGb?: number | null

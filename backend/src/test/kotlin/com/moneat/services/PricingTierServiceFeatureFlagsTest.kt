@@ -56,6 +56,7 @@ class PricingTierServiceFeatureFlagsTest {
                 it[monitor_interval_seconds] = 30
                 it[monthly_price_cents] = 2900
                 it[yearly_price_cents] = 28_800
+                it[trial_days] = 14
                 it[payg_enabled] = true
                 it[payg_rate_micros_per_unit] = 400_000
                 it[overage_rate_cents_per_gb] = 40
@@ -86,6 +87,7 @@ class PricingTierServiceFeatureFlagsTest {
         assertEquals(53_687_091_200, created.monthlyGbLimit)
         assertEquals(30, created.logRetentionDays)
         assertEquals(28_800, created.yearlyPriceCents)
+        assertEquals(14, created.trialDays)
         assertEquals(40, created.overageRateCentsPerGb)
         assertTrue(created.statusPagesEnabled)
         assertTrue(created.statusPageCustomDomainEnabled)
@@ -131,6 +133,7 @@ class PricingTierServiceFeatureFlagsTest {
                     it[monitor_interval_seconds] = 60
                     it[monthly_price_cents] = tier.monthlyPriceCents
                     it[yearly_price_cents] = 0
+                    it[trial_days] = if (tier.name == "FREE") 0 else 14
                     it[payg_enabled] = tier.name != "FREE"
                     it[payg_rate_micros_per_unit] = 400_000
                     it[overage_rate_cents_per_gb] = 40
@@ -144,7 +147,9 @@ class PricingTierServiceFeatureFlagsTest {
 
         val byTier = plans.associateBy { it.tier.tierName }
         assertEquals(3, byTier["FREE"]?.tier?.retentionDays)
+        assertEquals(0, byTier["FREE"]?.trialDays)
         assertEquals(30, byTier["PRO"]?.tier?.retentionDays)
+        assertEquals(14, byTier["PRO"]?.trialDays)
         assertEquals(30, byTier["TEAM"]?.tier?.retentionDays)
         assertEquals(90, byTier["BUSINESS"]?.tier?.retentionDays)
 

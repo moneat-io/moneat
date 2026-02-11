@@ -4,72 +4,9 @@ import {Check} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from '@/components/ui/card'
 import {api} from '@/lib/api'
+import {buildPricingCardModel} from '@/lib/pricing-display'
 import {useToast} from '@/hooks/use-toast'
 import {useState} from 'react'
-
-function formatDataLimit(gbLimit: number): string {
-  if (gbLimit >= 1024) return `${gbLimit / 1024} TB`
-  return `${gbLimit} GB`
-}
-
-function tierDescription(tierName: string): string {
-  switch (tierName) {
-    case 'FREE':
-      return 'Perfect for side projects and getting started'
-    case 'PRO':
-      return 'For growing teams shipping production apps'
-    case 'TEAM':
-      return 'For teams that need scale and compliance'
-    case 'BUSINESS':
-      return 'For enterprises with custom requirements'
-    default:
-      return 'Flexible observability for every team'
-  }
-}
-
-function buildTierFeatures(tier: {
-  monthlyGbLimit: number
-  retentionDays: number
-  maxProjects: number | null
-  maxSystems: number
-  monitorIntervalSeconds: number
-  sessionReplayEnabled: boolean
-  statusPagesEnabled: boolean
-  statusPageCustomDomainEnabled: boolean
-  slackEnabled: boolean
-  incidentIoEnabled: boolean
-  samlEnabled: boolean
-  oidcEnabled: boolean
-  prioritySupportEnabled: boolean
-  slaEnabled: boolean
-  customRetentionEnabled: boolean
-}): string[] {
-  const gbLimit = tier.monthlyGbLimit / (1024 * 1024 * 1024)
-  const features = [
-    `${formatDataLimit(gbLimit)}/mo data`,
-    `${tier.retentionDays}-day retention`,
-    tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`,
-    `${tier.maxSystems} monitors (${tier.monitorIntervalSeconds}s interval)`,
-  ]
-
-  if (tier.sessionReplayEnabled) features.push('Session replays and events')
-
-  if (tier.statusPagesEnabled && tier.statusPageCustomDomainEnabled) {
-    features.push('Custom status pages with custom domains')
-  } else if (tier.statusPagesEnabled) {
-    features.push('Custom status pages')
-  }
-
-  if (tier.slackEnabled) features.push('Slack integration')
-  if (tier.incidentIoEnabled) features.push('incident.io integration')
-  if (tier.samlEnabled) features.push('SAML SSO integration')
-  if (tier.oidcEnabled) features.push('OIDC SSO integration')
-  if (tier.prioritySupportEnabled) features.push('Priority support')
-  if (tier.slaEnabled) features.push('SLA guarantee')
-  if (tier.customRetentionEnabled) features.push('Custom retention')
-
-  return features
-}
 
 function PricingLoadingState() {
   return (
@@ -154,21 +91,13 @@ export function PricingSection() {
   })
 
   const tiers = billingPlans?.plans.map((plan) => {
-    const tier = plan.tier
-    const monthlyPrice = tier.monthlyPriceCents / 100
-    const yearlyPrice = tier.yearlyPriceCents / (100 * 12)
-
-    return {
-      name: tier.tierName.charAt(0) + tier.tierName.slice(1).toLowerCase(),
-      monthlyPrice,
-      yearlyPrice,
-      description: tierDescription(tier.tierName),
-      features: buildTierFeatures(tier),
-      cta: tier.monthlyPriceCents === 0 ? 'Start Free' : `Start ${plan.trialDays}-Day Trial`,
-      tierName: tier.tierName,
-      ctaLink: '/signup',
-      highlight: tier.tierName === 'PRO',
-    }
+    return buildPricingCardModel(
+      {
+        ...plan.tier,
+        trialDays: plan.trialDays ?? plan.tier.trialDays,
+      },
+      billingInterval,
+    )
   }) ?? []
 
   const handlePaidTierClick = (tierName: string) => {
@@ -231,7 +160,7 @@ export function PricingSection() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             {tiers.map((tier) => {
-              const displayPrice = billingInterval === 'yearly' ? tier.yearlyPrice : tier.monthlyPrice
+              const displayPrice = tier.displayPrice
               const isYearly = billingInterval === 'yearly'
 
               return (
@@ -260,7 +189,7 @@ export function PricingSection() {
                       <span className="text-muted-foreground text-sm">
                         /mo{isYearly && displayPrice > 0 ? (
                           <span className="block text-xs mt-1">
-                            billed ${(tier.yearlyPrice * 12).toFixed(0)}/yr
+                            billed ${tier.yearlyTotalPrice.toFixed(0)}/yr
                           </span>
                         ) : ''}
                       </span>

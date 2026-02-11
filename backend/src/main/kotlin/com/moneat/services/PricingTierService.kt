@@ -49,7 +49,10 @@ class PricingTierService {
         return transaction {
             PricingTierConfigs.selectAll().where { PricingTierConfigs.is_current eq true }
                 .orderBy(PricingTierConfigs.monthly_price_cents to SortOrder.ASC)
-                .map { BillingPlanResponse(rowToResponse(it)) }
+                .map { row ->
+                    val tier = rowToResponse(row)
+                    BillingPlanResponse(tier = tier, trialDays = tier.trialDays)
+                }
         }
     }
 
@@ -154,6 +157,7 @@ class PricingTierService {
             val resolvedMonthlyGbLimit = request.monthlyGbLimit ?: currentConfig?.monthlyGbLimit ?: 0
             val resolvedLogRetentionDays = request.logRetentionDays ?: currentConfig?.logRetentionDays ?: request.retentionDays
             val resolvedYearlyPriceCents = request.yearlyPriceCents ?: currentConfig?.yearlyPriceCents ?: 0
+            val resolvedTrialDays = request.trialDays ?: currentConfig?.trialDays ?: defaultTrialDaysForTier(canonicalName)
             val resolvedOverageRateCentsPerGb = request.overageRateCentsPerGb ?: currentConfig?.overageRateCentsPerGb ?: 0
 
             val resolvedStatusPagesEnabled = request.statusPagesEnabled
@@ -217,6 +221,7 @@ class PricingTierService {
                 it[monitor_interval_seconds] = request.monitorIntervalSeconds
                 it[monthly_price_cents] = request.monthlyPriceCents
                 it[yearly_price_cents] = resolvedYearlyPriceCents
+                it[trial_days] = resolvedTrialDays
                 it[payg_enabled] = request.paygEnabled
                 it[payg_rate_micros_per_unit] = request.paygRateMicrosPerUnit
                 it[overage_rate_cents_per_gb] = resolvedOverageRateCentsPerGb
@@ -246,6 +251,9 @@ class PricingTierService {
         }
         if (request.yearlyPriceCents != null) {
             require(request.yearlyPriceCents >= 0) { "Yearly price cannot be negative" }
+        }
+        if (request.trialDays != null) {
+            require(request.trialDays in 0..60) { "Trial days must be between 0 and 60" }
         }
         if (request.overageRateCentsPerGb != null) {
             require(request.overageRateCentsPerGb >= 0) { "Overage rate cannot be negative" }
@@ -392,6 +400,7 @@ class PricingTierService {
             monitorIntervalSeconds = tier.monitorIntervalSeconds,
             monthlyPriceCents = monthlyPrice,
             yearlyPriceCents = yearlyPrice,
+            trialDays = defaultTrialDaysForTier(tier.name),
             paygEnabled = tier != PricingTier.FREE,
             paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,  // $0.40/GB in micros
             overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,  // $0.40/GB
@@ -431,6 +440,7 @@ class PricingTierService {
             monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
             monthlyPriceCents = row[PricingTierConfigs.monthly_price_cents],
             yearlyPriceCents = row[PricingTierConfigs.yearly_price_cents],
+            trialDays = row[PricingTierConfigs.trial_days],
             paygEnabled = row[PricingTierConfigs.payg_enabled],
             paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
             overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
@@ -462,5 +472,9 @@ class PricingTierService {
             slaEnabled = isBusiness,
             customRetentionEnabled = isBusiness
         )
+    }
+
+    private fun defaultTrialDaysForTier(tierName: String): Int {
+        return if (tierName.uppercase() == "FREE") 0 else 14
     }
 }

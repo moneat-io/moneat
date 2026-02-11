@@ -188,6 +188,7 @@ CREATE TABLE IF NOT EXISTS pricing_tier_configs (
     monitor_interval_seconds INT NOT NULL,
     monthly_price_cents INT NOT NULL,
     yearly_price_cents INT NOT NULL DEFAULT 0,
+    trial_days INT NOT NULL DEFAULT 14,
     payg_enabled BOOLEAN NOT NULL DEFAULT false,
     payg_rate_micros_per_unit BIGINT NOT NULL DEFAULT 0,
     overage_rate_cents_per_gb INT NOT NULL DEFAULT 0,
@@ -292,6 +293,7 @@ INSERT INTO pricing_tier_configs (
     monitor_interval_seconds,
     monthly_price_cents,
     yearly_price_cents,
+    trial_days,
     payg_enabled,
     payg_rate_micros_per_unit,
     overage_rate_cents_per_gb,
@@ -304,21 +306,21 @@ INSERT INTO pricing_tier_configs (
     (
         'FREE', 1, 10000, 10000, 0, 0, 0, 1073741824, 3, 3,
         true, true, true, true, true, false, false, false, false, false,
-        3, 3, 60, 0, 0, false, 0, 0, NULL, NULL, NULL, NULL, true
+        3, 3, 60, 0, 0, 0, false, 0, 0, NULL, NULL, NULL, NULL, true
     ),
     (
         'PRO', 1, 500000, 500000, 0, 0, 0, 53687091200, 30, 30,
         true, true, true, true, true, false, false, false, false, false,
-        NULL, 10, 30, 2900, 28800, true, 400000, 40, NULL, NULL, NULL, NULL, true
+        NULL, 10, 30, 2900, 28800, 14, true, 400000, 40, NULL, NULL, NULL, NULL, true
     ),
     (
         'TEAM', 1, 5000000, 5000000, 0, 0, 0, 214748364800, 30, 30,
         true, true, true, true, true, true, true, false, false, false,
-        NULL, 25, 10, 7900, 79200, true, 400000, 40, NULL, NULL, NULL, NULL, true
+        NULL, 25, 10, 7900, 79200, 14, true, 400000, 40, NULL, NULL, NULL, NULL, true
     ),
     (
         'BUSINESS', 1, 9223372036854775807, 9223372036854775807, 0, 0, 0, 1099511627776, 90, 90,
         true, true, true, true, true, true, true, true, true, true,
-        NULL, 2147483647, 10, 19900, 199200, true, 400000, 40, NULL, NULL, NULL, NULL, true
+        NULL, 2147483647, 10, 19900, 199200, 14, true, 400000, 40, NULL, NULL, NULL, NULL, true
     )
 ON CONFLICT (tier_name, version) DO NOTHING;

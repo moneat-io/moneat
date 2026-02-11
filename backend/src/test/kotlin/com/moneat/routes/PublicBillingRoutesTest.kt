@@ -51,6 +51,7 @@ class PublicBillingRoutesTest {
                 it[monitor_interval_seconds] = 60
                 it[monthly_price_cents] = 0
                 it[yearly_price_cents] = 0
+                it[trial_days] = 0
                 it[payg_enabled] = false
                 it[payg_rate_micros_per_unit] = 0
                 it[overage_rate_cents_per_gb] = 0
@@ -79,5 +80,6 @@ class PublicBillingRoutesTest {
         assertTrue(body.contains("\"sessionReplayEnabled\""))
         assertTrue(body.contains("\"slackEnabled\""))
         assertTrue(body.contains("\"incidentIoEnabled\""))
+        assertTrue(body.contains("\"trialDays\""))
     }
 }

@@ -32,6 +32,7 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val monitor_interval_seconds = integer("monitor_interval_seconds")
     val monthly_price_cents = integer("monthly_price_cents")
     val yearly_price_cents = integer("yearly_price_cents").default(0)
+    val trial_days = integer("trial_days").default(14)
     val payg_enabled = bool("payg_enabled").default(false)
     val payg_rate_micros_per_unit = long("payg_rate_micros_per_unit").default(0)
     val overage_rate_cents_per_gb = integer("overage_rate_cents_per_gb").default(0)
@@ -107,6 +108,7 @@ data class PricingTierConfigResponse(
     val monitorIntervalSeconds: Int,
     val monthlyPriceCents: Int,
     val yearlyPriceCents: Int,
+    val trialDays: Int,
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
     val overageRateCentsPerGb: Int,
@@ -120,7 +122,7 @@ data class PricingTierConfigResponse(
 @Serializable
 data class BillingPlanResponse(
     val tier: PricingTierConfigResponse,
-    val trialDays: Int = 14
+    val trialDays: Int
 )
 
 @Serializable
@@ -236,6 +238,7 @@ data class CreateTierVersionRequest(
     val monitorIntervalSeconds: Int,
     val monthlyPriceCents: Int,
     val yearlyPriceCents: Int? = null,
+    val trialDays: Int? = null,
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
     val overageRateCentsPerGb: Int? = null,

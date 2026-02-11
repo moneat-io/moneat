@@ -389,6 +389,7 @@ class BillingQuotaService(
             monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
             monthlyPriceCents = row[PricingTierConfigs.monthly_price_cents],
             yearlyPriceCents = row[PricingTierConfigs.yearly_price_cents],
+            trialDays = row[PricingTierConfigs.trial_days],
             paygEnabled = row[PricingTierConfigs.payg_enabled],
             paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
             overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
@@ -439,6 +440,7 @@ class BillingQuotaService(
                 PricingTier.TEAM -> 79200
                 PricingTier.BUSINESS -> 199200
             },
+            trialDays = if (tier == PricingTier.FREE) 0 else 14,
             paygEnabled = tier != PricingTier.FREE,
             paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,
             overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
