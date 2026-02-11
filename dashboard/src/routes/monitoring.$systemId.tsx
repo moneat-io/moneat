@@ -878,23 +878,6 @@ function SystemDetailPage() {
                       The agent is online, but it can’t read Docker container metadata yet.
                     </p>
                   </div>
-                  <div className="mx-auto max-w-2xl space-y-3">
-                    <div className="rounded-lg border bg-background/80 p-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">1. Resolve Docker socket path</p>
-                      <code className="block rounded bg-muted px-2.5 py-2 text-xs font-mono overflow-x-auto">
-                        {"docker context inspect --format '{{.Endpoints.docker.Host}}'"}
-                      </code>
-                    </div>
-                    <div className="rounded-lg border bg-background/80 p-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">2. Verify the agent can read the socket</p>
-                      <code className="block rounded bg-muted px-2.5 py-2 text-xs font-mono overflow-x-auto">
-                        docker exec moneat-agent ls -l /var/run/docker.sock
-                      </code>
-                    </div>
-                    <p className="text-xs text-muted-foreground px-1">
-                      If you just created this system, regenerate the setup command with container monitoring enabled and redeploy the agent.
-                    </p>
-                  </div>
                 </CardContent>
               </Card>
             )}

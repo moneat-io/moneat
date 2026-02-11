@@ -3,16 +3,42 @@ import {Logo} from '@/components/logo'
 import {Button} from '@/components/ui/button'
 import {VariantA} from './variant-a'
 import {PricingSection} from './pricing-section'
+import {Helmet} from 'react-helmet-async'
 
 export function LandingPage() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Moneat',
+    url: 'https://moneat.io',
+    applicationCategory: 'DeveloperApplication',
+    description: 'Sentry-compatible error, performance, and session replay monitoring.',
+    operatingSystem: 'Web',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+    },
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <article className="min-h-screen bg-background">
+      <Helmet>
+        <title>Moneat | Error, Performance, and Replay Monitoring</title>
+        <meta
+          name="description"
+          content="Sentry-compatible error, performance, and session replay monitoring. Built for developers who care about reliability."
+        />
+        <link rel="canonical" href="https://moneat.io" />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
+
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
         <div className="flex h-16 items-center px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto justify-between">
-          <Link to="/" className="flex items-center">
+          <Link to="/" className="flex items-center" aria-label="Moneat Home">
             <Logo className="h-8" />
           </Link>
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
             <a
               href="#features"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -56,7 +82,7 @@ export function LandingPage() {
                 Monitoring built for developers who care about reliability.
               </p>
             </div>
-            <nav className="flex items-center gap-8">
+            <nav className="flex items-center gap-8" aria-label="Footer navigation">
               <a
                 href="#features"
                 className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
@@ -105,6 +131,6 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
-    </div>
+    </article>
   )
 }

@@ -7,6 +7,7 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {LEGAL_PRIVACY_VERSION, LEGAL_TERMS_VERSION} from '@/lib/legal'
 import {Logo} from '@/components/logo'
+import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/signup')({
   beforeLoad: () => {
@@ -66,6 +67,10 @@ function SignupPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Sign Up | Moneat</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="mx-auto flex min-h-screen max-w-6xl overflow-hidden border-x border-border">
         <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative flex-col justify-between p-10">
           <div className="text-white">

@@ -258,15 +258,12 @@ fun Route.monitorRoutes() {
                 val (system, agentKey) = monitorService.createSystem(organizationId, request.name)
                 
                 // Generate docker run command
-                val apiUrl = System.getenv("API_URL") ?: "https://api.moneat.io"
                 val dockerCommand = """
                     docker run -d --name moneat-agent \
-                      --user 0:0 \
-                      --restart unless-stopped \
+                      --restart always \
+                      --network host \
                       -v /var/run/docker.sock:/var/run/docker.sock:ro \
-                      -e DOCKER_HOST="unix:///var/run/docker.sock" \
                       -e MONEAT_KEY="$agentKey" \
-                      -e MONEAT_URL="$apiUrl" \
                       adrianelder/moneat-agent:latest
                 """.trimIndent()
                 

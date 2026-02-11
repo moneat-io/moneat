@@ -1,5 +1,6 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {LEGAL_PRIVACY_VERSION} from '@/lib/legal'
+import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/legal/privacy')({
   component: PrivacyPolicyPage,
@@ -8,6 +9,11 @@ export const Route = createFileRoute('/legal/privacy')({
 function PrivacyPolicyPage() {
   return (
     <main className="min-h-screen bg-background">
+      <Helmet>
+        <title>Privacy Policy | Moneat</title>
+        <meta name="description" content="Privacy Policy for Moneat monitoring service." />
+        <link rel="canonical" href="https://moneat.io/legal/privacy" />
+      </Helmet>
       <div className="mx-auto max-w-4xl px-6 py-12 md:py-16">
         <div className="mb-10 space-y-3">
           <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>

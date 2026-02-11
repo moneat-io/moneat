@@ -18,6 +18,7 @@ import {Label} from '@/components/ui/label'
 import {Separator} from '@/components/ui/separator'
 import {Switch} from '@/components/ui/switch'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
   Activity,
@@ -161,61 +162,36 @@ function AddSystemButton({onClick}: {onClick: () => void}) {
 }
 
 const DOCKER_SOCKET_REFERENCE_REGEX = /\/var\/run\/docker\.sock/
-const SOCK_PATH_ASSIGNMENT_REGEX = /^\s*SOCK_PATH=/
-const DOCKER_HOST_LINE_REGEX = /^\s*-e\s+DOCKER_HOST="unix:\/\/\/var\/run\/docker\.sock"\s*\\?\s*$/
-const SOCK_PATH_LOOKUP_LINE = `SOCK_PATH="$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"`
-const SOCK_PATH_STRIP_UNIX_LINE = 'SOCK_PATH="${SOCK_PATH#unix://}"'
-const SOCK_PATH_MAC_NORMALIZE_LINE = `case "$SOCK_PATH" in /Users/*/.docker/run/docker.sock) SOCK_PATH="/var/run/docker.sock" ;; esac`
-const SOCK_PATH_FALLBACK_LINE = '[ -S "$SOCK_PATH" ] || SOCK_PATH="/var/run/docker.sock"'
-const AGENT_ROOT_USER_LINE = '--user 0:0 \\'
 
 function getInstallCommand(baseCommand: string, enableContainerMonitoring: boolean): string {
-  const lines = baseCommand.split('\n')
-  const withoutDockerSocket = lines.filter(
-    (line) =>
-      !SOCK_PATH_ASSIGNMENT_REGEX.test(line) &&
-      !DOCKER_SOCKET_REFERENCE_REGEX.test(line) &&
-      line.trim() !== '--user 0:0 \\' &&
-      !DOCKER_HOST_LINE_REGEX.test(line)
-  )
-
-  if (!enableContainerMonitoring) {
-    return withoutDockerSocket.join('\n')
+  if (enableContainerMonitoring) {
+    return baseCommand
   }
 
-  const runLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('docker run '))
-  const insertLookupAt = runLineIndex >= 0 ? runLineIndex : 0
+  // Remove docker socket mount when container monitoring is disabled
+  const lines = baseCommand.split('\n')
+  return lines.filter((line) => !DOCKER_SOCKET_REFERENCE_REGEX.test(line)).join('\n')
+}
 
-  withoutDockerSocket.splice(
-    insertLookupAt,
-    0,
-    SOCK_PATH_LOOKUP_LINE,
-    SOCK_PATH_STRIP_UNIX_LINE,
-    SOCK_PATH_MAC_NORMALIZE_LINE,
-    SOCK_PATH_FALLBACK_LINE,
-    ''
-  )
+function getDockerComposeCommand(baseCommand: string, enableContainerMonitoring: boolean): string {
+  // Extract the MONEAT_KEY from the docker run command
+  const keyMatch = baseCommand.match(/-e MONEAT_KEY="([^"]+)"/)
+  const key = keyMatch ? keyMatch[1] : 'YOUR_KEY_HERE'
 
-  const updatedRunLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('docker run '))
-  const userLineInsertAt = updatedRunLineIndex >= 0 ? updatedRunLineIndex + 1 : 4
-  const userLineIndentation = (withoutDockerSocket[userLineInsertAt - 1]?.match(/^\s*/) || ['  '])[0]
-  withoutDockerSocket.splice(userLineInsertAt, 0, `${userLineIndentation}${AGENT_ROOT_USER_LINE}`)
+  const volumes = enableContainerMonitoring
+    ? `    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro`
+    : ''
 
-  const restartLineIndex = withoutDockerSocket.findIndex(
-    (line, idx) => idx > userLineInsertAt && line.trim().startsWith('--restart ')
-  )
-  const insertMountAt = restartLineIndex >= 0 ? restartLineIndex + 1 : userLineInsertAt + 1
-  const indentation = (withoutDockerSocket[insertMountAt - 1]?.match(/^\s*/) || ['  '])[0]
-
-  withoutDockerSocket.splice(insertMountAt, 0, `${indentation}-v "\${SOCK_PATH}:/var/run/docker.sock:ro" \\`)
-
-  const keyEnvLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('-e MONEAT_KEY='))
-  const imageLineIndex = withoutDockerSocket.findIndex((line) => line.trim().startsWith('adrianelder/moneat-agent:'))
-  const insertDockerHostAt = keyEnvLineIndex >= 0 ? keyEnvLineIndex : imageLineIndex >= 0 ? imageLineIndex : withoutDockerSocket.length
-  const envIndentation = (withoutDockerSocket[Math.max(insertDockerHostAt - 1, 0)]?.match(/^\s*/) || ['  '])[0]
-  withoutDockerSocket.splice(insertDockerHostAt, 0, `${envIndentation}-e DOCKER_HOST="unix:///var/run/docker.sock" \\`)
-
-  return withoutDockerSocket.join('\n')
+  return `services:
+  moneat-agent:
+    image: adrianelder/moneat-agent:latest
+    container_name: moneat-agent
+    restart: always
+    network_mode: host
+${volumes}
+    environment:
+      - MONEAT_KEY=${key}`
 }
 
 function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: boolean) => void}) {
@@ -226,6 +202,7 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
   const [containerMonitoringEnabled, setContainerMonitoringEnabled] = useState(true)
   const [isDark, setIsDark] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [installType, setInstallType] = useState<'docker' | 'compose'>('docker')
 
   useEffect(() => {
     const root = document.documentElement
@@ -286,9 +263,12 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
 
   const handleCopyCommand = async () => {
     if (createdSystem) {
-      await navigator.clipboard.writeText(getInstallCommand(createdSystem.dockerCommand, containerMonitoringEnabled))
+      const command = installType === 'docker'
+        ? getInstallCommand(createdSystem.dockerCommand, containerMonitoringEnabled)
+        : getDockerComposeCommand(createdSystem.dockerCommand, containerMonitoringEnabled)
+      await navigator.clipboard.writeText(command)
       setCopied(true)
-      toast({title: 'Copied!', description: 'Docker command copied to clipboard'})
+      toast({title: 'Copied!', description: 'Command copied to clipboard'})
       setTimeout(() => setCopied(false), 2000)
     }
   }
@@ -344,7 +324,7 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
                 System Created Successfully
               </DialogTitle>
               <DialogDescription>
-                Install the monitoring agent on your server using the command below.
+                Install the monitoring agent on your server using Docker or Docker Compose.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-5 py-4">
@@ -358,7 +338,7 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium">Enable container monitoring</p>
                     <p className="text-xs text-muted-foreground">
-                      Auto-detects Docker socket path and uses Docker Engine API via <code className="rounded bg-muted px-1 py-0.5">DOCKER_HOST</code>.
+                      Mounts Docker socket for container metrics and stats.
                     </p>
                   </div>
                   <Switch
@@ -367,49 +347,102 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
                     aria-label="Toggle container monitoring"
                   />
                 </div>
-                <div className="relative group">
-                  <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
-                    <SyntaxHighlighter
-                      language="bash"
-                      style={isDark ? oneDark : oneLight}
-                      customStyle={{
-                        margin: 0,
-                        padding: '1rem',
-                        paddingRight: '5rem',
-                        fontSize: '0.8125rem',
-                        lineHeight: 1.6,
-                        background: 'transparent',
-                      }}
-                      codeTagProps={{
-                        style: {
-                          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                        },
-                      }}
-                      showLineNumbers={false}
-                      wrapLongLines={false}
-                    >
-                      {getInstallCommand(createdSystem.dockerCommand, containerMonitoringEnabled)}
-                    </SyntaxHighlighter>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
-                    onClick={handleCopyCommand}
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-emerald-500" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
-                </div>
+                <Tabs value={installType} onValueChange={(v) => setInstallType(v as 'docker' | 'compose')} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="docker">Docker</TabsTrigger>
+                    <TabsTrigger value="compose">Docker Compose</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="docker" className="mt-3">
+                    <div className="relative group">
+                      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
+                        <SyntaxHighlighter
+                          language="bash"
+                          style={isDark ? oneDark : oneLight}
+                          customStyle={{
+                            margin: 0,
+                            padding: '1rem',
+                            paddingRight: '5rem',
+                            fontSize: '0.8125rem',
+                            lineHeight: 1.6,
+                            background: 'transparent',
+                          }}
+                          codeTagProps={{
+                            style: {
+                              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                            },
+                          }}
+                          showLineNumbers={false}
+                          wrapLongLines={false}
+                        >
+                          {getInstallCommand(createdSystem.dockerCommand, containerMonitoringEnabled)}
+                        </SyntaxHighlighter>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
+                        onClick={handleCopyCommand}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            Copy
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="compose" className="mt-3">
+                    <div className="relative group">
+                      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
+                        <SyntaxHighlighter
+                          language="yaml"
+                          style={isDark ? oneDark : oneLight}
+                          customStyle={{
+                            margin: 0,
+                            padding: '1rem',
+                            paddingRight: '5rem',
+                            fontSize: '0.8125rem',
+                            lineHeight: 1.6,
+                            background: 'transparent',
+                          }}
+                          codeTagProps={{
+                            style: {
+                              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                            },
+                          }}
+                          showLineNumbers={false}
+                          wrapLongLines={false}
+                        >
+                          {getDockerComposeCommand(createdSystem.dockerCommand, containerMonitoringEnabled)}
+                        </SyntaxHighlighter>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
+                        onClick={handleCopyCommand}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            Copy
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </div>
 
               {/* Steps */}

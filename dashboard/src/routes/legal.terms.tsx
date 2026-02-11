@@ -1,5 +1,6 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {LEGAL_TERMS_VERSION} from '@/lib/legal'
+import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/legal/terms')({
   component: TermsOfUsePage,
@@ -8,6 +9,11 @@ export const Route = createFileRoute('/legal/terms')({
 function TermsOfUsePage() {
   return (
     <main className="min-h-screen bg-background">
+      <Helmet>
+        <title>Terms of Use | Moneat</title>
+        <meta name="description" content="Terms of Use for Moneat monitoring service." />
+        <link rel="canonical" href="https://moneat.io/legal/terms" />
+      </Helmet>
       <div className="mx-auto max-w-4xl px-6 py-12 md:py-16">
         <div className="mb-10 space-y-3">
           <h1 className="text-3xl font-bold tracking-tight">Terms of Use</h1>

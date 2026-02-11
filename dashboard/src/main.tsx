@@ -5,6 +5,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {routeTree} from './routeTree.gen'
 import {ProjectProvider} from './contexts/project-context'
 import {TooltipProvider} from './components/ui/tooltip'
+import {HelmetProvider} from 'react-helmet-async'
 import * as Sentry from '@sentry/react'
 import './index.css'
 
@@ -46,7 +47,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ProjectProvider>
-          <RouterProvider router={router} />
+          <HelmetProvider>
+            <RouterProvider router={router} />
+          </HelmetProvider>
         </ProjectProvider>
       </TooltipProvider>
     </QueryClientProvider>

@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /onboarding
+Disallow: /settings
+Disallow: /projects
+Disallow: /issues
+Disallow: /feedback
+Disallow: /performance
+Disallow: /releases
+Disallow: /replays
+Disallow: /monitoring
+Disallow: /uptime
+Disallow: /status-pages
+Disallow: /accept-invite
+Disallow: /impersonate-callback
+Disallow: /auth
+
+Sitemap: https://moneat.io/sitemap.xml

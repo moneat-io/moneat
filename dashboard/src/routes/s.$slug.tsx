@@ -19,6 +19,7 @@ import {
   Loader2,
   ChevronRight,
 } from 'lucide-react'
+import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/s/$slug')({
   component: PublicStatusPage,
@@ -79,6 +80,13 @@ function PublicStatusPage() {
 
   return (
     <TooltipProvider delayDuration={0}>
+      <Helmet>
+        <title>{statusPage.name} Status | Moneat</title>
+        <meta name="description" content={`Current status and uptime for ${statusPage.name}.`} />
+        {statusPage.activeIncidents.length > 0 && (
+          <meta name="twitter:data1" content={`${statusPage.activeIncidents.length} active incidents`} />
+        )}
+      </Helmet>
       <div className={`min-h-screen font-sans antialiased ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}`}>
         {/* Minimal Top Bar */}
         <header className={`border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
