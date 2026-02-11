@@ -1,0 +1,185 @@
+package com.moneat.services
+
+import com.moneat.models.*
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.mindrot.jbcrypt.BCrypt
+import kotlin.test.*
+
+class AuthServicePasswordResetTest {
+    private val authService = AuthService()
+
+    @BeforeTest
+    fun setupDatabase() {
+        Database.connect(
+            url = "jdbc:h2:mem:moneat_password_reset_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver"
+        )
+        transaction {
+            SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances)
+        }
+    }
+
+    @Test
+    fun `resetPassword succeeds with valid token`() {
+        val token = "valid-reset-token"
+        val expiresAt = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour from now
+        val oldPassword = "oldpassword123"
+        val newPassword = "newpassword456"
+        
+        val userId = transaction {
+            insertTestUser(
+                email = "reset@example.com",
+                password = oldPassword,
+                passwordResetToken = token,
+                passwordResetExpiresAt = expiresAt
+            )
+        }
+
+        val result = authService.resetPassword(token, newPassword)
+        
+        assertTrue(result, "Password reset should succeed")
+        
+        // Verify password was changed and token cleared
+        transaction {
+            val user = Users.selectAll().where { Users.id eq userId }.first()
+            val newHash = user[Users.password_hash]
+            
+            assertTrue(BCrypt.checkpw(newPassword, newHash), "New password should be set")
+            assertFalse(BCrypt.checkpw(oldPassword, newHash), "Old password should not work")
+            assertNull(user[Users.password_reset_token], "Reset token should be cleared")
+            assertNull(user[Users.password_reset_expires_at], "Expiration should be cleared")
+        }
+    }
+
+    @Test
+    fun `resetPassword fails with expired token`() {
+        val token = "expired-reset-token"
+        val expiresAt = System.currentTimeMillis() - 1000 // 1 second ago (expired)
+        val oldPassword = "oldpassword123"
+        
+        val userId = transaction {
+            insertTestUser(
+                email = "expired@example.com",
+                password = oldPassword,
+                passwordResetToken = token,
+                passwordResetExpiresAt = expiresAt
+            )
+        }
+
+        val result = authService.resetPassword(token, "newpassword456")
+        
+        assertFalse(result, "Password reset should fail with expired token")
+        
+        // Verify password unchanged
+        transaction {
+            val user = Users.selectAll().where { Users.id eq userId }.first()
+            assertTrue(BCrypt.checkpw(oldPassword, user[Users.password_hash]), "Password should remain unchanged")
+        }
+    }
+
+    @Test
+    fun `resetPassword fails with invalid token`() {
+        transaction {
+            insertTestUser(
+                email = "test@example.com",
+                password = "password123",
+                passwordResetToken = "real-token",
+                passwordResetExpiresAt = System.currentTimeMillis() + 1000000
+            )
+        }
+
+        val result = authService.resetPassword("wrong-token", "newpassword456")
+        
+        assertFalse(result, "Password reset should fail with wrong token")
+    }
+
+    @Test
+    fun `resetPassword rejects short passwords`() {
+        val token = "valid-token"
+        val expiresAt = System.currentTimeMillis() + 1000000
+        
+        transaction {
+            insertTestUser(
+                email = "test@example.com",
+                password = "oldpassword123",
+                passwordResetToken = token,
+                passwordResetExpiresAt = expiresAt
+            )
+        }
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            authService.resetPassword(token, "short")
+        }
+        
+        assertTrue(error.message?.contains("at least 8 characters", ignoreCase = true) == true)
+    }
+
+    @Test
+    fun `resetPassword fails when token is null in database`() {
+        transaction {
+            insertTestUser(
+                email = "test@example.com",
+                password = "password123",
+                passwordResetToken = null,
+                passwordResetExpiresAt = null
+            )
+        }
+
+        val result = authService.resetPassword("any-token", "newpassword123")
+        
+        assertFalse(result, "Password reset should fail when no token exists")
+    }
+
+    @Test
+    fun `requestPasswordReset generates token with 1 hour expiry`() {
+        transaction {
+            insertTestUser(
+                email = "request@example.com",
+                password = "password123",
+                passwordResetToken = null,
+                passwordResetExpiresAt = null
+            )
+        }
+
+        val timeBefore = System.currentTimeMillis()
+        authService.requestPasswordReset("request@example.com")
+        val timeAfter = System.currentTimeMillis()
+        
+        // Note: This may fail if email service is not available, which is okay for unit tests
+        // The important part is that the token is set in the database
+        
+        transaction {
+            val user = Users.selectAll().where { Users.email eq "request@example.com" }.first()
+            assertNotNull(user[Users.password_reset_token], "Reset token should be generated")
+            
+            val expiresAt = user[Users.password_reset_expires_at]
+            assertNotNull(expiresAt, "Expiration should be set")
+            
+            // Token should expire in approximately 1 hour (60 * 60 * 1000 ms)
+            val expectedExpiry = timeBefore + (60 * 60 * 1000)
+            assertTrue(expiresAt >= expectedExpiry - 1000, "Expiry should be ~1 hour from now (lower bound)")
+            assertTrue(expiresAt <= timeAfter + (60 * 60 * 1000) + 1000, "Expiry should be ~1 hour from now (upper bound)")
+        }
+    }
+
+    private fun insertTestUser(
+        email: String,
+        password: String,
+        passwordResetToken: String?,
+        passwordResetExpiresAt: Long?
+    ): Int {
+        return Users.insert {
+            it[Users.email] = email
+            it[password_hash] = BCrypt.hashpw(password, BCrypt.gensalt())
+            it[name] = "Test User"
+            it[email_verified] = true
+            it[password_reset_token] = passwordResetToken
+            it[password_reset_expires_at] = passwordResetExpiresAt
+            it[onboarding_completed] = true
+        }[Users.id]
+    }
+}
