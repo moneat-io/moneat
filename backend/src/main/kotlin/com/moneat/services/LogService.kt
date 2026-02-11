@@ -158,7 +158,7 @@ class LogService {
         
         // Support filtering by either system_id or project_id
         if (!request.systemId.isNullOrBlank()) {
-            conditions += "system_id = toUUID('${escapeSql(request.systemId)}')"
+            conditions += "toString(system_id) = '${escapeSql(request.systemId)}'"
         } else {
             conditions += "project_id = $projectId"
         }
@@ -263,7 +263,7 @@ class LogService {
 
         // Query total count - use appropriate filter
         val totalCountFilter = if (!request.systemId.isNullOrBlank()) {
-            "system_id = toUUID('${escapeSql(request.systemId)}')"
+            "toString(system_id) = '${escapeSql(request.systemId)}'"
         } else {
             "project_id = $projectId"
         }
