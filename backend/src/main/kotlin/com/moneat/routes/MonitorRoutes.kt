@@ -141,7 +141,7 @@ fun Route.monitorRoutes() {
                 }
 
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
-                val (_, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
+                val (systemId, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid agent key"))
                     return@post
                 }
@@ -161,13 +161,11 @@ fun Route.monitorRoutes() {
                     return@post
                 }
 
-                val projectId = resolveProjectForOrganization(organizationId, payload.projectId)
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "No project available for organization"))
-                    return@post
-                }
+                // Agent logs are now scoped to system, not project
+                // We still need a projectId for billing/quota tracking, so use the first project in the org
+                val projectId = resolveProjectForOrganization(organizationId, payload.projectId) ?: 0L
 
-                if (quotaService.isEnforcementEnabled()) {
+                if (quotaService.isEnforcementEnabled() && projectId > 0) {
                     val reservation = quotaService.reserveUnits(organizationId, payload.logs.size, "log")
                     if (!reservation.allowed) {
                         call.respond(
@@ -184,8 +182,8 @@ fun Route.monitorRoutes() {
 
                 val queueKey = call.application.environment.config.propertyOrNull("logs.queueKey")?.getString()
                     ?: "moneat:logs:queue"
-                val accepted = logService.enqueueAgentLogs(projectId, payload.logs, queueKey)
-                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted, "project_id" to projectId))
+                val accepted = logService.enqueueAgentLogs(projectId, systemId.toString(), payload.logs, queueKey)
+                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted, "system_id" to systemId.toString()))
             } catch (e: Exception) {
                 logger.error(e) { "Failed to ingest agent logs: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid log payload", "message" to (e.message ?: "Unknown error")))
@@ -216,7 +214,7 @@ fun Route.monitorRoutes() {
                 val response = allSystems.map { system ->
                     SystemResponse(
                         id = system.id.toString(),
-                        projectId = 0L, // TODO: Systems need to be associated with projects for log context
+                        projectId = 0L, // Not used - logs are now scoped by system_id
                         name = system.name,
                         host = system.host,
                         status = system.status,
@@ -273,7 +271,7 @@ fun Route.monitorRoutes() {
                     CreateSystemResponse(
                         system = SystemResponse(
                             id = system.id.toString(),
-                            projectId = 0L, // TODO: Systems need to be associated with projects for log context
+                            projectId = 0L, // Not used - logs are now scoped by system_id
                             name = system.name,
                             host = system.host,
                             status = system.status,
@@ -319,7 +317,7 @@ fun Route.monitorRoutes() {
                     HttpStatusCode.OK,
                     SystemResponse(
                         id = system.id.toString(),
-                        projectId = 0L, // TODO: Systems need to be associated with projects for log context
+                        projectId = 0L, // Not used - logs are now scoped by system_id
                         name = system.name,
                         host = system.host,
                         status = system.status,
@@ -481,6 +479,61 @@ fun Route.monitorRoutes() {
                 val response = monitorService.getContainerHistoricalMetrics(
                     systemId, containerName, fromParam, toParam, intervalParam
                 )
+                call.respond(HttpStatusCode.OK, response)
+            }
+            
+            // Get logs for a system (container logs)
+            get("/systems/{id}/logs") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val systemIdStr = call.parameters["id"]
+                
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    return@get
+                }
+                
+                val systemId = try {
+                    UUID.fromString(systemIdStr)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    return@get
+                }
+                
+                // Verify ownership
+                val system = monitorService.getSystemById(systemId)
+                if (system == null || system.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    return@get
+                }
+                
+                // Parse query parameters
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
+                val cursor = call.request.queryParameters["cursor"]
+                val query = call.request.queryParameters["query"]
+                val levels = call.request.queryParameters.getAll("levels") ?: emptyList()
+                val service = call.request.queryParameters["service"]
+                val environment = call.request.queryParameters["environment"]
+                val containerName = call.request.queryParameters["container_name"]
+                val from = call.request.queryParameters["from"]
+                val to = call.request.queryParameters["to"]
+                
+                val logRequest = LogQueryRequest(
+                    limit = limit,
+                    cursor = cursor,
+                    query = query,
+                    levels = levels,
+                    service = service,
+                    environment = environment,
+                    from = from,
+                    to = to,
+                    systemId = systemIdStr,
+                    containerName = containerName
+                )
+                
+                // Use a dummy projectId (0) since we're querying by systemId
+                val response = logService.queryLogs(0L, logRequest)
                 call.respond(HttpStatusCode.OK, response)
             }
             

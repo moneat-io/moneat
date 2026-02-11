@@ -27,18 +27,18 @@ class LogService {
 
     suspend fun enqueueSdkLogs(projectId: Long, entries: List<LogIngestEntry>, queueKey: String): Int {
         val normalized = entries.mapNotNull { normalizeSdkEntry(it) }
-        return enqueueNormalized(projectId, "sdk", normalized, queueKey)
+        return enqueueNormalized(projectId, null, "sdk", normalized, queueKey)
     }
 
-    suspend fun enqueueAgentLogs(projectId: Long, entries: List<AgentLogEntry>, queueKey: String): Int {
-        val normalized = entries.mapNotNull { normalizeAgentEntry(it) }
-        return enqueueNormalized(projectId, "agent", normalized, queueKey)
+    suspend fun enqueueAgentLogs(projectId: Long, systemId: String?, entries: List<AgentLogEntry>, queueKey: String): Int {
+        val normalized = entries.mapNotNull { normalizeAgentEntry(it, systemId) }
+        return enqueueNormalized(projectId, systemId, "agent", normalized, queueKey)
     }
 
     suspend fun enqueueOtlpLogs(projectId: Long, body: String, queueKey: String): Int {
         val parsed = parseOtlpJson(body)
         val normalized = parsed.mapNotNull { normalizeOtlpEntry(it) }
-        return enqueueNormalized(projectId, "otlp", normalized, queueKey)
+        return enqueueNormalized(projectId, null, "otlp", normalized, queueKey)
     }
 
     fun decodeQueueMessage(encoded: String): QueuedLogBatch {
@@ -52,11 +52,14 @@ class LogService {
     suspend fun insertBatch(batch: QueuedLogBatch): List<LogEntryResponse> {
         if (batch.logs.isEmpty()) return emptyList()
 
+        val systemIdValue = batch.systemId ?: "00000000-0000-0000-0000-000000000000"
+
         val rows = batch.logs.joinToString(",\n") { entry ->
             """
             (
                 toUUID('${escapeSql(entry.logId)}'),
                 ${batch.projectId},
+                toUUID('${escapeSql(systemIdValue)}'),
                 fromUnixTimestamp64Milli(${entry.timestampMs}),
                 '${escapeSql(entry.level)}',
                 '${escapeSql(entry.message)}',
@@ -80,6 +83,7 @@ class LogService {
             INSERT INTO $clickhouseDb.logs (
                 log_id,
                 project_id,
+                system_id,
                 timestamp,
                 level,
                 message,
@@ -108,7 +112,7 @@ class LogService {
         val totalBytes = batch.logs.sumOf { it.message.length + it.body.length }
         usageTracking.recordUsage(batch.projectId, "log", totalBytes)
 
-        return batch.logs.map { toResponse(it) }
+        return batch.logs.map { toResponse(it, batch.systemId) }
     }
 
     suspend fun publishLiveLogs(projectId: Long, logs: List<LogEntryResponse>) {
@@ -150,7 +154,14 @@ class LogService {
 
     suspend fun queryLogs(projectId: Long, request: LogQueryRequest): LogQueryResponse {
         val limit = request.limit.coerceIn(1, 500)
-        val conditions = mutableListOf("project_id = $projectId")
+        val conditions = mutableListOf<String>()
+        
+        // Support filtering by either system_id or project_id
+        if (!request.systemId.isNullOrBlank()) {
+            conditions += "system_id = toUUID('${escapeSql(request.systemId)}')"
+        } else {
+            conditions += "project_id = $projectId"
+        }
 
         val fromMs = parseTimeToMillis(request.from)
         if (fromMs != null) {
@@ -168,6 +179,10 @@ class LogService {
 
         if (!request.environment.isNullOrBlank()) {
             conditions += "environment = '${escapeSql(request.environment)}'"
+        }
+        
+        if (!request.containerName.isNullOrBlank()) {
+            conditions += "container_name = '${escapeSql(request.containerName)}'"
         }
 
         val normalizedLevels = request.levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
@@ -224,7 +239,8 @@ class LogService {
                 span_id,
                 toJSONString(tags) AS tags,
                 toJSONString(resource_attributes) AS resource_attributes,
-                toUnixTimestamp64Milli(timestamp) AS timestamp_ms
+                toUnixTimestamp64Milli(timestamp) AS timestamp_ms,
+                toString(system_id) AS system_id
             FROM $clickhouseDb.logs
             WHERE $whereClause
             ORDER BY timestamp DESC, log_id DESC
@@ -245,11 +261,17 @@ class LogService {
             if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
         }
 
-        // Query total count for the project (no filters except project_id) to determine if any logs exist
+        // Query total count - use appropriate filter
+        val totalCountFilter = if (!request.systemId.isNullOrBlank()) {
+            "system_id = toUUID('${escapeSql(request.systemId)}')"
+        } else {
+            "project_id = $projectId"
+        }
+        
         val totalCountQuery = """
             SELECT count() as count
             FROM $clickhouseDb.logs
-            WHERE project_id = $projectId
+            WHERE $totalCountFilter
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -384,6 +406,7 @@ class LogService {
                 try {
                     val obj = json.parseToJsonElement(line).jsonObject
                     val timestampMs = obj["timestamp_ms"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
+                    val systemId = obj["system_id"]?.jsonPrimitive?.contentOrNull
                     val log = LogEntryResponse(
                         logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                         timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
@@ -400,7 +423,8 @@ class LogService {
                         traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
                         spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
                         tags = parseMapField(obj["tags"]),
-                        resourceAttributes = parseMapField(obj["resource_attributes"])
+                        resourceAttributes = parseMapField(obj["resource_attributes"]),
+                        systemId = if (systemId == "00000000-0000-0000-0000-000000000000") null else systemId
                     )
                     LogWithCursor(log = log, timestampMs = timestampMs)
                 } catch (e: Exception) {
@@ -434,6 +458,7 @@ class LogService {
 
     private suspend fun enqueueNormalized(
         projectId: Long,
+        systemId: String?,
         source: String,
         logs: List<QueuedLogEntry>,
         queueKey: String
@@ -443,6 +468,7 @@ class LogService {
         val message = encodeQueueMessage(
             QueuedLogBatch(
                 projectId = projectId,
+                systemId = systemId,
                 source = source,
                 logs = logs
             )
@@ -476,7 +502,7 @@ class LogService {
         )
     }
 
-    private fun normalizeAgentEntry(entry: AgentLogEntry): QueuedLogEntry? {
+    private fun normalizeAgentEntry(entry: AgentLogEntry, systemId: String?): QueuedLogEntry? {
         val message = entry.message?.trim().orEmpty()
         if (message.isBlank()) return null
 
@@ -501,7 +527,8 @@ class LogService {
             traceId = trimTo(entry.traceId.orEmpty(), 128),
             spanId = trimTo(entry.spanId.orEmpty(), 128),
             tags = sanitizeMap(entry.tags),
-            resourceAttributes = sanitizeMap(entry.resourceAttributes)
+            resourceAttributes = sanitizeMap(entry.resourceAttributes),
+            systemId = systemId
         )
     }
 
@@ -510,7 +537,7 @@ class LogService {
         return base.copy(source = "otlp")
     }
 
-    private fun toResponse(entry: QueuedLogEntry): LogEntryResponse {
+    private fun toResponse(entry: QueuedLogEntry, systemId: String?): LogEntryResponse {
         return LogEntryResponse(
             logId = entry.logId,
             timestamp = Instant.ofEpochMilli(entry.timestampMs).toString(),
@@ -527,7 +554,8 @@ class LogService {
             traceId = entry.traceId,
             spanId = entry.spanId,
             tags = entry.tags,
-            resourceAttributes = entry.resourceAttributes
+            resourceAttributes = entry.resourceAttributes,
+            systemId = systemId
         )
     }
 

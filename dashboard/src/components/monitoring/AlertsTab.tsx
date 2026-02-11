@@ -1,4 +1,5 @@
 import {useMemo, useState} from 'react'
+import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type SystemAlert} from '@/lib/api'
 import {Button} from '@/components/ui/button'
@@ -352,6 +353,18 @@ export function AlertsTab({systemId}: AlertsTabProps) {
         </CardHeader>
 
         <CardContent>
+          <div className="mb-6 rounded-md bg-blue-500/10 p-4 text-sm text-blue-500 flex items-start gap-3 border border-blue-500/20">
+            <BellRing className="h-5 w-5 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-medium">Notification Channels</p>
+              <p className="text-blue-500/80">
+                Configure which channels (Email, Slack, Discord) receive these alerts in{' '}
+                <Link to="/settings" search={{ tab: 'notifications' }} className="underline hover:text-blue-400">
+                  Settings &gt; Notifications
+                </Link>.
+              </p>
+            </div>
+          </div>
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-3">

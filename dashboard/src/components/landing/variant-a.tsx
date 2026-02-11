@@ -3,6 +3,7 @@ import {
   Activity,
   ArrowRight,
   Bell,
+  Box,
   FileText,
   GitBranch,
   Globe,

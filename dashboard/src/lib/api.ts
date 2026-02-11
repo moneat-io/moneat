@@ -290,6 +290,20 @@ interface NotificationPreferences {
   projects: ProjectNotificationPreference[]
 }
 
+export type AlertSource = 'SYSTEM_ALERT' | 'SYSTEM_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT'
+
+export interface AlertNotificationPreference {
+  id: number
+  userId: number
+  organizationId: number
+  alertSource: AlertSource
+  emailEnabled: boolean
+  slackEnabled: boolean
+  discordEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface ReplayTimelineResponse {
   items: ReplayTimelineItem[]
   replayStartMs: number
@@ -1518,6 +1532,67 @@ class ApiClient {
     }
   }
 
+  async getSystemLogs(
+    systemId: string,
+    options: {
+      cursor?: string
+      limit?: number
+      query?: string
+      levels?: string[]
+      service?: string
+      environment?: string
+      containerName?: string
+      from?: string
+      to?: string
+      tags?: Record<string, string>
+    } = {}
+  ): Promise<LogQueryResponse> {
+    const params = new URLSearchParams()
+    if (options.cursor) params.set('cursor', options.cursor)
+    params.set('limit', String(options.limit ?? 100))
+    if (options.query) params.set('query', options.query)
+    if (options.levels && options.levels.length > 0) {
+      options.levels.forEach((level) => params.append('levels', level))
+    }
+    if (options.service) params.set('service', options.service)
+    if (options.environment) params.set('environment', options.environment)
+    if (options.containerName) params.set('container_name', options.containerName)
+    if (options.from) params.set('from', options.from)
+    if (options.to) params.set('to', options.to)
+    if (options.tags) {
+      Object.entries(options.tags).forEach(([key, value]) => {
+        if (key) params.append('tag', `${key}:${value}`)
+      })
+    }
+
+    const response = await this.request<any>(`${API_BASE}/monitor/systems/${systemId}/logs?${params.toString()}`)
+    const rows: any[] = response.logs ?? []
+    const logs = rows.map((row) => ({
+      logId: row.logId ?? row.log_id,
+      timestamp: row.timestamp,
+      level: row.level,
+      message: row.message,
+      body: row.body ?? '',
+      service: row.service ?? '',
+      environment: row.environment ?? '',
+      host: row.host ?? '',
+      source: row.source ?? 'sdk',
+      containerName: row.containerName ?? row.container_name ?? '',
+      containerId: row.containerId ?? row.container_id ?? '',
+      containerImage: row.containerImage ?? row.container_image ?? '',
+      traceId: row.traceId ?? row.trace_id ?? '',
+      spanId: row.spanId ?? row.span_id ?? '',
+      tags: row.tags ?? {},
+      resourceAttributes: row.resourceAttributes ?? row.resource_attributes ?? {},
+    })) as LogEntry[]
+
+    return {
+      logs,
+      nextCursor: response.nextCursor ?? response.next_cursor ?? null,
+      hasMore: response.hasMore ?? response.has_more ?? false,
+    }
+  }
+
   async getProjectLogFilters(
     projectId: number,
     options: { from?: string; to?: string } = {}
@@ -1971,6 +2046,21 @@ class ApiClient {
   async deleteProjectNotificationPreferences(projectId: number) {
     return this.request(`${API_BASE}/notification-preferences/${projectId}`, {
       method: 'DELETE',
+    })
+  }
+
+  // Unified Alert Notification Preferences
+  async getAlertNotificationPreferences(): Promise<AlertNotificationPreference[]> {
+    return this.request<AlertNotificationPreference[]>(`${API_BASE}/alert-notification-preferences`)
+  }
+
+  async updateAlertNotificationPreference(
+    alertSource: AlertSource,
+    preferences: { emailEnabled?: boolean; slackEnabled?: boolean; discordEnabled?: boolean }
+  ): Promise<AlertNotificationPreference> {
+    return this.request<AlertNotificationPreference>(`${API_BASE}/alert-notification-preferences/${alertSource}`, {
+      method: 'PUT',
+      body: JSON.stringify(preferences),
     })
   }
 

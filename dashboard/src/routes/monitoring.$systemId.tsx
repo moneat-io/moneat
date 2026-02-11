@@ -176,11 +176,6 @@ function SystemDetailPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
   const [containerViewMode, setContainerViewMode] = useState<ContainerViewMode>(getInitialContainerViewMode())
   const [selectedContainer, setSelectedContainer] = useState<ContainerStats | null>(null)
-  
-  const {data: projects} = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.getProjects(),
-  })
 
   const {data: billingUsage} = useQuery({
     queryKey: ['billing-usage'],
@@ -1149,19 +1144,13 @@ function SystemDetailPage() {
 
               <div className="space-y-4">
                 <h3 className="text-sm font-medium">Logs</h3>
-                {projects && projects.length > 0 ? (
-                  <EmbeddedLogs 
-                    projectId={(system as any)?.projectId || projects[0].id}
-                    containerName={selectedContainer.name}
-                    showHeader={false}
-                    maxHeight="500px"
-                    compact={true}
-                  />
-                ) : (
-                   <div className="text-sm text-muted-foreground p-4 border rounded-lg bg-muted/30 text-center">
-                     No projects found. Create a project to view logs.
-                   </div>
-                )}
+                <EmbeddedLogs 
+                  systemId={system.id}
+                  containerName={selectedContainer.name}
+                  showHeader={false}
+                  maxHeight="500px"
+                  compact={true}
+                />
               </div>
             </div>
           )}

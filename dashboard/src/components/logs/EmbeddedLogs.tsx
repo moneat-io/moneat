@@ -8,7 +8,8 @@ import {cn} from '@/lib/utils'
 import {ChevronLeft, ChevronRight, Loader2, TerminalSquare} from 'lucide-react'
 
 interface EmbeddedLogsProps {
-  projectId: number
+  projectId?: number
+  systemId?: string
   /**
    * Filter logs by time range around a specific timestamp
    * Shows logs from [centerTimestamp - contextMinutes] to [centerTimestamp + contextMinutes]
@@ -44,6 +45,7 @@ interface EmbeddedLogsProps {
 
 export function EmbeddedLogs({
   projectId,
+  systemId,
   centerTimestamp,
   contextMinutes = 5,
   query,
@@ -90,6 +92,7 @@ export function EmbeddedLogs({
     queryKey: [
       'embedded-logs',
       projectId,
+      systemId,
       cursor,
       query,
       levels?.join(','),
@@ -100,20 +103,37 @@ export function EmbeddedLogs({
       containerName,
       JSON.stringify(tags),
     ],
-    queryFn: () =>
-      api.getProjectLogs(projectId, {
-        cursor: cursor || undefined,
-        limit: 100,
-        query: query || undefined,
-        levels,
-        service,
-        environment,
-        containerName,
-        from: timeRange.from,
-        to: timeRange.to,
-        tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
-      }),
-    enabled: Number.isFinite(projectId),
+    queryFn: () => {
+      if (systemId) {
+        return api.getSystemLogs(systemId, {
+          cursor: cursor || undefined,
+          limit: 100,
+          query: query || undefined,
+          levels,
+          service,
+          environment,
+          containerName,
+          from: timeRange.from,
+          to: timeRange.to,
+          tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
+        })
+      } else if (projectId) {
+        return api.getProjectLogs(projectId, {
+          cursor: cursor || undefined,
+          limit: 100,
+          query: query || undefined,
+          levels,
+          service,
+          environment,
+          containerName,
+          from: timeRange.from,
+          to: timeRange.to,
+          tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
+        })
+      }
+      throw new Error('Either projectId or systemId must be provided')
+    },
+    enabled: Boolean(projectId || systemId),
   })
 
   const logs = logPage?.logs ?? []

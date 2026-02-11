@@ -1,9 +1,9 @@
 import { type FormEvent, Fragment, useEffect, useMemo, useState } from 'react'
-import { createFileRoute, redirect, useSearch } from '@tanstack/react-router'
+import { createFileRoute, redirect, useSearch, Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, useElements, useStripe, PaymentElement } from '@stripe/react-stripe-js'
-import { api, type AuthToken } from '@/lib/api'
+import { api, type AuthToken, type AlertSource, type AlertNotificationPreference } from '@/lib/api'
 import { buildPricingCardModel } from '@/lib/pricing-display'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,6 +48,8 @@ import {
   Plug,
   Shield,
   Settings,
+  Server,
+  Info,
   Flame,
   Eye,
   EyeOff,
@@ -2583,22 +2585,51 @@ function NotificationsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  const { data: preferences, isLoading } = useQuery({
+  const { data: alertPrefs, isLoading: isLoadingAlertPrefs } = useQuery({
+    queryKey: ['alertNotificationPreferences'],
+    queryFn: () => api.getAlertNotificationPreferences(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const { data: preferences, isLoading: isLoadingPrefs } = useQuery({
     queryKey: ['notificationPreferences'],
     queryFn: () => api.getNotificationPreferences(),
     enabled: api.isAuthenticated(),
   })
 
+  const { data: integrations = [] } = useQuery({
+    queryKey: ['integrations'],
+    queryFn: () => api.getIntegrations(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const slackConfigured = useMemo(() => integrations.some(i => i.integrationType === 'slack' && i.enabled), [integrations])
+  const discordConfigured = useMemo(() => integrations.some(i => i.integrationType === 'discord' && i.enabled), [integrations])
+
+  const updateAlertPrefMutation = useMutation({
+    mutationFn: ({ source, prefs }: { source: AlertSource, prefs: Partial<AlertNotificationPreference> }) =>
+      api.updateAlertNotificationPreference(source, prefs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alertNotificationPreferences'] })
+      toast({ title: 'Preferences updated' })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to update preferences',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
   const updateGlobalMutation = useMutation({
     mutationFn: (prefs: Partial<{
-      issueAlerts: boolean
-      errorAlerts: boolean
       weeklySummary: boolean
       alertFrequencyMinutes: number
     }>) => api.updateNotificationPreferences(prefs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
-      toast({ title: 'Preferences updated', description: 'Your notification preferences have been saved.' })
+      toast({ title: 'Global preferences updated' })
     },
     onError: (err: Error) => {
       toast({
@@ -2647,84 +2678,142 @@ function NotificationsTab() {
     },
   })
 
-  if (isLoading) {
-    return <div>Loading...</div>
+  if (isLoadingAlertPrefs || isLoadingPrefs) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   const global = preferences?.global || {
-    issueAlerts: true,
-    errorAlerts: true,
     weeklySummary: true,
     alertFrequencyMinutes: 30,
   }
 
   const projects = preferences?.projects || []
 
+  const getSourceLabel = (source: AlertSource) => {
+    switch (source) {
+      case 'SYSTEM_ALERT':
+        return { label: 'System Alerts', desc: 'Metric threshold breaches (CPU, memory, disk)', icon: Zap }
+      case 'SYSTEM_DOWN':
+        return { label: 'System Down', desc: 'Server stops reporting', icon: Server }
+      case 'UPTIME_MONITOR':
+        return { label: 'Uptime Monitors', desc: 'Website or service goes down', icon: Activity }
+      case 'ERROR_ALERT':
+        return { label: 'Error Alerts', desc: 'New errors and exceptions in your projects', icon: Shield }
+    }
+  }
+
+  const renderRow = (source: AlertSource) => {
+    // If not found, default to all enabled (safe default)
+    const pref = alertPrefs?.find((p) => p.alertSource === source) || {
+      emailEnabled: true,
+      slackEnabled: true,
+      discordEnabled: true,
+    }
+    const info = getSourceLabel(source)
+    const Icon = info.icon
+
+    return (
+      <div className="flex items-center justify-between py-4 border-b last:border-0" key={source}>
+        <div className="flex items-start gap-3">
+          <div className="mt-1 bg-primary/10 p-2 rounded-full hidden sm:block">
+            <Icon className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="font-medium">{info.label}</p>
+            <p className="text-sm text-muted-foreground max-w-xs sm:max-w-none">{info.desc}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 sm:gap-8 mr-2 sm:mr-4">
+          <div className="flex flex-col items-center gap-2 w-[50px]">
+            <Switch
+              checked={pref.emailEnabled}
+              onCheckedChange={(c) => updateAlertPrefMutation.mutate({ source, prefs: { emailEnabled: c } })}
+              disabled={updateAlertPrefMutation.isPending}
+            />
+          </div>
+          <div className="flex flex-col items-center gap-2 w-[50px]">
+            <Switch
+              checked={pref.slackEnabled}
+              disabled={!slackConfigured || updateAlertPrefMutation.isPending}
+              onCheckedChange={(c) => updateAlertPrefMutation.mutate({ source, prefs: { slackEnabled: c } })}
+            />
+          </div>
+          <div className="flex flex-col items-center gap-2 w-[50px]">
+            <Switch
+              checked={pref.discordEnabled}
+              disabled={!discordConfigured || updateAlertPrefMutation.isPending}
+              onCheckedChange={(c) => updateAlertPrefMutation.mutate({ source, prefs: { discordEnabled: c } })}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      {/* Global Preferences */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5" />
-            <CardTitle>Global Notification Preferences</CardTitle>
+            <CardTitle>Notification Channels</CardTitle>
           </div>
           <CardDescription>
-            Default notification settings for all projects. You can override these settings per project below.
+            Configure how you want to be notified for different types of alerts.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between space-x-2">
-            <div className="space-y-0.5">
-              <Label htmlFor="global-issue-alerts" className="text-base font-medium">
-                Issue Alerts
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Get notified when new issues are detected
-              </p>
+        <CardContent>
+          <div className="grid grid-cols-[1fr,auto] gap-4 mb-2 border-b pb-2">
+            <div className="font-medium text-sm text-muted-foreground uppercase tracking-wider pl-2">Alert Source</div>
+            <div className="flex items-center gap-4 sm:gap-8 mr-2 sm:mr-4">
+              <div className="w-[50px] text-center font-medium text-sm text-muted-foreground">Email</div>
+              <div className="w-[50px] text-center font-medium text-sm text-muted-foreground">Slack</div>
+              <div className="w-[50px] text-center font-medium text-sm text-muted-foreground">Discord</div>
             </div>
-            <Checkbox
-              id="global-issue-alerts"
-              checked={global.issueAlerts}
-              onCheckedChange={(checked) => updateGlobalMutation.mutate({ issueAlerts: checked === true })}
-            />
           </div>
+          
+          {['SYSTEM_ALERT', 'SYSTEM_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT'].map((s) => renderRow(s as AlertSource))}
 
-          <div className="flex items-center justify-between space-x-2">
-            <div className="space-y-0.5">
-              <Label htmlFor="global-error-alerts" className="text-base font-medium">
-                Error Alerts
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Get notified about errors and exceptions
-              </p>
+          {(!slackConfigured || !discordConfigured) && (
+            <div className="mt-6 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground flex items-center gap-2">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>
+                Some channels are disabled because integrations are not configured.{' '}
+                <Link to="/settings" search={{ tab: 'integrations' }} className="text-primary hover:underline font-medium">
+                  Configure Integrations
+                </Link>
+              </span>
             </div>
-            <Checkbox
-              id="global-error-alerts"
-              checked={global.errorAlerts}
-              onCheckedChange={(checked) => updateGlobalMutation.mutate({ errorAlerts: checked === true })}
-            />
-          </div>
+          )}
+        </CardContent>
+      </Card>
 
-          <div className="flex items-center justify-between space-x-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Additional Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="global-weekly-summary" className="text-base font-medium">
+              <Label htmlFor="global-weekly-summary" className="text-base">
                 Weekly Summary
               </Label>
-              <p className="text-sm text-muted-foreground">
-                Receive a weekly summary email every Monday
-              </p>
+              <p className="text-sm text-muted-foreground">Receive a weekly summary email every Monday</p>
             </div>
-            <Checkbox
+            <Switch
               id="global-weekly-summary"
               checked={global.weeklySummary}
-              onCheckedChange={(checked) => updateGlobalMutation.mutate({ weeklySummary: checked === true })}
+              onCheckedChange={(checked) => updateGlobalMutation.mutate({ weeklySummary: checked })}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="global-frequency" className="text-base font-medium">
-              Alert Frequency
+            <Label htmlFor="global-frequency" className="text-base">
+              Error Alert Frequency
             </Label>
             <p className="text-sm text-muted-foreground mb-2">
               Minimum time between alerts for the same project
@@ -2748,7 +2837,6 @@ function NotificationsTab() {
         </CardContent>
       </Card>
 
-      {/* Per-Project Overrides */}
       <Card>
         <CardHeader>
           <CardTitle>Per-Project Overrides</CardTitle>

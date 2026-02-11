@@ -52,6 +52,7 @@ data class AgentLogEntry(
 @Serializable
 data class QueuedLogBatch(
     @SerialName("project_id") val projectId: Long,
+    @SerialName("system_id") val systemId: String? = null,
     val source: String,
     val logs: List<QueuedLogEntry>
 )
@@ -73,7 +74,8 @@ data class QueuedLogEntry(
     @SerialName("trace_id") val traceId: String,
     @SerialName("span_id") val spanId: String,
     val tags: Map<String, String> = emptyMap(),
-    @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap()
+    @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap(),
+    @SerialName("system_id") val systemId: String? = null
 )
 
 @Serializable
@@ -93,7 +95,8 @@ data class LogEntryResponse(
     @SerialName("trace_id") val traceId: String,
     @SerialName("span_id") val spanId: String,
     val tags: Map<String, String> = emptyMap(),
-    @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap()
+    @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap(),
+    @SerialName("system_id") val systemId: String? = null
 )
 
 @Serializable
@@ -127,7 +130,9 @@ data class LogQueryRequest(
     val environment: String? = null,
     val from: String? = null,
     val to: String? = null,
-    val tags: Map<String, String> = emptyMap()
+    val tags: Map<String, String> = emptyMap(),
+    val systemId: String? = null,
+    val containerName: String? = null
 )
 
 data class LogTailFilters(
