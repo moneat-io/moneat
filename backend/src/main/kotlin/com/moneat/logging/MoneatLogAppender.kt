@@ -48,7 +48,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 }
         """.trimIndent()
         
-        val connection = URL(endpoint).openConnection() as HttpURLConnection
+        val connection = java.net.URI(endpoint).toURL().openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")

@@ -1,63 +1,64 @@
-import {type FormEvent, Fragment, useEffect, useMemo, useState} from 'react'
-import {createFileRoute, redirect, useSearch} from '@tanstack/react-router'
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type AuthToken} from '@/lib/api'
-import {Button} from '@/components/ui/button'
-import {Input} from '@/components/ui/input'
-import {Label} from '@/components/ui/label'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
-import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table'
-import {Badge} from '@/components/ui/badge'
-import {Checkbox} from '@/components/ui/checkbox'
+import { type FormEvent, Fragment, useEffect, useMemo, useState } from 'react'
+import { createFileRoute, redirect, useSearch } from '@tanstack/react-router'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, useElements, useStripe, PaymentElement } from '@stripe/react-stripe-js'
+import { api, type AuthToken } from '@/lib/api'
+import { buildPricingCardModel } from '@/lib/pricing-display'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog'
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
-import {useToast} from '@/hooks/use-toast'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useToast } from '@/hooks/use-toast'
 import {
-    AlertTriangle,
-    Bell,
-    CheckCircle2,
-    Copy,
-    CreditCard,
-    Key,
-    Loader2,
-    Minus,
-    Plus,
-    Trash2,
-    Zap,
-    Activity,
-    MessageSquare,
-    AlertCircle,
-    Download,
-    Receipt,
-    Check,
-    Clock,
-    Wallet,
-    Layers,
-    Plug,
-    Shield,
-    Settings,
-    Flame,
-    Eye,
-    EyeOff,
-    RotateCcw,
-    ChevronDown,
-    ChevronUp,
-    X,
-    Users,
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  Copy,
+  CreditCard,
+  Key,
+  Loader2,
+  Minus,
+  Plus,
+  Trash2,
+  Zap,
+  Activity,
+  MessageSquare,
+  AlertCircle,
+  Download,
+  Receipt,
+  Check,
+  Clock,
+  Wallet,
+  Layers,
+  Plug,
+  Shield,
+  Settings,
+  Flame,
+  Eye,
+  EyeOff,
+  RotateCcw,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from 'lucide-react'
-import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
-import {loadStripe} from '@stripe/stripe-js'
-import {SsoTab} from '@/components/sso-settings'
-import {TeamSettings} from '@/components/settings/team-settings'
-import {useAuth} from '@/hooks/useAuth'
+import { SsoTab } from '@/components/sso-settings'
+import { TeamSettings } from '@/components/settings/team-settings'
+import { useAuth } from '@/hooks/useAuth'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -667,6 +668,7 @@ function BillingTab() {
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [setupClientSecret, setSetupClientSecret] = useState<string | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
 
   const { data: usage, isLoading } = useQuery({
     queryKey: ['billingUsage'],
@@ -719,9 +721,10 @@ function BillingTab() {
   })
 
   const checkoutMutation = useMutation({
-    mutationFn: (tierName: string) =>
+    mutationFn: ({ tierName, interval }: { tierName: string; interval: 'monthly' | 'yearly' }) =>
       api.createBillingCheckoutSession({
         tierName,
+        billingInterval: interval,
         successUrl: `${window.location.origin}/settings`,
         cancelUrl: `${window.location.origin}/settings`,
       }),
@@ -819,9 +822,10 @@ function BillingTab() {
 
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`
   const statusBadgeVariant = usage.status === 'active' || usage.status === 'trialing' ? 'default' : 'secondary'
-  
+  const BYTES_PER_GB = 1024 * 1024 * 1024
+
   // GB conversion: 1 GB = 1,073,741,824 bytes (binary)
-  const formatGB = (bytes: number) => (bytes / 1073741824).toFixed(2)
+  const formatGB = (bytes: number) => (bytes / BYTES_PER_GB).toFixed(2)
   const usedGB = formatGB(usage.usedBytes)
   const limitGB = usage.bytesLimit > 0 ? formatGB(usage.bytesLimit) : null
   const isUnlimitedGB = !usage.bytesLimit || usage.bytesLimit <= 0
@@ -1160,49 +1164,119 @@ function BillingTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-500/10 rounded-full">
-              <Layers className="h-5 w-5 text-purple-600" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-purple-500/10 rounded-full">
+                <Layers className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <CardTitle>Plan Management</CardTitle>
+                <CardDescription>
+                  Compare plans, switch tiers, or cancel your subscription.
+                </CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle>Plan Management</CardTitle>
-              <CardDescription>
-                Compare plans, switch tiers, or cancel your subscription.
-              </CardDescription>
+            <div className="flex items-center rounded-lg border bg-muted/50 p-1">
+              <button
+                onClick={() => setBillingInterval('monthly')}
+                className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  billingInterval === 'monthly'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingInterval('yearly')}
+                className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  billingInterval === 'yearly'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Yearly
+                <span className="ml-1.5 text-[10px] text-sky-600 dark:text-sky-400 font-bold">
+                  -17%
+                </span>
+              </button>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent>
           {billablePlans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No paid plans configured yet.</p>
+            <p className="text-sm text-muted-foreground p-4 text-center">No paid plans configured yet.</p>
           ) : (
-            billablePlans.map((plan) => {
-              const isCurrentPlan = plan.tier.tierName.toLowerCase() === usage.plan.toLowerCase()
-              return (
-                <div key={plan.tier.id} className="flex items-center justify-between rounded border p-3">
-                  <div>
-                    <p className="font-medium">{plan.tier.tierName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatCurrency(plan.tier.monthlyPriceCents)}/mo · {(plan.tier.monthlyGbLimit / 1).toFixed(0)} GB included
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={isCurrentPlan ? 'secondary' : 'default'}
-                    disabled={checkoutMutation.isPending || isCurrentPlan}
-                    onClick={() => checkoutMutation.mutate(plan.tier.tierName)}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {billablePlans.map((plan) => {
+                const isCurrentPlan = plan.tier.tierName.toLowerCase() === usage.plan.toLowerCase()
+                
+                // Use shared helper to build display model
+                const model = buildPricingCardModel(
+                  { ...plan.tier, trialDays: plan.trialDays ?? plan.tier.trialDays }, 
+                  billingInterval
+                )
+                
+                const isYearly = billingInterval === 'yearly'
+
+                return (
+                  <div
+                    key={plan.tier.id}
+                    className={`flex flex-col rounded-xl border-2 p-6 transition-all ${
+                      isCurrentPlan
+                        ? 'border-primary bg-primary/5 shadow-md relative'
+                        : 'border-muted hover:border-primary/50'
+                    }`}
                   >
-                    {isCurrentPlan ? 'Current plan' : 'Select'}
-                  </Button>
-                </div>
-              )
-            })
+                    {isCurrentPlan && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs px-3 py-1 rounded-full font-medium">
+                        Current Plan
+                      </div>
+                    )}
+                    <div className="mb-4">
+                      <h3 className="font-bold text-xl">{model.name}</h3>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-3xl font-bold">${model.displayPrice.toFixed(0)}</span>
+                        <span className="text-sm text-muted-foreground">/mo</span>
+                      </div>
+                      {isYearly && model.displayPrice > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          billed ${model.yearlyTotalPrice.toFixed(0)}/yr
+                        </p>
+                      )}
+                    </div>
+
+                    <ul className="space-y-3 mb-8 flex-1">
+                      {model.features.map((feature, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <CheckCircle2 className={`h-4 w-4 flex-shrink-0 mt-0.5 ${isCurrentPlan ? 'text-primary' : 'text-emerald-500'}`} />
+                          <span className="text-sm leading-tight">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Button
+                      className="w-full"
+                      variant={isCurrentPlan ? 'secondary' : 'default'}
+                      disabled={checkoutMutation.isPending || isCurrentPlan}
+                      onClick={() => checkoutMutation.mutate({
+                        tierName: plan.tier.tierName,
+                        interval: billingInterval
+                      })}
+                    >
+                      {isCurrentPlan ? 'Current plan' : `Upgrade to ${model.name}`}
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
           )}
 
           {isPaidTier && (
-            <div className="pt-2">
+            <div className="mt-8 flex justify-center border-t pt-6">
               <Button
-                variant="destructive"
+                variant="ghost"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={() => setShowCancelDialog(true)}
                 disabled={cancelSubscriptionMutation.isPending}
               >

@@ -524,12 +524,14 @@ jobs:
         with:
           name: backend-coverage-report
           path: backend-coverage
+        continue-on-error: true
 
       - name: Download frontend coverage
         uses: actions/download-artifact@v4
         with:
           name: frontend-test-results
           path: frontend-coverage
+        continue-on-error: true
 
       - name: Parse coverage reports
         id: parse_coverage

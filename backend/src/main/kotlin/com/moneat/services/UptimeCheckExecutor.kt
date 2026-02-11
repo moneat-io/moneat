@@ -405,7 +405,7 @@ class UptimeCheckExecutor {
         val startTime = System.currentTimeMillis()
         
         return try {
-            val url = URL("https://$hostname:$port")
+            val url = java.net.URI("https://$hostname:$port").toURL()
             val conn = url.openConnection() as HttpsURLConnection
             conn.connectTimeout = monitor.timeoutSeconds * 1000
             conn.connect()
