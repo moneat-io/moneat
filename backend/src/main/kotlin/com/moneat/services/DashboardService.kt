@@ -1055,6 +1055,10 @@ class DashboardService {
 
         return try {
             val response = ClickHouseClient.execute(query)
+            if (response.status != io.ktor.http.HttpStatusCode.OK) {
+                // Log error safely if possible, or just return empty list as fail-safe
+                return emptyList()
+            }
             val body = response.bodyAsText()
             body.lines()
                 .filter { it.isNotBlank() }

@@ -235,7 +235,7 @@ function IssueDetailPage() {
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     {latestEvent.exception ? (
-                      <div className="max-h-[500px] overflow-auto">
+                      <div>
                         <StackTraceViewer exception={latestEvent.exception} />
                       </div>
                     ) : (

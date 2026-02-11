@@ -3,6 +3,7 @@ import {useMemo, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {cn} from '@/lib/utils'
+import {useToast} from '@/hooks/use-toast'
 import {Badge} from '@/components/ui/badge'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
@@ -373,6 +374,7 @@ function RequestInfoCard({ request }: { request?: string }) {
 function TransactionDetailPage() {
   const { transactionId } = Route.useParams()
   const [expandByDefault, setExpandByDefault] = useState(true)
+  const { toast } = useToast()
 
   const { data, isLoading } = useQuery({
     queryKey: ['transaction-spans', transactionId],
@@ -562,11 +564,26 @@ function TransactionDetailPage() {
             <CardContent className="space-y-4 px-4 pb-4 pt-0">
               {/* Tags */}
               <div>
-                <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Tag className="h-3 w-3" />
-                  Tags
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Tag className="h-3 w-3" />
+                    Tags
+                    {Object.keys(transaction.tags).length > 0 && (
+                      <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{Object.keys(transaction.tags).length}</Badge>
+                    )}
+                  </div>
                   {Object.keys(transaction.tags).length > 0 && (
-                    <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{Object.keys(transaction.tags).length}</Badge>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(transaction.tags, null, 2))
+                        toast({ title: 'Copied', description: 'Tags copied to clipboard.' })
+                      }}
+                      className="inline-flex items-center gap-1 rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <Copy className="h-3 w-3" />
+                      <span className="text-[10px]">Copy</span>
+                    </button>
                   )}
                 </div>
                 {Object.keys(transaction.tags).length === 0 ? (
@@ -596,18 +613,34 @@ function TransactionDetailPage() {
                       <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{contextEntries.length}</Badge>
                     )}
                   </div>
-                  {contextEntries.length > 0 && (
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <Checkbox
-                        checked={expandByDefault}
-                        onCheckedChange={(checked) => setExpandByDefault(checked === true)}
-                        className="h-3.5 w-3.5"
-                      />
-                      <Label className="cursor-pointer text-[11px] font-normal text-muted-foreground">
-                        Expand
-                      </Label>
-                    </label>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {contextEntries.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const contextsObj = Object.fromEntries(contextEntries)
+                          navigator.clipboard.writeText(JSON.stringify(contextsObj, null, 2))
+                          toast({ title: 'Copied', description: 'Contexts copied to clipboard.' })
+                        }}
+                        className="inline-flex items-center gap-1 rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+                      >
+                        <Copy className="h-3 w-3" />
+                        <span className="text-[10px]">Copy</span>
+                      </button>
+                    )}
+                    {contextEntries.length > 0 && (
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Checkbox
+                          checked={expandByDefault}
+                          onCheckedChange={(checked) => setExpandByDefault(checked === true)}
+                          className="h-3.5 w-3.5"
+                        />
+                        <Label className="cursor-pointer text-[11px] font-normal text-muted-foreground">
+                          Expand
+                        </Label>
+                      </label>
+                    )}
+                  </div>
                 </div>
                 {contextEntries.length === 0 ? (
                   <p className="text-xs text-muted-foreground">No context entries</p>
