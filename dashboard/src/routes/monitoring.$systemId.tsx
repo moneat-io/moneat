@@ -14,6 +14,8 @@ import {
     Clock,
     Cpu,
     HardDrive,
+    LayoutGrid,
+    LayoutList,
     MemoryStick,
     Monitor,
     Network,
@@ -36,6 +38,14 @@ import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
+type ContainerViewMode = 'cards' | 'compact'
+
+const CONTAINER_VIEW_MODE_KEY = 'moneat.containers.viewMode'
+
+function getInitialContainerViewMode(): ContainerViewMode {
+  if (typeof window === 'undefined') return 'cards'
+  return window.localStorage.getItem(CONTAINER_VIEW_MODE_KEY) === 'compact' ? 'compact' : 'cards'
+}
 
 interface TimeRangeOption {
   value: TimeRange
@@ -161,6 +171,8 @@ function MetricCard({
 function SystemDetailPage() {
   const {systemId} = Route.useParams()
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
+  const [containerViewMode, setContainerViewMode] = useState<ContainerViewMode>(getInitialContainerViewMode())
+  
   const {data: billingUsage} = useQuery({
     queryKey: ['billing-usage'],
     queryFn: () => api.getBillingUsage(),
@@ -177,6 +189,13 @@ function SystemDetailPage() {
       setTimeRange(fallback)
     }
   }, [availableRanges, timeRange, setTimeRange])
+
+  // Persist container view mode to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(CONTAINER_VIEW_MODE_KEY, containerViewMode)
+    }
+  }, [containerViewMode])
 
   const {data: system, isLoading: systemLoading} = useQuery({
     queryKey: ['monitor-system', systemId],
@@ -772,100 +791,198 @@ function SystemDetailPage() {
 
           <TabsContent value="containers" className="space-y-6">
             {containers.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                {containers.map((container) => {
-                  const isRunning = container.status === 'running'
-
-                  return (
-                    <Card
-                      key={container.id}
-                      className={`relative overflow-hidden ${
-                        isRunning ? 'border-emerald-500/10' : 'border-muted'
-                      }`}
+              <>
+                {/* View mode toggle */}
+                <div className="flex justify-end">
+                  <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+                    <Button
+                      variant={containerViewMode === 'cards' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setContainerViewMode('cards')}
+                      className="h-7 px-2"
                     >
-                      <div
-                        className={`absolute top-0 left-0 right-0 h-0.5 ${
-                          isRunning
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
-                            : 'bg-gradient-to-r from-zinc-400 to-zinc-500'
-                        }`}
-                      />
-                      <CardHeader className="pb-3 pt-5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div
-                              className={`flex items-center justify-center h-8 w-8 rounded-lg shrink-0 ${
-                                isRunning
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                  : 'bg-muted text-muted-foreground'
-                              }`}
-                            >
-                              <Box className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <CardTitle className="text-sm truncate">{container.name}</CardTitle>
-                              <p className="text-xs text-muted-foreground truncate">{container.image}</p>
-                            </div>
-                          </div>
-                          <Badge
-                            variant="secondary"
-                            className={`text-xs shrink-0 ${
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={containerViewMode === 'compact' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setContainerViewMode('compact')}
+                      className="h-7 px-2"
+                    >
+                      <LayoutList className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Cards view */}
+                {containerViewMode === 'cards' ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {containers.map((container) => {
+                      const isRunning = container.status === 'running'
+
+                      return (
+                        <Card
+                          key={container.id}
+                          className={`relative overflow-hidden ${
+                            isRunning ? 'border-emerald-500/10' : 'border-muted'
+                          }`}
+                        >
+                          <div
+                            className={`absolute top-0 left-0 right-0 h-0.5 ${
                               isRunning
-                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                                : 'bg-gradient-to-r from-zinc-400 to-zinc-500'
                             }`}
-                          >
-                            {container.status}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pb-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <Cpu className="h-3 w-3 text-blue-500" />
-                              <span className="text-xs text-muted-foreground">CPU</span>
+                          />
+                          <CardHeader className="pb-3 pt-5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={`flex items-center justify-center h-8 w-8 rounded-lg shrink-0 ${
+                                    isRunning
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                      : 'bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  <Box className="h-4 w-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <CardTitle className="text-sm truncate">{container.name}</CardTitle>
+                                  <p className="text-xs text-muted-foreground truncate">{container.image}</p>
+                                </div>
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className={`text-xs shrink-0 ${
+                                  isRunning
+                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                                    : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
+                                }`}
+                              >
+                                {container.status}
+                              </Badge>
                             </div>
-                            <p className={`text-lg font-semibold ${getPercentColor(container.cpuPercent)}`}>
-                              {formatPercent(container.cpuPercent)}
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <MemoryStick className="h-3 w-3 text-violet-500" />
-                              <span className="text-xs text-muted-foreground">Memory</span>
+                          </CardHeader>
+                          <CardContent className="pb-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Cpu className="h-3 w-3 text-blue-500" />
+                                  <span className="text-xs text-muted-foreground">CPU</span>
+                                </div>
+                                <p className={`text-lg font-semibold ${getPercentColor(container.cpuPercent)}`}>
+                                  {formatPercent(container.cpuPercent)}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <MemoryStick className="h-3 w-3 text-violet-500" />
+                                  <span className="text-xs text-muted-foreground">Memory</span>
+                                </div>
+                                <p className="text-lg font-semibold">
+                                  {formatBytesShort(container.memUsed)}
+                                  <span className="text-xs text-muted-foreground font-normal ml-1">
+                                    / {formatBytesShort(container.memLimit)}
+                                  </span>
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Network className="h-3 w-3 text-sky-500" />
+                                  <span className="text-xs text-muted-foreground">Net In</span>
+                                </div>
+                                <p className="text-lg font-semibold">
+                                  {formatBytesShort(container.netRecvBytes)}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Network className="h-3 w-3 text-indigo-500 rotate-180" />
+                                  <span className="text-xs text-muted-foreground">Net Out</span>
+                                </div>
+                                <p className="text-lg font-semibold">
+                                  {formatBytesShort(container.netSentBytes)}
+                                </p>
+                              </div>
                             </div>
-                            <p className="text-lg font-semibold">
-                              {formatBytesShort(container.memUsed)}
-                              <span className="text-xs text-muted-foreground font-normal ml-1">
-                                / {formatBytesShort(container.memLimit)}
-                              </span>
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <Network className="h-3 w-3 text-sky-500" />
-                              <span className="text-xs text-muted-foreground">Net In</span>
-                            </div>
-                            <p className="text-lg font-semibold">
-                              {formatBytesShort(container.netRecvBytes)}
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <Network className="h-3 w-3 text-indigo-500 rotate-180" />
-                              <span className="text-xs text-muted-foreground">Net Out</span>
-                            </div>
-                            <p className="text-lg font-semibold">
-                              {formatBytesShort(container.netSentBytes)}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  /* Compact table view */
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Container</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">CPU</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Memory</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Net In</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Net Out</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {containers.map((container) => {
+                            const isRunning = container.status === 'running'
+                            return (
+                              <tr key={container.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2.5">
+                                    <div
+                                      className={`flex items-center justify-center h-6 w-6 rounded shrink-0 ${
+                                        isRunning
+                                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                          : 'bg-muted text-muted-foreground'
+                                      }`}
+                                    >
+                                      <Box className="h-3 w-3" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium truncate">{container.name}</div>
+                                      <div className="text-xs text-muted-foreground truncate">{container.image}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <Badge
+                                    variant="secondary"
+                                    className={`text-xs ${
+                                      isRunning
+                                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                                        : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
+                                    }`}
+                                  >
+                                    {container.status}
+                                  </Badge>
+                                </td>
+                                <td className={`py-3 px-4 text-right text-sm font-medium ${getPercentColor(container.cpuPercent)}`}>
+                                  {formatPercent(container.cpuPercent)}
+                                </td>
+                                <td className="py-3 px-4 text-right text-sm font-medium">
+                                  {formatBytesShort(container.memUsed)}
+                                  <span className="text-xs text-muted-foreground font-normal ml-1">
+                                    / {formatBytesShort(container.memLimit)}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-right text-sm font-medium">
+                                  {formatBytesShort(container.netRecvBytes)}
+                                </td>
+                                <td className="py-3 px-4 text-right text-sm font-medium">
+                                  {formatBytesShort(container.netSentBytes)}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+              </>
             ) : (
               <Card className="border-dashed bg-gradient-to-br from-cyan-500/5 via-background to-blue-500/5">
                 <CardContent className="py-12">

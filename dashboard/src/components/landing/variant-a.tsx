@@ -158,6 +158,16 @@ const secondaryFeatures: Feature[] = [
     mock: <img src="/screenshots/uptime.png" alt="Uptime monitoring with status checks and availability metrics" className="w-full h-full object-cover" />,
   },
   {
+    icon: Box,
+    title: 'Container monitoring',
+    description:
+      'Real-time Docker container metrics. Track CPU, memory, and network usage across all your containers.',
+    gradient: 'from-blue-500 to-cyan-400',
+    iconBg: 'bg-blue-500/10',
+    iconColor: 'text-blue-400',
+    mock: <img src="/screenshots/containers.png" alt="Container monitoring showing Docker metrics and resource usage" className="w-full h-full object-cover" />,
+  },
+  {
     icon: GitBranch,
     title: 'Status pages',
     description:

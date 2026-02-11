@@ -68,7 +68,7 @@ const SCREENSHOTS = [
             await page.waitForLoadState('networkidle');
             await page.waitForTimeout(1500);
             
-            // Set time range to show demo data (last 15 minutes preset)
+            // Set time range to show demo data (last 1 hour preset)
             try {
               // Click the time range dropdown button (has Clock icon)
               const timeButton = page.locator('button:has(svg.lucide-clock)').first();
@@ -76,15 +76,15 @@ const SCREENSHOTS = [
                 await timeButton.click();
                 await page.waitForTimeout(500);
                 
-                // Click the "15m" preset option (auto-applies and closes dropdown)
-                const fifteenMinPreset = page.locator('button:has-text("15m")').first();
-                if (await fifteenMinPreset.count() > 0) {
-                  await fifteenMinPreset.click();
-                  await page.waitForTimeout(1500); // Wait for data to reload
+                // Click the "1h" preset option (auto-applies and closes dropdown)
+                const oneHourPreset = page.locator('button:has-text("1h")').first();
+                if (await oneHourPreset.count() > 0) {
+                  await oneHourPreset.click();
+                  await page.waitForTimeout(2000); // Wait for data to reload
                   
-                  console.log('   ✅ Set time range to last 15 minutes');
+                  console.log('   ✅ Set time range to last 1 hour');
                 } else {
-                  console.log('   ⚠️  Could not find 15m preset option');
+                  console.log('   ⚠️  Could not find 1h preset option');
                   
                   // Close dropdown if still open
                   await page.keyboard.press('Escape');
@@ -183,6 +183,42 @@ const SCREENSHOTS = [
       }
     },
     elementSelector: 'h3:has-text("incident.io")',
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    name: 'containers',
+    description: 'Container monitoring with metrics',
+    navigate: async (page) => {
+      // Go to monitoring page
+      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      
+      // Click on first system card/link
+      try {
+        const firstSystem = page.locator('a[href^="/monitoring/"]:not([href*="/settings"])').first();
+        const systemExists = await firstSystem.count() > 0;
+        if (systemExists) {
+          await firstSystem.click();
+          await page.waitForLoadState('networkidle');
+          await page.waitForTimeout(1500);
+          
+          // Click on containers tab
+          const containersTab = page.locator('button[value="containers"]').first();
+          const tabExists = await containersTab.count() > 0;
+          if (tabExists) {
+            await containersTab.click();
+            await page.waitForTimeout(1500);
+            console.log('   ✅ Navigated to containers tab');
+          } else {
+            console.log('   ⚠️  Containers tab not found');
+          }
+        } else {
+          console.log('   ⚠️  No monitoring systems found');
+        }
+      } catch (e) {
+        console.log('   ⚠️  Could not navigate to containers:', e.message);
+      }
+    },
     viewport: { width: 1920, height: 1080 },
   },
 ];

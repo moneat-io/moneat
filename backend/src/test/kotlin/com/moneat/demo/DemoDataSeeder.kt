@@ -341,6 +341,10 @@ object DemoDataSeeder {
         println("\nSeeding monitoring systems...")
         seedMonitoringSystems(orgId)
         
+        // Seed container metrics for monitoring systems
+        println("\nSeeding container metrics...")
+        seedContainerMetrics(orgId)
+        
         // Seed status pages (only if not exists)
         if (!statusPagesExist) {
             println("\nSeeding status pages...")
@@ -1349,16 +1353,18 @@ object DemoDataSeeder {
                 mapOf("command" to listOf("GET product:123", "SET session:abc", "HGETALL user:456"), "ms" to listOf("2", "5", "12", "8")))
         )
         
-        // Generate realistic logs with timestamps spread over last 15 minutes
+        // Generate realistic logs with timestamps spread over last 2 hours
+        // This ensures logs are visible even if screenshots are taken later
         val now = Instant.now()
-        val logCount = 250 // Generate 250 logs
+        val logCount = 300 // Generate 300 logs
         
         repeat(logCount) { i ->
-            // Weight towards more recent logs
+            // Weight towards more recent logs, but spread over 2 hours
             val minutesAgo = when {
-                i < 100 -> random.nextInt(0, 3)    // Last 3 minutes: 100 logs
-                i < 200 -> random.nextInt(3, 8)    // 3-8 minutes ago: 100 logs
-                else -> random.nextInt(8, 15)      // 8-15 minutes ago: 50 logs
+                i < 80 -> random.nextInt(0, 10)      // Last 10 minutes: 80 logs
+                i < 160 -> random.nextInt(10, 30)    // 10-30 minutes ago: 80 logs
+                i < 240 -> random.nextInt(30, 60)    // 30-60 minutes ago: 80 logs
+                else -> random.nextInt(60, 120)      // 1-2 hours ago: 60 logs
             }
             val secondsOffset = random.nextInt(0, 60)
             val timestamp = now.minus((minutesAgo * 60 + secondsOffset).toLong(), ChronoUnit.SECONDS)
@@ -1992,6 +1998,133 @@ object DemoDataSeeder {
         }
         
         println("✅ Seeded ${systemsList.size} monitoring systems")
+    }
+    
+    private suspend fun seedContainerMetrics(organizationId: Int) {
+        val db = ClickHouseClient.getDatabase()
+        
+        // Get seeded systems
+        val systems = transaction {
+            Systems.selectAll()
+                .where { Systems.organization_id eq organizationId }
+                .map { it[Systems.id] to it[Systems.name] }
+        }
+        
+        if (systems.isEmpty()) {
+            println("⚠️  No monitoring systems found. Skipping container metrics seeding.")
+            return
+        }
+        
+        // Container configurations for different system types
+        val containerConfigs = mapOf(
+            "api-prod-1.acme.com" to listOf(
+                Triple("acme-api", "acme/api-server:1.8.3", "running"),
+                Triple("acme-worker", "acme/background-worker:1.8.3", "running"),
+                Triple("nginx-proxy", "nginx:1.25-alpine", "running"),
+                Triple("redis-cache", "redis:7.2-alpine", "running")
+            ),
+            "api-prod-2.acme.com" to listOf(
+                Triple("acme-api", "acme/api-server:1.8.3", "running"),
+                Triple("acme-worker", "acme/background-worker:1.8.3", "running"),
+                Triple("nginx-proxy", "nginx:1.25-alpine", "running")
+            ),
+            "worker-prod-1.acme.com" to listOf(
+                Triple("acme-worker-queue", "acme/background-worker:1.8.3", "running"),
+                Triple("acme-worker-scheduler", "acme/scheduler:1.2.0", "running"),
+                Triple("acme-mailer", "acme/mailer-service:2.1.5", "running")
+            ),
+            "db-primary.acme.com" to listOf(
+                Triple("postgres-main", "postgres:15.4-alpine", "running"),
+                Triple("pg-backup", "postgres:15.4-alpine", "exited")
+            ),
+            "cache-redis-1.acme.com" to listOf(
+                Triple("redis-master", "redis:7.2-alpine", "running"),
+                Triple("redis-exporter", "oliver006/redis_exporter:latest", "running")
+            )
+        )
+        
+        var totalContainers = 0
+        var totalMetrics = 0
+        
+        systems.forEach { (systemId, systemName) ->
+            val containers = containerConfigs[systemName] ?: emptyList()
+            
+            containers.forEach { (containerName, image, status) ->
+                val containerId = UUID.randomUUID().toString().take(12) // Docker-style short ID
+                val isRunning = status == "running"
+                
+                // Generate metrics for last 7 days (every 30 seconds = ~20k points per container)
+                // Let's do last 2 hours with 1-minute intervals for demo (120 points)
+                val now = Instant.now()
+                val metricsCount = 120
+                
+                // Base resource usage patterns per container type
+                val (baseCpu, baseMemMB, memLimitMB) = when {
+                    containerName.contains("api") -> Triple(25.0f, 512, 1024)
+                    containerName.contains("worker") -> Triple(45.0f, 768, 2048)
+                    containerName.contains("postgres") -> Triple(15.0f, 1024, 4096)
+                    containerName.contains("redis") -> Triple(8.0f, 256, 512)
+                    containerName.contains("nginx") -> Triple(5.0f, 128, 256)
+                    else -> Triple(20.0f, 512, 1024)
+                }
+                
+                repeat(metricsCount) { i ->
+                    val timestamp = now.minus((metricsCount - i).toLong(), ChronoUnit.MINUTES)
+                    
+                    // Add realistic variation to metrics
+                    val cpuVariation = random.nextDouble(-10.0, 15.0).toFloat()
+                    val memVariation = random.nextInt(-100, 200)
+                    
+                    val cpuPercent = if (isRunning) {
+                        (baseCpu + cpuVariation).coerceIn(0.0f, 100.0f)
+                    } else 0.0f
+                    
+                    val memUsedMB = if (isRunning) {
+                        (baseMemMB + memVariation).coerceAtLeast(50)
+                    } else 0
+                    
+                    val memUsed = memUsedMB * 1024L * 1024L
+                    val memLimit = memLimitMB * 1024L * 1024L
+                    val memPercent = if (memLimit > 0) (memUsed.toFloat() / memLimit.toFloat() * 100) else 0.0f
+                    
+                    // Network metrics (bytes)
+                    val netRecv = if (isRunning) random.nextLong(1024L * 1024L, 100L * 1024L * 1024L) else 0L
+                    val netSent = if (isRunning) random.nextLong(512L * 1024L, 50L * 1024L * 1024L) else 0L
+                    
+                    val containerQuery = """
+                        INSERT INTO $db.container_metrics (
+                            system_id, container_name, container_id, image, status,
+                            cpu_percent, mem_used, mem_limit, mem_percent,
+                            net_recv_bytes, net_sent_bytes, timestamp
+                        ) VALUES (
+                            toUUID('$systemId'),
+                            '$containerName',
+                            '$containerId',
+                            '$image',
+                            '$status',
+                            $cpuPercent,
+                            $memUsed,
+                            $memLimit,
+                            $memPercent,
+                            $netRecv,
+                            $netSent,
+                            toDateTime64(${timestamp.epochSecond}, 3, 'UTC')
+                        )
+                    """.trimIndent()
+                    
+                    try {
+                        ClickHouseClient.execute(containerQuery)
+                        totalMetrics++
+                    } catch (e: Exception) {
+                        if (i == 0) println("❌ Error inserting container metric: ${e.message}")
+                    }
+                }
+                
+                totalContainers++
+            }
+        }
+        
+        println("✅ Seeded $totalContainers containers with $totalMetrics metric points")
     }
     
     private suspend fun seedStatusPages(organizationId: Int) {
