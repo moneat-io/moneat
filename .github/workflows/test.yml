@@ -1,0 +1,381 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  schedule:
+    # Nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '21'
+  NODE_VERSION: '20'
+
+jobs:
+  # PR-Required: Backend unit and route tests
+  backend-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: ./gradlew test --no-daemon
+
+      - name: Generate JaCoCo report
+        working-directory: backend
+        run: ./gradlew jacocoTestReport --no-daemon
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-unit-test-results
+          path: backend/build/test-results/test/
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: backend/build/reports/jacoco/test/
+
+  # PR-Required: Frontend unit tests
+  frontend-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: dashboard
+        run: npm run test:coverage
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: dashboard/coverage/
+
+  # PR-Required: Web E2E smoke tests
+  web-e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: moneat
+          POSTGRES_PASSWORD: moneat_test_password
+          POSTGRES_DB: moneat
+        ports:
+          - 5499:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.1-alpine
+        env:
+          CLICKHOUSE_USER: moneat
+          CLICKHOUSE_PASSWORD: moneat_test_password
+          CLICKHOUSE_DB: moneat
+        ports:
+          - 8123:8123
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Build backend
+        working-directory: backend
+        run: ./gradlew shadowJar --no-daemon
+
+      - name: Run DB migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5499/moneat
+          DATABASE_USER: moneat
+          DATABASE_PASSWORD: moneat_test_password
+          CLICKHOUSE_URL: http://localhost:8123
+          CLICKHOUSE_USER: moneat
+          CLICKHOUSE_PASSWORD: moneat_test_password
+          JWT_SECRET: test-secret-for-ci-only
+          STRIPE_ENABLED: false
+          BILLING_ENFORCEMENT_ENABLED: false
+          TESTING_BACKGROUND_JOBS_ENABLED: false
+        run: ./gradlew flywayMigrate --no-daemon
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5499/moneat
+          DATABASE_USER: moneat
+          DATABASE_PASSWORD: moneat_test_password
+          CLICKHOUSE_URL: http://localhost:8123
+          CLICKHOUSE_USER: moneat
+          CLICKHOUSE_PASSWORD: moneat_test_password
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-for-ci-only
+          STRIPE_ENABLED: false
+          BILLING_ENFORCEMENT_ENABLED: false
+          TESTING_BACKGROUND_JOBS_ENABLED: false
+          FRONTEND_URL: http://localhost:5173
+        run: |
+          java -jar build/libs/moneat-backend-all.jar &
+          echo $! > backend.pid
+          sleep 10
+
+      - name: Seed E2E data
+        working-directory: e2e
+        env:
+          BACKEND_URL: http://localhost:8080
+        run: ./seed-data.sh
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Install Playwright
+        working-directory: e2e/web
+        run: |
+          npm ci
+          npx playwright install chromium
+
+      - name: Run smoke tests
+        working-directory: e2e/web
+        env:
+          BASE_URL: http://localhost:5173
+          CI: true
+        run: npm run test:smoke
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/web/playwright-report/
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-results
+          path: e2e/web/test-results/
+
+  # Nightly: Full backend integration tests (Testcontainers)
+  backend-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Run integration tests
+        working-directory: backend
+        run: ./gradlew integrationTest --no-daemon
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integration-test-results
+          path: backend/build/test-results/integrationTest/
+
+  # Nightly: Full web E2E suite
+  web-e2e-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: moneat
+          POSTGRES_PASSWORD: moneat_test_password
+          POSTGRES_DB: moneat
+        ports:
+          - 5499:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.1-alpine
+        env:
+          CLICKHOUSE_USER: moneat
+          CLICKHOUSE_PASSWORD: moneat_test_password
+          CLICKHOUSE_DB: moneat
+        ports:
+          - 8123:8123
+          - 9000:9000
+
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build and start backend
+        working-directory: backend
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5499/moneat
+          DATABASE_USER: moneat
+          DATABASE_PASSWORD: moneat_test_password
+          CLICKHOUSE_URL: http://localhost:8123
+          CLICKHOUSE_USER: moneat
+          CLICKHOUSE_PASSWORD: moneat_test_password
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-for-ci-only
+          STRIPE_ENABLED: false
+        run: |
+          ./gradlew shadowJar --no-daemon
+          java -jar build/libs/moneat-backend-all.jar &
+          sleep 15
+
+      - name: Seed E2E data
+        working-directory: e2e
+        run: ./seed-data.sh
+
+      - name: Install dependencies and run full E2E
+        working-directory: e2e/web
+        run: |
+          npm ci
+          npx playwright install chromium
+          npm test
+
+      - name: Upload full Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-full-report
+          path: e2e/web/playwright-report/
+
+  # Coverage verification (reporting-only for now)
+  coverage-check:
+    runs-on: ubuntu-latest
+    needs: [backend-unit, frontend-unit]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: backend-coverage
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-test-results
+          path: frontend-coverage
+
+      - name: Coverage summary
+        run: |
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Backend and frontend coverage reports available in artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "Future: Automated coverage gates will enforce thresholds." >> $GITHUB_STEP_SUMMARY

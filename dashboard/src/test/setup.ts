@@ -43,3 +43,32 @@ global.IntersectionObserver = class IntersectionObserver {
   }
   unobserve() {}
 } as any
+
+// Mock localStorage and sessionStorage
+const createStorage = (): Storage => {
+  let store: Record<string, string> = {}
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value
+    },
+    removeItem: (key: string) => {
+      delete store[key]
+    },
+    clear: () => {
+      store = {}
+    },
+    key: (index: number) => Object.keys(store)[index] || null,
+    length: Object.keys(store).length,
+  }
+}
+
+Object.defineProperty(global, 'localStorage', {
+  value: createStorage(),
+  writable: true,
+})
+
+Object.defineProperty(global, 'sessionStorage', {
+  value: createStorage(),
+  writable: true,
+})

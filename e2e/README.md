@@ -67,23 +67,38 @@ After seeding, you can login with:
 
 ```
 e2e/
-├── Android/           # Native Android E2E app
-├── KMP/              # Kotlin Multiplatform E2E app
-├── setup.sh          # Initialize E2E environment
-├── seed-data.sh      # Seed database with test data
-├── run-android.sh    # Build and run Android app
-├── run-kmp.sh        # Build and run KMP app (Android)
-└── README.md         # This file
+├── Android/                      # Native Android E2E app
+├── KMP/                          # Kotlin Multiplatform E2E app
+├── web/                          # Playwright web E2E tests
+├── setup.sh                      # Initialize E2E environment
+├── seed-data.sh                  # Seed database with test data
+├── run-android.sh                # Build and run Android app
+├── run-kmp.sh                    # Build and run KMP app (Android)
+├── ANDROID_MANUAL_CHECKLIST.md  # Release validation checklist
+└── README.md                     # This file
 ```
 
 ## Testing Workflow
 
+### Web E2E Tests (Automated)
+```bash
+cd web
+npm install
+npm run test:smoke  # Run critical-path tests
+```
+See `web/README.md` for details.
+
+### Mobile Manual Testing
 1. Start the apps
 2. Click different error trigger buttons
-3. Check the Moneat dashboard at http://localhost:3000
+3. Check the Moneat dashboard at http://localhost:5173
 4. Login with e2e-test@moneat.dev
 5. Navigate to projects and view captured errors
-6. Verify:
+
+**For release validation**, use the comprehensive checklist:
+- `ANDROID_MANUAL_CHECKLIST.md` - Step-by-step validation guide
+
+Verify:
    - Error grouping (same error type = same issue)
    - Stack traces are captured
    - Context data (tags, breadcrumbs) is attached
