@@ -89,7 +89,7 @@ function validateCreateForm(form: CreateFormState): ValidationErrors {
 
   if (form.monthlyErrorLimit < 0) errors.monthlyErrorLimit = 'Cannot be negative'
   if (form.monthlyTransactionLimit < 0) errors.monthlyTransactionLimit = 'Cannot be negative'
-  if (form.monthlyReplayLimit < 0) errors.monthlyReplayLimit = 'Cannot be negative'
+  if (form.monthlyReplayLimit < -1) errors.monthlyReplayLimit = 'Cannot be less than -1 (use -1 for unlimited)'
   if (form.monthlyFeedbackLimit < 0) errors.monthlyFeedbackLimit = 'Cannot be negative'
   if (form.retentionDays < 1) {
     errors.retentionDays = 'Must be at least 1 day'
@@ -345,7 +345,7 @@ function AdminBillingPage() {
         monitorIntervalSeconds: config.monitorIntervalSeconds,
         monthlyPriceCents: config.monthlyPriceCents,
         yearlyPriceCents: config.yearlyPriceCents,
-        monthlyGbLimitGb: Math.max(0, config.monthlyGbLimit / BYTES_PER_GB),
+        monthlyGbLimitGb: Math.max(0, Math.round(config.monthlyGbLimit / BYTES_PER_GB)),
         trialDays: config.trialDays,
         paygEnabled: config.paygEnabled,
         paygRateMicrosPerUnit: config.paygRateMicrosPerUnit,
@@ -1603,8 +1603,8 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
   if (current.monthlyGbLimit !== formMonthlyGbLimit) {
     changes.push({
       field: 'Monthly Data Limit',
-      from: `${(current.monthlyGbLimit / BYTES_PER_GB).toFixed(0)} GB`,
-      to: `${form.monthlyGbLimitGb} GB`,
+      from: `${Math.round(current.monthlyGbLimit / BYTES_PER_GB)} GB`,
+      to: `${Math.round(form.monthlyGbLimitGb)} GB`,
     })
   }
   if (current.trialDays !== form.trialDays) {

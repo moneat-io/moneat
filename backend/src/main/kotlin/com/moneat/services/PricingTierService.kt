@@ -244,7 +244,7 @@ class PricingTierService {
         require(request.monthlyUnitLimit >= 0) { "Monthly unit limit must be non-negative" }
         require(request.monthlyErrorLimit >= 0) { "Monthly error limit must be non-negative" }
         require(request.monthlyTransactionLimit >= 0) { "Monthly transaction limit must be non-negative" }
-        require(request.monthlyReplayLimit >= 0) { "Monthly replay limit must be non-negative" }
+        require(request.monthlyReplayLimit >= -1) { "Monthly replay limit must be -1 (unlimited) or non-negative" }
         require(request.monthlyFeedbackLimit >= 0) { "Monthly feedback limit must be non-negative" }
         if (request.monthlyGbLimit != null) {
             require(request.monthlyGbLimit >= 0) { "Monthly GB limit must be non-negative" }
