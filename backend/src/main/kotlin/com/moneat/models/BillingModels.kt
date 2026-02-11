@@ -16,6 +16,7 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val monthly_feedback_limit = long("monthly_feedback_limit").default(0)
     val monthly_gb_limit = long("monthly_gb_limit").default(0)
     val retention_days = integer("retention_days")
+    val log_retention_days = integer("log_retention_days")
     val max_projects = integer("max_projects").nullable()
     val max_systems = integer("max_systems")
     val monitor_interval_seconds = integer("monitor_interval_seconds")
@@ -80,6 +81,7 @@ data class PricingTierConfigResponse(
     val monthlyFeedbackLimit: Long,
     val monthlyGbLimit: Long,
     val retentionDays: Int,
+    val logRetentionDays: Int,
     val maxProjects: Int?,
     val maxSystems: Int,
     val monitorIntervalSeconds: Int,
@@ -198,6 +200,7 @@ data class CreateTierVersionRequest(
     val monthlyFeedbackLimit: Long = 0,
     val monthlyGbLimit: Long = 0,
     val retentionDays: Int,
+    val logRetentionDays: Int,
     val maxProjects: Int? = null,
     val maxSystems: Int,
     val monitorIntervalSeconds: Int,

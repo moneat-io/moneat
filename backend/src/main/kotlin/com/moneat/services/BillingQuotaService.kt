@@ -373,6 +373,7 @@ class BillingQuotaService(
             monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
             monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
+            logRetentionDays = row[PricingTierConfigs.log_retention_days],
             maxProjects = row[PricingTierConfigs.max_projects],
             maxSystems = row[PricingTierConfigs.max_systems],
             monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
@@ -402,6 +403,7 @@ class BillingQuotaService(
             monthlyFeedbackLimit = 0,
             monthlyGbLimit = tier.monthlyGbBytes,
             retentionDays = tier.retentionDays,
+            logRetentionDays = tier.retentionDays,  // Fallback: use same as retentionDays
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
             monitorIntervalSeconds = tier.monitorIntervalSeconds,

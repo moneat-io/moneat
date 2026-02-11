@@ -19,10 +19,16 @@ import org.jetbrains.exposed.sql.transactions.transaction
 fun Route.apiRoutes() {
     val dashboardService = DashboardService()
     
+    // Public routes (no auth required)
+    route("/v1") {
+        // Public billing plans endpoint
+        publicBillingRoutes()
+    }
+    
     authenticate("auth-jwt") {
         rateLimit(RateLimitName("api")) {
         route("/v1") {
-            // Billing
+            // Protected billing routes
             billingRoutes()
 
             // Integrations

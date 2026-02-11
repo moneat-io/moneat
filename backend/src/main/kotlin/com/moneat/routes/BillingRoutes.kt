@@ -28,14 +28,12 @@ import org.jetbrains.exposed.sql.update
 
 private val logger = KotlinLogging.logger {}
 
-fun Route.billingRoutes() {
+// Public billing endpoints (no auth required)
+fun Route.publicBillingRoutes() {
     val pricingTierService = PricingTierService()
-    val quotaService = BillingQuotaService(pricingTierService)
     val stripeService = StripeService(pricingTierService)
-    val usageTrackingService = UsageTrackingService.instance
 
     route("/billing") {
-        // Public endpoint for pricing plans (no auth required)
         get("/plans") {
             val plans = pricingTierService.getCurrentPlans()
             call.respond(
@@ -46,7 +44,17 @@ fun Route.billingRoutes() {
                 )
             )
         }
+    }
+}
 
+// Protected billing endpoints (require auth)
+fun Route.billingRoutes() {
+    val pricingTierService = PricingTierService()
+    val quotaService = BillingQuotaService(pricingTierService)
+    val stripeService = StripeService(pricingTierService)
+    val usageTrackingService = UsageTrackingService.instance
+
+    route("/billing") {
         get("/usage") {
             val principal = call.principal<JWTPrincipal>() ?: run {
                 call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))

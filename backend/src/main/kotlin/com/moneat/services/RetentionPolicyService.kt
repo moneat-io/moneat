@@ -51,4 +51,34 @@ class RetentionPolicyService(
         }
         return retentionByOrg
     }
+
+    suspend fun getLogRetentionDaysForOrganization(organizationId: Int): Int {
+        return CacheService.cached("cache:log_retention:org:$organizationId", 300) {
+            pricingTierService.getEffectiveTierForOrganization(organizationId).tier.logRetentionDays
+        }
+    }
+
+    suspend fun getLogRetentionDaysForProject(projectId: Long): Int? {
+        return CacheService.cached("cache:log_retention:project:$projectId", 300) {
+            val organizationId = transaction {
+                Projects.selectAll().where { Projects.id eq projectId }
+                    .firstOrNull()
+                    ?.get(Projects.organization_id)
+            }
+            organizationId?.let { getLogRetentionDaysForOrganization(it) }
+        }
+    }
+
+    suspend fun getLogRetentionDaysByOrganization(): Map<Int, Int> {
+        val orgIds = transaction { Organizations.selectAll().map { it[Organizations.id] } }
+        if (orgIds.isEmpty()) return emptyMap()
+
+        val logRetentionByOrg = LinkedHashMap<Int, Int>(orgIds.size)
+        for (orgId in orgIds) {
+            logRetentionByOrg[orgId] = runCatching {
+                getLogRetentionDaysForOrganization(orgId)
+            }.getOrDefault(3) // Default to FREE tier log retention (3 days)
+        }
+        return logRetentionByOrg
+    }
 }

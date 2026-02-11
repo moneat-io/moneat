@@ -92,11 +92,11 @@ export function PricingSection() {
   const {toast} = useToast()
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
   const isAuthenticated = api.isAuthenticated()
-  // Billing plans are now public - no auth required
+  // Public endpoint available, but only fetch when user visits page while authenticated
   const {data: billingPlans} = useQuery({
     queryKey: ['billing-plans'],
     queryFn: () => api.getBillingPlans(),
-    enabled: true,
+    enabled: isAuthenticated,
   })
   const checkoutMutation = useMutation({
     mutationFn: ({tierName, interval}: {tierName: string; interval: string}) =>

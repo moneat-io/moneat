@@ -51,6 +51,8 @@ class RetentionBackgroundService(
 
     private suspend fun runSweep() {
         val retentionByOrg = retentionPolicyService.getRetentionDaysByOrganization()
+        val logRetentionByOrg = retentionPolicyService.getLogRetentionDaysByOrganization()
+        
         if (retentionByOrg.isEmpty()) {
             logger.debug { "Retention sweep skipped: no organizations found" }
             return
@@ -64,6 +66,8 @@ class RetentionBackgroundService(
 
         var tableMutationCount = 0
         var orgGroupCount = 0
+        
+        // Process event retention
         val groupedOrgIds = retentionByOrg.entries.groupBy({ it.value }, { it.key })
         for ((retentionDays, orgIds) in groupedOrgIds) {
             orgGroupCount++
@@ -71,6 +75,13 @@ class RetentionBackgroundService(
 
             tableMutationCount += submitProjectScopedDeletes(projectIds, retentionDays)
             tableMutationCount += submitOrgScopedDeletes(orgIds, retentionDays)
+        }
+
+        // Process log retention separately
+        val groupedLogOrgIds = logRetentionByOrg.entries.groupBy({ it.value }, { it.key })
+        for ((logRetentionDays, orgIds) in groupedLogOrgIds) {
+            val projectIds = orgIds.flatMap { projectsByOrg[it].orEmpty() }
+            tableMutationCount += submitLogDeletes(projectIds, logRetentionDays)
         }
 
         logger.info {
@@ -129,6 +140,24 @@ class RetentionBackgroundService(
                 if (submitMutation(query, "$table(org)")) {
                     mutations++
                 }
+            }
+        }
+        return mutations
+    }
+
+    private suspend fun submitLogDeletes(projectIds: List<Long>, logRetentionDays: Int): Int {
+        if (projectIds.isEmpty()) return 0
+
+        var mutations = 0
+        for (chunk in projectIds.chunked(idChunkSize)) {
+            val projectList = chunk.joinToString(",")
+            val query = """
+                ALTER TABLE $clickhouseDb.logs
+                DELETE WHERE project_id IN ($projectList)
+                    AND timestamp < now() - INTERVAL $logRetentionDays DAY
+            """.trimIndent()
+            if (submitMutation(query, "logs(project)")) {
+                mutations++
             }
         }
         return mutations

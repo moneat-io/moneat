@@ -150,6 +150,7 @@ class PricingTierService {
                 it[monthly_feedback_limit] = monthlyFeedbackLimit
                 it[monthly_gb_limit] = request.monthlyGbLimit
                 it[retention_days] = request.retentionDays
+                it[log_retention_days] = request.logRetentionDays
                 it[max_projects] = request.maxProjects
                 it[max_systems] = request.maxSystems
                 it[monitor_interval_seconds] = request.monitorIntervalSeconds
@@ -171,6 +172,7 @@ class PricingTierService {
 
     private fun validateCreateTierRequest(request: CreateTierVersionRequest) {
         require(request.retentionDays in 1..90) { "Retention days must be between 1 and 90" }
+        require(request.logRetentionDays in 1..90) { "Log retention days must be between 1 and 90" }
         require(request.monthlyUnitLimit >= 0) { "Monthly unit limit must be non-negative" }
         require(request.monthlyErrorLimit >= 0) { "Monthly error limit must be non-negative" }
         require(request.monthlyTransactionLimit >= 0) { "Monthly transaction limit must be non-negative" }
@@ -302,6 +304,7 @@ class PricingTierService {
             monthlyFeedbackLimit = 0,
             monthlyGbLimit = tier.monthlyGbBytes,
             retentionDays = tier.retentionDays,
+            logRetentionDays = tier.retentionDays,  // Use same as retentionDays for fallback
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
             monitorIntervalSeconds = tier.monitorIntervalSeconds,
@@ -330,6 +333,7 @@ class PricingTierService {
             monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
             monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
+            logRetentionDays = row[PricingTierConfigs.log_retention_days],
             maxProjects = row[PricingTierConfigs.max_projects],
             maxSystems = row[PricingTierConfigs.max_systems],
             monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
