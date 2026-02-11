@@ -59,6 +59,7 @@ data class IngestResponse(
 @Serializable
 data class SystemResponse(
     val id: String,
+    @SerialName("project_id") val projectId: Long,
     val name: String,
     val host: String?,
     val status: String,

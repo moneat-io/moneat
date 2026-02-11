@@ -55,42 +55,37 @@ class NotificationService(private val emailService: EmailService) {
             val projectName = project[Projects.name]
             val orgId = project[Projects.organization_id]
             
-            // Get all users in the organization with issue alerts enabled
-            val usersToNotify = transaction {
-                val orgUsers = Memberships
-                    .selectAll()
-                    .where { Memberships.organization_id eq orgId }
-                    .map { it[Memberships.user_id] }
-                
-                // Get their notification preferences
-                orgUsers.mapNotNull { userId ->
-                    val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                    if (user == null || !user[Users.email_verified]) {
-                        return@mapNotNull null
-                    }
-                    
-                    val prefs = getPreferences(userId, projectId)
-                    if (!prefs.issueAlerts && !prefs.errorAlerts) {
-                        return@mapNotNull null
-                    }
-                    
-                    // Check rate limiting
-                    val key = Pair(userId, projectId)
-                    val lastAlert = lastAlertTimes[key]
-                    val now = Instant.now()
-                    if (lastAlert != null) {
-                        val minutesSince = Duration.between(lastAlert, now).toMinutes()
-                        if (minutesSince < prefs.alertFrequencyMinutes) {
-                            logger.debug { "Rate limiting alert for user=$userId project=$projectId" }
-                            return@mapNotNull null
-                        }
-                    }
-                    
-                    // Update last alert time
-                    lastAlertTimes[key] = now
-                    
-                    Pair(user[Users.email], user[Users.name])
+            // Get users with ERROR_ALERT email enabled
+            val prefsService = AlertNotificationPreferencesService()
+            val usersToNotify = prefsService.getUsersWithChannelEnabled(
+                organizationId = orgId,
+                alertSource = "ERROR_ALERT",
+                channel = "email"
+            ).mapNotNull { (userId, email) ->
+                val user = transaction {
+                    Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 }
+                if (user == null || !user[Users.email_verified]) {
+                    return@mapNotNull null
+                }
+                
+                // Check rate limiting
+                val prefs = getPreferences(userId, projectId)
+                val key = Pair(userId, projectId)
+                val lastAlert = lastAlertTimes[key]
+                val now = Instant.now()
+                if (lastAlert != null) {
+                    val minutesSince = Duration.between(lastAlert, now).toMinutes()
+                    if (minutesSince < prefs.alertFrequencyMinutes) {
+                        logger.debug { "Rate limiting alert for user=$userId project=$projectId" }
+                        return@mapNotNull null
+                    }
+                }
+                
+                // Update last alert time
+                lastAlertTimes[key] = now
+                
+                Pair(email, user[Users.name])
             }
             
             if (usersToNotify.isEmpty()) {
@@ -139,41 +134,57 @@ class NotificationService(private val emailService: EmailService) {
                 }
             }
             
-            // Send Slack notification
-            try {
-                slackService.sendErrorAlert(
-                    organizationId = orgId,
-                    projectName = projectName,
-                    issueTitle = emailData.issueTitle,
-                    level = emailData.issueLevel,
-                    culprit = culprit,
-                    issueId = issueId.toLongOrNull() ?: 0L,
-                    projectId = projectId,
-                    baseUrl = frontendUrl,
-                    occurrenceCount = 1,
-                    environment = emailData.environment,
-                    timestamp = emailData.timestamp,
-                    stackTrace = stackTrace
-                )
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to send Slack notification for new issue" }
+            // Check if Slack is enabled for any user in the org
+            val slackEnabled = prefsService.getUsersWithChannelEnabled(
+                organizationId = orgId,
+                alertSource = "ERROR_ALERT",
+                channel = "slack"
+            ).isNotEmpty()
+            
+            if (slackEnabled) {
+                try {
+                    slackService.sendErrorAlert(
+                        organizationId = orgId,
+                        projectName = projectName,
+                        issueTitle = emailData.issueTitle,
+                        level = emailData.issueLevel,
+                        culprit = culprit,
+                        issueId = issueId.toLongOrNull() ?: 0L,
+                        projectId = projectId,
+                        baseUrl = frontendUrl,
+                        occurrenceCount = 1,
+                        environment = emailData.environment,
+                        timestamp = emailData.timestamp,
+                        stackTrace = stackTrace
+                    )
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to send Slack notification for new issue" }
+                }
             }
             
-            // Send Discord notification
-            try {
-                val discordIssueUrl = "$frontendUrl/projects/$projectId/issues/$issueId"
-                discordService.sendErrorAlert(
-                    organizationId = orgId,
-                    projectName = projectName,
-                    issueTitle = emailData.issueTitle,
-                    level = emailData.issueLevel,
-                    firstSeen = emailData.timestamp,
-                    eventCount = 1,
-                    userCount = 0,
-                    issueUrl = discordIssueUrl
-                )
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to send Discord notification for new issue" }
+            // Check if Discord is enabled for any user in the org
+            val discordEnabled = prefsService.getUsersWithChannelEnabled(
+                organizationId = orgId,
+                alertSource = "ERROR_ALERT",
+                channel = "discord"
+            ).isNotEmpty()
+            
+            if (discordEnabled) {
+                try {
+                    val discordIssueUrl = "$frontendUrl/projects/$projectId/issues/$issueId"
+                    discordService.sendErrorAlert(
+                        organizationId = orgId,
+                        projectName = projectName,
+                        issueTitle = emailData.issueTitle,
+                        level = emailData.issueLevel,
+                        firstSeen = emailData.timestamp,
+                        eventCount = 1,
+                        userCount = 0,
+                        issueUrl = discordIssueUrl
+                    )
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to send Discord notification for new issue" }
+                }
             }
             
             // Fire incident alert for error

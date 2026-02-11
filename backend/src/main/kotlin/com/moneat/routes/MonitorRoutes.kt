@@ -216,6 +216,7 @@ fun Route.monitorRoutes() {
                 val response = allSystems.map { system ->
                     SystemResponse(
                         id = system.id.toString(),
+                        projectId = 0L, // TODO: Systems need to be associated with projects for log context
                         name = system.name,
                         host = system.host,
                         status = system.status,
@@ -272,6 +273,7 @@ fun Route.monitorRoutes() {
                     CreateSystemResponse(
                         system = SystemResponse(
                             id = system.id.toString(),
+                            projectId = 0L, // TODO: Systems need to be associated with projects for log context
                             name = system.name,
                             host = system.host,
                             status = system.status,
@@ -317,6 +319,7 @@ fun Route.monitorRoutes() {
                     HttpStatusCode.OK,
                     SystemResponse(
                         id = system.id.toString(),
+                        projectId = 0L, // TODO: Systems need to be associated with projects for log context
                         name = system.name,
                         host = system.host,
                         status = system.status,

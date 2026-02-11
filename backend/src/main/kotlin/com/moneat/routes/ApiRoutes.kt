@@ -2,6 +2,7 @@ package com.moneat.routes
 
 import com.moneat.models.*
 import com.moneat.plugins.getSentryTransaction
+import com.moneat.services.AlertNotificationPreferencesService
 import com.moneat.services.DashboardService
 import com.moneat.services.SdkVersionService
 import io.ktor.http.*
@@ -823,6 +824,76 @@ fun Route.apiRoutes() {
                 }
                 
                 call.respond(HttpStatusCode.OK)
+            }
+            
+            // Alert Notification Preferences (Unified Alerting System)
+            get("/alert-notification-preferences") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                // Get user's primary organization
+                val organizationId = transaction {
+                    Memberships.selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                }
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.NotFound, "User not in any organization")
+                    return@get
+                }
+                
+                val prefsService = AlertNotificationPreferencesService()
+                val preferences = prefsService.getPreferences(userId, organizationId)
+                
+                call.respond(AlertNotificationPreferencesResponse(preferences = preferences))
+            }
+            
+            put("/alert-notification-preferences/{alertSource}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val alertSource = call.parameters["alertSource"]
+                if (alertSource.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, "Alert source required")
+                    return@put
+                }
+                
+                // Get user's primary organization
+                val organizationId = transaction {
+                    Memberships.selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                }
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.NotFound, "User not in any organization")
+                    return@put
+                }
+                
+                val request = try {
+                    call.receive<UpdateAlertNotificationPreferenceRequest>()
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid request body")
+                    return@put
+                }
+                
+                val prefsService = AlertNotificationPreferencesService()
+                try {
+                    val updated = prefsService.updatePreference(
+                        userId = userId,
+                        organizationId = organizationId,
+                        alertSource = alertSource,
+                        emailEnabled = request.emailEnabled,
+                        slackEnabled = request.slackEnabled,
+                        discordEnabled = request.discordEnabled
+                    )
+                    call.respond(updated)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, e.message ?: "Invalid alert source")
+                }
             }
             
             delete("/notification-preferences/{projectId}") {

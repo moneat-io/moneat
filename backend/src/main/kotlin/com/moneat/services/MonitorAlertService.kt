@@ -396,12 +396,14 @@ class MonitorAlertService {
         organizationId: Int,
         currentValue: Double
     ) {
-        // Get all users in the organization who should receive alerts
-        val recipients = transaction {
-            Users.innerJoin(Memberships)
-                .selectAll().where { Memberships.organization_id eq organizationId }
-                .map { it[Users.email] }
-        }
+        val prefsService = AlertNotificationPreferencesService()
+        
+        // Get users with email enabled for SYSTEM_ALERT
+        val emailRecipients = prefsService.getUsersWithChannelEnabled(
+            organizationId = organizationId,
+            alertSource = "SYSTEM_ALERT",
+            channel = "email"
+        )
         
         val metricLabel = getMetricLabel(alert.metric)
         val subject = "⚠️ Alert: $systemName - $metricLabel ${alert.condition} ${alert.threshold}"
@@ -410,7 +412,7 @@ class MonitorAlertService {
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
         
         // Send email notifications
-        for (recipient in recipients) {
+        for ((_, email) in emailRecipients) {
             try {
                 val htmlBody = """
                     <!DOCTYPE html>
@@ -452,50 +454,66 @@ class MonitorAlertService {
                     Moneat Server Monitoring
                 """.trimIndent()
                 
-                emailService.sendEmail(recipient, subject, htmlBody, textBody, "monitor_alert")
+                emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_alert")
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send alert notification to $recipient" }
+                logger.error(e) { "Failed to send alert notification to $email" }
             }
         }
         
-        // Send Slack notification
-        try {
-            val baseUrl = config.property("email.frontendUrl").getString()
-            slackService.sendSystemAlert(
-                organizationId = organizationId,
-                systemName = systemName,
-                metric = metricLabel,
-                condition = alert.condition,
-                threshold = formattedThreshold,
-                currentValue = formattedValue,
-                systemId = alert.systemId,
-                baseUrl = baseUrl
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to send Slack notification for system alert" }
+        // Check if Slack is enabled for any user in the org
+        val slackEnabled = prefsService.getUsersWithChannelEnabled(
+            organizationId = organizationId,
+            alertSource = "SYSTEM_ALERT",
+            channel = "slack"
+        ).isNotEmpty()
+        
+        if (slackEnabled) {
+            try {
+                val baseUrl = config.property("email.frontendUrl").getString()
+                slackService.sendSystemAlert(
+                    organizationId = organizationId,
+                    systemName = systemName,
+                    metric = metricLabel,
+                    condition = alert.condition,
+                    threshold = formattedThreshold,
+                    currentValue = formattedValue,
+                    systemId = alert.systemId,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Slack notification for system alert" }
+            }
         }
         
-        // Send Discord notification
-        try {
-            val baseUrl = config.property("email.frontendUrl").getString()
-            discordService.sendSystemAlert(
-                organizationId = organizationId,
-                systemName = systemName,
-                metric = metricLabel,
-                condition = alert.condition,
-                threshold = formattedThreshold,
-                currentValue = formattedValue,
-                systemId = alert.systemId,
-                baseUrl = baseUrl
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to send Discord notification for system alert" }
+        // Check if Discord is enabled for any user in the org
+        val discordEnabled = prefsService.getUsersWithChannelEnabled(
+            organizationId = organizationId,
+            alertSource = "SYSTEM_ALERT",
+            channel = "discord"
+        ).isNotEmpty()
+        
+        if (discordEnabled) {
+            try {
+                val baseUrl = config.property("email.frontendUrl").getString()
+                discordService.sendSystemAlert(
+                    organizationId = organizationId,
+                    systemName = systemName,
+                    metric = metricLabel,
+                    condition = alert.condition,
+                    threshold = formattedThreshold,
+                    currentValue = formattedValue,
+                    systemId = alert.systemId,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Discord notification for system alert" }
+            }
         }
         
         // Fire incident alert
         try {
             val incidentSeverity = transaction {
-                SystemAlerts.select(SystemAlerts.incident_severity)
+                SystemAlerts.selectAll()
                     .where { SystemAlerts.id eq alert.id }
                     .firstOrNull()?.get(SystemAlerts.incident_severity)
                     ?.let { com.moneat.models.IncidentSeverity.fromString(it) }
@@ -592,13 +610,15 @@ class MonitorAlertService {
         organizationId: Int,
         lastSeenAt: Instant?
     ) {
-        val recipients = transaction {
-            Users.innerJoin(Memberships)
-                .selectAll().where { Memberships.organization_id eq organizationId }
-                .map { it[Users.email] }
-        }
+        val prefsService = AlertNotificationPreferencesService()
         
-        val subject = "🔴 System Down: $systemName"
+        // Get users with email enabled for SYSTEM_DOWN
+        val emailRecipients = prefsService.getUsersWithChannelEnabled(
+            organizationId = organizationId,
+            alertSource = "SYSTEM_DOWN",
+            channel = "email"
+        )
+        
         val lastSeenText = if (lastSeenAt != null) {
             val minutesAgo = ((Clock.System.now() - lastSeenAt).inWholeSeconds / 60).toInt()
             "Last seen $minutesAgo minutes ago"
@@ -606,78 +626,59 @@ class MonitorAlertService {
             "Never reported metrics"
         }
         
+        val systemUrl = "${config.property("email.frontendUrl").getString()}/monitoring/$systemId"
+        
         // Send email notifications
-        for (recipient in recipients) {
+        for ((_, email) in emailRecipients) {
             try {
-                val htmlBody = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    </head>
-                    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                        <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
-                            <h1 style="color: #dc2626; margin-bottom: 20px;">🔴 System Down</h1>
-                            <p><strong>System:</strong> $systemName</p>
-                            <p><strong>Status:</strong> $lastSeenText</p>
-                            <p>The monitoring agent has stopped reporting metrics. Please check if the system is online and the agent is running.</p>
-                            <div style="margin: 30px 0;">
-                                <a href="${config.property("email.frontendUrl").getString()}/monitoring/$systemId" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
-                            </div>
-                            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                            <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
-                        </div>
-                    </body>
-                    </html>
-                """.trimIndent()
-                
-                val textBody = """
-                    🔴 System Down
-                    
-                    System: $systemName
-                    Status: $lastSeenText
-                    
-                    The monitoring agent has stopped reporting metrics. Please check if the system is online and the agent is running.
-                    
-                    View system: ${config.property("email.frontendUrl").getString()}/monitoring/$systemId
-                    
-                    ---
-                    Moneat Server Monitoring
-                """.trimIndent()
-                
-                emailService.sendEmail(recipient, subject, htmlBody, textBody, "system_down")
+                emailService.sendSystemDownEmail(email, systemName, lastSeenText, systemUrl)
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send system down notification to $recipient" }
+                logger.error(e) { "Failed to send system down notification to $email" }
             }
         }
         
-        // Send Slack notification
-        try {
-            val baseUrl = config.property("email.frontendUrl").getString()
-            slackService.sendSystemDown(
-                organizationId = organizationId,
-                systemName = systemName,
-                lastSeen = lastSeenText,
-                systemId = systemId,
-                baseUrl = baseUrl
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to send Slack notification for system down" }
+        // Check if Slack is enabled for any user in the org
+        val slackEnabled = prefsService.getUsersWithChannelEnabled(
+            organizationId = organizationId,
+            alertSource = "SYSTEM_DOWN",
+            channel = "slack"
+        ).isNotEmpty()
+        
+        if (slackEnabled) {
+            try {
+                val baseUrl = config.property("email.frontendUrl").getString()
+                slackService.sendSystemDown(
+                    organizationId = organizationId,
+                    systemName = systemName,
+                    lastSeen = lastSeenText,
+                    systemId = systemId,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Slack notification for system down" }
+            }
         }
         
-        // Send Discord notification
-        try {
-            val baseUrl = config.property("email.frontendUrl").getString()
-            discordService.sendSystemDown(
-                organizationId = organizationId,
-                systemName = systemName,
-                lastSeen = lastSeenText,
-                systemId = systemId,
-                baseUrl = baseUrl
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to send Discord notification for system down" }
+        // Check if Discord is enabled for any user in the org
+        val discordEnabled = prefsService.getUsersWithChannelEnabled(
+            organizationId = organizationId,
+            alertSource = "SYSTEM_DOWN",
+            channel = "discord"
+        ).isNotEmpty()
+        
+        if (discordEnabled) {
+            try {
+                val baseUrl = config.property("email.frontendUrl").getString()
+                discordService.sendSystemDown(
+                    organizationId = organizationId,
+                    systemName = systemName,
+                    lastSeen = lastSeenText,
+                    systemId = systemId,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Discord notification for system down" }
+            }
         }
         
         // Fire incident alert for system down

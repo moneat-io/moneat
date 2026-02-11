@@ -36,6 +36,9 @@ import {
 } from 'recharts'
 import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
+import {Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription} from '@/components/ui/sheet'
+import {EmbeddedLogs} from '@/components/logs/EmbeddedLogs'
+import type {ContainerStats} from '@/lib/api'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 type ContainerViewMode = 'cards' | 'compact'
@@ -172,7 +175,13 @@ function SystemDetailPage() {
   const {systemId} = Route.useParams()
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
   const [containerViewMode, setContainerViewMode] = useState<ContainerViewMode>(getInitialContainerViewMode())
+  const [selectedContainer, setSelectedContainer] = useState<ContainerStats | null>(null)
   
+  const {data: projects} = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+  })
+
   const {data: billingUsage} = useQuery({
     queryKey: ['billing-usage'],
     queryFn: () => api.getBillingUsage(),
@@ -823,7 +832,8 @@ function SystemDetailPage() {
                       return (
                         <Card
                           key={container.id}
-                          className={`relative overflow-hidden ${
+                          onClick={() => setSelectedContainer(container)}
+                          className={`relative overflow-hidden cursor-pointer hover:border-primary/50 transition-colors ${
                             isRunning ? 'border-emerald-500/10' : 'border-muted'
                           }`}
                         >
@@ -929,7 +939,11 @@ function SystemDetailPage() {
                           {containers.map((container) => {
                             const isRunning = container.status === 'running'
                             return (
-                              <tr key={container.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <tr 
+                                key={container.id} 
+                                onClick={() => setSelectedContainer(container)}
+                                className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                              >
                                 <td className="py-3 px-4">
                                   <div className="flex items-center gap-2.5">
                                     <div
@@ -1072,6 +1086,87 @@ function SystemDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
+      
+      <Sheet open={!!selectedContainer} onOpenChange={(open) => !open && setSelectedContainer(null)}>
+        <SheetContent side="right" className="sm:max-w-2xl w-[800px] overflow-y-auto">
+          {selectedContainer && (
+            <div className="space-y-6">
+              <SheetHeader>
+                <div className="flex items-center gap-2">
+                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg ${
+                    selectedContainer.status === 'running'
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    <Box className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <SheetTitle>{selectedContainer.name}</SheetTitle>
+                    <SheetDescription>{selectedContainer.image}</SheetDescription>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Status</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Badge variant="secondary" className={selectedContainer.status === 'running' ? 'text-emerald-500' : ''}>
+                        {selectedContainer.status}
+                      </Badge>
+                    </CardContent>
+                 </Card>
+                 <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Container ID</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="font-mono text-xs">{selectedContainer.id.substring(0, 12)}</div>
+                    </CardContent>
+                 </Card>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Resources</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 border rounded-lg bg-card">
+                     <div className="text-xs text-muted-foreground mb-1">CPU Usage</div>
+                     <div className="text-lg font-semibold">{formatPercent(selectedContainer.cpuPercent)}</div>
+                  </div>
+                  <div className="p-3 border rounded-lg bg-card">
+                     <div className="text-xs text-muted-foreground mb-1">Memory Usage</div>
+                     <div className="text-lg font-semibold">
+                       {formatBytesShort(selectedContainer.memUsed)}
+                       <span className="text-xs text-muted-foreground font-normal ml-1">
+                         / {formatBytesShort(selectedContainer.memLimit)}
+                       </span>
+                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Logs</h3>
+                {projects && projects.length > 0 ? (
+                  <EmbeddedLogs 
+                    projectId={(system as any)?.projectId || projects[0].id}
+                    containerName={selectedContainer.name}
+                    showHeader={false}
+                    maxHeight="500px"
+                    compact={true}
+                  />
+                ) : (
+                   <div className="text-sm text-muted-foreground p-4 border rounded-lg bg-muted/30 text-center">
+                     No projects found. Create a project to view logs.
+                   </div>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

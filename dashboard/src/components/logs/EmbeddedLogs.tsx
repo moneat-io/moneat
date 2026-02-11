@@ -25,6 +25,7 @@ interface EmbeddedLogsProps {
   levels?: string[]
   service?: string
   environment?: string
+  containerName?: string
   tags?: Record<string, string>
   /**
    * Maximum height of the logs container (default: '400px')
@@ -49,6 +50,7 @@ export function EmbeddedLogs({
   levels,
   service,
   environment,
+  containerName,
   tags,
   maxHeight = '400px',
   showHeader = true,
@@ -95,6 +97,7 @@ export function EmbeddedLogs({
       timeRange.to,
       service,
       environment,
+      containerName,
       JSON.stringify(tags),
     ],
     queryFn: () =>
@@ -105,6 +108,7 @@ export function EmbeddedLogs({
         levels,
         service,
         environment,
+        containerName,
         from: timeRange.from,
         to: timeRange.to,
         tags: tags && Object.keys(tags).length > 0 ? tags : undefined,

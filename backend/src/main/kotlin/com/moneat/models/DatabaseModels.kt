@@ -146,6 +146,19 @@ object NotificationPreferences : Table("notification_preferences") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object AlertNotificationPreferences : Table("alert_notification_preferences") {
+    val id = integer("id").autoIncrement()
+    val user_id = integer("user_id").references(Users.id)
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val alert_source = varchar("alert_source", 50)
+    val email_enabled = bool("email_enabled").default(true)
+    val slack_enabled = bool("slack_enabled").default(true)
+    val discord_enabled = bool("discord_enabled").default(true)
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object EmailsSent : Table("emails_sent") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id).nullable()

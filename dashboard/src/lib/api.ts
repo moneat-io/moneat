@@ -524,6 +524,7 @@ interface UpdateStripePriceIdsRequest {
 // Monitoring types
 interface MonitorSystem {
   id: string
+  projectId?: number
   name: string
   host?: string
   status: 'up' | 'down' | 'pending'
@@ -1159,6 +1160,7 @@ class ApiClient {
     const latest = row.latest_metrics || {}
     return {
       id: row.id,
+      projectId: row.projectId ?? row.project_id,
       name: row.name,
       host: row.host,
       status: row.status,
@@ -1464,6 +1466,7 @@ class ApiClient {
       levels?: string[]
       service?: string
       environment?: string
+      containerName?: string
       from?: string
       to?: string
       tags?: Record<string, string>
@@ -1478,6 +1481,7 @@ class ApiClient {
     }
     if (options.service) params.set('service', options.service)
     if (options.environment) params.set('environment', options.environment)
+    if (options.containerName) params.set('containerName', options.containerName)
     if (options.from) params.set('from', options.from)
     if (options.to) params.set('to', options.to)
     if (options.tags) {

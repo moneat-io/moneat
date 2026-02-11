@@ -506,6 +506,28 @@ data class NotificationPreferencesResponse(
     val projects: List<ProjectNotificationPreferences>
 )
 
+// Alert Notification Preferences Models
+
+@Serializable
+data class AlertNotificationPreference(
+    val alertSource: String,
+    val emailEnabled: Boolean,
+    val slackEnabled: Boolean,
+    val discordEnabled: Boolean
+)
+
+@Serializable
+data class AlertNotificationPreferencesResponse(
+    val preferences: List<AlertNotificationPreference>
+)
+
+@Serializable
+data class UpdateAlertNotificationPreferenceRequest(
+    val emailEnabled: Boolean,
+    val slackEnabled: Boolean,
+    val discordEnabled: Boolean
+)
+
 // Org Team Management Models
 
 @Serializable

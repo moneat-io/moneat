@@ -450,6 +450,49 @@ class EmailService {
         
         sendEmail(to, subject, htmlBody, textBody, "system_down")
     }
+    
+    fun sendUptimeAlertEmail(to: String, monitorName: String, status: String, message: String, monitorUrl: String) {
+        val isDown = status.lowercase() == "down"
+        val emoji = if (isDown) "🔴" else "✅"
+        val subject = "$emoji Uptime Monitor ${if (isDown) "Down" else "Up"}: $monitorName"
+        val bgColor = if (isDown) "#fef2f2" else "#f0fdf4"
+        val borderColor = if (isDown) "#dc2626" else "#16a34a"
+        val headingColor = if (isDown) "#dc2626" else "#16a34a"
+        val buttonColor = if (isDown) "#dc2626" else "#16a34a"
+        
+        val htmlBody = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: $bgColor; border-left: 4px solid $borderColor; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: $headingColor; margin-bottom: 20px;">$emoji Uptime Monitor ${if (isDown) "Down" else "Recovered"}</h1>
+                    <p><strong>Monitor:</strong> $monitorName</p>
+                    <p><strong>Status:</strong> ${status.uppercase()}</p>
+                    ${if (message.isNotBlank()) "<p><strong>Message:</strong> $message</p>" else ""}
+                    <div style="margin: 30px 0;">
+                        <a href="$monitorUrl" style="display: inline-block; background-color: $buttonColor; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Monitor</a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">Moneat Uptime Monitoring</p>
+                </div>
+            </body>
+            </html>
+            """.trimIndent()
+        val textBody = """
+            Uptime Monitor ${if (isDown) "Down" else "Recovered"}: $monitorName
+            
+            Status: ${status.uppercase()}
+            ${if (message.isNotBlank()) "Message: $message" else ""}
+            
+            View monitor: $monitorUrl
+            """.trimIndent()
+        
+        sendEmail(to, subject, htmlBody, textBody, "uptime_alert")
+    }
 
     fun sendSystemUpEmail(to: String, systemName: String, systemUrl: String) {
         val subject = "✅ System Recovered: $systemName"

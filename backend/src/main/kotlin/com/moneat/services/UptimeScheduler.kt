@@ -208,12 +208,41 @@ class UptimeScheduler(
             "Message: ${result.message}"
         }
         
+        val config = io.ktor.server.config.ApplicationConfig("application.conf")
+        val baseUrl = config.property("email.frontendUrl").getString()
+        val monitorUrl = "$baseUrl/uptime/${monitor.id}"
+        
+        // Send email notifications
+        try {
+            val prefsService = com.moneat.services.AlertNotificationPreferencesService()
+            val emailRecipients = prefsService.getUsersWithChannelEnabled(
+                organizationId = monitor.organizationId,
+                alertSource = "UPTIME_MONITOR",
+                channel = "email"
+            )
+            
+            val emailService = com.moneat.services.EmailService()
+            emailRecipients.forEach { (_, email) ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        emailService.sendUptimeAlertEmail(
+                            to = email,
+                            monitorName = monitor.name,
+                            status = newStatus,
+                            message = result.message,
+                            monitorUrl = monitorUrl
+                        )
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to send uptime alert email to $email" }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send uptime alert emails" }
+        }
+        
         // Send Slack notification
         try {
-            // Get base URL from config
-            val config = io.ktor.server.config.ApplicationConfig("application.conf")
-            val baseUrl = config.property("email.frontendUrl").getString()
-            
             slackService.sendUptimeAlert(
                 organizationId = monitor.organizationId,
                 monitorName = monitor.name,
@@ -229,9 +258,6 @@ class UptimeScheduler(
         
         // Send Discord notification
         try {
-            val config = io.ktor.server.config.ApplicationConfig("application.conf")
-            val baseUrl = config.property("email.frontendUrl").getString()
-            
             discordService.sendUptimeAlert(
                 organizationId = monitor.organizationId,
                 monitorUrl = monitor.url ?: "N/A",
@@ -248,9 +274,6 @@ class UptimeScheduler(
         
         // Fire or resolve incident alert
         try {
-            val config = io.ktor.server.config.ApplicationConfig("application.conf")
-            val frontendUrl = config.property("email.frontendUrl").getString()
-            
             if (newStatus == "down") {
                 // Get severity from monitor override or fall back to routing rules
                 // We always fire the incident; IncidentService will check routing rules
@@ -276,7 +299,7 @@ class UptimeScheduler(
                         "error_message" to result.message,
                         "response_time_ms" to result.responseTimeMs.toString()
                     ),
-                    moneatUrl = "$frontendUrl/uptime/${monitor.id}"
+                    moneatUrl = "$baseUrl/uptime/${monitor.id}"
                 )
                 // IncidentService will check routing rules and only fire if configured
                 incidentService.fireAlert(incidentEvent)
