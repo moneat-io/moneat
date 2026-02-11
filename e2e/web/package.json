@@ -1,0 +1,20 @@
+{
+  "name": "moneat-web-e2e",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for Moneat web dashboard",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:smoke": "playwright test --grep @smoke",
+    "report": "playwright show-report"
+  },
+  "keywords": ["e2e", "playwright", "moneat"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "typescript": "^5.9.3"
+  }
+}

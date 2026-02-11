@@ -11,6 +11,7 @@ plugins {
     kotlin("plugin.serialization") version "1.9.22"
     id("io.ktor.plugin") version "2.3.7"
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    jacoco
 }
 
 group = "com.moneat"
@@ -35,6 +36,25 @@ tasks.shadowJar {
 
 repositories {
     mavenCentral()
+}
+
+// Configure integration test source set
+sourceSets {
+    create("integrationTest") {
+        kotlin {
+            srcDir("src/integrationTest/kotlin")
+        }
+        resources {
+            srcDir("src/integrationTest/resources")
+        }
+        compileClasspath += sourceSets["main"].output + configurations["testRuntimeClasspath"]
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+// Fix duplicate resources issue
+tasks.named<ProcessResources>("processIntegrationTestResources") {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 dependencies {
@@ -112,6 +132,16 @@ dependencies {
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
     testImplementation("com.h2database:h2:2.2.224")
+    
+    // Integration testing dependencies
+    val integrationTestImplementation by configurations
+    integrationTestImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
+    integrationTestImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
+    integrationTestImplementation("org.junit.jupiter:junit-jupiter-api:5.10.1")
+    integrationTestImplementation("org.junit.jupiter:junit-jupiter-engine:5.10.1")
+    integrationTestImplementation("org.testcontainers:testcontainers:1.19.3")
+    integrationTestImplementation("org.testcontainers:postgresql:1.19.3")
+    integrationTestImplementation("org.testcontainers:clickhouse:1.19.3")
 }
 
 // Task to run the E2E data seeder
@@ -136,6 +166,81 @@ tasks.register<JavaExec>("seedDemoData") {
     
     standardOutput = System.out
     errorOutput = System.err
+}
+
+// Integration test task
+val integrationTest = tasks.register<Test>("integrationTest") {
+    description = "Runs integration tests with Testcontainers"
+    group = "verification"
+    
+    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+    classpath = sourceSets["integrationTest"].runtimeClasspath
+    
+    shouldRunAfter(tasks.test)
+    
+    useJUnitPlatform()
+    
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+// JaCoCo configuration
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test, integrationTest)
+    
+    executionData.setFrom(
+        fileTree(layout.buildDirectory.asFile).include("jacoco/*.exec")
+    )
+    
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+    
+    classDirectories.setFrom(
+        files(classDirectories.files.map {
+            fileTree(it) {
+                exclude(
+                    "**/models/**",
+                    "**/config/**",
+                    "**/Application*",
+                    "**/e2e/**",
+                    "**/demo/**"
+                )
+            }
+        })
+    )
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+    
+    violationRules {
+        rule {
+            limit {
+                // Initial soft limit - will increase to 65% by Week 6
+                minimum = "0.45".toBigDecimal()
+            }
+        }
+    }
+    
+    classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
+}
+
+tasks.test {
+    useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.check {
+    dependsOn(integrationTest)
 }
 
 tasks.withType<KotlinCompile>().configureEach {
