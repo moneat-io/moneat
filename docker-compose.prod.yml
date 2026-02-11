@@ -97,13 +97,6 @@ services:
       DATABASE_URL: jdbc:postgresql://postgres:5432/moneat
       CLICKHOUSE_URL: http://clickhouse:8123
       REDIS_URL: redis://redis:6379
-      STRIPE_ENABLED: ${STRIPE_ENABLED:-false}
-      BILLING_ENFORCEMENT_ENABLED: ${BILLING_ENFORCEMENT_ENABLED:-false}
-      BILLING_BACKGROUND_JOBS_ENABLED: ${BILLING_BACKGROUND_JOBS_ENABLED:-true}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
-      STRIPE_METER_EVENT_NAME: ${STRIPE_METER_EVENT_NAME:-moneat_overage_units}
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,16 +113,11 @@ services:
     env_file:
       - .env
     environment:
+      # Container-internal URLs (overrides from .env if needed)
       DATABASE_URL: jdbc:postgresql://postgres:5432/moneat
       CLICKHOUSE_URL: http://clickhouse:8123
       REDIS_URL: redis://redis:6379
-      STRIPE_ENABLED: ${STRIPE_ENABLED:-false}
-      BILLING_ENFORCEMENT_ENABLED: ${BILLING_ENFORCEMENT_ENABLED:-false}
-      BILLING_BACKGROUND_JOBS_ENABLED: ${BILLING_BACKGROUND_JOBS_ENABLED:-true}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
-      STRIPE_METER_EVENT_NAME: ${STRIPE_METER_EVENT_NAME:-moneat_overage_units}
+      # All other env vars (SENTRY_DSN, JWT_SECRET, etc.) come from .env
     depends_on:
       postgres:
         condition: service_healthy
