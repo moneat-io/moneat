@@ -71,8 +71,16 @@ fun Route.apiRoutes() {
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val request = call.receive<CreateProjectRequest>()
                 
-                val project = dashboardService.createProject(userId, request)
-                call.respond(HttpStatusCode.Created, project)
+                try {
+                    val project = dashboardService.createProject(userId, request)
+                    call.respond(HttpStatusCode.Created, project)
+                } catch (e: IllegalStateException) {
+                    if (e.message == "project_limit_reached") {
+                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "project_limit_reached", "message" to "Project limit reached for your plan"))
+                    } else {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to create project")))
+                    }
+                }
             }
             
             get("/projects/{projectId}") {

@@ -7,6 +7,7 @@ import {api} from '@/lib/api'
 import {useToast} from '@/hooks/use-toast'
 import {useState} from 'react'
 
+// Fallback tiers when API fails; should match pricing_tier_configs
 const fallbackTiers = [
   {
     name: 'Free',
@@ -17,7 +18,7 @@ const fallbackTiers = [
     description: 'Perfect for side projects and getting started',
     features: [
       '1 GB/mo data',
-      '1 project',
+      '3 projects',
       '3 monitors (60s interval)',
       'Unlimited team members',
       'Email alerts',
@@ -91,10 +92,11 @@ export function PricingSection() {
   const {toast} = useToast()
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
   const isAuthenticated = api.isAuthenticated()
+  // Billing plans are now public - no auth required
   const {data: billingPlans} = useQuery({
     queryKey: ['billing-plans'],
     queryFn: () => api.getBillingPlans(),
-    enabled: isAuthenticated,
+    enabled: true,
   })
   const checkoutMutation = useMutation({
     mutationFn: ({tierName, interval}: {tierName: string; interval: string}) =>

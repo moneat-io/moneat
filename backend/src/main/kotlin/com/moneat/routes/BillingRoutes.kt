@@ -35,6 +35,7 @@ fun Route.billingRoutes() {
     val usageTrackingService = UsageTrackingService.instance
 
     route("/billing") {
+        // Public endpoint for pricing plans (no auth required)
         get("/plans") {
             val plans = pricingTierService.getCurrentPlans()
             call.respond(

@@ -523,13 +523,24 @@ function AdminBillingPage() {
 
             <Separator />
 
+            {/* Event Limits Section Header */}
+            <div className="bg-muted/30 border border-border rounded-md p-3">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-muted-foreground">
+                  <strong>Event limits are for internal abuse prevention only.</strong> Public billing is based on GB only. 
+                  Set generous values (e.g., 100K-500K for Free, very high for paid tiers). These are not advertised to customers.
+                </div>
+              </div>
+            </div>
+
             {/* Form fields */}
             <div className="grid gap-4 sm:grid-cols-2">
               {/* Per-type limits */}
               <div className="space-y-1.5">
                 <Label htmlFor="monthlyErrorLimit">
-                  Error Limit
-                  <HelpTip text="Maximum error events included in the base monthly quota." />
+                  Error Limit (Internal)
+                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
                 </Label>
                 <Input
                   id="monthlyErrorLimit"
@@ -548,8 +559,8 @@ function AdminBillingPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="monthlyTransactionLimit">
-                  Transaction Limit
-                  <HelpTip text="Maximum transaction events included in the base monthly quota." />
+                  Transaction Limit (Internal)
+                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
                 </Label>
                 <Input
                   id="monthlyTransactionLimit"
@@ -568,8 +579,8 @@ function AdminBillingPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="monthlyReplayLimit">
-                  Replay Limit
-                  <HelpTip text="Maximum replay events included in the base monthly quota." />
+                  Replay Limit (Internal)
+                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
                 </Label>
                 <Input
                   id="monthlyReplayLimit"
@@ -588,8 +599,8 @@ function AdminBillingPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="monthlyFeedbackLimit">
-                  Feedback Limit
-                  <HelpTip text="Maximum feedback events included in the base monthly quota." />
+                  Feedback Limit (Internal)
+                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
                 </Label>
                 <Input
                   id="monthlyFeedbackLimit"

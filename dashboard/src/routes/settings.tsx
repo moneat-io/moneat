@@ -898,7 +898,12 @@ function BillingTab() {
           </div>
 
           <div className="pt-6 border-t">
-            <p className="text-sm font-medium text-muted-foreground mb-4">Event counts (for reference)</p>
+            <div className="space-y-2 mb-4">
+              <p className="text-sm font-medium text-muted-foreground">Usage breakdown</p>
+              <p className="text-xs text-muted-foreground">
+                Billing is based on data (GB) ingested. Event counts below are for reference—there are no separate limits per event type.
+              </p>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {usageRows.map((row) => {
                 const Icon = row.icon

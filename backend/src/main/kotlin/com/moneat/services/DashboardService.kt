@@ -26,6 +26,7 @@ class DashboardService {
     private val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
     private val json = Json { ignoreUnknownKeys = true }
     private val retentionPolicyService = RetentionPolicyService()
+    private val pricingTierService = PricingTierService()
     
     fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
         return transaction {
@@ -317,6 +318,19 @@ class DashboardService {
                 .firstOrNull()
                 ?.get(Memberships.organization_id)
                 ?: throw IllegalStateException("User has no organization")
+            
+            // Check project limit based on tier
+            val tierContext = pricingTierService.getEffectiveTierForOrganization(orgId)
+            val maxProjects = tierContext.tier.maxProjects
+            if (maxProjects != null) {
+                val currentProjectCount = Projects.selectAll()
+                    .where { Projects.organization_id eq orgId }
+                    .count()
+                
+                if (currentProjectCount >= maxProjects) {
+                    throw IllegalStateException("project_limit_reached")
+                }
+            }
             
             // Create slug from name
             val slug = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")

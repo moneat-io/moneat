@@ -6,6 +6,8 @@ import {useProject} from '@/contexts/project-context'
 import {ThemeToggle} from '@/components/theme-toggle'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
+import {Badge} from '@/components/ui/badge'
+import {useToast} from '@/hooks/use-toast'
 import {
     Activity,
     BookOpen,
@@ -58,6 +60,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { selectedProjectId, setSelectedProjectId } = useProject()
+  const { toast } = useToast()
 
   // Create project dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -78,8 +81,26 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     enabled: api.isAuthenticated(),
   })
 
+  const { data: billingPlans } = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: () => api.getBillingPlans(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const { data: billingUsage } = useQuery({
+    queryKey: ['billing-usage'],
+    queryFn: () => api.getBillingUsage(),
+    enabled: api.isAuthenticated(),
+  })
+
   const activeProject = projects?.find((project) => project.id === selectedProjectId) ?? projects?.[0] ?? null
   const activeProjectId = activeProject?.id ?? null
+
+  // Get current tier from billing usage
+  const currentPlan = billingPlans?.plans?.find((p) => p.tier.tierName === billingUsage?.plan?.toUpperCase())
+  const maxProjects = currentPlan?.tier.maxProjects
+  const projectCount = projects?.length ?? 0
+  const isAtProjectLimit = maxProjects != null && projectCount >= maxProjects
 
   const createProjectMutation = useMutation({
     mutationFn: (data: { name: string; framework: string; targets?: string[] }) =>
@@ -89,6 +110,29 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
       setSelectedProjectId(project.id)
       resetCreateForm()
       navigate({ to: `/projects/${project.id}` })
+    },
+    onError: (error: Error) => {
+      if (error.message.includes('project_limit_reached')) {
+        toast({
+          title: 'Project Limit Reached',
+          description: (
+            <>
+              You've reached the maximum number of projects for your plan.{' '}
+              <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
+                Upgrade your plan
+              </Link>{' '}
+              to add more projects.
+            </>
+          ),
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to create project. Please try again.',
+          variant: 'destructive',
+        })
+      }
     },
   })
 
@@ -263,22 +307,47 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
           {isExpanded ? (
             <div className="p-2">
               <div className="flex items-center justify-between px-2 mb-1">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projects</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowCreateDialog(true)}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>New Project</p>
-                  </TooltipContent>
-                </Tooltip>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projects</span>
+                  {maxProjects != null && (
+                    <Badge variant={isAtProjectLimit ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
+                      {projectCount} / {maxProjects}
+                    </Badge>
+                  )}
+                </div>
+                {isAtProjectLimit ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                        onClick={() => navigate({ to: '/settings', search: { tab: 'billing' } })}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p>Upgrade to Add More</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowCreateDialog(true)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p>New Project</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
               <div className="max-h-40 overflow-y-auto space-y-0.5">
                 {projects && projects.length > 0 ? (
@@ -304,21 +373,39 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
             </div>
           ) : (
             <div className="p-2 space-y-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-full h-8 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowCreateDialog(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>New Project</p>
-                </TooltipContent>
-              </Tooltip>
+              {isAtProjectLimit ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-full h-8 text-muted-foreground hover:text-foreground"
+                      onClick={() => navigate({ to: '/settings', search: { tab: 'billing' } })}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Upgrade to Add More Projects</p>
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-full h-8 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowCreateDialog(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>New Project</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <div className="max-h-32 overflow-y-auto space-y-1">
                 {projects && projects.length > 0 && activeProject ? (
                   <DropdownMenu>
