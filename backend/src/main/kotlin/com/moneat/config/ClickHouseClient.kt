@@ -85,9 +85,16 @@ object ClickHouseClient {
 }
 
 fun Application.configureClickHouse() {
+    // Skip ClickHouse in test environment if not configured
+    val url = try {
+        environment.config.property("database.clickhouse.url").getString()
+    } catch (e: Exception) {
+        log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
+        return
+    }
+    
     try {
         val config = environment.config
-        val url = config.property("database.clickhouse.url").getString()
         val database = config.property("database.clickhouse.database").getString()
         val user = config.property("database.clickhouse.user").getString()
         val password = config.property("database.clickhouse.password").getString()

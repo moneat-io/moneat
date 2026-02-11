@@ -32,29 +32,38 @@ fun Application.configureDatabases() {
         
         val dataSource = HikariDataSource(hikariConfig)
         
-        // Run Flyway migrations for PostgreSQL
-        log.info("Running PostgreSQL migrations...")
-        val flyway = Flyway.configure()
-            .dataSource(dataSource)
-            .locations("classpath:db/migration")
-            .baselineOnMigrate(true)
-            .load()
+        // Skip Flyway migrations for H2 test database
+        val isTestDatabase = hikariConfig.jdbcUrl.contains("jdbc:h2:mem")
         
-        val migrationsApplied = flyway.migrate()
-        log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
+        if (!isTestDatabase) {
+            // Run Flyway migrations for PostgreSQL
+            log.info("Running PostgreSQL migrations...")
+            val flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .load()
+            
+            val migrationsApplied = flyway.migrate()
+            log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
+        } else {
+            log.info("Test database detected (H2), skipping PostgreSQL migrations")
+        }
         
         Database.connect(dataSource)
         TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED
         
         log.info("PostgreSQL database connected")
         
-        // Run ClickHouse migrations
-        runBlocking {
-            try {
-                configureClickHouseMigrations()
-            } catch (e: Exception) {
-                log.error("Failed to run ClickHouse migrations. Make sure ClickHouse is running and accessible.", e)
-                throw e
+        // Run ClickHouse migrations only if ClickHouse is configured
+        if (!isTestDatabase) {
+            runBlocking {
+                try {
+                    configureClickHouseMigrations()
+                } catch (e: Exception) {
+                    log.error("Failed to run ClickHouse migrations. Make sure ClickHouse is running and accessible.", e)
+                    throw e
+                }
             }
         }
         

@@ -188,21 +188,6 @@ jobs:
         working-directory: backend
         run: ./gradlew shadowJar --no-daemon
 
-      - name: Run DB migrations
-        working-directory: backend
-        env:
-          DATABASE_URL: jdbc:postgresql://localhost:5499/moneat
-          DATABASE_USER: moneat
-          DATABASE_PASSWORD: moneat_test_password
-          CLICKHOUSE_URL: http://localhost:8123
-          CLICKHOUSE_USER: moneat
-          CLICKHOUSE_PASSWORD: moneat_test_password
-          JWT_SECRET: test-secret-for-ci-only
-          STRIPE_ENABLED: false
-          BILLING_ENFORCEMENT_ENABLED: false
-          TESTING_BACKGROUND_JOBS_ENABLED: false
-        run: ./gradlew flywayMigrate --no-daemon
-
       - name: Start backend
         working-directory: backend
         env:

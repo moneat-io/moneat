@@ -146,6 +146,23 @@ dependencies {
     integrationTestImplementation("org.testcontainers:clickhouse:1.19.3")
 }
 
+// Task to copy email templates into resources
+val copyEmailTemplates = tasks.register<Copy>("copyEmailTemplates") {
+    group = "build"
+    description = "Copies built email templates into backend resources"
+    
+    from("${project.rootDir}/../emails/build/templates/email")
+    into("${project.buildDir}/resources/main/email-templates")
+    
+    // Only copy if source exists
+    onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
+}
+
+// Ensure email templates are copied before processing resources
+tasks.named("processResources") {
+    dependsOn(copyEmailTemplates)
+}
+
 // Task to run the E2E data seeder
 tasks.register<JavaExec>("seedE2EData") {
     group = "e2e"

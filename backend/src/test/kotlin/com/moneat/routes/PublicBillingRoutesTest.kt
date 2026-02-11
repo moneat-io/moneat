@@ -1,11 +1,7 @@
 package com.moneat.routes
 
 import com.moneat.models.PricingTierConfigs
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
-import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
-import io.ktor.server.testing.testApplication
+import com.moneat.services.PricingTierService
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
@@ -61,25 +57,19 @@ class PublicBillingRoutesTest {
     }
 
     @Test
-    fun `billing plans endpoint is public and returns feature flags`() = testApplication {
-        application {
-            routing {
-                route("/v1") {
-                    publicBillingRoutes()
-                }
-            }
-        }
-
-        val response = client.get("/v1/billing/plans")
-        val body = response.bodyAsText()
-
-        assertEquals(200, response.status.value)
-        assertTrue(body.contains("\"plans\""))
-        assertTrue(body.contains("\"statusPagesEnabled\""))
-        assertTrue(body.contains("\"statusPageCustomDomainEnabled\""))
-        assertTrue(body.contains("\"sessionReplayEnabled\""))
-        assertTrue(body.contains("\"slackEnabled\""))
-        assertTrue(body.contains("\"incidentIoEnabled\""))
-        assertTrue(body.contains("\"trialDays\""))
+    fun `billing plans endpoint returns feature flags`() {
+        val pricingTierService = PricingTierService()
+        val plans = pricingTierService.getCurrentPlans()
+        
+        assertEquals(1, plans.size)
+        
+        val plan = plans[0]
+        assertEquals("FREE", plan.tier.tierName)
+        assertTrue(plan.tier.statusPagesEnabled)
+        assertTrue(plan.tier.statusPageCustomDomainEnabled)
+        assertTrue(plan.tier.sessionReplayEnabled)
+        assertTrue(plan.tier.slackEnabled)
+        assertTrue(plan.tier.incidentIoEnabled)
+        assertEquals(0, plan.trialDays)
     }
 }

@@ -1,11 +1,20 @@
 # syntax=docker/dockerfile:1.7
+FROM node:20-alpine AS email-builder
+WORKDIR /emails
+COPY emails/package*.json ./
+RUN npm ci
+COPY emails/ ./
+RUN npm run build:production
+
 FROM gradle:8-jdk17 AS build
 WORKDIR /app
-COPY build.gradle.kts settings.gradle.kts gradle.properties ./
-COPY gradle ./gradle
+COPY backend/build.gradle.kts backend/settings.gradle.kts backend/gradle.properties ./
+COPY backend/gradle ./gradle
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle dependencies --no-daemon --build-cache || true
-COPY src ./src
+COPY backend/src ./src
+# Copy built email templates from email-builder stage
+COPY --from=email-builder /emails/build/templates/email ./build/resources/main/email-templates/
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle shadowJar --no-daemon --build-cache
 

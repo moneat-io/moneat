@@ -39,7 +39,8 @@ jobs:
       - name: Build and push ${{ matrix.component }}
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.component }}
+          context: .
+          file: ./${{ matrix.component }}/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-${{ matrix.component }}:${{ github.sha }}

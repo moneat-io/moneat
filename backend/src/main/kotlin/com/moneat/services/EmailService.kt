@@ -214,12 +214,11 @@ class EmailService {
     }
     
     private fun loadVerificationTemplate(userName: String, verificationUrl: String): String {
-        // Try to load the built email template
-        val projectRoot = File(System.getProperty("user.dir")).parentFile
-        val templatePath = File(projectRoot, "emails/build/templates/email/verify-email.html")
+        // Try to load the built email template from classpath
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/verify-email.html")
         
-        return if (templatePath.exists()) {
-            templatePath.readText()
+        return if (templateResource != null) {
+            templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ userName }}", userName)
                 .replace("{{ verificationUrl }}", verificationUrl)
         } else {
@@ -251,12 +250,11 @@ class EmailService {
     }
     
     private fun loadPasswordResetTemplate(userName: String, resetUrl: String): String {
-        // Try to load the built email template
-        val projectRoot = File(System.getProperty("user.dir")).parentFile
-        val templatePath = File(projectRoot, "emails/build/templates/email/reset-password.html")
+        // Try to load the built email template from classpath
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/reset-password.html")
         
-        return if (templatePath.exists()) {
-            templatePath.readText()
+        return if (templateResource != null) {
+            templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ userName }}", userName)
                 .replace("{{ resetUrl }}", resetUrl)
         } else {
@@ -288,11 +286,10 @@ class EmailService {
     }
     
     private fun loadInvitationTemplate(inviterName: String, orgName: String, role: String, inviteUrl: String): String {
-        val projectRoot = File(System.getProperty("user.dir")).parentFile
-        val templatePath = File(projectRoot, "emails/build/templates/email/org-invitation.html")
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/org-invitation.html")
         
-        return if (templatePath.exists()) {
-            templatePath.readText()
+        return if (templateResource != null) {
+            templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ inviterName }}", inviterName)
                 .replace("{{ orgName }}", orgName)
                 .replace("{{ role }}", role)
@@ -413,13 +410,11 @@ class EmailService {
     }
     
     private fun loadErrorAlertTemplate(data: ErrorAlertData): String {
-        // Use absolute path from project root
-        val projectRoot = File(System.getProperty("user.dir")).parentFile
-        val templatePath = File(projectRoot, "emails/build/templates/email/error-alert.html")
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/error-alert.html")
         val year = java.time.Year.now().value.toString()
         
-        return if (templatePath.exists()) {
-            templatePath.readText()
+        return if (templateResource != null) {
+            templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ issueTitle }}", data.issueTitle)
                 .replace("{{ issueLevel }}", data.issueLevel)
                 .replace("{{ issueCulprit }}", data.issueCulprit)
@@ -452,12 +447,11 @@ class EmailService {
     }
     
     private fun loadWeeklySummaryTemplate(data: WeeklySummaryData): String {
-        val projectRoot = File(System.getProperty("user.dir")).parentFile
-        val templatePath = File(projectRoot, "emails/build/templates/email/weekly-summary.html")
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/weekly-summary.html")
         val year = java.time.Year.now().value.toString()
         
-        return if (templatePath.exists()) {
-            var html = templatePath.readText()
+        return if (templateResource != null) {
+            var html = templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ startDate }}", data.startDate)
                 .replace("{{ endDate }}", data.endDate)
                 .replace("{{ totalEvents }}", data.totalEvents)

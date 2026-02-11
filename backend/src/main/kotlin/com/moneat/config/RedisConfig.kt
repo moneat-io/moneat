@@ -50,8 +50,15 @@ object RedisConfig {
 }
 
 fun Application.configureRedis() {
+    // Skip Redis in test environment if REDIS_URL is not set
+    val redisUrl = try {
+        environment.config.property("redis.url").getString()
+    } catch (e: Exception) {
+        log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
+        return
+    }
+    
     try {
-        val redisUrl = environment.config.property("redis.url").getString()
         log.info("Connecting to Redis at $redisUrl...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
