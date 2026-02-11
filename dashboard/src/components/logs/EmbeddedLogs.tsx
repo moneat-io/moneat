@@ -161,7 +161,7 @@ export function EmbeddedLogs({
   }
 
   return (
-    <div className={cn('flex flex-col overflow-hidden rounded-lg border bg-card', className)}>
+    <div className={cn('flex min-w-0 max-w-full flex-col overflow-hidden rounded-lg border bg-card', className)}>
       {/* Header */}
       {showHeader && (
         <div className="flex items-center justify-between gap-4 border-b bg-muted/30 px-3 py-2">
@@ -226,7 +226,7 @@ export function EmbeddedLogs({
 
       {/* Log content */}
       <div
-        className="overflow-y-auto"
+        className="min-w-0 overflow-auto"
         style={{maxHeight}}
       >
         {isLoading ? (

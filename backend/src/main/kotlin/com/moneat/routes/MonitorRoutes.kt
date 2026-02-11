@@ -179,8 +179,14 @@ fun Route.monitorRoutes() {
                 // We still need a projectId for billing/quota tracking, so use the first project in the org
                 val projectId = resolveProjectForOrganization(organizationId, payload.projectId) ?: 0L
 
-                if (quotaService.isEnforcementEnabled() && projectId > 0) {
-                    val reservation = quotaService.reserveUnits(organizationId, payload.logs.size, "log")
+                if (quotaService.isEnforcementEnabled()) {
+                    val billableBytes = logService.estimateBillableBytes(payload.logs, systemId.toString())
+                    val reservation = quotaService.reserveUnits(
+                        organizationId = organizationId,
+                        requestedUnits = payload.logs.size,
+                        eventType = "log",
+                        requestedBytes = billableBytes
+                    )
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,

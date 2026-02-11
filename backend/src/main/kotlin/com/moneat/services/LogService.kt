@@ -41,6 +41,18 @@ class LogService {
         return enqueueNormalized(projectId, null, "otlp", normalized, queueKey)
     }
 
+    fun estimateBillableBytes(entries: List<LogIngestEntry>): Long {
+        return entries
+            .mapNotNull { normalizeSdkEntry(it) }
+            .sumOf { (it.message.length + it.body.length).toLong() }
+    }
+
+    fun estimateBillableBytes(entries: List<AgentLogEntry>, systemId: String?): Long {
+        return entries
+            .mapNotNull { normalizeAgentEntry(it, systemId) }
+            .sumOf { (it.message.length + it.body.length).toLong() }
+    }
+
     fun decodeQueueMessage(encoded: String): QueuedLogBatch {
         return json.decodeFromString(encoded)
     }

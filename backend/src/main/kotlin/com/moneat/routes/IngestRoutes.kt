@@ -157,7 +157,13 @@ fun Route.ingestRoutes() {
             }
 
             if (quotaService.isEnforcementEnabled()) {
-                val reservation = quotaService.reserveUnits(organizationId, entries.size, "log")
+                val billableBytes = logService.estimateBillableBytes(entries)
+                val reservation = quotaService.reserveUnits(
+                    organizationId = organizationId,
+                    requestedUnits = entries.size,
+                    eventType = "log",
+                    requestedBytes = billableBytes
+                )
                 if (!reservation.allowed) {
                     call.respond(
                         HttpStatusCode.TooManyRequests,

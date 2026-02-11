@@ -60,9 +60,9 @@ export function LogTable({logs, selectedLogId, onSelectLog}: LogTableProps) {
   }
 
   return (
-    <div className="bg-card/80">
-      <div className="overflow-auto">
-        <table className="w-full table-auto text-sm">
+    <div className="min-w-0 max-w-full bg-card/80">
+      <div className="max-w-full overflow-auto">
+        <table className="w-full min-w-0 table-auto text-sm">
           <colgroup>
             <col className="w-[3px]" />
             <col className="w-[1%]" />
@@ -119,9 +119,9 @@ export function LogTable({logs, selectedLogId, onSelectLog}: LogTableProps) {
                       <span className="text-xs text-muted-foreground/40">-</span>
                     )}
                   </td>
-                  <td className="px-2 py-1.5">
+                  <td className="min-w-0 px-2 py-1.5">
                     <span className={cn(
-                      'line-clamp-2 font-mono text-xs leading-snug',
+                      'line-clamp-2 break-all font-mono text-xs leading-snug',
                       normalizedLevel === 'error' || normalizedLevel === 'fatal'
                         ? 'text-foreground'
                         : 'text-foreground/80'

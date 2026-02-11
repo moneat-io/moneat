@@ -22,6 +22,10 @@ data class QuotaReservationResult(
 class BillingQuotaService(
     private val pricingTierService: PricingTierService = PricingTierService()
 ) {
+    companion object {
+        private const val BYTES_PER_GB = 1_073_741_824L
+    }
+
     private val config = ApplicationConfig("application.conf")
 
     fun isEnforcementEnabled(): Boolean {
@@ -35,14 +39,24 @@ class BillingQuotaService(
         }
     }
 
-    fun reserveUnits(organizationId: Int, requestedUnits: Int, eventType: String = "error"): QuotaReservationResult {
+    fun reserveUnits(
+        organizationId: Int,
+        requestedUnits: Int,
+        eventType: String = "error",
+        requestedBytes: Long = 0
+    ): QuotaReservationResult {
         return reserveUnitsBatch(
             organizationId = organizationId,
-            requestedUnitsByType = mapOf(eventType to requestedUnits)
+            requestedUnitsByType = mapOf(eventType to requestedUnits),
+            requestedBytesByType = mapOf(eventType to requestedBytes)
         )
     }
 
-    fun reserveUnitsBatch(organizationId: Int, requestedUnitsByType: Map<String, Int>): QuotaReservationResult {
+    fun reserveUnitsBatch(
+        organizationId: Int,
+        requestedUnitsByType: Map<String, Int>,
+        requestedBytesByType: Map<String, Long> = emptyMap()
+    ): QuotaReservationResult {
         val normalizedRequests = mutableMapOf<String, Long>()
         for ((eventType, requestedUnits) in requestedUnitsByType) {
             if (requestedUnits <= 0) continue
@@ -50,7 +64,14 @@ class BillingQuotaService(
             normalizedRequests[normalizedType] = (normalizedRequests[normalizedType] ?: 0L) + requestedUnits.toLong()
         }
 
-        if (normalizedRequests.isEmpty()) {
+        val normalizedBytes = mutableMapOf<String, Long>()
+        for ((eventType, requestedBytes) in requestedBytesByType) {
+            if (requestedBytes <= 0) continue
+            val normalizedType = normalizeEventType(eventType)
+            normalizedBytes[normalizedType] = (normalizedBytes[normalizedType] ?: 0L) + requestedBytes
+        }
+
+        if (normalizedRequests.isEmpty() && normalizedBytes.isEmpty()) {
             return QuotaReservationResult(
                 allowed = true,
                 usage = getUsageForOrganization(organizationId)
@@ -68,6 +89,8 @@ class BillingQuotaService(
             val state = loadQuotaState(organizationId, lockRows = true)
             val requestedTotal = normalizedRequests.values.sum()
             val totalAfter = state.usedUnits + requestedTotal
+            val requestedTotalBytes = normalizedBytes.values.sum()
+            val bytesAfter = state.usedBytes + requestedTotalBytes
 
             for ((eventType, requestedUnits) in normalizedRequests) {
                 val usedForType = usedUnitsForType(state, eventType)
@@ -109,6 +132,27 @@ class BillingQuotaService(
                 )
             }
 
+            val effectiveBytesLimit = if (state.bytesLimit > 0) {
+                state.bytesLimit + state.paygLimitBytes
+            } else {
+                Long.MAX_VALUE
+            }
+            if (state.bytesLimit > 0 && bytesAfter > effectiveBytesLimit) {
+                SentryUtils.breadcrumb("billing", "GB quota exceeded", mapOf(
+                    "organization_id" to organizationId,
+                    "requested_bytes" to requestedTotalBytes,
+                    "used_bytes" to state.usedBytes,
+                    "bytes_limit" to state.bytesLimit,
+                    "payg_limit_bytes" to state.paygLimitBytes
+                ))
+
+                return@transaction QuotaReservationResult(
+                    allowed = false,
+                    reason = "gb_quota_exceeded",
+                    usage = toUsageResponse(state)
+                )
+            }
+
             val requestedErrors = normalizedRequests["error"] ?: 0L
             val requestedTransactions = normalizedRequests["transaction"] ?: 0L
             val requestedReplays = normalizedRequests["replay"] ?: 0L
@@ -123,6 +167,7 @@ class BillingQuotaService(
                 it[used_transactions] = state.usedTransactions + requestedTransactions
                 it[used_replays] = state.usedReplays + requestedReplays
                 it[used_feedback] = state.usedFeedback + requestedFeedback
+                it[used_bytes] = bytesAfter
                 it[updated_at] = Clock.System.now()
             }
 
@@ -179,7 +224,8 @@ class BillingQuotaService(
         val paygUsedUnits: Long,
         val paygUsedMicros: Long,
         val pendingMeterUnits: Long,
-        val paygRateMicrosPerUnit: Long
+        val paygRateMicrosPerUnit: Long,
+        val paygLimitBytes: Long
     )
 
     private fun loadQuotaState(organizationId: Int, lockRows: Boolean): QuotaState {
@@ -284,9 +330,15 @@ class BillingQuotaService(
             .sum()
         val paygBudgetCents = sub?.get(Subscriptions.payg_budget_cents) ?: 0
         val paygRateMicros = tier.paygRateMicrosPerUnit
+        val overageRateCentsPerGb = tier.overageRateCentsPerGb
         val paygEnabled = tier.paygEnabled
         val paygLimitUnits = if (paygEnabled && paygBudgetCents > 0 && paygRateMicros > 0) {
             (paygBudgetCents.toLong() * 10_000L) / paygRateMicros
+        } else {
+            0
+        }
+        val paygLimitBytes = if (paygEnabled && paygBudgetCents > 0 && overageRateCentsPerGb > 0) {
+            (paygBudgetCents.toLong() * BYTES_PER_GB) / overageRateCentsPerGb.toLong()
         } else {
             0
         }
@@ -319,7 +371,8 @@ class BillingQuotaService(
             paygUsedUnits = sub?.get(Subscriptions.payg_used_units) ?: 0,
             paygUsedMicros = sub?.get(Subscriptions.payg_used_micros) ?: 0,
             pendingMeterUnits = sub?.get(Subscriptions.pending_meter_units) ?: 0,
-            paygRateMicrosPerUnit = paygRateMicros
+            paygRateMicrosPerUnit = paygRateMicros,
+            paygLimitBytes = paygLimitBytes
         )
     }
 
@@ -332,6 +385,7 @@ class BillingQuotaService(
         ).all { (used, limit) ->
             limit < 0 || used <= (limit + state.paygLimitUnits)
         }
+        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes)
 
         return BillingUsageResponse(
             organizationId = state.organizationId,
@@ -357,7 +411,7 @@ class BillingQuotaService(
             paygUsedCentsEstimate = (state.paygUsedMicros / 10_000L).toInt(),
             plan = state.plan,
             status = state.status,
-            withinQuota = state.usedUnits <= state.totalLimitUnits && eventLimitsWithinBudget
+            withinQuota = state.usedUnits <= state.totalLimitUnits && eventLimitsWithinBudget && bytesWithinBudget
         )
     }
 

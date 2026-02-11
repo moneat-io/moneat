@@ -384,6 +384,27 @@ class BillingQuotaServiceTest {
         assertTrue(usage.totalLimitUnits >= 1000)
     }
 
+    @Test
+    fun `usage response indicates over GB quota when used bytes exceed limit`() {
+        val bytesOverBaseAndPayg = 300L * 1024L * 1024L * 1024L
+        transaction {
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedErrors = 10,
+                usedTransactions = 0,
+                usedReplays = 0,
+                usedFeedback = 0,
+                usedBytes = bytesOverBaseAndPayg
+            )
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertFalse(usage.withinQuota, "Should be over quota when used bytes exceed monthly + PAYG GB limit")
+        assertEquals(bytesOverBaseAndPayg, usage.usedBytes)
+        assertEquals(10, usage.bytesLimit)
+    }
+
     // ============ Subscription Status Tests ============
 
     @Test

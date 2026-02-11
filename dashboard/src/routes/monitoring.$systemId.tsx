@@ -1086,7 +1086,10 @@ function SystemDetailPage() {
       </div>
       
       <Sheet open={!!selectedContainer} onOpenChange={(open) => !open && setSelectedContainer(null)}>
-        <SheetContent side="right" className="sm:max-w-2xl w-[800px] overflow-y-auto">
+        <SheetContent
+          side="right"
+          className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-[50vw] sm:max-w-[960px] overflow-y-auto"
+        >
           {selectedContainer && (
             <div className="space-y-6">
               <SheetHeader>
@@ -1145,7 +1148,7 @@ function SystemDetailPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 min-w-0">
                 <h3 className="text-sm font-medium">Logs</h3>
                 <EmbeddedLogs 
                   systemId={system.id}
@@ -1153,6 +1156,7 @@ function SystemDetailPage() {
                   showHeader={false}
                   maxHeight="500px"
                   compact={true}
+                  className="w-full max-w-full"
                 />
               </div>
             </div>
