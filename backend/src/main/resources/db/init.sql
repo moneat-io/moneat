@@ -170,15 +170,31 @@ CREATE TABLE IF NOT EXISTS pricing_tier_configs (
     monthly_transaction_limit BIGINT NOT NULL DEFAULT 0,
     monthly_replay_limit BIGINT NOT NULL DEFAULT 0,
     monthly_feedback_limit BIGINT NOT NULL DEFAULT 0,
+    monthly_gb_limit BIGINT NOT NULL DEFAULT 0,
     retention_days INT NOT NULL,
+    log_retention_days INT NOT NULL DEFAULT 3,
+    status_pages_enabled BOOLEAN NOT NULL DEFAULT true,
+    status_page_custom_domain_enabled BOOLEAN NOT NULL DEFAULT true,
+    session_replay_enabled BOOLEAN NOT NULL DEFAULT true,
+    slack_enabled BOOLEAN NOT NULL DEFAULT false,
+    incident_io_enabled BOOLEAN NOT NULL DEFAULT false,
+    saml_enabled BOOLEAN NOT NULL DEFAULT false,
+    oidc_enabled BOOLEAN NOT NULL DEFAULT false,
+    priority_support_enabled BOOLEAN NOT NULL DEFAULT false,
+    sla_enabled BOOLEAN NOT NULL DEFAULT false,
+    custom_retention_enabled BOOLEAN NOT NULL DEFAULT false,
     max_projects INT,
     max_systems INT NOT NULL,
     monitor_interval_seconds INT NOT NULL,
     monthly_price_cents INT NOT NULL,
+    yearly_price_cents INT NOT NULL DEFAULT 0,
     payg_enabled BOOLEAN NOT NULL DEFAULT false,
     payg_rate_micros_per_unit BIGINT NOT NULL DEFAULT 0,
+    overage_rate_cents_per_gb INT NOT NULL DEFAULT 0,
     stripe_base_price_id VARCHAR(255),
     stripe_overage_price_id VARCHAR(255),
+    stripe_yearly_base_price_id VARCHAR(255),
+    stripe_yearly_overage_price_id VARCHAR(255),
     is_current BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (tier_name, version)
@@ -226,6 +242,7 @@ CREATE TABLE IF NOT EXISTS org_usage_counters (
     used_transactions BIGINT NOT NULL DEFAULT 0,
     used_replays BIGINT NOT NULL DEFAULT 0,
     used_feedback BIGINT NOT NULL DEFAULT 0,
+    used_bytes BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (organization_id, period_start)
 );
@@ -257,18 +274,51 @@ INSERT INTO pricing_tier_configs (
     monthly_transaction_limit,
     monthly_replay_limit,
     monthly_feedback_limit,
+    monthly_gb_limit,
     retention_days,
+    log_retention_days,
+    status_pages_enabled,
+    status_page_custom_domain_enabled,
+    session_replay_enabled,
+    slack_enabled,
+    incident_io_enabled,
+    saml_enabled,
+    oidc_enabled,
+    priority_support_enabled,
+    sla_enabled,
+    custom_retention_enabled,
     max_projects,
     max_systems,
     monitor_interval_seconds,
     monthly_price_cents,
+    yearly_price_cents,
     payg_enabled,
     payg_rate_micros_per_unit,
+    overage_rate_cents_per_gb,
     stripe_base_price_id,
+    stripe_yearly_base_price_id,
     stripe_overage_price_id,
+    stripe_yearly_overage_price_id,
     is_current
 ) VALUES
-    ('FREE', 1, 10000, 10000, 0, 0, 0, 30, 1, 1, 60, 0, false, 0, NULL, NULL, true),
-    ('PRO', 1, 500000, 500000, 0, 0, 0, 90, NULL, 5, 15, 1900, true, 10, NULL, NULL, true),
-    ('TEAM', 1, 5000000, 5000000, 0, 0, 0, 90, NULL, 25, 10, 4900, true, 10, NULL, NULL, true)
+    (
+        'FREE', 1, 10000, 10000, 0, 0, 0, 1073741824, 3, 3,
+        true, true, true, true, true, false, false, false, false, false,
+        3, 3, 60, 0, 0, false, 0, 0, NULL, NULL, NULL, NULL, true
+    ),
+    (
+        'PRO', 1, 500000, 500000, 0, 0, 0, 53687091200, 30, 30,
+        true, true, true, true, true, false, false, false, false, false,
+        NULL, 10, 30, 2900, 28800, true, 400000, 40, NULL, NULL, NULL, NULL, true
+    ),
+    (
+        'TEAM', 1, 5000000, 5000000, 0, 0, 0, 214748364800, 30, 30,
+        true, true, true, true, true, true, true, false, false, false,
+        NULL, 25, 10, 7900, 79200, true, 400000, 40, NULL, NULL, NULL, NULL, true
+    ),
+    (
+        'BUSINESS', 1, 9223372036854775807, 9223372036854775807, 0, 0, 0, 1099511627776, 90, 90,
+        true, true, true, true, true, true, true, true, true, true,
+        NULL, 2147483647, 10, 19900, 199200, true, 400000, 40, NULL, NULL, NULL, NULL, true
+    )
 ON CONFLICT (tier_name, version) DO NOTHING;

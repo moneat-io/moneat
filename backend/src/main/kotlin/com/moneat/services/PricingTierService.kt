@@ -23,6 +23,19 @@ data class EffectiveTierContext(
 )
 
 class PricingTierService {
+    private data class DefaultFeatureFlags(
+        val statusPagesEnabled: Boolean,
+        val statusPageCustomDomainEnabled: Boolean,
+        val sessionReplayEnabled: Boolean,
+        val slackEnabled: Boolean,
+        val incidentIoEnabled: Boolean,
+        val samlEnabled: Boolean,
+        val oidcEnabled: Boolean,
+        val prioritySupportEnabled: Boolean,
+        val slaEnabled: Boolean,
+        val customRetentionEnabled: Boolean
+    )
+
     fun getPrimaryOrganizationIdForUser(userId: Int): Int? {
         return transaction {
             Memberships.selectAll().where { Memberships.user_id eq userId }
@@ -134,7 +147,45 @@ class PricingTierService {
             val current = PricingTierConfigs.selectAll().where { PricingTierConfigs.tier_name eq canonicalName }
                 .orderBy(PricingTierConfigs.version to SortOrder.DESC)
                 .firstOrNull()
+            val currentConfig = current?.let { rowToResponse(it) }
+            val defaults = defaultFeatureFlagsForTier(canonicalName)
             val nextVersion = (current?.get(PricingTierConfigs.version) ?: 0) + 1
+
+            val resolvedMonthlyGbLimit = request.monthlyGbLimit ?: currentConfig?.monthlyGbLimit ?: 0
+            val resolvedLogRetentionDays = request.logRetentionDays ?: currentConfig?.logRetentionDays ?: request.retentionDays
+            val resolvedYearlyPriceCents = request.yearlyPriceCents ?: currentConfig?.yearlyPriceCents ?: 0
+            val resolvedOverageRateCentsPerGb = request.overageRateCentsPerGb ?: currentConfig?.overageRateCentsPerGb ?: 0
+
+            val resolvedStatusPagesEnabled = request.statusPagesEnabled
+                ?: currentConfig?.statusPagesEnabled
+                ?: defaults.statusPagesEnabled
+            val resolvedStatusPageCustomDomainEnabled = request.statusPageCustomDomainEnabled
+                ?: currentConfig?.statusPageCustomDomainEnabled
+                ?: defaults.statusPageCustomDomainEnabled
+            val resolvedSessionReplayEnabled = request.sessionReplayEnabled
+                ?: currentConfig?.sessionReplayEnabled
+                ?: defaults.sessionReplayEnabled
+            val resolvedSlackEnabled = request.slackEnabled
+                ?: currentConfig?.slackEnabled
+                ?: defaults.slackEnabled
+            val resolvedIncidentIoEnabled = request.incidentIoEnabled
+                ?: currentConfig?.incidentIoEnabled
+                ?: defaults.incidentIoEnabled
+            val resolvedSamlEnabled = request.samlEnabled
+                ?: currentConfig?.samlEnabled
+                ?: defaults.samlEnabled
+            val resolvedOidcEnabled = request.oidcEnabled
+                ?: currentConfig?.oidcEnabled
+                ?: defaults.oidcEnabled
+            val resolvedPrioritySupportEnabled = request.prioritySupportEnabled
+                ?: currentConfig?.prioritySupportEnabled
+                ?: defaults.prioritySupportEnabled
+            val resolvedSlaEnabled = request.slaEnabled
+                ?: currentConfig?.slaEnabled
+                ?: defaults.slaEnabled
+            val resolvedCustomRetentionEnabled = request.customRetentionEnabled
+                ?: currentConfig?.customRetentionEnabled
+                ?: defaults.customRetentionEnabled
 
             PricingTierConfigs.update({ PricingTierConfigs.tier_name eq canonicalName }) {
                 it[is_current] = false
@@ -148,17 +199,27 @@ class PricingTierService {
                 it[monthly_transaction_limit] = monthlyTransactionLimit
                 it[monthly_replay_limit] = monthlyReplayLimit
                 it[monthly_feedback_limit] = monthlyFeedbackLimit
-                it[monthly_gb_limit] = request.monthlyGbLimit
+                it[monthly_gb_limit] = resolvedMonthlyGbLimit
                 it[retention_days] = request.retentionDays
-                it[log_retention_days] = request.logRetentionDays
+                it[log_retention_days] = resolvedLogRetentionDays
+                it[status_pages_enabled] = resolvedStatusPagesEnabled
+                it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
+                it[session_replay_enabled] = resolvedSessionReplayEnabled
+                it[slack_enabled] = resolvedSlackEnabled
+                it[incident_io_enabled] = resolvedIncidentIoEnabled
+                it[saml_enabled] = resolvedSamlEnabled
+                it[oidc_enabled] = resolvedOidcEnabled
+                it[priority_support_enabled] = resolvedPrioritySupportEnabled
+                it[sla_enabled] = resolvedSlaEnabled
+                it[custom_retention_enabled] = resolvedCustomRetentionEnabled
                 it[max_projects] = request.maxProjects
                 it[max_systems] = request.maxSystems
                 it[monitor_interval_seconds] = request.monitorIntervalSeconds
                 it[monthly_price_cents] = request.monthlyPriceCents
-                it[yearly_price_cents] = request.yearlyPriceCents
+                it[yearly_price_cents] = resolvedYearlyPriceCents
                 it[payg_enabled] = request.paygEnabled
                 it[payg_rate_micros_per_unit] = request.paygRateMicrosPerUnit
-                it[overage_rate_cents_per_gb] = request.overageRateCentsPerGb
+                it[overage_rate_cents_per_gb] = resolvedOverageRateCentsPerGb
                 it[stripe_base_price_id] = request.stripeBasePriceId
                 it[stripe_overage_price_id] = request.stripeOveragePriceId
                 it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
@@ -172,12 +233,23 @@ class PricingTierService {
 
     private fun validateCreateTierRequest(request: CreateTierVersionRequest) {
         require(request.retentionDays in 1..90) { "Retention days must be between 1 and 90" }
-        require(request.logRetentionDays in 1..90) { "Log retention days must be between 1 and 90" }
+        if (request.logRetentionDays != null) {
+            require(request.logRetentionDays in 1..90) { "Log retention days must be between 1 and 90" }
+        }
         require(request.monthlyUnitLimit >= 0) { "Monthly unit limit must be non-negative" }
         require(request.monthlyErrorLimit >= 0) { "Monthly error limit must be non-negative" }
         require(request.monthlyTransactionLimit >= 0) { "Monthly transaction limit must be non-negative" }
         require(request.monthlyReplayLimit >= 0) { "Monthly replay limit must be non-negative" }
         require(request.monthlyFeedbackLimit >= 0) { "Monthly feedback limit must be non-negative" }
+        if (request.monthlyGbLimit != null) {
+            require(request.monthlyGbLimit >= 0) { "Monthly GB limit must be non-negative" }
+        }
+        if (request.yearlyPriceCents != null) {
+            require(request.yearlyPriceCents >= 0) { "Yearly price cannot be negative" }
+        }
+        if (request.overageRateCentsPerGb != null) {
+            require(request.overageRateCentsPerGb >= 0) { "Overage rate cannot be negative" }
+        }
     }
 
     fun migrateSubscribers(tierName: String, request: TierMigrationRequest): TierMigrationResponse {
@@ -305,6 +377,16 @@ class PricingTierService {
             monthlyGbLimit = tier.monthlyGbBytes,
             retentionDays = tier.retentionDays,
             logRetentionDays = tier.retentionDays,  // Use same as retentionDays for fallback
+            statusPagesEnabled = true,
+            statusPageCustomDomainEnabled = true,
+            sessionReplayEnabled = true,
+            slackEnabled = true,
+            incidentIoEnabled = true,
+            samlEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
+            oidcEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
+            prioritySupportEnabled = tier == PricingTier.BUSINESS,
+            slaEnabled = tier == PricingTier.BUSINESS,
+            customRetentionEnabled = tier == PricingTier.BUSINESS,
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
             monitorIntervalSeconds = tier.monitorIntervalSeconds,
@@ -334,6 +416,16 @@ class PricingTierService {
             monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
             logRetentionDays = row[PricingTierConfigs.log_retention_days],
+            statusPagesEnabled = row[PricingTierConfigs.status_pages_enabled],
+            statusPageCustomDomainEnabled = row[PricingTierConfigs.status_page_custom_domain_enabled],
+            sessionReplayEnabled = row[PricingTierConfigs.session_replay_enabled],
+            slackEnabled = row[PricingTierConfigs.slack_enabled],
+            incidentIoEnabled = row[PricingTierConfigs.incident_io_enabled],
+            samlEnabled = row[PricingTierConfigs.saml_enabled],
+            oidcEnabled = row[PricingTierConfigs.oidc_enabled],
+            prioritySupportEnabled = row[PricingTierConfigs.priority_support_enabled],
+            slaEnabled = row[PricingTierConfigs.sla_enabled],
+            customRetentionEnabled = row[PricingTierConfigs.custom_retention_enabled],
             maxProjects = row[PricingTierConfigs.max_projects],
             maxSystems = row[PricingTierConfigs.max_systems],
             monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
@@ -352,5 +444,23 @@ class PricingTierService {
 
     private fun Instant.toLocalDateUtc(): kotlinx.datetime.LocalDate {
         return toLocalDateTime(TimeZone.UTC).date
+    }
+
+    private fun defaultFeatureFlagsForTier(tierName: String): DefaultFeatureFlags {
+        val canonicalName = tierName.uppercase()
+        val isTeamOrBusiness = canonicalName == "TEAM" || canonicalName == "BUSINESS"
+        val isBusiness = canonicalName == "BUSINESS"
+        return DefaultFeatureFlags(
+            statusPagesEnabled = true,
+            statusPageCustomDomainEnabled = true,
+            sessionReplayEnabled = true,
+            slackEnabled = true,
+            incidentIoEnabled = true,
+            samlEnabled = isTeamOrBusiness,
+            oidcEnabled = isTeamOrBusiness,
+            prioritySupportEnabled = isBusiness,
+            slaEnabled = isBusiness,
+            customRetentionEnabled = isBusiness
+        )
     }
 }

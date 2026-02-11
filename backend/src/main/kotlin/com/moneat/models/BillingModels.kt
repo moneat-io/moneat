@@ -17,6 +17,16 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val monthly_gb_limit = long("monthly_gb_limit").default(0)
     val retention_days = integer("retention_days")
     val log_retention_days = integer("log_retention_days")
+    val status_pages_enabled = bool("status_pages_enabled").default(true)
+    val status_page_custom_domain_enabled = bool("status_page_custom_domain_enabled").default(true)
+    val session_replay_enabled = bool("session_replay_enabled").default(true)
+    val slack_enabled = bool("slack_enabled").default(false)
+    val incident_io_enabled = bool("incident_io_enabled").default(false)
+    val saml_enabled = bool("saml_enabled").default(false)
+    val oidc_enabled = bool("oidc_enabled").default(false)
+    val priority_support_enabled = bool("priority_support_enabled").default(false)
+    val sla_enabled = bool("sla_enabled").default(false)
+    val custom_retention_enabled = bool("custom_retention_enabled").default(false)
     val max_projects = integer("max_projects").nullable()
     val max_systems = integer("max_systems")
     val monitor_interval_seconds = integer("monitor_interval_seconds")
@@ -82,6 +92,16 @@ data class PricingTierConfigResponse(
     val monthlyGbLimit: Long,
     val retentionDays: Int,
     val logRetentionDays: Int,
+    val statusPagesEnabled: Boolean,
+    val statusPageCustomDomainEnabled: Boolean,
+    val sessionReplayEnabled: Boolean,
+    val slackEnabled: Boolean,
+    val incidentIoEnabled: Boolean,
+    val samlEnabled: Boolean,
+    val oidcEnabled: Boolean,
+    val prioritySupportEnabled: Boolean,
+    val slaEnabled: Boolean,
+    val customRetentionEnabled: Boolean,
     val maxProjects: Int?,
     val maxSystems: Int,
     val monitorIntervalSeconds: Int,
@@ -198,17 +218,27 @@ data class CreateTierVersionRequest(
     val monthlyTransactionLimit: Long = 0,
     val monthlyReplayLimit: Long = 0,
     val monthlyFeedbackLimit: Long = 0,
-    val monthlyGbLimit: Long = 0,
+    val monthlyGbLimit: Long? = null,
     val retentionDays: Int,
-    val logRetentionDays: Int,
+    val logRetentionDays: Int? = null,
+    val statusPagesEnabled: Boolean? = null,
+    val statusPageCustomDomainEnabled: Boolean? = null,
+    val sessionReplayEnabled: Boolean? = null,
+    val slackEnabled: Boolean? = null,
+    val incidentIoEnabled: Boolean? = null,
+    val samlEnabled: Boolean? = null,
+    val oidcEnabled: Boolean? = null,
+    val prioritySupportEnabled: Boolean? = null,
+    val slaEnabled: Boolean? = null,
+    val customRetentionEnabled: Boolean? = null,
     val maxProjects: Int? = null,
     val maxSystems: Int,
     val monitorIntervalSeconds: Int,
     val monthlyPriceCents: Int,
-    val yearlyPriceCents: Int = 0,
+    val yearlyPriceCents: Int? = null,
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
-    val overageRateCentsPerGb: Int = 0,
+    val overageRateCentsPerGb: Int? = null,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,

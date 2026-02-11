@@ -18,7 +18,7 @@ enum class PricingTier(
         monthlyErrorLimit = 10_000,
         monthlyReplayLimit = 0,
         monthlyGbBytes = 1_073_741_824L,  // 1 GB
-        retentionDays = 7,
+        retentionDays = 3,
         maxProjects = 1,
         maxSystems = 3,
         monitorIntervalSeconds = 60
@@ -36,7 +36,7 @@ enum class PricingTier(
         monthlyErrorLimit = 5_000_000,
         monthlyReplayLimit = -1,
         monthlyGbBytes = 214_748_364_800L,  // 200 GB
-        retentionDays = 90,
+        retentionDays = 30,
         maxProjects = null,
         maxSystems = 25,
         monitorIntervalSeconds = 10
@@ -45,7 +45,7 @@ enum class PricingTier(
         monthlyErrorLimit = Long.MAX_VALUE,
         monthlyReplayLimit = -1,
         monthlyGbBytes = 1_099_511_627_776L,  // 1 TB
-        retentionDays = 180,
+        retentionDays = 90,
         maxProjects = null,
         maxSystems = Int.MAX_VALUE,
         monitorIntervalSeconds = 10

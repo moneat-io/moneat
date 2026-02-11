@@ -353,7 +353,18 @@ interface BillingTierConfig {
   monthlyTransactionLimit: number
   monthlyReplayLimit: number
   monthlyFeedbackLimit: number
+  logRetentionDays: number
   retentionDays: number
+  statusPagesEnabled: boolean
+  statusPageCustomDomainEnabled: boolean
+  sessionReplayEnabled: boolean
+  slackEnabled: boolean
+  incidentIoEnabled: boolean
+  samlEnabled: boolean
+  oidcEnabled: boolean
+  prioritySupportEnabled: boolean
+  slaEnabled: boolean
+  customRetentionEnabled: boolean
   maxProjects: number | null
   maxSystems: number
   monitorIntervalSeconds: number
@@ -465,13 +476,27 @@ interface CreateTierVersionRequest {
   monthlyTransactionLimit: number
   monthlyReplayLimit: number
   monthlyFeedbackLimit: number
+  monthlyGbLimit?: number | null
   retentionDays: number
+  logRetentionDays?: number | null
+  statusPagesEnabled?: boolean | null
+  statusPageCustomDomainEnabled?: boolean | null
+  sessionReplayEnabled?: boolean | null
+  slackEnabled?: boolean | null
+  incidentIoEnabled?: boolean | null
+  samlEnabled?: boolean | null
+  oidcEnabled?: boolean | null
+  prioritySupportEnabled?: boolean | null
+  slaEnabled?: boolean | null
+  customRetentionEnabled?: boolean | null
   maxProjects?: number | null
   maxSystems: number
   monitorIntervalSeconds: number
   monthlyPriceCents: number
+  yearlyPriceCents?: number | null
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
+  overageRateCentsPerGb?: number | null
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null
