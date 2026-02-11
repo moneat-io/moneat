@@ -22,7 +22,13 @@ import java.util.*
 
 private val logger = KotlinLogging.logger {}
 
-private val json = Json { ignoreUnknownKeys = true }
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+private val json = Json { 
+    ignoreUnknownKeys = true
+    isLenient = true
+    encodeDefaults = true
+    explicitNulls = false
+}
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -136,13 +142,19 @@ fun Route.monitorRoutes() {
             try {
                 val authHeader = call.request.header("Authorization")
                 if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing or invalid Authorization header"))
+                    call.respond(
+                        HttpStatusCode.Unauthorized,
+                        AgentLogIngestResponse(error = "Missing or invalid Authorization header")
+                    )
                     return@post
                 }
 
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
                 val (systemId, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid agent key"))
+                    call.respond(
+                        HttpStatusCode.Unauthorized,
+                        AgentLogIngestResponse(error = "Invalid agent key")
+                    )
                     return@post
                 }
 
@@ -155,9 +167,11 @@ fun Route.monitorRoutes() {
                     bodyBytes
                 }
 
-                val payload = json.decodeFromString<AgentLogsRequest>(decompressedBytes.decodeToString())
+                val jsonString = decompressedBytes.decodeToString()
+                logger.debug { "Received log payload: ${jsonString.take(500)}" }
+                val payload = json.decodeFromString<AgentLogsRequest>(jsonString)
                 if (payload.logs.isEmpty()) {
-                    call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
+                    call.respond(HttpStatusCode.Accepted, AgentLogIngestResponse(accepted = 0))
                     return@post
                 }
 
@@ -170,10 +184,10 @@ fun Route.monitorRoutes() {
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
-                            mapOf(
-                                "error" to "Quota exceeded",
-                                "reason" to reservation.reason,
-                                "usage" to reservation.usage
+                            AgentLogIngestResponse(
+                                error = "Quota exceeded",
+                                reason = reservation.reason,
+                                usage = reservation.usage
                             )
                         )
                         return@post
@@ -183,10 +197,19 @@ fun Route.monitorRoutes() {
                 val queueKey = call.application.environment.config.propertyOrNull("logs.queueKey")?.getString()
                     ?: "moneat:logs:queue"
                 val accepted = logService.enqueueAgentLogs(projectId, systemId.toString(), payload.logs, queueKey)
-                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted, "system_id" to systemId.toString()))
+                call.respond(
+                    HttpStatusCode.Accepted,
+                    AgentLogIngestResponse(accepted = accepted, systemId = systemId.toString())
+                )
             } catch (e: Exception) {
                 logger.error(e) { "Failed to ingest agent logs: ${e.message}" }
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid log payload", "message" to (e.message ?: "Unknown error")))
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    AgentLogIngestResponse(
+                        error = "Invalid log payload",
+                        message = e.message ?: "Unknown error"
+                    )
+                )
             }
         }
         

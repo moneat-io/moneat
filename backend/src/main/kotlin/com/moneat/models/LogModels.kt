@@ -3,6 +3,9 @@ package com.moneat.models
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+typealias TagsMap = HashMap<String, String>
+typealias AttributesMap = HashMap<String, String>
+
 @Serializable
 data class LogIngestEntry(
     val timestamp: String? = null,
@@ -19,8 +22,8 @@ data class LogIngestEntry(
     @SerialName("container_image") val containerImage: String? = null,
     @SerialName("trace_id") val traceId: String? = null,
     @SerialName("span_id") val spanId: String? = null,
-    val tags: Map<String, String> = emptyMap(),
-    @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap()
+    val tags: HashMap<String, String>? = null,
+    @SerialName("resource_attributes") val resourceAttributes: HashMap<String, String>? = null
 )
 
 @Serializable
@@ -45,8 +48,8 @@ data class AgentLogEntry(
     @SerialName("container_image") val containerImage: String? = null,
     @SerialName("trace_id") val traceId: String? = null,
     @SerialName("span_id") val spanId: String? = null,
-    val tags: Map<String, String> = emptyMap(),
-    @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap()
+    val tags: HashMap<String, String>? = null,
+    @SerialName("resource_attributes") val resourceAttributes: HashMap<String, String>? = null
 )
 
 @Serializable

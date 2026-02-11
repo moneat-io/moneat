@@ -175,6 +175,7 @@ function SystemDetailPage() {
   const {systemId} = Route.useParams()
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
   const [containerViewMode, setContainerViewMode] = useState<ContainerViewMode>(getInitialContainerViewMode())
+  const [activeTab, setActiveTab] = useState('overview')
   const [selectedContainer, setSelectedContainer] = useState<ContainerStats | null>(null)
 
   const {data: billingUsage} = useQuery({
@@ -415,30 +416,54 @@ function SystemDetailPage() {
       </div>
 
       <div className="container mx-auto px-4 py-6">
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-muted/50">
-            <TabsTrigger value="overview" className="gap-1.5">
-              <Activity className="h-3.5 w-3.5" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="containers" className="gap-1.5">
-              <Box className="h-3.5 w-3.5" />
-              Containers
-              {containers.length > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {containers.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="network" className="gap-1.5">
-              <Network className="h-3.5 w-3.5" />
-              Network
-            </TabsTrigger>
-            <TabsTrigger value="alerts" className="gap-1.5">
-              <AlertTriangleIcon className="h-3.5 w-3.5" />
-              Alerts
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <div className="flex items-center justify-between">
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="overview" className="gap-1.5">
+                <Activity className="h-3.5 w-3.5" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="containers" className="gap-1.5">
+                <Box className="h-3.5 w-3.5" />
+                Containers
+                {containers.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                    {containers.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="network" className="gap-1.5">
+                <Network className="h-3.5 w-3.5" />
+                Network
+              </TabsTrigger>
+              <TabsTrigger value="alerts" className="gap-1.5">
+                <AlertTriangleIcon className="h-3.5 w-3.5" />
+                Alerts
+              </TabsTrigger>
+            </TabsList>
+
+            {/* View mode toggle */}
+            {activeTab === 'containers' && containers.length > 0 && (
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+                <Button
+                  variant={containerViewMode === 'cards' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setContainerViewMode('cards')}
+                  className="h-7 px-2"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={containerViewMode === 'compact' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setContainerViewMode('compact')}
+                  className="h-7 px-2"
+                >
+                  <LayoutList className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Current Stats Cards */}
@@ -796,28 +821,6 @@ function SystemDetailPage() {
           <TabsContent value="containers" className="space-y-6">
             {containers.length > 0 ? (
               <>
-                {/* View mode toggle */}
-                <div className="flex justify-end">
-                  <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
-                    <Button
-                      variant={containerViewMode === 'cards' ? 'secondary' : 'ghost'}
-                      size="sm"
-                      onClick={() => setContainerViewMode('cards')}
-                      className="h-7 px-2"
-                    >
-                      <LayoutGrid className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={containerViewMode === 'compact' ? 'secondary' : 'ghost'}
-                      size="sm"
-                      onClick={() => setContainerViewMode('compact')}
-                      className="h-7 px-2"
-                    >
-                      <LayoutList className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
                 {/* Cards view */}
                 {containerViewMode === 'cards' ? (
                   <div className="grid gap-4 md:grid-cols-2">

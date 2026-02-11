@@ -1,4 +1,4 @@
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type MonitorSystemWithMetrics} from '@/lib/api'
 import {cn, formatRelativeTime} from '@/lib/utils'
@@ -32,7 +32,7 @@ import {
   MemoryStick,
   Network,
   Plus,
-  Rows3,
+  LayoutList,
   Server,
   ServerOff,
   Terminal,
@@ -690,6 +690,8 @@ function SystemsCompactTable({
   systems: MonitorSystemWithMetrics[]
   onDelete: (id: string, name: string) => void
 }) {
+  const navigate = useNavigate()
+
   return (
     <Card className="overflow-hidden border-border/60 shadow-sm">
       <CardContent className="p-0">
@@ -717,7 +719,11 @@ function SystemsCompactTable({
               const isOnline = system.status === 'up'
 
               return (
-                <TableRow key={system.id} className="group">
+                <TableRow
+                  key={system.id}
+                  className="group cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => navigate({to: '/monitoring/$systemId', params: {systemId: system.id}})}
+                >
                   <TableCell className="pl-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
@@ -925,42 +931,6 @@ function MonitoringListPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className={cn(
-                      "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium",
-                      isAtLimit ? "border-orange-500/50 bg-orange-500/10 text-orange-700 dark:text-orange-400" : "bg-muted"
-                    )}>
-                      <Server className="h-3.5 w-3.5" />
-                      {systemCount} / {systemLimit}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Systems: {systemCount} of {systemLimit} used ({currentPlan} plan)</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <div className="inline-flex items-center rounded-lg border bg-background p-1">
-                <Button
-                  variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  onClick={() => setViewMode('cards')}
-                >
-                  <LayoutGrid className="h-3.5 w-3.5" />
-                  Cards
-                </Button>
-                <Button
-                  variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  onClick={() => setViewMode('compact')}
-                >
-                  <Rows3 className="h-3.5 w-3.5" />
-                  Compact
-                </Button>
-              </div>
               {isAtLimit ? (
                 <TooltipProvider>
                   <Tooltip>
@@ -1055,6 +1025,44 @@ function MonitoringListPage() {
         )}
 
         {/* Systems Grid */}
+        <div className="flex justify-end items-center gap-3">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium",
+                  isAtLimit ? "border-orange-500/50 bg-orange-500/10 text-orange-700 dark:text-orange-400" : "bg-muted"
+                )}>
+                  <Server className="h-3.5 w-3.5" />
+                  {systemCount} / {systemLimit}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Systems: {systemCount} of {systemLimit} used ({currentPlan} plan)</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+            <Button
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('cards')}
+              className="h-7 px-2"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('compact')}
+              className="h-7 px-2"
+            >
+              <LayoutList className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3">

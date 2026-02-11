@@ -211,10 +211,10 @@ class UptimeScheduler(
         val config = io.ktor.server.config.ApplicationConfig("application.conf")
         val baseUrl = config.property("email.frontendUrl").getString()
         val monitorUrl = "$baseUrl/uptime/${monitor.id}"
+        val prefsService = com.moneat.services.AlertNotificationPreferencesService()
         
         // Send email notifications
         try {
-            val prefsService = com.moneat.services.AlertNotificationPreferencesService()
             val emailRecipients = prefsService.getUsersWithChannelEnabled(
                 organizationId = monitor.organizationId,
                 alertSource = "UPTIME_MONITOR",
@@ -242,34 +242,58 @@ class UptimeScheduler(
         }
         
         // Send Slack notification
-        try {
-            slackService.sendUptimeAlert(
+        val slackEnabled = try {
+            prefsService.getUsersWithChannelEnabled(
                 organizationId = monitor.organizationId,
-                monitorName = monitor.name,
-                oldStatus = oldStatus,
-                newStatus = newStatus,
-                message = result.message,
-                monitorId = monitor.id,
-                baseUrl = baseUrl
-            )
+                alertSource = "UPTIME_MONITOR",
+                channel = "slack"
+            ).isNotEmpty()
         } catch (e: Exception) {
-            logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
+            logger.error(e) { "Failed to evaluate Slack notification preferences for uptime monitor" }
+            false
+        }
+        if (slackEnabled) {
+            try {
+                slackService.sendUptimeAlert(
+                    organizationId = monitor.organizationId,
+                    monitorName = monitor.name,
+                    oldStatus = oldStatus,
+                    newStatus = newStatus,
+                    message = result.message,
+                    monitorId = monitor.id,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
+            }
         }
         
         // Send Discord notification
-        try {
-            discordService.sendUptimeAlert(
+        val discordEnabled = try {
+            prefsService.getUsersWithChannelEnabled(
                 organizationId = monitor.organizationId,
-                monitorUrl = monitor.url ?: "N/A",
-                isDown = newStatus == "down",
-                statusCode = result.statusCode,
-                responseTime = result.responseTimeMs.toLong(),
-                errorMessage = if (result.message.isNotBlank()) result.message else null,
-                monitorId = monitor.id,
-                baseUrl = baseUrl
-            )
+                alertSource = "UPTIME_MONITOR",
+                channel = "discord"
+            ).isNotEmpty()
         } catch (e: Exception) {
-            logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
+            logger.error(e) { "Failed to evaluate Discord notification preferences for uptime monitor" }
+            false
+        }
+        if (discordEnabled) {
+            try {
+                discordService.sendUptimeAlert(
+                    organizationId = monitor.organizationId,
+                    monitorUrl = monitor.url ?: "N/A",
+                    isDown = newStatus == "down",
+                    statusCode = result.statusCode,
+                    responseTime = result.responseTimeMs.toLong(),
+                    errorMessage = if (result.message.isNotBlank()) result.message else null,
+                    monitorId = monitor.id,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
+            }
         }
         
         // Fire or resolve incident alert

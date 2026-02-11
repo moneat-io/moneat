@@ -2607,7 +2607,13 @@ function NotificationsTab() {
   const discordConfigured = useMemo(() => integrations.some(i => i.integrationType === 'discord' && i.enabled), [integrations])
 
   const updateAlertPrefMutation = useMutation({
-    mutationFn: ({ source, prefs }: { source: AlertSource, prefs: Partial<AlertNotificationPreference> }) =>
+    mutationFn: ({
+      source,
+      prefs,
+    }: {
+      source: AlertSource
+      prefs: Pick<AlertNotificationPreference, 'emailEnabled' | 'slackEnabled' | 'discordEnabled'>
+    }) =>
       api.updateAlertNotificationPreference(source, prefs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alertNotificationPreferences'] })
@@ -2731,7 +2737,16 @@ function NotificationsTab() {
           <div className="flex flex-col items-center gap-2 w-[50px]">
             <Switch
               checked={pref.emailEnabled}
-              onCheckedChange={(c) => updateAlertPrefMutation.mutate({ source, prefs: { emailEnabled: c } })}
+              onCheckedChange={(c) =>
+                updateAlertPrefMutation.mutate({
+                  source,
+                  prefs: {
+                    emailEnabled: c,
+                    slackEnabled: pref.slackEnabled,
+                    discordEnabled: pref.discordEnabled,
+                  },
+                })
+              }
               disabled={updateAlertPrefMutation.isPending}
             />
           </div>
@@ -2739,14 +2754,32 @@ function NotificationsTab() {
             <Switch
               checked={pref.slackEnabled}
               disabled={!slackConfigured || updateAlertPrefMutation.isPending}
-              onCheckedChange={(c) => updateAlertPrefMutation.mutate({ source, prefs: { slackEnabled: c } })}
+              onCheckedChange={(c) =>
+                updateAlertPrefMutation.mutate({
+                  source,
+                  prefs: {
+                    emailEnabled: pref.emailEnabled,
+                    slackEnabled: c,
+                    discordEnabled: pref.discordEnabled,
+                  },
+                })
+              }
             />
           </div>
           <div className="flex flex-col items-center gap-2 w-[50px]">
             <Switch
               checked={pref.discordEnabled}
               disabled={!discordConfigured || updateAlertPrefMutation.isPending}
-              onCheckedChange={(c) => updateAlertPrefMutation.mutate({ source, prefs: { discordEnabled: c } })}
+              onCheckedChange={(c) =>
+                updateAlertPrefMutation.mutate({
+                  source,
+                  prefs: {
+                    emailEnabled: pref.emailEnabled,
+                    slackEnabled: pref.slackEnabled,
+                    discordEnabled: c,
+                  },
+                })
+              }
             />
           </div>
         </div>

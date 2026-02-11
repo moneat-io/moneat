@@ -55,6 +55,16 @@ data class IngestResponse(
     val message: String? = null
 )
 
+@Serializable
+data class AgentLogIngestResponse(
+    val accepted: Int? = null,
+    @SerialName("system_id") val systemId: String? = null,
+    val error: String? = null,
+    val message: String? = null,
+    val reason: String? = null,
+    val usage: BillingUsageResponse? = null
+)
+
 // Dashboard-facing models
 @Serializable
 data class SystemResponse(

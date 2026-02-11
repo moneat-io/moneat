@@ -293,15 +293,14 @@ interface NotificationPreferences {
 export type AlertSource = 'SYSTEM_ALERT' | 'SYSTEM_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT'
 
 export interface AlertNotificationPreference {
-  id: number
-  userId: number
-  organizationId: number
   alertSource: AlertSource
   emailEnabled: boolean
   slackEnabled: boolean
   discordEnabled: boolean
-  createdAt: string
-  updatedAt: string
+}
+
+interface AlertNotificationPreferencesResponse {
+  preferences: AlertNotificationPreference[]
 }
 
 interface ReplayTimelineResponse {
@@ -2051,12 +2050,15 @@ class ApiClient {
 
   // Unified Alert Notification Preferences
   async getAlertNotificationPreferences(): Promise<AlertNotificationPreference[]> {
-    return this.request<AlertNotificationPreference[]>(`${API_BASE}/alert-notification-preferences`)
+    const response = await this.request<AlertNotificationPreferencesResponse>(
+      `${API_BASE}/alert-notification-preferences`
+    )
+    return response.preferences ?? []
   }
 
   async updateAlertNotificationPreference(
     alertSource: AlertSource,
-    preferences: { emailEnabled?: boolean; slackEnabled?: boolean; discordEnabled?: boolean }
+    preferences: { emailEnabled: boolean; slackEnabled: boolean; discordEnabled: boolean }
   ): Promise<AlertNotificationPreference> {
     return this.request<AlertNotificationPreference>(`${API_BASE}/alert-notification-preferences/${alertSource}`, {
       method: 'PUT',

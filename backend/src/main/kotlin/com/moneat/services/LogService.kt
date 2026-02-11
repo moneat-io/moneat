@@ -155,13 +155,16 @@ class LogService {
     suspend fun queryLogs(projectId: Long, request: LogQueryRequest): LogQueryResponse {
         val limit = request.limit.coerceIn(1, 500)
         val conditions = mutableListOf<String>()
-        
+
+        val totalCountFilter = buildScopeFilter(projectId, request.systemId) ?: return LogQueryResponse(
+            logs = emptyList(),
+            nextCursor = null,
+            hasMore = false,
+            totalCount = 0L
+        )
+
         // Support filtering by either system_id or project_id
-        if (!request.systemId.isNullOrBlank()) {
-            conditions += "toString(system_id) = '${escapeSql(request.systemId)}'"
-        } else {
-            conditions += "project_id = $projectId"
-        }
+        conditions += totalCountFilter
 
         val fromMs = parseTimeToMillis(request.from)
         if (fromMs != null) {
@@ -240,7 +243,7 @@ class LogService {
                 toJSONString(tags) AS tags,
                 toJSONString(resource_attributes) AS resource_attributes,
                 toUnixTimestamp64Milli(timestamp) AS timestamp_ms,
-                toString(system_id) AS system_id
+                toString(system_id) AS system_id_text
             FROM $clickhouseDb.logs
             WHERE $whereClause
             ORDER BY timestamp DESC, log_id DESC
@@ -261,13 +264,7 @@ class LogService {
             if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
         }
 
-        // Query total count - use appropriate filter
-        val totalCountFilter = if (!request.systemId.isNullOrBlank()) {
-            "toString(system_id) = '${escapeSql(request.systemId)}'"
-        } else {
-            "project_id = $projectId"
-        }
-        
+        // Query total count - use scope filter
         val totalCountQuery = """
             SELECT count() as count
             FROM $clickhouseDb.logs
@@ -406,7 +403,8 @@ class LogService {
                 try {
                     val obj = json.parseToJsonElement(line).jsonObject
                     val timestampMs = obj["timestamp_ms"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
-                    val systemId = obj["system_id"]?.jsonPrimitive?.contentOrNull
+                    val systemId = obj["system_id_text"]?.jsonPrimitive?.contentOrNull
+                        ?: obj["system_id"]?.jsonPrimitive?.contentOrNull
                     val log = LogEntryResponse(
                         logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                         timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
@@ -603,8 +601,8 @@ class LogService {
                         source = "otlp",
                         traceId = record["traceId"]?.jsonPrimitive?.contentOrNull,
                         spanId = record["spanId"]?.jsonPrimitive?.contentOrNull,
-                        tags = attributes,
-                        resourceAttributes = resourceAttrs
+                        tags = HashMap(attributes),
+                        resourceAttributes = HashMap(resourceAttrs)
                     )
                     entries += entry
                 }
@@ -653,6 +651,21 @@ class LogService {
         }
     }
 
+    private fun buildScopeFilter(projectId: Long, systemId: String?): String? {
+        val rawSystemId = systemId?.trim()
+        if (rawSystemId.isNullOrEmpty()) {
+            return "project_id = $projectId"
+        }
+
+        val parsed = try {
+            UUID.fromString(rawSystemId)
+        } catch (_: Exception) {
+            return null
+        }
+
+        return "system_id = toUUID('${parsed}')"
+    }
+
     private fun resolveTimestampMs(timestamp: String?, timestampMs: Long?): Long {
         return timestampMs
             ?: parseTimeToMillis(timestamp)
@@ -680,8 +693,8 @@ class LogService {
         }
     }
 
-    private fun sanitizeMap(input: Map<String, String>): Map<String, String> {
-        if (input.isEmpty()) return emptyMap()
+    private fun sanitizeMap(input: Map<String, String>?): Map<String, String> {
+        if (input == null || input.isEmpty()) return emptyMap()
         return input
             .mapNotNull { (rawKey, rawValue) ->
                 val key = rawKey.trim().take(128)
@@ -695,8 +708,8 @@ class LogService {
         return if (value.length <= maxLength) value else value.take(maxLength)
     }
 
-    private fun mapToSqlMap(value: Map<String, String>): String {
-        if (value.isEmpty()) return "map()"
+    private fun mapToSqlMap(value: Map<String, String>?): String {
+        if (value == null || value.isEmpty()) return "map()"
         val pairs = value.entries
             .sortedBy { it.key }
             .joinToString(", ") { (key, mapValue) ->

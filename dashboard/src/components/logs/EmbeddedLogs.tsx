@@ -3,6 +3,7 @@ import {useMemo, useState} from 'react'
 import {api, type LogEntry} from '@/lib/api'
 import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
+import {ContainerLogSetupGuide} from '@/components/logs/ContainerLogSetupGuide'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
 import {ChevronLeft, ChevronRight, Loader2, TerminalSquare} from 'lucide-react'
@@ -56,6 +57,7 @@ export function EmbeddedLogs({
   tags,
   maxHeight = '400px',
   showHeader = true,
+  compact = false,
   className,
 }: EmbeddedLogsProps) {
   const [cursor, setCursor] = useState<string | null>(null)
@@ -137,6 +139,8 @@ export function EmbeddedLogs({
   })
 
   const logs = logPage?.logs ?? []
+  const showContainerLogSetupGuide =
+    compact && Boolean(systemId && containerName) && !centerTimestamp
 
   const handleSelectLog = (log: LogEntry) => {
     setSelectedLog(log)
@@ -233,16 +237,22 @@ export function EmbeddedLogs({
             </div>
           </div>
         ) : logs.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <TerminalSquare className="mx-auto h-8 w-8 text-muted-foreground/30" />
-              <p className="mt-2 text-sm font-medium text-muted-foreground">No logs found</p>
-              {centerTimestamp && (
-                <p className="mt-1 text-xs text-muted-foreground/70">
-                  No logs in the ±{contextMinutes} minute window
-                </p>
-              )}
-            </div>
+          <div
+            className={cn('py-12', showContainerLogSetupGuide ? 'px-4' : 'flex items-center justify-center')}
+          >
+            {showContainerLogSetupGuide ? (
+              <ContainerLogSetupGuide compact />
+            ) : (
+              <div className="text-center">
+                <TerminalSquare className="mx-auto h-8 w-8 text-muted-foreground/30" />
+                <p className="mt-2 text-sm font-medium text-muted-foreground">No logs found</p>
+                {centerTimestamp && (
+                  <p className="mt-1 text-xs text-muted-foreground/70">
+                    No logs in the ±{contextMinutes} minute window
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <LogTable
