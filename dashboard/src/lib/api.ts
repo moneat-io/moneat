@@ -2184,6 +2184,41 @@ class ApiClient {
     })
   }
 
+  // Discord Integration Methods
+
+  async startDiscordOAuth() {
+    return this.request<SlackOAuthStartResponse>(`${API_BASE}/integrations/discord/oauth/start`)
+  }
+
+  async getDiscordChannels() {
+    return this.request<SlackChannelList>(`${API_BASE}/integrations/discord/channels`)
+  }
+
+  async updateDiscordChannel(channelId: string, channelName: string) {
+    return this.request<void>(`${API_BASE}/integrations/discord/channel`, {
+      method: 'PUT',
+      body: JSON.stringify({ channelId, channelName }),
+    })
+  }
+
+  async toggleDiscordIntegration() {
+    return this.request<void>(`${API_BASE}/integrations/discord/toggle`, {
+      method: 'PUT',
+    })
+  }
+
+  async deleteDiscordIntegration() {
+    return this.request<void>(`${API_BASE}/integrations/discord`, {
+      method: 'DELETE',
+    })
+  }
+
+  async testDiscordIntegration() {
+    return this.request<TestIntegrationResponse>(`${API_BASE}/integrations/discord/test`, {
+      method: 'POST',
+    })
+  }
+
   // Incident Provider Methods
 
   async getIncidentProviders(): Promise<IncidentProviderConfig[]> {

@@ -21,6 +21,7 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val status_page_custom_domain_enabled = bool("status_page_custom_domain_enabled").default(true)
     val session_replay_enabled = bool("session_replay_enabled").default(true)
     val slack_enabled = bool("slack_enabled").default(false)
+    val discord_enabled = bool("discord_enabled").default(false)
     val incident_io_enabled = bool("incident_io_enabled").default(false)
     val saml_enabled = bool("saml_enabled").default(false)
     val oidc_enabled = bool("oidc_enabled").default(false)
@@ -97,6 +98,7 @@ data class PricingTierConfigResponse(
     val statusPageCustomDomainEnabled: Boolean,
     val sessionReplayEnabled: Boolean,
     val slackEnabled: Boolean,
+    val discordEnabled: Boolean,
     val incidentIoEnabled: Boolean,
     val samlEnabled: Boolean,
     val oidcEnabled: Boolean,
@@ -227,6 +229,7 @@ data class CreateTierVersionRequest(
     val statusPageCustomDomainEnabled: Boolean? = null,
     val sessionReplayEnabled: Boolean? = null,
     val slackEnabled: Boolean? = null,
+    val discordEnabled: Boolean? = null,
     val incidentIoEnabled: Boolean? = null,
     val samlEnabled: Boolean? = null,
     val oidcEnabled: Boolean? = null,

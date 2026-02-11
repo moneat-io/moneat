@@ -65,6 +65,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
   })
 
   const slackEnabled = integrations.some(i => i.integrationType === 'slack' && i.enabled)
+  const discordEnabled = integrations.some(i => i.integrationType === 'discord' && i.enabled)
 
   const activeScope: AlertScope = alertConfig?.scope ?? 'global'
 
@@ -566,11 +567,16 @@ export function AlertsTab({systemId}: AlertsTabProps) {
               </div>
               <div className="space-y-1">
                 <h4 className="text-sm font-medium">
-                  {slackEnabled ? 'Email & Slack Notifications' : 'Email Notifications'}
+                  {slackEnabled && discordEnabled ? 'Email, Slack & Discord Notifications' : 
+                   slackEnabled ? 'Email & Slack Notifications' :
+                   discordEnabled ? 'Email & Discord Notifications' : 
+                   'Email Notifications'}
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Alert notifications are sent to all members of your organization via email
-                  {slackEnabled && ' and to your configured Slack channel'}. 
+                  {slackEnabled && discordEnabled && ', to your configured Slack channel, and to your configured Discord channel'}
+                  {slackEnabled && !discordEnabled && ' and to your configured Slack channel'}
+                  {!slackEnabled && discordEnabled && ' and to your configured Discord channel'}. 
                   Alerts are throttled to prevent spam (minimum 15 minutes between notifications
                   for the same alert).
                 </p>

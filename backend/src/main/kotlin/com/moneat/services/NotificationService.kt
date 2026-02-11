@@ -27,6 +27,7 @@ class NotificationService(private val emailService: EmailService) {
     private val frontendUrl = config.property("email.frontendUrl").getString()
     private val json = Json { ignoreUnknownKeys = true }
     private val slackService = SlackService()
+    private val discordService = DiscordService()
     private val incidentService = com.moneat.services.incident.IncidentService()
     
     // Rate limiting: track last alert time per (user, project)
@@ -156,6 +157,23 @@ class NotificationService(private val emailService: EmailService) {
                 )
             } catch (e: Exception) {
                 logger.error(e) { "Failed to send Slack notification for new issue" }
+            }
+            
+            // Send Discord notification
+            try {
+                val discordIssueUrl = "$frontendUrl/projects/$projectId/issues/$issueId"
+                discordService.sendErrorAlert(
+                    organizationId = orgId,
+                    projectName = projectName,
+                    issueTitle = emailData.issueTitle,
+                    level = emailData.issueLevel,
+                    firstSeen = emailData.timestamp,
+                    eventCount = 1,
+                    userCount = 0,
+                    issueUrl = discordIssueUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Discord notification for new issue" }
             }
             
             // Fire incident alert for error

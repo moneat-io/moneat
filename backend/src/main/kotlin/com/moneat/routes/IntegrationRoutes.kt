@@ -3,6 +3,7 @@ package com.moneat.routes
 import com.moneat.config.EnvConfig
 import com.moneat.models.Memberships
 import com.moneat.models.OrganizationIntegrations
+import com.moneat.services.DiscordService
 import com.moneat.services.SlackService
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -131,6 +132,7 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
 fun Route.integrationRoutes() {
     
     val slackService = SlackService()
+    val discordService = DiscordService()
     
     route("/integrations") {
         
@@ -396,12 +398,217 @@ fun Route.integrationRoutes() {
                     TestIntegrationResponse(success, message)
                 )
             }
+            
+            // Discord OAuth Start
+            get("/discord/oauth/start") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    
+                    val organizationId = transaction {
+                        Memberships
+                            .selectAll()
+                            .where { Memberships.user_id eq userId }
+                            .firstOrNull()
+                            ?.get(Memberships.organization_id)
+                    }
+                    
+                    if (organizationId == null) {
+                        return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                    }
+                    
+                    val clientId = EnvConfig.get("DISCORD_CLIENT_ID")
+                        ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client ID not configured"))
+                    
+                    val redirectUri = EnvConfig.get("DISCORD_REDIRECT_URI")
+                        ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord redirect URI not configured"))
+                    
+                    // Discord permissions: Send Messages (0x800), Embed Links (0x4000), Read Message History (0x10000), View Channels (0x400)
+                    val permissions = 85504 // 0x14C00
+                    val scopes = "bot+guilds"
+                    
+                    val state = generateSecureState(userId, organizationId)
+                    
+                    val authUrl = "https://discord.com/oauth2/authorize?" +
+                        "client_id=$clientId&" +
+                        "permissions=$permissions&" +
+                        "scope=$scopes&" +
+                        "redirect_uri=${URLEncoder.encode(redirectUri, "UTF-8")}&" +
+                        "response_type=code&" +
+                        "state=$state"
+                    
+                    call.respond(SlackOAuthStartResponse(authUrl))
+                } catch (e: Exception) {
+                    logger.error("Error starting Discord OAuth", e)
+                    call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+                }
+            }
+            
+            // Get Discord channels
+            get("/discord/channels") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val organizationId = transaction {
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                
+                val guildId = transaction {
+                    OrganizationIntegrations
+                        .selectAll()
+                        .where {
+                            (OrganizationIntegrations.organization_id eq organizationId) and
+                            (OrganizationIntegrations.integration_type eq "discord")
+                        }
+                        .singleOrNull()
+                        ?.get(OrganizationIntegrations.team_id)
+                }
+                
+                if (guildId == null) {
+                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("Discord not configured"))
+                }
+                
+                try {
+                    val channels = discordService.listChannels(guildId).map { SlackChannel(it.id, it.name) }
+                    call.respond(SlackChannelList(channels))
+                } catch (e: Exception) {
+                    logger.error("Error fetching Discord channels", e)
+                    call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+                }
+            }
+            
+            // Update Discord channel
+            put("/discord/channel") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val selection = call.receive<SlackChannelSelection>()
+                
+                val organizationId = transaction {
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                
+                val updated = transaction {
+                    OrganizationIntegrations.update({
+                        (OrganizationIntegrations.organization_id eq organizationId) and
+                        (OrganizationIntegrations.integration_type eq "discord")
+                    }) {
+                        it[channel_id] = selection.channelId
+                        it[channel_name] = selection.channelName
+                        it[updated_at] = Clock.System.now()
+                    }
+                }
+                
+                if (updated > 0) {
+                    logger.info("Discord channel updated for organization $organizationId")
+                    call.respond(HttpStatusCode.OK, MessageResponse("Channel updated successfully"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, MessageResponse("Integration not found"))
+                }
+            }
+            
+            // Toggle Discord integration
+            put("/discord/toggle") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val organizationId = transaction {
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                
+                val updated = transaction {
+                    val current = OrganizationIntegrations
+                        .selectAll()
+                        .where {
+                            (OrganizationIntegrations.organization_id eq organizationId) and
+                            (OrganizationIntegrations.integration_type eq "discord")
+                        }
+                        .singleOrNull()
+                        ?.get(OrganizationIntegrations.enabled) ?: false
+                    
+                    OrganizationIntegrations.update({
+                        (OrganizationIntegrations.organization_id eq organizationId) and
+                        (OrganizationIntegrations.integration_type eq "discord")
+                    }) {
+                        it[enabled] = !current
+                        it[updated_at] = Clock.System.now()
+                    }
+                }
+                
+                if (updated > 0) {
+                    logger.info("Discord integration toggled for organization $organizationId")
+                    call.respond(HttpStatusCode.OK, MessageResponse("Integration toggled successfully"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, MessageResponse("Integration not found"))
+                }
+            }
+            
+            // Delete Discord integration
+            delete("/discord") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val organizationId = transaction {
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                } ?: return@delete call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                
+                val deleted = transaction {
+                    OrganizationIntegrations.deleteWhere {
+                        (organization_id eq organizationId) and (integration_type eq "discord")
+                    }
+                }
+                
+                if (deleted > 0) {
+                    logger.info("Discord integration deleted for organization $organizationId")
+                    call.respond(HttpStatusCode.OK, MessageResponse("Integration deleted successfully"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, MessageResponse("Integration not found"))
+                }
+            }
+            
+            // Test Discord integration
+            post("/discord/test") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val organizationId = transaction {
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                
+                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val (success, message) = discordService.testConnection(organizationId, frontendUrl)
+                
+                call.respond(
+                    if (success) HttpStatusCode.OK else HttpStatusCode.BadRequest,
+                    TestIntegrationResponse(success, message ?: "Success")
+                )
+            }
         }
 }
 
 // Unauthenticated routes for OAuth callbacks
 fun Route.integrationCallbackRoutes() {
     val slackService = SlackService()
+    val discordService = DiscordService()
     
     route("/integrations") {
         // Slack OAuth callback (no auth required - called by Slack)
@@ -489,6 +696,88 @@ fun Route.integrationCallbackRoutes() {
                 logger.error("Slack OAuth failed: ${oauthResponse.error}")
                 val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&slack=error&message=${URLEncoder.encode(oauthResponse.error ?: "Unknown error", "UTF-8")}")
+            }
+        }
+        
+        // Discord OAuth callback
+        get("/discord/oauth/callback") {
+            val code = call.request.queryParameters["code"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing code parameter"))
+            
+            val state = call.request.queryParameters["state"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing state parameter"))
+            
+            val (userId, organizationId) = validateAndDecodeState(state)
+                ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Invalid or expired state parameter"))
+            
+            val hasAccess = transaction {
+                Memberships.selectAll()
+                    .where {
+                        (Memberships.user_id eq userId) and
+                        (Memberships.organization_id eq organizationId)
+                    }
+                    .firstOrNull() != null
+            }
+            
+            if (!hasAccess) {
+                return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
+            }
+            
+            val clientId = EnvConfig.get("DISCORD_CLIENT_ID")
+                ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client ID not configured"))
+            val clientSecret = EnvConfig.get("DISCORD_CLIENT_SECRET")
+                ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client secret not configured"))
+            val redirectUri = EnvConfig.get("DISCORD_REDIRECT_URI")
+                ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord redirect URI not configured"))
+            
+            // Exchange code for access token
+            val oauthResponse = discordService.exchangeOAuthCode(code, clientId, clientSecret, redirectUri)
+            
+            if (oauthResponse.access_token != null && oauthResponse.guild != null) {
+                val now = Clock.System.now()
+                
+                transaction {
+                    val existing = OrganizationIntegrations
+                        .selectAll()
+                        .where {
+                            (OrganizationIntegrations.organization_id eq organizationId) and
+                            (OrganizationIntegrations.integration_type eq "discord")
+                        }
+                        .singleOrNull()
+                    
+                    if (existing != null) {
+                        OrganizationIntegrations.update({
+                            (OrganizationIntegrations.organization_id eq organizationId) and
+                            (OrganizationIntegrations.integration_type eq "discord")
+                        }) {
+                            it[access_token] = oauthResponse.access_token
+                            it[team_id] = oauthResponse.guild.id
+                            it[team_name] = oauthResponse.guild.name
+                            it[enabled] = true
+                            it[updated_at] = now
+                        }
+                    } else {
+                        OrganizationIntegrations.insert {
+                            it[organization_id] = organizationId
+                            it[integration_type] = "discord"
+                            it[access_token] = oauthResponse.access_token
+                            it[team_id] = oauthResponse.guild.id
+                            it[team_name] = oauthResponse.guild.name
+                            it[enabled] = true
+                            it[created_at] = now
+                            it[updated_at] = now
+                        }
+                    }
+                }
+                
+                logger.info("Discord OAuth completed for organization $organizationId")
+                
+                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                call.respondRedirect("$frontendUrl/settings?tab=integrations&discord=connected")
+            } else {
+                logger.error("Discord OAuth failed: ${oauthResponse.error}")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                call.respondRedirect("$frontendUrl/settings?tab=integrations&discord=error&message=${URLEncoder.encode(oauthResponse.error ?: "Unknown error", "UTF-8")}")
             }
         }
     }

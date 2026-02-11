@@ -16,6 +16,7 @@ class UptimeScheduler(
 ) {
     
     private val slackService = SlackService()
+    private val discordService = DiscordService()
     private val incidentService = com.moneat.services.incident.IncidentService()
     private var schedulerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -224,6 +225,25 @@ class UptimeScheduler(
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
+        }
+        
+        // Send Discord notification
+        try {
+            val config = io.ktor.server.config.ApplicationConfig("application.conf")
+            val baseUrl = config.property("email.frontendUrl").getString()
+            
+            discordService.sendUptimeAlert(
+                organizationId = monitor.organizationId,
+                monitorUrl = monitor.url ?: "N/A",
+                isDown = newStatus == "down",
+                statusCode = result.statusCode,
+                responseTime = result.responseTimeMs.toLong(),
+                errorMessage = if (result.message.isNotBlank()) result.message else null,
+                monitorId = monitor.id,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
         }
         
         // Fire or resolve incident alert

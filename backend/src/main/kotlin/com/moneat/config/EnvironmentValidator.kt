@@ -58,6 +58,15 @@ class EnvironmentValidator {
             validateRequired("SLACK_REDIRECT_URI", "Slack integration is enabled", errors)
         }
         
+        // Validate Discord configuration when enabled
+        val discordEnabled = getConfigValue("DISCORD_ENABLED")?.toBoolean() ?: true
+        if (discordEnabled) {
+            validateRequired("DISCORD_CLIENT_ID", "Discord integration is enabled", errors)
+            validateRequired("DISCORD_CLIENT_SECRET", "Discord integration is enabled", errors)
+            validateRequired("DISCORD_REDIRECT_URI", "Discord integration is enabled", errors)
+            validateRequired("DISCORD_BOT_TOKEN", "Discord integration is enabled", errors)
+        }
+        
         // Validate Stripe configuration when enabled
         val stripeEnabled = getConfigValue("STRIPE_ENABLED")?.toBoolean() ?: false
         if (stripeEnabled) {

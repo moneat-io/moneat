@@ -28,6 +28,7 @@ class MonitorAlertService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val emailService = EmailService()
     private val slackService = SlackService()
+    private val discordService = DiscordService()
     private val incidentService = com.moneat.services.incident.IncidentService()
     
     private var evaluationJob: Job? = null
@@ -474,6 +475,23 @@ class MonitorAlertService {
             logger.error(e) { "Failed to send Slack notification for system alert" }
         }
         
+        // Send Discord notification
+        try {
+            val baseUrl = config.property("email.frontendUrl").getString()
+            discordService.sendSystemAlert(
+                organizationId = organizationId,
+                systemName = systemName,
+                metric = metricLabel,
+                condition = alert.condition,
+                threshold = formattedThreshold,
+                currentValue = formattedValue,
+                systemId = alert.systemId,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Discord notification for system alert" }
+        }
+        
         // Fire incident alert
         try {
             val incidentSeverity = transaction {
@@ -648,6 +666,20 @@ class MonitorAlertService {
             logger.error(e) { "Failed to send Slack notification for system down" }
         }
         
+        // Send Discord notification
+        try {
+            val baseUrl = config.property("email.frontendUrl").getString()
+            discordService.sendSystemDown(
+                organizationId = organizationId,
+                systemName = systemName,
+                lastSeen = lastSeenText,
+                systemId = systemId,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Discord notification for system down" }
+        }
+        
         // Fire incident alert for system down
         try {
             val frontendUrl = config.property("email.frontendUrl").getString()
@@ -743,6 +775,19 @@ class MonitorAlertService {
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to send Slack notification for system up" }
+        }
+        
+        // Send Discord notification
+        try {
+            val baseUrl = config.property("email.frontendUrl").getString()
+            discordService.sendSystemUp(
+                organizationId = organizationId,
+                systemName = systemName,
+                systemId = systemId,
+                baseUrl = baseUrl
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to send Discord notification for system up" }
         }
         
         // Resolve incident alert for system up

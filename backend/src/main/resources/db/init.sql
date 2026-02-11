@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS pricing_tier_configs (
     status_page_custom_domain_enabled BOOLEAN NOT NULL DEFAULT true,
     session_replay_enabled BOOLEAN NOT NULL DEFAULT true,
     slack_enabled BOOLEAN NOT NULL DEFAULT false,
+    discord_enabled BOOLEAN NOT NULL DEFAULT false,
     incident_io_enabled BOOLEAN NOT NULL DEFAULT false,
     saml_enabled BOOLEAN NOT NULL DEFAULT false,
     oidc_enabled BOOLEAN NOT NULL DEFAULT false,
@@ -282,6 +283,7 @@ INSERT INTO pricing_tier_configs (
     status_page_custom_domain_enabled,
     session_replay_enabled,
     slack_enabled,
+    discord_enabled,
     incident_io_enabled,
     saml_enabled,
     oidc_enabled,
@@ -305,22 +307,22 @@ INSERT INTO pricing_tier_configs (
 ) VALUES
     (
         'FREE', 1, 10000, 10000, 0, 0, 0, 1073741824, 3, 3,
-        true, true, true, true, true, false, false, false, false, false,
+        true, true, true, true, true, true, false, false, false, false, false,
         3, 3, 60, 0, 0, 0, false, 0, 0, NULL, NULL, NULL, NULL, true
     ),
     (
         'PRO', 1, 500000, 500000, 0, 0, 0, 53687091200, 30, 30,
-        true, true, true, true, true, false, false, false, false, false,
+        true, true, true, true, true, true, false, false, false, false, false,
         NULL, 10, 30, 2900, 28800, 14, true, 400000, 40, NULL, NULL, NULL, NULL, true
     ),
     (
         'TEAM', 1, 5000000, 5000000, 0, 0, 0, 214748364800, 30, 30,
-        true, true, true, true, true, true, true, false, false, false,
+        true, true, true, true, true, true, true, true, false, false, false,
         NULL, 25, 10, 7900, 79200, 14, true, 400000, 40, NULL, NULL, NULL, NULL, true
     ),
     (
         'BUSINESS', 1, 9223372036854775807, 9223372036854775807, 0, 0, 0, 1099511627776, 90, 90,
-        true, true, true, true, true, true, true, true, true, true,
+        true, true, true, true, true, true, true, true, true, true, true,
         NULL, 2147483647, 10, 19900, 199200, 14, true, 400000, 40, NULL, NULL, NULL, NULL, true
     )
 ON CONFLICT (tier_name, version) DO NOTHING;
