@@ -174,9 +174,17 @@ function AdminNotificationsPage() {
         result,
       })
       if (result.success) {
+        const sentChannels = [
+          result.emailSent ? 'Email' : null,
+          result.slackSent ? 'Slack' : null,
+          result.discordSent ? 'Discord' : null,
+        ].filter(Boolean) as string[]
         toast({
           title: 'Test notification sent!',
-          description: `${result.emailSent ? 'Email' : ''} ${result.emailSent && result.slackSent ? 'and' : ''} ${result.slackSent ? 'Slack' : ''} notification sent successfully.`,
+          description:
+            sentChannels.length > 0
+              ? `${sentChannels.join(', ')} notification${sentChannels.length > 1 ? 's' : ''} sent successfully.`
+              : 'Notification sent successfully.',
         })
       }
     },
@@ -199,7 +207,7 @@ function AdminNotificationsPage() {
     <div className="space-y-8">
       <SectionHeader
         title="Test Notifications"
-        description="Send test notifications to verify your email and Slack integrations are working correctly."
+        description="Send test notifications to verify your email, Slack, and Discord integrations are working correctly."
       />
 
       {/* Test Email Configuration */}
@@ -243,7 +251,7 @@ function AdminNotificationsPage() {
         <Bell className="h-4 w-4" />
         <AlertDescription>
           Test notifications are clearly marked as <strong>[TEST]</strong> to avoid confusion. 
-          Slack tests require a configured integration in Settings → Integrations.
+          Slack and Discord tests require configured integrations in Settings → Integrations.
         </AlertDescription>
       </Alert>
 
@@ -285,7 +293,12 @@ function AdminNotificationsPage() {
       <div className="grid grid-cols-1 gap-4">
         {notificationTypes.map((notif) => {
           const Icon = notif.icon
-          const supportedCount = [notif.supportsEmail, notif.supportsSlack, notif.supportsDiscord].filter(Boolean).length
+          const combinedChannel: Channel | null =
+            notif.supportsEmail && notif.supportsSlack && notif.supportsDiscord
+              ? 'all'
+              : notif.supportsEmail && notif.supportsSlack
+                ? 'both'
+                : null
           
           return (
             <Card key={notif.type}>
@@ -359,14 +372,14 @@ function AdminNotificationsPage() {
                       Test Discord
                     </Button>
                   )}
-                  {supportedCount > 1 && (
+                  {combinedChannel && (
                     <Button
                       size="sm"
-                      onClick={() => handleTest(notif.type, 'all')}
+                      onClick={() => handleTest(notif.type, combinedChannel)}
                       disabled={testMutation.isPending}
                     >
                       <Bell className="h-4 w-4 mr-2" />
-                      Test All
+                      {combinedChannel === 'all' ? 'Test All' : 'Test Both'}
                     </Button>
                   )}
                 </div>

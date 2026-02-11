@@ -14,6 +14,38 @@ import {
 import {Button} from '@/components/ui/button'
 
 // ────────────────────────────────────────────────────────────────
+// Logos
+// ────────────────────────────────────────────────────────────────
+
+const SlackLogo = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+    <path fill="#E01E5A" d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.52 2.52 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.522 2.522 0 0 1 2.521 2.52v6.313A2.52 2.52 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
+    <path fill="#36C5F0" d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.52 2.52 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52h-2.521zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.522 2.522 0 0 1-2.521 2.521H2.522A2.52 2.52 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
+    <path fill="#2EB67D" d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.52 2.52 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.522 2.522 0 0 1-2.52-2.521V2.522A2.52 2.52 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
+    <path fill="#ECB22E" d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.52 2.52 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.52 2.52 0 0 1 2.52-2.52h6.313A2.52 2.52 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+  </svg>
+)
+
+const DiscordLogo = ({className}: {className?: string}) => (
+  <svg role="img" viewBox="0 0 24 24" fill="#5865F2" className={className} xmlns="http://www.w3.org/2000/svg">
+    <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/>
+  </svg>
+)
+
+const IncidentIoLogo = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 163" fill="none" className={className}>
+    <g clipPath="url(#clip0_1361_12561)">
+      <path fillRule="evenodd" clipRule="evenodd" d="M48.7336 139.642V163C20.7585 156.323 0 131.711 0 102.372C0 85.4557 7.15792 72.0354 18.1053 58.8703C27.1831 47.9534 49.5985 19.0426 56.6543 3.08954C58.3673 -0.783473 62.7348 -0.633805 64.6182 1.44721C70.6432 8.10421 78.0694 22.6432 80.4983 39.135C80.9932 42.4953 81.1969 45.2388 81.3587 47.4184C81.706 52.0954 81.8604 54.1748 84.2854 54.1748C88.0955 54.1748 90.588 48.3977 91.1358 42.4345C91.4869 38.6136 95.2774 37.3346 97.8914 38.6136C110.463 44.7644 123.292 74.0426 126.393 88.4102C127.366 92.9158 128 97.5719 128 102.372C128 131.646 107.335 156.214 79.4537 162.955V139.642H48.7336ZM64.0002 130.333C73.8316 130.333 81.8016 122.789 81.8016 113.483C81.8016 98.6407 70.8577 88.0345 65.4048 84.8105C65.0364 84.5928 64.8523 84.4839 64.3512 84.4974C63.9843 84.5073 63.4429 84.7369 63.181 84.9935C62.8232 85.3441 62.7283 85.743 62.5387 86.5409C61.5721 90.6065 58.5292 93.5054 55.327 96.556C50.9141 100.76 46.1988 105.252 46.1988 113.483C46.1988 122.789 54.1688 130.333 64.0002 130.333Z" fill="#F25533"/>
+    </g>
+    <defs>
+      <clipPath id="clip0_1361_12561">
+        <rect width="128" height="163" fill="white"/>
+      </clipPath>
+    </defs>
+  </svg>
+)
+
+// ────────────────────────────────────────────────────────────────
 // Screenshot frame — browser-chrome wrapper for 16:9 screenshots
 // Replace children with <img src="..." className="w-full h-full object-cover" />
 // when real screenshots are available.
@@ -68,6 +100,7 @@ interface Feature {
   iconBg: string
   iconColor: string
   mock: React.ReactNode
+  noFrame?: boolean
 }
 
 const primaryFeatures: Feature[] = [
@@ -138,25 +171,36 @@ const secondaryFeatures: Feature[] = [
     icon: Bell,
     title: 'Alerting & Integrations',
     description:
-      'Multi-channel alerts with Slack and incident.io integrations. Route alerts to the right teams and create incidents automatically.',
+      'Multi-channel alerts with Slack, Discord, and incident.io integrations. Route alerts to the right teams and create incidents automatically.',
     gradient: 'from-rose-500 to-pink-400',
     iconBg: 'bg-rose-500/10',
     iconColor: 'text-rose-400',
+    noFrame: true,
     mock: (
-      <div className="flex gap-4 p-6 h-full items-center justify-center">
-        <div className="flex-1 rounded-lg overflow-hidden shadow-xl ring-1 ring-white/10 hover:ring-white/20 transition-all hover:scale-[1.02]">
-          <img 
-            src="/screenshots/slack-integration.png" 
-            alt="Slack integration tile showing connection setup" 
-            className="w-full h-full object-cover"
-          />
+      <div className="relative w-full rounded-xl overflow-hidden bg-[#0B1120] border border-white/10">
+        <div className="absolute inset-0" 
+             style={{
+               backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)',
+               backgroundSize: '24px 24px'
+             }} 
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120] via-transparent to-transparent" />
+        
+        {/* Header spacer to match ScreenshotFrame height */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
+          <div className="h-4 opacity-0" />
         </div>
-        <div className="flex-1 rounded-lg overflow-hidden shadow-xl ring-1 ring-white/10 hover:ring-white/20 transition-all hover:scale-[1.02]">
-          <img 
-            src="/screenshots/incident-io-integration.png" 
-            alt="Incident.io integration tile showing incident creation setup" 
-            className="w-full h-full object-cover"
-          />
+
+        <div className="aspect-video relative flex items-center justify-center gap-10">
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm hover:border-rose-500/50 hover:bg-rose-500/10 transition-colors duration-300">
+            <SlackLogo className="h-14 w-14" />
+          </div>
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm hover:border-indigo-500/50 hover:bg-indigo-500/10 transition-colors duration-300">
+            <DiscordLogo className="h-14 w-14" />
+          </div>
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm hover:border-orange-500/50 hover:bg-orange-500/10 transition-colors duration-300">
+            <IncidentIoLogo className="h-14 w-14" />
+          </div>
         </div>
       </div>
     ),
@@ -364,9 +408,13 @@ export function VariantA() {
           <div className="grid sm:grid-cols-2 gap-10">
             {secondaryFeatures.map((feature) => (
               <div key={feature.title} className="group">
-                <ScreenshotFrame gradient={feature.gradient} className="mb-6">
-                  {feature.mock}
-                </ScreenshotFrame>
+                {feature.noFrame ? (
+                  <div className="mb-6">{feature.mock}</div>
+                ) : (
+                  <ScreenshotFrame gradient={feature.gradient} className="mb-6">
+                    {feature.mock}
+                  </ScreenshotFrame>
+                )}
                 <div className="flex items-start gap-4 px-1">
                   <div
                     className={`shrink-0 rounded-lg ${feature.iconBg} p-2.5 ring-1 ring-inset ring-white/5`}

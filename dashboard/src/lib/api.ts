@@ -359,6 +359,7 @@ interface BillingTierConfig {
   statusPageCustomDomainEnabled: boolean
   sessionReplayEnabled: boolean
   slackEnabled: boolean
+  discordEnabled: boolean
   incidentIoEnabled: boolean
   samlEnabled: boolean
   oidcEnabled: boolean
@@ -484,6 +485,7 @@ interface CreateTierVersionRequest {
   statusPageCustomDomainEnabled?: boolean | null
   sessionReplayEnabled?: boolean | null
   slackEnabled?: boolean | null
+  discordEnabled?: boolean | null
   incidentIoEnabled?: boolean | null
   samlEnabled?: boolean | null
   oidcEnabled?: boolean | null
@@ -1899,6 +1901,7 @@ class ApiClient {
       success: boolean
       emailSent: boolean
       slackSent: boolean
+      discordSent?: boolean
       errors?: string[]
     }>(`${API_BASE}/admin/test-notification`, {
       method: 'POST',

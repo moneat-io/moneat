@@ -308,6 +308,7 @@ function AdminBillingPage() {
           statusPagesEnabled: currentTierConfig.statusPagesEnabled,
           statusPageCustomDomainEnabled: currentTierConfig.statusPageCustomDomainEnabled,
           slackEnabled: currentTierConfig.slackEnabled,
+          discordEnabled: currentTierConfig.discordEnabled,
           incidentIoEnabled: currentTierConfig.incidentIoEnabled,
           samlEnabled: currentTierConfig.samlEnabled,
           oidcEnabled: currentTierConfig.oidcEnabled,

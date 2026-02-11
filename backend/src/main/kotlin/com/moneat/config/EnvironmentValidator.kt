@@ -59,7 +59,7 @@ class EnvironmentValidator {
         }
         
         // Validate Discord configuration when enabled
-        val discordEnabled = getConfigValue("DISCORD_ENABLED")?.toBoolean() ?: true
+        val discordEnabled = getConfigValue("DISCORD_ENABLED")?.toBoolean() ?: false
         if (discordEnabled) {
             validateRequired("DISCORD_CLIENT_ID", "Discord integration is enabled", errors)
             validateRequired("DISCORD_CLIENT_SECRET", "Discord integration is enabled", errors)

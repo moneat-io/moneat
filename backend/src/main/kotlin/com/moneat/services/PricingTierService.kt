@@ -173,6 +173,9 @@ class PricingTierService {
             val resolvedSlackEnabled = request.slackEnabled
                 ?: currentConfig?.slackEnabled
                 ?: defaults.slackEnabled
+            val resolvedDiscordEnabled = request.discordEnabled
+                ?: currentConfig?.discordEnabled
+                ?: defaults.discordEnabled
             val resolvedIncidentIoEnabled = request.incidentIoEnabled
                 ?: currentConfig?.incidentIoEnabled
                 ?: defaults.incidentIoEnabled
@@ -211,6 +214,7 @@ class PricingTierService {
                 it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
                 it[session_replay_enabled] = resolvedSessionReplayEnabled
                 it[slack_enabled] = resolvedSlackEnabled
+                it[discord_enabled] = resolvedDiscordEnabled
                 it[incident_io_enabled] = resolvedIncidentIoEnabled
                 it[saml_enabled] = resolvedSamlEnabled
                 it[oidc_enabled] = resolvedOidcEnabled
