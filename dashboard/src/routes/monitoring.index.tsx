@@ -183,7 +183,8 @@ function getDockerComposeCommand(baseCommand: string, enableContainerMonitoring:
       - /var/run/docker.sock:/var/run/docker.sock:ro`
     : ''
 
-  return `services:
+  return `cat > docker-compose.yml <<'EOF'
+services:
   moneat-agent:
     image: adrianelder/moneat-agent:latest
     container_name: moneat-agent
@@ -191,7 +192,10 @@ function getDockerComposeCommand(baseCommand: string, enableContainerMonitoring:
     network_mode: host
 ${volumes}
     environment:
-      - MONEAT_KEY=${key}`
+      - MONEAT_KEY=${key}
+EOF
+
+docker compose up -d`
 }
 
 function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: boolean) => void}) {
@@ -401,7 +405,7 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
                     <div className="relative group">
                       <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
                         <SyntaxHighlighter
-                          language="yaml"
+                          language="bash"
                           style={isDark ? oneDark : oneLight}
                           customStyle={{
                             margin: 0,
