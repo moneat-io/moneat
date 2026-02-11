@@ -103,5 +103,8 @@ fun Application.configureRouting() {
         
         // Incident provider integration endpoints
         incidentProviderRoutes()
+        
+        // Organization team management endpoints
+        orgManagementRoutes()
     }
 }

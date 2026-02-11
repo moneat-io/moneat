@@ -18,6 +18,8 @@ fun Route.authRoutes() {
     route("/auth") {
         post("/signup") {
             val request = call.receive<SignupRequest>()
+            val inviteToken = call.request.queryParameters["inviteToken"]
+            
             val forwardedFor = call.request.headers["X-Forwarded-For"]
                 ?.split(",")
                 ?.firstOrNull()
@@ -31,7 +33,7 @@ fun Route.authRoutes() {
             )
             
             try {
-                val result = authService.signup(request, context)
+                val result = authService.signup(request, context, inviteToken)
                 call.respond(HttpStatusCode.Created, result)
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))

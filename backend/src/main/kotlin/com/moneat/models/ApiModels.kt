@@ -504,3 +504,75 @@ data class NotificationPreferencesResponse(
     val global: NotificationPreferencesData,
     val projects: List<ProjectNotificationPreferences>
 )
+
+// Org Team Management Models
+
+@Serializable
+data class InviteMemberRequest(
+    val email: String,
+    val role: String = "member"
+)
+
+@Serializable
+data class BulkInviteRequest(
+    val emails: List<String>,
+    val role: String = "member"
+)
+
+@Serializable
+data class BulkInviteResult(
+    val success: List<String>,
+    val failed: List<BulkInviteFailure>
+)
+
+@Serializable
+data class BulkInviteFailure(
+    val email: String,
+    val reason: String
+)
+
+@Serializable
+data class InvitationResponse(
+    val id: Int,
+    val email: String,
+    val role: String,
+    val status: String,
+    val invitedBy: String,
+    val invitedByEmail: String,
+    val createdAt: String,
+    val expiresAt: String
+)
+
+@Serializable
+data class OrgMemberResponse(
+    val userId: Int,
+    val email: String,
+    val name: String?,
+    val role: String,
+    val joinedAt: String?
+)
+
+@Serializable
+data class UpdateMemberRoleRequest(
+    val role: String
+)
+
+@Serializable
+data class AcceptInviteRequest(
+    val token: String
+)
+
+@Serializable
+data class InvitationDetailsResponse(
+    val orgName: String,
+    val role: String,
+    val invitedBy: String,
+    val expiresAt: String,
+    val valid: Boolean
+)
+
+@Serializable
+data class OrgMembersResponse(
+    val members: List<OrgMemberResponse>,
+    val pendingInvitations: List<InvitationResponse>
+)

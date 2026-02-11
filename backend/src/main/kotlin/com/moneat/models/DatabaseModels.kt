@@ -239,3 +239,16 @@ object OrganizationIntegrations : Table("organization_integrations") {
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
+
+object OrgInvitations : Table("org_invitations") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val email = varchar("email", 255)
+    val role = varchar("role", 50).default("member")
+    val invited_by = integer("invited_by").references(Users.id)
+    val token = varchar("token", 255)
+    val status = varchar("status", 20).default("pending")
+    val expires_at = long("expires_at")
+    val created_at = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+}

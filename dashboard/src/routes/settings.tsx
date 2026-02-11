@@ -51,10 +51,13 @@ import {
     ChevronDown,
     ChevronUp,
     X,
+    Users,
 } from 'lucide-react'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {loadStripe} from '@stripe/stripe-js'
 import {SsoTab} from '@/components/sso-settings'
+import {TeamSettings} from '@/components/settings/team-settings'
+import {useAuth} from '@/hooks/useAuth'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -122,6 +125,7 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
   const search = useSearch({ from: '/settings' })
+  const { user } = useAuth()
   
   const { data: subscription } = useQuery({
     queryKey: ['subscription'],
@@ -131,6 +135,7 @@ function SettingsPage() {
   
   const tier = subscription?.tier?.tierName || 'FREE'
   const canUseSso = tier === 'TEAM' || tier === 'BUSINESS'
+  const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
   
   return (
     <div className="min-h-screen bg-background">
@@ -162,6 +167,15 @@ function SettingsPage() {
               <Bell className="h-4 w-4" />
               Notifications
             </TabsTrigger>
+            {canManageTeam && (
+              <TabsTrigger 
+                value="team" 
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-700 dark:data-[state=active]:bg-indigo-900/20 dark:data-[state=active]:text-indigo-400 data-[state=active]:shadow-sm"
+              >
+                <Users className="h-4 w-4" />
+                Team
+              </TabsTrigger>
+            )}
             <TabsTrigger 
               value="billing" 
               className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-900/20 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm"
@@ -188,6 +202,11 @@ function SettingsPage() {
           <TabsContent value="notifications" className="space-y-4">
             <NotificationsTab />
           </TabsContent>
+          {canManageTeam && (
+            <TabsContent value="team" className="space-y-4">
+              <TeamSettings />
+            </TabsContent>
+          )}
           <TabsContent value="billing" className="space-y-4">
             <BillingTab />
           </TabsContent>

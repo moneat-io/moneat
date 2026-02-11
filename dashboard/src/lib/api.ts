@@ -849,6 +849,43 @@ interface UpdateSlackIntegrationRequest {
   enabled?: boolean
 }
 
+interface OrgMember {
+  userId: number
+  email: string
+  name?: string
+  role: string
+  joinedAt?: string
+}
+
+interface OrgInvitation {
+  id: number
+  email: string
+  role: string
+  status: string
+  invitedBy: string
+  invitedByEmail: string
+  createdAt: string
+  expiresAt: string
+}
+
+interface OrgMembersResponse {
+  members: OrgMember[]
+  pendingInvitations: OrgInvitation[]
+}
+
+interface InvitationDetailsResponse {
+  orgName: string
+  role: string
+  invitedBy: string
+  expiresAt: string
+  valid: boolean
+}
+
+interface BulkInviteResult {
+  success: string[]
+  failed: Array<{ email: string; reason: string }>
+}
+
 interface TestIntegrationResponse {
   success: boolean
   message: string
@@ -1310,6 +1347,61 @@ class ApiClient {
     // Backend should have an endpoint for this, but for now we can derive from other calls
     // This is a placeholder that the SSO settings component needs
     return [{ id: 1, name: "Default Organization", slug: "default" }]
+  }
+
+  // Organization team management
+  async getOrgMembers(): Promise<OrgMembersResponse> {
+    return this.request(`${API_BASE}/org/members`)
+  }
+
+  async inviteMember(email: string, role = 'member'): Promise<OrgInvitation> {
+    return this.request(`${API_BASE}/org/invitations`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    })
+  }
+
+  async bulkInviteMembers(emails: string[], role = 'member'): Promise<BulkInviteResult> {
+    return this.request(`${API_BASE}/org/invitations/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ emails, role }),
+    })
+  }
+
+  async updateMemberRole(userId: number, role: string): Promise<{ success: boolean }> {
+    return this.request(`${API_BASE}/org/members/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    })
+  }
+
+  async removeMember(userId: number): Promise<{ success: boolean }> {
+    return this.request(`${API_BASE}/org/members/${userId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async revokeInvitation(invitationId: number): Promise<{ success: boolean }> {
+    return this.request(`${API_BASE}/org/invitations/${invitationId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async resendInvitation(invitationId: number): Promise<{ success: boolean }> {
+    return this.request(`${API_BASE}/org/invitations/${invitationId}/resend`, {
+      method: 'POST',
+    })
+  }
+
+  async getInvitationDetails(token: string): Promise<InvitationDetailsResponse> {
+    return this.request(`${API_BASE}/org/invitations/details?token=${encodeURIComponent(token)}`)
+  }
+
+  async acceptInvitation(token: string): Promise<{ success: boolean }> {
+    return this.request(`${API_BASE}/org/invitations/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    })
   }
 
   async getSubscription(): Promise<{ tier: { tierName: string } } | null> {
@@ -2327,4 +2419,9 @@ export type {
   UpdateIncidentRequest,
   CreateIncidentUpdateRequest,
   AddCustomDomainRequest,
+  OrgMember,
+  OrgInvitation,
+  OrgMembersResponse,
+  InvitationDetailsResponse,
+  BulkInviteResult,
 }

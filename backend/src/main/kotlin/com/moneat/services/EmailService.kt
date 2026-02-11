@@ -102,6 +102,31 @@ class EmailService {
         sendEmail(email, subject, htmlBody, textBody, "password_reset")
     }
     
+    fun sendInvitationEmail(toEmail: String, inviterName: String, orgName: String, role: String, token: String) {
+        val inviteUrl = "$frontendUrl/accept-invite?token=$token"
+        
+        val subject = "You've been invited to join $orgName on Moneat"
+        val htmlBody = loadInvitationTemplate(inviterName, orgName, role, inviteUrl)
+        val textBody = """
+            You've been invited to join $orgName on Moneat
+            
+            $inviterName has invited you to join their team as a ${role.lowercase()}.
+            
+            Click the link below to accept the invitation:
+            
+            $inviteUrl
+            
+            This invitation will expire in 7 days.
+            
+            If you don't have an account yet, you'll be able to create one when you accept the invitation.
+            
+            Best regards,
+            The Moneat Team
+        """.trimIndent()
+        
+        sendEmail(toEmail, subject, htmlBody, textBody, "org_invitation")
+    }
+    
     fun sendEmail(to: String, subject: String, htmlBody: String, textBody: String, emailType: String = "other") {
         SentryUtils.breadcrumb("email", "Sending email", mapOf(
             "to" to to,
@@ -253,6 +278,43 @@ class EmailService {
                     </div>
                     <p style="color: #666; font-size: 14px;">This link will expire in 1 hour.</p>
                     <p style="color: #666; font-size: 14px;">If you didn't request a password reset, you can safely ignore this email.</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">Moneat - Mobile-First Error Monitoring</p>
+                </div>
+            </body>
+            </html>
+            """.trimIndent()
+        }
+    }
+    
+    private fun loadInvitationTemplate(inviterName: String, orgName: String, role: String, inviteUrl: String): String {
+        val projectRoot = File(System.getProperty("user.dir")).parentFile
+        val templatePath = File(projectRoot, "emails/build/templates/email/org-invitation.html")
+        
+        return if (templatePath.exists()) {
+            templatePath.readText()
+                .replace("{{ inviterName }}", inviterName)
+                .replace("{{ orgName }}", orgName)
+                .replace("{{ role }}", role)
+                .replace("{{ inviteUrl }}", inviteUrl)
+        } else {
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #2563eb; margin-bottom: 20px;">You've been invited to join $orgName</h1>
+                    <p>Hi there,</p>
+                    <p>$inviterName has invited you to join <strong>$orgName</strong> on Moneat as a <strong>${role.replaceFirstChar { it.uppercase() }}</strong>.</p>
+                    <div style="margin: 30px 0;">
+                        <a href="$inviteUrl" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">Accept Invitation</a>
+                    </div>
+                    <p style="color: #666; font-size: 14px;">This invitation will expire in 7 days.</p>
+                    <p style="color: #666; font-size: 14px;">If you don't have an account yet, you'll be able to create one when you accept the invitation.</p>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat - Mobile-First Error Monitoring</p>
                 </div>
