@@ -75,7 +75,7 @@ private val secureRandom = SecureRandom()
 
 private fun getStateSecret(): String {
     // Fail fast if the signing secret is not configured.
-    return System.getenv("JWT_SECRET")
+    return EnvConfig.get("JWT_SECRET")
         ?.takeIf { it.isNotBlank() }
         ?: throw IllegalStateException("JWT_SECRET environment variable is required for integration state signing")
 }

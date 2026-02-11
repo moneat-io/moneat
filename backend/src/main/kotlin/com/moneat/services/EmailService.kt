@@ -408,6 +408,88 @@ class EmailService {
         
         sendEmail(to, subject, htmlBody, textBody, "weekly_summary")
     }
+
+    fun sendSystemDownEmail(to: String, systemName: String, lastSeenText: String, systemUrl: String) {
+        val subject = "🔴 System Down: $systemName"
+        val htmlBody = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #dc2626; margin-bottom: 20px;">🔴 System Down</h1>
+                    <p><strong>System:</strong> $systemName</p>
+                    <p><strong>Status:</strong> $lastSeenText</p>
+                    <p>The monitoring agent has stopped reporting metrics. Please check if the system is online and the agent is running.</p>
+                    <div style="margin: 30px 0;">
+                        <a href="$systemUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+        
+        val textBody = """
+            🔴 System Down
+            
+            System: $systemName
+            Status: $lastSeenText
+            
+            The monitoring agent has stopped reporting metrics. Please check if the system is online and the agent is running.
+            
+            View system: $systemUrl
+            
+            ---
+            Moneat Server Monitoring
+        """.trimIndent()
+        
+        sendEmail(to, subject, htmlBody, textBody, "system_down")
+    }
+
+    fun sendSystemUpEmail(to: String, systemName: String, systemUrl: String) {
+        val subject = "✅ System Recovered: $systemName"
+        val htmlBody = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #16a34a; margin-bottom: 20px;">✅ System Recovered</h1>
+                    <p><strong>System:</strong> $systemName</p>
+                    <p>The system is now reporting metrics again.</p>
+                    <div style="margin: 30px 0;">
+                        <a href="$systemUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+        
+        val textBody = """
+            ✅ System Recovered
+            
+            System: $systemName
+            
+            The system is now reporting metrics again.
+            
+            View system: $systemUrl
+            
+            ---
+            Moneat Server Monitoring
+        """.trimIndent()
+        
+        sendEmail(to, subject, htmlBody, textBody, "system_up")
+    }
     
     private fun loadErrorAlertTemplate(data: ErrorAlertData): String {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/error-alert.html")

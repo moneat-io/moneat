@@ -466,6 +466,7 @@ data class TestNotificationResponse(
     val success: Boolean,
     val emailSent: Boolean,
     val slackSent: Boolean,
+    val discordSent: Boolean = false,
     val errors: List<String> = emptyList()
 )
 

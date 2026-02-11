@@ -81,22 +81,28 @@ fun Application.configureMonitoring() {
             
             // Send to Sentry if enabled
             if (SentryConfig.isEnabled()) {
-                Sentry.captureException(cause) { scope ->
-                    scope.setTag("http.method", call.request.httpMethod.value)
-                    scope.setTag("http.path", call.request.path())
-                    scope.setTag("http.status_code", "500")
-                    scope.setExtra("user_agent", call.request.headers["User-Agent"] ?: "unknown")
-                    scope.setExtra("remote_host", call.request.local.remoteHost)
-                    scope.setExtra("query_string", call.request.queryString())
-                    
-                    // Add request headers as extra context (excluding sensitive ones)
-                    val safeHeaders = call.request.headers.entries()
-                        .filter { (key, _) -> 
-                            !key.equals("Authorization", ignoreCase = true) && 
-                            !key.equals("Cookie", ignoreCase = true)
-                        }
-                        .associate { (key, values) -> key to values.joinToString(", ") }
-                    scope.setExtra("request_headers", safeHeaders.toString())
+                try {
+                    Sentry.captureException(cause) { scope ->
+                        scope.setTag("http.method", call.request.httpMethod.value)
+                        scope.setTag("http.path", call.request.path())
+                        scope.setTag("http.status_code", "500")
+                        
+                        val userAgent = call.request.headers["User-Agent"] ?: "unknown"
+                        scope.setExtra("user_agent", userAgent)
+                        scope.setExtra("remote_host", call.request.local.remoteHost)
+                        scope.setExtra("query_string", call.request.queryString())
+                        
+                        // Add request headers as extra context (excluding sensitive ones)
+                        val safeHeaders = call.request.headers.entries()
+                            .filter { (key, _) -> 
+                                !key.equals("Authorization", ignoreCase = true) && 
+                                !key.equals("Cookie", ignoreCase = true)
+                            }
+                            .associate { (key, values) -> key to values.joinToString(", ") }
+                        scope.setExtra("request_headers", safeHeaders.toString())
+                    }
+                } catch (e: Throwable) {
+                    logger.error(e) { "Failed to capture exception to Sentry" }
                 }
             }
             

@@ -13,8 +13,8 @@ COPY backend/gradle ./gradle
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle dependencies --no-daemon --build-cache || true
 COPY backend/src ./src
-# Copy built email templates from email-builder stage
-COPY --from=email-builder /emails/build/templates/email ./build/resources/main/email-templates/
+# Copy built email templates from email-builder stage into src so they're processed as resources
+COPY --from=email-builder /emails/build/templates/email ./src/main/resources/email-templates/
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle shadowJar --no-daemon --build-cache
 

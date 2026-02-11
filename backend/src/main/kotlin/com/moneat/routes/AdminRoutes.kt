@@ -163,15 +163,21 @@ fun Route.adminRoutes() {
                     
                     val emailService = com.moneat.services.EmailService()
                     val slackService = com.moneat.services.SlackService()
+                    val discordService = com.moneat.services.DiscordService()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
                     
                     var emailSent = false
                     var slackSent = false
+                    var discordSent = false
                     val errors = mutableListOf<String>()
                     
+                    val testEmail = request.channel == "email" || request.channel == "both" || request.channel == "all"
+                    val testSlack = request.channel == "slack" || request.channel == "both" || request.channel == "all"
+                    val testDiscord = request.channel == "discord" || request.channel == "all"
+                    
                     // Send email notification if requested
-                    if (request.channel == "email" || request.channel == "both") {
+                    if (testEmail) {
                         try {
                             when (request.type) {
                                 "error_alert" -> {
@@ -239,6 +245,23 @@ fun Route.adminRoutes() {
                                     emailService.sendPasswordResetEmail(userEmail, "test-reset-token-67890", "Test User")
                                     emailSent = true
                                 }
+                                "system_up" -> {
+                                    emailService.sendSystemUpEmail(
+                                        userEmail,
+                                        "[TEST] Production API",
+                                        "$frontendUrl/monitoring"
+                                    )
+                                    emailSent = true
+                                }
+                                "system_down" -> {
+                                    emailService.sendSystemDownEmail(
+                                        userEmail,
+                                        "[TEST] Production API",
+                                        "2 minutes ago",
+                                        "$frontendUrl/monitoring"
+                                    )
+                                    emailSent = true
+                                }
                                 else -> {
                                     errors.add("Email type '${request.type}' not supported for email channel")
                                 }
@@ -249,7 +272,7 @@ fun Route.adminRoutes() {
                     }
                     
                     // Send Slack notification if requested
-                    if (request.channel == "slack" || request.channel == "both") {
+                    if (testSlack) {
                         if (orgId == null) {
                             errors.add("No organization found for Slack testing")
                         } else {
@@ -311,15 +334,77 @@ fun Route.adminRoutes() {
                             }
                         }
                     }
+
+                    // Send Discord notification if requested
+                    if (testDiscord) {
+                        if (orgId == null) {
+                            errors.add("No organization found for Discord testing")
+                        } else {
+                            try {
+                                when (request.type) {
+                                    "error_alert" -> {
+                                        discordSent = discordService.sendErrorAlert(
+                                            organizationId = orgId,
+                                            projectName = "[TEST] Test Project",
+                                            issueTitle = "NullPointerException in UserService",
+                                            level = "error",
+                                            firstSeen = "Just now",
+                                            eventCount = 42,
+                                            userCount = 12,
+                                            issueUrl = "$frontendUrl/issues/12345"
+                                        )
+                                    }
+                                    "system_up" -> {
+                                        discordSent = discordService.sendSystemUp(
+                                            organizationId = orgId,
+                                            systemName = "[TEST] Production API",
+                                            systemId = java.util.UUID.randomUUID(),
+                                            baseUrl = frontendUrl
+                                        )
+                                    }
+                                    "system_down" -> {
+                                        discordSent = discordService.sendSystemDown(
+                                            organizationId = orgId,
+                                            systemName = "[TEST] Production API",
+                                            lastSeen = "2 minutes ago",
+                                            systemId = java.util.UUID.randomUUID(),
+                                            baseUrl = frontendUrl
+                                        )
+                                    }
+                                    "uptime_alert" -> {
+                                        discordSent = discordService.sendUptimeAlert(
+                                            organizationId = orgId,
+                                            monitorUrl = "https://api.example.com/health",
+                                            isDown = true,
+                                            statusCode = 500,
+                                            responseTime = 1245,
+                                            errorMessage = "Internal Server Error",
+                                            monitorId = java.util.UUID.randomUUID(),
+                                            baseUrl = frontendUrl
+                                        )
+                                    }
+                                    else -> {
+                                        errors.add("Notification type '${request.type}' not supported for Discord channel")
+                                    }
+                                }
+                                if (!discordSent && errors.isEmpty()) {
+                                    errors.add("Discord notification failed (no Discord integration configured or error occurred)")
+                                }
+                            } catch (e: Exception) {
+                                errors.add("Discord failed: ${e.message}")
+                            }
+                        }
+                    }
                     
                     val response = com.moneat.models.TestNotificationResponse(
-                        success = emailSent || slackSent,
+                        success = emailSent || slackSent || discordSent,
                         emailSent = emailSent,
                         slackSent = slackSent,
+                        discordSent = discordSent,
                         errors = errors
                     )
                     
-                    call.respond(if (emailSent || slackSent) HttpStatusCode.OK else HttpStatusCode.BadRequest, response)
+                    call.respond(if (emailSent || slackSent || discordSent) HttpStatusCode.OK else HttpStatusCode.BadRequest, response)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.InternalServerError, com.moneat.models.TestNotificationResponse(
                         success = false,
