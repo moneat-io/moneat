@@ -99,9 +99,12 @@ describe('ApiClient', () => {
 
   describe('401 logout and redirect behavior', () => {
     it('clears tokens and redirects to /login on 401', async () => {
+      const mockAssign = vi.fn()
       const originalLocation = window.location
-      delete (window as any).location
-      window.location = { ...originalLocation, assign: vi.fn() }
+      // @ts-expect-error - Mocking window.location for tests
+      delete window.location
+      // @ts-expect-error - Mocking window.location for tests
+      window.location = { ...originalLocation, assign: mockAssign }
 
       localStorage.setItem('auth_token', 'expired-token')
       server.use(
@@ -113,15 +116,19 @@ describe('ApiClient', () => {
       await expect(api.getProjects()).rejects.toThrow('Unauthorized')
 
       expect(localStorage.getItem('auth_token')).toBeNull()
-      expect(window.location.assign).toHaveBeenCalledWith('/login')
+      expect(mockAssign).toHaveBeenCalledWith('/login')
 
+      // @ts-expect-error - Restoring window.location
       window.location = originalLocation
     })
 
     it('does not redirect if already on auth page', async () => {
+      const mockAssign = vi.fn()
       const originalLocation = window.location
-      delete (window as any).location
-      window.location = { ...originalLocation, pathname: '/login', assign: vi.fn() }
+      // @ts-expect-error - Mocking window.location for tests
+      delete window.location
+      // @ts-expect-error - Mocking window.location for tests
+      window.location = { ...originalLocation, pathname: '/login', assign: mockAssign }
 
       localStorage.setItem('auth_token', 'expired-token')
       server.use(
@@ -132,15 +139,19 @@ describe('ApiClient', () => {
 
       await expect(api.getProjects()).rejects.toThrow('Unauthorized')
 
-      expect(window.location.assign).not.toHaveBeenCalled()
+      expect(mockAssign).not.toHaveBeenCalled()
 
+      // @ts-expect-error - Restoring window.location
       window.location = originalLocation
     })
 
     it('does not redirect on 401 without token', async () => {
+      const mockAssign = vi.fn()
       const originalLocation = window.location
-      delete (window as any).location
-      window.location = { ...originalLocation, assign: vi.fn() }
+      // @ts-expect-error - Mocking window.location for tests
+      delete window.location
+      // @ts-expect-error - Mocking window.location for tests
+      window.location = { ...originalLocation, assign: mockAssign }
 
       server.use(
         http.post(`${API_BASE}/auth/login`, () => {
@@ -150,8 +161,9 @@ describe('ApiClient', () => {
 
       await expect(api.login('bad@example.com', 'wrong')).rejects.toThrow()
 
-      expect(window.location.assign).not.toHaveBeenCalled()
+      expect(mockAssign).not.toHaveBeenCalled()
 
+      // @ts-expect-error - Restoring window.location
       window.location = originalLocation
     })
 

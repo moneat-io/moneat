@@ -18,6 +18,7 @@ export const Route = createFileRoute('/signup')({
 })
 
 function SignupPage() {
+  const inviteToken = new URLSearchParams(window.location.search).get('inviteToken') || undefined
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -42,7 +43,7 @@ function SignupPage() {
         acceptPrivacy: true,
         termsVersion: LEGAL_TERMS_VERSION,
         privacyVersion: LEGAL_PRIVACY_VERSION,
-      })
+      }, inviteToken)
       setSuccess(true)
     } catch (err) {
       setError('Failed to create account. Email may already be in use.')

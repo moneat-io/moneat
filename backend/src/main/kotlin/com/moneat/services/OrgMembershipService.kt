@@ -74,11 +74,15 @@ class OrgMembershipService {
         val targetRole = getMemberRole(orgId, targetUserId)
             ?: throw NotFoundException("User is not a member of this organization")
         
-        // Admins cannot modify owners
+        // Admins cannot modify owners or assign owner role
         val requestingRole = getMemberRole(orgId, requestingUserId)!!
-        if (OrgRole.fromString(requestingRole) == OrgRole.ADMIN && 
-            OrgRole.fromString(targetRole) == OrgRole.OWNER) {
-            throw IllegalStateException("Admins cannot modify owners")
+        if (OrgRole.fromString(requestingRole) == OrgRole.ADMIN) {
+            if (OrgRole.fromString(targetRole) == OrgRole.OWNER) {
+                throw IllegalStateException("Admins cannot modify owners")
+            }
+            if (newRole == "owner") {
+                throw IllegalStateException("Only owners can assign owner role")
+            }
         }
         
         // Prevent changing last owner

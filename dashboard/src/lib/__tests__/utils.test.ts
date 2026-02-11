@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { cn, formatRelativeTime } from '../utils'
 
 describe('utils', () => {
@@ -31,7 +31,7 @@ describe('utils', () => {
           if (args.length === 0) {
             super(mockNow.toISOString())
           } else {
-            super(...args)
+            super(...(args as [string]))
           }
         }
         static now() {

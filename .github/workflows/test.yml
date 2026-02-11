@@ -536,9 +536,14 @@ jobs:
         run: |
           # Parse backend coverage from JaCoCo XML
           if [ -f backend-coverage/jacocoTestReport.xml ]; then
-            BACKEND_COVERAGE=$(grep -oP 'type="LINE".*?missed="\d+".*?covered="\K\d+' backend-coverage/jacocoTestReport.xml | head -1 || echo "0")
-            BACKEND_TOTAL=$(grep -oP 'type="LINE".*?covered="\d+"' backend-coverage/jacocoTestReport.xml | grep -oP 'covered="\K\d+' | head -1 || echo "1")
-            BACKEND_PCT=$(awk "BEGIN {printf \"%.1f\", ($BACKEND_COVERAGE / $BACKEND_TOTAL) * 100}")
+            BACKEND_MISSED=$(grep -oP 'counter type="LINE" missed="\K\d+' backend-coverage/jacocoTestReport.xml | head -1 || echo "0")
+            BACKEND_COVERED=$(grep -oP 'counter type="LINE" missed="\d+" covered="\K\d+' backend-coverage/jacocoTestReport.xml | head -1 || echo "0")
+            BACKEND_TOTAL=$((BACKEND_MISSED + BACKEND_COVERED))
+            if [ "$BACKEND_TOTAL" -gt 0 ]; then
+              BACKEND_PCT=$(awk "BEGIN {printf \"%.1f\", ($BACKEND_COVERED / $BACKEND_TOTAL) * 100}")
+            else
+              BACKEND_PCT="0.0"
+            fi
           else
             BACKEND_PCT="0.0"
           fi

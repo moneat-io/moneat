@@ -39,6 +39,23 @@ class OrgInvitationService(
         if (role !in validRoles) {
             throw BadRequestException("Invalid role: $role")
         }
+
+        val requestingRole = membershipService.getMemberRole(orgId, invitedByUserId)
+            ?: throw IllegalStateException("Not a member of this organization")
+        if (role == "owner" && OrgRole.fromString(requestingRole) != OrgRole.OWNER) {
+            throw IllegalStateException("Only owners can invite members as owner")
+        }
+
+        val now = Clock.System.now().toEpochMilliseconds()
+        // Expire stale pending invitations so they don't block re-invites.
+        OrgInvitations.update({
+            (OrgInvitations.organization_id eq orgId) and
+                (OrgInvitations.email eq email) and
+                (OrgInvitations.status eq "pending") and
+                (OrgInvitations.expires_at lessEq now)
+        }) {
+            it[OrgInvitations.status] = "expired"
+        }
         
         // Check if user is already a member
         val existingUser = Users.selectAll().where { Users.email eq email }.singleOrNull()
@@ -55,7 +72,8 @@ class OrgInvitationService(
             .where { 
                 (OrgInvitations.organization_id eq orgId) and 
                 (OrgInvitations.email eq email) and 
-                (OrgInvitations.status eq "pending") 
+                (OrgInvitations.status eq "pending") and
+                (OrgInvitations.expires_at greater now)
             }
             .singleOrNull()
         
@@ -128,11 +146,21 @@ class OrgInvitationService(
     }
     
     fun getPendingInvitations(orgId: Int): List<InvitationResponse> = transaction {
+        val now = Clock.System.now().toEpochMilliseconds()
+        OrgInvitations.update({
+            (OrgInvitations.organization_id eq orgId) and
+                (OrgInvitations.status eq "pending") and
+                (OrgInvitations.expires_at lessEq now)
+        }) {
+            it[OrgInvitations.status] = "expired"
+        }
+
         (OrgInvitations innerJoin Users)
             .selectAll()
             .where { 
                 (OrgInvitations.organization_id eq orgId) and 
-                (OrgInvitations.status eq "pending") 
+                (OrgInvitations.status eq "pending") and
+                (OrgInvitations.expires_at greater now)
             }
             .map { row ->
                 InvitationResponse(

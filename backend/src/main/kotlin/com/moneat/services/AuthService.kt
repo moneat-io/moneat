@@ -58,31 +58,51 @@ class AuthService {
                 throw IllegalArgumentException("User already exists")
             }
             
-            // Check for pending invitation by email
+            val now = System.currentTimeMillis()
+
+            // Resolve invite in a strict state-aware way.
             val pendingInvite = if (inviteToken != null) {
-                OrgInvitations.selectAll()
+                val inviteByToken = OrgInvitations.selectAll()
                     .where { OrgInvitations.token eq inviteToken }
                     .singleOrNull()
+                    ?: throw IllegalArgumentException("Invitation not found")
+
+                val inviteStatus = inviteByToken[OrgInvitations.status]
+                if (inviteStatus != "pending") {
+                    throw IllegalArgumentException("Invitation is no longer valid")
+                }
+
+                val inviteExpiresAt = inviteByToken[OrgInvitations.expires_at]
+                if (now > inviteExpiresAt) {
+                    OrgInvitations.update({ OrgInvitations.id eq inviteByToken[OrgInvitations.id] }) {
+                        it[OrgInvitations.status] = "expired"
+                    }
+                    throw IllegalArgumentException("Invitation has expired")
+                }
+
+                if (inviteByToken[OrgInvitations.email] != request.email) {
+                    throw IllegalArgumentException("This invitation was sent to a different email address")
+                }
+
+                inviteByToken
             } else {
+                OrgInvitations.update({
+                    (OrgInvitations.email eq request.email) and
+                        (OrgInvitations.status eq "pending") and
+                        (OrgInvitations.expires_at lessEq now)
+                }) {
+                    it[OrgInvitations.status] = "expired"
+                }
+
                 OrgInvitations.selectAll()
-                    .where { 
-                        (OrgInvitations.email eq request.email) and 
-                        (OrgInvitations.status eq "pending") 
+                    .where {
+                        (OrgInvitations.email eq request.email) and
+                            (OrgInvitations.status eq "pending") and
+                            (OrgInvitations.expires_at greater now)
                     }
                     .orderBy(OrgInvitations.created_at, org.jetbrains.exposed.sql.SortOrder.DESC)
                     .limit(1)
                     .singleOrNull()
-            }
-            
-            // Validate invitation if present
-            if (pendingInvite != null) {
-                val expiresAt = pendingInvite[OrgInvitations.expires_at]
-                if (System.currentTimeMillis() > expiresAt) {
-                    throw IllegalArgumentException("Invitation has expired")
-                }
-                if (pendingInvite[OrgInvitations.email] != request.email) {
-                    throw IllegalArgumentException("This invitation was sent to a different email address")
-                }
             }
             
             // Generate verification token

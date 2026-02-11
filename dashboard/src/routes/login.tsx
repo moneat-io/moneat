@@ -17,6 +17,7 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   const navigate = useNavigate()
+  const inviteToken = new URLSearchParams(window.location.search).get('inviteToken') || undefined
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -32,7 +33,11 @@ function LoginPage() {
 
     try {
       await api.login(email, password)
-      navigate({ to: '/' })
+      if (inviteToken) {
+        navigate({ to: '/accept-invite', search: { token: inviteToken } })
+      } else {
+        navigate({ to: '/' })
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       if (errorMessage === 'NETWORK_ERROR') {

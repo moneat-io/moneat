@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPricingCardModel, type PricingCardTierInput, type BillingInterval } from '../pricing-display'
+import { buildPricingCardModel, type PricingCardTierInput } from '../pricing-display'
 
 describe('pricing-display', () => {
   const createBaseTier = (overrides: Partial<PricingCardTierInput> = {}): PricingCardTierInput => ({

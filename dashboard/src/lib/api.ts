@@ -1200,8 +1200,17 @@ class ApiClient {
     }
   }
 
-  async signup(email: string, password: string, name: string | undefined, legalConsent: SignupLegalConsent): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>(`${API_BASE.replace('/v1', '')}/auth/signup`, {
+  async signup(
+    email: string,
+    password: string,
+    name: string | undefined,
+    legalConsent: SignupLegalConsent,
+    inviteToken?: string
+  ): Promise<AuthResponse> {
+    const signupUrl = inviteToken
+      ? `${API_BASE.replace('/v1', '')}/auth/signup?inviteToken=${encodeURIComponent(inviteToken)}`
+      : `${API_BASE.replace('/v1', '')}/auth/signup`
+    const response = await this.request<AuthResponse>(signupUrl, {
       method: 'POST',
       body: JSON.stringify({ email, password, name, ...legalConsent }),
     })
