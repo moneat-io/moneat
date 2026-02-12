@@ -14,9 +14,11 @@ private val logger = KotlinLogging.logger {}
 // Global service instances
 private lateinit var escalationEngineInstance: EscalationEngine
 private lateinit var incidentManagementServiceInstance: IncidentManagementService
+private lateinit var slackUserGroupSyncServiceInstance: SlackUserGroupSyncService
 
 fun getEscalationEngine(): EscalationEngine = escalationEngineInstance
 fun getIncidentManagementService(): IncidentManagementService = incidentManagementServiceInstance
+fun getSlackUserGroupSyncService(): SlackUserGroupSyncService = slackUserGroupSyncServiceInstance
 
 fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
@@ -50,11 +52,17 @@ fun Application.configureBackgroundJobs() {
     incidentManagementServiceInstance = IncidentManagementService(
         escalationEngine = escalationEngineInstance
     )
+    
+    slackUserGroupSyncServiceInstance = SlackUserGroupSyncService(
+        onCallScheduleService = onCallScheduleService,
+        slackService = slackService,
+        redisClient = redisClient
+    )
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    // Start the monitor alert service, billing service, retention service, uptime scheduler, ingestion workers, and escalation engine
+    // Start the monitor alert service, billing service, retention service, uptime scheduler, ingestion workers, escalation engine, and Slack usergroup sync
     logger.info { "Starting background jobs" }
     monitorAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
@@ -63,6 +71,7 @@ fun Application.configureBackgroundJobs() {
     ingestionWorker.start()
     logIngestionWorker.start()
     escalationEngineInstance.start()
+    slackUserGroupSyncServiceInstance.start()
 
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopped) {
@@ -74,5 +83,6 @@ fun Application.configureBackgroundJobs() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
         escalationEngineInstance.stop()
+        slackUserGroupSyncServiceInstance.stop()
     }
 }

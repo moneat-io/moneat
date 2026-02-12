@@ -66,6 +66,12 @@ class OnCallScheduleService {
         
         val currentOnCall = getCurrentOnCall(scheduleId)
         
+        // Fetch Slack usergroup mapping if it exists
+        val usergroupMapping = OnCallScheduleUsergroups
+            .selectAll()
+            .where { OnCallScheduleUsergroups.scheduleId eq scheduleId }
+            .singleOrNull()
+        
         OnCallSchedule(
             id = scheduleRow[OnCallSchedules.id].value,
             organizationId = scheduleRow[OnCallSchedules.organizationId],
@@ -76,6 +82,8 @@ class OnCallScheduleService {
             participants = participants,
             overrides = overrides,
             currentOnCall = currentOnCall,
+            slackUsergroupId = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupId),
+            slackUsergroupHandle = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupHandle),
             createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
             updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString()
         )

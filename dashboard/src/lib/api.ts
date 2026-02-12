@@ -886,6 +886,13 @@ interface SlackChannelSelection {
   channelName: string
 }
 
+interface SlackUsergroup {
+  id: string
+  handle: string
+  name: string
+  description?: string
+}
+
 interface UpdateSlackIntegrationRequest {
   webhookUrl: string
   channelName?: string
@@ -1181,6 +1188,8 @@ interface OnCallSchedule {
     userId: number
     userName: string
   }
+  slackUsergroupId?: string
+  slackUsergroupHandle?: string
 }
 
 interface OnCallParticipant {
@@ -2588,6 +2597,23 @@ class ApiClient {
     })
   }
 
+  async getSlackUsergroups() {
+    return this.request<SlackUsergroup[]>(`${API_BASE}/integrations/slack/usergroups`)
+  }
+
+  async setScheduleSlackUsergroup(scheduleId: number, usergroupId: string, usergroupHandle: string) {
+    return this.request<void>(`${API_BASE}/on-call/schedules/${scheduleId}/slack-usergroup`, {
+      method: 'PUT',
+      body: JSON.stringify({ usergroupId, usergroupHandle }),
+    })
+  }
+
+  async removeScheduleSlackUsergroup(scheduleId: number) {
+    return this.request<void>(`${API_BASE}/on-call/schedules/${scheduleId}/slack-usergroup`, {
+      method: 'DELETE',
+    })
+  }
+
   // Discord Integration Methods
 
   async startDiscordOAuth() {
@@ -3016,6 +3042,7 @@ export type {
   SlackChannel,
   SlackChannelList,
   SlackChannelSelection,
+  SlackUsergroup,
   UpdateSlackIntegrationRequest,
   TestIntegrationResponse,
   IncidentProviderConfig,

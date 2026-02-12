@@ -13,10 +13,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {useToast} from '@/hooks/use-toast'
-import {Calendar, Plus, Users, Clock, Trash2, Pencil, RotateCcw, GripVertical, ChevronDown, ChevronUp, Globe} from 'lucide-react'
+import {Calendar, Plus, Users, Clock, Trash2, Pencil, RotateCcw, GripVertical, ChevronDown, ChevronUp, Globe, Slack} from 'lucide-react'
 import {useState} from 'react'
 import {ScheduleEditor, type OnCallScheduleData} from '@/components/on-call/ScheduleEditor'
 import {cn} from '@/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export const Route = createFileRoute('/on-call/schedules')({
   component: OnCallSchedules,
@@ -60,7 +67,19 @@ function OnCallSchedules() {
     queryFn: () => api.getOrgMembers(),
   })
 
+  const {data: integrations} = useQuery({
+    queryKey: ['org-integrations'],
+    queryFn: () => api.getIntegrations(),
+  })
+
+  const {data: slackUsergroups} = useQuery({
+    queryKey: ['slack-usergroups'],
+    queryFn: () => api.getSlackUsergroups(),
+    enabled: integrations?.some((i: any) => i.integrationType === 'slack' && i.enabled) ?? false,
+  })
+
   const users = orgMembers?.members?.map(m => ({id: m.userId, name: m.name || m.email})) || []
+  const slackEnabled = integrations?.some((i: any) => i.integrationType === 'slack' && i.enabled) ?? false
 
   const createMutation = useMutation({
     mutationFn: (data: OnCallScheduleData) => api.createOnCallSchedule({
@@ -100,6 +119,25 @@ function OnCallSchedules() {
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
       toast({title: 'Schedule Deleted', description: 'On-call schedule has been removed.'})
+    },
+    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+  })
+
+  const setUsergroupMutation = useMutation({
+    mutationFn: ({scheduleId, usergroupId, usergroupHandle}: {scheduleId: number; usergroupId: string; usergroupHandle: string}) =>
+      api.setScheduleSlackUsergroup(scheduleId, usergroupId, usergroupHandle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
+      toast({title: 'Slack User Group Set', description: 'Schedule will sync to this Slack user group.'})
+    },
+    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+  })
+
+  const removeUsergroupMutation = useMutation({
+    mutationFn: (scheduleId: number) => api.removeScheduleSlackUsergroup(scheduleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
+      toast({title: 'Slack User Group Removed', description: 'Schedule will no longer sync.'})
     },
     onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
@@ -280,6 +318,70 @@ function OnCallSchedules() {
                               </span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Slack User Group Sync */}
+                    {slackEnabled && (
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Slack className="h-4 w-4 text-muted-foreground" />
+                          Slack User Group
+                        </h4>
+                        <div className="ml-6">
+                          {schedule.slackUsergroupId ? (
+                            <div className="flex items-center justify-between p-2 rounded-md bg-blue-500/5 border border-blue-500/20">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs bg-blue-500/15 text-blue-400 border-blue-500/30">
+                                  @{schedule.slackUsergroupHandle}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">Auto-syncing current on-call user</span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-destructive hover:text-destructive"
+                                onClick={() => removeUsergroupMutation.mutate(schedule.id)}
+                                disabled={removeUsergroupMutation.isPending}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <Select
+                                onValueChange={(value) => {
+                                  const ug = slackUsergroups?.find(u => u.id === value)
+                                  if (ug) {
+                                    setUsergroupMutation.mutate({
+                                      scheduleId: schedule.id,
+                                      usergroupId: ug.id,
+                                      usergroupHandle: ug.handle
+                                    })
+                                  }
+                                }}
+                                disabled={setUsergroupMutation.isPending || !slackUsergroups || slackUsergroups.length === 0}
+                              >
+                                <SelectTrigger className="w-[300px] h-9">
+                                  <SelectValue placeholder={slackUsergroups && slackUsergroups.length === 0 ? "No user groups available" : "Select a user group"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {slackUsergroups?.map(ug => (
+                                    <SelectItem key={ug.id} value={ug.id}>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">@{ug.handle}</span>
+                                        <span className="text-xs text-muted-foreground">{ug.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <span className="text-xs text-muted-foreground">
+                                Sync current on-call user to a Slack user group
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

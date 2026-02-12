@@ -274,7 +274,7 @@ fun Route.integrationRoutes() {
                 println("DEBUG: ClientId: $clientId")
                 println("DEBUG: RedirectUri: $redirectUri")
                 
-                val scopes = "chat:write,channels:read,channels:join,groups:read,groups:write"
+                val scopes = "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read,usergroups:write"
                 
                 // Generate secure state parameter bound to user and org
                 val state = generateSecureState(userId, organizationId)
@@ -350,6 +350,34 @@ fun Route.integrationRoutes() {
                 }
                 
                 call.respond(HttpStatusCode.OK, MessageResponse("Channel updated successfully"))
+            }
+            
+            // List available Slack user groups
+            get("/slack/usergroups") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val organizationId = transaction {
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?.get(Memberships.organization_id)
+                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                
+                val accessToken = transaction {
+                    OrganizationIntegrations
+                        .selectAll()
+                        .where {
+                            (OrganizationIntegrations.organization_id eq organizationId) and
+                            (OrganizationIntegrations.integration_type eq "slack")
+                        }
+                        .singleOrNull()
+                        ?.get(OrganizationIntegrations.access_token)
+                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No Slack integration found"))
+                
+                val usergroups = slackService.listUsergroups(accessToken)
+                call.respond(usergroups)
             }
             
             // Toggle enabled status
@@ -856,6 +884,24 @@ fun Route.integrationCallbackRoutes() {
                                     val userId = getUserIdFromSlackUserId(slackUserId)
                                     if (userId != null) {
                                         val incidentService = com.moneat.plugins.getIncidentManagementService()
+                                        
+                                        // Verify user's organization matches incident's organization
+                                        val incident = incidentService.getIncident(incidentId, userId)
+                                        val userOrgId = transaction {
+                                            Memberships.selectAll()
+                                                .where { Memberships.user_id eq userId }
+                                                .singleOrNull()
+                                                ?.get(Memberships.organization_id)
+                                        }
+                                        
+                                        if (incident == null || userOrgId == null || incident.organizationId != userOrgId) {
+                                            call.respond(mapOf(
+                                                "response_type" to "ephemeral",
+                                                "text" to "❌ Incident not found or access denied"
+                                            ))
+                                            return@post
+                                        }
+                                        
                                         val acknowledged = incidentService.acknowledge(incidentId, userId)
                                         
                                         if (acknowledged) {

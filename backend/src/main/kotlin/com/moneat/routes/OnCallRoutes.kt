@@ -1,5 +1,6 @@
 package com.moneat.routes
 
+import com.moneat.models.OnCallScheduleUsergroups
 import com.moneat.services.oncall.*
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -8,8 +9,14 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalTime
 
 @Serializable
@@ -37,8 +44,15 @@ data class CreateOverrideRequest(
     val endAt: String // ISO 8601 timestamp
 )
 
-fun Route.onCallRoutes() {
+@Serializable
+data class SetScheduleUsergroupRequest(
+    val usergroupId: String,
+    val usergroupHandle: String
+)
+
+fun Route.onCallRoutes(getSlackUserGroupSyncService: (() -> com.moneat.services.oncall.SlackUserGroupSyncService)? = null) {
     val scheduleService = OnCallScheduleService()
+    val slackUserGroupSyncService = getSlackUserGroupSyncService?.invoke()
     
     route("/v1/on-call/schedules") {
         authenticate("auth-jwt") {
@@ -283,6 +297,115 @@ fun Route.onCallRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Override not found"))
+                }
+            }
+        }
+    }
+    
+    // Slack usergroup mapping endpoints
+    route("/v1/on-call/schedules/{id}/slack-usergroup") {
+        authenticate("auth-jwt") {
+            put {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null || userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@put
+                }
+                
+                if (scheduleId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    return@put
+                }
+                
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    return@put
+                }
+                
+                val request = call.receive<SetScheduleUsergroupRequest>()
+                
+                try {
+                    org.jetbrains.exposed.sql.transactions.transaction {
+                        val now = kotlinx.datetime.Clock.System.now()
+                        
+                        // Check if mapping already exists
+                        val existing = com.moneat.models.OnCallScheduleUsergroups
+                            .selectAll()
+                            .where { com.moneat.models.OnCallScheduleUsergroups.scheduleId eq scheduleId }
+                            .singleOrNull()
+                        
+                        if (existing != null) {
+                            // Update existing mapping
+                            com.moneat.models.OnCallScheduleUsergroups.update({
+                                com.moneat.models.OnCallScheduleUsergroups.scheduleId eq scheduleId
+                            }) {
+                                it[com.moneat.models.OnCallScheduleUsergroups.slackUsergroupId] = request.usergroupId
+                                it[com.moneat.models.OnCallScheduleUsergroups.slackUsergroupHandle] = request.usergroupHandle
+                                it[com.moneat.models.OnCallScheduleUsergroups.updatedAt] = now
+                            }
+                        } else {
+                            // Insert new mapping
+                            com.moneat.models.OnCallScheduleUsergroups.insert {
+                                it[com.moneat.models.OnCallScheduleUsergroups.scheduleId] = scheduleId
+                                it[com.moneat.models.OnCallScheduleUsergroups.slackUsergroupId] = request.usergroupId
+                                it[com.moneat.models.OnCallScheduleUsergroups.slackUsergroupHandle] = request.usergroupHandle
+                                it[com.moneat.models.OnCallScheduleUsergroups.createdAt] = now
+                                it[com.moneat.models.OnCallScheduleUsergroups.updatedAt] = now
+                            }
+                        }
+                    }
+                    
+                    // Trigger immediate sync if service is available
+                    if (slackUserGroupSyncService != null) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            slackUserGroupSyncService.syncScheduleNow(scheduleId)
+                        }
+                    }
+                    
+                    call.respond(HttpStatusCode.OK, mapOf("message" to "Slack usergroup mapping updated"))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                }
+            }
+            
+            delete {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@delete
+                }
+                
+                if (scheduleId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    return@delete
+                }
+                
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    return@delete
+                }
+                
+                try {
+                    val deleted = org.jetbrains.exposed.sql.transactions.transaction {
+                        com.moneat.models.OnCallScheduleUsergroups.deleteWhere {
+                            com.moneat.models.OnCallScheduleUsergroups.scheduleId eq scheduleId
+                        }
+                    }
+                    
+                    if (deleted > 0) {
+                        call.respond(HttpStatusCode.NoContent)
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "No mapping found"))
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
             }
         }

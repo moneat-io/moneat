@@ -680,6 +680,70 @@ class SlackService {
         }
     }
     
+    // ===== User Groups =====
+    
+    @Serializable
+    data class SlackUsergroupsResponse(
+        val ok: Boolean,
+        val usergroups: List<SlackUsergroup>? = null,
+        val error: String? = null
+    )
+    
+    @Serializable
+    data class SlackUsergroup(
+        val id: String,
+        val handle: String,
+        val name: String,
+        val description: String? = null
+    )
+    
+    @Serializable
+    data class SlackUsergroupUsersUpdateResponse(
+        val ok: Boolean,
+        val error: String? = null
+    )
+    
+    suspend fun listUsergroups(accessToken: String): List<SlackUsergroup> {
+        return try {
+            val response: HttpResponse = httpClient.get("https://slack.com/api/usergroups.list") {
+                header("Authorization", "Bearer $accessToken")
+            }
+            
+            val result = json.decodeFromString<SlackUsergroupsResponse>(response.bodyAsText())
+            if (result.ok && result.usergroups != null) {
+                result.usergroups
+            } else {
+                logger.error("Failed to list Slack usergroups: ${result.error}")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            logger.error("Error listing Slack usergroups", e)
+            emptyList()
+        }
+    }
+    
+    suspend fun updateUsergroupMembers(accessToken: String, usergroupId: String, userIds: List<String>): Boolean {
+        return try {
+            val response: HttpResponse = httpClient.post("https://slack.com/api/usergroups.users.update") {
+                contentType(ContentType.Application.FormUrlEncoded)
+                header("Authorization", "Bearer $accessToken")
+                setBody("usergroup=$usergroupId&users=${userIds.joinToString(",")}")
+            }
+            
+            val result = json.decodeFromString<SlackUsergroupUsersUpdateResponse>(response.bodyAsText())
+            if (result.ok) {
+                logger.debug("Successfully updated usergroup $usergroupId with ${userIds.size} members")
+                true
+            } else {
+                logger.error("Failed to update Slack usergroup: ${result.error}")
+                false
+            }
+        } catch (e: Exception) {
+            logger.error("Error updating Slack usergroup members", e)
+            false
+        }
+    }
+    
     // ===== On-Call Notifications =====
     
     suspend fun sendOnCallAlert(userId: Int, incidentId: Int, title: String, priorityLevel: String) {
