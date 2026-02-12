@@ -1,6 +1,7 @@
 package com.moneat.services
 
 import com.moneat.models.*
+import com.moneat.services.oncall.OnCallScheduleService
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
 import kotlinx.datetime.*
@@ -20,7 +21,8 @@ data class QuotaReservationResult(
 )
 
 class BillingQuotaService(
-    private val pricingTierService: PricingTierService = PricingTierService()
+    private val pricingTierService: PricingTierService = PricingTierService(),
+    private val onCallScheduleService: OnCallScheduleService = OnCallScheduleService()
 ) {
     companion object {
         private const val BYTES_PER_GB = 1_073_741_824L
@@ -225,7 +227,11 @@ class BillingQuotaService(
         val paygUsedMicros: Long,
         val pendingMeterUnits: Long,
         val paygRateMicrosPerUnit: Long,
-        val paygLimitBytes: Long
+        val paygLimitBytes: Long,
+        val oncallSeats: Int,
+        val oncallUsedSeats: Int,
+        val oncallPerUserMonthlyCents: Int,
+        val oncallEnabled: Boolean
     )
 
     private fun loadQuotaState(organizationId: Int, lockRows: Boolean): QuotaState {
@@ -372,7 +378,11 @@ class BillingQuotaService(
             paygUsedMicros = sub?.get(Subscriptions.payg_used_micros) ?: 0,
             pendingMeterUnits = sub?.get(Subscriptions.pending_meter_units) ?: 0,
             paygRateMicrosPerUnit = paygRateMicros,
-            paygLimitBytes = paygLimitBytes
+            paygLimitBytes = paygLimitBytes,
+            oncallSeats = sub?.get(Subscriptions.oncall_seats) ?: 0,
+            oncallUsedSeats = onCallScheduleService.getOnCallUsedSeats(organizationId),
+            oncallPerUserMonthlyCents = tier.oncallPerUserMonthlyCents,
+            oncallEnabled = tier.oncallEnabled
         )
     }
 
@@ -409,6 +419,10 @@ class BillingQuotaService(
             paygBudgetCents = state.paygBudgetCents,
             paygUsedUnits = state.paygUsedUnits,
             paygUsedCentsEstimate = (state.paygUsedMicros / 10_000L).toInt(),
+            oncallSeats = state.oncallSeats,
+            oncallUsedSeats = state.oncallUsedSeats,
+            oncallPerUserMonthlyCents = state.oncallPerUserMonthlyCents,
+            oncallEnabled = state.oncallEnabled,
             plan = state.plan,
             status = state.status,
             withinQuota = state.usedUnits <= state.totalLimitUnits && eventLimitsWithinBudget && bytesWithinBudget
@@ -452,6 +466,11 @@ class BillingQuotaService(
             stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
             stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
             stripeYearlyOveragePriceId = row[PricingTierConfigs.stripe_yearly_overage_price_id],
+            stripeOncallPriceId = row[PricingTierConfigs.stripe_oncall_price_id],
+            stripeOncallYearlyPriceId = row[PricingTierConfigs.stripe_oncall_yearly_price_id],
+            oncallPerUserMonthlyCents = row[PricingTierConfigs.oncall_per_user_monthly_cents],
+            oncallPerUserYearlyCents = row[PricingTierConfigs.oncall_per_user_yearly_cents],
+            oncallEnabled = row[PricingTierConfigs.oncall_enabled],
             isCurrent = row[PricingTierConfigs.is_current]
         )
     }
@@ -504,6 +523,11 @@ class BillingQuotaService(
             stripeOveragePriceId = null,
             stripeYearlyBasePriceId = null,
             stripeYearlyOveragePriceId = null,
+            stripeOncallPriceId = null,
+            stripeOncallYearlyPriceId = null,
+            oncallPerUserMonthlyCents = 500, // Default $5
+            oncallPerUserYearlyCents = 5000, // Default $50
+            oncallEnabled = tier != PricingTier.FREE,
             isCurrent = true
         )
     }

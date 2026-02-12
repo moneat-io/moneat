@@ -7,6 +7,7 @@ import {
   FileText,
   GitBranch,
   Globe,
+  Phone,
   Play,
   Shield,
   Zap,
@@ -179,6 +180,51 @@ const secondaryFeatures: Feature[] = [
     mock: <img src="/screenshots/status-pages.png" alt="Public status page showing service health and incidents" className="w-full h-full object-cover" />,
   },
   {
+    icon: Phone,
+    title: 'On-call scheduling',
+    description:
+      'Manage on-call rotations and escalation policies. Notify the right person via phone, SMS, or Slack when things break.',
+    gradient: 'from-orange-500 to-amber-400',
+    iconBg: 'bg-orange-500/10',
+    iconColor: 'text-orange-400',
+    noFrame: true,
+    mock: (
+      <div className="relative w-full rounded-xl overflow-hidden bg-[#0B1120] border border-white/10">
+        <div className="absolute inset-0"
+             style={{
+               backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)',
+               backgroundSize: '24px 24px'
+             }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120] via-transparent to-transparent" />
+
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
+           <div className="h-4 opacity-0" />
+        </div>
+
+        <div className="aspect-video relative flex flex-col items-center justify-center p-6 gap-3">
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 backdrop-blur-sm">
+                <div className="h-8 w-8 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400 font-bold text-xs">AE</div>
+                <div className="flex-1 space-y-1.5">
+                    <div className="h-2 w-24 rounded bg-white/20"/>
+                    <div className="h-1.5 w-16 rounded bg-white/10"/>
+                </div>
+                <div className="px-2 py-1 rounded bg-green-500/20 text-green-400 text-[10px] font-medium border border-green-500/20">Active</div>
+            </div>
+             <div className="h-4 w-0.5 bg-white/10"/>
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 opacity-60 backdrop-blur-sm">
+                <div className="h-8 w-8 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-xs">JD</div>
+                <div className="flex-1 space-y-1.5">
+                    <div className="h-2 w-20 rounded bg-white/20"/>
+                    <div className="h-1.5 w-12 rounded bg-white/10"/>
+                </div>
+                <div className="px-2 py-1 rounded bg-white/10 text-slate-400 text-[10px] font-medium border border-white/10">Backup</div>
+            </div>
+        </div>
+      </div>
+    ),
+  },
+  {
     icon: Bell,
     title: 'Alerting & Integrations',
     description:
@@ -295,7 +341,7 @@ export function VariantA() {
             </h1>
 
             <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up animation-delay-200">
-              Errors, logs, uptime, and status pages — one platform, simple GB pricing.
+              Errors, logs, uptime, on-call, and status pages — one platform, simple GB pricing.
               Switch from Sentry in minutes.
             </p>
 

@@ -37,10 +37,15 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val payg_enabled = bool("payg_enabled").default(false)
     val payg_rate_micros_per_unit = long("payg_rate_micros_per_unit").default(0)
     val overage_rate_cents_per_gb = integer("overage_rate_cents_per_gb").default(0)
+    val oncall_per_user_monthly_cents = integer("oncall_per_user_monthly_cents").default(0)
+    val oncall_per_user_yearly_cents = integer("oncall_per_user_yearly_cents").default(0)
+    val oncall_enabled = bool("oncall_enabled").default(false)
     val stripe_base_price_id = varchar("stripe_base_price_id", 255).nullable()
     val stripe_overage_price_id = varchar("stripe_overage_price_id", 255).nullable()
     val stripe_yearly_base_price_id = varchar("stripe_yearly_base_price_id", 255).nullable()
     val stripe_yearly_overage_price_id = varchar("stripe_yearly_overage_price_id", 255).nullable()
+    val stripe_oncall_price_id = varchar("stripe_oncall_price_id", 255).nullable()
+    val stripe_oncall_yearly_price_id = varchar("stripe_oncall_yearly_price_id", 255).nullable()
     val is_current = bool("is_current").default(true)
     val created_at = timestamp("created_at").nullable()
     override val primaryKey = PrimaryKey(id)
@@ -114,10 +119,15 @@ data class PricingTierConfigResponse(
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
     val overageRateCentsPerGb: Int,
+    val oncallPerUserMonthlyCents: Int = 0,
+    val oncallPerUserYearlyCents: Int = 0,
+    val oncallEnabled: Boolean = false,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,
     val stripeYearlyOveragePriceId: String? = null,
+    val stripeOncallPriceId: String? = null,
+    val stripeOncallYearlyPriceId: String? = null,
     val isCurrent: Boolean
 )
 
@@ -157,6 +167,10 @@ data class BillingUsageResponse(
     val paygBudgetCents: Int,
     val paygUsedUnits: Long,
     val paygUsedCentsEstimate: Int,
+    val oncallSeats: Int = 0,
+    val oncallUsedSeats: Int = 0,
+    val oncallPerUserMonthlyCents: Int = 0,
+    val oncallEnabled: Boolean = false,
     val plan: String,
     val status: String,
     val withinQuota: Boolean
@@ -167,7 +181,8 @@ data class CheckoutSessionRequest(
     val tierName: String,
     val billingInterval: String = "monthly",  // "monthly" or "yearly"
     val successUrl: String,
-    val cancelUrl: String
+    val cancelUrl: String,
+    val oncallSeats: Int = 0
 )
 
 @Serializable
@@ -245,10 +260,15 @@ data class CreateTierVersionRequest(
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
     val overageRateCentsPerGb: Int? = null,
+    val oncallPerUserMonthlyCents: Int? = null,
+    val oncallPerUserYearlyCents: Int? = null,
+    val oncallEnabled: Boolean? = null,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,
-    val stripeYearlyOveragePriceId: String? = null
+    val stripeYearlyOveragePriceId: String? = null,
+    val stripeOncallPriceId: String? = null,
+    val stripeOncallYearlyPriceId: String? = null
 )
 
 @Serializable
@@ -256,7 +276,20 @@ data class UpdateStripePriceIdsRequest(
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,
-    val stripeYearlyOveragePriceId: String? = null
+    val stripeYearlyOveragePriceId: String? = null,
+    val stripeOncallPriceId: String? = null,
+    val stripeOncallYearlyPriceId: String? = null
+)
+
+@Serializable
+data class UpdateOnCallSeatsRequest(
+    val seats: Int
+)
+
+@Serializable
+data class UpdateOnCallSeatsResponse(
+    val seats: Int,
+    val proratedAmountCents: Int?
 )
 
 @Serializable

@@ -3,12 +3,15 @@ package com.moneat.routes
 import com.moneat.models.BillingPlansListResponse
 import com.moneat.models.CheckoutSessionRequest
 import com.moneat.models.Subscriptions
+import com.moneat.models.UpdateOnCallSeatsRequest
+import com.moneat.models.UpdateOnCallSeatsResponse
 import com.moneat.models.UpdatePaygBudgetRequest
 import com.moneat.models.UpdatePaygBudgetResponse
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.PricingTierService
 import com.moneat.services.StripeService
 import com.moneat.services.UsageTrackingService
+import com.moneat.services.oncall.OnCallScheduleService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -243,6 +246,45 @@ fun Route.billingRoutes() {
                 return@put
             }
             call.respond(UpdatePaygBudgetResponse(paygBudgetCents = request.paygBudgetCents))
+        }
+
+        put("/oncall-seats") {
+            val principal = call.principal<JWTPrincipal>() ?: run {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))
+                return@put
+            }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId = pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                return@put
+            }
+            
+            val request = call.receive<UpdateOnCallSeatsRequest>()
+            if (request.seats < 0) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Seats must be non-negative"))
+                return@put
+            }
+            if (request.seats > 200) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Maximum 200 on-call seats allowed"))
+                return@put
+            }
+
+            // Check if seats >= currently used
+            val usedSeats = OnCallScheduleService().getOnCallUsedSeats(orgId)
+            if (request.seats < usedSeats) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Cannot reduce seats below currently assigned users ($usedSeats)"))
+                return@put
+            }
+
+            try {
+                val response = stripeService.updateOnCallSeats(orgId, request.seats)
+                call.respond(response)
+            } catch (e: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to update on-call seats" }
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to update seats"))
+            }
         }
     }
 }

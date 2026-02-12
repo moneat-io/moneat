@@ -43,14 +43,16 @@ class StripeService(
         tierName: String,
         billingInterval: String = "monthly",
         successUrl: String,
-        cancelUrl: String
+        cancelUrl: String,
+        oncallSeats: Int = 0
     ): CheckoutSessionResponse {
         ensureEnabled()
         
         SentryUtils.breadcrumb("stripe", "Creating checkout session", mapOf(
             "organization_id" to organizationId,
             "tier_name" to tierName,
-            "billing_interval" to billingInterval
+            "billing_interval" to billingInterval,
+            "oncall_seats" to oncallSeats
         ))
 
         val tier = pricingTierService.getCurrentTier(tierName)
@@ -72,6 +74,12 @@ class StripeService(
             tier.stripeOveragePriceId
         }
         
+        val oncallPriceId = if (isYearly) {
+            tier.stripeOncallYearlyPriceId ?: tier.stripeOncallPriceId
+        } else {
+            tier.stripeOncallPriceId
+        }
+
         if (tier.paygEnabled && overagePriceId.isNullOrBlank()) {
             throw IllegalArgumentException("Tier missing Stripe overage price ID while PAYG is enabled")
         }
@@ -105,6 +113,14 @@ class StripeService(
             paramsBuilder.addLineItem(
                 CheckoutSessionCreateParams.LineItem.builder()
                     .setPrice(overagePriceId)
+                    .build()
+            )
+        }
+        if (tier.oncallEnabled && !oncallPriceId.isNullOrBlank() && oncallSeats > 0) {
+            paramsBuilder.addLineItem(
+                CheckoutSessionCreateParams.LineItem.builder()
+                    .setPrice(oncallPriceId)
+                    .setQuantity(oncallSeats.toLong())
                     .build()
             )
         }
@@ -290,6 +306,90 @@ class StripeService(
         }
     }
 
+    fun updateOnCallSeats(organizationId: Int, seats: Int): UpdateOnCallSeatsResponse {
+        ensureEnabled()
+        if (seats < 0) throw IllegalArgumentException("Seats cannot be negative")
+
+        val subRow = transaction {
+            Subscriptions.selectAll().where {
+                (Subscriptions.organization_id eq organizationId) and
+                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+            }.orderBy(Subscriptions.id to SortOrder.DESC).firstOrNull()
+        } ?: throw IllegalArgumentException("No active subscription found")
+
+        val stripeSubId = subRow[Subscriptions.stripe_subscription_id]
+            ?: throw IllegalArgumentException("Subscription is not linked to Stripe")
+        
+        val tierId = subRow[Subscriptions.pricing_tier_config_id]
+        val tier = pricingTierService.getTierById(tierId ?: 0)
+            ?: throw IllegalArgumentException("Subscription has no valid pricing tier")
+
+        if (!tier.oncallEnabled) throw IllegalArgumentException("On-call is not enabled for this tier")
+
+        val isYearly = subRow[Subscriptions.billing_interval].equals("yearly", ignoreCase = true)
+        val oncallPriceId = if (isYearly) {
+            tier.stripeOncallYearlyPriceId ?: tier.stripeOncallPriceId
+        } else {
+            tier.stripeOncallPriceId
+        } ?: throw IllegalArgumentException("On-call price ID not configured for this tier")
+
+        val currentOncallItemId = subRow[Subscriptions.stripe_oncall_item_id]
+        
+        val subscription = Subscription.retrieve(stripeSubId)
+        
+        val prorationParams = SubscriptionUpdateParams.builder()
+            .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS)
+
+        if (seats == 0) {
+            if (currentOncallItemId != null) {
+                // Remove item
+                SubscriptionItem.retrieve(currentOncallItemId).delete()
+            }
+        } else {
+            if (currentOncallItemId != null) {
+                // Update existing item
+                val item = SubscriptionItem.retrieve(currentOncallItemId)
+                item.update(
+                    SubscriptionItemUpdateParams.builder()
+                        .setQuantity(seats.toLong())
+                        .setProrationBehavior(SubscriptionItemUpdateParams.ProrationBehavior.CREATE_PRORATIONS)
+                        .build()
+                )
+            } else {
+                // Add new item
+                SubscriptionItem.create(
+                    SubscriptionItemCreateParams.builder()
+                        .setSubscription(stripeSubId)
+                        .setPrice(oncallPriceId)
+                        .setQuantity(seats.toLong())
+                        .setProrationBehavior(SubscriptionItemCreateParams.ProrationBehavior.CREATE_PRORATIONS)
+                        .build()
+                )
+            }
+        }
+        
+        // Fetch upcoming invoice to estimate proration cost if any
+        val upcomingInvoice = try {
+            com.stripe.model.Invoice.upcoming(
+                com.stripe.param.InvoiceUpcomingParams.builder()
+                    .setCustomer(subRow[Subscriptions.stripe_customer_id])
+                    .setSubscription(stripeSubId)
+                    .build()
+            )
+        } catch (e: Exception) {
+            null
+        }
+
+        // We trigger a sync to update DB state immediately
+        val updatedSub = Subscription.retrieve(stripeSubId)
+        syncSubscriptionFromStripe(updatedSub)
+
+        return UpdateOnCallSeatsResponse(
+            seats = seats,
+            proratedAmountCents = upcomingInvoice?.amountDue?.toInt() // This is a rough estimate, usually user sees next invoice
+        )
+    }
+
     fun syncSubscriptionFromStripe(subscription: Subscription) {
         val metadataOrgId = subscription.metadata?.get("organization_id")
         logger.info { "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, metadata_org_id='$metadataOrgId'" }
@@ -319,13 +419,26 @@ class StripeService(
             resolvedTier?.stripeOveragePriceId,
             resolvedTier?.stripeYearlyOveragePriceId
         )
+        val oncallPriceIds = setOfNotBlank(
+            resolvedTier?.stripeOncallPriceId,
+            resolvedTier?.stripeOncallYearlyPriceId
+        )
 
         var baseItemId: String? = null
         var overageItemId: String? = null
+        var oncallItemId: String? = null
+        var oncallSeats = 0
+
         for (item in subscription.items.data) {
             val priceId = item.price?.id
-            if (priceId != null && priceId in overagePriceIds) overageItemId = item.id
-            if (priceId != null && priceId in basePriceIds) baseItemId = item.id
+            if (priceId != null) {
+                if (priceId in overagePriceIds) overageItemId = item.id
+                if (priceId in basePriceIds) baseItemId = item.id
+                if (priceId in oncallPriceIds) {
+                    oncallItemId = item.id
+                    oncallSeats = item.quantity?.toInt() ?: 0
+                }
+            }
         }
 
         transaction {
@@ -340,6 +453,10 @@ class StripeService(
             val tierId = resolvedTier?.id?.takeIf { it > 0 }
             val startInstant = subscription.startDate?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
             val endInstant = subscription.trialEnd?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
+            val billingInterval = if (baseItemId != null) {
+                 subscription.items.data.find { it.id == baseItemId }?.price?.recurring?.interval ?: "monthly"
+            } else "monthly"
+            val finalInterval = if (billingInterval == "year") "yearly" else "monthly"
 
             if (existing != null) {
                 logger.info { "Updating existing subscription row ${existing[Subscriptions.id]} for org $organizationId" }
@@ -352,6 +469,9 @@ class StripeService(
                     it[pricing_tier_config_id] = tierId
                     it[stripe_base_item_id] = baseItemId
                     it[stripe_overage_item_id] = overageItemId
+                    it[stripe_oncall_item_id] = oncallItemId
+                    it[Subscriptions.oncall_seats] = oncallSeats
+                    it[Subscriptions.billing_interval] = finalInterval
                 }
             } else {
                 logger.info { "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}" }
@@ -370,6 +490,9 @@ class StripeService(
                     it[pending_meter_units] = 0
                     it[stripe_base_item_id] = baseItemId
                     it[stripe_overage_item_id] = overageItemId
+                    it[stripe_oncall_item_id] = oncallItemId
+                    it[Subscriptions.oncall_seats] = oncallSeats
+                    it[Subscriptions.billing_interval] = finalInterval
                 }
             }
         }
@@ -397,7 +520,9 @@ class StripeService(
                         tier.stripeBasePriceId,
                         tier.stripeYearlyBasePriceId,
                         tier.stripeOveragePriceId,
-                        tier.stripeYearlyOveragePriceId
+                        tier.stripeYearlyOveragePriceId,
+                        tier.stripeOncallPriceId,
+                        tier.stripeOncallYearlyPriceId
                     )
                     tierPriceIds.any { it in subscriptionPriceIds }
                 }

@@ -24,6 +24,8 @@ export interface PricingCardTierInput {
   prioritySupportEnabled: boolean
   slaEnabled: boolean
   customRetentionEnabled: boolean
+  oncallPerUserMonthlyCents?: number
+  oncallEnabled?: boolean
 }
 
 export interface PricingCardModel {
@@ -97,6 +99,9 @@ function buildTierFeatures(tier: PricingCardTierInput): string[] {
   if (tier.prioritySupportEnabled) features.push('Priority support')
   if (tier.slaEnabled) features.push('SLA guarantee')
   if (tier.customRetentionEnabled) features.push('Custom retention')
+  if (tier.oncallEnabled && tier.oncallPerUserMonthlyCents) {
+    features.push(`On-call scheduling (+$${tier.oncallPerUserMonthlyCents / 100}/user)`)
+  }
 
   return features
 }

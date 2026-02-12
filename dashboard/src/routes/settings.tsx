@@ -47,6 +47,7 @@ import {
   Layers,
   Plug,
   Shield,
+  Phone,
   Settings,
   Server,
   Info,
@@ -672,6 +673,7 @@ function BillingTab() {
   const [setupClientSecret, setSetupClientSecret] = useState<string | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+  const [pendingOnCallSeats, setPendingOnCallSeats] = useState<number | null>(null)
 
   const { data: usage, isLoading } = useQuery({
     queryKey: ['billingUsage'],
@@ -705,8 +707,32 @@ function BillingTab() {
   useEffect(() => {
     if (usage) {
       setBudgetDollars((usage.paygBudgetCents / 100).toString())
+      if (pendingOnCallSeats === null && usage.oncallSeats !== undefined) {
+        setPendingOnCallSeats(usage.oncallSeats)
+      }
     }
-  }, [usage?.paygBudgetCents])
+  }, [usage?.paygBudgetCents, usage?.oncallSeats])
+
+  const updateOnCallSeatsMutation = useMutation({
+    mutationFn: (seats: number) => api.updateOnCallSeats(seats),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['billingUsage'] })
+      queryClient.invalidateQueries({ queryKey: ['billingInvoices'] })
+      toast({
+        title: 'On-call seats updated',
+        description: data.proratedAmountCents
+           ? `Seats updated. Prorated charge: $${(data.proratedAmountCents / 100).toFixed(2)}`
+           : 'Seats updated successfully.',
+      })
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to update seats',
+        description: err.message,
+        variant: 'destructive',
+      })
+    },
+  })
 
   const updateBudgetMutation = useMutation({
     mutationFn: (paygBudgetCents: number) => api.updatePaygBudget(paygBudgetCents),
@@ -843,8 +869,22 @@ function BillingTab() {
       ? 'bg-amber-500'
       : 'bg-emerald-500'
   const overageGB = usage.bytesLimit > 0 && usage.usedBytes > usage.bytesLimit
-    ? formatGB(usage.usedBytes - usage.bytesLimit)
-    : null
+  const calculateProration = (seatDiff: number) => {
+    if (!usage || !usage.oncallPerUserMonthlyCents) return 0
+    const now = new Date().getTime()
+    const start = new Date(usage.periodStart).getTime()
+    const end = new Date(usage.periodEnd).getTime()
+    const totalDuration = end - start
+    const remainingDuration = Math.max(0, end - now)
+    const ratio = remainingDuration / totalDuration
+    return Math.round(seatDiff * usage.oncallPerUserMonthlyCents * ratio)
+  }
+
+  const handleUpdateOnCallSeats = () => {
+    if (pendingOnCallSeats !== null) {
+      updateOnCallSeatsMutation.mutate(pendingOnCallSeats)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -884,6 +924,111 @@ function BillingTab() {
           </div>
         </CardContent>
       </Card>
+
+      {usage.oncallEnabled && (
+        <Card className="border-orange-500/20 overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+            <Phone className="w-32 h-32 text-orange-500" />
+          </div>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-orange-500/10 rounded-full">
+                <Phone className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <CardTitle>On-Call Seats</CardTitle>
+                <CardDescription>
+                  Manage seats for on-call scheduling and rotations.
+                  ${(usage.oncallPerUserMonthlyCents ?? 500) / 100}/user/mo.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6 relative z-10">
+            <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Seat Utilization</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold">{usage.oncallUsedSeats ?? 0}</span>
+                  <span className="text-muted-foreground">of {usage.oncallSeats ?? 0} seats used</span>
+                </div>
+                {(usage.oncallUsedSeats ?? 0) > (pendingOnCallSeats ?? usage.oncallSeats ?? 0) && (
+                  <p className="text-xs text-red-500 font-medium flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Cannot reduce below currently used seats ({usage.oncallUsedSeats})
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setPendingOnCallSeats(Math.max((usage.oncallUsedSeats ?? 0), (pendingOnCallSeats ?? 0) - 1))}
+                    disabled={updateOnCallSeatsMutation.isPending || (pendingOnCallSeats ?? 0) <= (usage.oncallUsedSeats ?? 0)}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <div className="w-12 text-center font-mono text-lg font-medium">
+                    {pendingOnCallSeats ?? 0}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setPendingOnCallSeats((pendingOnCallSeats ?? 0) + 1)}
+                    disabled={updateOnCallSeatsMutation.isPending}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {(pendingOnCallSeats !== null && usage.oncallSeats !== undefined && pendingOnCallSeats !== usage.oncallSeats) && (
+              <div className="rounded-lg bg-muted/50 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm">
+                  <span className="font-medium">Summary: </span>
+                  {pendingOnCallSeats > usage.oncallSeats ? (
+                    <>
+                      Adding {pendingOnCallSeats - usage.oncallSeats} seat{(pendingOnCallSeats - usage.oncallSeats) > 1 ? 's' : ''}.
+                      <span className="text-muted-foreground ml-1">
+                        (approx. +{formatCurrency(calculateProration(pendingOnCallSeats - usage.oncallSeats))} now)
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      Removing {usage.oncallSeats - pendingOnCallSeats} seat{(usage.oncallSeats - pendingOnCallSeats) > 1 ? 's' : ''}.
+                      <span className="text-muted-foreground ml-1">
+                        (credit applied to next bill)
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPendingOnCallSeats(usage.oncallSeats ?? 0)}
+                    disabled={updateOnCallSeatsMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleUpdateOnCallSeats}
+                    disabled={updateOnCallSeatsMutation.isPending}
+                  >
+                    {updateOnCallSeatsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update Seats'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

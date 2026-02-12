@@ -129,6 +129,8 @@ object Subscriptions : Table("subscriptions") {
     val pending_meter_units = long("pending_meter_units").default(0)
     val stripe_base_item_id = varchar("stripe_base_item_id", 255).nullable()
     val stripe_overage_item_id = varchar("stripe_overage_item_id", 255).nullable()
+    val stripe_oncall_item_id = varchar("stripe_oncall_item_id", 255).nullable()
+    val oncall_seats = integer("oncall_seats").default(0)
     val billing_grace_until = timestamp("billing_grace_until").nullable()
     override val primaryKey = PrimaryKey(id)
 }

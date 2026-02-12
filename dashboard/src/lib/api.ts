@@ -392,6 +392,9 @@ interface BillingTierConfig {
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null
   stripeYearlyOveragePriceId?: string | null
+  oncallPerUserMonthlyCents?: number
+  oncallPerUserYearlyCents?: number
+  oncallEnabled?: boolean
   isCurrent: boolean
 }
 
@@ -428,6 +431,10 @@ interface BillingUsage {
   paygBudgetCents: number
   paygUsedUnits: number
   paygUsedCentsEstimate: number
+  oncallSeats?: number
+  oncallUsedSeats?: number
+  oncallPerUserMonthlyCents?: number
+  oncallEnabled?: boolean
   plan: string
   status: string
   withinQuota: boolean
@@ -438,6 +445,7 @@ interface CheckoutSessionRequest {
   billingInterval?: string  // 'monthly' or 'yearly'
   successUrl: string
   cancelUrl: string
+  oncallSeats?: number
 }
 
 interface CheckoutSessionResponse {
@@ -1329,6 +1337,15 @@ interface IncidentListFilters {
   toDate?: string
 }
 
+interface UpdateOnCallSeatsRequest {
+  seats: number
+}
+
+interface UpdateOnCallSeatsResponse {
+  seats: number
+  proratedAmountCents?: number
+}
+
 class ApiClient {
   private authRedirectInProgress = false
 
@@ -2079,6 +2096,13 @@ class ApiClient {
     return this.request<{paygBudgetCents: number}>(`${API_BASE}/billing/payg-budget`, {
       method: 'PUT',
       body: JSON.stringify({paygBudgetCents}),
+    })
+  }
+
+  async updateOnCallSeats(seats: number) {
+    return this.request<UpdateOnCallSeatsResponse>(`${API_BASE}/billing/oncall-seats`, {
+      method: 'PUT',
+      body: JSON.stringify({ seats }),
     })
   }
 

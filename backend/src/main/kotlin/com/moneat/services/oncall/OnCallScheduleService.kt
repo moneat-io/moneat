@@ -10,6 +10,21 @@ import java.time.LocalTime
 
 class OnCallScheduleService {
     
+    fun getOnCallUsedSeats(organizationId: Int): Int = transaction {
+        val scheduleIds = OnCallSchedules.selectAll()
+            .where { OnCallSchedules.organizationId eq organizationId }
+            .map { it[OnCallSchedules.id].value }
+        
+        if (scheduleIds.isEmpty()) return@transaction 0
+        
+        OnCallParticipants
+            .selectAll()
+            .where { OnCallParticipants.scheduleId inList scheduleIds }
+            .map { it[OnCallParticipants.userId] }
+            .distinct()
+            .count()
+    }
+    
     fun getSchedule(scheduleId: Int): OnCallSchedule? = transaction {
         val scheduleRow = OnCallSchedules
             .selectAll()
@@ -159,6 +174,9 @@ class OnCallScheduleService {
         timezone: String,
         participantIds: List<Int>
     ): OnCallSchedule = transaction {
+        // Enforce seat limits
+        checkSeatLimit(organizationId, participantIds)
+
         val now = Clock.System.now()
         
         val scheduleId = OnCallSchedules.insertAndGetId {
@@ -191,6 +209,13 @@ class OnCallScheduleService {
         timezone: String? = null,
         participantIds: List<Int>? = null
     ): OnCallSchedule? = transaction {
+        if (participantIds != null) {
+            val schedule = OnCallSchedules.selectAll().where { OnCallSchedules.id eq scheduleId }.singleOrNull()
+            if (schedule != null) {
+                checkSeatLimit(schedule[OnCallSchedules.organizationId], participantIds, scheduleId)
+            }
+        }
+
         val now = Clock.System.now()
         
         OnCallSchedules.update({ OnCallSchedules.id eq scheduleId }) {
@@ -278,5 +303,34 @@ class OnCallScheduleService {
     
     fun deleteOverride(overrideId: Int): Boolean = transaction {
         OnCallOverrides.deleteWhere { id eq overrideId } > 0
+    }
+
+    private fun checkSeatLimit(organizationId: Int, newParticipantUserIds: List<Int>, scheduleIdToExclude: Int? = null) {
+        val sub = Subscriptions.selectAll().where {
+            (Subscriptions.organization_id eq organizationId) and
+            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+        }.orderBy(Subscriptions.id to SortOrder.DESC).firstOrNull()
+        
+        val seatsPurchased = sub?.get(Subscriptions.oncall_seats) ?: 0
+        
+        val scheduleIds = OnCallSchedules.selectAll()
+            .where { OnCallSchedules.organizationId eq organizationId }
+            .map { it[OnCallSchedules.id].value }
+            .filter { it != scheduleIdToExclude }
+            
+        val existingUsers = if (scheduleIds.isEmpty()) emptySet() else {
+            OnCallParticipants
+                .selectAll()
+                .where { OnCallParticipants.scheduleId inList scheduleIds }
+                .map { it[OnCallParticipants.userId] }
+                .toSet()
+        }
+        
+        val allUsers = existingUsers + newParticipantUserIds
+        val neededSeats = allUsers.size
+        
+        if (neededSeats > seatsPurchased) {
+             throw IllegalArgumentException("On-call seat limit reached ($seatsPurchased seats). Purchase more seats in Settings > Billing.")
+        }
     }
 }

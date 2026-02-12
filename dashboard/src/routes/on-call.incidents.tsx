@@ -1,7 +1,7 @@
-import {createFileRoute} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Card, CardContent} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {
   Select,
@@ -10,23 +10,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {AlertTriangle, Filter} from 'lucide-react'
+import {Filter, Zap, Clock, CheckCircle2, ChevronRight, Inbox} from 'lucide-react'
 import {useState} from 'react'
+import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/on-call/incidents')({
   component: Incidents,
 })
 
-const getPriorityVariant = (priority: string): 'default' | 'destructive' | 'outline' => {
-  if (priority.startsWith('P0') || priority.startsWith('P1')) return 'destructive'
-  if (priority.startsWith('P2')) return 'default'
-  return 'outline'
+const getPriorityConfig = (priority: string) => {
+  if (priority.startsWith('P0')) return {color: 'bg-red-500/15 text-red-400 border-red-500/30', dot: 'bg-red-500', label: 'Critical'}
+  if (priority.startsWith('P1')) return {color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', dot: 'bg-orange-500', label: 'High'}
+  if (priority.startsWith('P2')) return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', dot: 'bg-amber-500', label: 'Medium'}
+  if (priority.startsWith('P3')) return {color: 'bg-blue-500/15 text-blue-400 border-blue-500/30', dot: 'bg-blue-500', label: 'Low'}
+  if (priority.startsWith('P4')) return {color: 'bg-slate-500/15 text-slate-400 border-slate-500/30', dot: 'bg-slate-500', label: 'Info'}
+  return {color: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground', label: 'Unknown'}
 }
 
-const getStatusVariant = (status: string): 'default' | 'destructive' | 'outline' => {
-  if (status === 'TRIGGERED') return 'destructive'
-  if (status === 'ACKNOWLEDGED') return 'default'
-  return 'outline'
+const getStatusConfig = (status: string) => {
+  if (status === 'TRIGGERED') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', icon: Zap, label: 'Triggered'}
+  if (status === 'ACKNOWLEDGED') return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', icon: Clock, label: 'Acknowledged'}
+  return {color: 'bg-green-500/15 text-green-400 border-green-500/30', icon: CheckCircle2, label: 'Resolved'}
+}
+
+function timeAgo(date: string) {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
 }
 
 function Incidents() {
@@ -43,123 +58,194 @@ function Incidents() {
     },
   })
 
+  const triggeredCount = incidents?.filter(i => i.status === 'TRIGGERED').length || 0
+  const acknowledgedCount = incidents?.filter(i => i.status === 'ACKNOWLEDGED').length || 0
+  const resolvedCount = incidents?.filter(i => i.status === 'RESOLVED').length || 0
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Incidents</h2>
-          <p className="text-muted-foreground">View and manage on-call incidents</p>
+          <p className="text-muted-foreground text-sm">View and manage on-call incidents</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-4 w-4" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex gap-4">
-          <div className="w-48">
-            <label className="text-sm font-medium mb-2 block">Status</label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="TRIGGERED">Triggered</SelectItem>
-                <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
-                <SelectItem value="RESOLVED">Resolved</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Stats Row */}
+      {!isLoading && incidents && incidents.length > 0 && (
+        <div className="flex gap-3">
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'TRIGGERED' ? 'all' : 'TRIGGERED')}
+            className={cn(
+              'flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all',
+              statusFilter === 'TRIGGERED'
+                ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                : 'hover:bg-muted'
+            )}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>{triggeredCount} Triggered</span>
+          </button>
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'ACKNOWLEDGED' ? 'all' : 'ACKNOWLEDGED')}
+            className={cn(
+              'flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all',
+              statusFilter === 'ACKNOWLEDGED'
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                : 'hover:bg-muted'
+            )}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            <span>{acknowledgedCount} Acknowledged</span>
+          </button>
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
+            className={cn(
+              'flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all',
+              statusFilter === 'RESOLVED'
+                ? 'bg-green-500/15 border-green-500/40 text-green-400'
+                : 'hover:bg-muted'
+            )}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            <span>{resolvedCount} Resolved</span>
+          </button>
+        </div>
+      )}
 
-          <div className="w-48">
-            <label className="text-sm font-medium mb-2 block">Priority</label>
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                <SelectItem value="P0">P0</SelectItem>
-                <SelectItem value="P1">P1</SelectItem>
-                <SelectItem value="P2">P2</SelectItem>
-                <SelectItem value="P3">P3</SelectItem>
-                <SelectItem value="P4">P4</SelectItem>
-                <SelectItem value="P5">P5</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Filters */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Filter className="h-4 w-4" />
+          <span>Filter:</span>
+        </div>
+        <div className="w-44">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="TRIGGERED">Triggered</SelectItem>
+              <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
+              <SelectItem value="RESOLVED">Resolved</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-44">
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="P0">P0 - Critical</SelectItem>
+              <SelectItem value="P1">P1 - High</SelectItem>
+              <SelectItem value="P2">P2 - Medium</SelectItem>
+              <SelectItem value="P3">P3 - Low</SelectItem>
+              <SelectItem value="P4">P4 - Info</SelectItem>
+              <SelectItem value="P5">P5 - None</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {(statusFilter !== 'all' || priorityFilter !== 'all') && (
+          <button
+            onClick={() => {setStatusFilter('all'); setPriorityFilter('all')}}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
 
       {/* Incidents List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Incidents</CardTitle>
-          <CardDescription>
-            {isLoading ? 'Loading...' : `${incidents?.length || 0} incident(s)`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading incidents...</p>
-          ) : incidents && incidents.length > 0 ? (
-            <div className="space-y-3">
-              {incidents.map((incident) => (
-                <a
-                  key={incident.id}
-                  href={`/on-call/incidents/${incident.id}`}
-                  className="block p-4 border rounded-md hover:bg-accent transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-base mb-1">{incident.title}</h3>
-                      {incident.description && (
-                        <p className="text-sm text-muted-foreground mb-2">{incident.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>{new Date(incident.triggeredAt).toLocaleString()}</span>
-                        {incident.acknowledgedAt && (
-                          <>
-                            <span>·</span>
-                            <span>Acknowledged by {incident.acknowledgedByName}</span>
-                          </>
-                        )}
-                        {incident.resolvedAt && (
-                          <>
-                            <span>·</span>
-                            <span>Resolved by {incident.resolvedByName}</span>
-                          </>
-                        )}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-red-500" />
+        </div>
+      ) : incidents && incidents.length > 0 ? (
+        <div className="space-y-2">
+          {incidents.map((incident) => {
+            const priorityCfg = getPriorityConfig(incident.priorityLevel)
+            const statusCfg = getStatusConfig(incident.status)
+            const StatusIcon = statusCfg.icon
+            return (
+              <Link
+                key={incident.id}
+                to="/on-call/incidents/$incidentId"
+                params={{incidentId: String(incident.id)}}
+                className="block group"
+              >
+                <Card className={cn(
+                  'transition-all hover:shadow-md',
+                  incident.status === 'TRIGGERED' && 'border-l-4 border-l-red-500 hover:border-red-500/40',
+                  incident.status === 'ACKNOWLEDGED' && 'border-l-4 border-l-amber-500 hover:border-amber-500/40',
+                  incident.status === 'RESOLVED' && 'hover:border-muted-foreground/20',
+                )}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className={cn('flex-shrink-0 h-2.5 w-2.5 rounded-full mt-2', priorityCfg.dot)} />
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-sm group-hover:text-foreground truncate">
+                            {incident.title}
+                          </h3>
+                          {incident.description && (
+                            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{incident.description}</p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                            <span>{timeAgo(incident.triggeredAt)}</span>
+                            {incident.alertSource && (
+                              <>
+                                <span>·</span>
+                                <span>{incident.alertSource}</span>
+                              </>
+                            )}
+                            {incident.acknowledgedByName && (
+                              <>
+                                <span>·</span>
+                                <span className="text-amber-400">Ack by {incident.acknowledgedByName}</span>
+                              </>
+                            )}
+                            {incident.resolvedByName && (
+                              <>
+                                <span>·</span>
+                                <span className="text-green-400">Resolved by {incident.resolvedByName}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant="outline" className={cn('text-xs', priorityCfg.color)}>
+                          {incident.priorityLevel}
+                        </Badge>
+                        <Badge variant="outline" className={cn('text-xs gap-1', statusCfg.color)}>
+                          <StatusIcon className="h-3 w-3" />
+                          {statusCfg.label}
+                        </Badge>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
-                    <div className="flex gap-2 ml-4">
-                      <Badge variant={getPriorityVariant(incident.priorityLevel)}>
-                        {incident.priorityLevel}
-                      </Badge>
-                      <Badge variant={getStatusVariant(incident.status)}>
-                        {incident.status}
-                      </Badge>
-                    </div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No incidents found</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Incidents will appear here when triggered
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </CardContent>
+                </Card>
+              </Link>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-lg">
+          <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-muted mb-4">
+            <Inbox className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold mb-1">No incidents found</h3>
+          <p className="text-sm text-muted-foreground text-center max-w-sm">
+            {statusFilter !== 'all' || priorityFilter !== 'all'
+              ? 'No incidents match your current filters. Try adjusting or clearing filters.'
+              : 'Incidents will appear here when triggered by your alerting rules.'}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

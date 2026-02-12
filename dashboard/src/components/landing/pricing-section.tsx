@@ -249,8 +249,9 @@ export function PricingSection() {
 
         <div className="text-center mt-8 pt-8 border-t border-border/40">
           <p className="text-sm text-muted-foreground">
-            Need more data? <span className="font-semibold text-foreground">$0.40/GB</span> for overage
-            <span className="mx-2">.</span>
+            Need more data? <span className="font-semibold text-foreground">$0.40/GB</span> for overage.
+            On-call: <span className="font-semibold text-foreground">$5/user/mo</span>.
+            <span className="mx-2"> </span>
             <span className="text-xs">30-day money-back guarantee</span>
           </p>
         </div>
