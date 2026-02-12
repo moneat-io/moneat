@@ -54,10 +54,16 @@ function IncidentDetailPage() {
     queryFn: () => api.getIncident(Number(incidentId)),
   })
 
+  const {data: timeline = [], isLoading: timelineLoading} = useQuery({
+    queryKey: ['incident-timeline', incidentId],
+    queryFn: () => api.getIncidentTimeline(Number(incidentId)),
+  })
+
   const acknowledgeMutation = useMutation({
     mutationFn: () => api.acknowledgeIncident(Number(incidentId)),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['incident', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['incident-timeline', incidentId]})
       queryClient.invalidateQueries({queryKey: ['incidents']})
       toast({
         title: 'Incident Acknowledged',
@@ -77,6 +83,7 @@ function IncidentDetailPage() {
     mutationFn: () => api.resolveIncident(Number(incidentId)),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['incident', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['incident-timeline', incidentId]})
       queryClient.invalidateQueries({queryKey: ['incidents']})
       toast({
         title: 'Incident Resolved',
@@ -96,6 +103,7 @@ function IncidentDetailPage() {
     mutationFn: (note: string) => api.addIncidentNote(Number(incidentId), note),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['incident', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['incident-timeline', incidentId]})
       setNote('')
       toast({
         title: 'Note Added',
@@ -111,7 +119,7 @@ function IncidentDetailPage() {
     },
   })
 
-  if (isLoading) {
+  if (isLoading || timelineLoading) {
     return (
       <div className="space-y-6">
         <p>Loading incident...</p>
@@ -126,6 +134,8 @@ function IncidentDetailPage() {
       </div>
     )
   }
+
+  const incidentTimeline = incident.timeline ?? timeline
 
   return (
     <div className="space-y-6">
@@ -233,7 +243,7 @@ function IncidentDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {incident.timeline.map((event, idx) => {
+            {incidentTimeline.map((event, idx) => {
               const Icon = getEventIcon(event.eventType)
               return (
                 <div key={event.id} className="flex gap-3">
@@ -241,7 +251,7 @@ function IncidentDetailPage() {
                     <div className="rounded-full p-2 bg-primary/10">
                       <Icon className="h-4 w-4 text-primary" />
                     </div>
-                    {idx < incident.timeline.length - 1 && (
+                    {idx < incidentTimeline.length - 1 && (
                       <div className="w-0.5 h-full bg-border mt-2" />
                     )}
                   </div>

@@ -21,10 +21,12 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlin.math.abs
 
 private val logger = LoggerFactory.getLogger("IntegrationRoutes")
 
@@ -80,6 +82,40 @@ private fun getStateSecret(): String {
     return EnvConfig.get("JWT_SECRET")
         ?.takeIf { it.isNotBlank() }
         ?: throw IllegalStateException("JWT_SECRET environment variable is required for integration state signing")
+}
+
+private fun getSlackSigningSecret(): String? {
+    return EnvConfig.get("SLACK_SIGNING_SECRET")?.takeIf { it.isNotBlank() }
+}
+
+private fun signSlackRequest(secret: String, timestamp: String, rawBody: String): String {
+    val baseString = "v0:$timestamp:$rawBody"
+    val mac = Mac.getInstance("HmacSHA256")
+    mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+    val digest = mac.doFinal(baseString.toByteArray(Charsets.UTF_8))
+    val hex = digest.joinToString("") { "%02x".format(it) }
+    return "v0=$hex"
+}
+
+private fun verifySlackRequestSignature(headers: Headers, rawBody: String): Boolean {
+    val timestamp = headers["X-Slack-Request-Timestamp"] ?: return false
+    val signature = headers["X-Slack-Signature"] ?: return false
+    val requestTs = timestamp.toLongOrNull() ?: return false
+    val nowTs = System.currentTimeMillis() / 1000
+
+    // Reject stale/replayed payloads.
+    if (abs(nowTs - requestTs) > 60 * 5) return false
+
+    val secret = getSlackSigningSecret() ?: run {
+        logger.error("SLACK_SIGNING_SECRET is not configured; rejecting Slack interaction")
+        return false
+    }
+
+    val expected = signSlackRequest(secret, timestamp, rawBody)
+    return MessageDigest.isEqual(
+        expected.toByteArray(Charsets.UTF_8),
+        signature.toByteArray(Charsets.UTF_8)
+    )
 }
 
 private fun generateSecureState(userId: Int, organizationId: Int): String {
@@ -786,8 +822,14 @@ fun Route.integrationCallbackRoutes() {
         // Slack Interactivity Endpoint (for interactive message buttons)
         post("/slack/interactions") {
             try {
+                val rawBody = call.receiveText()
+                if (!verifySlackRequestSignature(call.request.headers, rawBody)) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid Slack signature"))
+                    return@post
+                }
+
                 // Parse URL-encoded form data from Slack
-                val formParameters = call.receiveParameters()
+                val formParameters = parseQueryString(rawBody)
                 val payload = formParameters["payload"] ?: run {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing payload"))
                     return@post

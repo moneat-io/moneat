@@ -1233,7 +1233,7 @@ interface IncidentTimeline {
 }
 
 interface IncidentDetail extends Incident {
-  timeline: IncidentTimeline[]
+  timeline?: IncidentTimeline[]
 }
 
 interface DeviceToken {
@@ -2795,7 +2795,7 @@ class ApiClient {
   async getIncidents(filters?: IncidentListFilters): Promise<Incident[]> {
     const params = new URLSearchParams()
     if (filters?.status) params.append('status', filters.status)
-    if (filters?.priorityLevel) params.append('priorityLevel', filters.priorityLevel)
+    if (filters?.priorityLevel) params.append('priority', filters.priorityLevel)
     if (filters?.fromDate) params.append('fromDate', filters.fromDate)
     if (filters?.toDate) params.append('toDate', filters.toDate)
     
@@ -2805,6 +2805,10 @@ class ApiClient {
 
   async getIncident(id: number): Promise<IncidentDetail> {
     return this.request(`${API_BASE}/incidents/${id}`)
+  }
+
+  async getIncidentTimeline(id: number): Promise<IncidentTimeline[]> {
+    return this.request(`${API_BASE}/incidents/${id}/timeline`)
   }
 
   async acknowledgeIncident(id: number): Promise<Incident> {
