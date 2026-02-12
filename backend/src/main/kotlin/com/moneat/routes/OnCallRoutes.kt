@@ -44,7 +44,7 @@ fun Route.onCallRoutes() {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -57,7 +57,7 @@ fun Route.onCallRoutes() {
             
             post {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -84,7 +84,7 @@ fun Route.onCallRoutes() {
             
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -112,7 +112,7 @@ fun Route.onCallRoutes() {
             
             put("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -155,7 +155,7 @@ fun Route.onCallRoutes() {
             
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -183,7 +183,7 @@ fun Route.onCallRoutes() {
             
             get("/{id}/current") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -211,8 +211,8 @@ fun Route.onCallRoutes() {
             
             post("/{id}/overrides") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
-                val userId = principal?.payload?.getClaim("user_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -260,7 +260,7 @@ fun Route.onCallRoutes() {
         authenticate("auth-jwt") {
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val overrideId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {

@@ -24,7 +24,7 @@ fun Route.deviceRoutes() {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("user_id")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
                 
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -37,7 +37,7 @@ fun Route.deviceRoutes() {
             
             post {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("user_id")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
                 
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -66,7 +66,7 @@ fun Route.deviceRoutes() {
             
             delete("/{token}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("user_id")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val deviceToken = call.parameters["token"]
                 
                 if (userId == null) {

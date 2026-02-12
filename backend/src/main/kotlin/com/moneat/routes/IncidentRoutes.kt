@@ -26,7 +26,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -75,7 +75,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
             
             get("/{id}/timeline") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -101,8 +101,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
             
             post("/{id}/acknowledge") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
-                val jwtUserId = principal?.payload?.getClaim("user_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val jwtUserId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -137,8 +137,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
             
             post("/{id}/resolve") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
-                val jwtUserId = principal?.payload?.getClaim("user_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val jwtUserId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -173,8 +173,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
             
             post("/{id}/reassign") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
-                val byUserId = principal?.payload?.getClaim("user_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val byUserId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -211,8 +211,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
             
             post("/{id}/notes") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
-                val userId = principal?.payload?.getClaim("user_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {

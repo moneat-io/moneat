@@ -44,7 +44,7 @@ fun Route.priorityRoutes() {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -57,7 +57,7 @@ fun Route.priorityRoutes() {
             
             put {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -92,7 +92,7 @@ fun Route.priorityRoutes() {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -109,7 +109,7 @@ fun Route.priorityRoutes() {
             
             put {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))

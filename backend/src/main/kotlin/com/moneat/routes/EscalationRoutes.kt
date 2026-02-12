@@ -46,7 +46,7 @@ fun Route.escalationRoutes() {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -59,7 +59,7 @@ fun Route.escalationRoutes() {
             
             post {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
@@ -97,7 +97,7 @@ fun Route.escalationRoutes() {
             
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val policyId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -120,7 +120,7 @@ fun Route.escalationRoutes() {
             
             put("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val policyId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
@@ -175,7 +175,7 @@ fun Route.escalationRoutes() {
             
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val policyId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
