@@ -84,8 +84,8 @@ const SCREENSHOTS = [
   {
     name: 'error-tracking',
     description: 'Error tracking / Issues list',
-    path: '/',
-    waitFor: 'text=Recent Issues',
+    path: '/issues',
+    waitFor: 'text=Issues',
     viewport: { width: 1920, height: 1080 },
   },
   {
@@ -130,11 +130,11 @@ const SCREENSHOTS = [
                   console.log('   ✅ Set time range to last 7 days');
                 } else {
                   console.log('   ⚠️  Could not find 7d preset option');
-                  
-                  // Close dropdown if still open
-                  await page.keyboard.press('Escape');
-                  await page.waitForTimeout(500);
                 }
+                
+                // Ensure the date picker is closed before screenshot
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(500);
               } else {
                 console.log('   ⚠️  Could not find time range button');
               }
