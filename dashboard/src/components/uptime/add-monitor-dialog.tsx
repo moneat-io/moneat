@@ -352,14 +352,14 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Use routing rule default</SelectItem>
-                  <SelectItem value="CRITICAL">Critical</SelectItem>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="CRITICAL">[P0] Critical</SelectItem>
+                  <SelectItem value="HIGH">[P1] High</SelectItem>
+                  <SelectItem value="MEDIUM">[P2] Medium</SelectItem>
+                  <SelectItem value="LOW">[P3] Low</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
-                Override the default incident severity when this monitor triggers an alert.
+                Override the default incident severity when this monitor triggers an alert. P0–P2 page on-call 24/7. P3 notifies during business hours only.
               </p>
             </div>
           </div>

@@ -5,9 +5,10 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
-import {Calendar, Users, AlertTriangle, Clock, ChevronRight, Plus, Zap, CheckCircle2, ArrowUpRight} from 'lucide-react'
+import {Calendar, Users, AlertTriangle, Clock, ChevronRight, Plus, Zap, CheckCircle2, ArrowUpRight, Bell, BellOff, Shield} from 'lucide-react'
 import {Link} from '@tanstack/react-router'
 import {cn} from '@/lib/utils'
+import {useAuth} from '@/hooks/useAuth'
 
 export const Route = createFileRoute('/on-call/')({
   component: OnCallOverview,
@@ -37,6 +38,8 @@ const avatarColors = [
 ]
 
 function OnCallOverview() {
+  const {user} = useAuth()
+
   const {data: schedules, isLoading: schedulesLoading} = useQuery({
     queryKey: ['on-call-schedules'],
     queryFn: () => api.getOnCallSchedules(),
@@ -52,8 +55,62 @@ function OnCallOverview() {
     queryFn: () => api.getEscalationPolicies(),
   })
 
+  const {data: _priorities} = useQuery({
+    queryKey: ['priorities'],
+    queryFn: () => api.getPriorities(),
+  })
+
+  const {data: businessHours} = useQuery({
+    queryKey: ['business-hours'],
+    queryFn: () => api.getBusinessHours(),
+  })
+
   const activeIncidents = incidents?.filter((i) => i.status === 'TRIGGERED' || i.status === 'ACKNOWLEDGED') || []
   const hasActiveIncidents = activeIncidents.length > 0
+
+  // Determine which schedules the current user is on-call for
+  const userOnCallSchedules = schedules?.filter(s => s.currentOnCall?.userId === user?.id) || []
+  const isCurrentlyOnCall = userOnCallSchedules.length > 0
+
+  // Split incidents by paging behavior
+  const pageableIncidents = activeIncidents.filter(i => {
+    const level = i.priorityLevel
+    return level?.startsWith('P0') || level?.startsWith('P1') || level?.startsWith('P2')
+  })
+  const lowPriorityIncidents = activeIncidents.filter(i => {
+    const level = i.priorityLevel
+    return level?.startsWith('P3') || level?.startsWith('P4') || level?.startsWith('P5')
+  })
+
+  // Check if currently within business hours
+  const isWithinBusinessHours = (() => {
+    if (!businessHours?.enabled || !businessHours?.windows?.length) return null
+    try {
+      const now = new Date()
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: businessHours.timezone,
+        weekday: 'long',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+      })
+      const parts = formatter.formatToParts(now)
+      const weekday = parts.find(p => p.type === 'weekday')?.value?.toUpperCase()
+      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0')
+      const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0')
+      const nowMinutes = hour * 60 + minute
+
+      const dayIndex = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'].indexOf(weekday || '')
+      const todayWindows = businessHours.windows.filter(w => w.dayOfWeek === dayIndex)
+      return todayWindows.some(w => {
+        const [sh, sm] = w.startTime.split(':').map(Number)
+        const [eh, em] = w.endTime.split(':').map(Number)
+        return nowMinutes >= sh * 60 + sm && nowMinutes < eh * 60 + em
+      })
+    } catch {
+      return null
+    }
+  })()
 
   return (
     <div className="space-y-6">
@@ -113,6 +170,130 @@ function OnCallOverview() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Your Alert Summary */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-blue-500" />
+                Your Alert Summary
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {isCurrentlyOnCall
+                  ? `You're on call for ${userOnCallSchedules.length} schedule${userOnCallSchedules.length > 1 ? 's' : ''}`
+                  : "You're not currently on call"}
+              </CardDescription>
+            </div>
+            {businessHours?.enabled && isWithinBusinessHours !== null && (
+              <Badge variant="outline" className={cn(
+                'text-xs gap-1.5',
+                isWithinBusinessHours
+                  ? 'bg-green-500/10 text-green-500 border-green-500/30'
+                  : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+              )}>
+                <span className={cn('h-1.5 w-1.5 rounded-full', isWithinBusinessHours ? 'bg-green-500' : 'bg-slate-400')} />
+                {isWithinBusinessHours ? 'Business hours' : 'Outside business hours'}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* On-call schedules for current user */}
+            {isCurrentlyOnCall && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">On call for</p>
+                <div className="flex flex-wrap gap-2">
+                  {userOnCallSchedules.map(s => (
+                    <Badge key={s.id} variant="outline" className="bg-violet-500/10 text-violet-400 border-violet-500/30 gap-1.5">
+                      <Calendar className="h-3 w-3" />
+                      {s.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pageable incidents (P0-P2) */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Bell className="h-3.5 w-3.5 text-red-500" />
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Pages 24/7 — P0 · P1 · P2
+                </p>
+              </div>
+              {pageableIncidents.length > 0 ? (
+                <div className="space-y-1.5">
+                  {pageableIncidents.slice(0, 5).map(incident => {
+                    const priorityCfg = getPriorityConfig(incident.priorityLevel)
+                    return (
+                      <Link
+                        key={incident.id}
+                        to="/on-call/incidents/$incidentId"
+                        params={{incidentId: String(incident.id)}}
+                        className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
+                          <span className="text-sm truncate">{incident.title}</span>
+                        </div>
+                        <Badge variant="outline" className={cn('text-xs flex-shrink-0 ml-2', priorityCfg.color)}>
+                          {incident.priorityLevel}
+                        </Badge>
+                      </Link>
+                    )
+                  })}
+                  {pageableIncidents.length > 5 && (
+                    <p className="text-xs text-muted-foreground pl-3">+{pageableIncidents.length - 5} more</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground pl-5">No active high-priority incidents</p>
+              )}
+            </div>
+
+            {/* Low-priority (P3+, business hours only) */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <BellOff className="h-3.5 w-3.5 text-blue-400" />
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Business hours only — P3+
+                </p>
+              </div>
+              {lowPriorityIncidents.length > 0 ? (
+                <div className="space-y-1.5">
+                  {lowPriorityIncidents.slice(0, 3).map(incident => {
+                    const priorityCfg = getPriorityConfig(incident.priorityLevel)
+                    return (
+                      <Link
+                        key={incident.id}
+                        to="/on-call/incidents/$incidentId"
+                        params={{incidentId: String(incident.id)}}
+                        className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
+                          <span className="text-sm truncate">{incident.title}</span>
+                        </div>
+                        <Badge variant="outline" className={cn('text-xs flex-shrink-0 ml-2', priorityCfg.color)}>
+                          {incident.priorityLevel}
+                        </Badge>
+                      </Link>
+                    )
+                  })}
+                  {lowPriorityIncidents.length > 3 && (
+                    <p className="text-xs text-muted-foreground pl-5">+{lowPriorityIncidents.length - 3} more</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground pl-5">No low-priority incidents</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Active Incidents - prominent when present */}
       {hasActiveIncidents && (

@@ -471,6 +471,14 @@ data class TestNotificationResponse(
 )
 
 @Serializable
+data class TriggerIncidentRequest(
+    val source: String,
+    val severity: String,
+    val title: String,
+    val description: String
+)
+
+@Serializable
 data class ErrorResponse(
     val error: String
 )

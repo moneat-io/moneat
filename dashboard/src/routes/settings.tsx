@@ -2110,10 +2110,10 @@ const ALERT_SOURCE_OPTIONS = [
 ] as const
 
 const INCIDENT_SEVERITY_OPTIONS = [
-  { value: 'CRITICAL', label: 'Critical', color: 'bg-red-500' },
-  { value: 'HIGH', label: 'High', color: 'bg-orange-500' },
-  { value: 'MEDIUM', label: 'Medium', color: 'bg-yellow-500' },
-  { value: 'LOW', label: 'Low', color: 'bg-blue-500' },
+  { value: 'CRITICAL', label: '[P0] Critical', color: 'bg-red-500' },
+  { value: 'HIGH', label: '[P1] High', color: 'bg-orange-500' },
+  { value: 'MEDIUM', label: '[P2] Medium', color: 'bg-yellow-500' },
+  { value: 'LOW', label: '[P3] Low', color: 'bg-blue-500' },
 ] as const
 
 const IncidentIoLogo = ({ className }: { className?: string }) => (

@@ -54,6 +54,7 @@ import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastructure'
+import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
@@ -289,6 +290,11 @@ const AdminInfrastructureRoute = AdminInfrastructureRouteImport.update({
   path: '/infrastructure',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminIncidentsRoute = AdminIncidentsRouteImport.update({
+  id: '/incidents',
+  path: '/incidents',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminEmailsRoute = AdminEmailsRouteImport.update({
   id: '/emails',
   path: '/emails',
@@ -349,6 +355,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
@@ -400,6 +407,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
@@ -455,6 +463,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/infrastructure': typeof AdminInfrastructureRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
@@ -511,6 +520,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin/billing'
     | '/admin/emails'
+    | '/admin/incidents'
     | '/admin/infrastructure'
     | '/admin/notifications'
     | '/admin/organizations'
@@ -562,6 +572,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin/billing'
     | '/admin/emails'
+    | '/admin/incidents'
     | '/admin/infrastructure'
     | '/admin/notifications'
     | '/admin/organizations'
@@ -616,6 +627,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin/billing'
     | '/admin/emails'
+    | '/admin/incidents'
     | '/admin/infrastructure'
     | '/admin/notifications'
     | '/admin/organizations'
@@ -999,6 +1011,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminInfrastructureRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/incidents': {
+      id: '/admin/incidents'
+      path: '/incidents'
+      fullPath: '/admin/incidents'
+      preLoaderRoute: typeof AdminIncidentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/emails': {
       id: '/admin/emails'
       path: '/emails'
@@ -1065,6 +1084,7 @@ const AdminOrganizationsRouteWithChildren =
 interface AdminRouteChildren {
   AdminBillingRoute: typeof AdminBillingRoute
   AdminEmailsRoute: typeof AdminEmailsRoute
+  AdminIncidentsRoute: typeof AdminIncidentsRoute
   AdminInfrastructureRoute: typeof AdminInfrastructureRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrganizationsRoute: typeof AdminOrganizationsRouteWithChildren
@@ -1076,6 +1096,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminBillingRoute: AdminBillingRoute,
   AdminEmailsRoute: AdminEmailsRoute,
+  AdminIncidentsRoute: AdminIncidentsRoute,
   AdminInfrastructureRoute: AdminInfrastructureRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrganizationsRoute: AdminOrganizationsRouteWithChildren,

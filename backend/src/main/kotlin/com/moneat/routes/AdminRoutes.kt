@@ -1,6 +1,11 @@
 package com.moneat.routes
 
 import com.moneat.models.Users
+import com.moneat.models.TriggerIncidentRequest
+import com.moneat.models.IncidentEvent
+import com.moneat.models.AlertSource
+import com.moneat.models.IncidentSeverity
+import com.moneat.models.IncidentStatus
 import com.moneat.services.AdminOrgDetail
 import com.moneat.services.AdminOrgUsagePoint
 import com.moneat.services.AdminService
@@ -129,6 +134,52 @@ fun Route.adminRoutes() {
                     targetUser[Users.email]
                 )
                 call.respond(mapOf("token" to token))
+            }
+
+            post("/incidents/trigger") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                    call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                    return@post
+                }
+                
+                // Get user's organization
+                val orgId = transaction {
+                     com.moneat.models.Memberships.selectAll()
+                        .where { com.moneat.models.Memberships.user_id eq userId }
+                        .firstOrNull()?.get(com.moneat.models.Memberships.organization_id)
+                } ?: run {
+                    call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("User has no organization"))
+                    return@post
+                }
+
+                try {
+                    val request = call.receive<TriggerIncidentRequest>()
+                    
+                    val incidentService = com.moneat.services.incident.IncidentService()
+                    val config = ApplicationConfig("application.conf")
+                    val frontendUrl = config.property("email.frontendUrl").getString()
+                    
+                    val severityEnum = IncidentSeverity.fromString(request.severity) ?: IncidentSeverity.MEDIUM
+                    val sourceEnum = try { AlertSource.valueOf(request.source) } catch(e: Exception) { AlertSource.SYSTEM_ALERT }
+                    
+                    val event = IncidentEvent(
+                        title = request.title,
+                        description = request.description,
+                        severity = severityEnum,
+                        status = IncidentStatus.FIRING,
+                        source = sourceEnum,
+                        deduplicationKey = "manual-trigger-${java.util.UUID.randomUUID()}",
+                        organizationId = orgId,
+                        moneatUrl = frontendUrl,
+                        metadata = mapOf("triggered_by" to userId.toString())
+                    )
+                    
+                    incidentService.fireAlert(event)
+                    call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.InternalServerError, com.moneat.models.ErrorResponse(e.message ?: "Unknown error"))
+                }
             }
             
             post("/test-notification") {

@@ -2229,6 +2229,18 @@ class ApiClient {
     })
   }
 
+  async triggerIncident(data: {
+    source: string
+    severity: string
+    title: string
+    description: string
+  }) {
+    return this.request<{ success: boolean }>(`${API_BASE}/admin/incidents/trigger`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   async getAdminBillingTiers(tier?: string) {
     const query = tier ? `?tier=${encodeURIComponent(tier)}` : ''
     return this.request<BillingPlan[] | BillingTierConfig[]>(`${API_BASE}/admin/billing/tiers${query}`)

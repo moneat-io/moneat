@@ -11,6 +11,7 @@ import {
     Mail,
     Server,
     Shield,
+    AlertTriangle,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 
@@ -39,6 +40,7 @@ const adminNavSections = [
       {icon: LayoutDashboard, label: 'Overview', href: '/admin'},
       {icon: BarChart3, label: 'Usage', href: '/admin/usage'},
       {icon: Server, label: 'Infrastructure', href: '/admin/infrastructure'},
+      {icon: AlertTriangle, label: 'Incidents', href: '/admin/incidents'},
     ],
   },
   {
