@@ -31,7 +31,8 @@
     </root>
 
     <!-- Enable DEBUG only for your application code -->
-    <logger name="com.moneat" level="DEBUG"/>
+    <logger name="com.moneat" level="INFO"/>
+    <logger name="com.moneat.moneat.routes.StripeWebhookRoutes" level="DEBUG"/>
     
     <!-- Keep common noisy libraries at WARN level -->
     <logger name="io.lettuce" level="WARN"/>

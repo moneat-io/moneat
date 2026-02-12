@@ -103,7 +103,7 @@ dependencies {
     implementation("com.nimbusds:oauth2-oidc-sdk:11.10")
 
     // Billing
-    implementation("com.stripe:stripe-java:29.5.0")
+    implementation("com.stripe:stripe-java:31.3.0")
     
     // MessagePack for mobile replay decoding
     implementation("org.msgpack:msgpack-core:0.9.8")

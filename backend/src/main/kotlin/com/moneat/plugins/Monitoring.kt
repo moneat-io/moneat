@@ -115,7 +115,7 @@ fun Application.configureMonitoring() {
     }
     
     install(CallLogging) {
-        level = Level.INFO
+        level = Level.TRACE
         filter { call -> call.request.path().startsWith("/") }
         format { call ->
             val status = call.response.status()

@@ -262,7 +262,13 @@ class StripeService(
         ensureEnabled()
         val secret = webhookSecret ?: throw IllegalStateException("Missing Stripe webhook secret")
         if (signature.isNullOrBlank()) throw SignatureVerificationException("Missing Stripe signature", "")
-        return Webhook.constructEvent(payload, signature, secret)
+        logger.debug { "Verifying Stripe webhook signature" }
+        try {
+            return Webhook.constructEvent(payload, signature, secret)
+        } catch (e: SignatureVerificationException) {
+            logger.error { "Webhook signature verification failed: ${e.message}" }
+            throw e
+        }
     }
 
     fun wasEventProcessed(eventId: String): Boolean {
@@ -285,8 +291,15 @@ class StripeService(
     }
 
     fun syncSubscriptionFromStripe(subscription: Subscription) {
-        val organizationId = resolveOrganizationId(subscription.metadata["organization_id"], subscription.customer)
-            ?: return
+        val metadataOrgId = subscription.metadata?.get("organization_id")
+        logger.info { "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, metadata_org_id='$metadataOrgId'" }
+        
+        val organizationId = resolveOrganizationId(metadataOrgId, subscription.customer)
+        if (organizationId == null) {
+            logger.error { "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. metadata_org_id='$metadataOrgId', customer=${subscription.customer}, full_metadata=${subscription.metadata}" }
+            return
+        }
+        logger.info { "Resolved organization ID $organizationId for subscription ${subscription.id}" }
 
         val fallbackTier = transaction {
             val subRow = Subscriptions.selectAll().where {
@@ -329,6 +342,7 @@ class StripeService(
             val endInstant = subscription.trialEnd?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
 
             if (existing != null) {
+                logger.info { "Updating existing subscription row ${existing[Subscriptions.id]} for org $organizationId" }
                 Subscriptions.update({ Subscriptions.id eq existing[Subscriptions.id] }) {
                     it[plan] = planName
                     it[status] = subscription.status
@@ -340,6 +354,7 @@ class StripeService(
                     it[stripe_overage_item_id] = overageItemId
                 }
             } else {
+                logger.info { "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}" }
                 Subscriptions.insert {
                     it[Subscriptions.organization_id] = organizationId
                     it[stripe_subscription_id] = subscription.id
@@ -397,20 +412,33 @@ class StripeService(
     }
 
     fun handleCheckoutCompleted(session: com.stripe.model.checkout.Session) {
-        val customerId = session.customer ?: return
-        val subscriptionId = session.subscription ?: return
+        logger.info { "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}, subscription=${session.subscription}" }
+        val customerId = session.customer
+        val subscriptionId = session.subscription
+        if (customerId == null || subscriptionId == null) {
+            logger.error { "CRITICAL: Checkout session missing customer or subscription: session=${session.id}" }
+            return
+        }
+        logger.info { "Retrieving Stripe subscription $subscriptionId" }
         val stripeSubscription = Subscription.retrieve(subscriptionId)
         syncSubscriptionFromStripe(stripeSubscription)
 
-        val organizationId = resolveOrganizationId(session.metadata["organization_id"], customerId) ?: return
+        val metadataOrgId = session.metadata?.get("organization_id")
+        val organizationId = resolveOrganizationId(metadataOrgId, customerId)
+        if (organizationId == null) {
+            logger.error { "CRITICAL: Could not resolve organization ID from checkout session ${session.id}. metadata_org_id='$metadataOrgId', customer=$customerId" }
+            return
+        }
+        logger.info { "Setting subscription $subscriptionId to active for org $organizationId" }
         transaction {
-            Subscriptions.update({
+            val updateCount = Subscriptions.update({
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.stripe_subscription_id eq subscriptionId)
             }) {
                 it[status] = "active"
                 it[stripe_customer_id] = customerId
             }
+            logger.info { "Updated $updateCount subscription rows to active" }
         }
     }
 
@@ -649,15 +677,25 @@ class StripeService(
     }
 
     private fun resolveOrganizationId(metadataOrgId: String?, customerId: String?): Int? {
+        logger.debug { "Resolving org ID: metadataOrgId=$metadataOrgId, customerId=$customerId" }
         val byMetadata = metadataOrgId?.toIntOrNull()
-        if (byMetadata != null) return byMetadata
-        if (customerId.isNullOrBlank()) return null
-        return transaction {
+        logger.debug { "Parsed metadata org ID: $byMetadata" }
+        if (byMetadata != null) {
+            logger.debug { "Returning org ID from metadata: $byMetadata" }
+            return byMetadata
+        }
+        if (customerId.isNullOrBlank()) {
+            logger.debug { "Customer ID is blank, returning null" }
+            return null
+        }
+        val orgId = transaction {
             Subscriptions.selectAll().where { Subscriptions.stripe_customer_id eq customerId }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
                 ?.get(Subscriptions.organization_id)
         }
+        logger.debug { "Found org ID from customer lookup: $orgId" }
+        return orgId
     }
 
     private fun ensureEnabled() {

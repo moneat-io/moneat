@@ -1,9 +1,10 @@
 # Moneat - Mobile-First Error Monitoring Platform
 
-A Sentry-compatible error monitoring platform built with Kotlin/Ktor, focused on mobile monitoring with cost-effective VPS deployment.
+A Sentry-compatible error monitoring platform built with Kotlin/Ktor, focused on mobile monitoring with native on-call escalation and cost-effective VPS deployment.
 
 ## Features
 
+### Error Monitoring
 - ✅ Sentry-compatible envelope ingestion API
 - ✅ Real-time error tracking and grouping
 - ✅ Issue management with fingerprinting
@@ -12,8 +13,24 @@ A Sentry-compatible error monitoring platform built with Kotlin/Ktor, focused on
 - ✅ JWT-based authentication
 - ✅ Multi-project support
 - ✅ Self-monitoring with Sentry integration (optional)
-- 🚧 React dashboard (coming soon)
-- 🚧 Kotlin Multiplatform SDK (coming soon)
+- ✅ React dashboard
+
+### On-Call & Incident Management
+- ✅ Native escalation engine (PagerDuty/Opsgenie-style)
+- ✅ On-call schedules with rotation support
+- ✅ Priority-based escalation (P0-P5)
+- ✅ Business hours configuration
+- ✅ Push notifications via Expo mobile app
+- ✅ Incident timeline and audit trail
+- ✅ Visual escalation policy editor
+- ✅ Slack DM notifications with interactive buttons
+
+### Mobile App (Expo React Native)
+- ✅ iOS and Android support
+- ✅ Push notifications for on-call alerts
+- ✅ Incident management (view, acknowledge, resolve)
+- ✅ On-call schedule visibility
+- ✅ JWT authentication with secure storage
 
 ## Quick Start
 
@@ -106,6 +123,7 @@ curl -X POST http://localhost:8080/api/1/store/ \
 moneat/
 ├── backend/                 # Kotlin/Ktor backend
 ├── dashboard/               # React frontend
+├── mobile/                  # Expo React Native mobile app
 ├── emails/                  # Maizzle email templates
 └── docker-compose.yml       # Local development infrastructure
 ```
@@ -118,6 +136,16 @@ moneat/
 - Exposed (SQL DSL)
 - PostgreSQL (Operational data)
 - ClickHouse (Event analytics)
+
+**Frontend:**
+- React with TanStack Router
+- shadcn/ui components
+- TanStack Query for data fetching
+
+**Mobile:**
+- React Native with Expo
+- Push notifications via Expo Push API
+- JWT authentication with secure storage
 - Redis (Caching, queues)
 
 **Frontend (planned):**
@@ -144,6 +172,19 @@ moneat/
 - `GET /v1/projects/{id}/issues` - List issues
 - `GET /v1/issues/{id}` - Get issue detail
 - `GET /v1/issues/{id}/events` - Get issue events
+
+### On-Call API (requires JWT auth)
+- `GET /v1/escalation-policies` - List escalation policies
+- `POST /v1/escalation-policies` - Create policy
+- `GET /v1/on-call/schedules` - List on-call schedules
+- `POST /v1/on-call/schedules` - Create schedule
+- `GET /v1/on-call/schedules/{id}/current` - Get current on-call person
+- `GET /v1/incidents` - List incidents
+- `POST /v1/incidents/{id}/acknowledge` - Acknowledge incident
+- `POST /v1/incidents/{id}/resolve` - Resolve incident
+- `POST /v1/devices` - Register mobile device for push notifications
+
+See [docs/ONCALL.md](docs/ONCALL.md) for detailed on-call documentation.
 
 ## Development
 

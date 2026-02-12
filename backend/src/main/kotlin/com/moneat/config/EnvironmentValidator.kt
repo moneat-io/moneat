@@ -73,6 +73,12 @@ class EnvironmentValidator {
             validateRequired("STRIPE_SECRET_KEY", "Stripe billing is enabled", errors)
             validateRequired("STRIPE_WEBHOOK_SECRET", "Stripe billing is enabled", errors)
         }
+        
+        // Validate On-Call configuration when enabled
+        val onCallEnabled = getConfigValue("ONCALL_ENABLED")?.toBoolean() ?: false
+        if (onCallEnabled) {
+            validateRequired("EXPO_ACCESS_TOKEN", "On-Call mobile push notifications are enabled", errors)
+        }
     }
     
     private fun validateRequired(envVar: String, reason: String, errors: MutableList<String>) {

@@ -45,18 +45,44 @@ fun Route.stripeWebhookRoutes() {
         try {
             when (event.type) {
                 "checkout.session.completed" -> {
-                    val session = event.dataObjectDeserializer.`object`.orElse(null)
-                        as? com.stripe.model.checkout.Session
-                    if (session != null) {
+                    logger.info { "Processing checkout.session.completed event ${event.id}" }
+                    try {
+                        val sessionOpt = event.dataObjectDeserializer.`object`
+                        val session = if (sessionOpt.isPresent) {
+                            sessionOpt.get() as com.stripe.model.checkout.Session
+                        } else {
+                            // Fallback: retrieve from Stripe API using ID from raw data
+                            val sessionId = event.dataObjectDeserializer.rawJson.let {
+                                com.google.gson.JsonParser.parseString(it).asJsonObject.get("id").asString
+                            }
+                            com.stripe.model.checkout.Session.retrieve(sessionId)
+                        }
+                        logger.info { "Calling handleCheckoutCompleted for session ${session.id}" }
                         stripeService.handleCheckoutCompleted(session)
+                        logger.info { "Finished handleCheckoutCompleted" }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to retrieve or process checkout.Session from event ${event.id}" }
                     }
                 }
                 "customer.subscription.created",
                 "customer.subscription.updated" -> {
-                    val subscription = event.dataObjectDeserializer.`object`.orElse(null)
-                        as? com.stripe.model.Subscription
-                    if (subscription != null) {
+                    logger.info { "Processing ${event.type} event ${event.id}" }
+                    try {
+                        val subscriptionOpt = event.dataObjectDeserializer.`object`
+                        val subscription = if (subscriptionOpt.isPresent) {
+                            subscriptionOpt.get() as com.stripe.model.Subscription
+                        } else {
+                            // Fallback: retrieve from Stripe API using ID from raw data
+                            val subscriptionId = event.dataObjectDeserializer.rawJson.let {
+                                com.google.gson.JsonParser.parseString(it).asJsonObject.get("id").asString
+                            }
+                            com.stripe.model.Subscription.retrieve(subscriptionId)
+                        }
+                        logger.info { "Calling syncSubscriptionFromStripe for subscription ${subscription.id}" }
                         stripeService.syncSubscriptionFromStripe(subscription)
+                        logger.info { "Finished syncSubscriptionFromStripe" }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to retrieve or process Subscription from event ${event.id}" }
                     }
                 }
                 "customer.subscription.deleted" -> {
