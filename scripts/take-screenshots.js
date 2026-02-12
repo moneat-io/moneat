@@ -112,35 +112,6 @@ const SCREENSHOTS = [
             await logsLink.click();
             await page.waitForLoadState('networkidle');
             await page.waitForTimeout(1500);
-            
-            // Set time range to show demo data (last 7 days preset to capture all data)
-            try {
-              // Click the time range dropdown button (has Clock icon)
-              const timeButton = page.locator('button:has(svg.lucide-clock)').first();
-              if (await timeButton.count() > 0) {
-                await timeButton.click();
-                await page.waitForTimeout(500);
-                
-                // Click the "7d" preset option (auto-applies and closes dropdown)
-                const sevenDayPreset = page.locator('button:has-text("7d")').first();
-                if (await sevenDayPreset.count() > 0) {
-                  await sevenDayPreset.click();
-                  await page.waitForTimeout(2000); // Wait for data to reload
-                  
-                  console.log('   ✅ Set time range to last 7 days');
-                } else {
-                  console.log('   ⚠️  Could not find 7d preset option');
-                }
-                
-                // Ensure the date picker is closed before screenshot
-                await page.keyboard.press('Escape');
-                await page.waitForTimeout(500);
-              } else {
-                console.log('   ⚠️  Could not find time range button');
-              }
-            } catch (e) {
-              console.log('   ⚠️  Could not set time range:', e.message);
-            }
           } else {
             console.log('   ⚠️  Logs tab not found in project navigation');
           }
