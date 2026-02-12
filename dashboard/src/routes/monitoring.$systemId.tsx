@@ -37,7 +37,7 @@ import {
 import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
 import {Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription} from '@/components/ui/sheet'
-import {EmbeddedLogs} from '@/components/logs/EmbeddedLogs'
+import {LogExplorer} from '@/components/logs/LogExplorer'
 import type {ContainerStats} from '@/lib/api'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
@@ -1088,75 +1088,67 @@ function SystemDetailPage() {
       <Sheet open={!!selectedContainer} onOpenChange={(open) => !open && setSelectedContainer(null)}>
         <SheetContent
           side="right"
-          className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-[50vw] sm:max-w-[960px] overflow-y-auto"
+          className="w-screen h-screen max-w-none sm:w-screen sm:max-w-none p-0 gap-0 border-none"
         >
           {selectedContainer && (
-            <div className="space-y-6">
-              <SheetHeader>
-                <div className="flex items-center gap-2">
-                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg ${
-                    selectedContainer.status === 'running'
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                    <Box className="h-4 w-4" />
+            <div className="flex flex-col h-full bg-background/50 backdrop-blur-sm">
+              <div className="flex-none p-6 pb-4 border-b bg-background">
+                <SheetHeader className="mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex items-center justify-center h-10 w-10 rounded-xl ${
+                      selectedContainer.status === 'running'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      <Box className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <SheetTitle className="text-xl">{selectedContainer.name}</SheetTitle>
+                      <SheetDescription className="font-mono text-xs mt-1">{selectedContainer.image}</SheetDescription>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setSelectedContainer(null)}>
+                        Close
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <SheetTitle>{selectedContainer.name}</SheetTitle>
-                    <SheetDescription>{selectedContainer.image}</SheetDescription>
-                  </div>
-                </div>
-              </SheetHeader>
+                </SheetHeader>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">Status</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Badge variant="secondary" className={selectedContainer.status === 'running' ? 'text-emerald-500' : ''}>
-                        {selectedContainer.status}
-                      </Badge>
-                    </CardContent>
-                 </Card>
-                 <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">Container ID</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="font-mono text-xs">{selectedContainer.id.substring(0, 12)}</div>
-                    </CardContent>
-                 </Card>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Resources</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 border rounded-lg bg-card">
-                     <div className="text-xs text-muted-foreground mb-1">CPU Usage</div>
-                     <div className="text-lg font-semibold">{formatPercent(selectedContainer.cpuPercent)}</div>
-                  </div>
-                  <div className="p-3 border rounded-lg bg-card">
-                     <div className="text-xs text-muted-foreground mb-1">Memory Usage</div>
-                     <div className="text-lg font-semibold">
-                       {formatBytesShort(selectedContainer.memUsed)}
-                       <span className="text-xs text-muted-foreground font-normal ml-1">
-                         / {formatBytesShort(selectedContainer.memLimit)}
-                       </span>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                     <div className="p-3 border rounded-lg bg-card/50">
+                        <div className="text-xs text-muted-foreground mb-1">Status</div>
+                        <Badge variant="secondary" className={selectedContainer.status === 'running' ? 'text-emerald-500 bg-emerald-500/10' : ''}>
+                          {selectedContainer.status}
+                        </Badge>
                      </div>
-                  </div>
+                     <div className="p-3 border rounded-lg bg-card/50">
+                        <div className="text-xs text-muted-foreground mb-1">Container ID</div>
+                        <div className="font-mono text-xs truncate" title={selectedContainer.id}>{selectedContainer.id.substring(0, 12)}</div>
+                     </div>
+                     <div className="p-3 border rounded-lg bg-card/50">
+                        <div className="text-xs text-muted-foreground mb-1">CPU Usage</div>
+                        <div className="text-lg font-semibold">{formatPercent(selectedContainer.cpuPercent)}</div>
+                     </div>
+                     <div className="p-3 border rounded-lg bg-card/50">
+                        <div className="text-xs text-muted-foreground mb-1">Memory Usage</div>
+                        <div className="text-lg font-semibold truncate">
+                          {formatBytesShort(selectedContainer.memUsed)}
+                          <span className="text-xs text-muted-foreground font-normal ml-1 opacity-70">
+                            / {formatBytesShort(selectedContainer.memLimit)}
+                          </span>
+                        </div>
+                     </div>
                 </div>
               </div>
 
-              <div className="space-y-4 min-w-0">
-                <h3 className="text-sm font-medium">Logs</h3>
-                <EmbeddedLogs 
+              <div className="flex-1 min-h-0 relative">
+                <LogExplorer 
                   systemId={system.id}
-                  containerName={selectedContainer.name}
-                  showHeader={false}
-                  maxHeight="500px"
-                  compact={true}
-                  className="w-full max-w-full"
+                  initialContainerName={selectedContainer.name}
+                  className="absolute inset-0 border-none rounded-none"
+                  enableLiveTail={false}
+                  enableFacets={true}
+                  initialScrollToBottom={true}
                 />
               </div>
             </div>

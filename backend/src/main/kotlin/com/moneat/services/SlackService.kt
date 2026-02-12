@@ -678,4 +678,83 @@ class SlackService {
             emptyList()
         }
     }
+    
+    // ===== On-Call Notifications =====
+    
+    suspend fun sendOnCallAlert(userId: Int, incidentId: Int, title: String, priorityLevel: String) {
+        try {
+            // Get Slack user mapping
+            val slackUserId = getSlackUserIdForUser(userId) ?: run {
+                logger.debug("No Slack mapping found for user $userId")
+                return
+            }
+            
+            // Get organization's bot token
+            val orgId = getUserOrganizationId(userId) ?: return
+            val accessToken = getAccessToken(orgId) ?: return
+            
+            // Send DM with interactive buttons
+            val blocks = listOf(
+                SlackBlock(
+                    type = "header",
+                    text = SlackText(type = "plain_text", text = "🚨 On-Call Alert", emoji = true)
+                ),
+                SlackBlock(
+                    type = "section",
+                    text = SlackText(type = "mrkdwn", text = "*Priority:* $priorityLevel\n*Incident:* $title")
+                ),
+                SlackBlock(
+                    type = "actions",
+                    elements = listOf(
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "Acknowledge", emoji = false),
+                            action_id = "incident_acknowledge_$incidentId"
+                        ),
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "View Details", emoji = false),
+                            url = "${com.moneat.config.EnvConfig.get("FRONTEND_URL", "https://moneat.io")}/on-call/incidents/$incidentId",
+                            action_id = "incident_view_$incidentId"
+                        )
+                    )
+                )
+            )
+            
+            val response = httpClient.post("https://slack.com/api/chat.postMessage") {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer $accessToken")
+                setBody(SlackMessage(
+                    channel = slackUserId, // DM to user
+                    blocks = blocks,
+                    text = "[$priorityLevel] $title" // Fallback
+                ))
+            }
+            
+            val result = json.decodeFromString<SlackPostMessageResponse>(response.bodyAsText())
+            if (result.ok) {
+                logger.info("Sent on-call Slack DM to user $userId for incident $incidentId")
+            } else {
+                logger.error("Failed to send on-call Slack DM: ${result.error}")
+            }
+        } catch (e: Exception) {
+            logger.error("Error sending on-call Slack alert", e)
+        }
+    }
+    
+    private fun getSlackUserIdForUser(userId: Int): String? = transaction {
+        com.moneat.models.SlackUserMappings
+            .selectAll()
+            .where { com.moneat.models.SlackUserMappings.userId eq userId }
+            .singleOrNull()
+            ?.get(com.moneat.models.SlackUserMappings.slackUserId)
+    }
+    
+    private fun getUserOrganizationId(userId: Int): Int? = transaction {
+        com.moneat.models.Users
+            .selectAll()
+            .where { com.moneat.models.Users.id eq userId }
+            .singleOrNull()
+            ?.get(com.moneat.models.Users.organizationId)
+    }
 }

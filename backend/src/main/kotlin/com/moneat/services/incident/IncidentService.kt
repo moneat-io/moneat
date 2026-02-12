@@ -1,6 +1,10 @@
 package com.moneat.services.incident
 
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
+import com.moneat.plugins.getEscalationEngine
+import com.moneat.services.oncall.BusinessHoursService
+import com.moneat.services.oncall.PriorityService
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -14,6 +18,8 @@ import kotlinx.datetime.Clock
 class IncidentService {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
+    private val priorityService = PriorityService()
+    private val businessHoursService = BusinessHoursService()
     
     /**
      * Fire an alert to all enabled incident providers for the organization.
@@ -21,6 +27,13 @@ class IncidentService {
      */
     suspend fun fireAlert(event: IncidentEvent) {
         try {
+            // Check if native on-call is enabled
+            val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
+            
+            if (onCallEnabled) {
+                triggerNativeEscalation(event)
+            }
+            
             val configs = getEnabledProviderConfigs(event.organizationId)
             if (configs.isEmpty()) {
                 logger.debug("No enabled incident providers for org ${event.organizationId}")
@@ -225,6 +238,74 @@ class IncidentService {
                 it[IncidentEventLog.metadata] = null
                 it[IncidentEventLog.createdAt] = Clock.System.now()
             }
+        }
+    }
+    
+    /**
+     * Trigger native on-call escalation engine if configured.
+     */
+    private fun triggerNativeEscalation(event: IncidentEvent) {
+        try {
+            // Check if organization has an escalation policy for this alert source
+            val escalationPolicyId = getEscalationPolicyForSource(event.organizationId, event.source)
+            
+            if (escalationPolicyId == null) {
+                logger.debug("No escalation policy configured for org ${event.organizationId}, source ${event.source}")
+                return
+            }
+            
+            // Resolve priority level from severity
+            val priority = priorityService.resolvePriority(event.organizationId, event.severity.name)
+            if (priority == null) {
+                logger.warn("Could not resolve priority for severity ${event.severity}")
+                return
+            }
+            
+            // Check if we should escalate based on business hours
+            val shouldEscalate = businessHoursService.shouldEscalate(event.organizationId, priority.priorityLevel)
+            
+            if (!shouldEscalate) {
+                logger.debug("Alert deferred: outside business hours for priority ${priority.priorityLevel}")
+                // TODO: Queue for later escalation when business hours start
+                return
+            }
+            
+            // Trigger escalation
+            val escalationEngine = getEscalationEngine()
+            val incident = escalationEngine.triggerEscalation(
+                organizationId = event.organizationId,
+                escalationPolicyId = escalationPolicyId,
+                title = event.title,
+                description = event.description,
+                priorityLevel = priority.priorityLevel,
+                alertSource = event.source.name,
+                deduplicationKey = event.deduplicationKey,
+                metadata = event.metadata
+            )
+            
+            if (incident != null) {
+                logger.info("Native escalation triggered for incident ${incident.id}")
+            }
+        } catch (e: Exception) {
+            logger.error("Error triggering native escalation", e)
+        }
+    }
+    
+    /**
+     * Get the escalation policy ID for a given alert source.
+     * This could be extended to support per-source routing rules.
+     * For now, we use a single default policy per organization.
+     */
+    private fun getEscalationPolicyForSource(organizationId: Int, source: AlertSource): Int? {
+        return transaction {
+            // Get the first enabled escalation policy for this org
+            // TODO: Add alert_source routing to escalation_policies table
+            EscalationPolicies
+                .select(EscalationPolicies.id)
+                .where { EscalationPolicies.organizationId eq organizationId }
+                .limit(1)
+                .singleOrNull()
+                ?.get(EscalationPolicies.id)?.value
         }
     }
 }

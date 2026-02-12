@@ -1,11 +1,8 @@
 package com.moneat.plugins
 
-import com.moneat.services.BillingBackgroundService
-import com.moneat.services.IngestionWorker
-import com.moneat.services.LogIngestionWorker
-import com.moneat.services.MonitorAlertService
-import com.moneat.services.RetentionBackgroundService
-import com.moneat.services.UptimeScheduler
+import com.moneat.config.RedisClient
+import com.moneat.services.*
+import com.moneat.services.oncall.*
 import io.ktor.server.application.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +10,13 @@ import kotlinx.coroutines.SupervisorJob
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
+
+// Global service instances
+private lateinit var escalationEngineInstance: EscalationEngine
+private lateinit var incidentManagementServiceInstance: IncidentManagementService
+
+fun getEscalationEngine(): EscalationEngine = escalationEngineInstance
+fun getIncidentManagementService(): IncidentManagementService = incidentManagementServiceInstance
 
 fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
@@ -27,11 +31,30 @@ fun Application.configureBackgroundJobs() {
     val logDlqKey = environment.config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq"
     val logWorkerCount = environment.config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull() ?: 2
     val logIngestionWorker = LogIngestionWorker(logQueueKey, logDlqKey, logWorkerCount)
+    
+    // Initialize on-call services
+    val escalationPolicyService = EscalationPolicyService()
+    val onCallScheduleService = OnCallScheduleService()
+    val pushNotificationService = PushNotificationService()
+    val slackService = SlackService()
+    val redisClient = RedisClient()
+    
+    escalationEngineInstance = EscalationEngine(
+        escalationPolicyService = escalationPolicyService,
+        onCallScheduleService = onCallScheduleService,
+        pushNotificationService = pushNotificationService,
+        slackService = slackService,
+        redisClient = redisClient
+    )
+    
+    incidentManagementServiceInstance = IncidentManagementService(
+        escalationEngine = escalationEngineInstance
+    )
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    // Start the monitor alert service, billing service, retention service, uptime scheduler, and ingestion workers
+    // Start the monitor alert service, billing service, retention service, uptime scheduler, ingestion workers, and escalation engine
     logger.info { "Starting background jobs" }
     monitorAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
@@ -39,6 +62,7 @@ fun Application.configureBackgroundJobs() {
     uptimeScheduler.start()
     ingestionWorker.start()
     logIngestionWorker.start()
+    escalationEngineInstance.start()
 
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopped) {
@@ -49,5 +73,6 @@ fun Application.configureBackgroundJobs() {
         uptimeScheduler.stop()
         ingestionWorker.stop()
         logIngestionWorker.stop()
+        escalationEngineInstance.stop()
     }
 }

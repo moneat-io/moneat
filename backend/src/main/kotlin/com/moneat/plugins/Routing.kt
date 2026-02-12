@@ -106,5 +106,12 @@ fun Application.configureRouting() {
         
         // Organization team management endpoints
         orgManagementRoutes()
+        
+        // On-call management endpoints
+        onCallRoutes()
+        escalationRoutes()
+        priorityRoutes()
+        deviceRoutes()
+        incidentRoutes(getIncidentManagementService())
     }
 }
