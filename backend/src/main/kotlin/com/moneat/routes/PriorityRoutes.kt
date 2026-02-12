@@ -40,7 +40,7 @@ fun Route.priorityRoutes() {
     val priorityService = PriorityService()
     val businessHoursService = BusinessHoursService()
     
-    route("/priorities") {
+    route("/v1/priorities") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
@@ -88,7 +88,7 @@ fun Route.priorityRoutes() {
         }
     }
     
-    route("/business-hours") {
+    route("/v1/business-hours") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()

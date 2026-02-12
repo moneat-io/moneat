@@ -9,6 +9,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import org.jetbrains.exposed.dao.id.IntIdTable
 import org.jetbrains.exposed.sql.ReferenceOption
+import org.jetbrains.exposed.sql.javatime.time
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
 import java.time.LocalTime
 
@@ -51,8 +52,8 @@ object BusinessHours : IntIdTable("business_hours") {
 object BusinessHoursWindows : IntIdTable("business_hours_windows") {
     val businessHoursId = integer("business_hours_id").references(BusinessHours.id, onDelete = ReferenceOption.CASCADE)
     val dayOfWeek = integer("day_of_week")
-    val startTime = varchar("start_time", 8)  // TIME as string HH:MM:SS
-    val endTime = varchar("end_time", 8)
+    val startTime = time("start_time")
+    val endTime = time("end_time")
     val createdAt = timestamp("created_at")
 }
 
@@ -136,7 +137,7 @@ object OnCallSchedules : IntIdTable("on_call_schedules") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val name = varchar("name", 255)
     val rotationType = varchar("rotation_type", 20)
-    val handoffTime = varchar("handoff_time", 8)  // TIME as string HH:MM:SS
+    val handoffTime = time("handoff_time")
     val timezone = varchar("timezone", 100)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")

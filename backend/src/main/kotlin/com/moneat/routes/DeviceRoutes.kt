@@ -20,7 +20,7 @@ data class RegisterDeviceRequest(
 fun Route.deviceRoutes() {
     val pushService = PushNotificationService()
     
-    route("/devices") {
+    route("/v1/devices") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()

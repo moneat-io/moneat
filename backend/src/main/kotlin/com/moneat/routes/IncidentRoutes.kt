@@ -22,7 +22,7 @@ data class AddNoteRequest(
 
 fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementService) {
     
-    route("/incidents") {
+    route("/v1/incidents") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()

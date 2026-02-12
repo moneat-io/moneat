@@ -42,7 +42,7 @@ data class UpdatePolicyRequest(
 fun Route.escalationRoutes() {
     val policyService = EscalationPolicyService()
     
-    route("/escalation-policies") {
+    route("/v1/escalation-policies") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()

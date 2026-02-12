@@ -47,7 +47,7 @@ class OnCallScheduleService {
             }
         
         val overrides = OnCallOverrides
-            .innerJoin(Users)
+            .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
             .selectAll()
             .where { OnCallOverrides.scheduleId eq scheduleId }
             .orderBy(OnCallOverrides.startAt to SortOrder.ASC)
@@ -71,7 +71,7 @@ class OnCallScheduleService {
             organizationId = scheduleRow[OnCallSchedules.organizationId],
             name = scheduleRow[OnCallSchedules.name],
             rotationType = scheduleRow[OnCallSchedules.rotationType],
-            handoffTime = LocalTime.parse(scheduleRow[OnCallSchedules.handoffTime]),
+            handoffTime = scheduleRow[OnCallSchedules.handoffTime],
             timezone = scheduleRow[OnCallSchedules.timezone],
             participants = participants,
             overrides = overrides,
@@ -86,7 +86,7 @@ class OnCallScheduleService {
         
         // Check for active override first
         val override = OnCallOverrides
-            .innerJoin(Users)
+            .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
             .selectAll()
             .where { 
                 (OnCallOverrides.scheduleId eq scheduleId) and
@@ -183,7 +183,7 @@ class OnCallScheduleService {
             it[OnCallSchedules.organizationId] = organizationId
             it[OnCallSchedules.name] = name
             it[OnCallSchedules.rotationType] = rotationType
-            it[OnCallSchedules.handoffTime] = handoffTime.toString()
+            it[OnCallSchedules.handoffTime] = handoffTime
             it[OnCallSchedules.timezone] = timezone
             it[OnCallSchedules.createdAt] = now
             it[OnCallSchedules.updatedAt] = now
@@ -221,7 +221,7 @@ class OnCallScheduleService {
         OnCallSchedules.update({ OnCallSchedules.id eq scheduleId }) {
             if (name != null) it[OnCallSchedules.name] = name
             if (rotationType != null) it[OnCallSchedules.rotationType] = rotationType
-            if (handoffTime != null) it[OnCallSchedules.handoffTime] = handoffTime.toString()
+            if (handoffTime != null) it[OnCallSchedules.handoffTime] = handoffTime
             if (timezone != null) it[OnCallSchedules.timezone] = timezone
             it[updatedAt] = now
         }
@@ -264,7 +264,7 @@ class OnCallScheduleService {
         }.value
         
         val row = OnCallOverrides
-            .innerJoin(Users)
+            .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
             .selectAll()
             .where { OnCallOverrides.id eq overrideId }
             .single()

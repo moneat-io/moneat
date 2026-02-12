@@ -40,7 +40,7 @@ data class CreateOverrideRequest(
 fun Route.onCallRoutes() {
     val scheduleService = OnCallScheduleService()
     
-    route("/on-call/schedules") {
+    route("/v1/on-call/schedules") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()

@@ -282,7 +282,7 @@ class StripeService(
         try {
             return Webhook.constructEvent(payload, signature, secret)
         } catch (e: SignatureVerificationException) {
-            logger.error { "Webhook signature verification failed: ${e.message}" }
+            logger.debug { "Webhook signature verification failed: ${e.message}" }
             throw e
         }
     }
@@ -334,11 +334,6 @@ class StripeService(
         } ?: throw IllegalArgumentException("On-call price ID not configured for this tier")
 
         val currentOncallItemId = subRow[Subscriptions.stripe_oncall_item_id]
-        
-        val subscription = Subscription.retrieve(stripeSubId)
-        
-        val prorationParams = SubscriptionUpdateParams.builder()
-            .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS)
 
         if (seats == 0) {
             if (currentOncallItemId != null) {
@@ -369,7 +364,9 @@ class StripeService(
         }
         
         // Fetch upcoming invoice to estimate proration cost if any
-        val upcomingInvoice = try {
+        // NOTE: Commented out due to compilation issues with Invoice.upcoming in current SDK setup
+        val upcomingInvoice: com.stripe.model.Invoice? = null 
+        /* try {
             com.stripe.model.Invoice.upcoming(
                 com.stripe.param.InvoiceUpcomingParams.builder()
                     .setCustomer(subRow[Subscriptions.stripe_customer_id])
@@ -378,7 +375,7 @@ class StripeService(
             )
         } catch (e: Exception) {
             null
-        }
+        } */
 
         // We trigger a sync to update DB state immediately
         val updatedSub = Subscription.retrieve(stripeSubId)

@@ -78,13 +78,105 @@ class EscalationPolicyService {
     }
     
     fun listPolicies(organizationId: Int): List<EscalationPolicy> = transaction {
-        EscalationPolicies
+        // Fetch all policies for this organization
+        val policies = EscalationPolicies
             .selectAll()
             .where { EscalationPolicies.organizationId eq organizationId }
             .orderBy(EscalationPolicies.name to SortOrder.ASC)
-            .mapNotNull { row ->
-                getPolicy(row[EscalationPolicies.id].value)
-            }
+            .toList()
+        
+        if (policies.isEmpty()) return@transaction emptyList()
+        
+        val policyIds = policies.map { it[EscalationPolicies.id].value }
+        
+        // Fetch all steps for these policies in one query
+        val allSteps = EscalationSteps
+            .selectAll()
+            .where { EscalationSteps.escalationPolicyId inList policyIds }
+            .orderBy(EscalationSteps.stepOrder to SortOrder.ASC)
+            .toList()
+        
+        val stepIds = allSteps.map { it[EscalationSteps.id].value }
+        
+        // Fetch all targets for these steps in one query
+        val allTargets = if (stepIds.isNotEmpty()) {
+            EscalationStepTargets
+                .selectAll()
+                .where { EscalationStepTargets.escalationStepId inList stepIds }
+                .toList()
+        } else emptyList()
+        
+        // Get all unique user and schedule IDs from targets
+        val userIds = allTargets
+            .filter { it[EscalationStepTargets.targetType] == "USER" }
+            .map { it[EscalationStepTargets.targetId] }
+            .distinct()
+        
+        val scheduleIds = allTargets
+            .filter { it[EscalationStepTargets.targetType] == "ON_CALL_SCHEDULE" }
+            .map { it[EscalationStepTargets.targetId] }
+            .distinct()
+        
+        // Fetch all users and schedules in bulk
+        val users: Map<Int, String?> = if (userIds.isNotEmpty()) {
+            Users.selectAll()
+                .where { Users.id inList userIds }
+                .associate { it[Users.id] to it[Users.name] }
+        } else emptyMap()
+        
+        val schedules: Map<Int, String> = if (scheduleIds.isNotEmpty()) {
+            OnCallSchedules.selectAll()
+                .where { OnCallSchedules.id inList scheduleIds }
+                .associate { it[OnCallSchedules.id].value to it[OnCallSchedules.name] }
+        } else emptyMap()
+        
+        // Group targets by step ID
+        val targetsByStepId = allTargets.groupBy { it[EscalationStepTargets.escalationStepId] }
+        
+        // Group steps by policy ID
+        val stepsByPolicyId = allSteps.groupBy { it[EscalationSteps.escalationPolicyId] }
+        
+        // Build the result
+        policies.map { policyRow ->
+            val policyId = policyRow[EscalationPolicies.id].value
+            val steps = stepsByPolicyId[policyId]?.map { stepRow ->
+                val stepId = stepRow[EscalationSteps.id].value
+                val targets = targetsByStepId[stepId]?.map { targetRow ->
+                    val targetType = targetRow[EscalationStepTargets.targetType]
+                    val targetId = targetRow[EscalationStepTargets.targetId]
+                    val targetName = when (targetType) {
+                        "USER" -> users[targetId]
+                        "ON_CALL_SCHEDULE" -> schedules[targetId]
+                        else -> null
+                    }
+                    EscalationStepTarget(
+                        id = targetRow[EscalationStepTargets.id].value,
+                        targetType = targetType,
+                        targetId = targetId,
+                        targetName = targetName
+                    )
+                } ?: emptyList()
+                
+                EscalationStep(
+                    id = stepId,
+                    stepOrder = stepRow[EscalationSteps.stepOrder],
+                    timeoutMinutes = stepRow[EscalationSteps.timeoutMinutes],
+                    targets = targets,
+                    createdAt = stepRow[EscalationSteps.createdAt].toString()
+                )
+            } ?: emptyList()
+            
+            EscalationPolicy(
+                id = policyId,
+                organizationId = policyRow[EscalationPolicies.organizationId],
+                name = policyRow[EscalationPolicies.name],
+                description = policyRow[EscalationPolicies.description],
+                repeatCount = policyRow[EscalationPolicies.repeatCount],
+                steps = steps,
+                createdAt = policyRow[EscalationPolicies.createdAt].toString(),
+                updatedAt = policyRow[EscalationPolicies.updatedAt].toString()
+            )
+        }
     }
     
     data class CreateStepData(

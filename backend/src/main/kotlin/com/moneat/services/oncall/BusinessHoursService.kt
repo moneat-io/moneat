@@ -24,8 +24,8 @@ class BusinessHoursService {
             .map { row ->
                 BusinessHoursWindow(
                     dayOfWeek = row[BusinessHoursWindows.dayOfWeek],
-                    startTime = LocalTime.parse(row[BusinessHoursWindows.startTime]),
-                    endTime = LocalTime.parse(row[BusinessHoursWindows.endTime])
+                    startTime = row[BusinessHoursWindows.startTime],
+                    endTime = row[BusinessHoursWindows.endTime]
                 )
             }
         
@@ -118,8 +118,8 @@ class BusinessHoursService {
             BusinessHoursWindows.insert {
                 it[businessHoursId] = bhId
                 it[dayOfWeek] = window.dayOfWeek
-                it[startTime] = window.startTime.toString()
-                it[endTime] = window.endTime.toString()
+                it[startTime] = window.startTime
+                it[endTime] = window.endTime
                 it[createdAt] = now
             }
         }

@@ -30,7 +30,7 @@ fun Route.stripeWebhookRoutes() {
         val event = try {
             stripeService.verifyAndParseEvent(payload, signature)
         } catch (e: Exception) {
-            logger.warn(e) { "Stripe webhook signature verification failed" }
+            logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
             call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid webhook signature"))
             return@post
         }
