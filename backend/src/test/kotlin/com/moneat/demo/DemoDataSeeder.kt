@@ -9,6 +9,7 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.mindrot.jbcrypt.BCrypt
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -340,6 +341,10 @@ object DemoDataSeeder {
         // Seed monitoring systems (always check for duplicates inside the function)
         println("\nSeeding monitoring systems...")
         seedMonitoringSystems(orgId)
+        
+        // Seed system metrics for monitoring systems
+        println("\nSeeding system metrics...")
+        seedSystemMetrics(orgId)
         
         // Seed container metrics for monitoring systems
         println("\nSeeding container metrics...")
@@ -1955,12 +1960,26 @@ object DemoDataSeeder {
     
     private suspend fun seedMonitoringSystems(organizationId: Int) {
         // Check if systems already exist
-        val existingSystemsCount = transaction {
-            Systems.selectAll().where { Systems.organization_id eq organizationId }.count()
+        val existingSystems = transaction {
+            Systems.selectAll()
+                .where { Systems.organization_id eq organizationId }
+                .map { it[Systems.id] to it[Systems.name] }
         }
         
-        if (existingSystemsCount > 0) {
-            println("Monitoring systems already exist ($existingSystemsCount found). Skipping system seeding.")
+        if (existingSystems.isNotEmpty()) {
+            println("Monitoring systems already exist (${existingSystems.size} found).")
+            
+            // Update last_seen_at to now for all systems so they appear online
+            transaction {
+                existingSystems.forEach { (systemId, _) ->
+                    Systems.update({ Systems.id eq systemId }) {
+                        it[Systems.last_seen_at] = kotlinx.datetime.Clock.System.now()
+                        it[Systems.status] = "online"
+                        it[Systems.updated_at] = kotlinx.datetime.Clock.System.now()
+                    }
+                }
+            }
+            println("✅ Updated ${existingSystems.size} systems to appear online with current timestamps")
             return
         }
         
@@ -2015,6 +2034,15 @@ object DemoDataSeeder {
             return
         }
         
+        // Delete existing container metrics for this organization to ensure fresh data
+        try {
+            val deleteQuery = "DELETE FROM $db.container_metrics WHERE org_id = $organizationId"
+            ClickHouseClient.execute(deleteQuery)
+            println("🗑️  Deleted old container metrics for fresh data")
+        } catch (e: Exception) {
+            println("⚠️  Could not delete old container metrics: ${e.message}")
+        }
+        
         // Container configurations for different system types
         val containerConfigs = mapOf(
             "api-prod-1.acme.com" to listOf(
@@ -2053,10 +2081,10 @@ object DemoDataSeeder {
                 val containerId = UUID.randomUUID().toString().take(12) // Docker-style short ID
                 val isRunning = status == "running"
                 
-                // Generate metrics for last 7 days (every 30 seconds = ~20k points per container)
-                // Let's do last 2 hours with 1-minute intervals for demo (120 points)
+                // Generate metrics for last 24 hours with 5-minute intervals (288 points)
+                // This ensures screenshots always have recent data
                 val now = Instant.now()
-                val metricsCount = 120
+                val metricsCount = 288
                 
                 // Base resource usage patterns per container type
                 val (baseCpu, baseMemMB, memLimitMB) = when {
@@ -2069,7 +2097,7 @@ object DemoDataSeeder {
                 }
                 
                 repeat(metricsCount) { i ->
-                    val timestamp = now.minus((metricsCount - i).toLong(), ChronoUnit.MINUTES)
+                    val timestamp = now.minus((metricsCount - i).toLong() * 5, ChronoUnit.MINUTES)
                     
                     // Add realistic variation to metrics
                     val cpuVariation = random.nextDouble(-10.0, 15.0).toFloat()
@@ -2125,6 +2153,144 @@ object DemoDataSeeder {
         }
         
         println("✅ Seeded $totalContainers containers with $totalMetrics metric points")
+    }
+    
+    private suspend fun seedSystemMetrics(organizationId: Int) {
+        val db = ClickHouseClient.getDatabase()
+        
+        // Get seeded systems
+        val systems = transaction {
+            Systems.selectAll()
+                .where { Systems.organization_id eq organizationId }
+                .map { it[Systems.id] to it[Systems.name] }
+        }
+        
+        if (systems.isEmpty()) {
+            println("⚠️  No monitoring systems found. Skipping system metrics seeding.")
+            return
+        }
+        
+        // Delete existing system metrics for this organization to ensure fresh data
+        try {
+            val deleteQuery = "DELETE FROM $db.system_metrics WHERE org_id = $organizationId"
+            ClickHouseClient.execute(deleteQuery)
+            println("🗑️  Deleted old system metrics for fresh data")
+        } catch (e: Exception) {
+            println("⚠️  Could not delete old system metrics: ${e.message}")
+        }
+        
+        var totalMetrics = 0
+        
+        systems.forEach { (systemId, systemName) ->
+            // Generate metrics for last 24 hours with 5-minute intervals (288 points)
+            val now = Instant.now()
+            val metricsCount = 288
+            
+            // Base resource usage patterns per system type
+            val (baseCpu, memTotalGB, baseDiskGB) = when {
+                systemName.contains("api") -> Triple(35.0f, 8, 100)
+                systemName.contains("worker") -> Triple(55.0f, 16, 200)
+                systemName.contains("db") -> Triple(25.0f, 32, 500)
+                systemName.contains("cache") -> Triple(15.0f, 8, 50)
+                else -> Triple(30.0f, 8, 100)
+            }
+            
+            val memTotal = memTotalGB * 1024L * 1024L * 1024L
+            val diskTotal = baseDiskGB * 1024L * 1024L * 1024L
+            
+            repeat(metricsCount) { i ->
+                val timestamp = now.minus((metricsCount - i).toLong() * 5, ChronoUnit.MINUTES)
+                
+                // Add realistic variation to metrics
+                val cpuVariation = random.nextDouble(-15.0, 25.0).toFloat()
+                val memUsedPercent = 60.0f + random.nextDouble(-20.0, 25.0).toFloat()
+                val diskUsedPercent = 45.0f + random.nextDouble(-10.0, 15.0).toFloat()
+                
+                val cpuPercent = (baseCpu + cpuVariation).coerceIn(0.0f, 100.0f)
+                val memUsed = (memTotal * memUsedPercent / 100).toLong()
+                val memAvailable = memTotal - memUsed
+                val diskUsed = (diskTotal * diskUsedPercent / 100).toLong()
+                
+                // Swap (typically low usage)
+                val swapTotal = memTotal / 2
+                val swapUsed = (swapTotal * random.nextDouble(0.0, 0.15)).toLong()
+                
+                // Disk I/O (bytes/sec, cumulative)
+                val diskReadBytes = random.nextLong(1024L * 1024L, 100L * 1024L * 1024L)
+                val diskWriteBytes = random.nextLong(512L * 1024L, 50L * 1024L * 1024L)
+                
+                // Network I/O (bytes/sec, cumulative)
+                val netRecvBytes = random.nextLong(10L * 1024L * 1024L, 500L * 1024L * 1024L)
+                val netSentBytes = random.nextLong(5L * 1024L * 1024L, 250L * 1024L * 1024L)
+                
+                // Load averages (typically < number of CPUs, let's assume 4 CPUs)
+                val baseLoad = cpuPercent / 25.0f // Rough correlation
+                val load1 = (baseLoad + random.nextDouble(-0.5, 0.5).toFloat()).coerceAtLeast(0.0f)
+                val load5 = (baseLoad * 0.9f + random.nextDouble(-0.3, 0.3).toFloat()).coerceAtLeast(0.0f)
+                val load15 = (baseLoad * 0.8f + random.nextDouble(-0.2, 0.2).toFloat()).coerceAtLeast(0.0f)
+                
+                // Temperature (Celsius, if applicable)
+                val tempMax = if (random.nextBoolean()) {
+                    45.0f + random.nextDouble(-10.0, 25.0).toFloat()
+                } else 0.0f
+                
+                // Optional: GPU metrics (only for some systems)
+                val (gpuPercent, gpuMemPercent, gpuPower) = if (systemName.contains("worker") && random.nextDouble() < 0.3) {
+                    Triple(
+                        random.nextDouble(20.0, 90.0).toFloat(),
+                        random.nextDouble(30.0, 85.0).toFloat(),
+                        random.nextDouble(100.0, 300.0).toFloat()
+                    )
+                } else Triple(0.0f, 0.0f, 0.0f)
+                
+                // Battery (only for mobile/laptop monitoring, rare)
+                val batteryPercent = 0.0f
+                
+                val systemMetricsQuery = """
+                    INSERT INTO $db.system_metrics (
+                        system_id, org_id, timestamp,
+                        cpu_percent, mem_total, mem_used, mem_available,
+                        swap_total, swap_used, disk_total, disk_used,
+                        disk_read_bytes, disk_write_bytes, net_recv_bytes, net_sent_bytes,
+                        load_1, load_5, load_15, temp_max,
+                        gpu_percent, gpu_mem_percent, gpu_power, battery_percent
+                    ) VALUES (
+                        toUUID('$systemId'),
+                        $organizationId,
+                        toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
+                        $cpuPercent,
+                        $memTotal,
+                        $memUsed,
+                        $memAvailable,
+                        $swapTotal,
+                        $swapUsed,
+                        $diskTotal,
+                        $diskUsed,
+                        $diskReadBytes,
+                        $diskWriteBytes,
+                        $netRecvBytes,
+                        $netSentBytes,
+                        $load1,
+                        $load5,
+                        $load15,
+                        $tempMax,
+                        $gpuPercent,
+                        $gpuMemPercent,
+                        $gpuPower,
+                        $batteryPercent
+                    )
+                """.trimIndent()
+                
+                try {
+                    ClickHouseClient.execute(systemMetricsQuery)
+                    totalMetrics++
+                } catch (e: Exception) {
+                    if (i == 0) println("❌ Error inserting system metric for $systemName: ${e.message}")
+                }
+            }
+        }
+        
+        println("✅ Seeded ${systems.size} systems with $totalMetrics metric points")
     }
     
     private suspend fun seedStatusPages(organizationId: Int) {

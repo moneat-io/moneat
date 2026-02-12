@@ -44,8 +44,11 @@ echo ""
 
 # Check if demo data exists
 echo "🔍 Checking for demo data..."
-echo "💡 Make sure demo data is seeded. Run this if needed:"
+echo "💡 Make sure demo data is seeded with current timestamps:"
 echo "  ./seed-demo-data.sh"
+echo ""
+echo "⚠️  Important: Re-run seed script to refresh monitoring data timestamps"
+echo "   (Container and system metrics are timestamped relative to now)"
 echo ""
 
 # Run screenshot script
