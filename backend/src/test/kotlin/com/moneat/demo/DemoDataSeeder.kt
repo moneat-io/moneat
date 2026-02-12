@@ -2113,7 +2113,6 @@ object DemoDataSeeder {
                     
                     val memUsed = memUsedMB * 1024L * 1024L
                     val memLimit = memLimitMB * 1024L * 1024L
-                    val memPercent = if (memLimit > 0) (memUsed.toFloat() / memLimit.toFloat() * 100) else 0.0f
                     
                     // Network metrics (bytes)
                     val netRecv = if (isRunning) random.nextLong(1024L * 1024L, 100L * 1024L * 1024L) else 0L
@@ -2121,11 +2120,12 @@ object DemoDataSeeder {
                     
                     val containerQuery = """
                         INSERT INTO $db.container_metrics (
-                            system_id, container_name, container_id, image, status,
-                            cpu_percent, mem_used, mem_limit, mem_percent,
+                            system_id, org_id, container_name, container_id, image, status,
+                            cpu_percent, mem_used, mem_limit,
                             net_recv_bytes, net_sent_bytes, timestamp
                         ) VALUES (
                             toUUID('$systemId'),
+                            $organizationId,
                             '$containerName',
                             '$containerId',
                             '$image',
@@ -2133,7 +2133,6 @@ object DemoDataSeeder {
                             $cpuPercent,
                             $memUsed,
                             $memLimit,
-                            $memPercent,
                             $netRecv,
                             $netSent,
                             toDateTime64(${timestamp.epochSecond}, 3, 'UTC')

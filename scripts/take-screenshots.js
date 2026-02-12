@@ -136,56 +136,6 @@ const SCREENSHOTS = [
     viewport: { width: 1920, height: 1080 },
   },
   {
-    name: 'slack-integration',
-    description: 'Slack integration tile',
-    navigate: async (page) => {
-      // Navigate to settings page
-      await page.goto(`${BASE_URL}/settings`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      
-      // Click on Integrations tab
-      try {
-        const integrationsTab = await page.locator('button[value="integrations"], [role="tab"]:has-text("Integrations")').first();
-        const tabExists = await integrationsTab.count() > 0;
-        if (tabExists) {
-          await integrationsTab.click();
-          await page.waitForTimeout(1500);
-        } else {
-          console.log('   ⚠️  Integrations tab not found in settings');
-        }
-      } catch (e) {
-        console.log('   ⚠️  Could not navigate to integrations:', e.message);
-      }
-    },
-    elementSelector: 'h3:has-text("Slack")',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'incident-io-integration',
-    description: 'Incident.io integration tile',
-    navigate: async (page) => {
-      // Navigate to settings page
-      await page.goto(`${BASE_URL}/settings`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      
-      // Click on Integrations tab
-      try {
-        const integrationsTab = await page.locator('button[value="integrations"], [role="tab"]:has-text("Integrations")').first();
-        const tabExists = await integrationsTab.count() > 0;
-        if (tabExists) {
-          await integrationsTab.click();
-          await page.waitForTimeout(1500);
-        } else {
-          console.log('   ⚠️  Integrations tab not found in settings');
-        }
-      } catch (e) {
-        console.log('   ⚠️  Could not navigate to integrations:', e.message);
-      }
-    },
-    elementSelector: 'h3:has-text("incident.io")',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
     name: 'containers',
     description: 'Container monitoring with metrics',
     navigate: async (page) => {
