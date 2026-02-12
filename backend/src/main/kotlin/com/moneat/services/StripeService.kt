@@ -288,7 +288,7 @@ class StripeService(
         val organizationId = resolveOrganizationId(subscription.metadata["organization_id"], subscription.customer)
             ?: return
 
-        val currentTier = transaction {
+        val fallbackTier = transaction {
             val subRow = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq organizationId) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
@@ -297,15 +297,22 @@ class StripeService(
             pricingTierService.getCurrentTier(tierName) ?: pricingTierService.getCurrentTier("FREE")
         }
 
-        val overagePriceId = currentTier?.stripeOveragePriceId
-        val basePriceId = currentTier?.stripeBasePriceId
+        val resolvedTier = resolveTierForSubscription(subscription, fallbackTier)
+        val basePriceIds = setOfNotBlank(
+            resolvedTier?.stripeBasePriceId,
+            resolvedTier?.stripeYearlyBasePriceId
+        )
+        val overagePriceIds = setOfNotBlank(
+            resolvedTier?.stripeOveragePriceId,
+            resolvedTier?.stripeYearlyOveragePriceId
+        )
 
         var baseItemId: String? = null
         var overageItemId: String? = null
         for (item in subscription.items.data) {
             val priceId = item.price?.id
-            if (priceId != null && priceId == overagePriceId) overageItemId = item.id
-            if (priceId != null && priceId == basePriceId) baseItemId = item.id
+            if (priceId != null && priceId in overagePriceIds) overageItemId = item.id
+            if (priceId != null && priceId in basePriceIds) baseItemId = item.id
         }
 
         transaction {
@@ -314,7 +321,10 @@ class StripeService(
                     (Subscriptions.stripe_subscription_id eq subscription.id)
             }.orderBy(Subscriptions.id to SortOrder.DESC).firstOrNull()
 
-            val planName = currentTier?.tierName?.lowercase() ?: "free"
+            val planName = resolvedTier?.tierName?.lowercase()
+                ?: fallbackTier?.tierName?.lowercase()
+                ?: "free"
+            val tierId = resolvedTier?.id?.takeIf { it > 0 }
             val startInstant = subscription.startDate?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
             val endInstant = subscription.trialEnd?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
 
@@ -325,11 +335,11 @@ class StripeService(
                     it[current_period_start] = startInstant
                     it[current_period_end] = endInstant
                     it[stripe_customer_id] = subscription.customer
+                    it[pricing_tier_config_id] = tierId
                     it[stripe_base_item_id] = baseItemId
                     it[stripe_overage_item_id] = overageItemId
                 }
             } else {
-                val tierId = currentTier?.id?.takeIf { it > 0 }
                 Subscriptions.insert {
                     it[Subscriptions.organization_id] = organizationId
                     it[stripe_subscription_id] = subscription.id
@@ -348,6 +358,42 @@ class StripeService(
                 }
             }
         }
+    }
+
+    private fun resolveTierForSubscription(
+        subscription: Subscription,
+        fallbackTier: PricingTierConfigResponse?
+    ): PricingTierConfigResponse? {
+        val metadataTierName = subscription.metadata["tier_name"]?.trim()?.takeIf { it.isNotBlank() }
+        if (metadataTierName != null) {
+            val metadataTier = pricingTierService.getCurrentTier(metadataTierName)
+            if (metadataTier != null) return metadataTier
+            logger.warn {
+                "Stripe subscription ${subscription.id} has unknown tier_name metadata: $metadataTierName"
+            }
+        }
+
+        val subscriptionPriceIds = subscription.items.data.mapNotNull { it.price?.id }.toSet()
+        if (subscriptionPriceIds.isNotEmpty()) {
+            val matchedTier = pricingTierService.getCurrentPlans()
+                .map { it.tier }
+                .firstOrNull { tier ->
+                    val tierPriceIds = setOfNotBlank(
+                        tier.stripeBasePriceId,
+                        tier.stripeYearlyBasePriceId,
+                        tier.stripeOveragePriceId,
+                        tier.stripeYearlyOveragePriceId
+                    )
+                    tierPriceIds.any { it in subscriptionPriceIds }
+                }
+            if (matchedTier != null) return matchedTier
+        }
+
+        return fallbackTier ?: pricingTierService.getCurrentTier("FREE")
+    }
+
+    private fun setOfNotBlank(vararg values: String?): Set<String> {
+        return values.filterNotNull().map { it.trim() }.filter { it.isNotBlank() }.toSet()
     }
 
     fun handleCheckoutCompleted(session: com.stripe.model.checkout.Session) {

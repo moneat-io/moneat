@@ -16,6 +16,7 @@ import javax.crypto.spec.SecretKeySpec
 class StripeServiceWebhookTest {
     private val stripeService = StripeService()
     private var testOrgId: Int = 0
+    private var freeTierId: Int = 0
     private var testTierId: Int = 0
     private var testSubId: Int = 0
     private val webhookSecret = "whsec_test_secret_key_12345"
@@ -42,6 +43,18 @@ class StripeServiceWebhookTest {
         // Setup test data
         transaction {
             testOrgId = insertTestOrganization("Test Org", "test-org")
+            freeTierId = insertTestPricingTier(
+                tierName = "FREE",
+                monthlyUnitLimit = 100,
+                monthlyErrorLimit = 100,
+                monthlyTransactionLimit = 0,
+                monthlyReplayLimit = 0,
+                monthlyFeedbackLimit = 0,
+                paygEnabled = false,
+                paygRateMicrosPerUnit = 0,
+                retentionDays = 7,
+                logRetentionDays = 7
+            )
             testTierId = insertTestPricingTier(
                 tierName = "PRO",
                 monthlyUnitLimit = 1000,
@@ -379,6 +392,46 @@ class StripeServiceWebhookTest {
     }
 
     @Test
+    fun `syncSubscriptionFromStripe upgrades FREE subscription to PRO using Stripe metadata`() {
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.plan] = "free"
+                it[Subscriptions.pricing_tier_config_id] = freeTierId
+                it[Subscriptions.status] = "active"
+                it[Subscriptions.stripe_subscription_id] = mockSubscriptionId
+                it[Subscriptions.stripe_customer_id] = mockCustomerId
+            }
+        }
+
+        val subscription = mockSubscription(
+            subscriptionId = mockSubscriptionId,
+            customerId = mockCustomerId,
+            status = "trialing",
+            organizationId = testOrgId,
+            tierNameMetadata = "PRO"
+        )
+
+        stripeService.syncSubscriptionFromStripe(subscription)
+
+        transaction {
+            val record = Subscriptions.selectAll()
+                .where { Subscriptions.id eq testSubId }
+                .firstOrNull()
+
+            assertNotNull(record)
+            assertEquals("pro", record[Subscriptions.plan])
+            val tierConfigId = record[Subscriptions.pricing_tier_config_id]
+            assertNotNull(tierConfigId)
+            val tierName = PricingTierConfigs.selectAll()
+                .where { PricingTierConfigs.id eq tierConfigId }
+                .firstOrNull()
+                ?.get(PricingTierConfigs.tier_name)
+            assertEquals("PRO", tierName)
+            assertEquals("trialing", record[Subscriptions.status])
+        }
+    }
+
+    @Test
     fun `handleSubscriptionDeleted moves subscription to canceled and creates free tier`() {
         transaction {
             Subscriptions.update({ Subscriptions.id eq testSubId }) {
@@ -636,7 +689,8 @@ class StripeServiceWebhookTest {
         customerId: String,
         status: String,
         organizationId: Int,
-        withOrgMetadata: Boolean = true
+        withOrgMetadata: Boolean = true,
+        tierNameMetadata: String? = null
     ): Subscription {
         val subscription = Subscription()
         subscription.id = subscriptionId
@@ -654,8 +708,11 @@ class StripeServiceWebhookTest {
         if (withOrgMetadata) {
             metadata["organization_id"] = organizationId.toString()
         }
+        if (!tierNameMetadata.isNullOrBlank()) {
+            metadata["tier_name"] = tierNameMetadata
+        }
         subscription.metadata = metadata
-        
+
         return subscription
     }
 

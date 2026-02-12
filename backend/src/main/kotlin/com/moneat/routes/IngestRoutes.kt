@@ -78,7 +78,16 @@ fun Route.ingestRoutes() {
                         .groupingBy { mapEnvelopeItemTypeToQuotaType(it.type) }
                         .eachCount()
 
-                    val reservation = quotaService.reserveUnitsBatch(orgId, groupedReservations)
+                    // Calculate bytes per type for GB quota tracking
+                    val groupedBytes = envelope.items
+                        .groupBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                        .mapValues { (_, items) ->
+                            items.sumOf { item ->
+                                (item.payloadBytes?.size ?: item.payload.toByteArray(Charsets.UTF_8).size).toLong()
+                            }
+                        }
+
+                    val reservation = quotaService.reserveUnitsBatch(orgId, groupedReservations, groupedBytes)
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
@@ -215,7 +224,8 @@ fun Route.ingestRoutes() {
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
                         return@post
                     }
-                    val reservation = quotaService.reserveUnits(orgId, 1, "error")
+                    val bodyBytes = body.toByteArray(Charsets.UTF_8).size.toLong()
+                    val reservation = quotaService.reserveUnits(orgId, 1, "error", bodyBytes)
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
