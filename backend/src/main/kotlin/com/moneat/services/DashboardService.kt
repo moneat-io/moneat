@@ -28,6 +28,23 @@ class DashboardService {
     private val retentionPolicyService = RetentionPolicyService()
     private val pricingTierService = PricingTierService()
     
+    /**
+     * Safely extracts body text from ClickHouse response, checking for error messages.
+     * Returns null if the response contains a ClickHouse error instead of valid data.
+     */
+    private suspend fun extractClickHouseBody(response: HttpResponse): String? {
+        if (response.status != HttpStatusCode.OK) {
+            return null
+        }
+        val body = response.bodyAsText()
+        // ClickHouse returns error messages as plain text starting with "Code:"
+        if (body.startsWith("Code:") && body.contains("DB::Exception")) {
+            logger.warn { "ClickHouse error: ${body.take(200)}" }
+            return null
+        }
+        return body
+    }
+    
     fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
         return transaction {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
@@ -1055,11 +1072,8 @@ class DashboardService {
 
         return try {
             val response = ClickHouseClient.execute(query)
-            if (response.status != io.ktor.http.HttpStatusCode.OK) {
-                // Log error safely if possible, or just return empty list as fail-safe
-                return emptyList()
-            }
-            val body = response.bodyAsText()
+            val body = extractClickHouseBody(response) ?: return emptyList()
+            
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
