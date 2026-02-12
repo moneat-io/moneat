@@ -44,7 +44,7 @@ class StripeService(
         billingInterval: String = "monthly",
         successUrl: String,
         cancelUrl: String,
-        oncallSeats: Int = 0
+        oncallSeats: Int
     ): CheckoutSessionResponse {
         ensureEnabled()
         

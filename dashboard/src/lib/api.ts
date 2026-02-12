@@ -1,4 +1,4 @@
-const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'https://moneat-backend.bandapella.com'}/v1`
+const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'}/v1`
 const AUTH_PAGE_PATHS = new Set(['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
 
 // Helper to format errors for logging without massive stack traces

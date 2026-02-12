@@ -880,8 +880,9 @@ fun Route.integrationCallbackRoutes() {
                             if (incidentId != null) {
                                 // Get user from Slack user ID
                                 val slackUserId = payloadJson["user"]?.jsonObject?.get("id")?.jsonPrimitive?.content
-                                if (slackUserId != null) {
-                                    val userId = getUserIdFromSlackUserId(slackUserId)
+                                val slackTeamId = payloadJson["team"]?.jsonObject?.get("id")?.jsonPrimitive?.content
+                                if (slackUserId != null && slackTeamId != null) {
+                                    val userId = getUserIdFromSlackUserId(slackUserId, slackTeamId)
                                     if (userId != null) {
                                         val incidentService = com.moneat.plugins.getIncidentManagementService()
                                         
@@ -988,10 +989,13 @@ fun Route.integrationCallbackRoutes() {
 }
 
 // Helper function to get user ID from Slack user ID
-private fun getUserIdFromSlackUserId(slackUserId: String): Int? = transaction {
-    com.moneat.models.SlackUserMappings
+private fun getUserIdFromSlackUserId(slackUserId: String, slackTeamId: String): Int? = transaction {
+    SlackUserMappings
         .selectAll()
-        .where { com.moneat.models.SlackUserMappings.slackUserId eq slackUserId }
+        .where {
+            (SlackUserMappings.slackUserId eq slackUserId) and
+            (SlackUserMappings.slackTeamId eq slackTeamId)
+        }
         .singleOrNull()
-        ?.get(com.moneat.models.SlackUserMappings.userId)
+        ?.get(SlackUserMappings.userId)
 }

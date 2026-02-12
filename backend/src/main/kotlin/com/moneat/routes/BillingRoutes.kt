@@ -107,7 +107,8 @@ fun Route.billingRoutes() {
                     tierName = request.tierName,
                     billingInterval = request.billingInterval,
                     successUrl = request.successUrl,
-                    cancelUrl = request.cancelUrl
+                    cancelUrl = request.cancelUrl,
+                    oncallSeats = request.oncallSeats
                 )
                 call.respond(response)
             } catch (e: IllegalArgumentException) {

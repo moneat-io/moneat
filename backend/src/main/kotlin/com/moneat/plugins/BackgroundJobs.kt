@@ -14,11 +14,11 @@ private val logger = KotlinLogging.logger {}
 // Global service instances
 private lateinit var escalationEngineInstance: EscalationEngine
 private lateinit var incidentManagementServiceInstance: IncidentManagementService
-private lateinit var slackUserGroupSyncServiceInstance: SlackUserGroupSyncService
+private var slackUserGroupSyncServiceInstance: SlackUserGroupSyncService? = null
 
 fun getEscalationEngine(): EscalationEngine = escalationEngineInstance
 fun getIncidentManagementService(): IncidentManagementService = incidentManagementServiceInstance
-fun getSlackUserGroupSyncService(): SlackUserGroupSyncService = slackUserGroupSyncServiceInstance
+fun getSlackUserGroupSyncService(): SlackUserGroupSyncService? = slackUserGroupSyncServiceInstance
 
 fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
@@ -71,7 +71,7 @@ fun Application.configureBackgroundJobs() {
     ingestionWorker.start()
     logIngestionWorker.start()
     escalationEngineInstance.start()
-    slackUserGroupSyncServiceInstance.start()
+    slackUserGroupSyncServiceInstance?.start()
 
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopped) {
@@ -83,6 +83,6 @@ fun Application.configureBackgroundJobs() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
         escalationEngineInstance.stop()
-        slackUserGroupSyncServiceInstance.stop()
+        slackUserGroupSyncServiceInstance?.stop()
     }
 }

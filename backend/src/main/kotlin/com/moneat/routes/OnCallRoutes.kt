@@ -50,7 +50,7 @@ data class SetScheduleUsergroupRequest(
     val usergroupHandle: String
 )
 
-fun Route.onCallRoutes(getSlackUserGroupSyncService: (() -> com.moneat.services.oncall.SlackUserGroupSyncService)? = null) {
+fun Route.onCallRoutes(getSlackUserGroupSyncService: (() -> com.moneat.services.oncall.SlackUserGroupSyncService?)? = null) {
     val scheduleService = OnCallScheduleService()
     val slackUserGroupSyncService = getSlackUserGroupSyncService?.invoke()
     
