@@ -1,4 +1,4 @@
-import {createFileRoute, Link, Outlet} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
@@ -51,9 +51,11 @@ function isEscalatingSoon(nextEscalationAt?: string): boolean {
 }
 
 function Incidents() {
+  const pathname = useRouterState({select: state => state.location.pathname})
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [, setTick] = useState(0)
+  const isIncidentDetailRoute = pathname.startsWith('/on-call/incidents/')
 
   // Re-render every 30s to update "escalating soon" badges
   useEffect(() => {
@@ -75,6 +77,10 @@ function Incidents() {
   const triggeredCount = incidents?.filter(i => i.status === 'TRIGGERED').length || 0
   const acknowledgedCount = incidents?.filter(i => i.status === 'ACKNOWLEDGED').length || 0
   const resolvedCount = incidents?.filter(i => i.status === 'RESOLVED').length || 0
+
+  if (isIncidentDetailRoute) {
+    return <Outlet />
+  }
 
   return (
     <div className="space-y-6">
@@ -274,7 +280,6 @@ function Incidents() {
           </p>
         </div>
       )}
-      <Outlet />
     </div>
   )
 }

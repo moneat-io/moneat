@@ -191,50 +191,74 @@ function EscalationPolicies() {
 
                 {/* Visual Step Flow */}
                 {policy.steps.length > 0 && (
-                  <div className="mt-4 ml-[52px] space-y-1">
+                  <div className="mt-5 ml-[52px]">
                     {policy.steps
                       .sort((a, b) => a.stepOrder - b.stepOrder)
-                      .map((step, stepIdx) => (
-                        <div key={step.id}>
-                          <div className={cn(
-                            'flex items-center gap-3 p-3 rounded-lg border-l-4',
-                            stepColors[stepIdx % stepColors.length],
-                            'bg-card'
-                          )}>
+                      .map((step, stepIdx) => {
+                        const isLast = stepIdx === policy.steps.length - 1
+                        const isFirst = stepIdx === 0
+                        const stepDescription = isFirst
+                          ? 'First responders — notified immediately when an incident is triggered'
+                          : isLast
+                            ? `Final escalation — reached if step ${stepIdx} is not acknowledged`
+                            : `Escalated to if step ${stepIdx} is not acknowledged`
+
+                        return (
+                          <div key={step.id} className="relative">
+                            {/* Step card */}
                             <div className={cn(
-                              'flex items-center justify-center h-7 w-7 rounded-full text-xs font-bold',
-                              stepBgColors[stepIdx % stepBgColors.length],
-                              stepTextColors[stepIdx % stepTextColors.length],
+                              'relative flex items-start gap-3 p-3.5 rounded-lg border',
+                              'border-border/60 bg-card/60',
                             )}>
-                              {stepIdx + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-sm font-medium">Notify</span>
-                                {step.targets.map((target) => (
-                                  <Badge key={target.id} variant="secondary" className="text-xs gap-1">
-                                    {target.targetType === 'USER' ? (
-                                      <User className="h-3 w-3" />
-                                    ) : (
-                                      <Users className="h-3 w-3" />
-                                    )}
-                                    {target.targetName}
-                                  </Badge>
-                                ))}
+                              <div className={cn(
+                                'flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold flex-shrink-0 mt-0.5',
+                                stepBgColors[stepIdx % stepBgColors.length],
+                                stepTextColors[stepIdx % stepTextColors.length],
+                              )}>
+                                {stepIdx + 1}
                               </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-sm font-medium">Notify</span>
+                                  {step.targets.map((target) => (
+                                    <Badge key={target.id} variant="secondary" className="text-xs gap-1">
+                                      {target.targetType === 'USER' ? (
+                                        <User className="h-3 w-3" />
+                                      ) : (
+                                        <Users className="h-3 w-3" />
+                                      )}
+                                      {target.targetName}
+                                    </Badge>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                                  {stepDescription}
+                                </p>
+                              </div>
+                              <Badge variant="outline" className="text-xs gap-1 text-muted-foreground flex-shrink-0 mt-0.5">
+                                <Clock className="h-3 w-3" />
+                                {step.timeoutMinutes}m
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className="text-xs gap-1 text-muted-foreground flex-shrink-0">
-                              <Clock className="h-3 w-3" />
-                              {step.timeoutMinutes}m
-                            </Badge>
+
+                            {/* Connector between steps */}
+                            {!isLast && (
+                              <div className="flex items-center gap-3 py-1.5 pl-[14px]">
+                                <div className="flex flex-col items-center w-2">
+                                  <div className="w-px h-1.5 bg-muted-foreground/25" />
+                                  <div className="w-px h-1 bg-muted-foreground/20" />
+                                  <ArrowDown className="h-3.5 w-3.5 text-muted-foreground/40 -my-0.5" />
+                                  <div className="w-px h-1 bg-muted-foreground/20" />
+                                  <div className="w-px h-1.5 bg-muted-foreground/25" />
+                                </div>
+                                <span className="text-[11px] text-muted-foreground/60 italic">
+                                  Wait {step.timeoutMinutes} min for acknowledgement...
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          {stepIdx < policy.steps.length - 1 && (
-                            <div className="flex items-center justify-center py-0.5">
-                              <ArrowDown className="h-3 w-3 text-muted-foreground" />
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                   </div>
                 )}
               </div>

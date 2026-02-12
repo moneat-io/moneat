@@ -353,13 +353,12 @@ function IncidentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Add Note */}
-          {incident.status !== 'RESOLVED' && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Add Note</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+          {/* Add Note - Always visible regardless of status */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Add Note</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
                 <Textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -377,7 +376,6 @@ function IncidentDetailPage() {
                 </Button>
               </CardContent>
             </Card>
-          )}
         </div>
 
         {/* Sidebar */}
