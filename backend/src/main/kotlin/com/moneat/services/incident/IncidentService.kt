@@ -298,6 +298,7 @@ class IncidentService {
      */
     private fun getEscalationPolicyForSource(organizationId: Int, source: AlertSource): Int? {
         return transaction {
+            logger.debug("Resolving escalation policy for org {} source {}", organizationId, source.name)
             // Get the first enabled escalation policy for this org
             // TODO: Add alert_source routing to escalation_policies table
             EscalationPolicies

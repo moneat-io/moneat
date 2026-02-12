@@ -65,13 +65,21 @@ fun Route.deviceRoutes() {
             }
             
             delete("/{token}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("user_id")?.asInt()
                 val deviceToken = call.parameters["token"]
+                
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@delete
+                }
+                
                 if (deviceToken == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid device token"))
                     return@delete
                 }
                 
-                val unregistered = pushService.unregisterDeviceToken(deviceToken)
+                val unregistered = pushService.unregisterDeviceToken(userId, deviceToken)
                 if (unregistered) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {

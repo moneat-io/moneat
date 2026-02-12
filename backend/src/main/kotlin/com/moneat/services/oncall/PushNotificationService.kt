@@ -182,8 +182,10 @@ class PushNotificationService {
         true
     }
     
-    fun unregisterDeviceToken(deviceToken: String): Boolean = transaction {
-        val deleted = UserDeviceTokens.deleteWhere { UserDeviceTokens.deviceToken eq deviceToken }
+    fun unregisterDeviceToken(userId: Int, deviceToken: String): Boolean = transaction {
+        val deleted = UserDeviceTokens.deleteWhere {
+            (UserDeviceTokens.userId eq userId) and (UserDeviceTokens.deviceToken eq deviceToken)
+        }
         logger.info("Unregistered device token: $deviceToken")
         deleted > 0
     }

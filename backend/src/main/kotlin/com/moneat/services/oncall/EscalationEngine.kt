@@ -2,7 +2,6 @@ package com.moneat.services.oncall
 
 import com.moneat.config.RedisClient
 import com.moneat.models.*
-import com.moneat.services.NotificationService
 import com.moneat.services.SlackService
 import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
@@ -183,27 +182,28 @@ class EscalationEngine(
     }
     
     private fun notifyUser(incidentId: Int, userId: Int, title: String, priorityLevel: String) {
-        try {
-            // Send push notification
-            pushNotificationService.sendIncidentAlert(userId, incidentId, title, priorityLevel)
-            
-            // Send Slack DM
-            slackService.sendOnCallAlert(userId, incidentId, title, priorityLevel)
-            
-            logTimelineEvent(
-                incidentId,
-                "NOTIFICATION_SENT",
-                userId,
-                mapOf("channel" to "push,slack")
-            )
-        } catch (e: Exception) {
-            logger.error("Failed to notify user $userId for incident $incidentId", e)
+        scope.launch {
+            try {
+                // Send push notification
+                pushNotificationService.sendIncidentAlert(userId, incidentId, title, priorityLevel)
+                
+                // Send Slack DM
+                slackService.sendOnCallAlert(userId, incidentId, title, priorityLevel)
+                
+                logTimelineEvent(
+                    incidentId,
+                    "NOTIFICATION_SENT",
+                    userId,
+                    mapOf("channel" to "push,slack")
+                )
+            } catch (e: Exception) {
+                logger.error("Failed to notify user $userId for incident $incidentId", e)
+            }
         }
     }
     
     private fun scheduleTimeout(incidentId: Int, timeoutMinutes: Long, nextStep: Int, iteration: Int) {
         val timeoutAt = Clock.System.now().plus(timeoutMinutes.minutes)
-        val timeoutKey = "$TIMEOUT_KEY_PREFIX$incidentId"
         
         val timeoutData = mapOf(
             "incidentId" to incidentId.toString(),

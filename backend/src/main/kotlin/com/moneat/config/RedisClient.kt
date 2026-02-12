@@ -18,6 +18,7 @@ class RedisClient {
         return RedisConfig.sync().zrange(key, start, stop).toList()
     }
     
+    @Suppress("DEPRECATION")
     fun zrangebyscore(key: String, min: Double, max: Double): List<String> {
         return RedisConfig.sync().zrangebyscore(key, min, max).toList()
     }

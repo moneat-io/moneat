@@ -1,6 +1,7 @@
 package com.moneat.services
 
 import com.moneat.models.OrganizationIntegrations
+import com.moneat.models.Memberships
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -749,12 +750,26 @@ class SlackService {
             .singleOrNull()
             ?.get(com.moneat.models.SlackUserMappings.slackUserId)
     }
+
+    private fun getAccessToken(organizationId: Int): String? = transaction {
+        OrganizationIntegrations
+            .selectAll()
+            .where {
+                (OrganizationIntegrations.organization_id eq organizationId) and
+                (OrganizationIntegrations.integration_type eq "slack") and
+                (OrganizationIntegrations.enabled eq true)
+            }
+            .limit(1)
+            .singleOrNull()
+            ?.get(OrganizationIntegrations.access_token)
+    }
     
     private fun getUserOrganizationId(userId: Int): Int? = transaction {
-        com.moneat.models.Users
+        Memberships
             .selectAll()
-            .where { com.moneat.models.Users.id eq userId }
+            .where { Memberships.user_id eq userId }
+            .limit(1)
             .singleOrNull()
-            ?.get(com.moneat.models.Users.organizationId)
+            ?.get(Memberships.organization_id)
     }
 }

@@ -96,14 +96,22 @@ fun Route.escalationRoutes() {
             }
             
             get("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val policyId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@get
+                }
+                
                 if (policyId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid policy ID"))
                     return@get
                 }
                 
                 val policy = policyService.getPolicy(policyId)
-                if (policy != null) {
+                if (policy != null && policy.organizationId == organizationId) {
                     call.respond(policy)
                 } else {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
@@ -111,9 +119,23 @@ fun Route.escalationRoutes() {
             }
             
             put("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val policyId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@put
+                }
+                
                 if (policyId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid policy ID"))
+                    return@put
+                }
+                
+                val existingPolicy = policyService.getPolicy(policyId)
+                if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
                     return@put
                 }
                 
@@ -152,9 +174,23 @@ fun Route.escalationRoutes() {
             }
             
             delete("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val policyId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@delete
+                }
+                
                 if (policyId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid policy ID"))
+                    return@delete
+                }
+                
+                val existingPolicy = policyService.getPolicy(policyId)
+                if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
                     return@delete
                 }
                 

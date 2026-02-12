@@ -83,9 +83,22 @@ fun Route.onCallRoutes() {
             }
             
             get("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@get
+                }
+                
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    return@get
+                }
+                
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
                     return@get
                 }
                 
@@ -98,9 +111,22 @@ fun Route.onCallRoutes() {
             }
             
             put("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@put
+                }
+                
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    return@put
+                }
+                
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
                     return@put
                 }
                 
@@ -128,9 +154,22 @@ fun Route.onCallRoutes() {
             }
             
             delete("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@delete
+                }
+                
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    return@delete
+                }
+                
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
                     return@delete
                 }
                 
@@ -143,9 +182,22 @@ fun Route.onCallRoutes() {
             }
             
             get("/{id}/current") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@get
+                }
+                
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    return@get
+                }
+                
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
                     return@get
                 }
                 
@@ -159,8 +211,14 @@ fun Route.onCallRoutes() {
             
             post("/{id}/overrides") {
                 val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val userId = principal?.payload?.getClaim("user_id")?.asInt()
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@post
+                }
                 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
@@ -169,6 +227,11 @@ fun Route.onCallRoutes() {
                 
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@post
+                }
+                
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
                     return@post
                 }
                 
@@ -196,9 +259,22 @@ fun Route.onCallRoutes() {
     route("/on-call/overrides") {
         authenticate("jwt-auth") {
             delete("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
                 val overrideId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@delete
+                }
+                
                 if (overrideId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid override ID"))
+                    return@delete
+                }
+                
+                if (!scheduleService.isOverrideInOrganization(overrideId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Override not found"))
                     return@delete
                 }
                 

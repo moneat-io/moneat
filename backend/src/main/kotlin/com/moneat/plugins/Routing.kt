@@ -112,6 +112,6 @@ fun Application.configureRouting() {
         escalationRoutes()
         priorityRoutes()
         deviceRoutes()
-        incidentRoutes(getIncidentManagementService())
+        incidentRoutes(::getIncidentManagementService)
     }
 }

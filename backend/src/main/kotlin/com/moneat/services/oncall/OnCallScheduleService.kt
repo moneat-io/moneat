@@ -3,8 +3,6 @@ package com.moneat.services.oncall
 import com.moneat.models.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -27,7 +25,7 @@ class OnCallScheduleService {
                 OnCallParticipant(
                     id = row[OnCallParticipants.id].value,
                     userId = row[OnCallParticipants.userId],
-                    userName = row[Users.name],
+                    userName = row[Users.name] ?: row[Users.email],
                     userEmail = row[Users.email],
                     position = row[OnCallParticipants.position]
                 )
@@ -43,7 +41,7 @@ class OnCallScheduleService {
                     id = row[OnCallOverrides.id].value,
                     scheduleId = row[OnCallOverrides.scheduleId],
                     userId = row[OnCallOverrides.userId],
-                    userName = row[Users.name],
+                    userName = row[Users.name] ?: row[Users.email],
                     startAt = row[OnCallOverrides.startAt].toString(),
                     endAt = row[OnCallOverrides.endAt].toString(),
                     createdBy = row[OnCallOverrides.createdBy],
@@ -95,8 +93,8 @@ class OnCallScheduleService {
             
             return@transaction OnCallParticipant(
                 id = participant?.get(OnCallParticipants.id)?.value ?: -1,
-                userId = override[Users.id].value,
-                userName = override[Users.name],
+                userId = override[OnCallOverrides.userId],
+                userName = override[Users.name] ?: override[Users.email],
                 userEmail = override[Users.email],
                 position = participant?.get(OnCallParticipants.position) ?: -1
             )
@@ -118,7 +116,6 @@ class OnCallScheduleService {
         if (participants.isEmpty()) return@transaction null
         
         val rotationType = schedule[OnCallSchedules.rotationType]
-        val tz = try { TimeZone.of(schedule[OnCallSchedules.timezone]) } catch (e: Exception) { TimeZone.UTC }
         
         val rotationDays = when (rotationType) {
             "DAILY" -> 1
@@ -138,7 +135,7 @@ class OnCallScheduleService {
         OnCallParticipant(
             id = currentParticipant[OnCallParticipants.id].value,
             userId = currentParticipant[OnCallParticipants.userId],
-            userName = currentParticipant[Users.name],
+            userName = currentParticipant[Users.name] ?: currentParticipant[Users.email],
             userEmail = currentParticipant[Users.email],
             position = currentParticipant[OnCallParticipants.position]
         )
@@ -251,12 +248,32 @@ class OnCallScheduleService {
             id = row[OnCallOverrides.id].value,
             scheduleId = row[OnCallOverrides.scheduleId],
             userId = row[OnCallOverrides.userId],
-            userName = row[Users.name],
+            userName = row[Users.name] ?: row[Users.email],
             startAt = row[OnCallOverrides.startAt].toString(),
             endAt = row[OnCallOverrides.endAt].toString(),
             createdBy = row[OnCallOverrides.createdBy],
             createdAt = row[OnCallOverrides.createdAt].toString()
         )
+    }
+    
+    fun isScheduleInOrganization(scheduleId: Int, organizationId: Int): Boolean = transaction {
+        OnCallSchedules
+            .selectAll()
+            .where { (OnCallSchedules.id eq scheduleId) and (OnCallSchedules.organizationId eq organizationId) }
+            .limit(1)
+            .singleOrNull() != null
+    }
+    
+    fun isOverrideInOrganization(overrideId: Int, organizationId: Int): Boolean = transaction {
+        OnCallOverrides
+            .innerJoin(OnCallSchedules)
+            .selectAll()
+            .where {
+                (OnCallOverrides.id eq overrideId) and
+                (OnCallSchedules.organizationId eq organizationId)
+            }
+            .limit(1)
+            .singleOrNull() != null
     }
     
     fun deleteOverride(overrideId: Int): Boolean = transaction {

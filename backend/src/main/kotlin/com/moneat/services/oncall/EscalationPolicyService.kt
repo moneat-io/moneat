@@ -4,6 +4,7 @@ import com.moneat.models.*
 import kotlinx.datetime.Clock
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class EscalationPolicyService {
@@ -160,7 +161,7 @@ class EscalationPolicyService {
                 .map { it[EscalationSteps.id].value }
             
             if (existingStepIds.isNotEmpty()) {
-                EscalationStepTargets.deleteWhere { escalationStepId inList existingStepIds }
+                EscalationStepTargets.deleteWhere { EscalationStepTargets.escalationStepId inList existingStepIds }
             }
             EscalationSteps.deleteWhere { escalationPolicyId eq policyId }
             

@@ -15,7 +15,7 @@ class IncidentManagementService(
     fun getIncident(incidentId: Int): Incident? = transaction {
         val row = Incidents
             .leftJoin(EscalationPolicies, { escalationPolicyId }, { id })
-            .leftJoin(Users, { acknowledgedBy }, { id }, additionalConstraint = { Users.id.isNotNull() })
+            .leftJoin(Users, { Incidents.acknowledgedBy }, { Users.id })
             .selectAll()
             .where { Incidents.id eq incidentId }
             .singleOrNull() ?: return@transaction null
