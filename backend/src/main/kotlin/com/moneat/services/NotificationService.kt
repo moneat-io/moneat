@@ -205,12 +205,12 @@ class NotificationService(private val emailService: EmailService) {
                     deduplicationKey = "moneat-error-$projectId-$issueId",
                     organizationId = orgId,
                     metadata = mapOf(
-                        "project_id" to projectId.toString(),
-                        "project_name" to projectName,
-                        "issue_id" to issueId,
-                        "level" to emailData.issueLevel,
-                        "environment" to emailData.environment,
-                        "culprit" to culprit
+                        "project_id" to JsonPrimitive(projectId.toString()),
+                        "project_name" to JsonPrimitive(projectName),
+                        "issue_id" to JsonPrimitive(issueId),
+                        "level" to JsonPrimitive(emailData.issueLevel),
+                        "environment" to JsonPrimitive(emailData.environment),
+                        "culprit" to JsonPrimitive(culprit)
                     ),
                     moneatUrl = issueUrl
                 )

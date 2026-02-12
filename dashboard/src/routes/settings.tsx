@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/use-toast'
 import {
   AlertTriangle,
   Bell,
+  BellOff,
   CheckCircle2,
   Copy,
   CreditCard,
@@ -38,6 +39,7 @@ import {
   Zap,
   Activity,
   MessageSquare,
+  FileText,
   AlertCircle,
   Download,
   Receipt,
@@ -59,6 +61,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Calendar,
 } from 'lucide-react'
 import { SsoTab } from '@/components/sso-settings'
 import { TeamSettings } from '@/components/settings/team-settings'
@@ -143,7 +146,7 @@ function SettingsPage() {
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
   
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <div className="container mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
           <Settings className="h-6 w-6 text-muted-foreground" />
@@ -171,6 +174,13 @@ function SettingsPage() {
             >
               <Bell className="h-4 w-4" />
               Notifications
+            </TabsTrigger>
+            <TabsTrigger 
+              value="silence" 
+              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700 dark:data-[state=active]:bg-orange-900/20 dark:data-[state=active]:text-orange-400 data-[state=active]:shadow-sm"
+            >
+              <BellOff className="h-4 w-4" />
+              Silence Periods
             </TabsTrigger>
             {canManageTeam && (
               <TabsTrigger 
@@ -206,6 +216,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="notifications" className="space-y-4">
             <NotificationsTab />
+          </TabsContent>
+          <TabsContent value="silence" className="space-y-4">
+            <SilencePeriodsTab />
           </TabsContent>
           {canManageTeam && (
             <TabsContent value="team" className="space-y-4">
@@ -821,6 +834,7 @@ function BillingTab() {
     { key: 'transaction', label: 'Transactions', used: usage.usedTransactions, limit: usage.transactionLimit, icon: Activity, color: 'text-blue-500' },
     { key: 'replay', label: 'Replays', used: usage.usedReplays, limit: usage.replayLimit, icon: Zap, color: 'text-yellow-500' },
     { key: 'feedback', label: 'Feedback', used: usage.usedFeedback, limit: usage.feedbackLimit, icon: MessageSquare, color: 'text-purple-500' },
+    { key: 'log', label: 'Logs', used: usage.usedLogs ?? 0, limit: 0, icon: FileText, color: 'text-cyan-500' },
   ] as const
 
   const saveBudget = () => {
@@ -1075,7 +1089,7 @@ function BillingTab() {
                 Billing is based on data (GB) ingested. Event counts below are for reference—there are no separate limits per event type.
               </p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {usageRows.map((row) => {
                 const Icon = row.icon
                 return (
@@ -3095,6 +3109,333 @@ function NotificationsTab() {
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function SilencePeriodsTab() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false)
+
+  const { data: silencePeriods = [], isLoading } = useQuery({
+    queryKey: ['silence-periods'],
+    queryFn: () => api.getSilencePeriods(),
+    enabled: api.isAuthenticated(),
+    refetchInterval: 30000,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (data: { reason?: string; starts_at: number; ends_at: number }) =>
+      api.createSilencePeriod(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['silence-periods'] })
+      toast({ title: 'Silence period created', description: 'Alert notifications will be suppressed during this period.' })
+      setIsCustomDialogOpen(false)
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create silence period.', variant: 'destructive' })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.deleteSilencePeriod(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['silence-periods'] })
+      toast({ title: 'Silence period removed' })
+    },
+  })
+
+  const handleQuickSilence = (minutes: number, label: string) => {
+    const now = Date.now()
+    createMutation.mutate({
+      reason: `Quick silence: ${label}`,
+      starts_at: now,
+      ends_at: now + minutes * 60 * 1000,
+    })
+  }
+
+  const handleCustomSilence = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    const startsAt = new Date(formData.get('startsAt') as string).getTime()
+    const endsAt = new Date(formData.get('endsAt') as string).getTime()
+    const reason = (formData.get('reason') as string) || undefined
+
+    if (endsAt <= startsAt) {
+      toast({ title: 'Invalid range', description: 'End time must be after start time.', variant: 'destructive' })
+      return
+    }
+
+    createMutation.mutate({ reason, starts_at: startsAt, ends_at: endsAt })
+  }
+
+  const now = Date.now()
+  const activePeriods = silencePeriods.filter((p) => p.startsAt <= now && p.endsAt > now)
+  const scheduledPeriods = silencePeriods.filter((p) => p.startsAt > now)
+  const isCurrentlySilenced = activePeriods.length > 0
+
+  const formatDateTime = (ms: number) => {
+    return new Date(ms).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const formatTimeRemaining = (endsAt: number) => {
+    const diff = endsAt - Date.now()
+    if (diff <= 0) return 'Expired'
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+    if (hours > 0) return `${hours}h ${minutes}m remaining`
+    return `${minutes}m remaining`
+  }
+
+  const quickOptions = [
+    { minutes: 30, label: '30 minutes' },
+    { minutes: 60, label: '1 hour' },
+    { minutes: 4 * 60, label: '4 hours' },
+    { minutes: 8 * 60, label: '8 hours' },
+    { minutes: 24 * 60, label: '24 hours' },
+  ]
+
+  const defaultStart = new Date()
+  defaultStart.setMinutes(defaultStart.getMinutes() - defaultStart.getTimezoneOffset())
+  const defaultEnd = new Date(defaultStart.getTime() + 2 * 60 * 60 * 1000)
+  const toInputFormat = (d: Date) => d.toISOString().slice(0, 16)
+
+  return (
+    <div className="space-y-6">
+      {isCurrentlySilenced && (
+        <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-4 flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-orange-500/20 shrink-0">
+            <BellOff className="h-5 w-5 text-orange-500" />
+          </div>
+          <div className="flex-1">
+            <p className="font-medium text-orange-600 dark:text-orange-400">Alerts are currently silenced</p>
+            <p className="text-sm text-orange-600/80 dark:text-orange-400/80">
+              {activePeriods.length === 1
+                ? `${formatTimeRemaining(activePeriods[0].endsAt)} — ${activePeriods[0].reason || 'No reason specified'}`
+                : `${activePeriods.length} active silence periods`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-orange-500/10">
+              <BellOff className="h-5 w-5 text-orange-500" />
+            </div>
+            <div>
+              <CardTitle>Quick Silence</CardTitle>
+              <CardDescription>
+                Instantly silence all alert notifications for a preset duration. Alerts will still be evaluated but notifications will be suppressed.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {quickOptions.map((opt) => (
+              <Button
+                key={opt.minutes}
+                variant="outline"
+                className="gap-2"
+                onClick={() => handleQuickSilence(opt.minutes, opt.label)}
+                disabled={createMutation.isPending}
+              >
+                <BellOff className="h-4 w-4" />
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-500/10">
+                <Calendar className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <CardTitle>Silence Periods</CardTitle>
+                <CardDescription>
+                  Schedule maintenance windows or manage active silence periods. All alert notifications across the organization will be suppressed during these windows.
+                </CardDescription>
+              </div>
+            </div>
+            <Dialog open={isCustomDialogOpen} onOpenChange={setIsCustomDialogOpen}>
+              <Button className="gap-2" onClick={() => setIsCustomDialogOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Schedule Window
+              </Button>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-blue-500" />
+                    Schedule Silence Window
+                  </DialogTitle>
+                  <DialogDescription>
+                    All alert notifications will be suppressed during this window.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCustomSilence}>
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="reason">Reason (optional)</Label>
+                      <Input
+                        id="reason"
+                        name="reason"
+                        placeholder="e.g. Scheduled maintenance, Server migration"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="startsAt">Start Time</Label>
+                      <Input
+                        id="startsAt"
+                        name="startsAt"
+                        type="datetime-local"
+                        defaultValue={toInputFormat(defaultStart)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="endsAt">End Time</Label>
+                      <Input
+                        id="endsAt"
+                        name="endsAt"
+                        type="datetime-local"
+                        defaultValue={toInputFormat(defaultEnd)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter className="mt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsCustomDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={createMutation.isPending}>
+                      {createMutation.isPending ? 'Creating...' : 'Create'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <p className="text-muted-foreground text-sm">Loading silence periods...</p>
+              </div>
+            </div>
+          ) : silencePeriods.length > 0 ? (
+            <div className="space-y-3">
+              {activePeriods.map((period) => (
+                <div
+                  key={period.id}
+                  className="group flex items-center gap-4 rounded-lg border border-orange-500/30 bg-orange-500/5 p-4"
+                >
+                  <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-orange-500/15 shrink-0">
+                    <BellOff className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{period.reason || 'Silence period'}</span>
+                      <Badge className="bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30 text-xs">
+                        Active
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDateTime(period.startsAt)} — {formatDateTime(period.endsAt)}
+                      </span>
+                      <span className="text-orange-500 font-medium">{formatTimeRemaining(period.endsAt)}</span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => deleteMutation.mutate(period.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+              {scheduledPeriods.map((period) => (
+                <div
+                  key={period.id}
+                  className="group flex items-center gap-4 rounded-lg border p-4 bg-card hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-blue-500/15 shrink-0">
+                    <Calendar className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{period.reason || 'Scheduled silence'}</span>
+                      <Badge variant="secondary" className="text-xs">Scheduled</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDateTime(period.startsAt)} — {formatDateTime(period.endsAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => deleteMutation.mutate(period.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
+                <BellOff className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium mb-1">No silence periods</h3>
+              <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
+                Use the quick silence buttons above or schedule a maintenance window to suppress alert notifications.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-blue-500/5 to-indigo-500/5 border-blue-500/10">
+        <CardContent className="pt-5 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-blue-500/15 shrink-0">
+              <Info className="h-4 w-4 text-blue-500" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium">How Silence Periods Work</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                During a silence period, all alert notifications (metric alerts, system up/down, and uptime alerts) are suppressed organization-wide.
+                Alerts are still evaluated and trigger timestamps are recorded, but no emails, Slack, or Discord notifications are sent.
+                Expired silence periods are automatically cleaned up.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

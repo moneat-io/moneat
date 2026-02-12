@@ -3,6 +3,7 @@ package com.moneat.routes
 import com.moneat.models.*
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.LogService
+import com.moneat.services.MonitorAlertService
 import com.moneat.services.MonitorService
 import com.moneat.services.UsageTrackingService
 import io.ktor.http.*
@@ -792,6 +793,70 @@ fun Route.monitorRoutes() {
                     return@delete
                 }
                 
+                call.respond(HttpStatusCode.NoContent)
+            }
+
+            // --- Silence Period Routes ---
+
+            get("/silence-periods") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    return@get
+                }
+
+                val alertService = MonitorAlertService()
+                val periods = alertService.listSilencePeriods(organizationIds.first())
+                call.respond(HttpStatusCode.OK, periods)
+            }
+
+            post("/silence-periods") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    return@post
+                }
+
+                val request = call.receive<CreateSilencePeriodRequest>()
+                if (request.endsAt <= request.startsAt) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "End time must be after start time"))
+                    return@post
+                }
+
+                val alertService = MonitorAlertService()
+                val period = alertService.createSilencePeriod(organizationIds.first(), userId, request)
+                call.respond(HttpStatusCode.Created, period)
+            }
+
+            delete("/silence-periods/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val periodId = call.parameters["id"]?.toIntOrNull()
+
+                if (periodId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid silence period ID"))
+                    return@delete
+                }
+
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    return@delete
+                }
+
+                val alertService = MonitorAlertService()
+                val deleted = alertService.deleteSilencePeriod(periodId, organizationIds.first())
+                if (!deleted) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Silence period not found"))
+                    return@delete
+                }
+
                 call.respond(HttpStatusCode.NoContent)
             }
         }

@@ -9,10 +9,14 @@ import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -33,6 +37,7 @@ class MonitorAlertService {
     
     private var evaluationJob: Job? = null
     private var statusCheckJob: Job? = null
+    private var cleanupJob: Job? = null
     
     companion object {
         const val EVALUATION_INTERVAL_SECONDS = 30
@@ -71,6 +76,18 @@ class MonitorAlertService {
             }
         }
         
+        // Expired silence period cleanup job (runs every 5 minutes)
+        cleanupJob = scope.launch {
+            while (isActive) {
+                try {
+                    cleanupExpiredSilencePeriods()
+                } catch (e: Exception) {
+                    logger.error(e) { "Error cleaning up expired silence periods" }
+                }
+                delay(5.minutes)
+            }
+        }
+        
         logger.info { "MonitorAlertService background jobs started" }
     }
     
@@ -81,6 +98,7 @@ class MonitorAlertService {
         logger.info { "Stopping MonitorAlertService background jobs" }
         evaluationJob?.cancel()
         statusCheckJob?.cancel()
+        cleanupJob?.cancel()
     }
     
     /**
@@ -213,6 +231,11 @@ class MonitorAlertService {
             if (timeSinceLastTrigger < MIN_ALERT_INTERVAL_MINUTES.minutes) {
                 return // Don't spam alerts
             }
+        }
+        
+        // Check if alerts are silenced for this organization
+        if (isAnySilenceActive(organizationId)) {
+            return
         }
         
         // Get recent metrics for the system
@@ -530,11 +553,11 @@ class MonitorAlertService {
                     deduplicationKey = "moneat-system-alert-${alert.id}",
                     organizationId = organizationId,
                     metadata = mapOf(
-                        "system_id" to alert.systemId.toString(),
-                        "system_name" to systemName,
-                        "metric" to alert.metric,
-                        "current_value" to formattedValue,
-                        "threshold" to formattedThreshold
+                        "system_id" to JsonPrimitive(alert.systemId.toString()),
+                        "system_name" to JsonPrimitive(systemName),
+                        "metric" to JsonPrimitive(alert.metric),
+                        "current_value" to JsonPrimitive(formattedValue),
+                        "threshold" to JsonPrimitive(formattedThreshold)
                     ),
                     moneatUrl = "$frontendUrl/monitoring/${alert.systemId}"
                 )
@@ -589,6 +612,11 @@ class MonitorAlertService {
                         it[status] = newStatus
                         it[updated_at] = now
                     }
+                }
+                
+                // Skip notifications if alerts are silenced for this organization
+                if (isAnySilenceActive(organizationId)) {
+                    continue
                 }
                 
                 // Send notification
@@ -693,9 +721,9 @@ class MonitorAlertService {
                 deduplicationKey = "moneat-system-down-$systemId",
                 organizationId = organizationId,
                 metadata = mapOf(
-                    "system_id" to systemId.toString(),
-                    "system_name" to systemName,
-                    "last_seen" to lastSeenText
+                    "system_id" to JsonPrimitive(systemId.toString()),
+                    "system_name" to JsonPrimitive(systemName),
+                    "last_seen" to JsonPrimitive(lastSeenText)
                 ),
                 moneatUrl = "$frontendUrl/monitoring/$systemId"
             )
@@ -827,6 +855,85 @@ class MonitorAlertService {
             "load_1", "load_5", "load_15" -> 
                 String.format("%.2f", value)
             else -> value.toString()
+        }
+    }
+    
+    // --- Silence Period Methods ---
+    
+    fun isAnySilenceActive(organizationId: Int): Boolean {
+        val now = Clock.System.now()
+        return transaction {
+            AlertSilencePeriods.selectAll().where {
+                (AlertSilencePeriods.organization_id eq organizationId) and
+                (AlertSilencePeriods.starts_at lessEq now) and
+                (AlertSilencePeriods.ends_at greaterEq now)
+            }.count() > 0
+        }
+    }
+    
+    fun listSilencePeriods(organizationId: Int): List<SilencePeriodResponse> {
+        return transaction {
+            AlertSilencePeriods.selectAll().where {
+                AlertSilencePeriods.organization_id eq organizationId
+            }.map { row ->
+                SilencePeriodResponse(
+                    id = row[AlertSilencePeriods.id],
+                    organizationId = row[AlertSilencePeriods.organization_id],
+                    reason = row[AlertSilencePeriods.reason],
+                    startsAt = row[AlertSilencePeriods.starts_at].toEpochMilliseconds(),
+                    endsAt = row[AlertSilencePeriods.ends_at].toEpochMilliseconds(),
+                    createdBy = row[AlertSilencePeriods.created_by],
+                    createdAt = row[AlertSilencePeriods.created_at].toEpochMilliseconds()
+                )
+            }
+        }
+    }
+    
+    fun createSilencePeriod(organizationId: Int, userId: Int, request: CreateSilencePeriodRequest): SilencePeriodResponse {
+        val startsAt = Instant.fromEpochMilliseconds(request.startsAt)
+        val endsAt = Instant.fromEpochMilliseconds(request.endsAt)
+        val now = Clock.System.now()
+        
+        return transaction {
+            val id = AlertSilencePeriods.insert {
+                it[AlertSilencePeriods.organization_id] = organizationId
+                it[AlertSilencePeriods.reason] = request.reason
+                it[AlertSilencePeriods.starts_at] = startsAt
+                it[AlertSilencePeriods.ends_at] = endsAt
+                it[AlertSilencePeriods.created_by] = userId
+                it[AlertSilencePeriods.created_at] = now
+            } get AlertSilencePeriods.id
+            
+            SilencePeriodResponse(
+                id = id,
+                organizationId = organizationId,
+                reason = request.reason,
+                startsAt = startsAt.toEpochMilliseconds(),
+                endsAt = endsAt.toEpochMilliseconds(),
+                createdBy = userId,
+                createdAt = now.toEpochMilliseconds()
+            )
+        }
+    }
+    
+    fun deleteSilencePeriod(id: Int, organizationId: Int): Boolean {
+        return transaction {
+            AlertSilencePeriods.deleteWhere {
+                (AlertSilencePeriods.id eq id) and
+                (AlertSilencePeriods.organization_id eq organizationId)
+            } > 0
+        }
+    }
+    
+    private fun cleanupExpiredSilencePeriods() {
+        val now = Clock.System.now()
+        val deleted = transaction {
+            AlertSilencePeriods.deleteWhere {
+                AlertSilencePeriods.ends_at lessEq now
+            }
+        }
+        if (deleted > 0) {
+            logger.info { "Cleaned up $deleted expired silence periods" }
         }
     }
 }

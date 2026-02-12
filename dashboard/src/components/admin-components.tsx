@@ -276,6 +276,7 @@ export const eventTypeColors = {
   transaction: { stroke: '#3b82f6', fill: '#3b82f633', label: 'Transactions' },
   replay: { stroke: '#8b5cf6', fill: '#8b5cf633', label: 'Replays' },
   feedback: { stroke: '#f59e0b', fill: '#f59e0b33', label: 'Feedback' },
+  log: { stroke: '#06b6d4', fill: '#06b6d433', label: 'Logs' },
 } as const
 
 // ─── Empty State ────────────────────────────────────────────────────────────

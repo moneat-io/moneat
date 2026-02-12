@@ -8,9 +8,19 @@ import {Label} from '@/components/ui/label'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/login')({
-  beforeLoad: () => {
-    if (api.isAuthenticated()) {
+  beforeLoad: ({ search }) => {
+    // If user is already authenticated and there's NO redirect_uri (normal web login)
+    // then redirect to home. But if redirect_uri exists (mobile login), allow
+    // the page to load so they can log in again from mobile
+    const redirectUri = (search as any).redirect_uri
+    if (api.isAuthenticated() && !redirectUri) {
       throw redirect({ to: '/' })
+    }
+    
+    // If user is already authenticated AND redirect_uri exists (mobile login),
+    // log them out automatically so they can log in fresh
+    if (api.isAuthenticated() && redirectUri) {
+      api.logout()
     }
   },
   component: LoginPage,

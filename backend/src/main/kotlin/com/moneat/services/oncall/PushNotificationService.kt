@@ -30,7 +30,7 @@ class PushNotificationService {
         }
     }
     
-    private val expoAccessToken = EnvConfig.get("EXPO_ACCESS_TOKEN", "")
+    private val expoAccessToken = EnvConfig.get("EXPO_TOKEN", "")
     private val expoPushEndpoint = "https://exp.host/--/api/v2/push/send"
     
     @Serializable

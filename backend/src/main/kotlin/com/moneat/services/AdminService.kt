@@ -99,6 +99,7 @@ data class DailyUsageByType(
     val transaction: Long,
     val replay: Long,
     val feedback: Long,
+    val log: Long,
     val total: Long
 )
 
@@ -228,7 +229,11 @@ class AdminService {
                 val usage = usageRows.sumOf { it[UsageRecords.event_count].toLong() }
                 val bytesCount = usageRows.sumOf { it[UsageRecords.bytes_ingested] }
                 val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
-                val quotaPct = if (tier.monthlyUnitLimit > 0) (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0) else null
+                val quotaPct = when {
+                    tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
+                    tier.monthlyUnitLimit > 0 -> (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
+                    else -> null
+                }
 
                 AdminOrgSummary(
                     id = orgId,
@@ -267,7 +272,11 @@ class AdminService {
             val eventCount = usageRows.sumOf { it[UsageRecords.event_count].toLong() }
             val bytesCount = usageRows.sumOf { it[UsageRecords.bytes_ingested] }
             val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
-            val quotaPct = if (tier.monthlyUnitLimit > 0) (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0) else null
+            val quotaPct = when {
+                tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
+                tier.monthlyUnitLimit > 0 -> (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
+                else -> null
+            }
 
             val membersList = Memberships.selectAll().where { Memberships.organization_id eq orgId }
                 .mapNotNull { mRow ->
@@ -334,6 +343,8 @@ class AdminService {
                         transaction = byType["transaction"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                         replay = byType["replay"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                         feedback = byType["feedback"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
+                        log = (byType["log"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L) +
+                            (byType["logs"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L),
                         total = recs.sumOf { it[UsageRecords.event_count].toLong() }
                     )
                 }

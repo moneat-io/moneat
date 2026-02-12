@@ -6,8 +6,8 @@ import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {Textarea} from '@/components/ui/textarea'
 import {useToast} from '@/hooks/use-toast'
-import {AlertTriangle, CheckCircle, Clock, MessageSquare, ArrowLeft, Zap, UserPlus, Bell, CheckCircle2} from 'lucide-react'
-import {useState} from 'react'
+import {AlertTriangle, CheckCircle, Clock, MessageSquare, ArrowLeft, Zap, UserPlus, Bell, CheckCircle2, Eye, Send} from 'lucide-react'
+import {useState, useEffect} from 'react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/on-call/incidents/$incidentId')({
@@ -28,15 +28,16 @@ const getStatusConfig = (status: string) => {
   return {color: 'bg-green-500/15 text-green-400 border-green-500/30', icon: CheckCircle2, label: 'Resolved', accent: 'text-green-500'}
 }
 
-const EVENT_CONFIG: Record<string, {icon: typeof Zap; color: string; bgColor: string}> = {
-  TRIGGERED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15'},
-  ESCALATED: {icon: Bell, color: 'text-orange-500', bgColor: 'bg-orange-500/15'},
-  ACKNOWLEDGED: {icon: CheckCircle, color: 'text-blue-500', bgColor: 'bg-blue-500/15'},
-  RESOLVED: {icon: CheckCircle2, color: 'text-green-500', bgColor: 'bg-green-500/15'},
-  REASSIGNED: {icon: UserPlus, color: 'text-violet-500', bgColor: 'bg-violet-500/15'},
-  NOTE_ADDED: {icon: MessageSquare, color: 'text-slate-400', bgColor: 'bg-slate-500/15'},
-  STEP_TIMEOUT: {icon: Clock, color: 'text-orange-500', bgColor: 'bg-orange-500/15'},
-  NOTIFICATION_SENT: {icon: Bell, color: 'text-cyan-500', bgColor: 'bg-cyan-500/15'},
+const EVENT_CONFIG: Record<string, {icon: typeof Zap; color: string; bgColor: string; label: string}> = {
+  TRIGGERED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15', label: 'Incident triggered'},
+  ESCALATED: {icon: Bell, color: 'text-orange-500', bgColor: 'bg-orange-500/15', label: 'Escalated'},
+  ACKNOWLEDGED: {icon: CheckCircle, color: 'text-blue-500', bgColor: 'bg-blue-500/15', label: 'Acknowledged'},
+  RESOLVED: {icon: CheckCircle2, color: 'text-green-500', bgColor: 'bg-green-500/15', label: 'Resolved'},
+  REASSIGNED: {icon: UserPlus, color: 'text-violet-500', bgColor: 'bg-violet-500/15', label: 'Reassigned'},
+  NOTE_ADDED: {icon: MessageSquare, color: 'text-slate-400', bgColor: 'bg-slate-500/15', label: 'Note added'},
+  STEP_TIMEOUT: {icon: Clock, color: 'text-orange-500', bgColor: 'bg-orange-500/15', label: 'Step timed out'},
+  NOTIFICATION_SENT: {icon: Send, color: 'text-cyan-500', bgColor: 'bg-cyan-500/15', label: 'Notification sent'},
+  VIEWED: {icon: Eye, color: 'text-slate-400', bgColor: 'bg-slate-500/10', label: 'Viewed'},
 }
 
 function timeAgo(date: string) {
@@ -48,6 +49,26 @@ function timeAgo(date: string) {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   return `${days}d ago`
+}
+
+function getTimelineDescription(event: any): string | null {
+  if (event.eventType === 'NOTIFICATION_SENT' && event.details) {
+    const toName = event.details.toUserName || event.actorUserName
+    const channel = event.details.channel
+    if (toName && channel) return `to ${toName} via ${channel}`
+    if (toName) return `to ${toName}`
+    if (channel) return `via ${channel}`
+  }
+  if (event.eventType === 'ESCALATED' && event.details?.stepNumber !== undefined) {
+    return `to step ${Number(event.details.stepNumber) + 1}`
+  }
+  if (event.eventType === 'REASSIGNED' && event.details?.toUserName) {
+    return `to ${event.details.toUserName}`
+  }
+  if (event.eventType === 'REASSIGNED' && event.details?.reason === 'unavailable') {
+    return 'user marked as unavailable'
+  }
+  return null
 }
 
 function IncidentDetailPage() {
@@ -66,6 +87,13 @@ function IncidentDetailPage() {
     queryKey: ['incident-timeline', incidentId],
     queryFn: () => api.getIncidentTimeline(Number(incidentId)),
   })
+
+  // Mark as viewed (deduplicated on backend)
+  useEffect(() => {
+    if (incident) {
+      api.viewIncident(Number(incidentId)).catch(() => {})
+    }
+  }, [incident?.id])
 
   const acknowledgeMutation = useMutation({
     mutationFn: () => api.acknowledgeIncident(Number(incidentId)),
@@ -92,6 +120,22 @@ function IncidentDetailPage() {
       toast({
         title: 'Incident Resolved',
         description: 'This incident has been marked as resolved.',
+      })
+    },
+    onError: (error: any) => {
+      toast({title: 'Error', description: error.message, variant: 'destructive'})
+    },
+  })
+
+  const markUnavailableMutation = useMutation({
+    mutationFn: () => api.markUnavailable(Number(incidentId)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['incident', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['incident-timeline', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['incidents']})
+      toast({
+        title: 'Marked Unavailable',
+        description: 'You have been marked as unavailable. The incident will be escalated.',
       })
     },
     onError: (error: any) => {
@@ -150,9 +194,9 @@ function IncidentDetailPage() {
             <Badge variant="outline" className={cn('text-xs', priorityCfg.color)}>
               {incident.priorityLevel}
             </Badge>
-            <span className="text-xs text-muted-foreground">#{incident.id}</span>
+            <span className="text-xs text-muted-foreground font-mono">#{incident.id}</span>
           </div>
-          <h2 className="text-2xl font-bold">{incident.title}</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{incident.title}</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Triggered {timeAgo(incident.triggeredAt)} · {new Date(incident.triggeredAt).toLocaleString()}
           </p>
@@ -162,10 +206,10 @@ function IncidentDetailPage() {
       {/* Action Banner */}
       {incident.status !== 'RESOLVED' && (
         <div className={cn(
-          'flex items-center justify-between p-4 rounded-lg border',
+          'flex items-center justify-between p-4 rounded-xl border',
           incident.status === 'TRIGGERED'
-            ? 'bg-red-500/5 border-red-500/30'
-            : 'bg-amber-500/5 border-amber-500/30'
+            ? 'bg-red-500/5 border-red-500/20'
+            : 'bg-amber-500/5 border-amber-500/20'
         )}>
           <div className="flex items-center gap-3">
             <div className={cn(
@@ -185,39 +229,52 @@ function IncidentDetailPage() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            {incident.status === 'TRIGGERED' && (
-              <>
-                <Button
-                  onClick={() => acknowledgeMutation.mutate()}
-                  disabled={acknowledgeMutation.isPending}
-                  className="bg-amber-600 hover:bg-amber-700"
-                  size="sm"
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Acknowledge
-                </Button>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex gap-2">
+              {incident.status === 'TRIGGERED' && (
+                <>
+                  <Button
+                    onClick={() => acknowledgeMutation.mutate()}
+                    disabled={acknowledgeMutation.isPending}
+                    className="bg-amber-600 hover:bg-amber-700"
+                    size="sm"
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    Acknowledge
+                  </Button>
+                  <Button
+                    onClick={() => resolveMutation.mutate()}
+                    disabled={resolveMutation.isPending}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-500/30 text-green-400 hover:bg-green-500/10"
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Resolve
+                  </Button>
+                </>
+              )}
+              {incident.status === 'ACKNOWLEDGED' && (
                 <Button
                   onClick={() => resolveMutation.mutate()}
                   disabled={resolveMutation.isPending}
-                  variant="outline"
+                  className="bg-green-600 hover:bg-green-700"
                   size="sm"
-                  className="border-green-500/30 text-green-400 hover:bg-green-500/10"
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
                   Resolve
                 </Button>
-              </>
-            )}
-            {incident.status === 'ACKNOWLEDGED' && (
+              )}
+            </div>
+            {incident.status !== 'RESOLVED' && (
               <Button
-                onClick={() => resolveMutation.mutate()}
-                disabled={resolveMutation.isPending}
-                className="bg-green-600 hover:bg-green-700"
+                variant="link"
                 size="sm"
+                className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs"
+                onClick={() => markUnavailableMutation.mutate()}
+                disabled={markUnavailableMutation.isPending}
               >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Resolve
+                I'm not available
               </Button>
             )}
           </div>
@@ -227,14 +284,14 @@ function IncidentDetailPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Details */}
+          {/* Description */}
           {incident.description && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Description</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">{incident.description}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{incident.description}</p>
               </CardContent>
             </Card>
           )}
@@ -247,13 +304,15 @@ function IncidentDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="relative">
-                {incidentTimeline.map((event, idx) => {
+                {incidentTimeline.map((event: any, idx: number) => {
                   const config = EVENT_CONFIG[event.eventType] || {
                     icon: Clock,
                     color: 'text-muted-foreground',
                     bgColor: 'bg-muted',
+                    label: event.eventType.replace(/_/g, ' '),
                   }
                   const Icon = config.icon
+                  const description = getTimelineDescription(event)
 
                   return (
                     <div key={event.id} className="flex gap-3 pb-6 last:pb-0 relative">
@@ -269,32 +328,22 @@ function IncidentDetailPage() {
                       <div className="flex-1 min-w-0 pt-0.5">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-medium">
-                            {event.eventType.replace(/_/g, ' ')}
+                            {config.label}
                           </p>
                           <span className="text-xs text-muted-foreground flex-shrink-0">
                             {timeAgo(event.createdAt)}
                           </span>
                         </div>
-                        {event.actorUserName && (
+                        {event.actorUserName && event.eventType !== 'NOTIFICATION_SENT' && (
                           <p className="text-xs text-muted-foreground mt-0.5">
                             by {event.actorUserName}
                           </p>
                         )}
-                        {event.details && (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {event.eventType === 'NOTE_ADDED' && event.details.note && (
-                              <p className="italic bg-muted/50 rounded p-2 mt-1">&quot;{event.details.note}&quot;</p>
-                            )}
-                            {(event.eventType as string) === 'NOTIFICATION_SENT' && event.details.channel && (
-                              <p>via {event.details.channel}</p>
-                            )}
-                            {event.eventType === 'ESCALATED' && event.details.stepNumber !== undefined && (
-                              <p>to step {Number(event.details.stepNumber) + 1}</p>
-                            )}
-                            {event.eventType === 'REASSIGNED' && event.details.toUserName && (
-                              <p>to {event.details.toUserName}</p>
-                            )}
-                          </div>
+                        {description && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                        )}
+                        {event.details && event.eventType === 'NOTE_ADDED' && event.details.note && (
+                          <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{event.details.note}&quot;</p>
                         )}
                       </div>
                     </div>
@@ -339,32 +388,32 @@ function IncidentDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Status</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Status</p>
                 <Badge variant="outline" className={cn('gap-1', statusCfg.color)}>
                   <StatusIcon className="h-3 w-3" />
                   {statusCfg.label}
                 </Badge>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Priority</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Priority</p>
                 <Badge variant="outline" className={cn(priorityCfg.color)}>
                   {incident.priorityLevel}
                 </Badge>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Alert Source</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Alert Source</p>
                 <p className="text-sm">{incident.alertSource || 'Unknown'}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Triggered At</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Triggered At</p>
                 <p className="text-sm">{new Date(incident.triggeredAt).toLocaleString()}</p>
               </div>
               {incident.acknowledgedBy && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Acknowledged By</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Acknowledged By</p>
                   <p className="text-sm">
                     {incident.acknowledgedByName}
-                    <span className="text-xs text-muted-foreground block">
+                    <span className="text-xs text-muted-foreground block mt-0.5">
                       {new Date(incident.acknowledgedAt!).toLocaleString()}
                     </span>
                   </p>
@@ -372,10 +421,10 @@ function IncidentDetailPage() {
               )}
               {incident.resolvedBy && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Resolved By</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Resolved By</p>
                   <p className="text-sm">
                     {incident.resolvedByName}
-                    <span className="text-xs text-muted-foreground block">
+                    <span className="text-xs text-muted-foreground block mt-0.5">
                       {new Date(incident.resolvedAt!).toLocaleString()}
                     </span>
                   </p>

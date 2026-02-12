@@ -231,6 +231,17 @@ object SystemAlertTemplateStates : Table("system_alert_template_states") {
     override val primaryKey = PrimaryKey(template_alert_id, system_id)
 }
 
+object AlertSilencePeriods : Table("alert_silence_periods") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val reason = varchar("reason", 255).nullable()
+    val starts_at = timestamp("starts_at")
+    val ends_at = timestamp("ends_at")
+    val created_by = integer("created_by").references(Users.id)
+    val created_at = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object OrganizationIntegrations : Table("organization_integrations") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)

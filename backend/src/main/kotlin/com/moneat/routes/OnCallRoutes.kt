@@ -256,7 +256,7 @@ fun Route.onCallRoutes() {
         }
     }
     
-    route("/on-call/overrides") {
+    route("/v1/on-call/overrides") {
         authenticate("auth-jwt") {
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()

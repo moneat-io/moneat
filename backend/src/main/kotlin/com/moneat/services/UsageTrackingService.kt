@@ -187,6 +187,27 @@ class UsageTrackingService {
         }
     }
 
+    fun getEventCountForOrg(
+        orgId: Int,
+        startDate: kotlinx.datetime.LocalDate,
+        endDate: kotlinx.datetime.LocalDate,
+        eventTypes: List<String> = emptyList()
+    ): Long {
+        flushBuffer()
+        return transaction {
+            UsageRecords.selectAll().where {
+                val baseFilter = (UsageRecords.organization_id eq orgId) and
+                    (UsageRecords.recordDate greaterEq startDate) and
+                    (UsageRecords.recordDate lessEq endDate)
+                if (eventTypes.isNotEmpty()) {
+                    baseFilter and (UsageRecords.event_type inList eventTypes)
+                } else {
+                    baseFilter
+                }
+            }.sumOf { it[UsageRecords.event_count].toLong() }
+        }
+    }
+
     fun checkQuota(orgId: Int): QuotaStatus {
         val usage = billingQuotaService.getUsageForOrganization(orgId)
         return QuotaStatus(

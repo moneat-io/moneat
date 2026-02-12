@@ -42,7 +42,7 @@ data class IncidentEvent(
     val source: AlertSource,
     val deduplicationKey: String,
     val organizationId: Int,
-    val metadata: Map<String, String> = emptyMap(),
+    val metadata: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
     val moneatUrl: String
 )
 

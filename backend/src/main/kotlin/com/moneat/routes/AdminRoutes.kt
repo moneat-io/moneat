@@ -18,6 +18,7 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.config.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
+import kotlinx.serialization.json.JsonPrimitive
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -172,7 +173,7 @@ fun Route.adminRoutes() {
                         deduplicationKey = "manual-trigger-${java.util.UUID.randomUUID()}",
                         organizationId = orgId,
                         moneatUrl = frontendUrl,
-                        metadata = mapOf("triggered_by" to userId.toString())
+                        metadata = mapOf("triggered_by" to JsonPrimitive(userId.toString()))
                     )
                     
                     incidentService.fireAlert(event)

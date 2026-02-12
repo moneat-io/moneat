@@ -1,6 +1,7 @@
 package com.moneat.services
 
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.util.*
 
@@ -317,11 +318,11 @@ class UptimeScheduler(
                     deduplicationKey = "moneat-uptime-${monitor.id}",
                     organizationId = monitor.organizationId,
                     metadata = mapOf(
-                        "monitor_id" to monitor.id.toString(),
-                        "monitor_name" to monitor.name,
-                        "monitor_type" to monitor.type,
-                        "error_message" to result.message,
-                        "response_time_ms" to result.responseTimeMs.toString()
+                        "monitor_id" to JsonPrimitive(monitor.id.toString()),
+                        "monitor_name" to JsonPrimitive(monitor.name),
+                        "monitor_type" to JsonPrimitive(monitor.type),
+                        "error_message" to JsonPrimitive(result.message),
+                        "response_time_ms" to JsonPrimitive(result.responseTimeMs.toString())
                     ),
                     moneatUrl = "$baseUrl/uptime/${monitor.id}"
                 )

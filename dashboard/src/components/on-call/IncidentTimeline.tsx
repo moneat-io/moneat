@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, AlertTriangle, Clock, MessageSquare, UserPlus, Bell } from 'lucide-react'
+import { CheckCircle2, Circle, AlertTriangle, Clock, MessageSquare, UserPlus, Bell, Eye, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface TimelineEvent {
@@ -51,9 +51,14 @@ const EVENT_CONFIG: Record<string, { icon: typeof Circle; label: string; color: 
     color: 'text-orange-500',
   },
   NOTIFICATION_SENT: {
-    icon: Bell,
+    icon: Send,
     label: 'Notification Sent',
     color: 'text-blue-400',
+  },
+  VIEWED: {
+    icon: Eye,
+    label: 'Viewed',
+    color: 'text-gray-400',
   },
 }
 
@@ -92,7 +97,7 @@ export function IncidentTimeline({ events }: IncidentTimelineProps) {
                   <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
                     <div>
                       <p className="text-sm font-medium">{config.label}</p>
-                      {event.actorUserName && (
+                      {event.actorUserName && event.eventType !== 'NOTIFICATION_SENT' && (
                         <p className="mt-0.5 text-sm text-muted-foreground">
                           by {event.actorUserName}
                         </p>
@@ -102,8 +107,11 @@ export function IncidentTimeline({ events }: IncidentTimelineProps) {
                           {event.eventType === 'NOTE_ADDED' && event.details.note && (
                             <p className="italic">&quot;{event.details.note}&quot;</p>
                           )}
-                          {event.eventType === 'NOTIFICATION_SENT' && event.details.channel && (
-                            <p>via {event.details.channel}</p>
+                          {event.eventType === 'NOTIFICATION_SENT' && (
+                            <p>
+                              to {event.details.toUserName || event.actorUserName || 'on-call user'}
+                              {event.details.channel && ` via ${event.details.channel}`}
+                            </p>
                           )}
                           {event.eventType === 'ESCALATED' && event.details.stepNumber !== undefined && (
                             <p>to step {event.details.stepNumber + 1}</p>

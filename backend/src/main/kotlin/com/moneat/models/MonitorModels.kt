@@ -236,6 +236,24 @@ data class SystemData(
     val updatedAt: kotlinx.datetime.Instant
 )
 
+@Serializable
+data class CreateSilencePeriodRequest(
+    val reason: String? = null,
+    @SerialName("starts_at") val startsAt: Long,
+    @SerialName("ends_at") val endsAt: Long
+)
+
+@Serializable
+data class SilencePeriodResponse(
+    val id: Int,
+    @SerialName("organization_id") val organizationId: Int,
+    val reason: String?,
+    @SerialName("starts_at") val startsAt: Long,
+    @SerialName("ends_at") val endsAt: Long,
+    @SerialName("created_by") val createdBy: Int,
+    @SerialName("created_at") val createdAt: Long
+)
+
 data class AlertData(
     val id: Int,
     val systemId: UUID,

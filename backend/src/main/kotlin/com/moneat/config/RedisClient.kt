@@ -23,6 +23,12 @@ class RedisClient {
         return RedisConfig.sync().zrangebyscore(key, min, max).toList()
     }
     
+    fun zrangeWithScores(key: String, start: Long, stop: Long): List<Pair<String, Double>> {
+        return RedisConfig.sync().zrangeWithScores(key, start, stop).map { 
+            it.value to it.score 
+        }
+    }
+    
     fun get(key: String): String? {
         return RedisConfig.sync().get(key)
     }

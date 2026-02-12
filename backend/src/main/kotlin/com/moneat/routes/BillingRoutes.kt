@@ -76,7 +76,13 @@ fun Route.billingRoutes() {
                 val startDate = LocalDate.parse(usage.periodStart)
                 val endDate = LocalDate.parse(usage.periodEnd)
                 val computedBytes = usageTrackingService.getTotalBytesForOrg(orgId, startDate, endDate)
-                call.respond(usage.copy(usedBytes = maxOf(computedBytes, usage.usedBytes)))
+                val computedLogs = usageTrackingService.getEventCountForOrg(orgId, startDate, endDate, listOf("log", "logs"))
+                call.respond(
+                    usage.copy(
+                        usedBytes = maxOf(computedBytes, usage.usedBytes),
+                        usedLogs = maxOf(computedLogs, usage.usedLogs)
+                    )
+                )
             } catch (e: Exception) {
                 logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
                 call.respond(usage)

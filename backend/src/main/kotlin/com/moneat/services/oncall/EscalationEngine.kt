@@ -7,6 +7,8 @@ import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -58,7 +60,7 @@ class EscalationEngine(
         priorityLevel: String,
         alertSource: String?,
         deduplicationKey: String?,
-        metadata: Map<String, String>? = null
+        metadata: Map<String, JsonElement>? = null
     ): Incident? {
         return transaction {
             val now = Clock.System.now()
@@ -93,13 +95,13 @@ class EscalationEngine(
                 it[currentStep] = 0
                 it[repeatIteration] = 0
                 it[triggeredAt] = now
-                it[Incidents.metadata] = metadata?.let { m -> Json.encodeToString(kotlinx.serialization.serializer(), m) }
+                it[Incidents.metadata] = metadata
                 it[createdAt] = now
                 it[updatedAt] = now
             }.value
             
             // Log timeline event
-            logTimelineEvent(incidentId, "TRIGGERED", null, mapOf("priority" to priorityLevel))
+            logTimelineEvent(incidentId, "TRIGGERED", null, mapOf("priority" to JsonPrimitive(priorityLevel)))
             
             // Start escalation
             processEscalationStep(incidentId, 0, 0)
@@ -138,7 +140,7 @@ class EscalationEngine(
                     processEscalationStep(incidentId, 0, iteration + 1)
                 } else {
                     logger.warn("Escalation exhausted for incident $incidentId after $iteration iterations")
-                    logTimelineEvent(incidentId, "ESCALATED", null, mapOf("result" to "exhausted"))
+                    logTimelineEvent(incidentId, "ESCALATED", null, mapOf("result" to JsonPrimitive("exhausted")))
                 }
                 return@transaction
             }
@@ -173,7 +175,7 @@ class EscalationEngine(
                 incidentId,
                 "ESCALATED",
                 null,
-                mapOf("step" to stepIndex.toString(), "iteration" to iteration.toString())
+                mapOf("step" to JsonPrimitive(stepIndex.toString()), "iteration" to JsonPrimitive(iteration.toString()))
             )
             
             // Schedule timeout
@@ -182,6 +184,10 @@ class EscalationEngine(
     }
     
     private fun notifyUser(incidentId: Int, userId: Int, title: String, priorityLevel: String) {
+        val userName = transaction {
+            Users.selectAll().where { Users.id eq userId }.singleOrNull()?.get(Users.name)
+        }
+        
         scope.launch {
             try {
                 // Send push notification
@@ -194,7 +200,7 @@ class EscalationEngine(
                     incidentId,
                     "NOTIFICATION_SENT",
                     userId,
-                    mapOf("channel" to "push,slack")
+                    mapOf("channel" to JsonPrimitive("push,slack"), "toUserName" to JsonPrimitive(userName ?: "Unknown"))
                 )
             } catch (e: Exception) {
                 logger.error("Failed to notify user $userId for incident $incidentId", e)
@@ -243,7 +249,7 @@ class EscalationEngine(
                 
                 logger.info("Timeout expired for incident $incidentId, advancing to step $nextStep")
                 
-                logTimelineEvent(incidentId, "STEP_TIMEOUT", null, mapOf("step" to (nextStep - 1).toString()))
+                logTimelineEvent(incidentId, "STEP_TIMEOUT", null, mapOf("step" to JsonPrimitive((nextStep - 1).toString())))
                 processEscalationStep(incidentId, nextStep, iteration)
                 
                 // Remove from queue
@@ -316,7 +322,7 @@ class EscalationEngine(
             incidentId,
             "REASSIGNED",
             byUserId,
-            mapOf("to_user_id" to toUserId.toString())
+            mapOf("to_user_id" to JsonPrimitive(toUserId.toString()))
         )
         
         logger.info("Incident $incidentId reassigned to user $toUserId by $byUserId")
@@ -327,17 +333,70 @@ class EscalationEngine(
         incidentId: Int,
         eventType: String,
         actorUserId: Int?,
-        details: Map<String, String>?
+        details: Map<String, JsonElement>?
     ) {
         transaction {
             IncidentTimeline.insert {
                 it[IncidentTimeline.incidentId] = incidentId
                 it[IncidentTimeline.eventType] = eventType
                 it[IncidentTimeline.actorUserId] = actorUserId
-                it[IncidentTimeline.details] = details?.let { d -> Json.encodeToString(kotlinx.serialization.serializer(), d) }
+                it[IncidentTimeline.details] = details
                 it[createdAt] = Clock.System.now()
             }
         }
+    }
+    
+    fun getNextEscalationTimes(): Map<Int, String> {
+        val members = redisClient.zrangeWithScores(ACTIVE_INCIDENTS_KEY, 0, -1)
+        val result = mutableMapOf<Int, String>()
+        members.forEach { (member, score) ->
+            try {
+                val data = Json.decodeFromString<Map<String, String>>(member)
+                val incidentId = data["incidentId"]?.toIntOrNull() ?: return@forEach
+                val instant = Instant.fromEpochSeconds(score.toLong())
+                result[incidentId] = instant.toString()
+            } catch (_: Exception) { }
+        }
+        return result
+    }
+    
+    fun markUnavailable(incidentId: Int, userId: Int): Boolean = transaction {
+        val incident = Incidents
+            .selectAll()
+            .where { Incidents.id eq incidentId }
+            .singleOrNull() ?: return@transaction false
+        
+        if (incident[Incidents.status] != "TRIGGERED") return@transaction false
+        
+        val policyId = incident[Incidents.escalationPolicyId] ?: return@transaction false
+        val policy = escalationPolicyService.getPolicy(policyId) ?: return@transaction false
+        val currentStepIndex = incident[Incidents.currentStep]
+        
+        // Find the next step's first user target to reassign to
+        val nextStepIndex = currentStepIndex + 1
+        if (nextStepIndex < policy.steps.size) {
+            val nextStep = policy.steps[nextStepIndex]
+            val nextTarget = nextStep.targets.firstOrNull()
+            if (nextTarget != null) {
+                val targetUserId = when (nextTarget.targetType) {
+                    "USER" -> nextTarget.targetId
+                    "ON_CALL_SCHEDULE" -> onCallScheduleService.getCurrentOnCall(nextTarget.targetId)?.userId
+                    else -> null
+                }
+                if (targetUserId != null) {
+                    logTimelineEvent(incidentId, "REASSIGNED", userId, mapOf(
+                        "reason" to JsonPrimitive("unavailable"),
+                        "to_user_id" to JsonPrimitive(targetUserId.toString())
+                    ))
+                    // Force advance to next step immediately
+                    removeTimeout(incidentId)
+                    processEscalationStep(incidentId, nextStepIndex, incident[Incidents.repeatIteration])
+                    return@transaction true
+                }
+            }
+        }
+        
+        false
     }
     
     private fun getIncident(incidentId: Int): Incident? = transaction {
@@ -365,7 +424,7 @@ class EscalationEngine(
             acknowledgedBy = row[Incidents.acknowledgedBy],
             resolvedAt = row[Incidents.resolvedAt]?.toString(),
             resolvedBy = row[Incidents.resolvedBy],
-            metadata = row[Incidents.metadata]?.let { Json.decodeFromString(it) },
+            metadata = row[Incidents.metadata],
             createdAt = row[Incidents.createdAt].toString(),
             updatedAt = row[Incidents.updatedAt].toString()
         )

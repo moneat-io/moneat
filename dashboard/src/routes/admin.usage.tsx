@@ -5,7 +5,7 @@ import {useState} from 'react'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
-import {AlertCircle, ArrowRightLeft, HardDrive, MonitorPlay} from 'lucide-react'
+import {AlertCircle, ArrowRightLeft, FileText, HardDrive, MonitorPlay} from 'lucide-react'
 import {
     AdminSkeleton,
     ChartTooltipContent,
@@ -39,9 +39,10 @@ function AdminUsagePage() {
       transaction: acc.transaction + d.transaction,
       replay: acc.replay + d.replay,
       feedback: acc.feedback + d.feedback,
+      log: acc.log + (d.log ?? 0),
       total: acc.total + d.total,
     }),
-    { error: 0, transaction: 0, replay: 0, feedback: 0, total: 0 }
+    { error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, total: 0 }
   )
 
   const periodLabel = period === '24h' ? 'Last 24 Hours' : period === '7d' ? 'Last 7 Days' : 'Last 30 Days'
@@ -65,7 +66,7 @@ function AdminUsagePage() {
       </SectionHeader>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <MetricCard
           title="Total Events"
           value={formatNumber(totals.total)}
@@ -94,6 +95,13 @@ function AdminUsagePage() {
           icon={MonitorPlay}
           iconColor="text-violet-600 dark:text-violet-400"
           iconBg="bg-violet-100 dark:bg-violet-950"
+        />
+        <MetricCard
+          title="Logs"
+          value={formatNumber(totals.log)}
+          icon={FileText}
+          iconColor="text-cyan-600 dark:text-cyan-400"
+          iconBg="bg-cyan-100 dark:bg-cyan-950"
         />
         <MetricCard
           title="Data Ingested"
@@ -182,6 +190,15 @@ function AdminUsagePage() {
                   fill={`url(#gradient-feedback)`}
                   strokeWidth={2}
                   name={eventTypeColors.feedback.label}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="log"
+                  stackId="1"
+                  stroke={eventTypeColors.log.stroke}
+                  fill={`url(#gradient-log)`}
+                  strokeWidth={2}
+                  name={eventTypeColors.log.label}
                 />
               </AreaChart>
             </ResponsiveContainer>

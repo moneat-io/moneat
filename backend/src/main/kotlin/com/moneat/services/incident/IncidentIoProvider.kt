@@ -42,6 +42,21 @@ class IncidentIoProvider : IncidentProvider {
             val alertSourceConfigId = config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
                 ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
             
+            // Convert metadata JsonElement values to strings for incident.io API
+            val baseMetadata = mapOf(
+                "severity" to event.severity.name.lowercase(),
+                "source" to event.source.name,
+                "moneat_url" to event.moneatUrl
+            )
+            val convertedMetadata = event.metadata.mapValues { (_, value) ->
+                when (value) {
+                    is JsonPrimitive -> value.content
+                    is JsonArray -> value.toString()
+                    is JsonObject -> value.toString()
+                    else -> value.toString()
+                }
+            }
+            
             val payload = AlertEventPayload(
                 deduplication_key = event.deduplicationKey,
                 status = when (event.status) {
@@ -50,11 +65,7 @@ class IncidentIoProvider : IncidentProvider {
                 },
                 title = event.title,
                 description = event.description,
-                metadata = mapOf(
-                    "severity" to event.severity.name.lowercase(),
-                    "source" to event.source.name,
-                    "moneat_url" to event.moneatUrl
-                ) + event.metadata
+                metadata = baseMetadata + convertedMetadata
             )
             
             val response = client.post("https://api.incident.io/v2/alert_events/http/$alertSourceConfigId") {

@@ -77,7 +77,7 @@ class EnvironmentValidator {
         // Validate On-Call configuration when enabled
         val onCallEnabled = getConfigValue("ONCALL_ENABLED")?.toBoolean() ?: false
         if (onCallEnabled) {
-            validateRequired("EXPO_ACCESS_TOKEN", "On-Call mobile push notifications are enabled", errors)
+            validateRequired("EXPO_TOKEN", "On-Call mobile push notifications are enabled", errors)
         }
     }
     

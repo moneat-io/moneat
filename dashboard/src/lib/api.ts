@@ -423,6 +423,7 @@ interface BillingUsage {
   replayLimit: number
   usedFeedback: number
   feedbackLimit: number
+  usedLogs?: number
   usedBytes: number
   bytesLimit: number
   baseLimitUnits: number
@@ -694,6 +695,24 @@ interface SystemAlertConfig {
   globalAlerts: SystemAlert[]
   systemAlerts: SystemAlert[]
   effectiveAlerts: SystemAlert[]
+}
+
+// Alert Silence Period Interfaces
+
+interface SilencePeriod {
+  id: number
+  organizationId: number
+  reason: string | null
+  startsAt: number
+  endsAt: number
+  createdBy: number
+  createdAt: number
+}
+
+interface CreateSilencePeriodRequest {
+  reason?: string
+  starts_at: number
+  ends_at: number
 }
 
 // Uptime Monitoring Interfaces
@@ -1228,12 +1247,14 @@ interface Incident {
   resolvedBy?: number
   resolvedByName?: string
   metadata?: Record<string, any>
+  nextEscalationAt?: string
+  viewedByCurrentUser?: boolean
 }
 
 interface IncidentTimeline {
   id: number
   incidentId: number
-  eventType: 'TRIGGERED' | 'ESCALATED' | 'ACKNOWLEDGED' | 'RESOLVED' | 'REASSIGNED' | 'NOTE_ADDED'
+  eventType: 'TRIGGERED' | 'ESCALATED' | 'ACKNOWLEDGED' | 'RESOLVED' | 'REASSIGNED' | 'NOTE_ADDED' | 'STEP_TIMEOUT' | 'NOTIFICATION_SENT' | 'VIEWED'
   actorUserId?: number
   actorUserName?: string
   details?: Record<string, any>
@@ -1335,10 +1356,6 @@ interface IncidentListFilters {
   priorityLevel?: string
   fromDate?: string
   toDate?: string
-}
-
-interface UpdateOnCallSeatsRequest {
-  seats: number
 }
 
 interface UpdateOnCallSeatsResponse {
@@ -2165,6 +2182,7 @@ class ApiClient {
         transaction: number
         replay: number
         feedback: number
+        log: number
         total: number
       }>
       totalBytes: number
@@ -2442,6 +2460,39 @@ class ApiClient {
 
   async deleteSystemAlert(systemId: string, alertId: number, scope: 'global' | 'system' = 'system') {
     return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}?scope=${scope}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Alert Silence Period Methods
+
+  private mapSilencePeriod(row: any): SilencePeriod {
+    return {
+      id: row.id,
+      organizationId: row.organization_id ?? row.organizationId,
+      reason: row.reason ?? null,
+      startsAt: row.starts_at ?? row.startsAt,
+      endsAt: row.ends_at ?? row.endsAt,
+      createdBy: row.created_by ?? row.createdBy,
+      createdAt: row.created_at ?? row.createdAt,
+    }
+  }
+
+  async getSilencePeriods(): Promise<SilencePeriod[]> {
+    const response = await this.request<any[]>(`${API_BASE}/monitor/silence-periods`)
+    return response.map((row: any) => this.mapSilencePeriod(row))
+  }
+
+  async createSilencePeriod(data: CreateSilencePeriodRequest): Promise<SilencePeriod> {
+    const response = await this.request<any>(`${API_BASE}/monitor/silence-periods`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return this.mapSilencePeriod(response)
+  }
+
+  async deleteSilencePeriod(id: number): Promise<void> {
+    return this.request<void>(`${API_BASE}/monitor/silence-periods/${id}`, {
       method: 'DELETE',
     })
   }
@@ -2873,6 +2924,18 @@ class ApiClient {
     })
   }
 
+  async viewIncident(id: number): Promise<void> {
+    await this.request(`${API_BASE}/incidents/${id}/view`, {
+      method: 'POST',
+    })
+  }
+
+  async markUnavailable(id: number): Promise<void> {
+    await this.request(`${API_BASE}/incidents/${id}/unavailable`, {
+      method: 'POST',
+    })
+  }
+
   // Device Tokens
   async registerDevice(request: RegisterDeviceRequest): Promise<DeviceToken> {
     return this.request(`${API_BASE}/devices`, {
@@ -3004,4 +3067,6 @@ export type {
   UpdateBusinessHoursRequest,
   RegisterDeviceRequest,
   IncidentListFilters,
+  SilencePeriod,
+  CreateSilencePeriodRequest,
 }

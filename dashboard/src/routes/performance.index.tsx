@@ -226,7 +226,7 @@ function PerformancePage() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-background">
+      <div>
         <div className="px-4 py-4 sm:px-6 lg:px-8">
           {/* Compact header */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">

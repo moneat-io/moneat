@@ -1,4 +1,4 @@
-import {createFileRoute, Link} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
@@ -10,8 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, Clock, CheckCircle2, ChevronRight, Inbox} from 'lucide-react'
-import {useState} from 'react'
+import {Filter, Zap, Clock, CheckCircle2, ChevronRight, Inbox, Eye, AlertTriangle} from 'lucide-react'
+import {useState, useEffect} from 'react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/on-call/incidents')({
@@ -44,9 +44,22 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
+function isEscalatingSoon(nextEscalationAt?: string): boolean {
+  if (!nextEscalationAt) return false
+  const diff = new Date(nextEscalationAt).getTime() - Date.now()
+  return diff > 0 && diff <= 2 * 60 * 1000
+}
+
 function Incidents() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
+  const [, setTick] = useState(0)
+
+  // Re-render every 30s to update "escalating soon" badges
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const {data: incidents, isLoading} = useQuery({
     queryKey: ['incidents', statusFilter, priorityFilter],
@@ -56,6 +69,7 @@ function Incidents() {
       if (priorityFilter !== 'all') filters.priorityLevel = priorityFilter
       return api.getIncidents(filters)
     },
+    refetchInterval: 30000,
   })
 
   const triggeredCount = incidents?.filter(i => i.status === 'TRIGGERED').length || 0
@@ -66,21 +80,21 @@ function Incidents() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Incidents</h2>
-          <p className="text-muted-foreground text-sm">View and manage on-call incidents</p>
+          <h2 className="text-2xl font-bold tracking-tight">Incidents</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">View and manage on-call incidents</p>
         </div>
       </div>
 
       {/* Stats Row */}
       {!isLoading && incidents && incidents.length > 0 && (
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
             onClick={() => setStatusFilter(statusFilter === 'TRIGGERED' ? 'all' : 'TRIGGERED')}
             className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all',
+              'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
               statusFilter === 'TRIGGERED'
-                ? 'bg-red-500/15 border-red-500/40 text-red-400'
-                : 'hover:bg-muted'
+                ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-sm shadow-red-500/10'
+                : 'hover:bg-muted/60'
             )}
           >
             <Zap className="h-3.5 w-3.5" />
@@ -89,10 +103,10 @@ function Incidents() {
           <button
             onClick={() => setStatusFilter(statusFilter === 'ACKNOWLEDGED' ? 'all' : 'ACKNOWLEDGED')}
             className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all',
+              'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
               statusFilter === 'ACKNOWLEDGED'
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                : 'hover:bg-muted'
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 shadow-sm shadow-amber-500/10'
+                : 'hover:bg-muted/60'
             )}
           >
             <Clock className="h-3.5 w-3.5" />
@@ -101,10 +115,10 @@ function Incidents() {
           <button
             onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
             className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all',
+              'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
               statusFilter === 'RESOLVED'
-                ? 'bg-green-500/15 border-green-500/40 text-green-400'
-                : 'hover:bg-muted'
+                ? 'bg-green-500/15 border-green-500/40 text-green-400 shadow-sm shadow-green-500/10'
+                : 'hover:bg-muted/60'
             )}
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -169,6 +183,7 @@ function Incidents() {
             const priorityCfg = getPriorityConfig(incident.priorityLevel)
             const statusCfg = getStatusConfig(incident.status)
             const StatusIcon = statusCfg.icon
+            const escalatingSoon = isEscalatingSoon(incident.nextEscalationAt)
             return (
               <Link
                 key={incident.id}
@@ -177,19 +192,26 @@ function Incidents() {
                 className="block group"
               >
                 <Card className={cn(
-                  'transition-all hover:shadow-md',
-                  incident.status === 'TRIGGERED' && 'border-l-4 border-l-red-500 hover:border-red-500/40',
-                  incident.status === 'ACKNOWLEDGED' && 'border-l-4 border-l-amber-500 hover:border-amber-500/40',
-                  incident.status === 'RESOLVED' && 'hover:border-muted-foreground/20',
+                  'transition-all hover:shadow-md border-l-4',
+                  incident.status === 'TRIGGERED' && 'border-l-red-500 hover:border-red-500/40',
+                  incident.status === 'ACKNOWLEDGED' && 'border-l-amber-500 hover:border-amber-500/40',
+                  incident.status === 'RESOLVED' && 'border-l-transparent hover:border-muted-foreground/20',
                 )}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
                         <div className={cn('flex-shrink-0 h-2.5 w-2.5 rounded-full mt-2', priorityCfg.dot)} />
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-sm group-hover:text-foreground truncate">
-                            {incident.title}
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-sm group-hover:text-foreground truncate">
+                              {incident.title}
+                            </h3>
+                            {incident.viewedByCurrentUser && (
+                              <span title="You've viewed this incident">
+                                <Eye className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                              </span>
+                            )}
+                          </div>
                           {incident.description && (
                             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{incident.description}</p>
                           )}
@@ -197,19 +219,19 @@ function Incidents() {
                             <span>{timeAgo(incident.triggeredAt)}</span>
                             {incident.alertSource && (
                               <>
-                                <span>·</span>
+                                <span className="text-muted-foreground/40">·</span>
                                 <span>{incident.alertSource}</span>
                               </>
                             )}
                             {incident.acknowledgedByName && (
                               <>
-                                <span>·</span>
+                                <span className="text-muted-foreground/40">·</span>
                                 <span className="text-amber-400">Ack by {incident.acknowledgedByName}</span>
                               </>
                             )}
                             {incident.resolvedByName && (
                               <>
-                                <span>·</span>
+                                <span className="text-muted-foreground/40">·</span>
                                 <span className="text-green-400">Resolved by {incident.resolvedByName}</span>
                               </>
                             )}
@@ -217,6 +239,12 @@ function Incidents() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        {escalatingSoon && (
+                          <Badge variant="outline" className="text-xs gap-1 bg-orange-500/15 text-orange-400 border-orange-500/30 animate-pulse">
+                            <AlertTriangle className="h-3 w-3" />
+                            Escalating soon
+                          </Badge>
+                        )}
                         <Badge variant="outline" className={cn('text-xs', priorityCfg.color)}>
                           {incident.priorityLevel}
                         </Badge>
@@ -234,11 +262,11 @@ function Incidents() {
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-lg">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-muted mb-4">
-            <Inbox className="h-8 w-8 text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center py-20 border border-dashed rounded-xl">
+          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/60 mb-4">
+            <Inbox className="h-7 w-7 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold mb-1">No incidents found</h3>
+          <h3 className="text-base font-semibold mb-1">No incidents found</h3>
           <p className="text-sm text-muted-foreground text-center max-w-sm">
             {statusFilter !== 'all' || priorityFilter !== 'all'
               ? 'No incidents match your current filters. Try adjusting or clearing filters.'
@@ -246,6 +274,7 @@ function Incidents() {
           </p>
         </div>
       )}
+      <Outlet />
     </div>
   )
 }

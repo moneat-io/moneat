@@ -159,6 +159,7 @@ data class BillingUsageResponse(
     val replayLimit: Long,
     val usedFeedback: Long,
     val feedbackLimit: Long,
+    val usedLogs: Long = 0,
     val usedBytes: Long,
     val bytesLimit: Long,
     val baseLimitUnits: Long,

@@ -7,11 +7,43 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.dao.id.IntIdTable
+import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.ColumnType
 import org.jetbrains.exposed.sql.ReferenceOption
+import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.javatime.time
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.postgresql.util.PGobject
 import java.time.LocalTime
+
+// ===== Custom Column Types =====
+
+fun Table.jsonb(name: String): Column<Map<String, kotlinx.serialization.json.JsonElement>?> = 
+    registerColumn<Map<String, kotlinx.serialization.json.JsonElement>?>(name, object : ColumnType() {
+        override fun sqlType() = "JSONB"
+        
+        override fun valueFromDB(value: Any): Any {
+            if (value is PGobject && value.value == null) {
+                return emptyMap<String, kotlinx.serialization.json.JsonElement>()
+            }
+            return when (value) {
+                is PGobject -> Json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(value.value ?: "{}")
+                is String -> Json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(value)
+                else -> emptyMap<String, kotlinx.serialization.json.JsonElement>()
+            }
+        }
+        
+        override fun notNullValueToDB(value: Any): Any {
+            @Suppress("UNCHECKED_CAST")
+            val map = value as Map<String, kotlinx.serialization.json.JsonElement>
+            return PGobject().apply {
+                type = "jsonb"
+                this.value = Json.encodeToString(kotlinx.serialization.serializer(), map)
+            }
+        }
+    })
 
 // ===== Priority Management =====
 
@@ -214,7 +246,7 @@ object Incidents : IntIdTable("incidents") {
     val acknowledgedBy = integer("acknowledged_by").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val resolvedAt = timestamp("resolved_at").nullable()
     val resolvedBy = integer("resolved_by").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
-    val metadata = text("metadata").nullable()  // JSON as text
+    val metadata = jsonb("metadata")
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 }
@@ -223,7 +255,7 @@ object IncidentTimeline : IntIdTable("incident_timeline") {
     val incidentId = integer("incident_id").references(Incidents.id, onDelete = ReferenceOption.CASCADE)
     val eventType = varchar("event_type", 30)
     val actorUserId = integer("actor_user_id").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
-    val details = text("details").nullable()  // JSON as text
+    val details = jsonb("details")
     val createdAt = timestamp("created_at")
 }
 
@@ -248,7 +280,9 @@ data class Incident(
     val resolvedAt: String? = null,
     val resolvedBy: Int? = null,
     val resolvedByName: String? = null,
-    val metadata: Map<String, String>? = null,
+    val metadata: Map<String, kotlinx.serialization.json.JsonElement>? = null,
+    val nextEscalationAt: String? = null,
+    val viewedByCurrentUser: Boolean = false,
     val createdAt: String,
     val updatedAt: String
 )
@@ -260,7 +294,7 @@ data class IncidentTimelineEvent(
     val eventType: String,
     val actorUserId: Int? = null,
     val actorName: String? = null,
-    val details: Map<String, String>? = null,
+    val details: Map<String, kotlinx.serialization.json.JsonElement>? = null,
     val createdAt: String
 )
 

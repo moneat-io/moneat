@@ -12,6 +12,7 @@ import {
     ArrowLeft,
     ArrowRightLeft,
     Eye,
+    FileText,
     FolderKanban,
     HardDrive,
     MessageSquare,
@@ -40,6 +41,21 @@ function AdminOrgDetailPage() {
   const {orgId} = Route.useParams()
   const [usagePeriod, setUsagePeriod] = useState<'7d' | '30d'>('30d')
 
+  const normalizeEventType = (eventType: string): 'error' | 'transaction' | 'replay' | 'feedback' | 'log' | null => {
+    switch (eventType) {
+      case 'error':
+      case 'transaction':
+      case 'replay':
+      case 'feedback':
+      case 'log':
+        return eventType
+      case 'logs':
+        return 'log'
+      default:
+        return null
+    }
+  }
+
   const {data: org, isLoading} = useQuery({
     queryKey: ['admin-org', orgId],
     queryFn: () => api.getAdminOrgDetail(Number(orgId)),
@@ -57,14 +73,14 @@ function AdminOrgDetailPage() {
     if (!usage) return []
     const acc: Record<
       string,
-      {date: string; error: number; transaction: number; replay: number; feedback: number; total: number}
+      {date: string; error: number; transaction: number; replay: number; feedback: number; log: number; total: number}
     > = {}
     for (const u of usage) {
       if (!acc[u.date]) {
-        acc[u.date] = {date: u.date, error: 0, transaction: 0, replay: 0, feedback: 0, total: 0}
+        acc[u.date] = {date: u.date, error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, total: 0}
       }
-      const key = u.eventType as 'error' | 'transaction' | 'replay' | 'feedback'
-      if (key in acc[u.date]) {
+      const key = normalizeEventType(u.eventType)
+      if (key && key in acc[u.date]) {
         acc[u.date][key] += u.eventCount
       }
       acc[u.date].total += u.eventCount
@@ -74,16 +90,16 @@ function AdminOrgDetailPage() {
 
   // Aggregate usage by event type for breakdown
   const usageByType = useMemo(() => {
-    if (!usage) return {error: 0, transaction: 0, replay: 0, feedback: 0, totalEvents: 0, totalBytes: 0}
+    if (!usage) return {error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, totalEvents: 0, totalBytes: 0}
     return usage.reduce(
       (acc, u) => {
-        const key = u.eventType as 'error' | 'transaction' | 'replay' | 'feedback'
-        if (key in acc) acc[key] += u.eventCount
+        const key = normalizeEventType(u.eventType)
+        if (key && key in acc) acc[key] += u.eventCount
         acc.totalEvents += u.eventCount
         acc.totalBytes += u.bytesIngested
         return acc
       },
-      {error: 0, transaction: 0, replay: 0, feedback: 0, totalEvents: 0, totalBytes: 0}
+      {error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, totalEvents: 0, totalBytes: 0}
     )
   }, [usage])
 
@@ -172,7 +188,7 @@ function AdminOrgDetailPage() {
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Usage Breakdown ({periodLabel})
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
               <AlertCircle className="h-3 w-3 text-red-500" />
@@ -221,6 +237,19 @@ function AdminOrgDetailPage() {
             <div className="text-xs text-muted-foreground">
               {usageByType.totalEvents > 0
                 ? `${((usageByType.feedback / usageByType.totalEvents) * 100).toFixed(1)}%`
+                : '0%'}{' '}
+              of total
+            </div>
+          </Card>
+          <Card className="px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <FileText className="h-3 w-3 text-cyan-500" />
+              Logs
+            </div>
+            <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.log)}</div>
+            <div className="text-xs text-muted-foreground">
+              {usageByType.totalEvents > 0
+                ? `${((usageByType.log / usageByType.totalEvents) * 100).toFixed(1)}%`
                 : '0%'}{' '}
               of total
             </div>
@@ -274,6 +303,12 @@ function AdminOrgDetailPage() {
                   stackId="a"
                   fill={eventTypeColors.feedback.stroke}
                   name="Feedback"
+                />
+                <Bar
+                  dataKey="log"
+                  stackId="a"
+                  fill={eventTypeColors.log.stroke}
+                  name="Logs"
                   radius={[2, 2, 0, 0]}
                 />
               </BarChart>

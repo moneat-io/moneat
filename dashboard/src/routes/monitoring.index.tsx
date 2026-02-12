@@ -916,7 +916,7 @@ function MonitoringListPage() {
   const offlineSystems = systems.filter((s) => s.status === 'down')
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       {/* Single dialog instance owned by the page */}
       <AddSystemDialog isOpen={addDialogOpen} setIsOpen={setAddDialogOpen} />
 

@@ -15,6 +15,7 @@ import {
     Crown,
     Database,
     DollarSign,
+    FileText,
     HardDrive,
     MessageSquare,
     MonitorPlay,
@@ -78,9 +79,10 @@ function AdminOverviewPage() {
       transaction: acc.transaction + d.transaction,
       replay: acc.replay + d.replay,
       feedback: acc.feedback + d.feedback,
+      log: acc.log + (d.log ?? 0),
       total: acc.total + d.total,
     }),
-    {error: 0, transaction: 0, replay: 0, feedback: 0, total: 0}
+    {error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, total: 0}
   )
 
   // Orgs approaching quota
@@ -168,7 +170,7 @@ function AdminOverviewPage() {
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
             Event Volume (30 days)
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <MetricCard
               title="Errors"
               value={formatNumber(usageTotals.error)}
@@ -200,6 +202,14 @@ function AdminOverviewPage() {
               icon={MessageSquare}
               iconColor="text-amber-600 dark:text-amber-400"
               iconBg="bg-amber-100 dark:bg-amber-950"
+            />
+            <MetricCard
+              title="Logs"
+              value={formatNumber(usageTotals.log)}
+              subtitle={`${((usageTotals.log / Math.max(usageTotals.total, 1)) * 100).toFixed(1)}% of total`}
+              icon={FileText}
+              iconColor="text-cyan-600 dark:text-cyan-400"
+              iconBg="bg-cyan-100 dark:bg-cyan-950"
             />
             <MetricCard
               title="Data Ingested"

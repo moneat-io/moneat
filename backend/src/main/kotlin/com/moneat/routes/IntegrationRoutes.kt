@@ -890,7 +890,7 @@ fun Route.integrationCallbackRoutes() {
         authenticate("auth-jwt") {
             post("/slack/link-user") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("user_id")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
                 
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
