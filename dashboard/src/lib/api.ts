@@ -1111,6 +1111,224 @@ interface AddCustomDomainRequest {
   domain: string
 }
 
+// On-Call Interfaces
+
+interface Priority {
+  id: number
+  organizationId: number
+  severity: string
+  priorityLevel: string
+  isPageable: boolean
+  label: string
+  description?: string
+}
+
+interface BusinessHours {
+  id: number
+  organizationId: number
+  timezone: string
+  enabled: boolean
+  windows: BusinessHoursWindow[]
+}
+
+interface BusinessHoursWindow {
+  id: number
+  businessHoursId: number
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+}
+
+interface OnCallSchedule {
+  id: number
+  organizationId: number
+  name: string
+  rotationType: 'DAILY' | 'WEEKLY' | 'CUSTOM'
+  handoffTime: string
+  timezone: string
+  createdAt: string
+  updatedAt: string
+  participants: OnCallParticipant[]
+  overrides: OnCallOverride[]
+  currentOnCall?: {
+    userId: number
+    userName: string
+  }
+}
+
+interface OnCallParticipant {
+  id: number
+  scheduleId: number
+  userId: number
+  userName: string
+  position: number
+}
+
+interface OnCallOverride {
+  id: number
+  scheduleId: number
+  userId: number
+  userName: string
+  startAt: string
+  endAt: string
+  createdBy: number
+}
+
+interface EscalationPolicy {
+  id: number
+  organizationId: number
+  name: string
+  description?: string
+  repeatCount: number
+  createdAt: string
+  updatedAt: string
+  steps: EscalationStep[]
+}
+
+interface EscalationStep {
+  id: number
+  escalationPolicyId: number
+  stepOrder: number
+  timeoutMinutes: number
+  createdAt: string
+  targets: EscalationTarget[]
+}
+
+interface EscalationTarget {
+  id: number
+  escalationStepId: number
+  targetType: 'USER' | 'ON_CALL_SCHEDULE'
+  targetId: number
+  targetName: string
+}
+
+interface Incident {
+  id: number
+  organizationId: number
+  escalationPolicyId: number
+  title: string
+  description?: string
+  priorityLevel: string
+  status: 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+  alertSource: string
+  deduplicationKey?: string
+  triggeredAt: string
+  acknowledgedAt?: string
+  acknowledgedBy?: number
+  acknowledgedByName?: string
+  resolvedAt?: string
+  resolvedBy?: number
+  resolvedByName?: string
+  metadata?: Record<string, any>
+}
+
+interface IncidentTimeline {
+  id: number
+  incidentId: number
+  eventType: 'TRIGGERED' | 'ESCALATED' | 'ACKNOWLEDGED' | 'RESOLVED' | 'REASSIGNED' | 'NOTE_ADDED'
+  actorUserId?: number
+  actorUserName?: string
+  details?: Record<string, any>
+  createdAt: string
+}
+
+interface IncidentDetail extends Incident {
+  timeline: IncidentTimeline[]
+}
+
+interface DeviceToken {
+  id: number
+  userId: number
+  deviceToken: string
+  platform: 'IOS' | 'ANDROID'
+  deviceName?: string
+  createdAt: string
+  lastUsedAt?: string
+}
+
+interface CreateOnCallScheduleRequest {
+  name: string
+  rotationType: 'DAILY' | 'WEEKLY' | 'CUSTOM'
+  handoffTime: string
+  timezone: string
+  participants: { userId: number; position: number }[]
+}
+
+interface UpdateOnCallScheduleRequest {
+  name?: string
+  rotationType?: 'DAILY' | 'WEEKLY' | 'CUSTOM'
+  handoffTime?: string
+  timezone?: string
+  participants?: { userId: number; position: number }[]
+}
+
+interface CreateOverrideRequest {
+  userId: number
+  startAt: string
+  endAt: string
+}
+
+interface CreateEscalationPolicyRequest {
+  name: string
+  description?: string
+  repeatCount: number
+  steps: {
+    stepOrder: number
+    timeoutMinutes: number
+    targets: {
+      targetType: 'USER' | 'ON_CALL_SCHEDULE'
+      targetId: number
+    }[]
+  }[]
+}
+
+interface UpdateEscalationPolicyRequest {
+  name?: string
+  description?: string
+  repeatCount?: number
+  steps?: {
+    stepOrder: number
+    timeoutMinutes: number
+    targets: {
+      targetType: 'USER' | 'ON_CALL_SCHEDULE'
+      targetId: number
+    }[]
+  }[]
+}
+
+interface UpdatePrioritiesRequest {
+  priorities: {
+    severity: string
+    priorityLevel: string
+    isPageable: boolean
+    label: string
+    description?: string
+  }[]
+}
+
+interface UpdateBusinessHoursRequest {
+  timezone: string
+  enabled: boolean
+  windows: {
+    dayOfWeek: number
+    startTime: string
+    endTime: string
+  }[]
+}
+
+interface RegisterDeviceRequest {
+  deviceToken: string
+  platform: 'IOS' | 'ANDROID'
+  deviceName?: string
+}
+
+interface IncidentListFilters {
+  status?: 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+  priorityLevel?: string
+  fromDate?: string
+  toDate?: string
+}
+
 class ApiClient {
   private authRedirectInProgress = false
 
@@ -2471,6 +2689,163 @@ class ApiClient {
     }
     return response.json() as Promise<PublicStatusPage>
   }
+
+  // On-Call Management
+
+  // Priorities
+  async getPriorities(): Promise<Priority[]> {
+    return this.request(`${API_BASE}/priorities`)
+  }
+
+  async updatePriorities(request: UpdatePrioritiesRequest): Promise<Priority[]> {
+    return this.request(`${API_BASE}/priorities`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  // Business Hours
+  async getBusinessHours(): Promise<BusinessHours> {
+    return this.request(`${API_BASE}/business-hours`)
+  }
+
+  async updateBusinessHours(request: UpdateBusinessHoursRequest): Promise<BusinessHours> {
+    return this.request(`${API_BASE}/business-hours`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  // On-Call Schedules
+  async getOnCallSchedules(): Promise<OnCallSchedule[]> {
+    return this.request(`${API_BASE}/on-call/schedules`)
+  }
+
+  async getOnCallSchedule(id: number): Promise<OnCallSchedule> {
+    return this.request(`${API_BASE}/on-call/schedules/${id}`)
+  }
+
+  async createOnCallSchedule(request: CreateOnCallScheduleRequest): Promise<OnCallSchedule> {
+    return this.request(`${API_BASE}/on-call/schedules`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateOnCallSchedule(id: number, request: UpdateOnCallScheduleRequest): Promise<OnCallSchedule> {
+    return this.request(`${API_BASE}/on-call/schedules/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteOnCallSchedule(id: number): Promise<void> {
+    return this.request(`${API_BASE}/on-call/schedules/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getCurrentOnCall(scheduleId: number): Promise<{ userId: number; userName: string }> {
+    return this.request(`${API_BASE}/on-call/schedules/${scheduleId}/current`)
+  }
+
+  async createOverride(scheduleId: number, request: CreateOverrideRequest): Promise<OnCallOverride> {
+    return this.request(`${API_BASE}/on-call/schedules/${scheduleId}/overrides`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteOverride(overrideId: number): Promise<void> {
+    return this.request(`${API_BASE}/on-call/overrides/${overrideId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Escalation Policies
+  async getEscalationPolicies(): Promise<EscalationPolicy[]> {
+    return this.request(`${API_BASE}/escalation-policies`)
+  }
+
+  async getEscalationPolicy(id: number): Promise<EscalationPolicy> {
+    return this.request(`${API_BASE}/escalation-policies/${id}`)
+  }
+
+  async createEscalationPolicy(request: CreateEscalationPolicyRequest): Promise<EscalationPolicy> {
+    return this.request(`${API_BASE}/escalation-policies`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateEscalationPolicy(id: number, request: UpdateEscalationPolicyRequest): Promise<EscalationPolicy> {
+    return this.request(`${API_BASE}/escalation-policies/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteEscalationPolicy(id: number): Promise<void> {
+    return this.request(`${API_BASE}/escalation-policies/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Incidents
+  async getIncidents(filters?: IncidentListFilters): Promise<Incident[]> {
+    const params = new URLSearchParams()
+    if (filters?.status) params.append('status', filters.status)
+    if (filters?.priorityLevel) params.append('priorityLevel', filters.priorityLevel)
+    if (filters?.fromDate) params.append('fromDate', filters.fromDate)
+    if (filters?.toDate) params.append('toDate', filters.toDate)
+    
+    const query = params.toString()
+    return this.request(`${API_BASE}/incidents${query ? `?${query}` : ''}`)
+  }
+
+  async getIncident(id: number): Promise<IncidentDetail> {
+    return this.request(`${API_BASE}/incidents/${id}`)
+  }
+
+  async acknowledgeIncident(id: number): Promise<Incident> {
+    return this.request(`${API_BASE}/incidents/${id}/acknowledge`, {
+      method: 'POST',
+    })
+  }
+
+  async resolveIncident(id: number): Promise<Incident> {
+    return this.request(`${API_BASE}/incidents/${id}/resolve`, {
+      method: 'POST',
+    })
+  }
+
+  async reassignIncident(id: number, toUserId: number): Promise<Incident> {
+    return this.request(`${API_BASE}/incidents/${id}/reassign`, {
+      method: 'POST',
+      body: JSON.stringify({ toUserId }),
+    })
+  }
+
+  async addIncidentNote(id: number, note: string): Promise<IncidentTimeline> {
+    return this.request(`${API_BASE}/incidents/${id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    })
+  }
+
+  // Device Tokens
+  async registerDevice(request: RegisterDeviceRequest): Promise<DeviceToken> {
+    return this.request(`${API_BASE}/devices`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async unregisterDevice(token: string): Promise<void> {
+    return this.request(`${API_BASE}/devices/${encodeURIComponent(token)}`, {
+      method: 'DELETE',
+    })
+  }
 }
 
 export const api = new ApiClient()
@@ -2567,4 +2942,26 @@ export type {
   OrgMembersResponse,
   InvitationDetailsResponse,
   BulkInviteResult,
+  Priority,
+  BusinessHours,
+  BusinessHoursWindow,
+  OnCallSchedule,
+  OnCallParticipant,
+  OnCallOverride,
+  EscalationPolicy,
+  EscalationStep,
+  EscalationTarget,
+  Incident,
+  IncidentTimeline,
+  IncidentDetail,
+  DeviceToken,
+  CreateOnCallScheduleRequest,
+  UpdateOnCallScheduleRequest,
+  CreateOverrideRequest,
+  CreateEscalationPolicyRequest,
+  UpdateEscalationPolicyRequest,
+  UpdatePrioritiesRequest,
+  UpdateBusinessHoursRequest,
+  RegisterDeviceRequest,
+  IncidentListFilters,
 }

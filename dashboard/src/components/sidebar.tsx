@@ -10,6 +10,7 @@ import {Badge} from '@/components/ui/badge'
 import {useToast} from '@/hooks/use-toast'
 import {
     Activity,
+    Bell,
     BookOpen,
     Check,
     ChevronLeft,
@@ -208,6 +209,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
     { icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
     { icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
+    { icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false },
     ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]
