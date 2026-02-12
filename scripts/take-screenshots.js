@@ -68,7 +68,7 @@ const SCREENSHOTS = [
             await page.waitForLoadState('networkidle');
             await page.waitForTimeout(1500);
             
-            // Set time range to show demo data (last 1 hour preset)
+            // Set time range to show demo data (last 7 days preset to capture all data)
             try {
               // Click the time range dropdown button (has Clock icon)
               const timeButton = page.locator('button:has(svg.lucide-clock)').first();
@@ -76,15 +76,15 @@ const SCREENSHOTS = [
                 await timeButton.click();
                 await page.waitForTimeout(500);
                 
-                // Click the "1h" preset option (auto-applies and closes dropdown)
-                const oneHourPreset = page.locator('button:has-text("1h")').first();
-                if (await oneHourPreset.count() > 0) {
-                  await oneHourPreset.click();
+                // Click the "7d" preset option (auto-applies and closes dropdown)
+                const sevenDayPreset = page.locator('button:has-text("7d")').first();
+                if (await sevenDayPreset.count() > 0) {
+                  await sevenDayPreset.click();
                   await page.waitForTimeout(2000); // Wait for data to reload
                   
-                  console.log('   ✅ Set time range to last 1 hour');
+                  console.log('   ✅ Set time range to last 7 days');
                 } else {
-                  console.log('   ⚠️  Could not find 1h preset option');
+                  console.log('   ⚠️  Could not find 7d preset option');
                   
                   // Close dropdown if still open
                   await page.keyboard.press('Escape');
@@ -202,9 +202,16 @@ const SCREENSHOTS = [
           await page.waitForLoadState('networkidle');
           await page.waitForTimeout(1500);
           
-          // Click on containers tab
-          const containersTab = page.locator('button[value="containers"]').first();
-          const tabExists = await containersTab.count() > 0;
+          // Click on containers tab (try multiple selectors)
+          let containersTab = page.locator('button[value="containers"]').first();
+          let tabExists = await containersTab.count() > 0;
+          
+          if (!tabExists) {
+            // Try alternative selector for tab button
+            containersTab = page.locator('[role="tab"]:has-text("Containers"), button:has-text("Containers")').first();
+            tabExists = await containersTab.count() > 0;
+          }
+          
           if (tabExists) {
             await containersTab.click();
             await page.waitForTimeout(1500);
