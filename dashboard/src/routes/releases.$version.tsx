@@ -47,7 +47,7 @@ function ReleaseDetailPage() {
   })
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <div className="p-6 max-w-7xl mx-auto">
         <div className="mb-6">
           <Link

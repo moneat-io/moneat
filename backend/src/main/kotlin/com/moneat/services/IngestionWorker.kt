@@ -53,31 +53,25 @@ class IngestionWorker(
                 // BRPOP block with 5s timeout so we can check isActive periodically
                 val result = RedisConfig.syncBlocking().brpop(5, queueKey)
                 val value = result?.value ?: continue
-                
-                SentryUtils.withTransaction("ingestion.process", "background.job") { transaction ->
-                    transaction?.setData("worker_id", workerId)
-                    transaction?.setData("queue", queueKey)
-                    
-                    try {
-                        val (projectId, envelopeBytes) = decodeMessage(value)
-                        transaction?.setData("project_id", projectId)
-                        
-                        SentryUtils.breadcrumb("ingestion", "Processing envelope", mapOf(
-                            "project_id" to projectId,
-                            "size_bytes" to envelopeBytes.size
-                        ))
-                        
-                        val envelope = SentryEnvelope.parse(envelopeBytes)
-                        eventService.processEnvelope(projectId, envelope)
-                    } catch (e: Exception) {
-                        logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
-                        RedisConfig.syncBlocking().rpush(dlqKey, value)
-                        
-                        Sentry.captureException(e) { scope ->
-                            scope.setTag("worker.operation", "process_message")
-                            scope.setTag("worker.id", workerId.toString())
-                            scope.setExtra("queue", queueKey)
-                        }
+
+                try {
+                    val (projectId, envelopeBytes) = decodeMessage(value)
+
+                    SentryUtils.breadcrumb("ingestion", "Processing envelope", mapOf(
+                        "project_id" to projectId,
+                        "size_bytes" to envelopeBytes.size
+                    ))
+
+                    val envelope = SentryEnvelope.parse(envelopeBytes)
+                    eventService.processEnvelope(projectId, envelope)
+                } catch (e: Exception) {
+                    logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
+                    RedisConfig.syncBlocking().rpush(dlqKey, value)
+
+                    Sentry.captureException(e) { scope ->
+                        scope.setTag("worker.operation", "process_message")
+                        scope.setTag("worker.id", workerId.toString())
+                        scope.setExtra("queue", queueKey)
                     }
                 }
             } catch (e: CancellationException) {

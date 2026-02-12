@@ -330,7 +330,7 @@ function SystemDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       {/* Header */}
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-4 py-4">

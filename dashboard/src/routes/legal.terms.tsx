@@ -8,7 +8,7 @@ export const Route = createFileRoute('/legal/terms')({
 
 function TermsOfUsePage() {
   return (
-    <main className="min-h-screen bg-background">
+    <main>
       <Helmet>
         <title>Terms of Use | Moneat</title>
         <meta name="description" content="Terms of Use for Moneat monitoring service." />

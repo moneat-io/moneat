@@ -403,7 +403,7 @@ function TransactionDetailPage() {
   const spanCount = spans.length
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <div className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8">
         {/* ── Compact Header ──────────────────────────────── */}
         <div className="mb-4">

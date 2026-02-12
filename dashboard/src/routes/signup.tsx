@@ -66,7 +66,7 @@ function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <Helmet>
         <title>Sign Up | Moneat</title>
         <meta name="robots" content="noindex" />

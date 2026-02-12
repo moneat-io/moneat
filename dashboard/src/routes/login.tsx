@@ -90,7 +90,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <Helmet>
         <title>Sign In | Moneat</title>
         <meta name="robots" content="noindex" />

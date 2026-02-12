@@ -216,7 +216,7 @@ function PerformancePage() {
 
   if (!projects || projects.length === 0) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="p-6">
         <Card className="p-12 text-center">
           <p className="text-muted-foreground">No projects yet. Create a project to view performance data.</p>
         </Card>

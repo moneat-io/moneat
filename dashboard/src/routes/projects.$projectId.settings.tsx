@@ -156,7 +156,7 @@ function ProjectSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <div className="p-6 max-w-4xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">

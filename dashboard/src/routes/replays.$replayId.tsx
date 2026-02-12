@@ -378,7 +378,7 @@ function ReplayDetailPage() {
 
   if (isLoading || !replay) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="p-6">
         <div className="px-3 py-3 lg:px-5 lg:py-4">Loading replay...</div>
       </div>
     )
@@ -390,7 +390,7 @@ function ReplayDetailPage() {
     : null
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <div className="px-3 py-3 lg:px-5 lg:py-4">
         {/* Breadcrumb nav */}
         <nav className="mb-3 flex items-center gap-2 text-sm">

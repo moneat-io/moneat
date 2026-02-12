@@ -6,14 +6,6 @@
         </encoder>
     </appender>
     
-    <!-- Sentry Appender: Sends errors as events (optional, keep for error tracking) -->
-    <appender name="SENTRY" class="io.sentry.logback.SentryAppender">
-        <options>
-            <minimumEventLevel>WARN</minimumEventLevel>
-            <minimumBreadcrumbLevel>DEBUG</minimumBreadcrumbLevel>
-        </options>
-    </appender>
-    
     <!-- Moneat Log Appender: Sends logs to the logs table via OTLP -->
     <!-- Override these via env vars in production: MONEAT_LOGS_ENDPOINT, MONEAT_LOGS_DSN, MONEAT_LOGS_SERVICE_NAME, MONEAT_LOGS_ENVIRONMENT -->
     <appender name="MONEAT" class="com.moneat.logging.MoneatLogAppender">
@@ -26,7 +18,6 @@
     <!-- Default to INFO for all libraries to reduce noise -->
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
-        <appender-ref ref="SENTRY"/>
         <appender-ref ref="MONEAT"/>
     </root>
 
@@ -43,9 +34,22 @@
     <logger name="org.flywaydb" level="INFO"/>
     <logger name="io.opentelemetry" level="WARN"/>
     
+    <!-- Prevent telemetry feedback loops: ingestion/telemetry loggers should not emit back to OTLP -->
+    <logger name="com.moneat.routes.IngestRoutesKt" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+    <logger name="com.moneat.routes.LogRoutesKt" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+    <logger name="com.moneat.services.IngestionWorkerKt" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+    <logger name="com.moneat.services.LogIngestionWorkerKt" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
     <!-- Prevent infinite loop: don't send Application request logs to MONEAT appender -->
     <logger name="Application" level="INFO" additivity="false">
         <appender-ref ref="STDOUT"/>
-        <appender-ref ref="SENTRY"/>
     </logger>
 </configuration>

@@ -32,7 +32,7 @@ function SsoCallbackPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center">
           <Logo className="h-10 mx-auto mb-8" />
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 mb-6">
@@ -53,7 +53,7 @@ function SsoCallbackPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="flex items-center justify-center">
       <div className="text-center">
         <Logo className="h-10 mx-auto mb-6" />
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>

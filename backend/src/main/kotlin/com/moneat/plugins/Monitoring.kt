@@ -19,37 +19,43 @@ private val logger = KotlinLogging.logger {}
 
 // Attribute key for storing Sentry transaction in call
 private val SentryTransactionKey = AttributeKey<ITransaction>("SentryTransaction")
+private val ingestPathRegex = Regex("^/api/[^/]+/(envelope|logs|store|security)/?$")
 
 fun Application.configureMonitoring() {
-    // Sentry transaction interceptor for all requests
+    // Sentry transaction interceptor for non-ingestion, non-health requests
     intercept(ApplicationCallPipeline.Setup) {
         if (SentryConfig.isEnabled()) {
             val method = call.request.httpMethod.value
             val path = call.request.path()
-            
+
+            if (shouldSkipTracing(path)) {
+                proceed()
+                return@intercept
+            }
+
             // Create transaction for this HTTP request
             val transaction = Sentry.startTransaction("$method $path", "http.server")
             transaction.setData("http.method", method)
             transaction.setData("http.url", path)
             transaction.setData("http.query", call.request.queryString())
-            
+
             // Store transaction in call attributes
             call.attributes.put(SentryTransactionKey, transaction)
-            
+
             // Add breadcrumb for request
             SentryUtils.breadcrumb("http.request", "HTTP $method $path", mapOf(
                 "method" to method,
                 "path" to path,
                 "query" to (call.request.queryString().takeIf { it.isNotEmpty() } ?: "")
             ))
-            
+
             try {
                 proceed()
-                
+
                 // Set response status
                 val status = call.response.status()
                 transaction.setData("http.status_code", status?.value ?: 0)
-                
+
                 // Determine transaction status based on HTTP status code
                 transaction.status = when (status?.value) {
                     in 200..299 -> SpanStatus.OK
@@ -57,7 +63,7 @@ fun Application.configureMonitoring() {
                     in 500..599 -> SpanStatus.INTERNAL_ERROR
                     else -> SpanStatus.UNKNOWN_ERROR
                 }
-                
+
                 // Add breadcrumb for response
                 SentryUtils.breadcrumb("http.response", "HTTP ${status?.value ?: 0}", mapOf(
                     "status" to (status?.value ?: 0),
@@ -124,6 +130,16 @@ fun Application.configureMonitoring() {
             "Status: $status, HTTP method: $httpMethod, User agent: $userAgent"
         }
     }
+}
+
+private fun shouldSkipTracing(path: String): Boolean {
+    if (path == "/health" || path == "/health/") {
+        return true
+    }
+    if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/") {
+        return true
+    }
+    return ingestPathRegex.matches(path)
 }
 
 /**

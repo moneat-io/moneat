@@ -104,7 +104,7 @@ function StatusPagesListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       {/* Page Header */}
       <div className="border-b bg-card/50">
         <div className="px-6 lg:px-8 py-6">

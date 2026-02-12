@@ -179,14 +179,14 @@ function SetupPage() {
 
   if (!docs) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="p-8">
         <p className="text-muted-foreground">Unable to load setup documentation.</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       {/* Colored header strip */}
       <div
         className="h-1.5 w-full"

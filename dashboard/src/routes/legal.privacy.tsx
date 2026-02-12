@@ -8,7 +8,7 @@ export const Route = createFileRoute('/legal/privacy')({
 
 function PrivacyPolicyPage() {
   return (
-    <main className="min-h-screen bg-background">
+    <main>
       <Helmet>
         <title>Privacy Policy | Moneat</title>
         <meta name="description" content="Privacy Policy for Moneat monitoring service." />
