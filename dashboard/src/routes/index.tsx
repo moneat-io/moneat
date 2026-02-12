@@ -1,78 +1,57 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {LandingPage} from '@/components/landing/landing-page'
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, formatErrorForLogging} from '@/lib/api'
+import {useQuery} from '@tanstack/react-query'
+import {api, formatErrorForLogging, type UptimeHeartbeat} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Input} from '@/components/ui/input'
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
-import {Card} from '@/components/ui/card'
-import {Checkbox} from '@/components/ui/checkbox'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import HeartbeatBar from '@/components/uptime/heartbeat-bar'
 import {
   Activity,
   AlertCircle,
-  CheckCircle2,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  Bell,
   Clock,
-  FolderKanban,
-  Plus,
-  Search,
-  Settings,
-  TrendingUp,
-  Users
+  Globe,
+  HeartPulse,
+  MessageSquare,
+  Package,
+  Play,
+  Server,
+  Shield,
+  Terminal,
+  Timer,
+  Users,
+  Smartphone,
+  XCircle,
+  Zap,
 } from 'lucide-react'
-import {useState} from 'react'
 import {StatsCard} from '@/components/charts/stats-card'
 import {EventsChart} from '@/components/charts/events-chart'
-import {useToast} from '@/hooks/use-toast'
 
-// Helper function to get level color for badges
-function getLevelColor(level: string): string {
+// ─── Subtle badge colors ─────────────────────────────────────────────
+function getLevelBadge(level: string): string {
   switch (level.toLowerCase()) {
     case 'fatal':
-      return 'bg-red-900 text-red-100 hover:bg-red-900'
+      return 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300'
     case 'error':
-      return 'bg-red-600 text-white hover:bg-red-600'
+      return 'border-red-200 bg-red-50/80 text-red-700 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-400'
     case 'warning':
-      return 'bg-orange-500 text-white hover:bg-orange-500'
+      return 'border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400'
     case 'info':
-      return 'bg-blue-500 text-white hover:bg-blue-500'
+      return 'border-blue-200 bg-blue-50/80 text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/30 dark:text-blue-400'
     case 'debug':
-      return 'bg-gray-500 text-white hover:bg-gray-500'
+      return 'border-zinc-200 bg-zinc-50/80 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/30 dark:text-zinc-400'
     default:
-      return 'bg-secondary text-secondary-foreground'
+      return 'border-border bg-muted text-muted-foreground'
   }
 }
 
-// Get color for level left-border indicator
-function getLevelBorderColor(level: string): string {
-  switch (level.toLowerCase()) {
-    case 'fatal': return 'border-l-red-800'
-    case 'error': return 'border-l-red-500'
-    case 'warning': return 'border-l-amber-500'
-    case 'info': return 'border-l-blue-500'
-    case 'debug': return 'border-l-gray-400'
-    default: return 'border-l-border'
-  }
-}
-
-// Get freshness color based on how recently the last event occurred
-function getLastSeenColor(lastSeen: string): string {
-  const diff = Date.now() - new Date(lastSeen).getTime()
-  const hours = diff / (1000 * 60 * 60)
-  if (hours < 1) return 'text-red-500 dark:text-red-400'
-  if (hours < 24) return 'text-amber-600 dark:text-amber-400'
-  return 'text-muted-foreground'
-}
-
-// Check if an issue is new (first seen within last 24 hours)
-function isNewIssue(firstSeen: string): boolean {
-  const diff = Date.now() - new Date(firstSeen).getTime()
-  return diff < 24 * 60 * 60 * 1000
-}
-
-// Format large numbers compactly
 function formatCount(n: number): string {
   if (n >= 100000) return `${(n / 1000).toFixed(0)}k`
   if (n >= 10000) return `${(n / 1000).toFixed(1)}k`
@@ -80,47 +59,88 @@ function formatCount(n: number): string {
   return n.toLocaleString()
 }
 
-function getIssueDisplayTitle(issue: { title: string; culprit: string }): string {
-  const title = issue.title?.trim() ?? ''
-  const culprit = issue.culprit?.trim() ?? ''
-
-  if (!title) return culprit || 'Unknown error'
-  if (!culprit) return title
-
-  const normalizedTitle = title.toLowerCase()
-  const normalizedCulprit = culprit.toLowerCase()
-  if (
-    normalizedTitle.startsWith(`${normalizedCulprit}:`) ||
-    normalizedTitle.startsWith(`${normalizedCulprit} `)
-  ) {
-    return title
+function getIncidentStatusBadge(status: string) {
+  switch (status) {
+    case 'TRIGGERED':
+      return 'border-red-200 bg-red-50/80 text-red-700 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-400'
+    case 'ACKNOWLEDGED':
+      return 'border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400'
+    case 'RESOLVED':
+      return 'border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-400'
+    default:
+      return 'border-border bg-muted text-muted-foreground'
   }
-
-  return `${culprit}: ${title}`
 }
 
-// Simple sparkline component
-function EventSparkline({ eventCount }: { eventCount: number }) {
-  // Generate a simple frequency visualization
-  const bars = Math.min(Math.ceil(eventCount / 10), 10)
-  const heights = Array.from({ length: 10 }, (_, i) => {
-    if (i < bars) {
-      return 40 + Math.random() * 60 // 40-100% height for active bars
-    }
-    return 0
-  })
+function getPriorityColor(priority: string) {
+  switch (priority) {
+    case 'P0':
+      return 'text-red-600 dark:text-red-400'
+    case 'P1':
+      return 'text-orange-600 dark:text-orange-400'
+    case 'P2':
+      return 'text-amber-600 dark:text-amber-400'
+    case 'P3':
+      return 'text-blue-600 dark:text-blue-400'
+    default:
+      return 'text-muted-foreground'
+  }
+}
 
-  return (
-    <div className="flex items-end gap-0.5 h-8 w-20">
-      {heights.map((height, i) => (
-        <div
-          key={i}
-          className="flex-1 bg-primary/60 rounded-sm transition-all"
-          style={{ height: `${height}%` }}
-        />
-      ))}
-    </div>
-  )
+function getStatusDot(status: string) {
+  switch (status) {
+    case 'up':
+      return 'bg-emerald-400 dark:bg-emerald-500'
+    case 'down':
+      return 'bg-red-400 dark:bg-red-500'
+    case 'degraded':
+      return 'bg-amber-400 dark:bg-amber-500'
+    default:
+      return 'bg-zinc-300 dark:bg-zinc-600'
+  }
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1) return '<1ms'
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`
+  return `${Math.round(ms)}ms`
+}
+
+function getMonitorTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    http: 'HTTP(S)',
+    keyword: 'Keyword',
+    json_query: 'JSON Query',
+    tcp: 'TCP',
+    ping: 'Ping',
+    dns: 'DNS',
+    websocket: 'WebSocket',
+    push: 'Push',
+    docker: 'Docker',
+    database: 'Database',
+    ssl: 'SSL',
+  }
+  return labels[type] || type.toUpperCase()
+}
+
+function getLatestHeartbeat(heartbeats: UptimeHeartbeat[]): UptimeHeartbeat | null {
+  if (heartbeats.length === 0) return null
+
+  return heartbeats.reduce<UptimeHeartbeat | null>((latest, heartbeat) => {
+    if (!latest) return heartbeat
+    return heartbeat.timestamp > latest.timestamp ? heartbeat : latest
+  }, null)
+}
+
+function isRecentHeartbeat(
+  lastCheckAt: number | undefined,
+  intervalSeconds: number | undefined,
+  nowMs: number,
+): boolean {
+  if (!lastCheckAt) return false
+  const expectedIntervalMs = (intervalSeconds ?? 60) * 1000
+  const graceWindowMs = Math.max(expectedIntervalMs * 2, 5 * 60 * 1000)
+  return nowMs - lastCheckAt <= graceWindowMs
 }
 
 export const Route = createFileRoute('/')({
@@ -131,7 +151,7 @@ export const Route = createFileRoute('/')({
     try {
       const user = await api.getCurrentUser()
       if (!user.onboardingCompleted) {
-        throw redirect({ to: '/onboarding' })
+        throw redirect({to: '/onboarding'})
       }
     } catch (error) {
       if (error instanceof Error && 'redirect' in error) throw error
@@ -148,366 +168,886 @@ function IndexPage() {
   return <DashboardPage />
 }
 
-function DashboardPage() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('unresolved')
-  const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set())
-  const { selectedProjectId, setSelectedProjectId } = useProject()
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
+// ─── Section wrapper ──────────────────────────────────────────────────
+function DashboardSection({
+  title,
+  icon: Icon,
+  to,
+  children,
+  headerRight,
+  iconClassName,
+  iconBgClassName,
+}: {
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+  to: string
+  children: React.ReactNode
+  headerRight?: React.ReactNode
+  iconClassName?: string
+  iconBgClassName?: string
+}) {
+  return (
+    <Card className="overflow-hidden border-border/60">
+      <CardHeader className="px-5 py-3.5 flex flex-row items-center justify-between space-y-0 border-b border-border/40">
+        <div className="flex items-center gap-2.5">
+          <div className={`h-7 w-7 rounded-md flex items-center justify-center ${iconBgClassName || 'bg-muted/60'}`}>
+            <Icon className={`h-3.5 w-3.5 ${iconClassName || 'text-muted-foreground'}`} />
+          </div>
+          <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        </div>
+        <div className="flex items-center gap-2">
+          {headerRight}
+          <Link to={to}>
+            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1 px-2">
+              View <ArrowUpRight className="h-3 w-3" />
+            </Button>
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent className="px-5 pb-4 pt-3">
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
 
-  const { data: projects, isLoading } = useQuery({
+function EmptySection({message}: { message: string }) {
+  return (
+    <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+      {message}
+    </div>
+  )
+}
+
+function normalizePercent(value?: number | null): number | null {
+  if (value == null || Number.isNaN(value)) return null
+  return Math.max(0, Math.min(100, value))
+}
+
+function getUtilizationFillColor(percent: number | null): string {
+  if (percent == null) return 'bg-muted-foreground/30'
+  if (percent >= 85) return 'bg-red-500/80'
+  if (percent >= 70) return 'bg-amber-500/80'
+  return 'bg-emerald-500/75'
+}
+
+function UtilizationBar({
+  label,
+  value,
+}: {
+  label: string
+  value?: number | null
+}) {
+  const percent = normalizePercent(value)
+
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium text-foreground/90">
+          {percent != null ? `${Math.round(percent)}%` : '—'}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted/60">
+        <div
+          className={`h-full rounded-full transition-[width] duration-300 ${getUtilizationFillColor(percent)}`}
+          style={{width: `${percent ?? 0}%`}}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────
+function DashboardPage() {
+  const {selectedProjectId, setSelectedProjectId} = useProject()
+
+  const {data: projects} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
-  const hasProjects = (projects?.length ?? 0) > 0
 
   const projectId = selectedProjectId || projects?.[0]?.id
-  const currentProject = projects?.find(p => p.id === projectId)
 
-  // Auto-set the first project if none is selected
   if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
     setSelectedProjectId(projects[0].id)
   }
 
-  const { data: issues = [] } = useQuery({
-    queryKey: ['issues', projectId, statusFilter],
-    queryFn: () => (projectId ? api.getIssues(projectId) : []),
-    enabled: !!projectId,
-  })
-
-  const { data: stats } = useQuery({
+  const {data: stats} = useQuery({
     queryKey: ['stats', projectId],
     queryFn: () => (projectId ? api.getProjectStats(projectId, '24h') : null),
     enabled: !!projectId,
   })
 
-  const resolveMutation = useMutation({
-    mutationFn: async (issueIds: string[]) => {
-      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'resolved' })))
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
-      toast({
-        title: 'Success',
-        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} resolved`,
-      })
-      setSelectedIssues(new Set())
-    },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to resolve issues',
-        variant: 'destructive',
-      })
-    },
+  const {data: issues = []} = useQuery({
+    queryKey: ['issues', projectId, 'unresolved'],
+    queryFn: () => (projectId ? api.getIssues(projectId) : []),
+    enabled: !!projectId,
   })
 
-  const handleToggleIssue = (issueId: string) => {
-    const newSelected = new Set(selectedIssues)
-    if (newSelected.has(issueId)) {
-      newSelected.delete(issueId)
-    } else {
-      newSelected.add(issueId)
-    }
-    setSelectedIssues(newSelected)
-  }
-
-  const handleToggleAll = () => {
-    if (selectedIssues.size === filteredIssues.length) {
-      setSelectedIssues(new Set())
-    } else {
-      setSelectedIssues(new Set(filteredIssues.map(issue => issue.id)))
-    }
-  }
-
-  const handleResolveSelected = () => {
-    resolveMutation.mutate(Array.from(selectedIssues))
-  }
-
-  if (isLoading) return <div className="p-8">Loading...</div>
-
-  const filteredIssues = issues.filter((issue) => {
-    const matchesSearch =
-      searchQuery === '' ||
-      issue.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      issue.culprit?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || issue.status === statusFilter
-    return matchesSearch && matchesStatus
+  const {data: perfStats} = useQuery({
+    queryKey: ['perf-stats', projectId],
+    queryFn: () => (projectId ? api.getPerformanceStats(projectId, {period: '24h'}) : null),
+    enabled: !!projectId,
   })
+
+  const {data: releases = []} = useQuery({
+    queryKey: ['releases-overview', projectId],
+    queryFn: () => (projectId ? api.getReleases(projectId) : []),
+    enabled: !!projectId,
+  })
+
+  const {data: replays = []} = useQuery({
+    queryKey: ['replays-overview', projectId],
+    queryFn: () => (projectId ? api.getReplays(projectId, {limit: 5, period: '24h'}) : []),
+    enabled: !!projectId,
+  })
+
+  const {data: feedback = []} = useQuery({
+    queryKey: ['feedback-overview', projectId],
+    queryFn: () => (projectId ? api.getFeedback(projectId, {limit: 5}) : []),
+    enabled: !!projectId,
+  })
+
+  const {data: uptimeMonitors = []} = useQuery({
+    queryKey: ['uptime-monitors'],
+    queryFn: () => api.getUptimeMonitors(),
+  })
+
+  const {data: monitorSystems = []} = useQuery({
+    queryKey: ['monitor-systems'],
+    queryFn: () => api.getMonitorSystems(),
+  })
+
+  const {data: incidents = []} = useQuery({
+    queryKey: ['incidents-overview'],
+    queryFn: () => api.getIncidents(),
+    refetchInterval: 30_000,
+  })
+
+  const {data: onCallSchedules = []} = useQuery({
+    queryKey: ['oncall-schedules'],
+    queryFn: () => api.getOnCallSchedules(),
+  })
+
+  const {data: statusPages = []} = useQuery({
+    queryKey: ['status-pages'],
+    queryFn: () => api.getStatusPages(),
+  })
+
+  // ── Derived stats ──────────────────────────────────────────────────
+  const unresolvedIssues = issues.filter(i => i.status === 'unresolved')
+  const activeIncidents = incidents.filter(i => i.status !== 'RESOLVED')
+  const triggeredIncidents = incidents.filter(i => i.status === 'TRIGGERED')
+  const acknowledgedIncidents = incidents.filter(i => i.status === 'ACKNOWLEDGED') // eslint-disable-line @typescript-eslint/no-unused-vars
+  const resolvedIncidents = incidents.filter(i => i.status === 'RESOLVED') // eslint-disable-line @typescript-eslint/no-unused-vars
+  const uptimeUp = uptimeMonitors.filter(m => m.status === 'up').length
+  const uptimeDown = uptimeMonitors.filter(m => m.status === 'down').length
+  const systemsUp = monitorSystems.filter(s => s.status === 'up').length
+  const systemsDown = monitorSystems.filter(s => s.status === 'down').length
+  const recentReleases = releases.slice(0, 5)
+  const recentFeedback = feedback.slice(0, 5)
+  const dashboardUptimeMonitors = uptimeMonitors.slice(0, 6)
+  const nowMs = Date.now()
+
+  const {data: uptimeHeartbeatsByMonitor = {}} = useQuery({
+    queryKey: ['dashboard-uptime-heartbeats', dashboardUptimeMonitors.map((monitor) => monitor.id)],
+    queryFn: async () => {
+      const heartbeatEntries = await Promise.all(
+        dashboardUptimeMonitors.map(async (monitor) => {
+          const heartbeats = await api.getUptimeHeartbeats(monitor.id)
+          return [monitor.id, heartbeats] as const
+        }),
+      )
+      return Object.fromEntries(heartbeatEntries) as Record<string, UptimeHeartbeat[]>
+    },
+    enabled: dashboardUptimeMonitors.length > 0,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  })
+
+  const activeUptimeMonitors = uptimeMonitors.filter((monitor) => monitor.active && monitor.status !== 'paused')
+  const monitorsWithRecentHeartbeat = activeUptimeMonitors.filter((monitor) =>
+    isRecentHeartbeat(monitor.lastCheckAt, monitor.intervalSeconds, nowMs),
+  ).length
+  const monitorsWithMissedHeartbeat = Math.max(activeUptimeMonitors.length - monitorsWithRecentHeartbeat, 0) // eslint-disable-line @typescript-eslint/no-unused-vars
+  const latestMonitorHeartbeatAt = uptimeMonitors.reduce<number | null>((latest, monitor) => { // eslint-disable-line @typescript-eslint/no-unused-vars
+    if (!monitor.lastCheckAt) return latest
+    if (latest == null) return monitor.lastCheckAt
+    return monitor.lastCheckAt > latest ? monitor.lastCheckAt : latest
+  }, null)
+  const heartbeatSampleTotals = dashboardUptimeMonitors.reduce(
+    (acc, monitor) => {
+      const heartbeats = uptimeHeartbeatsByMonitor[monitor.id] ?? []
+      const successful = heartbeats.filter((heartbeat) => heartbeat.status === 1).length
+      return {
+        total: acc.total + heartbeats.length,
+        successful: acc.successful + successful,
+      }
+    },
+    {total: 0, successful: 0},
+  )
+  const sampledHeartbeatSuccess = heartbeatSampleTotals.total > 0 // eslint-disable-line @typescript-eslint/no-unused-vars
+    ? (heartbeatSampleTotals.successful / heartbeatSampleTotals.total) * 100
+    : null
+
+  // Infrastructure summary
+  const avgCpu = monitorSystems.length > 0 // eslint-disable-line @typescript-eslint/no-unused-vars
+    ? monitorSystems.reduce((sum, s) => sum + (s.cpuPercent ?? 0), 0) / monitorSystems.length
+    : null
+  const avgMem = monitorSystems.length > 0 // eslint-disable-line @typescript-eslint/no-unused-vars
+    ? monitorSystems.reduce((sum, s) => sum + (s.latest_metrics?.mem_percent ?? 0), 0) / monitorSystems.length
+    : null
+
+  // Issue breakdown by level
+  const issueLevelCounts = unresolvedIssues.reduce((acc, i) => {
+    acc[i.level] = (acc[i.level] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  // Feedback status counts
+  const newFeedback = feedback.filter(f => f.status === 'new' || f.status === 'unresolved').length
+  const replaysWithErrors = replays.filter(r => r.errorCount > 0).length
 
   return (
     <div className="min-h-screen">
       <div className="px-6 py-4">
         {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-              {currentProject && (
-                <p className="text-sm text-muted-foreground">{currentProject.name}</p>
-              )}
-            </div>
-            <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
-          </div>
-          {hasProjects && (
-            <div className="flex items-center gap-2">
-              {projectId && (
-                <Link to="/projects/$projectId/settings" params={{ projectId: String(projectId) }}>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="border-primary/30 hover:bg-primary/10 hover:border-primary/50"
-                    aria-label="Project settings"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </Link>
-              )}
-              <Link to="/projects">
-                <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary/10 hover:border-primary/50">
-                  <Plus className="h-4 w-4" />
-                  New Project
-                </Button>
-              </Link>
-            </div>
-          )}
+        <div className="mb-5">
+          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Overview of your systems, applications, and incidents
+          </p>
         </div>
 
-        {!hasProjects ? (
-          <Card className="p-12 text-center border-primary/20 bg-gradient-to-b from-card to-primary/5">
-            <div className="max-w-md mx-auto space-y-4">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-violet-500/15 p-4 ring-2 ring-violet-500/20">
-                  <FolderKanban className="h-10 w-10 text-violet-600 dark:text-violet-400" />
+        {/* ── Top-level stats ──────────────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+          <StatsCard
+            title="Unresolved Issues"
+            value={formatCount(stats?.unresolvedIssues ?? unresolvedIssues.length)}
+            icon={AlertCircle}
+            accent="amber"
+          />
+          <StatsCard
+            title="Events (24h)"
+            value={formatCount(stats?.totalEvents ?? 0)}
+            icon={Activity}
+            accent="blue"
+          />
+          <StatsCard
+            title="Active Incidents"
+            value={activeIncidents.length}
+            icon={Bell}
+            accent="rose"
+          />
+          <StatsCard
+            title="Uptime Monitors"
+            value={`${uptimeUp}/${uptimeMonitors.length}`}
+            icon={HeartPulse}
+            accent="emerald"
+            subtitle={uptimeDown > 0 ? `${uptimeDown} down` : 'All healthy'}
+          />
+          <StatsCard
+            title="Infrastructure"
+            value={`${systemsUp}/${monitorSystems.length}`}
+            icon={Server}
+            accent="cyan"
+            subtitle={systemsDown > 0 ? `${systemsDown} down` : 'All online'}
+          />
+          <StatsCard
+            title="Users (24h)"
+            value={formatCount(stats?.affectedUsers ?? 0)}
+            icon={Users}
+            accent="violet"
+          />
+        </div>
+
+        {/* ── Events Chart ─────────────────────────────────────────── */}
+        {stats && stats.eventsTimeline.length > 0 && (
+          <div className="mb-5 h-[200px]">
+            <EventsChart
+              data={stats.eventsTimeline}
+              title="Events — Last 24 Hours"
+              fillHeight
+            />
+          </div>
+        )}
+
+        {/* ── Two-column grid for feature sections ─────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+          {/* ── On-Call / Incidents ─────────────────────────────────── */}
+          <DashboardSection
+            title="On-Call"
+            icon={Bell}
+            to="/on-call"
+            iconClassName="text-amber-600 dark:text-amber-400"
+            iconBgClassName="bg-amber-100 dark:bg-amber-900/20"
+            headerRight={
+              (triggeredIncidents.length > 0 || activeIncidents.length > 0) ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  {triggeredIncidents.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                      <Bell className="h-3.5 w-3.5" />
+                      <span>{triggeredIncidents.length} Triggered</span>
+                    </div>
+                  )}
+                  {activeIncidents.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Activity className="h-3.5 w-3.5" />
+                      <span>{activeIncidents.length} Active</span>
+                    </div>
+                  )}
                 </div>
+              ) : null
+            }
+          >
+            {/* Who's on call */}
+            {onCallSchedules.length > 0 && onCallSchedules.some(s => s.currentOnCall) && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {onCallSchedules.map(schedule => (
+                  schedule.currentOnCall && (
+                    <div
+                      key={schedule.id}
+                      className="flex items-center gap-1.5 text-xs bg-muted/50 border border-border/40 rounded-md px-2.5 py-1"
+                    >
+                      <Shield className="h-3 w-3 text-muted-foreground" />
+                      <span className="font-medium">{schedule.currentOnCall.userName}</span>
+                      <span className="text-muted-foreground">on {schedule.name}</span>
+                    </div>
+                  )
+                ))}
               </div>
+            )}
+
+            {/* Recent incidents */}
+            {activeIncidents.length === 0 && incidents.length === 0 ? (
+              <EmptySection message="No incidents" />
+            ) : (
+              <div className="space-y-0.5">
+                {(activeIncidents.length > 0 ? activeIncidents : incidents)
+                  .slice(0, 5)
+                  .map(incident => (
+                    <Link
+                      key={incident.id}
+                      to="/on-call"
+                      className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+                    >
+                      <Badge variant="outline" className={`${getIncidentStatusBadge(incident.status)} text-[10px] px-1.5 py-0 shrink-0`}>
+                        {incident.status}
+                      </Badge>
+                      <span className={`text-[11px] font-semibold ${getPriorityColor(incident.priorityLevel)} shrink-0 tabular-nums`}>
+                        {incident.priorityLevel}
+                      </span>
+                      <span className="text-sm truncate flex-1">{incident.title}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">
+                        {formatRelativeTime(incident.triggeredAt)}
+                      </span>
+                    </Link>
+                  ))}
+              </div>
+            )}
+          </DashboardSection>
+
+          {/* ── Issues ─────────────────────────────────────────────── */}
+          <DashboardSection
+            title="Issues"
+            icon={AlertCircle}
+            to="/issues"
+            iconClassName="text-red-600 dark:text-red-400"
+            iconBgClassName="bg-red-100 dark:bg-red-900/20"
+            headerRight={
+              unresolvedIssues.length > 0 ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>{unresolvedIssues.length} Total</span>
+                  </div>
+                  {issueLevelCounts['fatal'] > 0 && (
+                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                      <XCircle className="h-3.5 w-3.5" />
+                      <span>{issueLevelCounts['fatal']} Fatal</span>
+                    </div>
+                  )}
+                  {issueLevelCounts['error'] > 0 && (
+                    <div className="flex items-center gap-1.5 text-red-500 dark:text-red-500">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <span>{issueLevelCounts['error']} Error</span>
+                    </div>
+                  )}
+                </div>
+              ) : null
+            }
+          >
+            {unresolvedIssues.length === 0 ? (
+              <EmptySection message="No unresolved issues" />
+            ) : (
+              <div className="space-y-0.5">
+                {unresolvedIssues.slice(0, 6).map(issue => {
+                  const levelAccent = {
+                    fatal: 'border-l-red-500',
+                    error: 'border-l-orange-400',
+                    warning: 'border-l-amber-400',
+                    info: 'border-l-blue-400',
+                    debug: 'border-l-gray-400',
+                  }[issue.level.toLowerCase()] ?? 'border-l-gray-300'
+
+                  const platformInfo = issue.platform?.toLowerCase().includes('cocoa') || issue.platform?.toLowerCase().includes('ios')
+                    ? { Icon: Smartphone, label: 'iOS' }
+                    : issue.platform?.toLowerCase().includes('android')
+                    ? { Icon: Smartphone, label: 'Android' }
+                    : issue.platform?.toLowerCase().includes('javascript') || issue.platform?.toLowerCase().includes('node')
+                    ? { Icon: Globe, label: 'Web' }
+                    : issue.platform?.toLowerCase().includes('python') || issue.platform?.toLowerCase().includes('java') || issue.platform?.toLowerCase().includes('go')
+                    ? { Icon: Server, label: 'Backend' }
+                    : null
+
+                  return (
+                    <Link
+                      key={issue.id}
+                      to="/issues/$issueId"
+                      params={{issueId: issue.id}}
+                      className={`flex items-center gap-2 py-2 px-2.5 rounded-md border-l-2 ${levelAccent} hover:bg-muted/50 transition`}
+                    >
+                      <Badge variant="outline" className={`${getLevelBadge(issue.level)} text-[10px] px-1.5 py-0 w-14 justify-center shrink-0`}>
+                        {issue.level.toUpperCase()}
+                      </Badge>
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <span className="text-sm truncate">{issue.title || issue.culprit}</span>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
+                          {platformInfo && (
+                            <span className="flex items-center gap-0.5" title={platformInfo.label}>
+                              <platformInfo.Icon className="h-3 w-3 text-muted-foreground/60" />
+                              <span>{platformInfo.label}</span>
+                            </span>
+                          )}
+                          {issue.lastSeen && (
+                            <span>{formatRelativeTime(issue.lastSeen)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          {formatCount(issue.eventCount)} events
+                        </span>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </DashboardSection>
+
+          {/* ── Uptime ─────────────────────────────────────────────── */}
+          <DashboardSection
+            title="Uptime"
+            icon={HeartPulse}
+            to="/uptime"
+            iconClassName="text-emerald-600 dark:text-emerald-400"
+            iconBgClassName="bg-emerald-100 dark:bg-emerald-900/20"
+            headerRight={
+              uptimeMonitors.length > 0 ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  {uptimeDown > 0 && (
+                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                      <ArrowDown className="h-3.5 w-3.5" />
+                      <span>{uptimeDown} Down</span>
+                    </div>
+                  )}
+                  {uptimeUp > 0 && (
+                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-500">
+                      <ArrowUp className="h-3.5 w-3.5" />
+                      <span>{uptimeUp} Up</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Activity className="h-3.5 w-3.5" />
+                    <span>{uptimeMonitors.length} Total</span>
+                  </div>
+                </div>
+              ) : null
+            }
+          >
+            {uptimeMonitors.length === 0 ? (
+              <EmptySection message="No uptime monitors configured" />
+            ) : (
+              <div className="space-y-0.5">
+                {dashboardUptimeMonitors.map(monitor => {
+                  const heartbeats = uptimeHeartbeatsByMonitor[monitor.id] ?? []
+                  const latestHeartbeat = getLatestHeartbeat(heartbeats)
+                  const isHeartbeatFresh = isRecentHeartbeat(monitor.lastCheckAt, monitor.intervalSeconds, nowMs)
+                  const sampledSuccess = heartbeats.length > 0
+                    ? (heartbeats.filter((heartbeat) => heartbeat.status === 1).length / heartbeats.length) * 100
+                    : null
+
+                  return (
+                    <Link
+                      key={monitor.id}
+                      to="/uptime/$monitorId"
+                      params={{monitorId: monitor.id}}
+                      className="grid gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:grid-cols-[minmax(12rem,26%)_minmax(0,1fr)_auto] md:items-center"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(monitor.status)}`} />
+                        <span className="text-sm truncate">{monitor.name}</span>
+                        {!isHeartbeatFresh && monitor.active && monitor.status !== 'paused' && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300/60 text-amber-700 dark:text-amber-400">
+                            stale
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <HeartbeatBar heartbeats={heartbeats} maxBars={24} className="h-3.5 w-full" />
+                        <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground tabular-nums">
+                          <span>
+                            {latestHeartbeat ? `Last beat ${formatRelativeTime(latestHeartbeat.timestamp)}` : 'No heartbeat data'}
+                          </span>
+                          {sampledSuccess != null && (
+                            <span>{sampledSuccess.toFixed(0)}% success</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        {monitor.uptime24h != null && (
+                          <span className="text-[11px] text-muted-foreground tabular-nums">
+                            {monitor.uptime24h.toFixed(2)}%
+                          </span>
+                        )}
+                        {monitor.avgResponseTime != null && (
+                          <span className="text-[11px] text-muted-foreground tabular-nums">
+                            {formatMs(monitor.avgResponseTime)}
+                          </span>
+                        )}
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {getMonitorTypeLabel(monitor.type)}
+                        </Badge>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </DashboardSection>
+
+          {/* ── Infrastructure Monitoring ───────────────────────────── */}
+          <DashboardSection
+            title="Infrastructure"
+            icon={Server}
+            to="/monitoring"
+            iconClassName="text-blue-600 dark:text-blue-400"
+            iconBgClassName="bg-blue-100 dark:bg-blue-900/20"
+            headerRight={
+              monitorSystems.length > 0 ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  {systemsDown > 0 && (
+                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                      <ArrowDown className="h-3.5 w-3.5" />
+                      <span>{systemsDown} Offline</span>
+                    </div>
+                  )}
+                  {systemsUp > 0 && (
+                    <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-500">
+                      <ArrowUp className="h-3.5 w-3.5" />
+                      <span>{systemsUp} Online</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Server className="h-3.5 w-3.5" />
+                    <span>{monitorSystems.length} Total</span>
+                  </div>
+                </div>
+              ) : null
+            }
+          >
+            {monitorSystems.length === 0 ? (
+              <EmptySection message="No systems being monitored" />
+            ) : (
+              <div className="space-y-0.5">
+                {monitorSystems.slice(0, 6).map(sys => (
+                  <Link
+                    key={sys.id}
+                    to="/monitoring/$systemId"
+                    params={{systemId: sys.id}}
+                    className="grid gap-3 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:clamp(18rem,30%,24rem)_minmax(0,1fr)] md:items-center"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(sys.status)}`} />
+                      <span className="text-sm truncate min-w-0">{sys.name}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 md:[grid-template-columns:repeat(3,minmax(0,1fr))_11rem] md:items-center md:gap-3">
+                      <UtilizationBar label="CPU" value={sys.cpuPercent} />
+                      <UtilizationBar label="RAM" value={sys.latest_metrics?.mem_percent} />
+                      <UtilizationBar label="Disk" value={sys.latest_metrics?.disk_percent} />
+                      {sys.os && (
+                        <Badge
+                          variant="outline"
+                          className="w-fit max-w-[11rem] justify-self-start truncate text-[10px] px-2 py-0"
+                        >
+                          {sys.os}
+                        </Badge>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </DashboardSection>
+
+          {/* ── Performance ─────────────────────────────────────────── */}
+          <DashboardSection
+            title="Performance"
+            icon={Zap}
+            to="/performance"
+            iconClassName="text-violet-600 dark:text-violet-400"
+            iconBgClassName="bg-violet-100 dark:bg-violet-900/20"
+            headerRight={
+              perfStats ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  <div className="flex items-center gap-1.5 text-violet-600 dark:text-violet-400">
+                    <Activity className="h-3.5 w-3.5" />
+                    <span>{perfStats.apdex.toFixed(2)} Apdex</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>{formatMs(perfStats.avgDuration)}</span>
+                  </div>
+                </div>
+              ) : null
+            }
+          >
+            {!perfStats ? (
+              <EmptySection message="No performance data" />
+            ) : (
               <div>
-                <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
-                <p className="text-muted-foreground mb-4">
-                  Create your first project to start tracking errors and monitoring your applications.
-                </p>
-              </div>
-              <Link to="/projects" className="flex justify-center">
-                <Button size="lg" className="w-full max-w-sm sm:w-auto sm:mx-auto">
-                  <Plus className="h-4 w-4" />
-                  Create Your First Project
-                </Button>
-              </Link>
-            </div>
-          </Card>
-        ) : (
-          <>
-            {/* Overview Stats & Chart — always visible, compact side-by-side layout */}
-            {stats && (
-              <div className="mb-4 grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <StatsCard
-                    title="Events (24h)"
-                    value={formatCount(stats.totalEvents)}
-                    icon={Activity}
-                    accent="blue"
-                  />
-                  <StatsCard
-                    title="Unresolved"
-                    value={formatCount(stats.unresolvedIssues)}
-                    icon={AlertCircle}
-                    accent="amber"
-                    valueColor={stats.unresolvedIssues > 0 ? 'text-amber-600 dark:text-amber-400' : undefined}
-                  />
-                  <StatsCard
-                    title="Users (24h)"
-                    value={formatCount(stats.affectedUsers)}
-                    icon={Users}
-                    accent="emerald"
-                  />
-                  <StatsCard
-                    title="Total Issues"
-                    value={formatCount(stats.totalIssues)}
-                    icon={TrendingUp}
-                    accent="violet"
-                  />
-                </div>
-                {stats.eventsTimeline.length > 0 && (
-                  <div className="min-h-[160px]">
-                    <EventsChart
-                      data={stats.eventsTimeline}
-                      title="Events in Last 24 Hours"
-                      fillHeight
-                    />
+                {perfStats.slowestTransactions.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">Slowest Transactions</p>
+                    <div className="space-y-0.5">
+                      {perfStats.slowestTransactions.slice(0, 4).map((tx, i) => (
+                        <div key={i} className="flex items-center gap-2 py-1.5 px-2.5 rounded-md bg-muted/20">
+                          <Timer className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="text-sm truncate flex-1">{tx.name}</span>
+                          <span className="text-sm font-medium tabular-nums shrink-0">
+                            {formatMs(tx.duration)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             )}
+          </DashboardSection>
 
-            {/* Toolbar */}
-            <div className="mb-3 flex gap-3 items-center">
-              {filteredIssues.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={selectedIssues.size === filteredIssues.length && filteredIssues.length > 0}
-                    onCheckedChange={handleToggleAll}
-                    aria-label="Select all issues"
-                  />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">Select all</span>
-                </div>
-              )}
-              
-              {selectedIssues.size > 0 && (
-                <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium whitespace-nowrap">
-                    {selectedIssues.size} selected
-                  </span>
-                  <Button
-                    onClick={handleResolveSelected}
-                    disabled={resolveMutation.isPending}
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 h-7 ml-2"
-                  >
-                    {resolveMutation.isPending ? 'Resolving...' : 'Resolve'}
-                  </Button>
-                </div>
-              )}
-
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search issues..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Issues</SelectItem>
-                  <SelectItem value="unresolved">Unresolved</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground whitespace-nowrap hidden lg:inline">
-                {filteredIssues.length} result{filteredIssues.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {filteredIssues.length === 0 ? (
-              <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
-                <div className="max-w-md mx-auto space-y-4">
-                  <div className="flex justify-center">
-                    <div className="rounded-full bg-blue-500/10 p-4">
-                      {searchQuery || statusFilter !== 'unresolved' ? (
-                        <Search className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-                      ) : (
-                        <AlertCircle className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-                      )}
-                    </div>
+          {/* ── Status Pages ────────────────────────────────────────── */}
+          <DashboardSection
+            title="Status Pages"
+            icon={Globe}
+            to="/status-pages"
+            iconClassName="text-indigo-600 dark:text-indigo-400"
+            iconBgClassName="bg-indigo-100 dark:bg-indigo-900/20"
+            headerRight={
+              statusPages.length > 0 ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                    <Globe className="h-3.5 w-3.5" />
+                    <span>{statusPages.filter(p => p.isPublic).length} Public</span>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">
-                      {searchQuery || statusFilter !== 'unresolved'
-                        ? 'No issues match your filters'
-                        : 'No issues yet'}
-                    </h3>
-                    <p className="text-muted-foreground">
-                      {searchQuery || statusFilter !== 'unresolved'
-                        ? 'Try adjusting your search or filters.'
-                        : 'Start sending errors to this project to see them tracked here. Visit the setup guide to integrate your application.'}
-                    </p>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Shield className="h-3.5 w-3.5" />
+                    <span>{statusPages.length} Total</span>
                   </div>
                 </div>
-              </Card>
+              ) : null
+            }
+          >
+            {statusPages.length === 0 ? (
+              <EmptySection message="No status pages configured" />
             ) : (
-              <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-                {/* Table header */}
-                <div className="hidden md:flex items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
-                  <div className="w-5 shrink-0" />
-                  <div className="w-14 shrink-0">Level</div>
-                  <div className="flex-1 min-w-0">Issue</div>
-                  <div className="hidden lg:block w-20 shrink-0">Platform</div>
-                  <div className="hidden lg:block w-20 shrink-0 text-center">Trend</div>
-                  <div className="w-[55px] shrink-0 text-right">Events</div>
-                  <div className="hidden sm:block w-[45px] shrink-0 text-right">Users</div>
-                  <div className="w-20 shrink-0 text-right">Last Seen</div>
-                </div>
-                {/* Issue rows */}
-                <div className="divide-y divide-border/40">
-                  {filteredIssues.map((issue) => (
-                    <div
-                      key={issue.id}
-                      className={`hover:bg-accent/40 transition border-l-[3px] ${getLevelBorderColor(issue.level)}`}
-                    >
-                      <div className="flex items-center gap-3 py-2.5 px-4">
-                        <Checkbox
-                          checked={selectedIssues.has(issue.id)}
-                          onCheckedChange={() => handleToggleIssue(issue.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={`Select ${issue.title}`}
-                          className="shrink-0"
-                        />
-                        <Link
-                          to="/issues/$issueId"
-                          params={{ issueId: issue.id }}
-                          className="flex-1 flex items-center gap-3 min-w-0"
-                        >
-                          <Badge className={`${getLevelColor(issue.level)} shrink-0 text-[11px] px-1.5 py-0 w-14 justify-center`}>
-                            {issue.level.toUpperCase()}
-                          </Badge>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-semibold truncate flex-1 min-w-0" title={getIssueDisplayTitle(issue)}>
-                                {getIssueDisplayTitle(issue)}
-                              </span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {isNewIssue(issue.firstSeen) && (
-                                  <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase">
-                                    New
-                                  </span>
-                                )}
-                                {issue.status === 'resolved' && (
-                                  <Badge variant="default" className="bg-green-600 text-[11px] px-1.5 py-0">
-                                    Resolved
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              <Clock className="inline h-3 w-3 mr-1 -mt-0.5" />
-                              First seen {formatRelativeTime(issue.firstSeen)}
-                            </div>
-                          </div>
-                          <div className="hidden lg:block w-20 shrink-0">
-                            <Badge variant="outline" className="text-[11px] px-1.5 py-0">{issue.platform}</Badge>
-                          </div>
-                          <div className="hidden lg:flex w-20 shrink-0 justify-center">
-                            <EventSparkline eventCount={issue.eventCount} />
-                          </div>
-                          <div className="w-[55px] shrink-0 text-right">
-                            <div className="font-semibold text-foreground">{formatCount(issue.eventCount)}</div>
-                            <div className="text-xs text-muted-foreground">events</div>
-                          </div>
-                          <div className="hidden sm:block w-[45px] shrink-0 text-right">
-                            <div className="font-semibold text-foreground">{issue.userCount ?? 0}</div>
-                            <div className="text-xs text-muted-foreground">users</div>
-                          </div>
-                          <div className="hidden md:block w-20 shrink-0 text-right">
-                            <span className={`text-xs font-medium ${getLastSeenColor(issue.lastSeen)}`}>
-                              {formatRelativeTime(issue.lastSeen)}
-                            </span>
-                          </div>
-                        </Link>
-                      </div>
+              <div className="space-y-0.5">
+                {statusPages.map(page => (
+                  <Link
+                    key={page.id}
+                    to="/status-pages/$pageId"
+                    params={{pageId: page.id}}
+                    className="flex items-center gap-2.5 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+                  >
+                    <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate flex-1">{page.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {page.description && (
+                        <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">
+                          {page.description}
+                        </span>
+                      )}
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {page.isPublic ? 'Public' : 'Private'}
+                      </Badge>
                     </div>
-                  ))}
-                </div>
+                  </Link>
+                ))}
               </div>
             )}
-          </>
-        )}
+          </DashboardSection>
+        </div>
+
+        {/* ── Third row: Releases, Replays, Feedback ───────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* ── Releases ────────────────────────────────────────────── */}
+          <DashboardSection
+            title="Releases"
+            icon={Package}
+            to="/releases"
+            iconClassName="text-blue-600 dark:text-blue-400"
+            iconBgClassName="bg-blue-100 dark:bg-blue-900/20"
+            headerRight={
+              releases.length > 0 ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Terminal className="h-3.5 w-3.5" />
+                    <span className="font-mono">{recentReleases[0]?.version ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Package className="h-3.5 w-3.5" />
+                    <span>{releases.length} Total</span>
+                  </div>
+                </div>
+              ) : null
+            }
+          >
+            {recentReleases.length === 0 ? (
+              <EmptySection message="No releases" />
+            ) : (
+              <div className="space-y-0.5">
+                {recentReleases.map(release => (
+                  <Link
+                    key={release.version}
+                    to="/releases/$version"
+                    params={{version: release.version}}
+                    className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+                  >
+                    <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-mono truncate flex-1">{release.version}</span>
+                    <div className="flex items-center gap-3 shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                      <span>{formatCount(release.eventCount)} events</span>
+                      <span>{release.userCount} users</span>
+                      {release.crashFreeRate != null && (
+                        <span>{release.crashFreeRate.toFixed(1)}% crash-free</span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </DashboardSection>
+
+          {/* ── Replays ─────────────────────────────────────────────── */}
+          <DashboardSection
+            title="Replays"
+            icon={Play}
+            to="/replays"
+            iconClassName="text-cyan-600 dark:text-cyan-400"
+            iconBgClassName="bg-cyan-100 dark:bg-cyan-900/20"
+            headerRight={
+              replays.length > 0 ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  {replaysWithErrors > 0 && (
+                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      <span>{replaysWithErrors} Errors</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Play className="h-3.5 w-3.5" />
+                    <span>{replays.length} Sessions</span>
+                  </div>
+                </div>
+              ) : null
+            }
+          >
+            {replays.length === 0 ? (
+              <EmptySection message="No recent replays" />
+            ) : (
+              <div className="space-y-0.5">
+                {replays.slice(0, 5).map(replay => (
+                  <Link
+                    key={replay.replayId}
+                    to="/replays/$replayId"
+                    params={{replayId: replay.replayId}}
+                    className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+                  >
+                    <Play className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate flex-1">
+                      {replay.user?.email || replay.user?.username || replay.urls[0] || 'Session'}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                      {replay.errorCount > 0 && (
+                        <span className="text-red-600/70 dark:text-red-400/70">{replay.errorCount} errors</span>
+                      )}
+                      <span>{Math.round(replay.durationMs / 1000)}s</span>
+                      {replay.browserName && (
+                        <span className="truncate max-w-[60px]">{replay.browserName}</span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </DashboardSection>
+
+          {/* ── Feedback ────────────────────────────────────────────── */}
+          <DashboardSection
+            title="Feedback"
+            icon={MessageSquare}
+            to="/feedback"
+            iconClassName="text-teal-600 dark:text-teal-400"
+            iconBgClassName="bg-teal-100 dark:bg-teal-900/20"
+            headerRight={
+              feedback.length > 0 ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  {newFeedback > 0 && (
+                    <div className="flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      <span>{newFeedback} New</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    <span>{feedback.length} Total</span>
+                  </div>
+                </div>
+              ) : null
+            }
+          >
+            {recentFeedback.length === 0 ? (
+              <EmptySection message="No feedback received" />
+            ) : (
+              <div className="space-y-0.5">
+                {recentFeedback.map(fb => (
+                  <Link
+                    key={fb.feedbackId}
+                    to="/feedback/$feedbackId"
+                    params={{feedbackId: fb.feedbackId}}
+                    className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate flex-1">{fb.message}</span>
+                    <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground">
+                      {fb.contactEmail && (
+                        <span className="truncate max-w-[100px]">{fb.contactEmail}</span>
+                      )}
+                      <span>{formatRelativeTime(fb.timestamp)}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </DashboardSection>
+        </div>
       </div>
     </div>
   )

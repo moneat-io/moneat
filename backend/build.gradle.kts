@@ -185,6 +185,11 @@ tasks.register<JavaExec>("seedDemoData") {
     classpath = sourceSets["main"].runtimeClasspath + sourceSets["test"].runtimeClasspath
     mainClass.set("com.moneat.demo.DemoDataSeederKt")
     
+    // Pass --reseed argument if provided: ./gradlew seedDemoData -Preseed
+    if (project.hasProperty("reseed")) {
+        args("--reseed")
+    }
+    
     standardOutput = System.out
     errorOutput = System.err
 }

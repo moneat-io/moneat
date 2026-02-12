@@ -42,13 +42,16 @@ fi
 echo "✅ Dashboard is running"
 echo ""
 
-# Check if demo data exists
-echo "🔍 Checking for demo data..."
-echo "💡 Make sure demo data is seeded with current timestamps:"
-echo "  ./seed-demo-data.sh"
-echo ""
-echo "⚠️  Important: Re-run seed script to refresh monitoring data timestamps"
-echo "   (Container and system metrics are timestamped relative to now)"
+# Reseed demo data with fresh timestamps
+echo "🔄 Reseeding demo data with fresh timestamps..."
+if [ -f "./seed-demo-data.sh" ]; then
+    ./seed-demo-data.sh --reseed
+elif [ -f "../scripts/seed-demo-data.sh" ]; then
+    ../scripts/seed-demo-data.sh --reseed
+else
+    echo "⚠️  Warning: Could not find seed-demo-data.sh script"
+    echo "   Screenshots may have stale data"
+fi
 echo ""
 
 # Run screenshot script

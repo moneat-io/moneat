@@ -33,6 +33,7 @@ import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.inde
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
+import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
@@ -181,6 +182,11 @@ const OnCallIndexRoute = OnCallIndexRouteImport.update({
 const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
   id: '/monitoring/',
   path: '/monitoring/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IssuesIndexRoute = IssuesIndexRouteImport.update({
+  id: '/issues/',
+  path: '/issues/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -377,6 +383,7 @@ export interface FileRoutesByFullPath {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -429,6 +436,7 @@ export interface FileRoutesByTo {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin': typeof AdminIndexRoute
+  '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
@@ -485,6 +493,7 @@ export interface FileRoutesById {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -542,6 +551,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
+    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -594,6 +604,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin'
+    | '/issues'
     | '/monitoring'
     | '/on-call'
     | '/performance'
@@ -649,6 +660,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
+    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -688,6 +700,7 @@ export interface RootRouteChildren {
   SSlugRoute: typeof SSlugRoute
   StatusPagesPageIdRoute: typeof StatusPagesPageIdRoute
   UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
+  IssuesIndexRoute: typeof IssuesIndexRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
   StatusPagesIndexRoute: typeof StatusPagesIndexRoute
   UptimeIndexRoute: typeof UptimeIndexRoute
@@ -862,6 +875,13 @@ declare module '@tanstack/react-router' {
       path: '/monitoring'
       fullPath: '/monitoring/'
       preLoaderRoute: typeof MonitoringIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/issues/': {
+      id: '/issues/'
+      path: '/issues'
+      fullPath: '/issues/'
+      preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -1237,6 +1257,7 @@ const rootRouteChildren: RootRouteChildren = {
   SSlugRoute: SSlugRoute,
   StatusPagesPageIdRoute: StatusPagesPageIdRoute,
   UptimeMonitorIdRoute: UptimeMonitorIdRoute,
+  IssuesIndexRoute: IssuesIndexRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
   StatusPagesIndexRoute: StatusPagesIndexRoute,
   UptimeIndexRoute: UptimeIndexRoute,

@@ -10,6 +10,7 @@ import {Badge} from '@/components/ui/badge'
 import {useToast} from '@/hooks/use-toast'
 import {
     Activity,
+    AlertCircle,
     Bell,
     BookOpen,
     Check,
@@ -202,6 +203,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   const navItems = [
     { icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
     { icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
+    { icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
     { icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
     { icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
     { icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
@@ -453,7 +455,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
             'flex-1 overflow-y-auto',
             isExpanded
               ? 'p-2'
-              : 'py-2 overflow-y-scroll [scrollbar-gutter:stable]'
+              : 'py-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]'
           )}
         >
           <div className={cn('space-y-1', !isExpanded && 'px-2')}>
@@ -468,11 +470,12 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
+                    'flex items-center gap-3 py-2 rounded-md transition-colors',
+                    isExpanded ? 'px-3' : 'px-2',
                     isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                    !isExpanded && 'justify-center h-10 w-10 mx-auto px-0'
+                    !isExpanded && 'justify-center'
                   )}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
@@ -486,7 +489,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     <TooltipTrigger asChild>
                       {linkContent}
                     </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={10}>
+                    <TooltipContent side="right">
                       <p>{item.label}</p>
                     </TooltipContent>
                   </Tooltip>
@@ -510,11 +513,12 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
+                    'flex items-center gap-3 py-2 rounded-md transition-colors',
+                    isExpanded ? 'px-3' : 'px-2',
                     isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                    !isExpanded && 'justify-center h-10 w-10 mx-auto px-0'
+                    !isExpanded && 'justify-center'
                   )}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
@@ -528,7 +532,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     <TooltipTrigger asChild>
                       {linkContent}
                     </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={10}>
+                    <TooltipContent side="right">
                       <p>{item.label}</p>
                     </TooltipContent>
                   </Tooltip>
@@ -556,10 +560,10 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     <ThemeToggle />
                   </div>
                 </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={10}>
-                    <p>Toggle theme</p>
-                  </TooltipContent>
-                </Tooltip>
+                <TooltipContent side="right">
+                  <p>Toggle theme</p>
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
 
@@ -590,7 +594,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                   <LogOut className="h-5 w-5 flex-shrink-0" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={10}>
+              <TooltipContent side="right">
                 <p>Logout</p>
               </TooltipContent>
             </Tooltip>

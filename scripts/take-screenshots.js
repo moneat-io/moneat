@@ -19,11 +19,56 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const pixelmatch = require('pixelmatch');
+const { PNG } = require('pngjs');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const DEMO_EMAIL = 'demo@moneat.dev';
 const DEMO_PASSWORD = 'demo123';
 const SCREENSHOTS_DIR = path.join(__dirname, '../dashboard/public/screenshots');
+
+// Diff threshold: 0.1 = 10% of pixels can differ
+const DIFF_THRESHOLD = 0.001; // 0.1% threshold for considering images identical
+
+/**
+ * Compare two PNG images and return true if they're identical (within threshold)
+ */
+function areImagesIdentical(existingPath, newBuffer) {
+  if (!fs.existsSync(existingPath)) {
+    return false; // No existing image, always save
+  }
+  
+  try {
+    const existingBuffer = fs.readFileSync(existingPath);
+    const img1 = PNG.sync.read(existingBuffer);
+    const img2 = PNG.sync.read(newBuffer);
+    
+    // Images must be same dimensions
+    if (img1.width !== img2.width || img1.height !== img2.height) {
+      return false;
+    }
+    
+    const { width, height } = img1;
+    const diff = new PNG({ width, height });
+    
+    const numDiffPixels = pixelmatch(
+      img1.data,
+      img2.data,
+      diff.data,
+      width,
+      height,
+      { threshold: 0.1 } // Per-pixel difference threshold
+    );
+    
+    const totalPixels = width * height;
+    const diffPercentage = numDiffPixels / totalPixels;
+    
+    return diffPercentage < DIFF_THRESHOLD;
+  } catch (error) {
+    console.warn(`  ⚠️  Failed to compare images: ${error.message}`);
+    return false; // On error, save the new screenshot
+  }
+}
 
 // Screenshot configurations - all features shown on landing page
 const SCREENSHOTS = [
@@ -178,6 +223,13 @@ const SCREENSHOTS = [
     },
     viewport: { width: 1920, height: 1080 },
   },
+  {
+    name: 'escalation-policies',
+    description: 'On-call escalation policies',
+    path: '/on-call/escalation-policies',
+    waitFor: 'text=Escalation Policies',
+    viewport: { width: 1920, height: 1080 },
+  },
 ];
 
 async function login(page) {
@@ -247,8 +299,11 @@ async function takeScreenshot(page, config) {
     // Additional wait for any animations to complete
     await page.waitForTimeout(1000);
     
-    // Take screenshot
+    // Prepare screenshot path
     const screenshotPath = path.join(SCREENSHOTS_DIR, `${config.name}.png`);
+    
+    // Capture screenshot to buffer first (for comparison)
+    let screenshotBuffer;
     
     // If elementSelector is provided, screenshot only that element's parent card
     if (config.elementSelector) {
@@ -262,47 +317,35 @@ async function takeScreenshot(page, config) {
         const cardExists = await cardContainer.count() > 0;
         
         if (cardExists) {
-          await cardContainer.screenshot({
-            path: screenshotPath,
-            type: 'png',
-          });
-          console.log(`✅ Saved (card): ${screenshotPath}`);
+          screenshotBuffer = await cardContainer.screenshot({ type: 'png' });
         } else {
           // Fallback: try generic card/border container
           const genericContainer = page.locator('[class*="border"][class*="rounded"]').filter({ has: element }).first();
           const genericExists = await genericContainer.count() > 0;
           
           if (genericExists) {
-            await genericContainer.screenshot({
-              path: screenshotPath,
-              type: 'png',
-            });
-            console.log(`✅ Saved (container): ${screenshotPath}`);
+            screenshotBuffer = await genericContainer.screenshot({ type: 'png' });
           } else {
             console.log(`⚠️  Card container not found for ${config.elementSelector}, taking full page`);
-            await page.screenshot({
-              path: screenshotPath,
-              fullPage: false,
-              type: 'png',
-            });
+            screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
           }
         }
       } else {
         console.log(`⚠️  Element not found: ${config.elementSelector}, taking full page screenshot`);
-        await page.screenshot({
-          path: screenshotPath,
-          fullPage: false,
-          type: 'png',
-        });
+        screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
       }
     } else {
       // Regular full viewport screenshot
-      await page.screenshot({
-        path: screenshotPath,
-        fullPage: false,
-        type: 'png',
-      });
-      console.log(`✅ Saved: ${screenshotPath}`);
+      screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
+    }
+    
+    // Compare with existing screenshot (if any)
+    if (areImagesIdentical(screenshotPath, screenshotBuffer)) {
+      console.log(`   ⏭️  Skipped (unchanged): ${config.name}`);
+    } else {
+      // Save the new screenshot
+      fs.writeFileSync(screenshotPath, screenshotBuffer);
+      console.log(`   ✅ Saved (changed): ${screenshotPath}`);
     }
     
     return true;
