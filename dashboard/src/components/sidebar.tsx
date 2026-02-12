@@ -448,8 +448,15 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 p-2 overflow-y-auto">
-          <div className="space-y-1">
+        <nav
+          className={cn(
+            'flex-1 overflow-y-auto',
+            isExpanded
+              ? 'p-2'
+              : 'py-2 overflow-y-scroll [scrollbar-gutter:stable]'
+          )}
+        >
+          <div className={cn('space-y-1', !isExpanded && 'px-2')}>
             {navItems.map((item) => {
               const isActive = item.href === '/'
                 ? currentPath === '/'
@@ -465,7 +472,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                    !isExpanded && 'justify-center'
+                    !isExpanded && 'justify-center h-10 w-10 mx-auto px-0'
                   )}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
@@ -479,7 +486,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     <TooltipTrigger asChild>
                       {linkContent}
                     </TooltipTrigger>
-                    <TooltipContent side="right">
+                    <TooltipContent side="right" sideOffset={10}>
                       <p>{item.label}</p>
                     </TooltipContent>
                   </Tooltip>
@@ -507,7 +514,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                    !isExpanded && 'justify-center'
+                    !isExpanded && 'justify-center h-10 w-10 mx-auto px-0'
                   )}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
@@ -521,7 +528,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     <TooltipTrigger asChild>
                       {linkContent}
                     </TooltipTrigger>
-                    <TooltipContent side="right">
+                    <TooltipContent side="right" sideOffset={10}>
                       <p>{item.label}</p>
                     </TooltipContent>
                   </Tooltip>
@@ -549,10 +556,10 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                     <ThemeToggle />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>Toggle theme</p>
-                </TooltipContent>
-              </Tooltip>
+                  <TooltipContent side="right" sideOffset={10}>
+                    <p>Toggle theme</p>
+                  </TooltipContent>
+                </Tooltip>
             )}
           </div>
 
@@ -583,7 +590,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                   <LogOut className="h-5 w-5 flex-shrink-0" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">
+              <TooltipContent side="right" sideOffset={10}>
                 <p>Logout</p>
               </TooltipContent>
             </Tooltip>

@@ -93,7 +93,6 @@ function buildTierFeatures(tier: PricingCardTierInput): string[] {
 
   if (tier.slackEnabled) features.push('Slack integration')
   if (tier.discordEnabled) features.push('Discord integration')
-  if (tier.incidentIoEnabled) features.push('incident.io integration')
   if (tier.samlEnabled) features.push('SAML SSO integration')
   if (tier.oidcEnabled) features.push('OIDC SSO integration')
   if (tier.prioritySupportEnabled) features.push('Priority support')

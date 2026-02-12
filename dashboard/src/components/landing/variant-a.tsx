@@ -228,7 +228,7 @@ const secondaryFeatures: Feature[] = [
     icon: Bell,
     title: 'Alerting & Integrations',
     description:
-      'Multi-channel alerts with Slack, Discord, and incident.io integrations. Route alerts to the right teams and create incidents automatically.',
+      'Multi-channel alerts with Slack and Discord integrations. Route alerts to the right teams instantly.',
     gradient: 'from-rose-500 to-pink-400',
     iconBg: 'bg-rose-500/10',
     iconColor: 'text-rose-400',

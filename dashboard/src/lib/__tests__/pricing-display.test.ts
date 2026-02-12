@@ -172,7 +172,6 @@ describe('pricing-display', () => {
       const model = buildPricingCardModel(tier, 'monthly')
 
       expect(model.features).toContain('Slack integration')
-      expect(model.features).toContain('incident.io integration')
       expect(model.features).toContain('SAML SSO integration')
       expect(model.features).toContain('OIDC SSO integration')
     })
