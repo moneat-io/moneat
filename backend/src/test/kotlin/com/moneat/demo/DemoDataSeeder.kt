@@ -2617,73 +2617,61 @@ object DemoDataSeeder {
     suspend fun deleteDemoData() {
         println("🗑️  Deleting existing demo data...")
         
-        // Get organization ID first
-        val orgId = transaction {
-            Organizations.selectAll().where { Organizations.slug eq "acme-mobile" }
-                .firstOrNull()?.get(Organizations.id)
+        // Get organization ID and user ID first
+        val (orgId, userId) = transaction {
+            val org = Organizations.selectAll().where { Organizations.slug eq "acme-mobile" }
+                .firstOrNull()
+            val user = Users.selectAll().where { Users.email eq "demo@moneat.dev" }
+                .firstOrNull()
+            
+            Pair(
+                org?.get(Organizations.id),
+                user?.get(Users.id)
+            )
         }
         
-        if (orgId == null) {
-            println("No demo organization found, skipping delete")
+        if (orgId == null && userId == null) {
+            println("No demo data found, skipping delete")
             return
         }
         
-        println("Found demo organization ID: $orgId")
+        if (orgId != null) {
+            println("Found demo organization ID: $orgId")
+        }
+        if (userId != null) {
+            println("Found demo user ID: $userId")
+        }
         
-        // Delete PostgreSQL data - each in its own transaction to avoid abort cascades
+        // Delete PostgreSQL data - only core tables we know exist
         println("Deleting PostgreSQL demo data...")
         
-        val deleteQueries = listOf(
-            "DELETE FROM emails_sent WHERE organization_id = $orgId",
-            "DELETE FROM quota_notifications_sent WHERE organization_id = $orgId",
-            "DELETE FROM usage_records WHERE organization_id = $orgId",
-            "DELETE FROM org_usage_counters WHERE organization_id = $orgId",
-            "DELETE FROM org_invitations WHERE organization_id = $orgId",
-            "DELETE FROM subscriptions WHERE organization_id = $orgId",
-            "DELETE FROM organization_integrations WHERE organization_id = $orgId",
-            "DELETE FROM sso_configurations WHERE organization_id = $orgId",
-            "DELETE FROM slack_user_mappings WHERE organization_id = $orgId",
-            "DELETE FROM business_hours_windows WHERE business_hours_id IN (SELECT id FROM business_hours WHERE organization_id = $orgId)",
-            "DELETE FROM business_hours WHERE organization_id = $orgId",
-            "DELETE FROM on_call_overrides WHERE schedule_id IN (SELECT id FROM on_call_schedules WHERE organization_id = $orgId)",
-            "DELETE FROM on_call_participants WHERE schedule_id IN (SELECT id FROM on_call_schedules WHERE organization_id = $orgId)",
-            "DELETE FROM on_call_schedules WHERE organization_id = $orgId",
-            "DELETE FROM escalation_step_targets WHERE step_id IN (SELECT id FROM escalation_steps WHERE policy_id IN (SELECT id FROM escalation_policies WHERE organization_id = $orgId))",
-            "DELETE FROM escalation_steps WHERE policy_id IN (SELECT id FROM escalation_policies WHERE organization_id = $orgId)",
-            "DELETE FROM escalation_policies WHERE organization_id = $orgId",
-            "DELETE FROM incident_timeline WHERE incident_id IN (SELECT id FROM incidents WHERE organization_id = $orgId)",
-            "DELETE FROM incident_event_log WHERE incident_id IN (SELECT id FROM incidents WHERE organization_id = $orgId)",
-            "DELETE FROM incidents WHERE organization_id = $orgId",
-            "DELETE FROM incident_provider_configs WHERE organization_id = $orgId",
-            "DELETE FROM incident_routing_rules WHERE organization_id = $orgId",
-            "DELETE FROM system_alert_template_states WHERE alert_id IN (SELECT id FROM system_alerts WHERE system_id IN (SELECT id FROM systems WHERE organization_id = $orgId))",
-            "DELETE FROM system_alerts WHERE system_id IN (SELECT id FROM systems WHERE organization_id = $orgId)",
-            "DELETE FROM system_alert_settings WHERE system_id IN (SELECT id FROM systems WHERE organization_id = $orgId)",
-            "DELETE FROM alert_silence_periods WHERE organization_id = $orgId",
-            "DELETE FROM alert_priorities WHERE organization_id = $orgId",
-            "DELETE FROM alert_notification_preferences WHERE organization_id = $orgId",
-            "DELETE FROM organization_alert_templates WHERE organization_id = $orgId",
-            "DELETE FROM status_page_incident_updates WHERE incident_id IN (SELECT id FROM status_page_incidents WHERE status_page_id IN (SELECT id FROM status_pages WHERE organization_id = $orgId))",
-            "DELETE FROM status_page_incidents WHERE status_page_id IN (SELECT id FROM status_pages WHERE organization_id = $orgId)",
-            "DELETE FROM status_page_monitors WHERE status_page_id IN (SELECT id FROM status_pages WHERE organization_id = $orgId)",
-            "DELETE FROM status_page_custom_domains WHERE status_page_id IN (SELECT id FROM status_pages WHERE organization_id = $orgId)",
-            "DELETE FROM status_pages WHERE organization_id = $orgId",
-            "DELETE FROM uptime_monitors WHERE organization_id = $orgId",
-            "DELETE FROM systems WHERE organization_id = $orgId",
-            "DELETE FROM notification_preferences WHERE user_id IN (SELECT user_id FROM memberships WHERE organization_id = $orgId)",
-            "DELETE FROM release_files WHERE release_id IN (SELECT id FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId))",
-            "DELETE FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",
-            "DELETE FROM log_sources WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",
-            "DELETE FROM project_keys WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",
-            "DELETE FROM projects WHERE organization_id = $orgId",
-            "DELETE FROM memberships WHERE organization_id = $orgId",
-            "DELETE FROM organizations WHERE id = $orgId",
-            "DELETE FROM auth_tokens WHERE user_id IN (SELECT id FROM users WHERE email = 'demo@moneat.dev')",
-            "DELETE FROM user_device_tokens WHERE user_id IN (SELECT id FROM users WHERE email = 'demo@moneat.dev')",
-            "DELETE FROM user_legal_acceptances WHERE user_id IN (SELECT id FROM users WHERE email = 'demo@moneat.dev')",
-            "DELETE FROM user_sso_links WHERE user_id IN (SELECT id FROM users WHERE email = 'demo@moneat.dev')",
-            "DELETE FROM users WHERE email = 'demo@moneat.dev'"
-        )
+        val deleteQueries = mutableListOf<String>()
+        
+        if (orgId != null) {
+            deleteQueries.addAll(listOf(
+                // Emails and notifications first
+                "DELETE FROM emails_sent WHERE organization_id = $orgId",
+                // Organization child data  
+                "DELETE FROM subscriptions WHERE organization_id = $orgId",
+                "DELETE FROM uptime_monitors WHERE organization_id = $orgId",
+                "DELETE FROM systems WHERE organization_id = $orgId",
+                "DELETE FROM status_pages WHERE organization_id = $orgId",
+                // Project-related data
+                "DELETE FROM release_files WHERE release_id IN (SELECT id FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId))",
+                "DELETE FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",
+                "DELETE FROM project_keys WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",
+                "DELETE FROM projects WHERE organization_id = $orgId",
+                // Memberships and organization itself
+                "DELETE FROM memberships WHERE organization_id = $orgId",
+                "DELETE FROM organizations WHERE id = $orgId"
+            ))
+        }
+        
+        if (userId != null) {
+            deleteQueries.addAll(listOf(
+                "DELETE FROM users WHERE id = $userId"
+            ))
+        }
         
         // Execute each delete in its own transaction to prevent cascading failures
         for (query in deleteQueries) {
@@ -2692,31 +2680,41 @@ object DemoDataSeeder {
                     exec(query)
                 }
             } catch (e: Exception) {
-                // Ignore errors for tables that might not exist
-                if (!e.message!!.contains("does not exist")) {
-                    // Only warn about real errors, not table-not-found
-                }
+                // Silently ignore errors - table might not exist or have no matching rows
             }
         }
         
-        // Delete ClickHouse data (demo projects typically have IDs 1, 2, 3)
-        println("Deleting ClickHouse demo data...")
-        val queries = listOf(
-            "ALTER TABLE issues DELETE WHERE project_id IN (1, 2, 3)",
-            "ALTER TABLE events DELETE WHERE project_id IN (1, 2, 3)",
-            "ALTER TABLE logs DELETE WHERE project_id IN (1, 2, 3)",
-            "ALTER TABLE user_feedback DELETE WHERE project_id IN (1, 2, 3)",
-            "ALTER TABLE replay_events DELETE WHERE project_id IN (1, 2, 3)",
-            "ALTER TABLE replay_segments DELETE WHERE project_id IN (1, 2, 3)",
-            "ALTER TABLE sessions DELETE WHERE project_id IN (1, 2, 3)",
-            "ALTER TABLE spans DELETE WHERE project_id IN (1, 2, 3)"
-        )
-        
-        for (query in queries) {
-            try {
-                ClickHouseClient.execute(query)
-            } catch (e: Exception) {
-                // Silently continue
+        // Delete ClickHouse data - get actual project IDs
+        if (orgId != null) {
+            println("Deleting ClickHouse demo data...")
+            val projectIds = transaction {
+                Projects.selectAll()
+                    .where { Projects.organization_id eq orgId }
+                    .map { it[Projects.id] }
+            }
+            
+            if (projectIds.isNotEmpty()) {
+                val projectIdList = projectIds.joinToString(",")
+                println("Deleting ClickHouse data for projects: $projectIdList")
+                
+                val clickhouseQueries = listOf(
+                    "ALTER TABLE issues DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE events DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE logs DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE user_feedback DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE replay_events DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE replay_segments DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE sessions DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE spans DELETE WHERE project_id IN ($projectIdList)"
+                )
+                
+                for (query in clickhouseQueries) {
+                    try {
+                        ClickHouseClient.execute(query)
+                    } catch (e: Exception) {
+                        // Silently continue
+                    }
+                }
             }
         }
         

@@ -266,17 +266,15 @@ function IncidentDetailPage() {
                 </Button>
               )}
             </div>
-            {incident.status !== 'RESOLVED' && (
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs"
-                onClick={() => markUnavailableMutation.mutate()}
-                disabled={markUnavailableMutation.isPending}
-              >
-                I'm not available
-              </Button>
-            )}
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs"
+              onClick={() => markUnavailableMutation.mutate()}
+              disabled={markUnavailableMutation.isPending}
+            >
+              I'm not available
+            </Button>
           </div>
         </div>
       )}

@@ -64,17 +64,24 @@ DELETE FROM users WHERE email = 'demo@moneat.dev';
 SQL
 
 echo "🗑️  Deleting ClickHouse demo data..."
-# Get project IDs before deleting (projects 1, 2, 3 are usually demo projects)
-docker exec moneat-clickhouse clickhouse-client --query "
-ALTER TABLE moneat.issues DELETE WHERE project_id IN (1, 2, 3);
-ALTER TABLE moneat.events DELETE WHERE project_id IN (1, 2, 3);
-ALTER TABLE moneat.logs DELETE WHERE project_id IN (1, 2, 3);
-ALTER TABLE moneat.user_feedback DELETE WHERE project_id IN (1, 2, 3);
-ALTER TABLE moneat.replay_events DELETE WHERE project_id IN (1, 2, 3);
-ALTER TABLE moneat.replay_segments DELETE WHERE project_id IN (1, 2, 3);
-ALTER TABLE moneat.sessions DELETE WHERE project_id IN (1, 2, 3);
-ALTER TABLE moneat.spans DELETE WHERE project_id IN (1, 2, 3);
+# Get actual project IDs from the demo organization
+PROJECT_IDS=$(docker exec moneat-postgres psql -U moneat -d moneat -t -c "SELECT id FROM projects WHERE organization_id IN (SELECT id FROM organizations WHERE slug = 'acme-mobile');" | tr '\n' ',' | sed 's/,$//' | tr -d ' ')
+
+if [ -n "$PROJECT_IDS" ]; then
+  echo "Deleting data for project IDs: $PROJECT_IDS"
+  docker exec moneat-clickhouse clickhouse-client --query "
+ALTER TABLE moneat.issues DELETE WHERE project_id IN ($PROJECT_IDS);
+ALTER TABLE moneat.events DELETE WHERE project_id IN ($PROJECT_IDS);
+ALTER TABLE moneat.logs DELETE WHERE project_id IN ($PROJECT_IDS);
+ALTER TABLE moneat.user_feedback DELETE WHERE project_id IN ($PROJECT_IDS);
+ALTER TABLE moneat.replay_events DELETE WHERE project_id IN ($PROJECT_IDS);
+ALTER TABLE moneat.replay_segments DELETE WHERE project_id IN ($PROJECT_IDS);
+ALTER TABLE moneat.sessions DELETE WHERE project_id IN ($PROJECT_IDS);
+ALTER TABLE moneat.spans DELETE WHERE project_id IN ($PROJECT_IDS);
 "
+else
+  echo "No demo projects found, skipping ClickHouse deletion"
+fi
 
 echo ""
 echo "✅ Demo data deleted successfully!"

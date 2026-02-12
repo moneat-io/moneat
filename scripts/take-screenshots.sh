@@ -43,11 +43,11 @@ echo "✅ Dashboard is running"
 echo ""
 
 # Reseed demo data with fresh timestamps
-echo "🔄 Reseeding demo data with fresh timestamps..."
+echo "🔄 Seeding demo data with fresh timestamps..."
 if [ -f "./seed-demo-data.sh" ]; then
-    ./seed-demo-data.sh --reseed
+    ./seed-demo-data.sh
 elif [ -f "../scripts/seed-demo-data.sh" ]; then
-    ../scripts/seed-demo-data.sh --reseed
+    ../scripts/seed-demo-data.sh
 else
     echo "⚠️  Warning: Could not find seed-demo-data.sh script"
     echo "   Screenshots may have stale data"

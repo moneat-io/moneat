@@ -21,10 +21,6 @@ export const Route = createFileRoute('/on-call/escalation-policies')({
   component: EscalationPolicies,
 })
 
-const stepColors = [
-  'border-l-blue-500', 'border-l-violet-500', 'border-l-amber-500',
-  'border-l-emerald-500', 'border-l-rose-500', 'border-l-cyan-500',
-]
 const stepBgColors = [
   'bg-blue-500/10', 'bg-violet-500/10', 'bg-amber-500/10',
   'bg-emerald-500/10', 'bg-rose-500/10', 'bg-cyan-500/10',
