@@ -23,7 +23,7 @@ data class AddNoteRequest(
 fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementService) {
     
     route("/incidents") {
-        authenticate("jwt-auth") {
+        authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()

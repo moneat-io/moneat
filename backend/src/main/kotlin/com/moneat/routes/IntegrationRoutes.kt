@@ -3,6 +3,7 @@ package com.moneat.routes
 import com.moneat.config.EnvConfig
 import com.moneat.models.Memberships
 import com.moneat.models.OrganizationIntegrations
+import com.moneat.models.SlackUserMappings
 import com.moneat.services.DiscordService
 import com.moneat.services.SlackService
 import io.ktor.http.*
@@ -14,6 +15,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -780,5 +782,128 @@ fun Route.integrationCallbackRoutes() {
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&discord=error&message=${URLEncoder.encode(oauthResponse.error ?: "Unknown error", "UTF-8")}")
             }
         }
+        
+        // Slack Interactivity Endpoint (for interactive message buttons)
+        post("/slack/interactions") {
+            try {
+                // Parse URL-encoded form data from Slack
+                val formParameters = call.receiveParameters()
+                val payload = formParameters["payload"] ?: run {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing payload"))
+                    return@post
+                }
+                
+                // Parse the JSON payload
+                val payloadJson = kotlinx.serialization.json.Json.parseToJsonElement(payload).jsonObject
+                val type = payloadJson["type"]?.jsonPrimitive?.content
+                
+                // Handle block actions (button clicks)
+                if (type == "block_actions") {
+                    val actions = payloadJson["actions"]?.jsonArray
+                    if (actions != null && actions.isNotEmpty()) {
+                        val action = actions[0].jsonObject
+                        val actionId = action["action_id"]?.jsonPrimitive?.content ?: ""
+                        
+                        // Parse action ID format: "incident_{action}_{incidentId}"
+                        if (actionId.startsWith("incident_acknowledge_")) {
+                            val incidentId = actionId.removePrefix("incident_acknowledge_").toIntOrNull()
+                            if (incidentId != null) {
+                                // Get user from Slack user ID
+                                val slackUserId = payloadJson["user"]?.jsonObject?.get("id")?.jsonPrimitive?.content
+                                if (slackUserId != null) {
+                                    val userId = getUserIdFromSlackUserId(slackUserId)
+                                    if (userId != null) {
+                                        val incidentService = com.moneat.plugins.getIncidentManagementService()
+                                        val acknowledged = incidentService.acknowledge(incidentId, userId)
+                                        
+                                        if (acknowledged) {
+                                            // Send success response
+                                            call.respond(mapOf(
+                                                "response_type" to "in_channel",
+                                                "text" to "✅ Incident acknowledged by <@$slackUserId>"
+                                            ))
+                                        } else {
+                                            call.respond(mapOf(
+                                                "response_type" to "ephemeral",
+                                                "text" to "❌ Failed to acknowledge incident"
+                                            ))
+                                        }
+                                        return@post
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Default response for unhandled actions
+                call.respond(HttpStatusCode.OK, mapOf("text" to "Action received"))
+            } catch (e: Exception) {
+                logger.error("Error processing Slack interaction", e)
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Internal error"))
+            }
+        }
+        
+        // Slack User Linking Endpoint
+        authenticate("auth-jwt") {
+            post("/slack/link-user") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("user_id")?.asInt()
+                
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@post
+                }
+                
+                @Serializable
+                data class LinkUserRequest(val slackUserId: String, val slackTeamId: String)
+                
+                val request = call.receive<LinkUserRequest>()
+                
+                try {
+                    transaction {
+                        // Check if mapping exists
+                        val existing = com.moneat.models.SlackUserMappings
+                            .selectAll()
+                            .where { com.moneat.models.SlackUserMappings.userId eq userId }
+                            .singleOrNull()
+                        
+                        if (existing != null) {
+                            // Update existing mapping
+                            com.moneat.models.SlackUserMappings.update({
+                                com.moneat.models.SlackUserMappings.userId eq userId
+                            }) {
+                                it[com.moneat.models.SlackUserMappings.slackUserId] = request.slackUserId
+                                it[com.moneat.models.SlackUserMappings.slackTeamId] = request.slackTeamId
+                                it[com.moneat.models.SlackUserMappings.updatedAt] = kotlinx.datetime.Clock.System.now()
+                            }
+                        } else {
+                            // Insert new mapping
+                            com.moneat.models.SlackUserMappings.insert {
+                                it[com.moneat.models.SlackUserMappings.userId] = userId
+                                it[com.moneat.models.SlackUserMappings.slackUserId] = request.slackUserId
+                                it[com.moneat.models.SlackUserMappings.slackTeamId] = request.slackTeamId
+                                it[com.moneat.models.SlackUserMappings.createdAt] = kotlinx.datetime.Clock.System.now()
+                                it[com.moneat.models.SlackUserMappings.updatedAt] = kotlinx.datetime.Clock.System.now()
+                            }
+                        }
+                    }
+                    
+                    call.respond(HttpStatusCode.OK, mapOf("message" to "User linked successfully"))
+                } catch (e: Exception) {
+                    logger.error("Error linking Slack user", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to link user"))
+                }
+            }
+        }
     }
+}
+
+// Helper function to get user ID from Slack user ID
+private fun getUserIdFromSlackUserId(slackUserId: String): Int? = transaction {
+    com.moneat.models.SlackUserMappings
+        .selectAll()
+        .where { com.moneat.models.SlackUserMappings.slackUserId eq slackUserId }
+        .singleOrNull()
+        ?.get(com.moneat.models.SlackUserMappings.userId)
 }

@@ -41,7 +41,7 @@ fun Route.priorityRoutes() {
     val businessHoursService = BusinessHoursService()
     
     route("/priorities") {
-        authenticate("jwt-auth") {
+        authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
@@ -89,7 +89,7 @@ fun Route.priorityRoutes() {
     }
     
     route("/business-hours") {
-        authenticate("jwt-auth") {
+        authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()

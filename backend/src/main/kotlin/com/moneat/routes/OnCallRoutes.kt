@@ -41,7 +41,7 @@ fun Route.onCallRoutes() {
     val scheduleService = OnCallScheduleService()
     
     route("/on-call/schedules") {
-        authenticate("jwt-auth") {
+        authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()
@@ -257,7 +257,7 @@ fun Route.onCallRoutes() {
     }
     
     route("/on-call/overrides") {
-        authenticate("jwt-auth") {
+        authenticate("auth-jwt") {
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("organization_id")?.asInt()

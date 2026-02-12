@@ -21,7 +21,7 @@ fun Route.deviceRoutes() {
     val pushService = PushNotificationService()
     
     route("/devices") {
-        authenticate("jwt-auth") {
+        authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal?.payload?.getClaim("user_id")?.asInt()
