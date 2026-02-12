@@ -18,7 +18,9 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   const navigate = useNavigate()
-  const inviteToken = new URLSearchParams(window.location.search).get('inviteToken') || undefined
+  const searchParams = new URLSearchParams(window.location.search)
+  const inviteToken = searchParams.get('inviteToken') || undefined
+  const redirectUri = searchParams.get('redirect_uri') || undefined
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -33,9 +35,15 @@ function LoginPage() {
     setError('')
 
     try {
-      await api.login(email, password)
+      const { token } = await api.login(email, password)
       if (inviteToken) {
         navigate({ to: '/accept-invite', search: { token: inviteToken } })
+      } else if (redirectUri) {
+        // Redirect back to mobile app with token
+        // Use window.location for external redirect
+        const hasQuery = redirectUri.includes('?')
+        const separator = hasQuery ? '&' : '?'
+        window.location.href = `${redirectUri}${separator}token=${token}`
       } else {
         navigate({ to: '/' })
       }
