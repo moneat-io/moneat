@@ -353,6 +353,7 @@ async function main() {
   
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    deviceScaleFactor: 1.25, // 125% zoom
   });
   
   const page = await context.newPage();
