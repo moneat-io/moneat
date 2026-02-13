@@ -40,7 +40,7 @@ const getStatusConfig = (status: string) => {
 }
 
 const EVENT_CONFIG: Record<string, {icon: typeof Zap; color: string; bgColor: string; label: string}> = {
-  TRIGGERED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15', label: 'Incident triggered'},
+  TRIGGERED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15', label: 'Alert triggered'},
   ESCALATED: {icon: Bell, color: 'text-orange-500', bgColor: 'bg-orange-500/15', label: 'Escalated'},
   ACKNOWLEDGED: {icon: CheckCircle, color: 'text-blue-500', bgColor: 'bg-blue-500/15', label: 'Acknowledged'},
   RESOLVED: {icon: CheckCircle2, color: 'text-green-500', bgColor: 'bg-green-500/15', label: 'Resolved'},
@@ -258,7 +258,7 @@ function IncidentDetailPage() {
             </div>
             <div>
               <p className="font-medium text-sm">
-                {incident.status === 'TRIGGERED' ? 'This incident needs attention' : 'Incident acknowledged'}
+                {incident.status === 'TRIGGERED' ? 'This alert needs attention' : 'Alert acknowledged'}
               </p>
               <p className="text-xs text-muted-foreground">
                 {incident.status === 'TRIGGERED'

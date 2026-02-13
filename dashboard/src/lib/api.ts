@@ -2988,9 +2988,10 @@ class ApiClient {
     })
   }
 
-  async getOnCallIncidents(filters: { status?: string } = {}) {
+  async getOnCallIncidents(filters: { status?: string; priorityLevel?: string } = {}) {
     const params = new URLSearchParams()
     if (filters.status) params.set('status', filters.status)
+    if (filters.priorityLevel) params.set('priorityLevel', filters.priorityLevel)
     return this.request<any[]>(`${API_BASE}/on-call-incidents?${params.toString()}`)
   }
 

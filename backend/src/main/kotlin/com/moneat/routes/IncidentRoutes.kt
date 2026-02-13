@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 data class DeclareIncidentRequest(
     val title: String,
     val description: String? = null,
-    val severity: String
+    val priorityLevel: String
 )
 
 @Serializable
@@ -349,9 +349,11 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                         alertId = alertId,
                         title = request.title,
                         description = request.description,
-                        severity = request.severity
+                        priorityLevel = request.priorityLevel
                     )
                     call.respond(HttpStatusCode.Created, incident)
+                } catch (e: IllegalStateException) {
+                    call.respond(HttpStatusCode.Conflict, mapOf("error" to e.message))
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
@@ -371,7 +373,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
                 
                 val status = call.request.queryParameters["status"]
-                val incidents = onCallIncidentService.getIncidents(organizationId, status)
+                val priorityLevel = call.request.queryParameters["priorityLevel"]
+                val incidents = onCallIncidentService.getIncidents(organizationId, status, priorityLevel)
                 call.respond(incidents)
             }
             

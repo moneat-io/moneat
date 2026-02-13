@@ -14,16 +14,25 @@ class OnCallIncidentService {
         alertId: Int,
         title: String,
         description: String?,
-        severity: String
+        priorityLevel: String
     ): OnCallIncident = transaction {
         val now = Clock.System.now()
+        
+        // Guard: check if alert is already linked to an incident
+        val existingLink = OnCallIncidentAlerts.selectAll()
+            .where { OnCallIncidentAlerts.alertId eq alertId }
+            .singleOrNull()
+        
+        if (existingLink != null) {
+            throw IllegalStateException("Alert is already linked to a declared incident")
+        }
         
         // Create incident
         val incidentId = OnCallIncidents.insertAndGetId {
             it[OnCallIncidents.organizationId] = organizationId
             it[OnCallIncidents.title] = title
             it[OnCallIncidents.description] = description
-            it[OnCallIncidents.severity] = severity
+            it[OnCallIncidents.severity] = priorityLevel
             it[OnCallIncidents.status] = "OPEN"
             it[OnCallIncidents.declaredBy] = userId
             it[OnCallIncidents.declaredAt] = now
@@ -99,12 +108,16 @@ class OnCallIncidentService {
         toOnCallIncident(row, alerts)
     }
     
-    fun getIncidents(organizationId: Int, status: String? = null): List<OnCallIncident> = transaction {
+    fun getIncidents(organizationId: Int, status: String? = null, priorityLevel: String? = null): List<OnCallIncident> = transaction {
         val query = OnCallIncidents.selectAll()
             .where { OnCallIncidents.organizationId eq organizationId }
             
         if (status != null) {
             query.andWhere { OnCallIncidents.status eq status }
+        }
+        
+        if (priorityLevel != null) {
+            query.andWhere { OnCallIncidents.severity eq priorityLevel }
         }
         
         query.orderBy(OnCallIncidents.createdAt to SortOrder.DESC)
@@ -142,7 +155,7 @@ class OnCallIncidentService {
             organizationId = row[OnCallIncidents.organizationId],
             title = row[OnCallIncidents.title],
             description = row[OnCallIncidents.description],
-            severity = row[OnCallIncidents.severity],
+            priorityLevel = row[OnCallIncidents.severity],
             status = row[OnCallIncidents.status],
             declaredBy = declaredById,
             declaredByName = declaredByName,

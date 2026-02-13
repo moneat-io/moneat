@@ -260,7 +260,7 @@ data class OnCallIncident(
     val organizationId: Int,
     val title: String,
     val description: String? = null,
-    val severity: String,
+    val priorityLevel: String,
     val status: String,
     val declaredBy: Int,
     val declaredByName: String? = null,
