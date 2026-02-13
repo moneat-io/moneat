@@ -3,6 +3,7 @@ import {useEffect, useState} from 'react'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
+import {cn} from '../lib/utils'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -106,6 +107,7 @@ function RootComponent() {
   const currentPath = router.location.pathname
   const isAuthenticated = api.isAuthenticated()
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
 
   useEffect(() => {
@@ -151,10 +153,20 @@ function RootComponent() {
 
   return (
     <div className="min-h-screen bg-background">
-      {showSidebar && <Sidebar isExpanded={isSidebarExpanded} onExpandedChange={setIsSidebarExpanded} />}
+      {showSidebar && (
+        <Sidebar 
+          isExpanded={isSidebarExpanded} 
+          onExpandedChange={setIsSidebarExpanded}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileOpenChange={setIsMobileSidebarOpen}
+        />
+      )}
       <div
-        className="transition-[margin-left] duration-300"
-        style={{ marginLeft: showSidebar ? sidebarWidth : 0 }}
+        className={cn(
+          "transition-[margin-left] duration-300",
+          showSidebar && "md:ml-[var(--sidebar-width)]"
+        )}
+        style={{ '--sidebar-width': showSidebar ? `${sidebarWidth}px` : '0px' } as React.CSSProperties}
       >
         <Outlet />
       </div>

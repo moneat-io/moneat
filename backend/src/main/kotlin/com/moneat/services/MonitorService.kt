@@ -519,6 +519,12 @@ class MonitorService {
      */
     suspend fun getLatestContainers(systemId: UUID): List<ContainerStats> {
         val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
+        val organizationId = getSystemById(systemId)?.organizationId
+        val monitorIntervalSeconds = organizationId
+            ?.let { getTierConfig(it).monitorIntervalSeconds }
+            ?: PricingTier.FREE.monitorIntervalSeconds
+        // Keep container visibility aligned with system health (5 min minimum), while respecting slower plans.
+        val freshnessWindowSeconds = max(monitorIntervalSeconds * 3, 300)
         fun buildQuery(includeNetwork: Boolean): String {
             val networkColumns = if (includeNetwork) ", net_recv_bytes, net_sent_bytes" else ""
             return """
@@ -532,6 +538,7 @@ class MonitorService {
                     WHERE system_id = toUUID('$systemId')
                       AND timestamp >= now() - INTERVAL $retentionDays DAY
                 ) WHERE rn = 1
+                  AND timestamp >= now() - INTERVAL $freshnessWindowSeconds SECOND
                 FORMAT JSONCompact
             """.trimIndent()
         }
