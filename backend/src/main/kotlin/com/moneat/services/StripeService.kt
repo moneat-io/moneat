@@ -273,6 +273,11 @@ class StripeService(
             currentPeriodEnd = epochSecondsToIso(canceled.cancelAt)
         )
     }
+    
+    fun cancelSubscription(stripeSubscriptionId: String) {
+        ensureEnabled()
+        Subscription.retrieve(stripeSubscriptionId).cancel()
+    }
 
     fun verifyAndParseEvent(payload: String, signature: String?): Event {
         ensureEnabled()

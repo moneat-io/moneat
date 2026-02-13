@@ -200,6 +200,13 @@ function SettingsPage() {
                 SSO
               </TabsTrigger>
             )}
+            <TabsTrigger 
+              value="account" 
+              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-red-100 data-[state=active]:text-red-700 dark:data-[state=active]:bg-red-900/20 dark:data-[state=active]:text-red-400 data-[state=active]:shadow-sm"
+            >
+              <Trash2 className="h-4 w-4" />
+              Account
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="auth-tokens" className="space-y-4">
             <AuthTokensTab />
@@ -226,6 +233,9 @@ function SettingsPage() {
               <SsoTab />
             </TabsContent>
           )}
+          <TabsContent value="account" className="space-y-4">
+            <AccountTab />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
@@ -2805,6 +2815,331 @@ function SilencePeriodsTab() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function AccountTab() {
+  const { toast } = useToast()
+  const { user, orgId } = useAuth()
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
+  const [deleteOrgOpen, setDeleteOrgOpen] = useState(false)
+  const [accountConfirmation, setAccountConfirmation] = useState('')
+  const [orgConfirmation, setOrgConfirmation] = useState('')
+  
+  const { data: orgData } = useQuery({
+    queryKey: ['organization', orgId],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/organizations/${orgId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      })
+      if (!res.ok) throw new Error('Failed to fetch organization')
+      return res.json()
+    },
+    enabled: !!orgId,
+  })
+  
+  const { data: accountValidation } = useQuery({
+    queryKey: ['account-deletion-validation'],
+    queryFn: async () => {
+      const res = await fetch('/api/v1/account/deletion-validation', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      })
+      if (!res.ok) throw new Error('Failed to validate')
+      return res.json()
+    },
+  })
+  
+  const { data: orgValidation } = useQuery({
+    queryKey: ['org-deletion-validation', orgId],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/organizations/${orgId}/deletion-validation`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      })
+      if (!res.ok) throw new Error('Failed to validate')
+      return res.json()
+    },
+    enabled: !!orgId,
+  })
+  
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/v1/account', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ confirmation: accountConfirmation }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to delete account')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Account deleted',
+        description: 'Your account has been successfully deleted.',
+      })
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to delete account',
+        description: error.message,
+        variant: 'destructive',
+      })
+    },
+  })
+  
+  const deleteOrgMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/v1/organizations/${orgId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ confirmation: orgConfirmation }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to delete organization')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Organization deleted',
+        description: 'The organization has been successfully deleted.',
+      })
+      window.location.href = '/onboarding'
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to delete organization',
+        description: error.message,
+        variant: 'destructive',
+      })
+    },
+  })
+  
+  const isOwner = orgData?.role === 'owner'
+  
+  return (
+    <div className="space-y-6">
+      {/* Organization Deletion - Owner Only */}
+      {isOwner && (
+        <Card className="border-red-200 dark:border-red-900/20">
+          <CardHeader>
+            <CardTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Organization
+            </CardTitle>
+            <CardDescription>
+              Permanently delete your organization and all associated data. This action cannot be undone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-4">
+              <h4 className="text-sm font-semibold text-red-900 dark:text-red-200 mb-2">
+                What will be deleted:
+              </h4>
+              <ul className="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                <li>All projects and their events</li>
+                <li>All error data, transactions, sessions, and replays</li>
+                <li>All monitoring data and uptime checks</li>
+                <li>All team members will be removed</li>
+                <li>All integrations and alert configurations</li>
+                <li>Billing subscription (will be cancelled)</li>
+              </ul>
+            </div>
+            
+            {!orgValidation?.canDelete && (
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-3">
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="h-4 w-4 inline mr-1" />
+                  {orgValidation?.error || 'Cannot delete organization at this time.'}
+                </p>
+              </div>
+            )}
+            
+            <Button
+              variant="destructive"
+              onClick={() => setDeleteOrgOpen(true)}
+              disabled={!orgValidation?.canDelete}
+              className="w-full"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Organization
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Account Deletion */}
+      <Card className="border-orange-200 dark:border-orange-900/20">
+        <CardHeader>
+          <CardTitle className="text-orange-600 dark:text-orange-400 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            Delete Account
+          </CardTitle>
+          <CardDescription>
+            Permanently delete your personal account. You will be removed from all organizations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/30 p-4">
+            <h4 className="text-sm font-semibold text-orange-900 dark:text-orange-200 mb-2">
+              What will happen:
+            </h4>
+            <ul className="text-sm text-orange-700 dark:text-orange-300 space-y-1 list-disc list-inside">
+              <li>Your account will be permanently deleted</li>
+              <li>You will be removed from all organizations</li>
+              <li>All your personal data will be erased</li>
+              <li>Any auth tokens you created will be revoked</li>
+            </ul>
+          </div>
+          
+          {!accountValidation?.canDelete && accountValidation?.organizationsAsLastOwner && accountValidation.organizationsAsLastOwner.length > 0 && (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-3">
+              <p className="text-sm text-amber-800 dark:text-amber-300 mb-2">
+                <AlertCircle className="h-4 w-4 inline mr-1" />
+                You cannot delete your account because you are the last owner of:
+              </p>
+              <ul className="text-sm text-amber-700 dark:text-amber-400 list-disc list-inside ml-4">
+                {accountValidation.organizationsAsLastOwner.map((org: string) => (
+                  <li key={org}>{org}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                Please delete these organizations or transfer ownership before deleting your account.
+              </p>
+            </div>
+          )}
+          
+          <Button
+            variant="destructive"
+            onClick={() => setDeleteAccountOpen(true)}
+            disabled={!accountValidation?.canDelete}
+            className="w-full"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete My Account
+          </Button>
+        </CardContent>
+      </Card>
+      
+      {/* Delete Organization Dialog */}
+      <Dialog open={deleteOrgOpen} onOpenChange={setDeleteOrgOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Organization</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. All data associated with <strong>{orgData?.name}</strong> will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="org-confirmation">
+                Type <strong>{orgData?.name}</strong> to confirm
+              </Label>
+              <Input
+                id="org-confirmation"
+                value={orgConfirmation}
+                onChange={(e) => setOrgConfirmation(e.target.value)}
+                placeholder="Organization name"
+                className="font-mono"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteOrgOpen(false)
+                setOrgConfirmation('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteOrgMutation.mutate()}
+              disabled={orgConfirmation !== orgData?.name || deleteOrgMutation.isPending}
+            >
+              {deleteOrgMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Organization
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Account Dialog */}
+      <Dialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Account</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. Your account and all personal data will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="account-confirmation">
+                Type <strong>{user?.email}</strong> to confirm
+              </Label>
+              <Input
+                id="account-confirmation"
+                value={accountConfirmation}
+                onChange={(e) => setAccountConfirmation(e.target.value)}
+                placeholder="Your email address"
+                className="font-mono"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteAccountOpen(false)
+                setAccountConfirmation('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteAccountMutation.mutate()}
+              disabled={accountConfirmation !== user?.email || deleteAccountMutation.isPending}
+            >
+              {deleteAccountMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Account
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

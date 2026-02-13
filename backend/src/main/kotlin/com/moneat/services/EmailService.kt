@@ -638,4 +638,81 @@ class EmailService {
             """.trimIndent()
         }
     }
+    
+    fun sendAccountDeletionConfirmation(email: String) {
+        val subject = "Your Moneat account has been deleted"
+        val htmlBody = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #1a1a1a; margin-bottom: 20px;">Account Deleted</h1>
+                    <p>Your Moneat account has been successfully deleted.</p>
+                    <p>All your personal data has been removed from our systems. If you had any active organization memberships, you have been removed from those organizations.</p>
+                    <p>If you deleted your account by mistake or have any questions, please contact us at <a href="mailto:support@moneat.io">support@moneat.io</a> within 30 days for potential account recovery.</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">Thank you for using Moneat.</p>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+        
+        val textBody = """
+            Account Deleted
+            
+            Your Moneat account has been successfully deleted.
+            
+            All your personal data has been removed from our systems. If you had any active organization memberships, you have been removed from those organizations.
+            
+            If you deleted your account by mistake or have any questions, please contact us at support@moneat.io within 30 days for potential account recovery.
+            
+            Thank you for using Moneat.
+        """.trimIndent()
+        
+        sendEmail(email, subject, htmlBody, textBody, "account_deletion")
+    }
+    
+    fun sendOrganizationDeletionNotification(email: String, organizationName: String) {
+        val subject = "Organization deleted: $organizationName"
+        val htmlBody = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #dc2626; margin-bottom: 20px;">Organization Deleted</h1>
+                    <p>The organization <strong>$organizationName</strong> has been deleted by its owner.</p>
+                    <p>All projects, events, and associated data have been permanently removed.</p>
+                    <p>Your Moneat account is still active. You can <a href="$frontendUrl/organizations/new" style="color: #2563eb;">create a new organization</a> or join another organization if you have pending invitations.</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">Moneat</p>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+        
+        val textBody = """
+            Organization Deleted
+            
+            The organization $organizationName has been deleted by its owner.
+            
+            All projects, events, and associated data have been permanently removed.
+            
+            Your Moneat account is still active. You can create a new organization or join another organization if you have pending invitations.
+            
+            Visit: $frontendUrl/organizations/new
+            
+            ---
+            Moneat
+        """.trimIndent()
+        
+        sendEmail(email, subject, htmlBody, textBody, "organization_deletion")
+    }
 }

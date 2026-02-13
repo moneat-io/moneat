@@ -935,6 +935,9 @@ fun Route.apiRoutes() {
                 
                 call.respond(HttpStatusCode.NoContent)
             }
+            
+            // Account Deletion Routes
+            accountDeletionRoutes()
         }
         }
     }
