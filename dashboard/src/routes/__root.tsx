@@ -3,7 +3,6 @@ import {useEffect, useState} from 'react'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
-import {cn} from '../lib/utils'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -107,7 +106,6 @@ function RootComponent() {
   const currentPath = router.location.pathname
   const isAuthenticated = api.isAuthenticated()
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
 
   useEffect(() => {
@@ -157,8 +155,6 @@ function RootComponent() {
         <Sidebar 
           isExpanded={isSidebarExpanded} 
           onExpandedChange={setIsSidebarExpanded}
-          isMobileOpen={isMobileSidebarOpen}
-          onMobileOpenChange={setIsMobileSidebarOpen}
         />
       )}
       <div

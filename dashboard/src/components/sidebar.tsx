@@ -46,8 +46,6 @@ export const SIDEBAR_EXPANDED_WIDTH = 256
 interface SidebarProps {
   isExpanded: boolean
   onExpandedChange: (expanded: boolean) => void
-  isMobileOpen?: boolean
-  onMobileOpenChange?: (open: boolean) => void
 }
 
 const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
@@ -58,7 +56,7 @@ const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
   { id: 'desktop-gaming', label: 'Desktop & Gaming' },
 ]
 
-export function Sidebar({ isExpanded, onExpandedChange, isMobileOpen, onMobileOpenChange }: SidebarProps) {
+export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   const router = useRouterState()
   const currentPath = router.location.pathname
   const navigate = useNavigate()
