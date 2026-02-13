@@ -112,11 +112,23 @@ function SetupPage() {
     queryFn: () => api.getSdkVersions(),
     staleTime: 30 * 60 * 1000,
   })
+  const {data: currentUser} = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => api.getCurrentUser(),
+    staleTime: 30 * 60 * 1000,
+  })
   const sdkVersions = sdkVersionsResponse?.versions
   const platformInfo = getPlatformInfo(project.framework)
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
   const [dsnCopiedMap, setDsnCopiedMap] = useState<Record<string, boolean>>({})
   const [showAddPlatform, setShowAddPlatform] = useState(false)
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+  const setupOptions = {
+    orgSlug: currentUser?.organizationSlug,
+    projectSlug: project.slug,
+    backendUrl,
+  }
 
   // Initialize selected target
   useEffect(() => {
@@ -159,16 +171,16 @@ function SetupPage() {
   // For single-platform, use the framework platform
   const getCurrentDocs = (targetId: string | null) => {
     if (!targetId || targetId === 'default') {
-      return getSetupDocs(project.framework, project.dsn, sdkVersions)
+      return getSetupDocs(project.framework, project.dsn, sdkVersions, setupOptions)
     }
     // Try to get target-specific docs (e.g., "kmp-android")
     const targetSpecificDocs = getSetupDocs(`${project.framework}-${targetId}`,
       project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn,
-      sdkVersions)
+      sdkVersions, setupOptions)
     // Fall back to framework docs if target-specific not found
     return targetSpecificDocs || getSetupDocs(project.framework,
       project.keys.find(k => k.platformTarget === targetId)?.dsn || project.dsn,
-      sdkVersions)
+      sdkVersions, setupOptions)
   }
 
   const docs = getCurrentDocs(selectedTarget)

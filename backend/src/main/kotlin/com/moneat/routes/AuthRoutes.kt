@@ -124,6 +124,17 @@ fun Route.authRoutes() {
                 }
                 
                 val state = oauthService.generateState()
+                val secureCookie = call.request.origin.scheme == "https"
+                call.response.cookies.append(
+                    Cookie(
+                        name = "oauth_state",
+                        value = state,
+                        httpOnly = true,
+                        secure = secureCookie,
+                        path = "/auth",
+                        extensions = mapOf("SameSite" to "Lax")
+                    )
+                )
                 val authUrl = oauthService.generateGitHubAuthUrl(state)
                 call.respondRedirect(authUrl)
             } catch (e: Exception) {
@@ -141,8 +152,21 @@ fun Route.authRoutes() {
                 if (code == null || state == null) {
                     throw IllegalArgumentException("Missing code or state parameter")
                 }
+                val cookieState = call.request.cookies["oauth_state"]
+                if (cookieState.isNullOrBlank() || cookieState != state) {
+                    throw IllegalArgumentException("Invalid OAuth state")
+                }
+                call.response.cookies.append(
+                    Cookie(
+                        name = "oauth_state",
+                        value = "",
+                        path = "/auth",
+                        maxAge = 0,
+                        secure = call.request.origin.scheme == "https"
+                    )
+                )
                 
-                val userData = oauthService.handleGitHubCallback(code, state)
+                val userData = oauthService.handleGitHubCallback(code)
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)
                 
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
@@ -167,6 +191,17 @@ fun Route.authRoutes() {
                 }
                 
                 val state = oauthService.generateState()
+                val secureCookie = call.request.origin.scheme == "https"
+                call.response.cookies.append(
+                    Cookie(
+                        name = "oauth_state",
+                        value = state,
+                        httpOnly = true,
+                        secure = secureCookie,
+                        path = "/auth",
+                        extensions = mapOf("SameSite" to "Lax")
+                    )
+                )
                 val authUrl = oauthService.generateAppleAuthUrl(state)
                 call.respondRedirect(authUrl)
             } catch (e: Exception) {
@@ -180,6 +215,20 @@ fun Route.authRoutes() {
             try {
                 val params = call.receiveParameters()
                 val idToken = params["id_token"] ?: throw IllegalArgumentException("Missing id_token")
+                val state = params["state"] ?: throw IllegalArgumentException("Missing state")
+                val cookieState = call.request.cookies["oauth_state"]
+                if (cookieState.isNullOrBlank() || cookieState != state) {
+                    throw IllegalArgumentException("Invalid OAuth state")
+                }
+                call.response.cookies.append(
+                    Cookie(
+                        name = "oauth_state",
+                        value = "",
+                        path = "/auth",
+                        maxAge = 0,
+                        secure = call.request.origin.scheme == "https"
+                    )
+                )
                 
                 val userData = oauthService.handleAppleCallback(idToken)
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)

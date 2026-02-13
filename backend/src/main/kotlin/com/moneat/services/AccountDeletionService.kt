@@ -196,6 +196,12 @@ class AccountDeletionService(
             } ?: return false
             
             val (orgName, _, projectIds) = orgData
+            val memberEmails = transaction {
+                Users.innerJoin(Memberships)
+                    .selectAll()
+                    .where { Memberships.organization_id eq organizationId }
+                    .map { it[Users.email] }
+            }
             
             logger.info { "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects" }
             
@@ -235,6 +241,9 @@ class AccountDeletionService(
                 
                 // Delete usage records
                 UsageRecords.deleteWhere { UsageRecords.organization_id eq organizationId }
+
+                // Revoke access to deleted organization by removing all memberships.
+                Memberships.deleteWhere { Memberships.organization_id eq organizationId }
                 
                 // Soft delete organization
                 Organizations.update({ Organizations.id eq organizationId }) {
@@ -247,13 +256,6 @@ class AccountDeletionService(
             
             // Send confirmation emails to all members
             try {
-                val memberEmails = transaction {
-                    Users.innerJoin(Memberships)
-                        .selectAll()
-                        .where { Memberships.organization_id eq organizationId }
-                        .map { it[Users.email] }
-                }
-                
                 memberEmails.forEach { email ->
                     try {
                         emailService.sendOrganizationDeletionNotification(email, orgName)

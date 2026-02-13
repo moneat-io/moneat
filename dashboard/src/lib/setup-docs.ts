@@ -18,6 +18,9 @@ export interface PlatformSetupDocs {
 }
 
 const DSN_PLACEHOLDER = '{{DSN}}'
+const ORG_PLACEHOLDER = '{{ORG}}'
+const PROJECT_PLACEHOLDER = '{{PROJECT}}'
+const BACKEND_URL_PLACEHOLDER = '{{BACKEND_URL}}'
 
 function createDocs(platformId: string, sdkName: string, steps: SetupStep[]): PlatformSetupDocs {
   return { platformId, sdkName, steps }
@@ -68,6 +71,30 @@ class MyApplication : Application() {
 // Capture a test message
 Sentry.captureMessage("Moneat test event from Android")`,
       language: 'kotlin',
+    },
+    {
+      title: 'Upload debug symbols & source maps',
+      description: 'To get readable stack traces in production, configure the Sentry Gradle plugin to upload debug symbols. First, create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `// app/build.gradle.kts
+plugins {
+    id("io.sentry.android.gradle") version "4.0.0"
+}
+
+sentry {
+    org.set("${ORG_PLACEHOLDER}")
+    projectName.set("${PROJECT_PLACEHOLDER}")
+    authToken.set(System.getenv("SENTRY_AUTH_TOKEN"))
+}`,
+      language: 'kotlin',
+    },
+    {
+      title: 'Configure sentry.properties',
+      description: 'Alternatively, create a sentry.properties file in your project root. Set SENTRY_AUTH_TOKEN as an environment variable or CI secret.',
+      code: `# sentry.properties
+auth.token=YOUR_AUTH_TOKEN
+org=${ORG_PLACEHOLDER}
+project=${PROJECT_PLACEHOLDER}`,
+      language: 'text',
     },
   ]),
 
@@ -129,6 +156,20 @@ struct MyApp: App {
 
 SentrySDK.capture(message: "Moneat test event from iOS")`,
       language: 'swift',
+    },
+    {
+      title: 'Upload debug symbols (dSYMs)',
+      description: 'To get readable stack traces, upload dSYMs using sentry-cli. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `# Install sentry-cli
+brew install getsentry/tools/sentry-cli
+
+# Upload dSYMs after building
+export SENTRY_AUTH_TOKEN=YOUR_AUTH_TOKEN
+export SENTRY_ORG=${ORG_PLACEHOLDER}
+export SENTRY_PROJECT=${PROJECT_PLACEHOLDER}
+
+sentry-cli debug-files upload --include-sources path/to/dSYMs`,
+      language: 'bash',
     },
   ]),
 
@@ -328,6 +369,23 @@ export default Sentry.wrap(App);`,
 Sentry.captureMessage("Moneat test event from React Native");`,
       language: 'javascript',
     },
+    {
+      title: 'Upload source maps',
+      description: 'Add the Sentry Expo plugin to upload source maps during builds. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `// app.json (or app.config.js)
+{
+  "plugins": [
+    ["@sentry/react-native/expo", {
+      "organization": "${ORG_PLACEHOLDER}",
+      "project": "${PROJECT_PLACEHOLDER}"
+    }]
+  ]
+}
+
+// Set SENTRY_AUTH_TOKEN in your EAS secrets or eas.json:
+// eas secret:create --name SENTRY_AUTH_TOKEN --value YOUR_AUTH_TOKEN`,
+      language: 'json',
+    },
   ]),
 
   flutter: createDocs('flutter', 'sentry_flutter', [
@@ -361,6 +419,20 @@ Future<void> main() async {
 
 Sentry.captureMessage('Moneat test event from Flutter');`,
       language: 'dart',
+    },
+    {
+      title: 'Upload debug symbols',
+      description: 'Upload debug symbols and source maps using sentry-cli. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `# Install sentry-cli
+brew install getsentry/tools/sentry-cli
+
+export SENTRY_AUTH_TOKEN=YOUR_AUTH_TOKEN
+export SENTRY_ORG=${ORG_PLACEHOLDER}
+export SENTRY_PROJECT=${PROJECT_PLACEHOLDER}
+
+# Upload debug symbols after building
+sentry-cli debug-files upload --include-sources build/`,
+      language: 'bash',
     },
   ]),
 
@@ -533,6 +605,20 @@ Sentry.init({
 Sentry.captureMessage("Moneat test event from web");`,
       language: 'javascript',
     },
+    {
+      title: 'Upload source maps',
+      description: 'Upload source maps after building for production. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `# Install sentry-cli
+npm install -g @sentry/cli
+
+# Upload source maps after your production build
+export SENTRY_AUTH_TOKEN=YOUR_AUTH_TOKEN
+export SENTRY_ORG=${ORG_PLACEHOLDER}
+export SENTRY_PROJECT=${PROJECT_PLACEHOLDER}
+
+sentry-cli sourcemaps upload --release=YOUR_RELEASE ./dist`,
+      language: 'bash',
+    },
   ]),
 
   react: createDocs('react', '@sentry/react', [
@@ -573,6 +659,20 @@ root.render(<App />);`,
 
 Sentry.captureMessage("Moneat test event from React");`,
       language: 'typescript',
+    },
+    {
+      title: 'Upload source maps',
+      description: 'Upload source maps after building for production. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `# Install sentry-cli
+npm install -g @sentry/cli
+
+# Upload source maps after your production build
+export SENTRY_AUTH_TOKEN=YOUR_AUTH_TOKEN
+export SENTRY_ORG=${ORG_PLACEHOLDER}
+export SENTRY_PROJECT=${PROJECT_PLACEHOLDER}
+
+sentry-cli sourcemaps upload --release=YOUR_RELEASE ./build`,
+      language: 'bash',
     },
   ]),
 
@@ -618,6 +718,20 @@ app.mount("#app");`,
 Sentry.captureMessage("Moneat test event from Vue");`,
       language: 'javascript',
     },
+    {
+      title: 'Upload source maps',
+      description: 'Upload source maps after building for production. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `# Install sentry-cli
+npm install -g @sentry/cli
+
+# Upload source maps after your production build
+export SENTRY_AUTH_TOKEN=YOUR_AUTH_TOKEN
+export SENTRY_ORG=${ORG_PLACEHOLDER}
+export SENTRY_PROJECT=${PROJECT_PLACEHOLDER}
+
+sentry-cli sourcemaps upload --release=YOUR_RELEASE ./dist`,
+      language: 'bash',
+    },
   ]),
 
   node: createDocs('node', '@sentry/node', [
@@ -652,6 +766,20 @@ import express from "express";
 
 Sentry.captureMessage("Moneat test event from Node.js");`,
       language: 'typescript',
+    },
+    {
+      title: 'Upload source maps',
+      description: 'Upload source maps after building for production. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `# Install sentry-cli
+npm install -g @sentry/cli
+
+# Upload source maps after your production build
+export SENTRY_AUTH_TOKEN=YOUR_AUTH_TOKEN
+export SENTRY_ORG=${ORG_PLACEHOLDER}
+export SENTRY_PROJECT=${PROJECT_PLACEHOLDER}
+
+sentry-cli sourcemaps upload --release=YOUR_RELEASE ./dist`,
+      language: 'bash',
     },
   ]),
 
@@ -1207,6 +1335,20 @@ Sentry.init({
       code: `Sentry.captureMessage("Moneat test event from Next.js");`,
       language: 'typescript',
     },
+    {
+      title: 'Upload source maps',
+      description: 'The @sentry/nextjs SDK can automatically upload source maps during build. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      code: `// next.config.js - withSentryConfig handles source map uploads
+const { withSentryConfig } = require("@sentry/nextjs");
+
+module.exports = withSentryConfig(nextConfig, {
+  org: "${ORG_PLACEHOLDER}",
+  project: "${PROJECT_PLACEHOLDER}",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+});`,
+      language: 'javascript',
+    },
   ]),
 
   nuxt: createDocs('nuxt', '@sentry/nuxt', [
@@ -1528,7 +1670,8 @@ const platformAliases: Record<string, string> = {
 export function getSetupDocs(
   platformId?: string,
   dsn: string = '',
-  sdkVersions?: SdkVersionMap
+  sdkVersions?: SdkVersionMap,
+  options?: { orgSlug?: string; projectSlug?: string; backendUrl?: string }
 ): PlatformSetupDocs | null {
   if (!platformId) return setupDocs.other
 
@@ -1537,13 +1680,24 @@ export function getSetupDocs(
   const resolvedId = platformAliases[lower] ?? platformAliases[normalized] ?? normalized
   const docs = setupDocs[resolvedId] ?? setupDocs.other
 
-  // Replace DSN placeholder in all code snippets
+  const orgSlug = options?.orgSlug || 'your-org-slug'
+  const projectSlug = options?.projectSlug || 'your-project-slug'
+  const backendUrl = options?.backendUrl || 'https://api.moneat.io'
+
+  // Replace all placeholders in code snippets
   return {
     ...docs,
     steps: docs.steps.map((step) => ({
       ...step,
       code: step.code
-        ? applySdkVersionsToSnippet(step.code.split(DSN_PLACEHOLDER).join(dsn), sdkVersions)
+        ? applySdkVersionsToSnippet(
+            step.code
+              .split(DSN_PLACEHOLDER).join(dsn)
+              .split(ORG_PLACEHOLDER).join(orgSlug)
+              .split(PROJECT_PLACEHOLDER).join(projectSlug)
+              .split(BACKEND_URL_PLACEHOLDER).join(backendUrl),
+            sdkVersions
+          )
         : step.code,
     })),
   }

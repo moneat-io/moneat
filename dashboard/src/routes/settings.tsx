@@ -2821,7 +2821,8 @@ function SilencePeriodsTab() {
 
 function AccountTab() {
   const { toast } = useToast()
-  const { user, orgId } = useAuth()
+  const { user } = useAuth()
+  const orgId = user?.orgId
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
   const [deleteOrgOpen, setDeleteOrgOpen] = useState(false)
   const [accountConfirmation, setAccountConfirmation] = useState('')
@@ -2831,7 +2832,7 @@ function AccountTab() {
     queryKey: ['organization', orgId],
     queryFn: async () => {
       const res = await fetch(`/api/v1/organizations/${orgId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
       })
       if (!res.ok) throw new Error('Failed to fetch organization')
       return res.json()
@@ -2843,7 +2844,7 @@ function AccountTab() {
     queryKey: ['account-deletion-validation'],
     queryFn: async () => {
       const res = await fetch('/api/v1/account/deletion-validation', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
       })
       if (!res.ok) throw new Error('Failed to validate')
       return res.json()
@@ -2854,7 +2855,7 @@ function AccountTab() {
     queryKey: ['org-deletion-validation', orgId],
     queryFn: async () => {
       const res = await fetch(`/api/v1/organizations/${orgId}/deletion-validation`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
       })
       if (!res.ok) throw new Error('Failed to validate')
       return res.json()
@@ -2867,7 +2868,7 @@ function AccountTab() {
       const res = await fetch('/api/v1/account', {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ confirmation: accountConfirmation }),
@@ -2883,7 +2884,7 @@ function AccountTab() {
         title: 'Account deleted',
         description: 'Your account has been successfully deleted.',
       })
-      localStorage.removeItem('token')
+      localStorage.removeItem('auth_token')
       window.location.href = '/login'
     },
     onError: (error: Error) => {
@@ -2900,7 +2901,7 @@ function AccountTab() {
       const res = await fetch(`/api/v1/organizations/${orgId}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ confirmation: orgConfirmation }),

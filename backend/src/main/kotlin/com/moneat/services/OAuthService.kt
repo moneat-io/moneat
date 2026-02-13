@@ -12,16 +12,18 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.config.*
+import io.ktor.util.decodeBase64Bytes
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.KeyFactory
-import java.security.interfaces.ECPrivateKey
-import java.security.spec.PKCS8EncodedKeySpec
+import java.security.interfaces.RSAPublicKey
+import java.security.spec.RSAPublicKeySpec
 import java.util.*
 import com.moneat.config.EnvConfig
+import java.math.BigInteger
 
 private val logger = KotlinLogging.logger {}
 
@@ -96,8 +98,6 @@ class OAuthService {
         }
     }
     
-    private val authService = AuthService()
-    
     fun isGitHubEnabled(): Boolean = githubClientId != null && githubClientSecret != null
     fun isAppleEnabled(): Boolean = appleClientId != null && appleTeamId != null && appleKeyId != null && applePrivateKey != null
     
@@ -114,7 +114,7 @@ class OAuthService {
                 "state=${state.encodeURLParameter()}"
     }
     
-    suspend fun handleGitHubCallback(code: String, @Suppress("UNUSED_PARAMETER") state: String): OAuthUserData {
+    suspend fun handleGitHubCallback(code: String): OAuthUserData {
         if (!isGitHubEnabled()) {
             throw IllegalStateException("GitHub OAuth is not configured")
         }
@@ -211,8 +211,7 @@ class OAuthService {
             throw IllegalStateException("Apple Sign In is not configured")
         }
         
-        // Decode and verify the ID token
-        val decodedToken = JWT.decode(idToken)
+        val decodedToken = verifyAppleIdToken(idToken)
         
         // Verify issuer
         if (decodedToken.issuer != "https://appleid.apple.com") {
@@ -225,7 +224,7 @@ class OAuthService {
         }
         
         // Verify expiration
-        if (decodedToken.expiresAt.before(Date())) {
+        if (decodedToken.expiresAt?.before(Date()) != false) {
             throw IllegalArgumentException("Apple ID token has expired")
         }
         
@@ -249,6 +248,29 @@ class OAuthService {
             name = name,
             emailVerified = emailVerified
         )
+    }
+
+    private suspend fun verifyAppleIdToken(idToken: String): com.auth0.jwt.interfaces.DecodedJWT {
+        val decoded = JWT.decode(idToken)
+        val keyId = decoded.keyId ?: throw IllegalArgumentException("Missing key ID in Apple ID token")
+        val keysResponse: ApplePublicKeys = httpClient.get("https://appleid.apple.com/auth/keys").body()
+        val key = keysResponse.keys.firstOrNull { it.kid == keyId && it.kty == "RSA" }
+            ?: throw IllegalArgumentException("Unable to find Apple signing key")
+
+        val publicKey = buildAppleRsaPublicKey(key)
+        val verifier = JWT.require(Algorithm.RSA256(publicKey, null))
+            .withIssuer("https://appleid.apple.com")
+            .withAudience(appleClientId)
+            .build()
+
+        return verifier.verify(idToken)
+    }
+
+    private fun buildAppleRsaPublicKey(key: ApplePublicKey): RSAPublicKey {
+        val modulus = BigInteger(1, key.n.decodeBase64Bytes())
+        val exponent = BigInteger(1, key.e.decodeBase64Bytes())
+        val keySpec = RSAPublicKeySpec(modulus, exponent)
+        return KeyFactory.getInstance("RSA").generatePublic(keySpec) as RSAPublicKey
     }
     
     fun findOrCreateOAuthUser(userData: OAuthUserData): AuthResponse {
