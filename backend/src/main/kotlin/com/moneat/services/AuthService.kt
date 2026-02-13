@@ -416,7 +416,7 @@ class AuthService {
         }
     }
     
-    fun completeOnboarding(userId: Int, organizationName: String, companySize: String): UserResponse {
+    fun completeOnboarding(userId: Int, organizationName: String, companySize: String, customSlug: String? = null): UserResponse {
         return transaction {
             val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 ?: throw IllegalArgumentException("User not found")
@@ -429,12 +429,23 @@ class AuthService {
             
             val orgId = membership[Memberships.organization_id]
             
-            // Update organization with new name and company size
-            val slug = organizationName.lowercase()
+            // Generate slug from custom input or organization name
+            val baseSlug = (customSlug ?: organizationName).lowercase()
                 .replace(Regex("[^a-z0-9]+"), "-")
                 .trim('-')
                 .take(100)
             
+            // Ensure slug uniqueness
+            var slug = baseSlug
+            var suffix = 2
+            while (Organizations.selectAll()
+                .where { (Organizations.slug eq slug) and (Organizations.id neq orgId) }
+                .count() > 0) {
+                slug = "$baseSlug-$suffix"
+                suffix++
+            }
+            
+            // Update organization with new name, slug, and company size
             Organizations.update({ Organizations.id eq orgId }) {
                 it[name] = organizationName
                 it[Organizations.slug] = slug
@@ -452,7 +463,8 @@ class AuthService {
                 user[Users.name],
                 user[Users.email_verified],
                 true,
-                user[Users.is_admin]
+                user[Users.is_admin],
+                slug
             )
         }
     }

@@ -364,7 +364,7 @@ class OAuthService {
                 it[password_hash] = "" // No password for OAuth users
                 it[name] = userData.name
                 it[email_verified] = userData.emailVerified
-                it[onboarding_completed] = true // Skip onboarding for OAuth users
+                it[onboarding_completed] = false // Require onboarding for OAuth users
                 it[oauth_provider] = userData.provider
                 it[oauth_provider_id] = userData.providerId
             }[Users.id]

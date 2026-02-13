@@ -40,8 +40,22 @@ fun Route.apiRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 
-                val user = transaction {
-                    Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                val (user, orgSlug) = transaction {
+                    val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                        ?: return@transaction Pair(null, null)
+                    
+                    val membership = Memberships.selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                    
+                    val slug = membership?.let { m ->
+                        Organizations.selectAll()
+                            .where { Organizations.id eq m[Memberships.organization_id] }
+                            .firstOrNull()
+                            ?.get(Organizations.slug)
+                    }
+                    
+                    Pair(userRow, slug)
                 }
                 
                 if (user == null) {
@@ -53,7 +67,8 @@ fun Route.apiRoutes() {
                         user[Users.name],
                         user[Users.email_verified],
                         user[Users.onboarding_completed],
-                        user[Users.is_admin]
+                        user[Users.is_admin],
+                        orgSlug
                     ))
                 }
             }

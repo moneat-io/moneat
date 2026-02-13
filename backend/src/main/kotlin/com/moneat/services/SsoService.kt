@@ -463,7 +463,7 @@ class SsoService {
                         it[Users.name] = name
                         it[password_hash] = "" // No password for SSO users
                         it[email_verified] = true // SSO users are pre-verified
-                        it[onboarding_completed] = true // Skip onboarding for SSO users
+                        it[onboarding_completed] = false // Require onboarding for SSO users
                     }[Users.id]
                     
                     // Link to SSO

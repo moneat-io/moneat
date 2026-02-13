@@ -1,4 +1,4 @@
-import {createRootRoute, Outlet, useRouterState} from '@tanstack/react-router'
+import {createRootRoute, Outlet, useRouterState, useNavigate} from '@tanstack/react-router'
 import {useEffect, useState} from 'react'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
 import {Toaster} from '../components/ui/toaster'
@@ -36,6 +36,18 @@ const STATIC_TITLES: Record<string, string> = {
   '/admin/emails': 'Admin Emails',
   '/admin/infrastructure': 'Admin Infrastructure',
 }
+
+// Public routes that don't require onboarding check
+const PUBLIC_ROUTES = new Set([
+  '/login',
+  '/signup',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/onboarding',
+  '/terms',
+  '/privacy',
+])
 
 function normalizePath(pathname: string): string {
   if (!pathname || pathname === '/') return '/'
@@ -90,13 +102,39 @@ function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
 
 function RootComponent() {
   const router = useRouterState()
+  const navigate = useNavigate()
   const currentPath = router.location.pathname
   const isAuthenticated = api.isAuthenticated()
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
+  const [onboardingChecked, setOnboardingChecked] = useState(false)
 
   useEffect(() => {
     document.title = getDocumentTitle(currentPath, isAuthenticated)
   }, [currentPath, isAuthenticated])
+
+  // Centralized onboarding check
+  useEffect(() => {
+    async function checkOnboarding() {
+      // Skip check if not authenticated or on public routes or public status pages
+      if (!isAuthenticated || PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/')) {
+        setOnboardingChecked(true)
+        return
+      }
+
+      try {
+        const user = await api.getCurrentUser()
+        if (!user.onboardingCompleted && currentPath !== '/onboarding') {
+          navigate({ to: '/onboarding' })
+        }
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error)
+      } finally {
+        setOnboardingChecked(true)
+      }
+    }
+
+    checkOnboarding()
+  }, [isAuthenticated, currentPath, navigate])
   
   // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
   const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'].includes(currentPath)
@@ -104,6 +142,11 @@ function RootComponent() {
   const isPublicStatusPage = currentPath.startsWith('/s/')
   const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
+
+  // Show loading state while checking onboarding
+  if (isAuthenticated && !onboardingChecked && !PUBLIC_ROUTES.has(currentPath) && !currentPath.startsWith('/s/') && !currentPath.startsWith('/auth/') && !currentPath.startsWith('/legal/')) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-background">

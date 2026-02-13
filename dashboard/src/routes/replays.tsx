@@ -1,6 +1,6 @@
 import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api, formatErrorForLogging} from '@/lib/api'
+import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
 import {useEffect, useMemo, useState} from 'react'
@@ -30,14 +30,6 @@ export const Route = createFileRoute('/replays')({
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
       throw redirect({ to: '/login' })
-    }
-    try {
-      const user = await api.getCurrentUser()
-      if (!user.onboardingCompleted) {
-        throw redirect({ to: '/onboarding' })
-      }
-    } catch (error) {
-      console.error('Failed to fetch user:', formatErrorForLogging(error))
     }
   },
   component: ReplaysLayout,

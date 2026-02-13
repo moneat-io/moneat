@@ -1618,15 +1618,19 @@ class ApiClient {
     })
   }
 
-  async completeOnboarding(organizationName: string, companySize: string): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean }> {
+  async completeOnboarding(organizationName: string, companySize: string, slug?: string): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; organizationSlug?: string }> {
     return this.request(`${API_BASE.replace('/v1', '')}/auth/complete-onboarding`, {
       method: 'POST',
-      body: JSON.stringify({ organizationName, companySize }),
+      body: JSON.stringify({ organizationName, companySize, slug }),
     })
   }
 
-  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean }> {
+  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean; organizationSlug?: string }> {
     return this.request(`${API_BASE}/user`)
+  }
+
+  async checkSlugAvailability(slug: string): Promise<{ available: boolean }> {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/check-slug?slug=${encodeURIComponent(slug)}`)
   }
 
   async getOrganizations(): Promise<Array<{ id: number; name: string; slug: string }>> {

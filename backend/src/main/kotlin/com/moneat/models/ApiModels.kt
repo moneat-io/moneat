@@ -33,7 +33,8 @@ data class UserResponse(
     val name: String?,
     val emailVerified: Boolean = false,
     val onboardingCompleted: Boolean = false,
-    val isAdmin: Boolean = false
+    val isAdmin: Boolean = false,
+    val organizationSlug: String? = null
 )
 
 @Serializable
@@ -246,7 +247,8 @@ data class ResendVerificationRequest(
 @Serializable
 data class CompleteOnboardingRequest(
     val organizationName: String,
-    val companySize: String
+    val companySize: String,
+    val slug: String? = null
 )
 
 @Serializable

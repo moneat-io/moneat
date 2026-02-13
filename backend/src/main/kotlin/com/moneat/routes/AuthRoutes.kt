@@ -14,6 +14,11 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import mu.KotlinLogging
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
@@ -195,13 +200,48 @@ fun Route.authRoutes() {
     
     authenticate("auth-jwt") {
         route("/auth") {
+            get("/check-slug") {
+                val slug = call.request.queryParameters["slug"]
+                if (slug.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "slug parameter is required"))
+                    return@get
+                }
+                
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                val available = transaction {
+                    // Get user's org ID to exclude from check
+                    val membership = Memberships.selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                    
+                    val userOrgId = membership?.get(Memberships.organization_id)
+                    
+                    // Check if slug exists in other organizations
+                    val existingOrg = if (userOrgId != null) {
+                        Organizations.selectAll()
+                            .where { (Organizations.slug eq slug) and (Organizations.id neq userOrgId) }
+                            .firstOrNull()
+                    } else {
+                        Organizations.selectAll()
+                            .where { Organizations.slug eq slug }
+                            .firstOrNull()
+                    }
+                    
+                    existingOrg == null
+                }
+                
+                call.respond(mapOf("available" to available))
+            }
+            
             post("/complete-onboarding") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val request = call.receive<CompleteOnboardingRequest>()
                 
                 try {
-                    val user = authService.completeOnboarding(userId, request.organizationName, request.companySize)
+                    val user = authService.completeOnboarding(userId, request.organizationName, request.companySize, request.slug)
                     call.respond(user)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))

@@ -15,14 +15,6 @@ export const Route = createFileRoute('/releases')({
     if (!api.isAuthenticated()) {
       throw redirect({ to: '/login' })
     }
-    try {
-      const user = await api.getCurrentUser()
-      if (!user.onboardingCompleted) {
-        throw redirect({ to: '/onboarding' })
-      }
-    } catch (error) {
-      console.error('Failed to fetch user:', formatErrorForLogging(error))
-    }
   },
   component: ReleasesLayout,
 })

@@ -1,7 +1,7 @@
 import {useEffect, useMemo, useState} from 'react'
 import {createFileRoute, Link, redirect, useNavigate, useRouter} from '@tanstack/react-router'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
-import {AlertTriangle, ArrowLeft, Loader2, Save, Trash2, Layers, Smartphone, Monitor, Server, Gamepad2} from 'lucide-react'
+import {AlertTriangle, ArrowLeft, Loader2, Save, Trash2, Layers, Smartphone, Monitor, Server, Gamepad2, Copy, Check} from 'lucide-react'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
@@ -49,6 +49,28 @@ function ProjectSettingsPage() {
   const [framework, setFramework] = useState(getPlatformInfo(project.framework)?.id ?? 'other')
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [copiedSlug, setCopiedSlug] = useState(false)
+  const [copiedConfig, setCopiedConfig] = useState(false)
+  const [orgSlug, setOrgSlug] = useState<string | null>(null)
+
+  // Fetch organization slug
+  useEffect(() => {
+    async function fetchOrgSlug() {
+      try {
+        const user = await api.getCurrentUser()
+        setOrgSlug(user.organizationSlug || null)
+      } catch (error) {
+        console.error('Failed to fetch organization slug:', error)
+      }
+    }
+    fetchOrgSlug()
+  }, [])
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+  const sentryCliConfig = orgSlug ? `[defaults]
+url=${backendUrl}
+org=${orgSlug}
+project=${project.slug}` : null
 
   useEffect(() => {
     setName(project.name)
@@ -155,6 +177,20 @@ function ProjectSettingsPage() {
     updateProjectMutation.mutate(updates)
   }
 
+  const copySlug = () => {
+    navigator.clipboard.writeText(project.slug)
+    setCopiedSlug(true)
+    setTimeout(() => setCopiedSlug(false), 2000)
+  }
+
+  const copyConfig = () => {
+    if (sentryCliConfig) {
+      navigator.clipboard.writeText(sentryCliConfig)
+      setCopiedConfig(true)
+      setTimeout(() => setCopiedConfig(false), 2000)
+    }
+  }
+
   return (
     <div>
       <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -201,6 +237,52 @@ function ProjectSettingsPage() {
                 placeholder="My Project"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project-slug">Project Slug</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="project-slug"
+                  value={project.slug}
+                  readOnly
+                  className="bg-muted"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={copySlug}
+                >
+                  {copiedSlug ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Used for Sentry CLI and API endpoints
+              </p>
+            </div>
+
+            {sentryCliConfig && (
+              <div className="space-y-2">
+                <Label>Sentry CLI Configuration</Label>
+                <div className="relative">
+                  <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto pr-12">
+                    <code>{sentryCliConfig}</code>
+                  </pre>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2"
+                    onClick={copyConfig}
+                  >
+                    {copiedConfig ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Use this in your sentry.properties file or with sentry-cli commands
+                </p>
+              </div>
+            )}
 
             <div className="space-y-3">
               <div>

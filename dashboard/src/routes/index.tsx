@@ -1,7 +1,7 @@
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {LandingPage} from '@/components/landing/landing-page'
 import {useQuery} from '@tanstack/react-query'
-import {api, formatErrorForLogging, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
+import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
@@ -176,20 +176,6 @@ function isRecentHeartbeat(
 }
 
 export const Route = createFileRoute('/')({
-  beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      return
-    }
-    try {
-      const user = await api.getCurrentUser()
-      if (!user.onboardingCompleted) {
-        throw redirect({to: '/onboarding'})
-      }
-    } catch (error) {
-      if (error instanceof Error && 'redirect' in error) throw error
-      console.error('Failed to fetch user:', formatErrorForLogging(error))
-    }
-  },
   component: IndexPage,
 })
 
