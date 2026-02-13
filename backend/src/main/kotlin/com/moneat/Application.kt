@@ -30,9 +30,9 @@ fun Application.module() {
         configureRateLimiting()
         configureRedis()
         configureClickHouse()
-        configureRouting()
         configureDatabases()
         configureBackgroundJobs()
+        configureRouting()
     } catch (e: Exception) {
         log.error("Failed to start application", e)
         throw e
