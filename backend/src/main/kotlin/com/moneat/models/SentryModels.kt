@@ -183,12 +183,42 @@ object SentryMessageSerializer : KSerializer<String?> {
     }
 }
 
+object FlexibleTimestampSerializer : KSerializer<Double?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleTimestamp", PrimitiveKind.DOUBLE)
+
+    override fun deserialize(decoder: Decoder): Double? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeDouble()
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            JsonNull -> null
+            is JsonPrimitive -> {
+                element.doubleOrNull ?: run {
+                    // Try to parse as ISO 8601 timestamp string
+                    val isoString = element.contentOrNull ?: return null
+                    try {
+                        val instant = java.time.Instant.parse(isoString)
+                        instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }
+            else -> null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: Double?) {
+        value?.let { encoder.encodeDouble(it) }
+    }
+}
+
 @Serializable
 data class SentryTransaction(
     val event_id: String? = null,
     val type: String? = null,
     val transaction: String? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val start_timestamp: Double? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val platform: String? = null,
     val environment: String? = null,
@@ -212,7 +242,9 @@ data class SentrySpan(
     val trace_id: String? = null,
     val op: String? = null,
     val description: String? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val start_timestamp: Double? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val status: String? = null,
     val tags: Map<String, String>? = null,
