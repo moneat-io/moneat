@@ -2,6 +2,7 @@ import {createFileRoute} from '@tanstack/react-router'
 import {DocPage, DocSection, DocSubSection, DocParagraph} from '@/components/docs/doc-page'
 import {CodeBlock, InlineCode} from '@/components/docs/code-block'
 import {Callout} from '@/components/docs/callout'
+import {platforms} from './projects'
 
 export const Route = createFileRoute('/docs/sdk-setup')({
   component: SdkSetupPage,
@@ -191,10 +192,23 @@ func main() {
           official <a href="https://docs.sentry.io/platforms/" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Sentry SDK documentation</a> and
           replace the DSN with your Moneat DSN.
         </DocParagraph>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm text-muted-foreground">
-          {['Ruby', 'PHP', '.NET', 'Rust', 'Elixir', 'Java', 'Next.js', 'Vue', 'Angular', 'Django', 'Flask', 'Spring', 'Laravel', 'Flutter', 'React Native', 'Unity'].map((platform) => (
-            <div key={platform} className="px-3 py-1.5 rounded bg-muted/50 text-center">{platform}</div>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {platforms
+            .filter(p => !['android', 'ios', 'kmp', 'react', 'node', 'python', 'kotlin', 'web', 'other'].includes(p.id))
+            .map((platform) => {
+              const Icon = platform.icon
+              return (
+                <div 
+                  key={platform.id} 
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-accent/50 transition-colors"
+                >
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: platform.color }}>
+                    <Icon className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-xs font-medium">{platform.name}</span>
+                </div>
+              )
+            })}
         </div>
       </DocSection>
 

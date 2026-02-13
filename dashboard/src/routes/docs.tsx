@@ -2,6 +2,7 @@ import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-rou
 import {useState} from 'react'
 import {Logo} from '@/components/logo'
 import {cn} from '@/lib/utils'
+import {DocsSearch} from '@/components/docs/search'
 import {
   BookOpen,
   Rocket,
@@ -114,23 +115,26 @@ function DocsLayout() {
     <div className="min-h-screen bg-background">
       {/* Top Header */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-between h-14 px-4 lg:px-6">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between h-14 px-4 lg:px-6 gap-4">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
             <button
-              className="lg:hidden p-2 -ml-2 rounded-md hover:bg-accent"
+              className="lg:hidden p-2 -ml-2 rounded-md hover:bg-accent shrink-0"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
-            <Link to="/docs" className="flex items-center gap-3">
+            <Link to="/docs" className="flex items-center gap-3 shrink-0">
               <Logo className="h-6" />
-              <span className="text-sm font-semibold text-muted-foreground border-l pl-3">Docs</span>
+              <span className="text-sm font-semibold text-muted-foreground border-l pl-3 hidden sm:inline">Docs</span>
             </Link>
+            <div className="flex-1 max-w-md hidden sm:block">
+              <DocsSearch />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <Link
               to="/login"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden md:block"
             >
               Sign In
             </Link>
@@ -141,6 +145,10 @@ function DocsLayout() {
               Get Started
             </Link>
           </div>
+        </div>
+        {/* Mobile Search */}
+        <div className="sm:hidden px-4 pb-3">
+          <DocsSearch />
         </div>
       </header>
 
