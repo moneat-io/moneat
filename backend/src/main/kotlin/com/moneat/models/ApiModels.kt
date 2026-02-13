@@ -248,7 +248,8 @@ data class ResendVerificationRequest(
 data class CompleteOnboardingRequest(
     val organizationName: String,
     val companySize: String,
-    val slug: String? = null
+    val slug: String? = null,
+    val referralSource: String
 )
 
 @Serializable

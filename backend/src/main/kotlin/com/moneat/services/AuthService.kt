@@ -416,7 +416,7 @@ class AuthService {
         }
     }
     
-    fun completeOnboarding(userId: Int, organizationName: String, companySize: String, customSlug: String? = null): UserResponse {
+    fun completeOnboarding(userId: Int, organizationName: String, companySize: String, customSlug: String? = null, referralSource: String): UserResponse {
         return transaction {
             val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 ?: throw IllegalArgumentException("User not found")
@@ -445,11 +445,12 @@ class AuthService {
                 suffix++
             }
             
-            // Update organization with new name, slug, and company size
+            // Update organization with new name, slug, company size, and referral source
             Organizations.update({ Organizations.id eq orgId }) {
                 it[name] = organizationName
                 it[Organizations.slug] = slug
                 it[company_size] = companySize
+                it[Organizations.referral_source] = referralSource
             }
             
             // Mark onboarding as completed

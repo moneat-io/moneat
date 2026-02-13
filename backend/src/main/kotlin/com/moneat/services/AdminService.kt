@@ -8,9 +8,8 @@ import kotlinx.datetime.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 
@@ -176,6 +175,15 @@ data class UpdateUserRequest(
 class AdminService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val usageTracker = UsageTrackingService.instance
+
+    private fun applyUserSearchFilter(query: Query, search: String?): Query {
+        if (search.isNullOrBlank()) return query
+        val searchPattern = "%${search.trim().lowercase()}%"
+        return query.where {
+            (Users.email.lowerCase() like searchPattern) or
+                ((Users.name.isNotNull()) and (Users.name.lowerCase() like searchPattern))
+        }
+    }
     private val pricingTierService = PricingTierService()
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -627,49 +635,43 @@ class AdminService {
 
     fun getAllUsers(page: Int, limit: Int, search: String? = null): List<AdminUserSummary> {
         return transaction {
-            var query = Users.selectAll()
-            
-            // Apply search filter if provided
-            if (!search.isNullOrBlank()) {
-                val searchLower = "%${search.lowercase()}%"
-                query = query.where { Users.email like searchLower }
-            }
-            
-            query
+            val userRows = applyUserSearchFilter(Users.selectAll(), search)
                 .orderBy(Users.id to SortOrder.DESC)
                 .limit(limit, offset = (page - 1) * limit.toLong())
-                .map { row ->
-                    val userId = row[Users.id]
-                    val orgCount = Memberships.selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .count()
-                        .toInt()
-                    
-                    AdminUserSummary(
-                        id = userId,
-                        email = row[Users.email],
-                        name = row[Users.name],
-                        emailVerified = row[Users.email_verified],
-                        isAdmin = row[Users.is_admin],
-                        onboardingCompleted = row[Users.onboarding_completed],
-                        oauthProvider = row[Users.oauth_provider],
-                        organizationCount = orgCount,
-                        createdAt = null // Will add created_at field later if needed
-                    )
-                }
+                .toList()
+
+            val userIds = userRows.map { row -> row[Users.id] }
+            val organizationCountsByUser = if (userIds.isEmpty()) {
+                emptyMap()
+            } else {
+                Memberships
+                    .select(Memberships.user_id)
+                    .where { Memberships.user_id inList userIds }
+                    .map { row -> row[Memberships.user_id] }
+                    .groupingBy { userId -> userId }
+                    .eachCount()
+            }
+
+            userRows.map { row ->
+                val userId = row[Users.id]
+                AdminUserSummary(
+                    id = userId,
+                    email = row[Users.email],
+                    name = row[Users.name],
+                    emailVerified = row[Users.email_verified],
+                    isAdmin = row[Users.is_admin],
+                    onboardingCompleted = row[Users.onboarding_completed],
+                    oauthProvider = row[Users.oauth_provider],
+                    organizationCount = organizationCountsByUser[userId] ?: 0,
+                    createdAt = null // Will add created_at field later if needed
+                )
+            }
         }
     }
 
     fun getTotalUserCount(search: String? = null): Int {
         return transaction {
-            var query = Users.selectAll()
-            
-            if (!search.isNullOrBlank()) {
-                val searchLower = "%${search.lowercase()}%"
-                query = query.where { Users.email like searchLower }
-            }
-            
-            query.count().toInt()
+            applyUserSearchFilter(Users.selectAll(), search).count().toInt()
         }
     }
 

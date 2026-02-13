@@ -6,6 +6,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.plus
 import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
@@ -50,17 +51,22 @@ class AdminBillingService {
                 ?: throw IllegalStateException("No active subscription found for organization $organizationId")
 
             val subscriptionId = subscription[Subscriptions.id]
-            val currentBonusGbBytes = subscription[Subscriptions.bonus_gb_bytes]
-            val currentBonusUnits = subscription[Subscriptions.bonus_units]
 
-            // Update subscription with new bonus credits (additive)
+            // Apply additive increment in SQL to avoid lost updates under concurrent grants.
             Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
-                it[bonus_gb_bytes] = currentBonusGbBytes + bonusGbBytes
-                it[bonus_units] = currentBonusUnits + bonusUnitsValue
+                it[bonus_gb_bytes] = Subscriptions.bonus_gb_bytes + bonusGbBytes
+                it[bonus_units] = Subscriptions.bonus_units + bonusUnitsValue
                 it[bonus_granted_at] = now
                 it[bonus_granted_by] = grantedByUserId
                 it[bonus_reason] = reason
             }
+
+            val updatedSubscription = Subscriptions
+                .select(Subscriptions.bonus_gb_bytes, Subscriptions.bonus_units)
+                .where { Subscriptions.id eq subscriptionId }
+                .first()
+            val updatedBonusGbBytes = updatedSubscription[Subscriptions.bonus_gb_bytes]
+            val updatedBonusUnits = updatedSubscription[Subscriptions.bonus_units]
 
             // Record grant in audit trail
             PromotionalCreditGrants.insert {
@@ -81,9 +87,9 @@ class AdminBillingService {
 
             GrantPromotionalCreditResponse(
                 organizationId = organizationId,
-                bonusGbBytes = currentBonusGbBytes + bonusGbBytes,
-                bonusUnits = currentBonusUnits + bonusUnitsValue,
-                bonusGb = (currentBonusGbBytes + bonusGbBytes) / BYTES_PER_GB.toDouble(),
+                bonusGbBytes = updatedBonusGbBytes,
+                bonusUnits = updatedBonusUnits,
+                bonusGb = updatedBonusGbBytes / BYTES_PER_GB.toDouble(),
                 reason = reason,
                 grantedAt = now.toLocalDateTime(TimeZone.UTC).toString()
             )

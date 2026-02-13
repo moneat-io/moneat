@@ -38,6 +38,7 @@ object Organizations : Table("organizations") {
     val name = varchar("name", 255)
     val slug = varchar("slug", 255)
     val company_size = varchar("company_size", 50).nullable()
+    val referral_source = varchar("referral_source", 100).nullable()
     val deletedAt = timestamp("deleted_at").nullable()
     val deletedBy = integer("deleted_by").references(Users.id).nullable()
     override val primaryKey = PrimaryKey(id)

@@ -27,6 +27,17 @@ const COMPANY_SIZES = [
   '500+'
 ]
 
+const REFERRAL_SOURCES = [
+  'Google Search',
+  'Social Media (Twitter, LinkedIn, etc.)',
+  'Friend or Colleague',
+  'Blog Post or Article',
+  'Conference or Event',
+  'Product Hunt',
+  'GitHub',
+  'Other'
+]
+
 // Generate slug from organization name
 function generateSlug(name: string): string {
   return name
@@ -40,6 +51,7 @@ function OnboardingPage() {
   const navigate = useNavigate()
   const [organizationName, setOrganizationName] = useState('')
   const [companySize, setCompanySize] = useState('')
+  const [referralSource, setReferralSource] = useState('')
   const [slug, setSlug] = useState('')
   const [customSlug, setCustomSlug] = useState(false)
   const [error, setError] = useState('')
@@ -109,6 +121,11 @@ function OnboardingPage() {
       return
     }
 
+    if (!referralSource) {
+      setError('Please select how you heard about us')
+      return
+    }
+
     if (!slug) {
       setError('Organization slug is required')
       return
@@ -121,7 +138,7 @@ function OnboardingPage() {
 
     setLoading(true)
     try {
-      await api.completeOnboarding(organizationName, companySize, slug)
+      await api.completeOnboarding(organizationName, companySize, slug, referralSource)
       navigate({ to: '/' })
     } catch (err) {
       setError('Failed to complete onboarding. Please try again.')
@@ -219,6 +236,22 @@ function OnboardingPage() {
                   {COMPANY_SIZES.map((size) => (
                     <SelectItem key={size} value={size}>
                       {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="referralSource">How did you hear about us?</Label>
+              <Select value={referralSource} onValueChange={setReferralSource} required>
+                <SelectTrigger id="referralSource">
+                  <SelectValue placeholder="Select an option" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REFERRAL_SOURCES.map((source) => (
+                    <SelectItem key={source} value={source}>
+                      {source}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -290,7 +290,7 @@ fun Route.authRoutes() {
                 val request = call.receive<CompleteOnboardingRequest>()
                 
                 try {
-                    val user = authService.completeOnboarding(userId, request.organizationName, request.companySize, request.slug)
+                    val user = authService.completeOnboarding(userId, request.organizationName, request.companySize, request.slug, request.referralSource)
                     call.respond(user)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))

@@ -1618,10 +1618,10 @@ class ApiClient {
     })
   }
 
-  async completeOnboarding(organizationName: string, companySize: string, slug?: string): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; organizationSlug?: string }> {
+  async completeOnboarding(organizationName: string, companySize: string, slug: string, referralSource: string): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; organizationSlug?: string }> {
     return this.request(`${API_BASE.replace('/v1', '')}/auth/complete-onboarding`, {
       method: 'POST',
-      body: JSON.stringify({ organizationName, companySize, slug }),
+      body: JSON.stringify({ organizationName, companySize, slug, referralSource }),
     })
   }
 
