@@ -10,7 +10,8 @@ const tabs = [
   {id: 'overview', label: 'Overview', href: '/on-call', icon: Bell, color: 'text-blue-500'},
   {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar, color: 'text-violet-500'},
   {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks, color: 'text-amber-500'},
-  {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: AlertTriangle, color: 'text-red-500'},
+  {id: 'alerts', label: 'Alerts', href: '/on-call/incidents', icon: AlertTriangle, color: 'text-red-500'},
+  {id: 'incidents', label: 'Incidents', href: '/on-call/declared-incidents', icon: Shield, color: 'text-orange-500'},
 ]
 
 function OnCallLayout() {

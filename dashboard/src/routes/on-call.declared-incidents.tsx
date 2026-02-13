@@ -10,12 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, Clock, CheckCircle2, ChevronRight, Inbox, Eye, AlertTriangle} from 'lucide-react'
-import {useState, useEffect} from 'react'
+import {Filter, Zap, Clock, CheckCircle2, ChevronRight, Inbox, FileText} from 'lucide-react'
+import {useState} from 'react'
 import {cn} from '@/lib/utils'
 
-export const Route = createFileRoute('/on-call/incidents')({
-  component: Incidents,
+export const Route = createFileRoute('/on-call/declared-incidents')({
+  component: DeclaredIncidents,
 })
 
 const getPriorityConfig = (priority: string) => {
@@ -28,9 +28,9 @@ const getPriorityConfig = (priority: string) => {
 }
 
 const getStatusConfig = (status: string) => {
-  if (status === 'TRIGGERED') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', icon: Zap, label: 'Triggered'}
-  if (status === 'ACKNOWLEDGED') return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', icon: Clock, label: 'Acknowledged'}
-  return {color: 'bg-green-500/15 text-green-400 border-green-500/30', icon: CheckCircle2, label: 'Resolved'}
+  if (status === 'OPEN') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', icon: Zap, label: 'Open'}
+  if (status === 'RESOLVED') return {color: 'bg-green-500/15 text-green-400 border-green-500/30', icon: CheckCircle2, label: 'Resolved'}
+  return {color: 'bg-muted text-muted-foreground', icon: Clock, label: status}
 }
 
 function timeAgo(date: string) {
@@ -44,41 +44,27 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
-function isEscalatingSoon(nextEscalationAt?: string): boolean {
-  if (!nextEscalationAt) return false
-  const diff = new Date(nextEscalationAt).getTime() - Date.now()
-  return diff > 0 && diff <= 2 * 60 * 1000
-}
-
-function Incidents() {
+function DeclaredIncidents() {
   const pathname = useRouterState({select: state => state.location.pathname})
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [, setTick] = useState(0)
-  const isIncidentDetailRoute = pathname.startsWith('/on-call/incidents/')
-
-  // Re-render every 30s to update "escalating soon" badges
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000)
-    return () => clearInterval(interval)
-  }, [])
+  const isDetailRoute = pathname.startsWith('/on-call/declared-incidents/')
 
   const {data: incidents, isLoading} = useQuery({
-    queryKey: ['incidents', statusFilter, priorityFilter],
+    queryKey: ['declared-incidents', statusFilter, priorityFilter],
     queryFn: () => {
       const filters: any = {}
       if (statusFilter !== 'all') filters.status = statusFilter
       if (priorityFilter !== 'all') filters.priorityLevel = priorityFilter
-      return api.getIncidents(filters)
+      return api.getOnCallIncidents(filters)
     },
     refetchInterval: 30000,
   })
 
-  const triggeredCount = incidents?.filter(i => i.status === 'TRIGGERED').length || 0
-  const acknowledgedCount = incidents?.filter(i => i.status === 'ACKNOWLEDGED').length || 0
+  const openCount = incidents?.filter(i => i.status === 'OPEN').length || 0
   const resolvedCount = incidents?.filter(i => i.status === 'RESOLVED').length || 0
 
-  if (isIncidentDetailRoute) {
+  if (isDetailRoute) {
     return <Outlet />
   }
 
@@ -86,8 +72,8 @@ function Incidents() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Alerts</h2>
-          <p className="text-muted-foreground text-sm mt-0.5">View and manage on-call alerts</p>
+          <h2 className="text-2xl font-bold tracking-tight">Incidents</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">Manage user-declared incidents</p>
         </div>
       </div>
 
@@ -95,28 +81,16 @@ function Incidents() {
       {!isLoading && incidents && incidents.length > 0 && (
         <div className="flex gap-2">
           <button
-            onClick={() => setStatusFilter(statusFilter === 'TRIGGERED' ? 'all' : 'TRIGGERED')}
+            onClick={() => setStatusFilter(statusFilter === 'OPEN' ? 'all' : 'OPEN')}
             className={cn(
               'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
-              statusFilter === 'TRIGGERED'
+              statusFilter === 'OPEN'
                 ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-sm shadow-red-500/10'
                 : 'hover:bg-muted/60'
             )}
           >
             <Zap className="h-3.5 w-3.5" />
-            <span>{triggeredCount} Triggered</span>
-          </button>
-          <button
-            onClick={() => setStatusFilter(statusFilter === 'ACKNOWLEDGED' ? 'all' : 'ACKNOWLEDGED')}
-            className={cn(
-              'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
-              statusFilter === 'ACKNOWLEDGED'
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 shadow-sm shadow-amber-500/10'
-                : 'hover:bg-muted/60'
-            )}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            <span>{acknowledgedCount} Acknowledged</span>
+            <span>{openCount} Open</span>
           </button>
           <button
             onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
@@ -146,8 +120,7 @@ function Incidents() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="TRIGGERED">Triggered</SelectItem>
-              <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
+              <SelectItem value="OPEN">Open</SelectItem>
               <SelectItem value="RESOLVED">Resolved</SelectItem>
             </SelectContent>
           </Select>
@@ -189,18 +162,16 @@ function Incidents() {
             const priorityCfg = getPriorityConfig(incident.priorityLevel)
             const statusCfg = getStatusConfig(incident.status)
             const StatusIcon = statusCfg.icon
-            const escalatingSoon = isEscalatingSoon(incident.nextEscalationAt)
             return (
               <Link
                 key={incident.id}
-                to="/on-call/incidents/$incidentId"
+                to="/on-call/declared-incidents/$incidentId"
                 params={{incidentId: String(incident.id)}}
                 className="block group"
               >
                 <Card className={cn(
                   'transition-all hover:shadow-md border-l-4',
-                  incident.status === 'TRIGGERED' && 'border-l-red-500 hover:border-red-500/40',
-                  incident.status === 'ACKNOWLEDGED' && 'border-l-amber-500 hover:border-amber-500/40',
+                  incident.status === 'OPEN' && 'border-l-red-500 hover:border-red-500/40',
                   incident.status === 'RESOLVED' && 'border-l-transparent hover:border-muted-foreground/20',
                 )}>
                   <CardContent className="p-4">
@@ -212,27 +183,16 @@ function Incidents() {
                             <h3 className="font-semibold text-sm group-hover:text-foreground truncate">
                               {incident.title}
                             </h3>
-                            {incident.viewedByCurrentUser && (
-                              <span title="You've viewed this incident">
-                                <Eye className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                              </span>
-                            )}
                           </div>
                           {incident.description && (
                             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{incident.description}</p>
                           )}
                           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                            <span>{timeAgo(incident.triggeredAt)}</span>
-                            {incident.alertSource && (
+                            <span>Declared {timeAgo(incident.declaredAt)}</span>
+                            {incident.declaredByName && (
                               <>
                                 <span className="text-muted-foreground/40">·</span>
-                                <span>{incident.alertSource}</span>
-                              </>
-                            )}
-                            {incident.acknowledgedByName && (
-                              <>
-                                <span className="text-muted-foreground/40">·</span>
-                                <span className="text-amber-400">Ack by {incident.acknowledgedByName}</span>
+                                <span>by {incident.declaredByName}</span>
                               </>
                             )}
                             {incident.resolvedByName && (
@@ -245,12 +205,6 @@ function Incidents() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {escalatingSoon && (
-                          <Badge variant="outline" className="text-xs gap-1 bg-orange-500/15 text-orange-400 border-orange-500/30 animate-pulse">
-                            <AlertTriangle className="h-3 w-3" />
-                            Escalating soon
-                          </Badge>
-                        )}
                         <Badge variant="outline" className={cn('text-xs', priorityCfg.color)}>
                           {incident.priorityLevel}
                         </Badge>
@@ -270,13 +224,13 @@ function Incidents() {
       ) : (
         <div className="flex flex-col items-center justify-center py-20 border border-dashed rounded-xl">
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/60 mb-4">
-            <Inbox className="h-7 w-7 text-muted-foreground" />
+            <FileText className="h-7 w-7 text-muted-foreground" />
           </div>
-          <h3 className="text-base font-semibold mb-1">No alerts found</h3>
+          <h3 className="text-base font-semibold mb-1">No incidents found</h3>
           <p className="text-sm text-muted-foreground text-center max-w-sm">
             {statusFilter !== 'all' || priorityFilter !== 'all'
-              ? 'No alerts match your current filters. Try adjusting or clearing filters.'
-              : 'Alerts will appear here when triggered by your alerting rules.'}
+              ? 'No incidents match your current filters. Try adjusting or clearing filters.'
+              : 'User-declared incidents will appear here.'}
           </p>
         </div>
       )}

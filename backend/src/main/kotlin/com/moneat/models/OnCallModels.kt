@@ -238,10 +238,47 @@ data class OnCallSchedule(
     val updatedAt: String
 )
 
+// ===== On-Call Incidents (User Declared) =====
+
+object OnCallIncidents : IntIdTable("on_call_incidents") {
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val title = varchar("title", 255)
+    val description = text("description").nullable()
+    val severity = varchar("severity", 10)
+    val status = varchar("status", 20)
+    val declaredBy = integer("declared_by").references(Users.id)
+    val declaredAt = timestamp("declared_at")
+    val resolvedBy = integer("resolved_by").references(Users.id).nullable()
+    val resolvedAt = timestamp("resolved_at").nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+}
+
+@Serializable
+data class OnCallIncident(
+    val id: Int,
+    val organizationId: Int,
+    val title: String,
+    val description: String? = null,
+    val severity: String,
+    val status: String,
+    val declaredBy: Int,
+    val declaredByName: String? = null,
+    val declaredAt: String,
+    val resolvedBy: Int? = null,
+    val resolvedByName: String? = null,
+    val resolvedAt: String? = null,
+    val alertCount: Int = 0,
+    val alerts: List<Incident> = emptyList(),
+    val createdAt: String,
+    val updatedAt: String
+)
+
 // ===== Incidents =====
 
 object Incidents : IntIdTable("incidents") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val escalationPolicyId = integer("escalation_policy_id").references(EscalationPolicies.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val title = varchar("title", 500)
     val description = text("description").nullable()
@@ -296,6 +333,12 @@ data class Incident(
     val createdAt: String,
     val updatedAt: String
 )
+
+object OnCallIncidentAlerts : Table("on_call_incident_alerts") {
+    val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
+    val alertId = integer("alert_id").references(Incidents.id, onDelete = ReferenceOption.CASCADE)
+    override val primaryKey = PrimaryKey(incidentId, alertId)
+}
 
 @Serializable
 data class IncidentTimelineEvent(

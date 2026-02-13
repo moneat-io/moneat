@@ -108,7 +108,7 @@ fun Application.configureRouting() {
         orgManagementRoutes()
         
         // On-call management endpoints
-        onCallRoutes(::getSlackUserGroupSyncService)
+        onCallRoutes(::getSlackUserGroupSyncService, ::getPushNotificationService)
         escalationRoutes()
         priorityRoutes()
         deviceRoutes()

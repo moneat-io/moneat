@@ -41,7 +41,8 @@ class PushNotificationService {
         val data: Map<String, String> = emptyMap(),
         val sound: String = "default",
         val priority: String = "high",
-        val channelId: String = "incidents"
+        val channelId: String = "default",
+        val interruptionLevel: String? = null
     )
     
     @Serializable
@@ -65,6 +66,10 @@ class PushNotificationService {
             return
         }
         
+        val isCritical = priorityLevel in listOf("P0", "P1")
+        val channelId = if (isCritical) "critical" else "default"
+        val interruptionLevel = if (isCritical) "critical" else null
+
         val messages = tokens.map { token ->
             ExpoMessage(
                 to = token,
@@ -74,7 +79,9 @@ class PushNotificationService {
                     "type" to "incident",
                     "incidentId" to incidentId.toString(),
                     "priority" to priorityLevel
-                )
+                ),
+                channelId = channelId,
+                interruptionLevel = interruptionLevel
             )
         }
         
@@ -100,6 +107,48 @@ class PushNotificationService {
                     }
                 }
                 logger.info("Sent push notification to ${tokens.size} device(s) for user $userId")
+            } else {
+                logger.error("Push notification request failed: ${response.status}")
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to send push notification", e)
+        }
+    }
+    
+    suspend fun sendOnCallAssignmentAlert(userId: Int, scheduleName: String) {
+        val tokens = getUserDeviceTokens(userId)
+        
+        if (tokens.isEmpty()) {
+            logger.debug("No device tokens found for user $userId")
+            return
+        }
+        
+        val messages = tokens.map { token ->
+            ExpoMessage(
+                to = token,
+                title = "You are now on-call",
+                body = "You are now the primary on-call for $scheduleName",
+                data = mapOf(
+                    "type" to "on_call_assignment",
+                    "scheduleName" to scheduleName
+                ),
+                priority = "high",
+                channelId = "critical",
+                interruptionLevel = "critical"
+            )
+        }
+        
+        try {
+            val response = httpClient.post(expoPushEndpoint) {
+                contentType(ContentType.Application.Json)
+                if (expoAccessToken.isNotEmpty()) {
+                    header("Authorization", "Bearer $expoAccessToken")
+                }
+                setBody(messages)
+            }
+            
+            if (response.status.isSuccess()) {
+                logger.info("Sent on-call assignment alert to ${tokens.size} device(s) for user $userId")
             } else {
                 logger.error("Push notification request failed: ${response.status}")
             }

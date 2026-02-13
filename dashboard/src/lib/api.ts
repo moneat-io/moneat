@@ -2979,6 +2979,30 @@ class ApiClient {
       method: 'DELETE',
     })
   }
+
+  // On-Call Incidents (Declared)
+  async declareIncident(alertId: number, data: { title: string; description: string; severity: string }) {
+    return this.request<{id: number}>(`${API_BASE}/incidents/${alertId}/declare`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getOnCallIncidents(filters: { status?: string } = {}) {
+    const params = new URLSearchParams()
+    if (filters.status) params.set('status', filters.status)
+    return this.request<any[]>(`${API_BASE}/on-call-incidents?${params.toString()}`)
+  }
+
+  async getOnCallIncident(id: number) {
+    return this.request<any>(`${API_BASE}/on-call-incidents/${id}`)
+  }
+
+  async resolveOnCallIncident(id: number) {
+    return this.request<any>(`${API_BASE}/on-call-incidents/${id}/resolve`, {
+      method: 'POST',
+    })
+  }
 }
 
 export const api = new ApiClient()

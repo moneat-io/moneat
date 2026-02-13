@@ -50,9 +50,13 @@ data class SetScheduleUsergroupRequest(
     val usergroupHandle: String
 )
 
-fun Route.onCallRoutes(getSlackUserGroupSyncService: (() -> com.moneat.services.oncall.SlackUserGroupSyncService?)? = null) {
+fun Route.onCallRoutes(
+    getSlackUserGroupSyncService: (() -> com.moneat.services.oncall.SlackUserGroupSyncService?)? = null,
+    getPushNotificationService: (() -> com.moneat.services.oncall.PushNotificationService)? = null
+) {
     val scheduleService = OnCallScheduleService()
     val slackUserGroupSyncService = getSlackUserGroupSyncService?.invoke()
+    val pushNotificationService = getPushNotificationService?.invoke()
     
     route("/v1/on-call/schedules") {
         authenticate("auth-jwt") {
@@ -262,6 +266,18 @@ fun Route.onCallRoutes(getSlackUserGroupSyncService: (() -> com.moneat.services.
                         endAt = endAt,
                         createdBy = userId
                     )
+                    
+                    // Notify override user if they are on-call immediately
+                    val now = kotlinx.datetime.Clock.System.now()
+                    if (startAt <= now && endAt > now) {
+                        val schedule = scheduleService.getSchedule(scheduleId)
+                        if (schedule != null && pushNotificationService != null) {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                pushNotificationService.sendOnCallAssignmentAlert(request.userId, schedule.name)
+                            }
+                        }
+                    }
+
                     call.respond(HttpStatusCode.Created, override)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))

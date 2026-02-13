@@ -1,6 +1,7 @@
 package com.moneat.routes
 
 import com.moneat.services.oncall.IncidentManagementService
+import com.moneat.services.oncall.OnCallIncidentService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -9,6 +10,18 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+
+@Serializable
+data class DeclareIncidentRequest(
+    val title: String,
+    val description: String? = null,
+    val severity: String
+)
+
+@Serializable
+data class AddAlertToIncidentRequest(
+    val alertId: Int
+)
 
 @Serializable
 data class ReassignIncidentRequest(
@@ -21,6 +34,8 @@ data class AddNoteRequest(
 )
 
 fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementService) {
+    
+    val onCallIncidentService = OnCallIncidentService()
     
     route("/v1/incidents") {
         authenticate("auth-jwt") {
@@ -299,6 +314,158 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.OK, mapOf("message" to "Escalated to next on-call"))
                 } else {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Could not escalate incident"))
+                }
+            }
+            
+            post("/{alertId}/declare") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val alertId = call.parameters["alertId"]?.toIntOrNull()
+                
+                if (organizationId == null || userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@post
+                }
+                
+                if (alertId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert ID"))
+                    return@post
+                }
+                
+                val incidentService = incidentServiceProvider()
+                val alert = incidentService.getIncident(alertId)
+                if (alert == null || alert.organizationId != organizationId) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
+                    return@post
+                }
+                
+                val request = call.receive<DeclareIncidentRequest>()
+                
+                try {
+                    val incident = onCallIncidentService.declareIncident(
+                        organizationId = organizationId,
+                        userId = userId,
+                        alertId = alertId,
+                        title = request.title,
+                        description = request.description,
+                        severity = request.severity
+                    )
+                    call.respond(HttpStatusCode.Created, incident)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                }
+            }
+        }
+    }
+    
+    route("/v1/on-call-incidents") {
+        authenticate("auth-jwt") {
+            get {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@get
+                }
+                
+                val status = call.request.queryParameters["status"]
+                val incidents = onCallIncidentService.getIncidents(organizationId, status)
+                call.respond(incidents)
+            }
+            
+            get("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val incidentId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@get
+                }
+                
+                if (incidentId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    return@get
+                }
+                
+                if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    return@get
+                }
+                
+                val incident = onCallIncidentService.getIncident(incidentId)
+                if (incident != null) {
+                    call.respond(incident)
+                } else {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                }
+            }
+            
+            post("/{id}/resolve") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val incidentId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null || userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@post
+                }
+                
+                if (incidentId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    return@post
+                }
+                
+                if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    return@post
+                }
+                
+                val incident = onCallIncidentService.resolveIncident(incidentId, userId)
+                if (incident != null) {
+                    call.respond(incident)
+                } else {
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to resolve incident"))
+                }
+            }
+            
+            post("/{id}/add-alert") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val incidentId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@post
+                }
+                
+                if (incidentId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    return@post
+                }
+                
+                if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    return@post
+                }
+                
+                val request = call.receive<AddAlertToIncidentRequest>()
+                val incidentService = incidentServiceProvider()
+                val alert = incidentService.getIncident(request.alertId)
+                
+                if (alert == null || alert.organizationId != organizationId) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Alert not found or not in organization"))
+                    return@post
+                }
+                
+                try {
+                    onCallIncidentService.addAlertToIncident(incidentId, request.alertId)
+                    call.respond(HttpStatusCode.OK, mapOf("message" to "Alert added to incident"))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
             }
         }

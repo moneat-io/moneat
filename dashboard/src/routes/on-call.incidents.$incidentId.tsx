@@ -5,6 +5,17 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {Textarea} from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import {useToast} from '@/hooks/use-toast'
 import {AlertTriangle, CheckCircle, Clock, MessageSquare, ArrowLeft, Zap, UserPlus, Bell, CheckCircle2, Eye, Send} from 'lucide-react'
 import {useState, useEffect} from 'react'
@@ -77,10 +88,37 @@ function IncidentDetailPage() {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [note, setNote] = useState('')
+  const [declareOpen, setDeclareOpen] = useState(false)
+  const [declareTitle, setDeclareTitle] = useState('')
+  const [declareDesc, setDeclareDesc] = useState('')
+  const [declareSeverity, setDeclareSeverity] = useState('P2')
 
   const {data: incident, isLoading} = useQuery({
     queryKey: ['incident', incidentId],
     queryFn: () => api.getIncident(Number(incidentId)),
+  })
+
+  useEffect(() => {
+    if (incident) {
+      setDeclareTitle(incident.title)
+      setDeclareDesc(incident.description || '')
+      setDeclareSeverity(incident.priorityLevel || 'P2')
+    }
+  }, [incident])
+
+  const declareMutation = useMutation({
+    mutationFn: () => api.declareIncident(Number(incidentId), {
+      title: declareTitle,
+      description: declareDesc,
+      severity: declareSeverity
+    }),
+    onSuccess: () => {
+      setDeclareOpen(false)
+      toast({title: 'Incident Declared', description: 'New incident created successfully.'})
+    },
+    onError: (error: any) => {
+      toast({title: 'Error', description: error.message, variant: 'destructive'})
+    }
   })
 
   const {data: timeline = [], isLoading: timelineLoading} = useQuery({
@@ -275,6 +313,54 @@ function IncidentDetailPage() {
             >
               I'm not available
             </Button>
+            
+            <Dialog open={declareOpen} onOpenChange={setDeclareOpen}>
+              <DialogTrigger asChild>
+                <Button variant="link" size="sm" className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs">
+                  Declare Incident
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Declare Incident</DialogTitle>
+                  <DialogDescription>
+                    Escalate this alert to a formal incident.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="title">Title</Label>
+                    <Input id="title" value={declareTitle} onChange={(e) => setDeclareTitle(e.target.value)} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="severity">Severity</Label>
+                    <div className="flex gap-2">
+                      {['P0', 'P1', 'P2', 'P3'].map((sev) => (
+                        <Button
+                          key={sev}
+                          type="button"
+                          variant={declareSeverity === sev ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDeclareSeverity(sev)}
+                        >
+                          {sev}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea id="description" value={declareDesc} onChange={(e) => setDeclareDesc(e.target.value)} />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDeclareOpen(false)}>Cancel</Button>
+                  <Button onClick={() => declareMutation.mutate()} disabled={declareMutation.isPending}>
+                    {declareMutation.isPending ? 'Declaring...' : 'Declare Incident'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       )}

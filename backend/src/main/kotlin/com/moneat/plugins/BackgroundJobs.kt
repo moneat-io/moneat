@@ -15,10 +15,13 @@ private val logger = KotlinLogging.logger {}
 private lateinit var escalationEngineInstance: EscalationEngine
 private lateinit var incidentManagementServiceInstance: IncidentManagementService
 private var slackUserGroupSyncServiceInstance: SlackUserGroupSyncService? = null
+private lateinit var pushNotificationServiceInstance: PushNotificationService
+private var onCallHandoffServiceInstance: OnCallHandoffService? = null
 
 fun getEscalationEngine(): EscalationEngine = escalationEngineInstance
 fun getIncidentManagementService(): IncidentManagementService = incidentManagementServiceInstance
 fun getSlackUserGroupSyncService(): SlackUserGroupSyncService? = slackUserGroupSyncServiceInstance
+fun getPushNotificationService(): PushNotificationService = pushNotificationServiceInstance
 
 fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
@@ -40,6 +43,8 @@ fun Application.configureBackgroundJobs() {
     val pushNotificationService = PushNotificationService()
     val slackService = SlackService()
     val redisClient = RedisClient()
+
+    pushNotificationServiceInstance = pushNotificationService
     
     escalationEngineInstance = EscalationEngine(
         escalationPolicyService = escalationPolicyService,
@@ -58,6 +63,12 @@ fun Application.configureBackgroundJobs() {
         slackService = slackService,
         redisClient = redisClient
     )
+    
+    onCallHandoffServiceInstance = OnCallHandoffService(
+        onCallScheduleService = onCallScheduleService,
+        pushNotificationService = pushNotificationService,
+        redisClient = redisClient
+    )
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -72,6 +83,7 @@ fun Application.configureBackgroundJobs() {
     logIngestionWorker.start()
     escalationEngineInstance.start()
     slackUserGroupSyncServiceInstance?.start()
+    onCallHandoffServiceInstance?.start()
 
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopped) {
@@ -84,5 +96,6 @@ fun Application.configureBackgroundJobs() {
         logIngestionWorker.stop()
         escalationEngineInstance.stop()
         slackUserGroupSyncServiceInstance?.stop()
+        onCallHandoffServiceInstance?.stop()
     }
 }
