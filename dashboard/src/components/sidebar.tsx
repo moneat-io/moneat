@@ -19,7 +19,6 @@ import {
     Globe,
     Home,
     LogOut,
-    Menu,
     MessageSquare,
     Package,
     Play,
@@ -38,7 +37,6 @@ import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {Logo} from '@/components/logo'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
-import {Sheet, SheetContent, SheetTrigger} from '@/components/ui/sheet'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
@@ -356,10 +354,7 @@ export function Sidebar({ isExpanded, onExpandedChange, isMobileOpen, onMobileOp
                 projects.map((project) => (
                   <button
                     key={project.id}
-                    onClick={() => {
-                      handleProjectSelect(project.id)
-                      onMobileOpenChange?.(false)
-                    }}
+                    onClick={() => handleProjectSelect(project.id)}
                     className={cn(
                       'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors text-left',
                       project.id === activeProjectId
@@ -470,7 +465,6 @@ export function Sidebar({ isExpanded, onExpandedChange, isMobileOpen, onMobileOp
               <Link
                 key={item.href}
                 to={item.href}
-                onClick={() => onMobileOpenChange?.(false)}
                 className={cn(
                   'flex items-center gap-3 py-2 rounded-md transition-colors',
                   isExpanded ? 'px-3' : 'px-2',
@@ -514,7 +508,6 @@ export function Sidebar({ isExpanded, onExpandedChange, isMobileOpen, onMobileOp
               <Link
                 key={item.href}
                 to={item.href}
-                onClick={() => onMobileOpenChange?.(false)}
                 className={cn(
                   'flex items-center gap-3 py-2 rounded-md transition-colors',
                   isExpanded ? 'px-3' : 'px-2',
@@ -603,11 +596,11 @@ export function Sidebar({ isExpanded, onExpandedChange, isMobileOpen, onMobileOp
           </Tooltip>
         )}
 
-        {/* Expand/Collapse Button - Only on Desktop */}
+        {/* Expand/Collapse Button */}
         <Button
           variant="ghost"
           className={cn(
-            'w-full justify-start gap-3 text-muted-foreground hover:text-foreground hidden md:flex',
+            'w-full justify-start gap-3 text-muted-foreground hover:text-foreground',
             !isExpanded && 'justify-center px-0'
           )}
           onClick={() => onExpandedChange(!isExpanded)}
@@ -627,28 +620,10 @@ export function Sidebar({ isExpanded, onExpandedChange, isMobileOpen, onMobileOp
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      <Sheet open={isMobileOpen} onOpenChange={onMobileOpenChange}>
-        <SheetTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="fixed top-3 left-3 z-50 md:hidden"
-          >
-            <Menu className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <div className="h-full bg-card flex flex-col">
-            <SidebarContent />
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Desktop Fixed Sidebar */}
+      {/* Fixed Sidebar */}
       <div
         className={cn(
-          'fixed left-0 top-0 h-full bg-card border-r flex-col transition-all duration-300 z-40 hidden md:flex',
+          'fixed left-0 top-0 h-full bg-card border-r flex flex-col transition-all duration-300 z-40',
           isExpanded ? 'w-64' : 'w-16'
         )}
       >

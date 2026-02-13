@@ -162,11 +162,8 @@ function RootComponent() {
         />
       )}
       <div
-        className={cn(
-          "transition-[margin-left] duration-300",
-          showSidebar && "md:ml-[var(--sidebar-width)]"
-        )}
-        style={{ '--sidebar-width': showSidebar ? `${sidebarWidth}px` : '0px' } as React.CSSProperties}
+        className="transition-[margin-left] duration-300"
+        style={{ marginLeft: showSidebar ? sidebarWidth : 0 }}
       >
         <Outlet />
       </div>
