@@ -3004,6 +3004,17 @@ class ApiClient {
       method: 'POST',
     })
   }
+  
+  async getOnCallIncidentTimeline(id: number) {
+    return this.request<any[]>(`${API_BASE}/on-call-incidents/${id}/timeline`)
+  }
+  
+  async addOnCallIncidentNote(id: number, note: string) {
+    return this.request<{ message: string }>(`${API_BASE}/on-call-incidents/${id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    })
+  }
 }
 
 export const api = new ApiClient()

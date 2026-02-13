@@ -78,6 +78,7 @@ export function LogExplorer({
   enableLiveTail = true,
   enableFacets = true,
   defaultTimeRange = '15m',
+  // @ts-ignore - unused param kept for interface compatibility
   initialScrollToBottom = false
 }: LogExplorerProps) {
   // Search / filter state

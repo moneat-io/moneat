@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { TIMEZONES } from '@/lib/timezones'
 import { Calendar, Trash2, User } from 'lucide-react'
 
 export interface OnCallScheduleData {
@@ -45,6 +46,7 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
   )
 
   const availableUsers = users.filter((u) => !schedule.participantIds.includes(u.id))
+  const hasCurrentTimezoneOption = TIMEZONES.some((tz) => tz.value === schedule.timezone)
 
   const addParticipant = (userId: number) => {
     setSchedule((prev) => ({
@@ -94,7 +96,7 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
           <Input
             id="schedule-name"
             value={schedule.name}
-            onChange={(e) => setSchedule({ ...schedule, name: e.target.value })}
+            onChange={(e) => setSchedule((prev) => ({ ...prev, name: e.target.value }))}
             placeholder="e.g., Engineering On-Call"
           />
         </div>
@@ -104,7 +106,9 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
             <Label htmlFor="rotation-type">Rotation Type</Label>
             <Select
               value={schedule.rotationType}
-              onValueChange={(value: any) => setSchedule({ ...schedule, rotationType: value })}
+              onValueChange={(value: any) =>
+                setSchedule((prev) => ({ ...prev, rotationType: value }))
+              }
             >
               <SelectTrigger id="rotation-type">
                 <SelectValue />
@@ -124,7 +128,7 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
               type="time"
               value={schedule.handoffTime.slice(0, 5)}
               onChange={(e) =>
-                setSchedule({ ...schedule, handoffTime: `${e.target.value}:00` })
+                setSchedule((prev) => ({ ...prev, handoffTime: `${e.target.value}:00` }))
               }
             />
           </div>
@@ -132,12 +136,26 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
 
         <div className="space-y-2">
           <Label htmlFor="timezone">Timezone</Label>
-          <Input
-            id="timezone"
+          <Select
             value={schedule.timezone}
-            onChange={(e) => setSchedule({ ...schedule, timezone: e.target.value })}
-            placeholder="America/New_York"
-          />
+            onValueChange={(value) =>
+              setSchedule((prev) => ({ ...prev, timezone: value }))
+            }
+          >
+            <SelectTrigger id="timezone">
+              <SelectValue placeholder="Select timezone..." />
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              {!hasCurrentTimezoneOption && schedule.timezone && (
+                <SelectItem value={schedule.timezone}>{schedule.timezone}</SelectItem>
+              )}
+              {TIMEZONES.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

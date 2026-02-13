@@ -51,6 +51,15 @@ class OnCallIncidentService {
             it[Incidents.incidentId] = incidentId
         }
         
+        // Add DECLARED event to timeline
+        OnCallIncidentTimeline.insert {
+            it[OnCallIncidentTimeline.incidentId] = incidentId
+            it[OnCallIncidentTimeline.eventType] = "DECLARED"
+            it[OnCallIncidentTimeline.actorUserId] = userId
+            it[OnCallIncidentTimeline.details] = emptyMap()
+            it[OnCallIncidentTimeline.createdAt] = now
+        }
+        
         getIncident(incidentId)!!
     }
 
@@ -60,7 +69,7 @@ class OnCallIncidentService {
             ?: throw IllegalArgumentException("Incident not found")
             
         // Check alert exists
-        Incidents.selectAll().where { Incidents.id eq alertId }.singleOrNull()
+        val alert = Incidents.selectAll().where { Incidents.id eq alertId }.singleOrNull()
             ?: throw IllegalArgumentException("Alert not found")
             
         // Insert if not exists
@@ -77,6 +86,18 @@ class OnCallIncidentService {
             Incidents.update({ Incidents.id eq alertId }) {
                 it[Incidents.incidentId] = incidentId
             }
+            
+            // Add ALERT_LINKED event to timeline
+            OnCallIncidentTimeline.insert {
+                it[OnCallIncidentTimeline.incidentId] = incidentId
+                it[OnCallIncidentTimeline.eventType] = "ALERT_LINKED"
+                it[OnCallIncidentTimeline.actorUserId] = null
+                it[OnCallIncidentTimeline.details] = mapOf(
+                    "alertId" to kotlinx.serialization.json.JsonPrimitive(alertId),
+                    "alertTitle" to kotlinx.serialization.json.JsonPrimitive(alert[Incidents.title])
+                )
+                it[OnCallIncidentTimeline.createdAt] = Clock.System.now()
+            }
         }
     }
 
@@ -88,6 +109,15 @@ class OnCallIncidentService {
             it[resolvedBy] = userId
             it[resolvedAt] = now
             it[updatedAt] = now
+        }
+        
+        // Add RESOLVED event to timeline
+        OnCallIncidentTimeline.insert {
+            it[OnCallIncidentTimeline.incidentId] = incidentId
+            it[OnCallIncidentTimeline.eventType] = "RESOLVED"
+            it[OnCallIncidentTimeline.actorUserId] = userId
+            it[OnCallIncidentTimeline.details] = emptyMap()
+            it[OnCallIncidentTimeline.createdAt] = now
         }
         
         getIncident(incidentId)
@@ -137,6 +167,93 @@ class OnCallIncidentService {
             .where { (OnCallIncidents.id eq incidentId) and (OnCallIncidents.organizationId eq organizationId) }
             .limit(1)
             .singleOrNull() != null
+    }
+    
+    fun addNote(incidentId: Int, userId: Int, note: String) = transaction {
+        val now = Clock.System.now()
+        
+        OnCallIncidentTimeline.insert {
+            it[OnCallIncidentTimeline.incidentId] = incidentId
+            it[OnCallIncidentTimeline.eventType] = "NOTE_ADDED"
+            it[OnCallIncidentTimeline.actorUserId] = userId
+            it[OnCallIncidentTimeline.details] = mapOf(
+                "note" to kotlinx.serialization.json.JsonPrimitive(note)
+            )
+            it[OnCallIncidentTimeline.createdAt] = now
+        }
+    }
+    
+    fun getIncidentTimeline(incidentId: Int): List<IncidentTimelineEvent> = transaction {
+        val events = mutableListOf<IncidentTimelineEvent>()
+        
+        // 1. Fetch incident-level events
+        val incidentEvents = OnCallIncidentTimeline
+            .selectAll()
+            .where { OnCallIncidentTimeline.incidentId eq incidentId }
+            .map { row ->
+                val actorId = row[OnCallIncidentTimeline.actorUserId]
+                val actorName = if (actorId != null) {
+                    val user = Users.selectAll().where { Users.id eq actorId }.singleOrNull()
+                    user?.get(Users.name) ?: user?.get(Users.email)
+                } else null
+                
+                IncidentTimelineEvent(
+                    id = row[OnCallIncidentTimeline.id].value,
+                    incidentId = incidentId,
+                    eventType = row[OnCallIncidentTimeline.eventType],
+                    actorUserId = actorId,
+                    actorName = actorName,
+                    details = row[OnCallIncidentTimeline.details],
+                    createdAt = row[OnCallIncidentTimeline.createdAt].toString(),
+                    source = "incident",
+                    alertId = null,
+                    alertTitle = null
+                )
+            }
+        events.addAll(incidentEvents)
+        
+        // 2. Fetch all linked alert IDs
+        val alertIds = OnCallIncidentAlerts
+            .selectAll()
+            .where { OnCallIncidentAlerts.incidentId eq incidentId }
+            .map { it[OnCallIncidentAlerts.alertId] }
+        
+        // 3. For each linked alert, fetch its timeline events
+        for (alertId in alertIds) {
+            val alertTitle = Incidents
+                .selectAll()
+                .where { Incidents.id eq alertId }
+                .singleOrNull()
+                ?.get(Incidents.title)
+            
+            val alertEvents = IncidentTimeline
+                .selectAll()
+                .where { IncidentTimeline.incidentId eq alertId }
+                .map { row ->
+                    val actorId = row[IncidentTimeline.actorUserId]
+                    val actorName = if (actorId != null) {
+                        val user = Users.selectAll().where { Users.id eq actorId }.singleOrNull()
+                        user?.get(Users.name) ?: user?.get(Users.email)
+                    } else null
+                    
+                    IncidentTimelineEvent(
+                        id = row[IncidentTimeline.id].value,
+                        incidentId = alertId,
+                        eventType = row[IncidentTimeline.eventType],
+                        actorUserId = actorId,
+                        actorName = actorName,
+                        details = row[IncidentTimeline.details],
+                        createdAt = row[IncidentTimeline.createdAt].toString(),
+                        source = "alert",
+                        alertId = alertId,
+                        alertTitle = alertTitle
+                    )
+                }
+            events.addAll(alertEvents)
+        }
+        
+        // 4. Sort by createdAt ascending
+        events.sortedBy { it.createdAt }
     }
     
     private fun toOnCallIncident(row: ResultRow, alerts: List<Incident>): OnCallIncident {

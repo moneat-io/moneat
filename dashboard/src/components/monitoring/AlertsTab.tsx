@@ -132,6 +132,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const severity = formData.get('incidentSeverity') as string
+    const durationMinutes = parseInt(formData.get('durationMinutes') as string) || 0
 
     createMutation.mutate({
       scope: activeScope,
@@ -139,7 +140,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
         metric: formData.get('metric') as string,
         condition: formData.get('condition') as string,
         threshold: parseFloat(formData.get('threshold') as string),
-        durationSeconds: parseInt(formData.get('durationSeconds') as string) || 0,
+        durationSeconds: durationMinutes * 60,
         enabled: createEnabled,
         incidentSeverity: severity && severity !== 'none' ? severity : undefined,
       },
@@ -152,13 +153,14 @@ export function AlertsTab({systemId}: AlertsTabProps) {
 
     const formData = new FormData(e.currentTarget)
     const severity = formData.get('incidentSeverity') as string
+    const durationMinutes = parseInt(formData.get('durationMinutes') as string) || 0
     updateMutation.mutate({
       alert: editingAlert,
       updates: {
         metric: formData.get('metric') as string,
         condition: formData.get('condition') as string,
         threshold: parseFloat(formData.get('threshold') as string),
-        durationSeconds: parseInt(formData.get('durationSeconds') as string) || 0,
+        durationSeconds: durationMinutes * 60,
         incidentSeverity: severity && severity !== 'none' ? severity : null,
       },
     })
@@ -292,14 +294,18 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="durationSeconds">Duration (seconds)</Label>
+                        <Label htmlFor="durationMinutes">Duration (minutes)</Label>
                         <Input
-                          id="durationSeconds"
-                          name="durationSeconds"
+                          id="durationMinutes"
+                          name="durationMinutes"
                           type="number"
+                          min="0"
                           placeholder="0 (immediate)"
                           defaultValue="0"
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Condition must be met for this long before alert triggers. 0 = immediate.
+                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="incidentSeverity">Incident Severity</Label>
@@ -401,7 +407,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                       {alert.durationSeconds > 0 && (
                         <Badge variant="secondary" className="text-xs gap-1">
                           <Clock className="h-3 w-3" />
-                          {alert.durationSeconds}s
+                          {Math.floor(alert.durationSeconds / 60)}m
                         </Badge>
                       )}
                       <Badge variant="secondary" className="text-[10px] uppercase">
@@ -524,13 +530,17 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-duration">Duration (seconds)</Label>
+                  <Label htmlFor="edit-duration">Duration (minutes)</Label>
                   <Input
                     id="edit-duration"
-                    name="durationSeconds"
+                    name="durationMinutes"
                     type="number"
-                    defaultValue={editingAlert.durationSeconds}
+                    min="0"
+                    defaultValue={Math.floor(editingAlert.durationSeconds / 60)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Condition must be met for this long before alert triggers. 0 = immediate.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-incidentSeverity">Incident Severity</Label>

@@ -274,6 +274,14 @@ data class OnCallIncident(
     val updatedAt: String
 )
 
+object OnCallIncidentTimeline : IntIdTable("on_call_incident_timeline") {
+    val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
+    val eventType = varchar("event_type", 30)
+    val actorUserId = integer("actor_user_id").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val details = jsonb("details")
+    val createdAt = timestamp("created_at")
+}
+
 // ===== Incidents =====
 
 object Incidents : IntIdTable("incidents") {
@@ -348,7 +356,11 @@ data class IncidentTimelineEvent(
     val actorUserId: Int? = null,
     val actorName: String? = null,
     val details: Map<String, kotlinx.serialization.json.JsonElement>? = null,
-    val createdAt: String
+    val createdAt: String,
+    // Fields for merged on-call incident timeline
+    val source: String? = null, // "incident" or "alert"
+    val alertId: Int? = null,
+    val alertTitle: String? = null
 )
 
 // ===== Device Tokens =====

@@ -471,6 +471,56 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
                 }
             }
+            
+            get("/{id}/timeline") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val incidentId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@get
+                }
+                
+                if (incidentId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    return@get
+                }
+                
+                if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    return@get
+                }
+                
+                val timeline = onCallIncidentService.getIncidentTimeline(incidentId)
+                call.respond(timeline)
+            }
+            
+            post("/{id}/notes") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val incidentId = call.parameters["id"]?.toIntOrNull()
+                
+                if (organizationId == null || userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    return@post
+                }
+                
+                if (incidentId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    return@post
+                }
+                
+                if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    return@post
+                }
+                
+                val request = call.receive<AddNoteRequest>()
+                onCallIncidentService.addNote(incidentId, userId, request.note)
+                call.respond(HttpStatusCode.OK, mapOf("message" to "Note added"))
+            }
         }
     }
 }

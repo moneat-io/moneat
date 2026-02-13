@@ -4,6 +4,7 @@ import {api} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
+import {Textarea} from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -14,9 +15,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {useToast} from '@/hooks/use-toast'
-import {AlertTriangle, CheckCircle2, Clock, ArrowLeft, Zap, User, Calendar} from 'lucide-react'
+import {AlertTriangle, CheckCircle2, Clock, ArrowLeft, Zap, User, Calendar, CheckCircle, Bell, UserPlus, MessageSquare, Eye, Send, Link as LinkIcon} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
 
@@ -38,6 +38,21 @@ const getStatusConfig = (status: string) => {
   return {color: 'bg-muted text-muted-foreground', icon: Clock, label: status, accent: 'text-muted-foreground'}
 }
 
+const EVENT_CONFIG: Record<string, {icon: typeof Zap; color: string; bgColor: string; label: string}> = {
+  DECLARED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15', label: 'Incident declared'},
+  RESOLVED: {icon: CheckCircle2, color: 'text-green-500', bgColor: 'bg-green-500/15', label: 'Incident resolved'},
+  NOTE_ADDED: {icon: MessageSquare, color: 'text-slate-400', bgColor: 'bg-slate-500/15', label: 'Note added'},
+  ALERT_LINKED: {icon: LinkIcon, color: 'text-violet-500', bgColor: 'bg-violet-500/15', label: 'Alert linked'},
+  // Alert-level events
+  TRIGGERED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15', label: 'Alert triggered'},
+  ESCALATED: {icon: Bell, color: 'text-orange-500', bgColor: 'bg-orange-500/15', label: 'Escalated'},
+  ACKNOWLEDGED: {icon: CheckCircle, color: 'text-blue-500', bgColor: 'bg-blue-500/15', label: 'Acknowledged'},
+  REASSIGNED: {icon: UserPlus, color: 'text-violet-500', bgColor: 'bg-violet-500/15', label: 'Reassigned'},
+  STEP_TIMEOUT: {icon: Clock, color: 'text-orange-500', bgColor: 'bg-orange-500/15', label: 'Step timed out'},
+  NOTIFICATION_SENT: {icon: Send, color: 'text-cyan-500', bgColor: 'bg-cyan-500/15', label: 'Notification sent'},
+  VIEWED: {icon: Eye, color: 'text-slate-400', bgColor: 'bg-slate-500/10', label: 'Viewed'},
+}
+
 function timeAgo(date: string) {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
   if (seconds < 60) return 'just now'
@@ -49,6 +64,29 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
+function getTimelineDescription(event: any): string | null {
+  if (event.eventType === 'NOTIFICATION_SENT' && event.details) {
+    const toName = event.details.toUserName || event.actorUserName
+    const channel = event.details.channel
+    if (toName && channel) return `to ${toName} via ${channel}`
+    if (toName) return `to ${toName}`
+    if (channel) return `via ${channel}`
+  }
+  if (event.eventType === 'ESCALATED' && event.details?.stepNumber !== undefined) {
+    return `to step ${Number(event.details.stepNumber) + 1}`
+  }
+  if (event.eventType === 'REASSIGNED' && event.details?.toUserName) {
+    return `to ${event.details.toUserName}`
+  }
+  if (event.eventType === 'REASSIGNED' && event.details?.reason === 'unavailable') {
+    return 'user marked as unavailable'
+  }
+  if (event.eventType === 'ALERT_LINKED' && event.details?.alertTitle) {
+    return event.details.alertTitle
+  }
+  return null
+}
+
 function DeclaredIncidentDetail() {
   const {incidentId} = Route.useParams()
   const navigate = useNavigate()
@@ -56,10 +94,16 @@ function DeclaredIncidentDetail() {
   const {toast} = useToast()
   const [resolveOpen, setResolveOpen] = useState(false)
   const [resolutionNote, setResolutionNote] = useState('')
+  const [note, setNote] = useState('')
 
   const {data: incident, isLoading} = useQuery({
     queryKey: ['declared-incident', incidentId],
     queryFn: () => api.getOnCallIncident(Number(incidentId)),
+  })
+  
+  const {data: timeline} = useQuery({
+    queryKey: ['declared-incident-timeline', incidentId],
+    queryFn: () => api.getOnCallIncidentTimeline(Number(incidentId)),
   })
 
   const resolveMutation = useMutation({
@@ -67,10 +111,26 @@ function DeclaredIncidentDetail() {
     onSuccess: () => {
       setResolveOpen(false)
       queryClient.invalidateQueries({queryKey: ['declared-incident', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', incidentId]})
       queryClient.invalidateQueries({queryKey: ['declared-incidents']})
       toast({
         title: 'Incident Resolved',
         description: 'This incident has been marked as resolved.',
+      })
+    },
+    onError: (error: any) => {
+      toast({title: 'Error', description: error.message, variant: 'destructive'})
+    },
+  })
+  
+  const addNoteMutation = useMutation({
+    mutationFn: (note: string) => api.addOnCallIncidentNote(Number(incidentId), note),
+    onSuccess: () => {
+      setNote('')
+      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', incidentId]})
+      toast({
+        title: 'Note Added',
+        description: 'Your note has been added to the incident timeline.',
       })
     },
     onError: (error: any) => {
@@ -200,14 +260,120 @@ function DeclaredIncidentDetail() {
             </Card>
           )}
 
-          {/* Linked Alerts (Placeholder for now) */}
+          {/* Linked Alerts */}
+          {incident.alerts && incident.alerts.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Linked Alerts</CardTitle>
+                <CardDescription>{incident.alerts.length} alert{incident.alerts.length !== 1 ? 's' : ''} linked to this incident</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {incident.alerts.map((alert: any) => (
+                  <div key={alert.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{alert.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Alert #{alert.id} · {alert.status}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => navigate({to: '/on-call/incidents/$incidentId', params: {incidentId: String(alert.id)}})}
+                    >
+                      View
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Timeline */}
+          {timeline && timeline.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Timeline</CardTitle>
+                <CardDescription>Incident history and linked alert events</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="relative">
+                  {timeline.map((event: any, idx: number) => {
+                    const config = EVENT_CONFIG[event.eventType] || {
+                      icon: Clock,
+                      color: 'text-muted-foreground',
+                      bgColor: 'bg-muted',
+                      label: event.eventType.replace(/_/g, ' '),
+                    }
+                    const Icon = config.icon
+                    const description = getTimelineDescription(event)
+
+                    return (
+                      <div key={`${event.source}-${event.id}`} className="flex gap-3 pb-6 last:pb-0 relative">
+                        {idx < timeline.length - 1 && (
+                          <div className="absolute left-[15px] top-8 bottom-0 w-px bg-border" />
+                        )}
+                        <div className={cn(
+                          'flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full z-10',
+                          config.bgColor
+                        )}>
+                          <Icon className={cn('h-4 w-4', config.color)} />
+                        </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium">
+                              {config.label}
+                              {event.source === 'alert' && event.alertTitle && (
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  from {event.alertTitle}
+                                </span>
+                              )}
+                            </p>
+                            <span className="text-xs text-muted-foreground flex-shrink-0">
+                              {timeAgo(event.createdAt)}
+                            </span>
+                          </div>
+                          {event.actorName && event.eventType !== 'NOTIFICATION_SENT' && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              by {event.actorName}
+                            </p>
+                          )}
+                          {description && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                          )}
+                          {event.details && event.eventType === 'NOTE_ADDED' && event.details.note && (
+                            <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{event.details.note}&quot;</p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Add Note */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Linked Alerts</CardTitle>
-              <CardDescription>System alerts associated with this incident</CardDescription>
+              <CardTitle className="text-base">Add Note</CardTitle>
             </CardHeader>
-            <CardContent>
-                <p className="text-sm text-muted-foreground italic">Alert linking visualization coming soon.</p>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Enter your note..."
+                rows={3}
+                className="resize-none"
+              />
+              <Button
+                onClick={() => addNoteMutation.mutate(note)}
+                disabled={!note.trim() || addNoteMutation.isPending}
+                size="sm"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                {addNoteMutation.isPending ? 'Adding...' : 'Add Note'}
+              </Button>
             </CardContent>
           </Card>
         </div>

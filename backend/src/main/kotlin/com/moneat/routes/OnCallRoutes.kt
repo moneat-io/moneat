@@ -20,12 +20,18 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalTime
 
 @Serializable
+data class ScheduleParticipant(
+    val userId: Int,
+    val position: Int
+)
+
+@Serializable
 data class CreateScheduleRequest(
     val name: String,
     val rotationType: String,
     val handoffTime: String, // HH:MM:SS format
     val timezone: String,
-    val participantIds: List<Int>
+    val participants: List<ScheduleParticipant>
 )
 
 @Serializable
@@ -34,7 +40,7 @@ data class UpdateScheduleRequest(
     val rotationType: String? = null,
     val handoffTime: String? = null,
     val timezone: String? = null,
-    val participantIds: List<Int>? = null
+    val participants: List<ScheduleParticipant>? = null
 )
 
 @Serializable
@@ -86,13 +92,16 @@ fun Route.onCallRoutes(
                 
                 try {
                     val handoffTime = LocalTime.parse(request.handoffTime)
+                    val participantIds = request.participants
+                        .sortedBy { it.position }
+                        .map { it.userId }
                     val schedule = scheduleService.createSchedule(
                         organizationId = organizationId,
                         name = request.name,
                         rotationType = request.rotationType,
                         handoffTime = handoffTime,
                         timezone = request.timezone,
-                        participantIds = request.participantIds
+                        participantIds = participantIds
                     )
                     call.respond(HttpStatusCode.Created, schedule)
                 } catch (e: Exception) {
@@ -152,13 +161,16 @@ fun Route.onCallRoutes(
                 
                 try {
                     val handoffTime = request.handoffTime?.let { LocalTime.parse(it) }
+                    val participantIds = request.participants
+                        ?.sortedBy { it.position }
+                        ?.map { it.userId }
                     val schedule = scheduleService.updateSchedule(
                         scheduleId = scheduleId,
                         name = request.name,
                         rotationType = request.rotationType,
                         handoffTime = handoffTime,
                         timezone = request.timezone,
-                        participantIds = request.participantIds
+                        participantIds = participantIds
                     )
                     
                     if (schedule != null) {
