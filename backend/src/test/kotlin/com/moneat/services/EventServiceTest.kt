@@ -290,13 +290,13 @@ class EventServiceTest {
     }
 
     @Test
-    fun `event with ISO 8601 timestamp is parsed correctly`() {
-        val isoTimestamp = "2024-01-15T10:30:45Z"
+    fun `event with Unix timestamp is parsed correctly`() {
+        val unixTimestamp = 1705316445.0 // 2024-01-15T10:30:45Z
         val event = createSentryEvent(
-            timestamp = isoTimestamp
+            timestamp = unixTimestamp
         )
 
-        assertEquals(isoTimestamp, event.timestamp, "ISO 8601 timestamp should be preserved")
+        assertEquals(unixTimestamp, event.timestamp, "Unix timestamp should be preserved")
     }
 
     @Test
@@ -578,7 +578,7 @@ class EventServiceTest {
 
     private fun createSentryEvent(
         eventId: String? = null,
-        timestamp: String? = "2024-01-15T10:30:45Z",
+        timestamp: Double? = 1705316445.0, // 2024-01-15T10:30:45Z
         level: String? = "error",
         platform: String? = "jvm",
         message: String? = null,

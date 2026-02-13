@@ -138,7 +138,8 @@ data class EnvelopeItem(
 @Serializable
 data class SentryEvent(
     val event_id: String? = null,
-    val timestamp: String? = null,  // ISO 8601 timestamp string
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val timestamp: Double? = null,
     val level: String? = null,
     val logger: String? = null,
     val platform: String? = null,

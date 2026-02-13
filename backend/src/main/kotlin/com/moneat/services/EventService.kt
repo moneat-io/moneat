@@ -280,16 +280,8 @@ class EventService(private val notificationService: NotificationService? = null)
         
         logger.debug { "Full event structure - exception: ${event.exception}, message: ${event.message}, platform: ${event.platform}" }
         
-        // Parse ISO 8601 timestamp or use current time
-        val timestamp = event.timestamp?.let {
-            try {
-                // Parse ISO 8601 to epoch milliseconds
-                java.time.Instant.parse(it).toEpochMilli()
-            } catch (e: Exception) {
-                logger.warn { "Failed to parse timestamp: $it, using current time" }
-                System.currentTimeMillis()
-            }
-        } ?: System.currentTimeMillis()
+        // Convert Unix timestamp (seconds with fractional part) to milliseconds
+        val timestamp = event.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
         
         // Generate issue ID from fingerprint
         val fingerprint = if (event.fingerprint.isNullOrEmpty()) {

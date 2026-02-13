@@ -116,7 +116,9 @@ class NotificationService(private val emailService: EmailService) {
                 issueUrl = issueUrl,
                 projectName = projectName,
                 environment = event.environment ?: "production",
-                timestamp = event.timestamp ?: java.time.Instant.now().toString(),
+                timestamp = event.timestamp?.let { 
+                    java.time.Instant.ofEpochMilli((it * 1000).toLong()).toString()
+                } ?: java.time.Instant.now().toString(),
                 stackTrace = stackTrace,
                 settingsUrl = settingsUrl,
                 unsubscribeUrl = "$settingsUrl?project=$projectId"

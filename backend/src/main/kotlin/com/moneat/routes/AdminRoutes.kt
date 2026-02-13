@@ -18,10 +18,29 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.config.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+
+@Serializable
+private data class AdminUsersResponse(
+    val users: List<com.moneat.services.AdminUserSummary>,
+    val total: Int,
+    val page: Int,
+    val limit: Int
+)
+
+@Serializable
+private data class AdminImpersonationTokenResponse(
+    val token: String
+)
+
+@Serializable
+private data class AdminSuccessResponse(
+    val success: Boolean
+)
 
 fun Route.adminRoutes() {
     val adminService = AdminService()
@@ -134,7 +153,7 @@ fun Route.adminRoutes() {
                     targetUser[Users.id],
                     targetUser[Users.email]
                 )
-                call.respond(mapOf("token" to token))
+                call.respond(AdminImpersonationTokenResponse(token = token))
             }
 
             post("/incidents/trigger") {
@@ -177,7 +196,7 @@ fun Route.adminRoutes() {
                     )
                     
                     incidentService.fireAlert(event)
-                    call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                    call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.InternalServerError, com.moneat.models.ErrorResponse(e.message ?: "Unknown error"))
                 }
@@ -473,12 +492,14 @@ fun Route.adminRoutes() {
                 val search = call.request.queryParameters["search"]
                 val users = adminService.getAllUsers(page, limit, search)
                 val total = adminService.getTotalUserCount(search)
-                call.respond(mapOf(
-                    "users" to users,
-                    "total" to total,
-                    "page" to page,
-                    "limit" to limit
-                ))
+                call.respond(
+                    AdminUsersResponse(
+                        users = users,
+                        total = total,
+                        page = page,
+                        limit = limit
+                    )
+                )
             }
 
             patch("/users/{userId}") {
@@ -491,7 +512,7 @@ fun Route.adminRoutes() {
                     val request = call.receive<com.moneat.services.UpdateUserRequest>()
                     val success = adminService.updateUser(userId, request)
                     if (success) {
-                        call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                        call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
                     } else {
                         call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("User not found"))
                     }
@@ -626,7 +647,7 @@ fun Route.adminRoutes() {
 
                     val success = adminBillingService.resetPromotionalCredits(orgId, adminUserId)
                     if (success) {
-                        call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                        call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
                     } else {
                         call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("Organization not found"))
                     }
