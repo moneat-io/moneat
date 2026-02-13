@@ -1,5 +1,7 @@
 import {Check, Copy} from 'lucide-react'
 import {useState, useCallback} from 'react'
+import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
+import {vscDarkPlus} from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface CodeBlockProps {
   code: string
@@ -7,7 +9,7 @@ interface CodeBlockProps {
   title?: string
 }
 
-export function CodeBlock({code, language, title}: CodeBlockProps) {
+export function CodeBlock({code, language = 'text', title}: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(() => {
@@ -30,9 +32,24 @@ export function CodeBlock({code, language, title}: CodeBlockProps) {
           </button>
         </div>
       )}
-      <pre className="p-4 overflow-x-auto text-sm leading-relaxed">
-        <code>{code}</code>
-      </pre>
+      <SyntaxHighlighter
+        language={language}
+        style={vscDarkPlus}
+        customStyle={{
+          margin: 0,
+          padding: '1rem',
+          background: 'transparent',
+          fontSize: '0.875rem',
+          lineHeight: '1.625',
+        }}
+        codeTagProps={{
+          style: {
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          }
+        }}
+      >
+        {code}
+      </SyntaxHighlighter>
     </div>
   )
 }

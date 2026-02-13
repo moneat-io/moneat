@@ -342,12 +342,6 @@ export function LogExplorer({
   const showEmptyState = !isLoading && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && totalCount === 0
   const logContainerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (initialScrollToBottom && !isLoading && logs.length > 0 && logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
-    }
-  }, [initialScrollToBottom, isLoading, logs.length])
-
   return (
     <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]", className)}>
       {/* Header bar */}
