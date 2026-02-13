@@ -21,6 +21,7 @@ import java.security.KeyFactory
 import java.security.interfaces.ECPrivateKey
 import java.security.spec.PKCS8EncodedKeySpec
 import java.util.*
+import com.moneat.config.EnvConfig
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,16 +76,16 @@ class OAuthService {
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
-    private val backendUrl = System.getenv("BACKEND_URL") ?: "https://api.moneat.io"
-    private val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+    private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
+    private val dashboardUrl = EnvConfig.get("DASHBOARD_URL") ?: "https://moneat.io"
     
-    private val githubClientId = System.getenv("GITHUB_OAUTH_CLIENT_ID")
-    private val githubClientSecret = System.getenv("GITHUB_OAUTH_CLIENT_SECRET")
+    private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
+    private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")
     
-    private val appleClientId = System.getenv("APPLE_CLIENT_ID")
-    private val appleTeamId = System.getenv("APPLE_TEAM_ID")
-    private val appleKeyId = System.getenv("APPLE_KEY_ID")
-    private val applePrivateKey = System.getenv("APPLE_PRIVATE_KEY")
+    private val appleClientId = EnvConfig.get("APPLE_CLIENT_ID")
+    private val appleTeamId = EnvConfig.get("APPLE_TEAM_ID")
+    private val appleKeyId = EnvConfig.get("APPLE_KEY_ID")
+    private val applePrivateKey = EnvConfig.get("APPLE_PRIVATE_KEY")
     
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {

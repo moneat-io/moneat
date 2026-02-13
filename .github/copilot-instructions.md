@@ -125,6 +125,7 @@ Fingerprint logic is in `EventService.kt` - modify carefully as it affects group
 - **CRITICAL**: See `ESSENTIAL_ENV_VARS.md` for complete list of required variables
 - Required vars: `JWT_SECRET`, `DATABASE_PASSWORD`, `CLICKHOUSE_PASSWORD`, `FRONTEND_URL`, `BACKEND_URL`
 - Application validates environment on startup and fails fast if critical variables are missing or unsafe
+- **NEVER use `System.getenv()` directly** - Always use `EnvConfig.get()` which handles both environment variables and `.env` files consistently
 
 ### Production Safety Rules
 **IMPORTANT:** When writing code that uses environment variables or configurable URLs:

@@ -89,9 +89,8 @@ class EnvironmentValidator {
     }
 
     private fun getConfigValue(key: String): String? {
-        return System.getenv(key)
+        return EnvConfig.get(key)
             ?: System.getProperty(key)
-            ?: EnvConfig.get(key)
     }
     
     fun validateAndFailFast() {

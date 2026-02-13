@@ -256,7 +256,7 @@ fun Route.integrationRoutes() {
                 // Debug env loading
                 println("DEBUG: EnvConfig.isLoaded(): ${EnvConfig.isLoaded()}")
                 println("DEBUG: System.getProperty('user.dir'): ${System.getProperty("user.dir")}")
-                println("DEBUG: Checking for SLACK_CLIENT_ID in System.getenv: ${System.getenv("SLACK_CLIENT_ID")}")
+                println("DEBUG: Checking for SLACK_CLIENT_ID in EnvConfig: ${EnvConfig.get("SLACK_CLIENT_ID")}")
                 
                 val clientId = EnvConfig.get("SLACK_CLIENT_ID")
                 println("DEBUG: EnvConfig.get('SLACK_CLIENT_ID'): $clientId")

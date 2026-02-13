@@ -17,7 +17,7 @@ object SentryConfig {
         Sentry.init { options ->
             options.dsn = dsn
             options.environment = EnvConfig.get("SENTRY_ENVIRONMENT", "production")
-            options.release = System.getenv("RELEASE_VERSION") ?: "moneat@${System.getProperty("app.version", "dev")}"
+            options.release = EnvConfig.get("RELEASE_VERSION") ?: "moneat@${System.getProperty("app.version", "dev")}"
             
             // Performance monitoring
             val tracesSampleRate = EnvConfig.get("SENTRY_TRACES_SAMPLE_RATE", "0.1").toDoubleOrNull() ?: 0.1
@@ -28,7 +28,7 @@ object SentryConfig {
             options.profilesSampleRate = profilesSampleRate
             
             // Set server name
-            options.serverName = System.getenv("HOSTNAME") ?: "moneat-backend"
+            options.serverName = EnvConfig.get("HOSTNAME", "moneat-backend")
             
             // Enable performance monitoring for database queries
             options.enableTracing = true

@@ -1,5 +1,6 @@
 package com.moneat.routes
 
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.services.SsoService
 import io.ktor.http.*
@@ -57,15 +58,15 @@ fun Route.ssoRoutes() {
                 val callbackData = ssoService.handleSamlResponse(samlResponse, relayState)
                 
                 // Redirect to dashboard with token
-                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "http://localhost:5173"
+                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "http://localhost:5173")
                 call.respondRedirect("$dashboardUrl/auth/sso/callback?token=${callbackData.token}&email=${callbackData.email}&name=${callbackData.name}")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "SAML ACS failed: ${e.message}" }
-                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "http://localhost:5173"
+                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "http://localhost:5173")
                 call.respondRedirect("$dashboardUrl/login?error=sso_failed&message=${e.message}")
             } catch (e: Exception) {
                 logger.error(e) { "SAML ACS error" }
-                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "http://localhost:5173"
+                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "http://localhost:5173")
                 call.respondRedirect("$dashboardUrl/login?error=sso_failed")
             }
         }
@@ -78,15 +79,15 @@ fun Route.ssoRoutes() {
                 val callbackData = ssoService.handleOidcCallback(code, state)
                 
                 // Redirect to dashboard with token
-                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "http://localhost:5173"
+                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "http://localhost:5173")
                 call.respondRedirect("$dashboardUrl/auth/sso/callback?token=${callbackData.token}&email=${callbackData.email}&name=${callbackData.name}")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "OIDC callback failed: ${e.message}" }
-                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "http://localhost:5173"
+                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "http://localhost:5173")
                 call.respondRedirect("$dashboardUrl/login?error=sso_failed&message=${e.message}")
             } catch (e: Exception) {
                 logger.error(e) { "OIDC callback error" }
-                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "http://localhost:5173"
+                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "http://localhost:5173")
                 call.respondRedirect("$dashboardUrl/login?error=sso_failed")
             }
         }
