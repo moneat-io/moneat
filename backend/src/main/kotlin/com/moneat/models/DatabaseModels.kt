@@ -16,6 +16,8 @@ object Users : Table("users") {
     val password_reset_token = varchar("password_reset_token", 255).nullable()
     val password_reset_expires_at = long("password_reset_expires_at").nullable()
     val onboarding_completed = bool("onboarding_completed").default(false)
+    val oauth_provider = varchar("oauth_provider", 20).nullable()
+    val oauth_provider_id = varchar("oauth_provider_id", 512).nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

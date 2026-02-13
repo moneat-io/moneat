@@ -2,6 +2,7 @@ package com.moneat.routes
 
 import com.moneat.models.*
 import com.moneat.services.AuthService
+import com.moneat.services.OAuthService
 import com.moneat.services.SignupRequestContext
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -11,9 +12,13 @@ import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 fun Route.authRoutes() {
     val authService = AuthService()
+    val oauthService = OAuthService()
     
     route("/auth") {
         post("/signup") {
@@ -101,6 +106,88 @@ fun Route.authRoutes() {
                 }
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+            }
+        }
+        
+        // GitHub OAuth
+        get("/github") {
+            try {
+                if (!oauthService.isGitHubEnabled()) {
+                    call.respond(HttpStatusCode.NotImplemented, mapOf("error" to "GitHub OAuth is not configured"))
+                    return@get
+                }
+                
+                val state = oauthService.generateState()
+                val authUrl = oauthService.generateGitHubAuthUrl(state)
+                call.respondRedirect(authUrl)
+            } catch (e: Exception) {
+                logger.error(e) { "GitHub OAuth init failed" }
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+            }
+        }
+        
+        get("/github/callback") {
+            try {
+                val code = call.parameters["code"]
+                val state = call.parameters["state"]
+                
+                if (code == null || state == null) {
+                    throw IllegalArgumentException("Missing code or state parameter")
+                }
+                
+                val userData = oauthService.handleGitHubCallback(code, state)
+                val authResponse = oauthService.findOrCreateOAuthUser(userData)
+                
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/auth/oauth/callback?token=${authResponse.token}")
+            } catch (e: IllegalArgumentException) {
+                logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed&message=${e.message}")
+            } catch (e: Exception) {
+                logger.error(e) { "GitHub OAuth callback error" }
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+            }
+        }
+        
+        // Apple Sign In
+        get("/apple") {
+            try {
+                if (!oauthService.isAppleEnabled()) {
+                    call.respond(HttpStatusCode.NotImplemented, mapOf("error" to "Apple Sign In is not configured"))
+                    return@get
+                }
+                
+                val state = oauthService.generateState()
+                val authUrl = oauthService.generateAppleAuthUrl(state)
+                call.respondRedirect(authUrl)
+            } catch (e: Exception) {
+                logger.error(e) { "Apple OAuth init failed" }
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+            }
+        }
+        
+        post("/apple/callback") {
+            try {
+                val params = call.receiveParameters()
+                val idToken = params["id_token"] ?: throw IllegalArgumentException("Missing id_token")
+                
+                val userData = oauthService.handleAppleCallback(idToken)
+                val authResponse = oauthService.findOrCreateOAuthUser(userData)
+                
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/auth/oauth/callback?token=${authResponse.token}")
+            } catch (e: IllegalArgumentException) {
+                logger.error(e) { "Apple OAuth callback failed: ${e.message}" }
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed&message=${e.message}")
+            } catch (e: Exception) {
+                logger.error(e) { "Apple OAuth callback error" }
+                val dashboardUrl = System.getenv("DASHBOARD_URL") ?: "https://moneat.io"
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
     }
