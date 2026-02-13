@@ -45,6 +45,9 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-${{ matrix.component }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-${{ matrix.component }}:latest
+          build-args: |
+            VITE_BACKEND_URL=https://api.moneat.io
+            VITE_API_URL=https://api.moneat.io
           cache-from: type=gha,scope=moneat-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=moneat-${{ matrix.component }}
           provenance: false
