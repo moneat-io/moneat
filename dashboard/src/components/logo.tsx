@@ -38,7 +38,7 @@ export function Logo({ className, markOnly = false }: LogoProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 236 48"
+      viewBox="0 0 160 48"
       className={cn('h-8', className)}
       aria-label="Moneat"
     >
