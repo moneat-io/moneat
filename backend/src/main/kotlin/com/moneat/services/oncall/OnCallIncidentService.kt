@@ -112,7 +112,7 @@ class OnCallIncidentService {
                 val alerts = Incidents
                     .innerJoin(OnCallIncidentAlerts)
                     .selectAll()
-                    .where { OnCallIncidentAlerts.incidentId eq row[OnCallIncidents.id] }
+                    .where { OnCallIncidentAlerts.incidentId eq row[OnCallIncidents.id].value }
                     .map { toIncident(it) }
                 toOnCallIncident(row, alerts)
             }
