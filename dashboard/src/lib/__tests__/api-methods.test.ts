@@ -330,7 +330,7 @@ describe('ApiClient - Projects and Issues', () => {
         })
       )
 
-      const user = await api.completeOnboarding('Acme Corp', '10-50')
+      const user = await api.completeOnboarding('Acme Corp', '10-50', 'acme-corp', 'search')
       expect(user).toEqual(mockUser)
     })
 
