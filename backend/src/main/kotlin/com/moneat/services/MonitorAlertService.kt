@@ -1,6 +1,7 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
 import com.moneat.models.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -224,19 +225,7 @@ class MonitorAlertService {
      * Evaluate a single alert.
      */
     private suspend fun evaluateAlert(alert: AlertData, systemName: String, organizationId: Int) {
-        // Check if we should throttle this alert
-        val now = Clock.System.now()
-        if (alert.lastTriggeredAt != null) {
-            val timeSinceLastTrigger = now - alert.lastTriggeredAt
-            if (timeSinceLastTrigger < MIN_ALERT_INTERVAL_MINUTES.minutes) {
-                return // Don't spam alerts
-            }
-        }
-        
-        // Check if alerts are silenced for this organization
-        if (isAnySilenceActive(organizationId)) {
-            return
-        }
+        val alertKey = "alert_state:${alert.systemId}:${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
         
         // Get recent metrics for the system
         val currentValue = getCurrentMetricValue(alert.systemId, alert.metric) ?: return
@@ -251,20 +240,75 @@ class MonitorAlertService {
             else -> false
         }
         
+        // Handle Recovery
         if (!triggered) {
-            return // Alert condition not met
+            // Check if it was previously triggered
+            val wasTriggered = try {
+                if (RedisConfig.isConnected()) {
+                    RedisConfig.sync().get(alertKey) == "TRIGGERED"
+                } else {
+                    false // Fallback if Redis is down
+                }
+            } catch (e: Exception) {
+                false
+            }
+            
+            if (wasTriggered) {
+                // Clear state
+                try {
+                    if (RedisConfig.isConnected()) {
+                        RedisConfig.sync().del(alertKey)
+                    }
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to clear alert state in Redis" }
+                }
+                
+                // Send recovery notification
+                sendRecoveryNotification(alert, systemName, organizationId)
+                logger.info { "Alert ${alert.id} recovered for system ${alert.systemId}" }
+            }
+            return
         }
         
-        // If duration is specified, check if condition has been true for that duration
+        // If triggered, check duration if specified
         if (alert.durationSeconds > 0) {
             val isSustained = checkSustainedCondition(alert)
             if (!isSustained) {
                 return // Condition not sustained for required duration
             }
         }
+
+        // Check throttling
+        val now = Clock.System.now()
+        if (alert.lastTriggeredAt != null) {
+            val timeSinceLastTrigger = now - alert.lastTriggeredAt
+            if (timeSinceLastTrigger < MIN_ALERT_INTERVAL_MINUTES.minutes) {
+                // Update Redis state even if throttled to ensure consistency
+                 try {
+                    if (RedisConfig.isConnected()) {
+                        RedisConfig.sync().set(alertKey, "TRIGGERED")
+                    }
+                } catch (e: Exception) {}
+                return // Don't spam alerts
+            }
+        }
+        
+        // Check if alerts are silenced for this organization
+        if (isAnySilenceActive(organizationId)) {
+            return
+        }
         
         // Trigger the alert
         logger.info { "Alert ${alert.id} triggered for system ${alert.systemId}: ${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)" }
+        
+        // Update Redis state
+        try {
+            if (RedisConfig.isConnected()) {
+                RedisConfig.sync().set(alertKey, "TRIGGERED")
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to set alert state in Redis" }
+        }
         
         // Update last triggered timestamp
         if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
@@ -429,49 +473,36 @@ class MonitorAlertService {
         )
         
         val metricLabel = getMetricLabel(alert.metric)
-        val subject = "⚠️ Alert: $systemName - $metricLabel ${alert.condition} ${alert.threshold}"
+        val conditionText = getConditionText(alert.condition)
+        val subject = "⚠️ Alert: $systemName - $metricLabel $conditionText ${alert.threshold}"
         
         val formattedValue = formatMetricValue(alert.metric, currentValue)
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
+        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/${alert.systemId}"
         
         // Send email notifications
         for ((_, email) in emailRecipients) {
             try {
-                val htmlBody = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    </head>
-                    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                        <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
-                            <h1 style="color: #dc2626; margin-bottom: 20px;">⚠️ System Alert</h1>
-                            <p><strong>System:</strong> $systemName</p>
-                            <p><strong>Metric:</strong> $metricLabel</p>
-                            <p><strong>Condition:</strong> ${alert.condition} $formattedThreshold</p>
-                            <p><strong>Current Value:</strong> <span style="color: #dc2626; font-weight: bold;">$formattedValue</span></p>
-                            ${if (alert.durationSeconds > 0) "<p><strong>Duration:</strong> ${alert.durationSeconds}s</p>" else ""}
-                            <div style="margin: 30px 0;">
-                                <a href="${config.property("email.frontendUrl").getString()}/monitoring/${alert.systemId}" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
-                            </div>
-                            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                            <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
-                        </div>
-                    </body>
-                    </html>
-                """.trimIndent()
+                val htmlBody = loadSystemAlertTemplate(
+                    systemName = systemName,
+                    metric = metricLabel,
+                    condition = conditionText,
+                    value = formattedValue,
+                    threshold = formattedThreshold,
+                    dashboardUrl = dashboardUrl
+                )
                 
                 val textBody = """
                     ⚠️ System Alert
                     
-                    System: $systemName
-                    Metric: $metricLabel
-                    Condition: ${alert.condition} $formattedThreshold
-                    Current Value: $formattedValue
-                    ${if (alert.durationSeconds > 0) "Duration: ${alert.durationSeconds}s" else ""}
+                    Heads up, something needs attention.
                     
-                    View system: ${config.property("email.frontendUrl").getString()}/monitoring/${alert.systemId}
+                    We noticed that $metricLabel on $systemName has $conditionText the threshold of $formattedThreshold.
+                    
+                    Current Value: $formattedValue
+                    ${if (alert.durationSeconds > 0) "Duration setting: ${alert.durationSeconds}s" else ""}
+                    
+                    Check System Health: $dashboardUrl
                     
                     ---
                     Moneat Server Monitoring
@@ -828,6 +859,120 @@ class MonitorAlertService {
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to resolve incident alert for system up" }
+        }
+    }
+    
+    private fun getConditionText(condition: String): String {
+        return when (condition) {
+            ">" -> "exceeded"
+            "<" -> "dropped below"
+            ">=" -> "reached or exceeded"
+            "<=" -> "reached or dropped below"
+            "==" -> "is exactly"
+            else -> condition
+        }
+    }
+
+    private fun loadSystemAlertTemplate(
+        systemName: String,
+        metric: String,
+        condition: String,
+        value: String,
+        threshold: String,
+        dashboardUrl: String
+    ): String {
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/system-alert-v1.html")
+        
+        return if (templateResource != null) {
+            templateResource.bufferedReader().use { it.readText() }
+                .replace("{{ systemName }}", systemName)
+                .replace("{{ metric }}", metric)
+                .replace("{{ condition }}", condition)
+                .replace("{{ value }}", value)
+                .replace("{{ threshold }}", threshold)
+                .replace("{{ dashboardUrl }}", dashboardUrl)
+        } else {
+            // Fallback inline HTML
+            """
+            <div style="padding: 20px; background: #fff1f2; border: 1px solid #fecaca; border-radius: 8px;">
+                <h2 style="color: #991b1b;">System Alert</h2>
+                <p><strong>$systemName</strong> reported <strong>$metric</strong> at <strong>$value</strong>.</p>
+                <p>Threshold: $condition $threshold</p>
+                <a href="$dashboardUrl">View Dashboard</a>
+            </div>
+            """.trimIndent()
+        }
+    }
+
+    private fun loadSystemRecoveredTemplate(
+        systemName: String,
+        metric: String,
+        duration: String,
+        dashboardUrl: String
+    ): String {
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/system-recovered.html")
+        
+        return if (templateResource != null) {
+            templateResource.bufferedReader().use { it.readText() }
+                .replace("{{ systemName }}", systemName)
+                .replace("{{ metric }}", metric)
+                .replace("{{ duration }}", duration)
+                .replace("{{ dashboardUrl }}", dashboardUrl)
+        } else {
+            // Fallback inline HTML
+            """
+            <div style="padding: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                <h2 style="color: #166534;">System Recovered</h2>
+                <p><strong>$systemName</strong> is back to normal.</p>
+                <p>Metric: $metric</p>
+                <a href="$dashboardUrl">View Dashboard</a>
+            </div>
+            """.trimIndent()
+        }
+    }
+
+    private suspend fun sendRecoveryNotification(
+        alert: AlertData,
+        systemName: String,
+        organizationId: Int
+    ) {
+        val prefsService = AlertNotificationPreferencesService()
+        
+        // Get users with email enabled for SYSTEM_ALERT
+        val emailRecipients = prefsService.getUsersWithChannelEnabled(
+            organizationId = organizationId,
+            alertSource = "SYSTEM_ALERT",
+            channel = "email"
+        )
+        
+        val metricLabel = getMetricLabel(alert.metric)
+        val subject = "✅ Recovered: $systemName - $metricLabel"
+        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/${alert.systemId}"
+        val durationText = if (alert.durationSeconds > 0) "${alert.durationSeconds}s setting" else "N/A"
+        
+        for ((_, email) in emailRecipients) {
+            try {
+                val htmlBody = loadSystemRecoveredTemplate(
+                    systemName = systemName,
+                    metric = metricLabel,
+                    duration = durationText,
+                    dashboardUrl = dashboardUrl
+                )
+                
+                val textBody = """
+                    ✅ Issue Resolved
+                    
+                    $systemName has recovered.
+                    
+                    The alert for $metricLabel is no longer active. The metric has returned to normal levels.
+                    
+                    View Dashboard: $dashboardUrl
+                """.trimIndent()
+                
+                emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_recovery")
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send recovery notification to $email" }
+            }
         }
     }
     

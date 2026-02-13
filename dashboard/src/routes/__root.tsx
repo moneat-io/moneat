@@ -116,7 +116,7 @@ function RootComponent() {
   useEffect(() => {
     async function checkOnboarding() {
       // Skip check if not authenticated or on public routes or public status pages
-      if (!isAuthenticated || PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/')) {
+      if (!isAuthenticated || PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
         setOnboardingChecked(true)
         return
       }
@@ -140,11 +140,12 @@ function RootComponent() {
   const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'].includes(currentPath)
   const isLandingPage = currentPath === '/' && !isAuthenticated
   const isPublicStatusPage = currentPath.startsWith('/s/')
-  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage
+  const isDocsPage = currentPath.startsWith('/docs')
+  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isDocsPage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   // Show loading state while checking onboarding
-  if (isAuthenticated && !onboardingChecked && !PUBLIC_ROUTES.has(currentPath) && !currentPath.startsWith('/s/') && !currentPath.startsWith('/auth/') && !currentPath.startsWith('/legal/')) {
+  if (isAuthenticated && !onboardingChecked && !PUBLIC_ROUTES.has(currentPath) && !currentPath.startsWith('/s/') && !currentPath.startsWith('/auth/') && !currentPath.startsWith('/legal/') && !currentPath.startsWith('/docs')) {
     return null
   }
 

@@ -13,7 +13,9 @@ class EmailTemplateTest {
             "reset-password.html",
             "org-invitation.html",
             "error-alert.html",
-            "weekly-summary.html"
+            "weekly-summary.html",
+            "system-alert-v1.html",
+            "system-recovered.html"
         )
         
         templates.forEach { templateName ->

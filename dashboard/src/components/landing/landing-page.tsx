@@ -51,6 +51,12 @@ export function LandingPage() {
             >
               Pricing
             </a>
+            <a
+              href="/docs"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Docs
+            </a>
           </nav>
           <div className="flex items-center gap-3">
             <Link to="/login">
