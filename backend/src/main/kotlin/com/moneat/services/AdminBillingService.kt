@@ -1,0 +1,198 @@
+package com.moneat.services
+
+import com.moneat.models.*
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import mu.KotlinLogging
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.transaction
+
+private val logger = KotlinLogging.logger {}
+
+class AdminBillingService {
+    companion object {
+        private const val BYTES_PER_GB = 1_073_741_824L
+    }
+
+    /**
+     * Grant promotional credits (bonus GB or units) to an organization
+     */
+    fun grantPromotionalCredit(
+        organizationId: Int,
+        grantedByUserId: Int,
+        bonusGb: Double? = null,
+        bonusUnits: Long? = null,
+        reason: String
+    ): GrantPromotionalCreditResponse {
+        require(bonusGb != null || bonusUnits != null) {
+            "At least one of bonusGb or bonusUnits must be provided"
+        }
+        require(bonusGb == null || bonusGb > 0) {
+            "bonusGb must be positive"
+        }
+        require(bonusUnits == null || bonusUnits > 0) {
+            "bonusUnits must be positive"
+        }
+
+        val bonusGbBytes = bonusGb?.let { (it * BYTES_PER_GB).toLong() } ?: 0L
+        val bonusUnitsValue = bonusUnits ?: 0L
+        val now = Clock.System.now()
+
+        return transaction {
+            // Get active subscription for the organization
+            val subscription = Subscriptions.selectAll().where {
+                (Subscriptions.organization_id eq organizationId) and
+                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+            }
+                .orderBy(Subscriptions.id to SortOrder.DESC)
+                .firstOrNull()
+                ?: throw IllegalStateException("No active subscription found for organization $organizationId")
+
+            val subscriptionId = subscription[Subscriptions.id]
+            val currentBonusGbBytes = subscription[Subscriptions.bonus_gb_bytes]
+            val currentBonusUnits = subscription[Subscriptions.bonus_units]
+
+            // Update subscription with new bonus credits (additive)
+            Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                it[bonus_gb_bytes] = currentBonusGbBytes + bonusGbBytes
+                it[bonus_units] = currentBonusUnits + bonusUnitsValue
+                it[bonus_granted_at] = now
+                it[bonus_granted_by] = grantedByUserId
+                it[bonus_reason] = reason
+            }
+
+            // Record grant in audit trail
+            PromotionalCreditGrants.insert {
+                it[PromotionalCreditGrants.organization_id] = organizationId
+                it[PromotionalCreditGrants.subscription_id] = subscriptionId
+                it[granted_by] = grantedByUserId
+                it[PromotionalCreditGrants.bonus_gb_bytes] = bonusGbBytes
+                it[PromotionalCreditGrants.bonus_units] = bonusUnitsValue
+                it[PromotionalCreditGrants.reason] = reason
+                it[granted_at] = now
+            }
+
+            logger.info {
+                "Granted promotional credit to org $organizationId: " +
+                    "${bonusGb ?: 0.0} GB (${bonusGbBytes} bytes), " +
+                    "${bonusUnitsValue} units by user $grantedByUserId"
+            }
+
+            GrantPromotionalCreditResponse(
+                organizationId = organizationId,
+                bonusGbBytes = currentBonusGbBytes + bonusGbBytes,
+                bonusUnits = currentBonusUnits + bonusUnitsValue,
+                bonusGb = (currentBonusGbBytes + bonusGbBytes) / BYTES_PER_GB.toDouble(),
+                reason = reason,
+                grantedAt = now.toLocalDateTime(TimeZone.UTC).toString()
+            )
+        }
+    }
+
+    /**
+     * Get promotional credit grant history for an organization
+     */
+    fun getPromotionalCreditHistory(organizationId: Int): List<PromotionalCreditHistoryItem> {
+        return transaction {
+            (PromotionalCreditGrants innerJoin Organizations innerJoin Users)
+                .select(
+                    PromotionalCreditGrants.id,
+                    PromotionalCreditGrants.organization_id,
+                    Organizations.name,
+                    PromotionalCreditGrants.granted_by,
+                    Users.email,
+                    PromotionalCreditGrants.bonus_gb_bytes,
+                    PromotionalCreditGrants.bonus_units,
+                    PromotionalCreditGrants.reason,
+                    PromotionalCreditGrants.granted_at
+                )
+                .where {
+                    (PromotionalCreditGrants.organization_id eq organizationId) and
+                        (PromotionalCreditGrants.granted_by eq Users.id)
+                }
+                .orderBy(PromotionalCreditGrants.granted_at to SortOrder.DESC)
+                .map { row ->
+                    PromotionalCreditHistoryItem(
+                        id = row[PromotionalCreditGrants.id],
+                        organizationId = row[PromotionalCreditGrants.organization_id],
+                        organizationName = row[Organizations.name],
+                        grantedBy = row[PromotionalCreditGrants.granted_by],
+                        grantedByEmail = row[Users.email],
+                        bonusGb = row[PromotionalCreditGrants.bonus_gb_bytes] / BYTES_PER_GB.toDouble(),
+                        bonusUnits = row[PromotionalCreditGrants.bonus_units],
+                        reason = row[PromotionalCreditGrants.reason],
+                        grantedAt = row[PromotionalCreditGrants.granted_at]
+                            .toLocalDateTime(TimeZone.UTC)
+                            .toString()
+                    )
+                }
+        }
+    }
+
+    /**
+     * Get all promotional credit grants across all organizations (admin view)
+     */
+    fun getAllPromotionalCreditGrants(limit: Int = 100): List<PromotionalCreditHistoryItem> {
+        return transaction {
+            (PromotionalCreditGrants innerJoin Organizations innerJoin Users)
+                .select(
+                    PromotionalCreditGrants.id,
+                    PromotionalCreditGrants.organization_id,
+                    Organizations.name,
+                    PromotionalCreditGrants.granted_by,
+                    Users.email,
+                    PromotionalCreditGrants.bonus_gb_bytes,
+                    PromotionalCreditGrants.bonus_units,
+                    PromotionalCreditGrants.reason,
+                    PromotionalCreditGrants.granted_at
+                )
+                .where { PromotionalCreditGrants.granted_by eq Users.id }
+                .orderBy(PromotionalCreditGrants.granted_at to SortOrder.DESC)
+                .limit(limit)
+                .map { row ->
+                    PromotionalCreditHistoryItem(
+                        id = row[PromotionalCreditGrants.id],
+                        organizationId = row[PromotionalCreditGrants.organization_id],
+                        organizationName = row[Organizations.name],
+                        grantedBy = row[PromotionalCreditGrants.granted_by],
+                        grantedByEmail = row[Users.email],
+                        bonusGb = row[PromotionalCreditGrants.bonus_gb_bytes] / BYTES_PER_GB.toDouble(),
+                        bonusUnits = row[PromotionalCreditGrants.bonus_units],
+                        reason = row[PromotionalCreditGrants.reason],
+                        grantedAt = row[PromotionalCreditGrants.granted_at]
+                            .toLocalDateTime(TimeZone.UTC)
+                            .toString()
+                    )
+                }
+        }
+    }
+
+    /**
+     * Reset promotional credits for an organization (set to zero)
+     */
+    fun resetPromotionalCredits(organizationId: Int, adminUserId: Int): Boolean {
+        return transaction {
+            val subscription = Subscriptions.selectAll().where {
+                (Subscriptions.organization_id eq organizationId) and
+                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+            }
+                .orderBy(Subscriptions.id to SortOrder.DESC)
+                .firstOrNull()
+                ?: return@transaction false
+
+            val subscriptionId = subscription[Subscriptions.id]
+            
+            Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                it[bonus_gb_bytes] = 0L
+                it[bonus_units] = 0L
+                it[bonus_granted_at] = Clock.System.now()
+                it[bonus_granted_by] = adminUserId
+                it[bonus_reason] = "Reset by admin"
+            }
+
+            logger.info { "Reset promotional credits for org $organizationId by admin $adminUserId" }
+            true
+        }
+    }
+}

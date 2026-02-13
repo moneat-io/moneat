@@ -6,6 +6,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.and
@@ -13,6 +14,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -64,7 +66,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 }
                 "transaction" -> {
                     logger.debug { "Transaction payload: ${item.payload.take(500)}" }
-                    val transaction = json.decodeFromString<SentryTransaction>(item.payload)
+                    val transaction = parseTransactionPayload(item.payload)
                     storeTransaction(projectId, transaction)
                     recordUsage(projectId, "transaction", item)
                 }
@@ -73,7 +75,7 @@ class EventService(private val notificationService: NotificationService? = null)
                     logger.debug { "Received session (not yet implemented)" }
                 }
                 "replay_event" -> {
-                    val replayEvent = json.decodeFromString<SentryReplayEvent>(item.payload)
+                    val replayEvent = parseReplayEventPayload(item.payload)
                     lastReplayId = replayEvent.replay_id
                     lastSegmentId = replayEvent.segment_id ?: 0
                     storeReplayEvent(projectId, replayEvent)
@@ -628,6 +630,90 @@ class EventService(private val notificationService: NotificationService? = null)
         } catch (e: Exception) {
             logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
         }
+    }
+
+    private fun parseTransactionPayload(payload: String): SentryTransaction {
+        return try {
+            json.decodeFromString(payload)
+        } catch (original: SerializationException) {
+            val normalizedPayload = normalizeTimestampJsonPayload(
+                payload = payload,
+                timestampKeys = setOf("start_timestamp", "timestamp")
+            ) ?: throw original
+            logger.warn { "Retrying transaction decode after normalizing timestamp fields" }
+            try {
+                json.decodeFromString(normalizedPayload)
+            } catch (_: SerializationException) {
+                throw original
+            }
+        }
+    }
+
+    private fun parseReplayEventPayload(payload: String): SentryReplayEvent {
+        return try {
+            json.decodeFromString(payload)
+        } catch (original: SerializationException) {
+            val normalizedPayload = normalizeTimestampJsonPayload(
+                payload = payload,
+                timestampKeys = setOf("timestamp", "replay_start_timestamp")
+            ) ?: throw original
+            logger.warn { "Retrying replay_event decode after normalizing timestamp fields" }
+            try {
+                json.decodeFromString(normalizedPayload)
+            } catch (_: SerializationException) {
+                throw original
+            }
+        }
+    }
+
+    private fun normalizeTimestampJsonPayload(payload: String, timestampKeys: Set<String>): String? {
+        val parsed = runCatching { json.parseToJsonElement(payload) }.getOrNull() ?: return null
+        val normalized = normalizeTimestampElement(parsed, timestampKeys)
+        if (normalized == parsed) return null
+        return normalized.toString()
+    }
+
+    private fun normalizeTimestampElement(element: JsonElement, timestampKeys: Set<String>): JsonElement {
+        return when (element) {
+            is JsonObject -> {
+                var changed = false
+                val normalizedEntries = element.mapValues { (key, value) ->
+                    val normalizedValue = if (key in timestampKeys) {
+                        normalizeTimestampValue(value)
+                    } else {
+                        normalizeTimestampElement(value, timestampKeys)
+                    }
+                    if (normalizedValue != value) changed = true
+                    normalizedValue
+                }
+                if (!changed) element else JsonObject(normalizedEntries)
+            }
+            is JsonArray -> {
+                var changed = false
+                val normalizedArray = element.map { value ->
+                    val normalizedValue = normalizeTimestampElement(value, timestampKeys)
+                    if (normalizedValue != value) changed = true
+                    normalizedValue
+                }
+                if (!changed) element else JsonArray(normalizedArray)
+            }
+            else -> element
+        }
+    }
+
+    private fun normalizeTimestampValue(value: JsonElement): JsonElement {
+        val primitive = value as? JsonPrimitive ?: return value
+        if (!primitive.isString) return value
+
+        val raw = primitive.contentOrNull ?: return value
+        val parsed = parseTimestampString(raw) ?: return value
+        return JsonPrimitive(parsed)
+    }
+
+    private fun parseTimestampString(raw: String): Double? {
+        raw.toDoubleOrNull()?.let { return it }
+        val instant = runCatching { Instant.parse(raw) }.getOrNull() ?: return null
+        return instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
     }
     
     private fun generateFingerprint(event: SentryEvent): List<String> {

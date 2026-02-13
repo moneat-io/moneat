@@ -467,6 +467,39 @@ fun Route.adminRoutes() {
                 }
             }
 
+            get("/users") {
+                val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                val search = call.request.queryParameters["search"]
+                val users = adminService.getAllUsers(page, limit, search)
+                val total = adminService.getTotalUserCount(search)
+                call.respond(mapOf(
+                    "users" to users,
+                    "total" to total,
+                    "page" to page,
+                    "limit" to limit
+                ))
+            }
+
+            patch("/users/{userId}") {
+                val userId = call.parameters["userId"]?.toIntOrNull()
+                if (userId == null) {
+                    call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid user ID"))
+                    return@patch
+                }
+                try {
+                    val request = call.receive<com.moneat.services.UpdateUserRequest>()
+                    val success = adminService.updateUser(userId, request)
+                    if (success) {
+                        call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("User not found"))
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                }
+            }
+
             route("/billing") {
                 get("/tiers") {
                     val tierName = call.request.queryParameters["tier"]?.uppercase()
@@ -525,6 +558,77 @@ fun Route.adminRoutes() {
                         call.respond(updated)
                     } catch (e: IllegalArgumentException) {
                         call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                    }
+                }
+
+                // Promotional credit management
+                val adminBillingService = com.moneat.services.AdminBillingService()
+
+                post("/organizations/{orgId}/promotional-credits") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val adminUserId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                        return@post
+                    }
+
+                    val orgId = call.parameters["orgId"]?.toIntOrNull()
+                    if (orgId == null) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid organization ID"))
+                        return@post
+                    }
+
+                    try {
+                        val request = call.receive<com.moneat.models.GrantPromotionalCreditRequest>()
+                        val response = adminBillingService.grantPromotionalCredit(
+                            organizationId = orgId,
+                            grantedByUserId = adminUserId,
+                            bonusGb = request.bonusGb,
+                            bonusUnits = request.bonusUnits,
+                            reason = request.reason
+                        )
+                        call.respond(HttpStatusCode.Created, response)
+                    } catch (e: IllegalArgumentException) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                    } catch (e: IllegalStateException) {
+                        call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse(e.message ?: "Organization not found"))
+                    }
+                }
+
+                get("/organizations/{orgId}/promotional-credits") {
+                    val orgId = call.parameters["orgId"]?.toIntOrNull()
+                    if (orgId == null) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid organization ID"))
+                        return@get
+                    }
+
+                    val history = adminBillingService.getPromotionalCreditHistory(orgId)
+                    call.respond(history)
+                }
+
+                get("/promotional-credits") {
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
+                    val grants = adminBillingService.getAllPromotionalCreditGrants(limit)
+                    call.respond(grants)
+                }
+
+                delete("/organizations/{orgId}/promotional-credits") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val adminUserId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                        return@delete
+                    }
+
+                    val orgId = call.parameters["orgId"]?.toIntOrNull()
+                    if (orgId == null) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid organization ID"))
+                        return@delete
+                    }
+
+                    val success = adminBillingService.resetPromotionalCredits(orgId, adminUserId)
+                    if (success) {
+                        call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("Organization not found"))
                     }
                 }
             }

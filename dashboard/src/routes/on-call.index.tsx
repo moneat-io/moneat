@@ -171,129 +171,225 @@ function OnCallOverview() {
         </Card>
       </div>
 
-      {/* Your Alert Summary */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-blue-500" />
-                Your Alert Summary
-              </CardTitle>
-              <CardDescription className="mt-1">
-                {isCurrentlyOnCall
-                  ? `You're on call for ${userOnCallSchedules.length} schedule${userOnCallSchedules.length > 1 ? 's' : ''}`
-                  : "You're not currently on call"}
-              </CardDescription>
+      <div className="grid gap-6 xl:grid-cols-2">
+        {/* Your Alert Summary */}
+        <Card className="h-full">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-blue-500" />
+                  Your Alert Summary
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  {isCurrentlyOnCall
+                    ? `You're on call for ${userOnCallSchedules.length} schedule${userOnCallSchedules.length > 1 ? 's' : ''}`
+                    : "You're not currently on call"}
+                </CardDescription>
+              </div>
+              {businessHours?.enabled && isWithinBusinessHours !== null && (
+                <Badge variant="outline" className={cn(
+                  'text-xs gap-1.5',
+                  isWithinBusinessHours
+                    ? 'bg-green-500/10 text-green-500 border-green-500/30'
+                    : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                )}>
+                  <span className={cn('h-1.5 w-1.5 rounded-full', isWithinBusinessHours ? 'bg-green-500' : 'bg-slate-400')} />
+                  {isWithinBusinessHours ? 'Business hours' : 'Outside business hours'}
+                </Badge>
+              )}
             </div>
-            {businessHours?.enabled && isWithinBusinessHours !== null && (
-              <Badge variant="outline" className={cn(
-                'text-xs gap-1.5',
-                isWithinBusinessHours
-                  ? 'bg-green-500/10 text-green-500 border-green-500/30'
-                  : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
-              )}>
-                <span className={cn('h-1.5 w-1.5 rounded-full', isWithinBusinessHours ? 'bg-green-500' : 'bg-slate-400')} />
-                {isWithinBusinessHours ? 'Business hours' : 'Outside business hours'}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* On-call schedules for current user */}
-            {isCurrentlyOnCall && (
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* On-call schedules for current user */}
+              {isCurrentlyOnCall && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">On call for</p>
+                  <div className="flex flex-wrap gap-2">
+                    {userOnCallSchedules.map(s => (
+                      <Badge key={s.id} variant="outline" className="bg-violet-500/10 text-violet-400 border-violet-500/30 gap-1.5">
+                        <Calendar className="h-3 w-3" />
+                        {s.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pageable incidents (P0-P2) */}
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">On call for</p>
-                <div className="flex flex-wrap gap-2">
-                  {userOnCallSchedules.map(s => (
-                    <Badge key={s.id} variant="outline" className="bg-violet-500/10 text-violet-400 border-violet-500/30 gap-1.5">
-                      <Calendar className="h-3 w-3" />
-                      {s.name}
-                    </Badge>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <Bell className="h-3.5 w-3.5 text-red-500" />
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Pages 24/7 — P0 · P1 · P2
+                  </p>
                 </div>
+                {pageableIncidents.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {pageableIncidents.slice(0, 5).map(incident => {
+                      const priorityCfg = getPriorityConfig(incident.priorityLevel)
+                      return (
+                        <Link
+                          key={incident.id}
+                          to="/on-call/incidents/$incidentId"
+                          params={{incidentId: String(incident.id)}}
+                          className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
+                            <span className="text-sm truncate">{incident.title}</span>
+                          </div>
+                          <Badge variant="outline" className={cn('text-xs flex-shrink-0 ml-2', priorityCfg.color)}>
+                            {incident.priorityLevel}
+                          </Badge>
+                        </Link>
+                      )
+                    })}
+                    {pageableIncidents.length > 5 && (
+                      <p className="text-xs text-muted-foreground pl-3">+{pageableIncidents.length - 5} more</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground pl-5">No active high-priority incidents</p>
+                )}
+              </div>
+
+              {/* Low-priority (P3+, business hours only) */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <BellOff className="h-3.5 w-3.5 text-blue-400" />
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Business hours only — P3+
+                  </p>
+                </div>
+                {lowPriorityIncidents.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {lowPriorityIncidents.slice(0, 3).map(incident => {
+                      const priorityCfg = getPriorityConfig(incident.priorityLevel)
+                      return (
+                        <Link
+                          key={incident.id}
+                          to="/on-call/incidents/$incidentId"
+                          params={{incidentId: String(incident.id)}}
+                          className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
+                            <span className="text-sm truncate">{incident.title}</span>
+                          </div>
+                          <Badge variant="outline" className={cn('text-xs flex-shrink-0 ml-2', priorityCfg.color)}>
+                            {incident.priorityLevel}
+                          </Badge>
+                        </Link>
+                      )
+                    })}
+                    {lowPriorityIncidents.length > 3 && (
+                      <p className="text-xs text-muted-foreground pl-5">+{lowPriorityIncidents.length - 3} more</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground pl-5">No low-priority incidents</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Who's On Call Now */}
+        <Card className="h-full">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-blue-500" />
+                  Who's On Call
+                </CardTitle>
+                <CardDescription className="mt-1">Current on-call engineers for each schedule</CardDescription>
+              </div>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/on-call/schedules">
+                  <Plus className="h-3 w-3 mr-1" />
+                  New Schedule
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {schedulesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" />
+              </div>
+            ) : schedules && schedules.length > 0 ? (
+              <div className="space-y-3">
+                {schedules.map((schedule, idx) => (
+                  <div
+                    key={schedule.id}
+                    className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'flex items-center justify-center h-10 w-10 rounded-lg text-white text-sm font-bold',
+                        avatarColors[idx % avatarColors.length]
+                      )}>
+                        {schedule.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium">{schedule.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-400 border-violet-500/30">
+                            {schedule.rotationType}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{schedule.timezone}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {schedule.currentOnCall ? (
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className={cn(
+                            'text-xs text-white',
+                            avatarColors[(schedule.currentOnCall.userId || 0) % avatarColors.length]
+                          )}>
+                            {getInitials(schedule.currentOnCall.userName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="text-right">
+                          <p className="text-sm font-medium">{schedule.currentOnCall.userName}</p>
+                          <p className="text-xs text-green-500 flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
+                            On call now
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-muted-foreground">
+                        No one assigned
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-violet-500/10 mb-3">
+                  <Calendar className="h-6 w-6 text-violet-500" />
+                </div>
+                <h3 className="text-sm font-medium mb-1">No schedules configured</h3>
+                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+                  Create your first on-call schedule to start managing rotations
+                </p>
+                <Button asChild>
+                  <Link to="/on-call/schedules">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Schedule
+                  </Link>
+                </Button>
               </div>
             )}
-
-            {/* Pageable incidents (P0-P2) */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Bell className="h-3.5 w-3.5 text-red-500" />
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Pages 24/7 — P0 · P1 · P2
-                </p>
-              </div>
-              {pageableIncidents.length > 0 ? (
-                <div className="space-y-1.5">
-                  {pageableIncidents.slice(0, 5).map(incident => {
-                    const priorityCfg = getPriorityConfig(incident.priorityLevel)
-                    return (
-                      <Link
-                        key={incident.id}
-                        to="/on-call/incidents/$incidentId"
-                        params={{incidentId: String(incident.id)}}
-                        className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
-                          <span className="text-sm truncate">{incident.title}</span>
-                        </div>
-                        <Badge variant="outline" className={cn('text-xs flex-shrink-0 ml-2', priorityCfg.color)}>
-                          {incident.priorityLevel}
-                        </Badge>
-                      </Link>
-                    )
-                  })}
-                  {pageableIncidents.length > 5 && (
-                    <p className="text-xs text-muted-foreground pl-3">+{pageableIncidents.length - 5} more</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground pl-5">No active high-priority incidents</p>
-              )}
-            </div>
-
-            {/* Low-priority (P3+, business hours only) */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <BellOff className="h-3.5 w-3.5 text-blue-400" />
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Business hours only — P3+
-                </p>
-              </div>
-              {lowPriorityIncidents.length > 0 ? (
-                <div className="space-y-1.5">
-                  {lowPriorityIncidents.slice(0, 3).map(incident => {
-                    const priorityCfg = getPriorityConfig(incident.priorityLevel)
-                    return (
-                      <Link
-                        key={incident.id}
-                        to="/on-call/incidents/$incidentId"
-                        params={{incidentId: String(incident.id)}}
-                        className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
-                          <span className="text-sm truncate">{incident.title}</span>
-                        </div>
-                        <Badge variant="outline" className={cn('text-xs flex-shrink-0 ml-2', priorityCfg.color)}>
-                          {incident.priorityLevel}
-                        </Badge>
-                      </Link>
-                    )
-                  })}
-                  {lowPriorityIncidents.length > 3 && (
-                    <p className="text-xs text-muted-foreground pl-5">+{lowPriorityIncidents.length - 3} more</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground pl-5">No low-priority incidents</p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Active Incidents - prominent when present */}
       {hasActiveIncidents && (
@@ -354,147 +450,6 @@ function OnCallOverview() {
         </Card>
       )}
 
-      {/* Who's On Call Now */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-blue-500" />
-                Who's On Call
-              </CardTitle>
-              <CardDescription className="mt-1">Current on-call engineers for each schedule</CardDescription>
-            </div>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/on-call/schedules">
-                <Plus className="h-3 w-3 mr-1" />
-                New Schedule
-              </Link>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {schedulesLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" />
-            </div>
-          ) : schedules && schedules.length > 0 ? (
-            <div className="space-y-3">
-              {schedules.map((schedule, idx) => (
-                <div
-                  key={schedule.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'flex items-center justify-center h-10 w-10 rounded-lg text-white text-sm font-bold',
-                      avatarColors[idx % avatarColors.length]
-                    )}>
-                      {schedule.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-medium">{schedule.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-400 border-violet-500/30">
-                          {schedule.rotationType}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">{schedule.timezone}</span>
-                      </div>
-                    </div>
-                  </div>
-                  {schedule.currentOnCall ? (
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className={cn(
-                          'text-xs text-white',
-                          avatarColors[(schedule.currentOnCall.userId || 0) % avatarColors.length]
-                        )}>
-                          {getInitials(schedule.currentOnCall.userName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{schedule.currentOnCall.userName}</p>
-                        <p className="text-xs text-green-500 flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
-                          On call now
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
-                      No one assigned
-                    </Badge>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 border-2 border-dashed rounded-lg">
-              <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-violet-500/10 mb-3">
-                <Calendar className="h-6 w-6 text-violet-500" />
-              </div>
-              <h3 className="text-sm font-medium mb-1">No schedules configured</h3>
-              <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-                Create your first on-call schedule to start managing rotations
-              </p>
-              <Button asChild>
-                <Link to="/on-call/schedules">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Schedule
-                </Link>
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Link to="/on-call/schedules" className="group">
-          <Card className="h-full hover:border-violet-500/40 transition-all hover:shadow-md hover:shadow-violet-500/5">
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-violet-500/15 group-hover:bg-violet-500/25 transition-colors">
-                <Calendar className="h-5 w-5 text-violet-500" />
-              </div>
-              <div>
-                <p className="font-medium text-sm">Manage Schedules</p>
-                <p className="text-xs text-muted-foreground">Create and edit rotations</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link to="/on-call/escalation-policies" className="group">
-          <Card className="h-full hover:border-amber-500/40 transition-all hover:shadow-md hover:shadow-amber-500/5">
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-amber-500/15 group-hover:bg-amber-500/25 transition-colors">
-                <Clock className="h-5 w-5 text-amber-500" />
-              </div>
-              <div>
-                <p className="font-medium text-sm">Escalation Policies</p>
-                <p className="text-xs text-muted-foreground">Configure alerting rules</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link to="/on-call/incidents" className="group">
-          <Card className="h-full hover:border-red-500/40 transition-all hover:shadow-md hover:shadow-red-500/5">
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-red-500/15 group-hover:bg-red-500/25 transition-colors">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <p className="font-medium text-sm">View Incidents</p>
-                <p className="text-xs text-muted-foreground">Track and resolve issues</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
     </div>
   )
 }

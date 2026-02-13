@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 
 private val logger = KotlinLogging.logger {}
 
@@ -151,6 +152,25 @@ data class AdminEmailStats(
 data class EmailTimelinePoint(
     val date: String,
     val count: Long
+)
+
+@Serializable
+data class AdminUserSummary(
+    val id: Int,
+    val email: String,
+    val name: String?,
+    val emailVerified: Boolean,
+    val isAdmin: Boolean,
+    val onboardingCompleted: Boolean,
+    val oauthProvider: String?,
+    val organizationCount: Int,
+    val createdAt: String?
+)
+
+@Serializable
+data class UpdateUserRequest(
+    val isAdmin: Boolean? = null,
+    val emailVerified: Boolean? = null
 )
 
 class AdminService {
@@ -602,6 +622,68 @@ class AdminService {
             bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
             bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
             else -> "%.1f GB".format(bytes / (1024.0 * 1024 * 1024))
+        }
+    }
+
+    fun getAllUsers(page: Int, limit: Int, search: String? = null): List<AdminUserSummary> {
+        return transaction {
+            var query = Users.selectAll()
+            
+            // Apply search filter if provided
+            if (!search.isNullOrBlank()) {
+                val searchLower = "%${search.lowercase()}%"
+                query = query.where { Users.email like searchLower }
+            }
+            
+            query
+                .orderBy(Users.id to SortOrder.DESC)
+                .limit(limit, offset = (page - 1) * limit.toLong())
+                .map { row ->
+                    val userId = row[Users.id]
+                    val orgCount = Memberships.selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .count()
+                        .toInt()
+                    
+                    AdminUserSummary(
+                        id = userId,
+                        email = row[Users.email],
+                        name = row[Users.name],
+                        emailVerified = row[Users.email_verified],
+                        isAdmin = row[Users.is_admin],
+                        onboardingCompleted = row[Users.onboarding_completed],
+                        oauthProvider = row[Users.oauth_provider],
+                        organizationCount = orgCount,
+                        createdAt = null // Will add created_at field later if needed
+                    )
+                }
+        }
+    }
+
+    fun getTotalUserCount(search: String? = null): Int {
+        return transaction {
+            var query = Users.selectAll()
+            
+            if (!search.isNullOrBlank()) {
+                val searchLower = "%${search.lowercase()}%"
+                query = query.where { Users.email like searchLower }
+            }
+            
+            query.count().toInt()
+        }
+    }
+
+    fun updateUser(userId: Int, updates: UpdateUserRequest): Boolean {
+        return transaction {
+            Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                ?: return@transaction false
+            
+            Users.update({ Users.id eq userId }) {
+                updates.isAdmin?.let { isAdmin -> it[Users.is_admin] = isAdmin }
+                updates.emailVerified?.let { verified -> it[Users.email_verified] = verified }
+            }
+            
+            true
         }
     }
 }

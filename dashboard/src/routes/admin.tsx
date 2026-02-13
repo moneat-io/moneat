@@ -12,6 +12,7 @@ import {
     Server,
     Shield,
     AlertTriangle,
+    Users,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 
@@ -47,6 +48,7 @@ const adminNavSections = [
     label: 'Business',
     items: [
       {icon: Building2, label: 'Organizations', href: '/admin/organizations'},
+      {icon: Users, label: 'Users', href: '/admin/users'},
       {icon: DollarSign, label: 'Revenue', href: '/admin/revenue'},
       {icon: CreditCard, label: 'Billing', href: '/admin/billing'},
     ],

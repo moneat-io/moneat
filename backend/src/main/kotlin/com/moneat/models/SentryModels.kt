@@ -187,17 +187,23 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleTimestamp", PrimitiveKind.DOUBLE)
 
     override fun deserialize(decoder: Decoder): Double? {
-        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeDouble()
-        return when (val element = jsonDecoder.decodeJsonElement()) {
+        val jsonDecoder = decoder as? JsonDecoder
+        if (jsonDecoder == null) {
+            return runCatching { decoder.decodeDouble() }.getOrNull()
+        }
+        return parseFlexibleTimestamp(jsonDecoder.decodeJsonElement())
+    }
+
+    private fun parseFlexibleTimestamp(element: JsonElement): Double? {
+        return when (element) {
             JsonNull -> null
             is JsonPrimitive -> {
                 element.doubleOrNull ?: run {
-                    // Try to parse as ISO 8601 timestamp string
                     val isoString = element.contentOrNull ?: return null
                     try {
                         val instant = java.time.Instant.parse(isoString)
                         instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         null
                     }
                 }
@@ -302,7 +308,9 @@ data class UserInfo(
 data class SentryReplayEvent(
     val replay_id: String? = null,
     val segment_id: Int? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val replay_start_timestamp: Double? = null,
     val urls: List<String>? = null,
     val error_ids: List<String>? = null,

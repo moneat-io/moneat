@@ -137,6 +137,11 @@ object Subscriptions : Table("subscriptions") {
     val stripe_oncall_item_id = varchar("stripe_oncall_item_id", 255).nullable()
     val oncall_seats = integer("oncall_seats").default(0)
     val billing_grace_until = timestamp("billing_grace_until").nullable()
+    val bonus_gb_bytes = long("bonus_gb_bytes").default(0)
+    val bonus_units = long("bonus_units").default(0)
+    val bonus_granted_at = timestamp("bonus_granted_at").nullable()
+    val bonus_granted_by = integer("bonus_granted_by").references(Users.id).nullable()
+    val bonus_reason = varchar("bonus_reason", 500).nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -173,6 +178,18 @@ object EmailsSent : Table("emails_sent") {
     val recipient = varchar("recipient", 255)
     val sent_at = timestamp("sent_at")
     val success = bool("success").default(true)
+    override val primaryKey = PrimaryKey(id)
+}
+
+object PromotionalCreditGrants : Table("promotional_credit_grants") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val subscription_id = integer("subscription_id").references(Subscriptions.id).nullable()
+    val granted_by = integer("granted_by").references(Users.id)
+    val bonus_gb_bytes = long("bonus_gb_bytes").default(0)
+    val bonus_units = long("bonus_units").default(0)
+    val reason = varchar("reason", 500).nullable()
+    val granted_at = timestamp("granted_at")
     override val primaryKey = PrimaryKey(id)
 }
 

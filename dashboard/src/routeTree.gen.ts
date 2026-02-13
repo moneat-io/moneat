@@ -66,6 +66,7 @@ import { Route as DocsGettingStartedRouteImport } from './routes/docs.getting-st
 import { Route as DocsErrorMonitoringRouteImport } from './routes/docs.error-monitoring'
 import { Route as DocsBillingRouteImport } from './routes/docs.billing'
 import { Route as DocsApiTokensRouteImport } from './routes/docs.api-tokens'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
 import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
@@ -369,6 +370,11 @@ const DocsApiTokensRoute = DocsApiTokensRouteImport.update({
   path: '/api-tokens',
   getParentRoute: () => DocsRoute,
 } as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminUsageRoute = AdminUsageRouteImport.update({
   id: '/usage',
   path: '/usage',
@@ -477,6 +483,7 @@ export interface FileRoutesByFullPath {
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
+  '/admin/users': typeof AdminUsersRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -547,6 +554,7 @@ export interface FileRoutesByTo {
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
+  '/admin/users': typeof AdminUsersRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -622,6 +630,7 @@ export interface FileRoutesById {
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
+  '/admin/users': typeof AdminUsersRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -698,6 +707,7 @@ export interface FileRouteTypes {
     | '/admin/organizations'
     | '/admin/revenue'
     | '/admin/usage'
+    | '/admin/users'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -768,6 +778,7 @@ export interface FileRouteTypes {
     | '/admin/organizations'
     | '/admin/revenue'
     | '/admin/usage'
+    | '/admin/users'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -842,6 +853,7 @@ export interface FileRouteTypes {
     | '/admin/organizations'
     | '/admin/revenue'
     | '/admin/usage'
+    | '/admin/users'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -1325,6 +1337,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsApiTokensRouteImport
       parentRoute: typeof DocsRoute
     }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/usage': {
       id: '/admin/usage'
       path: '/usage'
@@ -1453,6 +1472,7 @@ interface AdminRouteChildren {
   AdminOrganizationsRoute: typeof AdminOrganizationsRouteWithChildren
   AdminRevenueRoute: typeof AdminRevenueRoute
   AdminUsageRoute: typeof AdminUsageRoute
+  AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
@@ -1465,6 +1485,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrganizationsRoute: AdminOrganizationsRouteWithChildren,
   AdminRevenueRoute: AdminRevenueRoute,
   AdminUsageRoute: AdminUsageRoute,
+  AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 

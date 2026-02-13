@@ -2247,6 +2247,34 @@ class ApiClient {
     }>(`${API_BASE}/admin/emails?period=${period}`)
   }
 
+  async getAdminUsers(page = 1, limit = 25, search?: string) {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+    if (search) params.append('search', search)
+    return this.request<{
+      users: Array<{
+        id: number
+        email: string
+        name: string | null
+        emailVerified: boolean
+        isAdmin: boolean
+        onboardingCompleted: boolean
+        oauthProvider: string | null
+        organizationCount: number
+        createdAt: string | null
+      }>
+      total: number
+      page: number
+      limit: number
+    }>(`${API_BASE}/admin/users?${params}`)
+  }
+
+  async updateAdminUser(userId: number, updates: { isAdmin?: boolean; emailVerified?: boolean }) {
+    return this.request<{ success: boolean }>(`${API_BASE}/admin/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    })
+  }
+
   async testNotification(type: string, channel: string, testEmail?: string) {
     return this.request<{
       success: boolean

@@ -174,7 +174,10 @@ data class BillingUsageResponse(
     val oncallEnabled: Boolean = false,
     val plan: String,
     val status: String,
-    val withinQuota: Boolean
+    val withinQuota: Boolean,
+    val bonusGbBytes: Long = 0,
+    val bonusUnits: Long = 0,
+    val bonusReason: String? = null
 )
 
 @Serializable
@@ -322,3 +325,34 @@ data class AdminBillingSubscriptionResponse(
     val currentPeriodStart: String? = null,
     val currentPeriodEnd: String? = null
 )
+
+@Serializable
+data class GrantPromotionalCreditRequest(
+    val bonusGb: Double? = null,  // Bonus in GB (e.g., 5.0 for 5GB)
+    val bonusUnits: Long? = null,  // Bonus in event units
+    val reason: String
+)
+
+@Serializable
+data class GrantPromotionalCreditResponse(
+    val organizationId: Int,
+    val bonusGbBytes: Long,
+    val bonusUnits: Long,
+    val bonusGb: Double,  // Human-readable GB value
+    val reason: String,
+    val grantedAt: String
+)
+
+@Serializable
+data class PromotionalCreditHistoryItem(
+    val id: Int,
+    val organizationId: Int,
+    val organizationName: String,
+    val grantedBy: Int,
+    val grantedByEmail: String,
+    val bonusGb: Double,
+    val bonusUnits: Long,
+    val reason: String?,
+    val grantedAt: String
+)
+

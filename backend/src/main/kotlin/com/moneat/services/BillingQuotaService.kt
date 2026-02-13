@@ -98,7 +98,8 @@ class BillingQuotaService(
                 val usedForType = usedUnitsForType(state, eventType)
                 val typeLimit = baseLimitForType(state, eventType)
                 val typeAfter = usedForType + requestedUnits
-                val effectiveTypeLimit = if (typeLimit >= 0) typeLimit + state.paygLimitUnits else Long.MAX_VALUE
+                // Include bonus units in per-type limit
+                val effectiveTypeLimit = if (typeLimit >= 0) typeLimit + state.paygLimitUnits + state.bonusUnits else Long.MAX_VALUE
 
                 if (typeLimit >= 0 && typeAfter > effectiveTypeLimit) {
                     SentryUtils.breadcrumb("billing", "Per-type quota exceeded", mapOf(
@@ -107,7 +108,8 @@ class BillingQuotaService(
                         "event_type" to eventType,
                         "used_type_units" to usedForType,
                         "type_limit" to typeLimit,
-                        "payg_limit_units" to state.paygLimitUnits
+                        "payg_limit_units" to state.paygLimitUnits,
+                        "bonus_units" to state.bonusUnits
                     ))
 
                     return@transaction QuotaReservationResult(
@@ -119,12 +121,15 @@ class BillingQuotaService(
                 }
             }
 
-            if (totalAfter > state.totalLimitUnits) {
+            // Include bonus units in total limit
+            val effectiveTotalLimit = state.totalLimitUnits + state.bonusUnits
+            if (totalAfter > effectiveTotalLimit) {
                 SentryUtils.breadcrumb("billing", "Quota exceeded", mapOf(
                     "organization_id" to organizationId,
                     "requested_units" to requestedTotal,
                     "used_units" to state.usedUnits,
-                    "total_limit" to state.totalLimitUnits
+                    "total_limit" to state.totalLimitUnits,
+                    "bonus_units" to state.bonusUnits
                 ))
 
                 return@transaction QuotaReservationResult(
@@ -134,8 +139,9 @@ class BillingQuotaService(
                 )
             }
 
+            // Include bonus bytes in GB limit
             val effectiveBytesLimit = if (state.bytesLimit > 0) {
-                state.bytesLimit + state.paygLimitBytes
+                state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes
             } else {
                 Long.MAX_VALUE
             }
@@ -145,7 +151,8 @@ class BillingQuotaService(
                     "requested_bytes" to requestedTotalBytes,
                     "used_bytes" to state.usedBytes,
                     "bytes_limit" to state.bytesLimit,
-                    "payg_limit_bytes" to state.paygLimitBytes
+                    "payg_limit_bytes" to state.paygLimitBytes,
+                    "bonus_gb_bytes" to state.bonusGbBytes
                 ))
 
                 return@transaction QuotaReservationResult(
@@ -231,7 +238,10 @@ class BillingQuotaService(
         val oncallSeats: Int,
         val oncallUsedSeats: Int,
         val oncallPerUserMonthlyCents: Int,
-        val oncallEnabled: Boolean
+        val oncallEnabled: Boolean,
+        val bonusGbBytes: Long,
+        val bonusUnits: Long,
+        val bonusReason: String?
     )
 
     private fun loadQuotaState(organizationId: Int, lockRows: Boolean): QuotaState {
@@ -350,6 +360,10 @@ class BillingQuotaService(
         }
         val baseLimit = if (tier.monthlyUnitLimit > 0) tier.monthlyUnitLimit else aggregateBaseFromTypes
         val totalLimit = baseLimit + paygLimitUnits
+        
+        val bonusGbBytes = sub?.get(Subscriptions.bonus_gb_bytes) ?: 0L
+        val bonusUnits = sub?.get(Subscriptions.bonus_units) ?: 0L
+        val bonusReason = sub?.get(Subscriptions.bonus_reason)
 
         return QuotaState(
             organizationId = organizationId,
@@ -382,7 +396,10 @@ class BillingQuotaService(
             oncallSeats = sub?.get(Subscriptions.oncall_seats) ?: 0,
             oncallUsedSeats = onCallScheduleService.getOnCallUsedSeats(organizationId),
             oncallPerUserMonthlyCents = tier.oncallPerUserMonthlyCents,
-            oncallEnabled = tier.oncallEnabled
+            oncallEnabled = tier.oncallEnabled,
+            bonusGbBytes = bonusGbBytes,
+            bonusUnits = bonusUnits,
+            bonusReason = bonusReason
         )
     }
 
@@ -393,9 +410,9 @@ class BillingQuotaService(
             state.usedReplays to state.replayLimit,
             state.usedFeedback to state.feedbackLimit
         ).all { (used, limit) ->
-            limit < 0 || used <= (limit + state.paygLimitUnits)
+            limit < 0 || used <= (limit + state.paygLimitUnits + state.bonusUnits)
         }
-        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes)
+        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes)
 
         return BillingUsageResponse(
             organizationId = state.organizationId,
@@ -425,7 +442,10 @@ class BillingQuotaService(
             oncallEnabled = state.oncallEnabled,
             plan = state.plan,
             status = state.status,
-            withinQuota = state.usedUnits <= state.totalLimitUnits && eventLimitsWithinBudget && bytesWithinBudget
+            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && bytesWithinBudget,
+            bonusGbBytes = state.bonusGbBytes,
+            bonusUnits = state.bonusUnits,
+            bonusReason = state.bonusReason
         )
     }
 
