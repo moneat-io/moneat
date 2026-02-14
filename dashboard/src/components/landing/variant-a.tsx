@@ -249,7 +249,7 @@ const secondaryFeatures: Feature[] = [
 ]
 
 const stats = [
-  {value: '$0.40/GB', label: 'vs $0.60+ on BetterStack'},
+  {value: '$0.40/GB', label: 'Simple usage-based pricing'},
   {value: '1 GB free', label: 'No credit card required'},
   {value: 'Zero', label: 'Per-seat fees'},
   {value: '99.9%', label: 'Uptime SLA'},
@@ -312,21 +312,21 @@ export function VariantA() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-400" />
                 </span>
-                Sentry-compatible &mdash; switch in minutes
+                Works with Sentry SDKs out of the box
               </div>
             </div>
 
             <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl mb-6 animate-fade-in-up animation-delay-100">
-              Monitor everything.
+              Know when things break.
               <br />
               <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-sky-400 bg-clip-text text-transparent">
-                Pay for what you use.
+                Fix them faster.
               </span>
             </h1>
 
             <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up animation-delay-200">
-              Errors, logs, uptime, on-call, and status pages — one platform, simple GB pricing.
-              Switch from Sentry in minutes.
+              Errors, logs, uptime, on-call, and status pages — everything your team needs
+              to keep your app reliable, in one place. Simple GB pricing, no per-seat fees.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up animation-delay-300">
@@ -393,11 +393,11 @@ export function VariantA() {
               Features
             </p>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-              All-in-one observability
+              Everything you need, nothing you don&apos;t
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Errors, logs, uptime, replays, and status pages. Everything you need to monitor your
-              apps.
+              Stop stitching together five different tools. Moneat gives you error tracking, logs,
+              uptime, replays, and status pages in one place.
             </p>
           </div>
 
@@ -439,10 +439,10 @@ export function VariantA() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-white mb-3">
-              Plus everything else you need
+              Built for the full picture
             </h2>
             <p className="text-slate-400 max-w-xl mx-auto">
-              A complete observability toolkit — not just error tracking.
+              From infrastructure health to incident response — the tools your team needs when things go wrong.
             </p>
           </div>
 
@@ -484,10 +484,10 @@ export function VariantA() {
               <div className="inline-flex rounded-lg bg-indigo-500/10 p-3 mb-5 ring-1 ring-inset ring-white/5">
                 <Shield className="h-6 w-6 text-indigo-400" />
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-4">Sentry-compatible SDKs</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-4">Already using Sentry? Bring your SDKs.</h2>
               <p className="text-muted-foreground text-base leading-relaxed mb-6">
-                Drop-in replacement for Sentry SDKs. Change your DSN, redeploy, and you're done.
-                No code changes, no migration headaches. Switch in minutes, not days.
+                Moneat works with existing Sentry SDKs — just update your DSN and redeploy.
+                No code changes, no migration headaches. Your team can switch in minutes, not days.
               </p>
               <Button
                 asChild

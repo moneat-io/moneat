@@ -12,7 +12,7 @@ export function LandingPage() {
     name: 'Moneat',
     url: 'https://moneat.io',
     applicationCategory: 'DeveloperApplication',
-    description: 'Sentry-compatible error, performance, and session replay monitoring.',
+    description: 'Errors, logs, uptime, on-call, and status pages in one platform. Simple GB pricing, no per-seat fees.',
     operatingSystem: 'Web',
     offers: {
       '@type': 'Offer',
@@ -24,10 +24,10 @@ export function LandingPage() {
   return (
     <article className="min-h-screen bg-background">
       <Helmet>
-        <title>Moneat | Error, Performance, and Replay Monitoring</title>
+        <title>Moneat | Errors, Logs, Uptime, and On-Call in One Platform</title>
         <meta
           name="description"
-          content="Sentry-compatible error, performance, and session replay monitoring. Built for developers who care about reliability."
+          content="Stop juggling monitoring tools. Moneat brings errors, logs, uptime, on-call, and status pages into one platform with simple GB pricing."
         />
         <link rel="canonical" href="https://moneat.io" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
@@ -85,7 +85,7 @@ export function LandingPage() {
                 <span className="text-lg font-semibold text-white">moneat</span>
               </div>
               <p className="text-sm text-slate-400 max-w-xs">
-                Monitoring built for developers who care about reliability.
+                Errors, logs, uptime, and on-call — one platform, simple pricing.
               </p>
             </div>
             <nav className="flex items-center gap-8" aria-label="Footer navigation">
@@ -132,7 +132,7 @@ export function LandingPage() {
               &copy; {new Date().getFullYear()} Moneat. All rights reserved.
             </p>
             <p className="text-xs text-slate-500">
-              Sentry-compatible. Switch in minutes.
+              Works with Sentry SDKs. Switch in minutes.
             </p>
           </div>
         </div>

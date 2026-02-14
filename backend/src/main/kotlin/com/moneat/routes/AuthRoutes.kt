@@ -199,7 +199,9 @@ fun Route.authRoutes() {
                         httpOnly = true,
                         secure = secureCookie,
                         path = "/auth",
-                        extensions = mapOf("SameSite" to "Lax")
+                        // Apple uses response_mode=form_post which is a cross-site POST
+                        // SameSite=Lax blocks cookies on cross-site POSTs, so we need SameSite=None
+                        extensions = mapOf("SameSite" to "None")
                     )
                 )
                 val authUrl = oauthService.generateAppleAuthUrl(state)
