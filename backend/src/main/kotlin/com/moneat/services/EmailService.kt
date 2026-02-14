@@ -190,9 +190,10 @@ class EmailService {
     
     private fun trackEmailSent(recipient: String, emailType: String, success: Boolean) {
         try {
+            val normalizedEmail = recipient.lowercase().trim()
             transaction {
                 // Try to find organization for the recipient
-                val orgId = Users.selectAll().where { Users.email eq recipient }
+                val orgId = Users.selectAll().where { Users.email eq normalizedEmail }
                     .firstOrNull()
                     ?.let { user ->
                         Memberships.selectAll().where { Memberships.user_id eq user[Users.id] }
@@ -203,7 +204,7 @@ class EmailService {
                 EmailsSent.insert {
                     it[EmailsSent.organization_id] = orgId
                     it[EmailsSent.email_type] = emailType
-                    it[EmailsSent.recipient] = recipient
+                    it[EmailsSent.recipient] = normalizedEmail
                     it[EmailsSent.sent_at] = Clock.System.now()
                     it[EmailsSent.success] = success
                 }

@@ -191,13 +191,13 @@ fun Route.authRoutes() {
                 }
                 
                 val state = oauthService.generateState()
-                val secureCookie = call.request.origin.scheme == "https"
                 call.response.cookies.append(
                     Cookie(
                         name = "oauth_state",
                         value = state,
                         httpOnly = true,
-                        secure = secureCookie,
+                        // SameSite=None cookies must always be Secure, including behind TLS terminators.
+                        secure = true,
                         path = "/auth",
                         // Apple uses response_mode=form_post which is a cross-site POST
                         // SameSite=Lax blocks cookies on cross-site POSTs, so we need SameSite=None
@@ -228,7 +228,8 @@ fun Route.authRoutes() {
                         value = "",
                         path = "/auth",
                         maxAge = 0,
-                        secure = call.request.origin.scheme == "https"
+                        secure = true,
+                        extensions = mapOf("SameSite" to "None")
                     )
                 )
                 
@@ -292,7 +293,18 @@ fun Route.authRoutes() {
                 val request = call.receive<CompleteOnboardingRequest>()
                 
                 try {
-                    val user = authService.completeOnboarding(userId, request.organizationName, request.companySize, request.slug, request.referralSource)
+                    val user = authService.completeOnboarding(
+                        userId, 
+                        request.organizationName, 
+                        request.companySize, 
+                        request.slug, 
+                        request.referralSource,
+                        request.utmSource,
+                        request.utmMedium,
+                        request.utmCampaign,
+                        request.utmContent,
+                        request.utmTerm
+                    )
                     call.respond(user)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))

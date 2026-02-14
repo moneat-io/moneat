@@ -185,7 +185,7 @@ class OAuthService {
         return OAuthUserData(
             provider = "github",
             providerId = user.id.toString(),
-            email = email,
+            email = email.lowercase().trim(),
             name = user.name ?: user.login,
             emailVerified = emailVerified
         )
@@ -244,7 +244,7 @@ class OAuthService {
         return OAuthUserData(
             provider = "apple",
             providerId = subject,
-            email = email,
+            email = email.lowercase().trim(),
             name = name,
             emailVerified = emailVerified
         )

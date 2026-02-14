@@ -357,6 +357,47 @@ interface AuthToken {
   createdAt: string
 }
 
+interface OrganizationAccountSettings {
+  id: number
+  name: string
+  role: string
+}
+
+interface AccountDeletionValidation {
+  canDelete: boolean
+  error?: string | null
+  organizationsAsLastOwner: string[]
+}
+
+interface OrganizationDeletionValidation {
+  canDelete: boolean
+  error?: string | null
+}
+
+interface AdminAttributionMetrics {
+  source: string | null
+  medium: string | null
+  campaign: string | null
+  signups: number
+  paidOrganizations: number
+  conversionRate: number
+  totalMrr: string
+  averageMrr: string
+  estimatedLtv: string
+}
+
+interface AdminAttributionSummary {
+  totalSignups: number
+  totalPaidOrganizations: number
+  overallConversionRate: number
+  totalMrr: string
+}
+
+interface AdminAttributionResponse {
+  metrics: AdminAttributionMetrics[]
+  summary: AdminAttributionSummary
+}
+
 interface BillingTierConfig {
   id: number
   tierName: string
@@ -1618,10 +1659,30 @@ class ApiClient {
     })
   }
 
-  async completeOnboarding(organizationName: string, companySize: string, slug: string, referralSource: string): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; organizationSlug?: string }> {
+  async completeOnboarding(
+    organizationName: string, 
+    companySize: string, 
+    slug: string, 
+    referralSource: string,
+    utmSource?: string,
+    utmMedium?: string,
+    utmCampaign?: string,
+    utmContent?: string,
+    utmTerm?: string
+  ): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; organizationSlug?: string }> {
     return this.request(`${API_BASE.replace('/v1', '')}/auth/complete-onboarding`, {
       method: 'POST',
-      body: JSON.stringify({ organizationName, companySize, slug, referralSource }),
+      body: JSON.stringify({ 
+        organizationName, 
+        companySize, 
+        slug, 
+        referralSource,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm
+      }),
     })
   }
 
@@ -1638,6 +1699,32 @@ class ApiClient {
     // Backend should have an endpoint for this, but for now we can derive from other calls
     // This is a placeholder that the SSO settings component needs
     return [{ id: 1, name: "Default Organization", slug: "default" }]
+  }
+
+  async getOrganizationAccountSettings(organizationId: number): Promise<OrganizationAccountSettings> {
+    return this.request<OrganizationAccountSettings>(`${API_BASE}/organizations/${organizationId}`)
+  }
+
+  async getAccountDeletionValidation(): Promise<AccountDeletionValidation> {
+    return this.request<AccountDeletionValidation>(`${API_BASE}/account/deletion-validation`)
+  }
+
+  async getOrganizationDeletionValidation(organizationId: number): Promise<OrganizationDeletionValidation> {
+    return this.request<OrganizationDeletionValidation>(`${API_BASE}/organizations/${organizationId}/deletion-validation`)
+  }
+
+  async deleteAccount(confirmation: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`${API_BASE}/account`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation }),
+    })
+  }
+
+  async deleteOrganization(organizationId: number, confirmation: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`${API_BASE}/organizations/${organizationId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation }),
+    })
   }
 
   // Organization team management
@@ -2298,6 +2385,10 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  }
+
+  async getAdminAttribution(groupBy: 'campaign' | 'source' | 'medium' | 'all' = 'campaign') {
+    return this.request<AdminAttributionResponse>(`${API_BASE}/admin/attribution?groupBy=${encodeURIComponent(groupBy)}`)
   }
 
   async getAdminBillingTiers(tier?: string) {

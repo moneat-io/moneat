@@ -37,11 +37,12 @@ const STATIC_TITLES: Record<string, string> = {
   '/admin/infrastructure': 'Admin Infrastructure',
 }
 
-// Public routes that don't require onboarding check
+// Public routes that don't require authentication or verification checks
 const PUBLIC_ROUTES = new Set([
   '/login',
   '/signup',
   '/verify-email',
+  '/verify-email-required',
   '/forgot-password',
   '/reset-password',
   '/onboarding',
@@ -112,9 +113,9 @@ function RootComponent() {
     document.title = getDocumentTitle(currentPath, isAuthenticated)
   }, [currentPath, isAuthenticated])
 
-  // Centralized onboarding check
+  // Centralized email verification and onboarding check
   useEffect(() => {
-    async function checkOnboarding() {
+    async function checkUserStatus() {
       // Skip check if not authenticated or on public routes or public status pages
       if (!isAuthenticated || PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
         setOnboardingChecked(true)
@@ -123,21 +124,30 @@ function RootComponent() {
 
       try {
         const user = await api.getCurrentUser()
+        
+        // First check: Email verification (blocks everything)
+        if (!user.emailVerified && currentPath !== '/verify-email-required') {
+          navigate({ to: '/verify-email-required' })
+          setOnboardingChecked(true)
+          return
+        }
+        
+        // Second check: Onboarding completion (only after email is verified)
         if (!user.onboardingCompleted && currentPath !== '/onboarding') {
           navigate({ to: '/onboarding' })
         }
       } catch (error) {
-        console.error('Failed to check onboarding status:', error)
+        console.error('Failed to check user status:', error)
       } finally {
         setOnboardingChecked(true)
       }
     }
 
-    checkOnboarding()
+    checkUserStatus()
   }, [isAuthenticated, currentPath, navigate])
   
   // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
-  const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'].includes(currentPath)
+  const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password'].includes(currentPath)
   const isLandingPage = currentPath === '/' && !isAuthenticated
   const isPublicStatusPage = currentPath.startsWith('/s/')
   const isDocsPage = currentPath.startsWith('/docs')

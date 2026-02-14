@@ -39,11 +39,13 @@ class AuthService {
         }
         validateSignupLegalConsent(request)
         
+        val normalizedEmail = request.email.lowercase().trim()
+        
         SentryUtils.breadcrumb(
             "auth",
             "User signup started",
             mapOf(
-                "email" to request.email,
+                "email" to normalizedEmail,
                 "terms_version" to request.termsVersion,
                 "privacy_version" to request.privacyVersion,
                 "has_invite" to (inviteToken != null)
@@ -52,7 +54,7 @@ class AuthService {
         
         val (userId, emailVerified, orgId, orgRole) = transaction {
             // Check if user exists
-            val existing = Users.selectAll().where { Users.email eq request.email }.firstOrNull()
+            val existing = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
             if (existing != null) {
                 SentryUtils.breadcrumb("auth", "Signup failed - user exists", mapOf("email" to request.email))
                 throw IllegalArgumentException("User already exists")
@@ -80,14 +82,14 @@ class AuthService {
                     throw IllegalArgumentException("Invitation has expired")
                 }
 
-                if (inviteByToken[OrgInvitations.email] != request.email) {
+                if (inviteByToken[OrgInvitations.email].lowercase() != normalizedEmail) {
                     throw IllegalArgumentException("This invitation was sent to a different email address")
                 }
 
                 inviteByToken
             } else {
                 OrgInvitations.update({
-                    (OrgInvitations.email eq request.email) and
+                    (OrgInvitations.email eq normalizedEmail) and
                         (OrgInvitations.status eq "pending") and
                         (OrgInvitations.expires_at lessEq now)
                 }) {
@@ -96,7 +98,7 @@ class AuthService {
 
                 OrgInvitations.selectAll()
                     .where {
-                        (OrgInvitations.email eq request.email) and
+                        (OrgInvitations.email eq normalizedEmail) and
                             (OrgInvitations.status eq "pending") and
                             (OrgInvitations.expires_at greater now)
                     }
@@ -112,7 +114,7 @@ class AuthService {
             // Create user
             val passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt())
             val id = Users.insert {
-                it[email] = request.email
+                it[email] = normalizedEmail
                 it[password_hash] = passwordHash
                 it[name] = request.name
                 it[email_verified] = false
@@ -204,7 +206,7 @@ class AuthService {
             
             // Send verification email
             try {
-                emailService.sendVerificationEmail(request.email, verificationToken, request.name)
+                emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
             } catch (e: Exception) {
                 // Log but don't fail signup if email fails
                 println("Failed to send verification email: ${e.message}")
@@ -213,11 +215,11 @@ class AuthService {
             Quadruple(id, false, finalOrgId, finalOrgRole)
         }
         
-        val token = generateToken(userId, request.email, orgId, orgRole)
+        val token = generateToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
         return AuthResponse(
             token = token,
-            user = UserResponse(userId, request.email, request.name, emailVerified, false, false)
+            user = UserResponse(userId, normalizedEmail, request.name, emailVerified, false, false)
         )
     }
     
@@ -245,9 +247,10 @@ class AuthService {
     }
     
     fun resendVerificationEmail(email: String): Boolean {
+        val normalizedEmail = email.lowercase().trim()
         return transaction {
             val user = Users.selectAll()
-                .where { Users.email eq email }
+                .where { Users.email eq normalizedEmail }
                 .firstOrNull()
                 ?: return@transaction false
             
@@ -267,7 +270,7 @@ class AuthService {
             
             // Send email
             try {
-                emailService.sendVerificationEmail(email, verificationToken, user[Users.name])
+                emailService.sendVerificationEmail(normalizedEmail, verificationToken, user[Users.name])
                 true
             } catch (e: Exception) {
                 println("Failed to send verification email: ${e.message}")
@@ -277,13 +280,15 @@ class AuthService {
     }
     
     fun login(request: LoginRequest): AuthResponse? {
+        val normalizedEmail = request.email.lowercase().trim()
+        
         // Check if SSO is required for this email domain
-        if (ssoService.checkSsoRequired(request.email)) {
+        if (ssoService.checkSsoRequired(normalizedEmail)) {
             throw IllegalArgumentException("SSO is required for your organization. Please use the 'Login with SSO' option.")
         }
         
         return transaction {
-            val user = Users.selectAll().where { Users.email eq request.email }.firstOrNull()
+            val user = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
                 ?: return@transaction null
             
             if (!BCrypt.checkpw(request.password, user[Users.password_hash])) {
@@ -362,9 +367,10 @@ class AuthService {
     }
     
     fun requestPasswordReset(email: String): Boolean {
+        val normalizedEmail = email.lowercase().trim()
         return transaction {
             val user = Users.selectAll()
-                .where { Users.email eq email }
+                .where { Users.email eq normalizedEmail }
                 .firstOrNull()
                 ?: return@transaction false
             
@@ -379,7 +385,7 @@ class AuthService {
             
             // Send password reset email
             try {
-                emailService.sendPasswordResetEmail(email, resetToken, user[Users.name])
+                emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user[Users.name])
                 true
             } catch (e: Exception) {
                 println("Failed to send password reset email: ${e.message}")
@@ -416,7 +422,18 @@ class AuthService {
         }
     }
     
-    fun completeOnboarding(userId: Int, organizationName: String, companySize: String, customSlug: String? = null, referralSource: String): UserResponse {
+    fun completeOnboarding(
+        userId: Int, 
+        organizationName: String, 
+        companySize: String, 
+        customSlug: String? = null, 
+        referralSource: String,
+        utmSource: String? = null,
+        utmMedium: String? = null,
+        utmCampaign: String? = null,
+        utmContent: String? = null,
+        utmTerm: String? = null
+    ): UserResponse {
         return transaction {
             val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 ?: throw IllegalArgumentException("User not found")
@@ -445,12 +462,17 @@ class AuthService {
                 suffix++
             }
             
-            // Update organization with new name, slug, company size, and referral source
+            // Update organization with new name, slug, company size, referral source, and UTM parameters
             Organizations.update({ Organizations.id eq orgId }) {
                 it[name] = organizationName
                 it[Organizations.slug] = slug
                 it[company_size] = companySize
                 it[Organizations.referral_source] = referralSource
+                it[utm_source] = utmSource
+                it[utm_medium] = utmMedium
+                it[utm_campaign] = utmCampaign
+                it[utm_content] = utmContent
+                it[utm_term] = utmTerm
             }
             
             // Mark onboarding as completed

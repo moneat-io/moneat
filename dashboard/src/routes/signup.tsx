@@ -1,5 +1,5 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
@@ -19,7 +19,31 @@ export const Route = createFileRoute('/signup')({
 })
 
 function SignupPage() {
-  const inviteToken = new URLSearchParams(window.location.search).get('inviteToken') || undefined
+  const searchParams = new URLSearchParams(window.location.search)
+  const inviteToken = searchParams.get('inviteToken') || undefined
+  
+  // Capture UTM parameters from URL
+  const utmSource = searchParams.get('utm_source') || undefined
+  const utmMedium = searchParams.get('utm_medium') || undefined
+  const utmCampaign = searchParams.get('utm_campaign') || undefined
+  const utmContent = searchParams.get('utm_content') || undefined
+  const utmTerm = searchParams.get('utm_term') || undefined
+  
+  useEffect(() => {
+    // Store UTM params for onboarding, or clear stale values on non-UTM visits.
+    if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm) {
+      localStorage.setItem('utm_params', JSON.stringify({
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm,
+      }))
+      return
+    }
+    localStorage.removeItem('utm_params')
+  }, [utmSource, utmMedium, utmCampaign, utmContent, utmTerm])
+  
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')

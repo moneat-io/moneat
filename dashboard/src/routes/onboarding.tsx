@@ -138,7 +138,25 @@ function OnboardingPage() {
 
     setLoading(true)
     try {
-      await api.completeOnboarding(organizationName, companySize, slug, referralSource)
+      // Retrieve UTM parameters from localStorage
+      const utmParamsStr = localStorage.getItem('utm_params')
+      const utmParams = utmParamsStr ? JSON.parse(utmParamsStr) : {}
+      
+      await api.completeOnboarding(
+        organizationName, 
+        companySize, 
+        slug, 
+        referralSource,
+        utmParams.utmSource,
+        utmParams.utmMedium,
+        utmParams.utmCampaign,
+        utmParams.utmContent,
+        utmParams.utmTerm
+      )
+      
+      // Clean up UTM params after successful onboarding
+      localStorage.removeItem('utm_params')
+      
       navigate({ to: '/' })
     } catch (err) {
       setError('Failed to complete onboarding. Please try again.')

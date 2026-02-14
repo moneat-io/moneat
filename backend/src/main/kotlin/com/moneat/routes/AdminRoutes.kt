@@ -46,6 +46,7 @@ fun Route.adminRoutes() {
     val adminService = AdminService()
     val authService = AuthService()
     val pricingTierService = PricingTierService()
+    val attributionAnalyticsService = com.moneat.services.AttributionAnalyticsService()
     
     authenticate("auth-jwt") {
         route("/v1/admin") {
@@ -652,6 +653,14 @@ fun Route.adminRoutes() {
                         call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("Organization not found"))
                     }
                 }
+            }
+            
+            // Attribution analytics endpoint for ROAS tracking
+            get("/attribution") {
+                val groupBy = call.request.queryParameters["groupBy"] ?: "campaign"
+                
+                val analytics = attributionAnalyticsService.getAttributionMetrics(groupBy = groupBy)
+                call.respond(analytics)
             }
         }
     }

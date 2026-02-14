@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignupRouteImport } from './routes/signup'
@@ -75,6 +76,7 @@ import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastr
 import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
+import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdLogsRouteImport } from './routes/projects.$projectId.logs'
 import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
@@ -83,6 +85,11 @@ import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 
+const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
+  id: '/verify-email-required',
+  path: '/verify-email-required',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
@@ -415,6 +422,11 @@ const AdminBillingRoute = AdminBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAttributionRoute = AdminAttributionRouteImport.update({
+  id: '/attribution',
+  path: '/attribution',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ProjectsProjectIdSettingsRoute =
   ProjectsProjectIdSettingsRouteImport.update({
     id: '/settings',
@@ -475,6 +487,8 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/verify-email-required': typeof VerifyEmailRequiredRoute
+  '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/incidents': typeof AdminIncidentsRoute
@@ -546,6 +560,8 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/verify-email-required': typeof VerifyEmailRequiredRoute
+  '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/incidents': typeof AdminIncidentsRoute
@@ -622,6 +638,8 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/verify-email-required': typeof VerifyEmailRequiredRoute
+  '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/incidents': typeof AdminIncidentsRoute
@@ -699,6 +717,8 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/verify-email'
+    | '/verify-email-required'
+    | '/admin/attribution'
     | '/admin/billing'
     | '/admin/emails'
     | '/admin/incidents'
@@ -770,6 +790,8 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/verify-email'
+    | '/verify-email-required'
+    | '/admin/attribution'
     | '/admin/billing'
     | '/admin/emails'
     | '/admin/incidents'
@@ -845,6 +867,8 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/verify-email'
+    | '/verify-email-required'
+    | '/admin/attribution'
     | '/admin/billing'
     | '/admin/emails'
     | '/admin/incidents'
@@ -921,6 +945,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
@@ -938,6 +963,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verify-email-required': {
+      id: '/verify-email-required'
+      path: '/verify-email-required'
+      fullPath: '/verify-email-required'
+      preLoaderRoute: typeof VerifyEmailRequiredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/verify-email': {
       id: '/verify-email'
       path: '/verify-email'
@@ -1400,6 +1432,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminBillingRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/attribution': {
+      id: '/admin/attribution'
+      path: '/attribution'
+      fullPath: '/admin/attribution'
+      preLoaderRoute: typeof AdminAttributionRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/projects/$projectId/settings': {
       id: '/projects/$projectId/settings'
       path: '/settings'
@@ -1464,6 +1503,7 @@ const AdminOrganizationsRouteWithChildren =
   AdminOrganizationsRoute._addFileChildren(AdminOrganizationsRouteChildren)
 
 interface AdminRouteChildren {
+  AdminAttributionRoute: typeof AdminAttributionRoute
   AdminBillingRoute: typeof AdminBillingRoute
   AdminEmailsRoute: typeof AdminEmailsRoute
   AdminIncidentsRoute: typeof AdminIncidentsRoute
@@ -1477,6 +1517,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAttributionRoute: AdminAttributionRoute,
   AdminBillingRoute: AdminBillingRoute,
   AdminEmailsRoute: AdminEmailsRoute,
   AdminIncidentsRoute: AdminIncidentsRoute,
@@ -1668,6 +1709,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
   IssuesIssueIdRoute: IssuesIssueIdRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,

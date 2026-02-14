@@ -31,6 +31,8 @@ class OrgInvitationService(
         role: String,
         invitedByUserId: Int
     ): InvitationResponse = transaction {
+        val normalizedEmail = email.lowercase().trim()
+        
         // Validate permission
         membershipService.requireRole(orgId, invitedByUserId, OrgRole.ADMIN)
         
@@ -50,7 +52,7 @@ class OrgInvitationService(
         // Expire stale pending invitations so they don't block re-invites.
         OrgInvitations.update({
             (OrgInvitations.organization_id eq orgId) and
-                (OrgInvitations.email eq email) and
+                (OrgInvitations.email eq normalizedEmail) and
                 (OrgInvitations.status eq "pending") and
                 (OrgInvitations.expires_at lessEq now)
         }) {
@@ -58,7 +60,7 @@ class OrgInvitationService(
         }
         
         // Check if user is already a member
-        val existingUser = Users.selectAll().where { Users.email eq email }.singleOrNull()
+        val existingUser = Users.selectAll().where { Users.email eq normalizedEmail }.singleOrNull()
         if (existingUser != null) {
             val userId = existingUser[Users.id]
             if (membershipService.isMember(orgId, userId)) {
@@ -71,7 +73,7 @@ class OrgInvitationService(
             .selectAll()
             .where { 
                 (OrgInvitations.organization_id eq orgId) and 
-                (OrgInvitations.email eq email) and 
+                (OrgInvitations.email eq normalizedEmail) and 
                 (OrgInvitations.status eq "pending") and
                 (OrgInvitations.expires_at greater now)
             }
@@ -87,7 +89,7 @@ class OrgInvitationService(
         
         val invitationId = OrgInvitations.insert {
             it[organization_id] = orgId
-            it[OrgInvitations.email] = email
+            it[OrgInvitations.email] = normalizedEmail
             it[OrgInvitations.role] = role
             it[invited_by] = invitedByUserId
             it[OrgInvitations.token] = token
@@ -102,18 +104,18 @@ class OrgInvitationService(
         
         // Send invitation email
         emailService.sendInvitationEmail(
-            toEmail = email,
+            toEmail = normalizedEmail,
             inviterName = inviter[Users.name] ?: inviter[Users.email],
             orgName = org[Organizations.name],
             role = role,
             token = token
         )
         
-        logger.info("User $invitedByUserId invited $email to org $orgId as $role")
+        logger.info("User $invitedByUserId invited $normalizedEmail to org $orgId as $role")
         
         InvitationResponse(
             id = invitationId,
-            email = email,
+            email = normalizedEmail,
             role = role,
             status = "pending",
             invitedBy = inviter[Users.name] ?: "",

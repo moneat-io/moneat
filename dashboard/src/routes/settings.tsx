@@ -2830,55 +2830,23 @@ function AccountTab() {
   
   const { data: orgData } = useQuery({
     queryKey: ['organization', orgId],
-    queryFn: async () => {
-      const res = await fetch(`/api/v1/organizations/${orgId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
-      })
-      if (!res.ok) throw new Error('Failed to fetch organization')
-      return res.json()
-    },
+    queryFn: () => api.getOrganizationAccountSettings(orgId!),
     enabled: !!orgId,
   })
   
   const { data: accountValidation } = useQuery({
     queryKey: ['account-deletion-validation'],
-    queryFn: async () => {
-      const res = await fetch('/api/v1/account/deletion-validation', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
-      })
-      if (!res.ok) throw new Error('Failed to validate')
-      return res.json()
-    },
+    queryFn: () => api.getAccountDeletionValidation(),
   })
   
   const { data: orgValidation } = useQuery({
     queryKey: ['org-deletion-validation', orgId],
-    queryFn: async () => {
-      const res = await fetch(`/api/v1/organizations/${orgId}/deletion-validation`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
-      })
-      if (!res.ok) throw new Error('Failed to validate')
-      return res.json()
-    },
+    queryFn: () => api.getOrganizationDeletionValidation(orgId!),
     enabled: !!orgId,
   })
   
   const deleteAccountMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/v1/account', {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ confirmation: accountConfirmation }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Failed to delete account')
-      }
-      return res.json()
-    },
+    mutationFn: () => api.deleteAccount(accountConfirmation.trim()),
     onSuccess: () => {
       toast({
         title: 'Account deleted',
@@ -2898,19 +2866,10 @@ function AccountTab() {
   
   const deleteOrgMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/v1/organizations/${orgId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ confirmation: orgConfirmation }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Failed to delete organization')
+      if (!orgId) {
+        throw new Error('No organization selected')
       }
-      return res.json()
+      return api.deleteOrganization(orgId, orgConfirmation.trim())
     },
     onSuccess: () => {
       toast({
@@ -2928,7 +2887,9 @@ function AccountTab() {
     },
   })
   
-  const isOwner = orgData?.role === 'owner'
+  const isOwner = orgData?.role === 'owner' || user?.orgRole === 'owner'
+  const isAccountConfirmationValid =
+    accountConfirmation.trim().toLowerCase() === (user?.email || '').trim().toLowerCase()
   
   return (
     <div className="space-y-6">
@@ -2971,7 +2932,7 @@ function AccountTab() {
             <Button
               variant="destructive"
               onClick={() => setDeleteOrgOpen(true)}
-              disabled={!orgValidation?.canDelete}
+              disabled={orgValidation?.canDelete === false}
               className="w-full"
             >
               <Trash2 className="h-4 w-4 mr-2" />
@@ -3025,7 +2986,7 @@ function AccountTab() {
           <Button
             variant="destructive"
             onClick={() => setDeleteAccountOpen(true)}
-            disabled={!accountValidation?.canDelete}
+            disabled={accountValidation?.canDelete === false}
             className="w-full"
           >
             <Trash2 className="h-4 w-4 mr-2" />
@@ -3124,7 +3085,7 @@ function AccountTab() {
             <Button
               variant="destructive"
               onClick={() => deleteAccountMutation.mutate()}
-              disabled={accountConfirmation !== user?.email || deleteAccountMutation.isPending}
+              disabled={!isAccountConfirmationValid || deleteAccountMutation.isPending}
             >
               {deleteAccountMutation.isPending ? (
                 <>

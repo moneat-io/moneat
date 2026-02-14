@@ -1,6 +1,7 @@
 package com.moneat.routes
 
 import com.moneat.models.Organizations
+import com.moneat.models.Memberships
 import com.moneat.services.AccountDeletionService
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -11,7 +12,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
@@ -28,6 +29,40 @@ data class DeleteOrganizationRequest(
 
 fun Route.accountDeletionRoutes() {
     val deletionService = AccountDeletionService()
+
+    // Get organization details for account deletion confirmation
+    get("/organizations/{orgId}") {
+        val principal = call.principal<JWTPrincipal>()
+        val userId = principal!!.payload.getClaim("userId").asInt()
+
+        val orgId = call.parameters["orgId"]?.toIntOrNull()
+        if (orgId == null) {
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid organization ID"))
+            return@get
+        }
+
+        val orgWithRole = transaction {
+            Memberships.innerJoin(Organizations)
+                .selectAll()
+                .where {
+                    (Memberships.user_id eq userId) and
+                    (Memberships.organization_id eq orgId) and
+                    (Organizations.deletedAt.isNull())
+                }
+                .singleOrNull()
+        }
+
+        if (orgWithRole == null) {
+            call.respond(HttpStatusCode.NotFound, mapOf("error" to "Organization not found"))
+            return@get
+        }
+
+        call.respond(mapOf(
+            "id" to orgId,
+            "name" to orgWithRole[Organizations.name],
+            "role" to orgWithRole[Memberships.role]
+        ))
+    }
     
     // Delete current user account
     delete("/account") {
@@ -54,7 +89,7 @@ fun Route.accountDeletionRoutes() {
             return@delete
         }
         
-        if (request.confirmation != userEmail) {
+        if (!request.confirmation.trim().equals(userEmail, ignoreCase = true)) {
             call.respond(HttpStatusCode.BadRequest, mapOf(
                 "error" to "Confirmation does not match your email address"
             ))

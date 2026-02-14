@@ -13,8 +13,11 @@ import {
     Shield,
     AlertTriangle,
     Users,
+    Menu,
+    X,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
+import {useState} from 'react'
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
@@ -65,11 +68,34 @@ const adminNavSections = [
 function AdminLayout() {
   const router = useRouterState()
   const currentPath = router.location.pathname
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
     <div className="flex min-h-screen">
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-background border shadow-lg"
+        aria-label="Toggle admin menu"
+      >
+        {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </button>
+
+      {/* Mobile Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Admin Side Navigation */}
-      <aside className="w-52 shrink-0 border-r bg-muted/30 sticky top-0 h-screen flex flex-col overflow-y-auto">
+      <aside className={cn(
+        "w-52 shrink-0 border-r bg-muted/30 h-screen flex flex-col overflow-y-auto",
+        "lg:sticky lg:top-0",
+        "fixed top-0 left-0 z-40 transition-transform duration-300",
+        mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
         {/* Header */}
         <div className="px-4 py-4 border-b">
           <div className="flex items-center gap-2.5">
@@ -101,6 +127,7 @@ function AdminLayout() {
                     <Link
                       key={item.href}
                       to={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
                       className={cn(
                         'flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all',
                         isActive
@@ -122,6 +149,7 @@ function AdminLayout() {
         <div className="px-2 py-3 border-t">
           <Link
             to="/"
+            onClick={() => setMobileMenuOpen(false)}
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
             <ArrowLeft className="h-4 w-4 shrink-0" />
@@ -132,7 +160,7 @@ function AdminLayout() {
 
       {/* Content */}
       <main className="flex-1 min-w-0">
-        <div className="p-6 lg:p-8">
+        <div className="p-6 lg:p-8 pt-16 lg:pt-6">
           <Outlet />
         </div>
       </main>

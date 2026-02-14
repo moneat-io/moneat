@@ -249,7 +249,12 @@ data class CompleteOnboardingRequest(
     val organizationName: String,
     val companySize: String,
     val slug: String? = null,
-    val referralSource: String
+    val referralSource: String,
+    val utmSource: String? = null,
+    val utmMedium: String? = null,
+    val utmCampaign: String? = null,
+    val utmContent: String? = null,
+    val utmTerm: String? = null
 )
 
 @Serializable

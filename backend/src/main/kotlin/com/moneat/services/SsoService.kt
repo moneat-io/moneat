@@ -412,6 +412,8 @@ class SsoService {
         ssoConfigId: Int,
         organizationId: Int
     ): Triple<String, String, String> {
+        val normalizedEmail = email.lowercase().trim()
+        
         return transaction {
             // Check if user already linked via SSO
             val existingLink = UserSsoLinks.selectAll()
@@ -426,7 +428,7 @@ class SsoService {
             } else {
                 // Check if user exists by email
                 val existingUser = Users.selectAll()
-                    .where { Users.email eq email }
+                    .where { Users.email eq normalizedEmail }
                     .firstOrNull()
                 
                 if (existingUser != null) {
@@ -459,7 +461,7 @@ class SsoService {
                 } else {
                     // Create new user (JIT provisioning)
                     val uid = Users.insert {
-                        it[Users.email] = email
+                        it[Users.email] = normalizedEmail
                         it[Users.name] = name
                         it[password_hash] = "" // No password for SSO users
                         it[email_verified] = true // SSO users are pre-verified

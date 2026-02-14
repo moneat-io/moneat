@@ -45,8 +45,11 @@ export function useAuth() {
         id: payload.userId,
         email: payload.email,
         name: payload.name,
-        emailVerified: true, // If they have a token, they're verified
-        onboardingCompleted: true,
+        // Note: JWT doesn't contain emailVerified/onboardingCompleted
+        // These values are validated by the root route guard which calls getCurrentUser()
+        // This is just a lightweight representation from the token
+        emailVerified: true, // Assumed true if they have a token (actual check in root route)
+        onboardingCompleted: true, // Assumed true if they have a token (actual check in root route)
         orgId: payload.orgId,
         orgRole: payload.orgRole,
       })
