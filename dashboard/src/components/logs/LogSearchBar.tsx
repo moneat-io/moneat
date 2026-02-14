@@ -177,6 +177,16 @@ export function LogSearchBar({
 
   const applyToken = useCallback(
     (token: string) => {
+      // If the input contains Boolean operators, treat the entire input as a query
+      const hasBooleanOps = /\b(AND|OR)\b/.test(token)
+      if (hasBooleanOps) {
+        const newQuery = query ? `${query} ${token}` : token
+        onQueryChange(newQuery.trim())
+        setInputValue('')
+        setShowSuggestions(false)
+        return
+      }
+
       const colonIndex = token.indexOf(':')
       if (colonIndex > 0) {
         const isExclude = token.startsWith('-')

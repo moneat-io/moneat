@@ -471,8 +471,12 @@ class LogQueryParser {
     }
     
     private fun buildFullTextCondition(term: String, isWildcard: Boolean, isPhrase: Boolean, escapeFn: (String) -> String): String {
-        // Search in message, body, and all text fields
-        val fields = listOf("message", "body", "service", "environment", "host", "source", "container_name", "level")
+        // Search in message, body, and text fields (excluding Enum8 columns level/source
+        // which cause "Block structure mismatch" when SELECT aliases them with toString())
+        val fields = listOf("message", "body", "service", "environment", "host", "container_name")
+        
+        // hasTokenCaseInsensitive rejects needles containing separator chars (hyphens, dots, etc.)
+        val hasSeparators = term.any { it == '-' || it == '.' || it == '/' || it == ':' || it == ' ' }
         
         return if (isWildcard) {
             val pattern = wildcardToLikePattern(term)
@@ -480,8 +484,8 @@ class LogQueryParser {
             fields.joinToString(" OR ") { field ->
                 "$field ILIKE '$escaped'"
             }
-        } else if (isPhrase) {
-            // Phrase search: use ILIKE for exact substring match (preserves word order)
+        } else if (isPhrase || hasSeparators) {
+            // Phrase search or terms with separators: use ILIKE for substring match
             val escaped = escapeFn(term)
             fields.joinToString(" OR ") { field ->
                 "$field ILIKE '%$escaped%'"
@@ -550,8 +554,8 @@ class LogQueryParser {
         val topLevelFields = setOf("service", "environment", "host", "source", "level", "message", "body")
         
         return if (actualField in topLevelFields) {
-            // Try to convert to number if possible, otherwise string comparison
-            "($actualField >= $minVal AND $actualField <= $maxVal)"
+            val fieldRef = if (actualField in setOf("level", "source")) "toString($actualField)" else actualField
+            "($fieldRef >= $minVal AND $fieldRef <= $maxVal)"
         } else {
             val escapedField = escapeFn(actualField)
             "(has(tags, '$escapedField') AND toInt32OrNull(tags['$escapedField']) >= $minVal AND toInt32OrNull(tags['$escapedField']) <= $maxVal) OR " +
@@ -570,12 +574,15 @@ class LogQueryParser {
         val topLevelFields = setOf("service", "environment", "host", "source", "level", "message", "body",
                                     "container_name", "container_id", "container_image", "trace_id", "span_id")
         
+        val enumFields = setOf("level", "source")
+        
         return if (actualField in topLevelFields) {
+            val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
             if (numVal != null) {
-                "$actualField $operator $numVal"
+                "$fieldRef $operator $numVal"
             } else {
                 val escaped = escapeFn(value)
-                "$actualField $operator '$escaped'"
+                "$fieldRef $operator '$escaped'"
             }
         } else {
             val escapedField = escapeFn(actualField)
@@ -600,7 +607,8 @@ class LogQueryParser {
                                     "container_name", "container_id", "container_image", "trace_id", "span_id")
         
         return if (actualField in topLevelFields) {
-            "$actualField IS NOT NULL AND $actualField != ''"
+            val fieldRef = if (actualField in setOf("level", "source")) "toString($actualField)" else actualField
+            "$fieldRef IS NOT NULL AND $fieldRef != ''"
         } else {
             val escapedField = escapeFn(actualField)
             "(has(tags, '$escapedField') OR has(resource_attributes, '$escapedField'))"

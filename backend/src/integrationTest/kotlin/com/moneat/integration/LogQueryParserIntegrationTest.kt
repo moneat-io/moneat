@@ -248,8 +248,8 @@ class LogQueryParserIntegrationTest {
     @Test
     @Order(10)
     fun `AND narrows results`() = runBlocking {
-        // error AND timeout — only log 6 has both
-        val ids = queryLogIds("error AND timeout")
+        // level:error AND timeout — only log 6 has both (level=error + "timeout" in message)
+        val ids = queryLogIds("level:error AND timeout")
         assertTrue(ids.contains(logId(6)), "AND should find log with both terms: $ids")
         assertTrue(ids.all { it == logId(6) || it != logId(1) || it != logId(2) },
             "AND should narrow results")
@@ -284,9 +284,9 @@ class LogQueryParserIntegrationTest {
     @Test
     @Order(14)
     fun `complex boolean expression`() = runBlocking {
-        // (error OR fatal) AND service:worker
+        // (level:error OR level:fatal) AND service:worker
         // worker service has: log 8 (fatal), log 9 (info), log 14 (error)
-        val ids = queryLogIds("(error OR fatal) AND service:worker")
+        val ids = queryLogIds("(level:error OR level:fatal) AND service:worker")
         assertTrue(ids.contains(logId(8)), "Should find fatal worker log: $ids")
         assertTrue(ids.contains(logId(14)), "Should find error worker log: $ids")
         assertTrue(!ids.contains(logId(9)), "Should not find info worker log: $ids")
@@ -594,7 +594,7 @@ class LogQueryParserIntegrationTest {
     @Test
     @Order(83)
     fun `unclosed parenthesis handles gracefully`() = runBlocking {
-        val ids = queryLogIds("(error AND timeout")
+        val ids = queryLogIds("(level:error AND timeout")
         // Should still work and find log 6
         assertTrue(ids.contains(logId(6)), "Unclosed paren should still parse: $ids")
     }
@@ -702,5 +702,134 @@ class LogQueryParserIntegrationTest {
         assertTrue(ids.contains(logId(1)), "Should find 500: $ids")
         assertTrue(ids.contains(logId(2)), "Should find 401: $ids")
         assertTrue(ids.contains(logId(6)), "Should find 504: $ids")
+    }
+
+    // ==========================================
+    // Regression: SELECT with toString(level) AS level_text alongside WHERE referencing level
+    // Using level_text alias avoids "Block structure mismatch" error
+    // ==========================================
+
+    @Test
+    @Order(110)
+    fun `SELECT toString(level) AS level_text does not conflict with WHERE clause on level`() = runBlocking {
+        // Uses the production alias pattern: toString(level) AS level_text
+        // combined with a WHERE clause that references toString(level) via level:error
+        val parsed = parser.parse("level:error")
+        val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+
+        val sql = """
+            SELECT toString(log_id) AS id,
+                   toString(level) AS level_text,
+                   message,
+                   service
+            FROM logs
+            WHERE project_id = $PROJECT_ID AND ($whereCondition)
+            ORDER BY timestamp ASC
+            FORMAT TabSeparated
+        """.trimIndent()
+
+        // This should NOT throw "Block structure mismatch... level String vs level Enum8"
+        val result = executeRawQuery(sql)
+        val rows = result.trim().lines().filter { it.isNotBlank() }
+        assertTrue(rows.isNotEmpty(), "Should find error logs without type conflict: $rows")
+    }
+
+    @Test
+    @Order(111)
+    fun `SELECT toString(source) AS source_text does not conflict with WHERE clause on source`() = runBlocking {
+        val parsed = parser.parse("source:sdk")
+        val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+
+        val sql = """
+            SELECT toString(log_id) AS id,
+                   toString(source) AS source_text,
+                   message
+            FROM logs
+            WHERE project_id = $PROJECT_ID AND ($whereCondition)
+            ORDER BY timestamp ASC
+            FORMAT TabSeparated
+        """.trimIndent()
+
+        val result = executeRawQuery(sql)
+        val rows = result.trim().lines().filter { it.isNotBlank() }
+        assertTrue(rows.isNotEmpty(), "Should find sdk source logs without type conflict: $rows")
+    }
+
+    // ==========================================
+    // 8. Hyphenated / separator term tests
+    // ==========================================
+
+    @Test
+    @Order(120)
+    fun `free text search with hyphenated term uses ILIKE fallback`() = runBlocking {
+        // "api-gateway" contains a hyphen — hasTokenCaseInsensitive would reject it.
+        // Should fall back to ILIKE and find logs with service=api-gateway in the message/body/service fields.
+        val ids = queryLogIds("api-gateway")
+        assertTrue(ids.contains(logId(1)), "Should find api-gateway log via ILIKE fallback: $ids")
+        assertTrue(ids.contains(logId(6)), "Should find another api-gateway log: $ids")
+    }
+
+    @Test
+    @Order(121)
+    fun `free text search with dotted term uses ILIKE fallback`() = runBlocking {
+        // "config.yaml" contains a dot — another separator char
+        val ids = queryLogIds("config.yaml")
+        assertTrue(ids.contains(logId(14)), "Should find log with config.yaml in message: $ids")
+    }
+
+    @Test
+    @Order(122)
+    fun `production-like SELECT with toString level and source aliases`() = runBlocking {
+        // Reproduce the exact production query shape — uses level_text/source_text aliases
+        // to avoid Enum8 column name collision
+        val parsed = parser.parse("level:error AND timeout")
+        val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+
+        val sql = """
+            SELECT
+                toString(log_id) AS log_id,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp_formatted,
+                toString(level) AS level_text,
+                message,
+                body,
+                service,
+                environment,
+                host,
+                toString(source) AS source_text,
+                container_name
+            FROM logs
+            WHERE project_id = $PROJECT_ID AND ($whereCondition)
+            ORDER BY timestamp DESC, log_id DESC
+            LIMIT 151
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        // This must NOT throw "Block structure mismatch" error
+        val result = executeRawQuery(sql)
+        assertTrue(result.contains("Timeout"), "Production-like query should return timeout log: $result")
+    }
+
+    @Test
+    @Order(123)
+    fun `production-like SELECT with hyphenated free text search`() = runBlocking {
+        // Free text "api-gateway" with production SELECT shape
+        val parsed = parser.parse("api-gateway")
+        val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+
+        val sql = """
+            SELECT
+                toString(log_id) AS log_id,
+                toString(level) AS level_text,
+                message,
+                toString(source) AS source_text
+            FROM logs
+            WHERE project_id = $PROJECT_ID AND ($whereCondition)
+            ORDER BY timestamp DESC
+            LIMIT 10
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val result = executeRawQuery(sql)
+        assertTrue(result.isNotBlank(), "Hyphenated search with production SELECT should return results: $result")
     }
 }

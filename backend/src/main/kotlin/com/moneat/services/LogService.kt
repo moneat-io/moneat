@@ -227,8 +227,7 @@ class LogService {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
                 // Fallback: treat as simple full-text search
-                val escaped = escapeSql(request.query)
-                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+                conditions += buildSimpleSearchCondition(request.query)
             }
         }
 
@@ -252,13 +251,13 @@ class LogService {
             SELECT
                 toString(log_id) AS log_id,
                 formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp_formatted,
-                toString(level) AS level,
+                toString(level) AS level_text,
                 message,
                 body,
                 service,
                 environment,
                 host,
-                toString(source) AS source,
+                toString(source) AS source_text,
                 container_name,
                 container_id,
                 container_image,
@@ -385,8 +384,7 @@ class LogService {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
-                val escaped = escapeSql(query)
-                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+                conditions += buildSimpleSearchCondition(query)
             }
         }
         tags.forEach { (key, value) ->
@@ -499,8 +497,7 @@ class LogService {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
-                val escaped = escapeSql(query)
-                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+                conditions += buildSimpleSearchCondition(query)
             }
         }
         tags.forEach { (key, value) ->
@@ -600,8 +597,7 @@ class LogService {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
-                val escaped = escapeSql(query)
-                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+                conditions += buildSimpleSearchCondition(query)
             }
         }
         tags.forEach { (key, value) ->
@@ -878,13 +874,13 @@ class LogService {
                     val log = LogEntryResponse(
                         logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                         timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
-                        level = normalizeLevel(obj["level"]?.jsonPrimitive?.content),
+                        level = normalizeLevel(obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content),
                         message = obj["message"]?.jsonPrimitive?.content ?: "",
                         body = obj["body"]?.jsonPrimitive?.content ?: "",
                         service = obj["service"]?.jsonPrimitive?.content ?: "",
                         environment = obj["environment"]?.jsonPrimitive?.content ?: "",
                         host = obj["host"]?.jsonPrimitive?.content ?: "",
-                        source = normalizeSource(obj["source"]?.jsonPrimitive?.content ?: "sdk"),
+                        source = normalizeSource(obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"),
                         containerName = obj["container_name"]?.jsonPrimitive?.content ?: "",
                         containerId = obj["container_id"]?.jsonPrimitive?.content ?: "",
                         containerImage = obj["container_image"]?.jsonPrimitive?.content ?: "",
@@ -1195,6 +1191,16 @@ class LogService {
             .replace("'", "\\'")
     }
 
+    private fun buildSimpleSearchCondition(term: String): String {
+        val escaped = escapeSql(term)
+        val hasSeparators = term.any { it == '-' || it == '.' || it == '/' || it == ':' || it == ' ' }
+        return if (hasSeparators) {
+            "(message ILIKE '%$escaped%' OR body ILIKE '%$escaped%')"
+        } else {
+            "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+        }
+    }
+
     private fun encodeCursor(timestampMs: Long, logId: String): String {
         val raw = "$timestampMs|$logId"
         return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
@@ -1238,10 +1244,19 @@ class LogService {
     internal fun buildTagCondition(key: String, value: String): String {
         if (key.isBlank()) return ""
         
-        // Ignore malformed tags that contain Boolean operators
+        // If the tag value contains Boolean operators, it's actually a query that was
+        // mistakenly sent as a tag. Route it through the query parser instead of dropping it.
         if (isTagMalformed(key, value)) {
-            logger.warn { "Ignoring malformed tag with Boolean operators: $key=$value" }
-            return ""
+            logger.info { "Tag contains Boolean operators, parsing as query: $key:$value" }
+            return try {
+                val parsed = queryParser.parse("$key:$value")
+                if (parsed.rootNode != null) {
+                    queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                } else ""
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
+                ""
+            }
         }
         
         val escapedKey = escapeSql(key)
