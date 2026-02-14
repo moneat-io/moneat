@@ -64,6 +64,14 @@ class DashboardService {
         return hasProjectAccess(userId, projectId)
     }
 
+    suspend fun hasTraceAccess(userId: Int, projectId: Long): Boolean {
+        return hasProjectAccess(userId, projectId)
+    }
+
+    suspend fun hasSpanAccess(userId: Int, projectId: Long): Boolean {
+        return hasProjectAccess(userId, projectId)
+    }
+
     suspend fun hasReplayAccess(userId: Int, replayId: String): Boolean {
         val projectId = getProjectIdForReplay(replayId) ?: return false
         return hasProjectAccess(userId, projectId)
@@ -971,13 +979,16 @@ class DashboardService {
             SELECT
                 span_id,
                 parent_span_id,
+                trace_id,
+                toString(transaction_id) as transaction_id,
                 op,
                 description,
                 toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
                 toUnixTimestamp64Milli(end_timestamp) as end_ts_ms,
                 duration_ms,
                 status,
-                tags
+                tags,
+                data
             FROM $clickhouseDb.spans
             WHERE toString(transaction_id) = '$normalizedEventId'
                 AND project_id = $projectId
@@ -1003,13 +1014,16 @@ class DashboardService {
                     SpanResponse(
                         spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
                         parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.ifBlank { null },
+                        traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
+                        transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
                         op = obj["op"]?.jsonPrimitive?.content ?: "",
                         description = obj["description"]?.jsonPrimitive?.content ?: "",
                         startTimestamp = (obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
                         endTimestamp = (obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
                         duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
                         status = obj["status"]?.jsonPrimitive?.contentOrNull,
-                        tags = parseStringMap(obj["tags"])
+                        tags = parseStringMap(obj["tags"]),
+                        data = obj["data"]?.jsonPrimitive?.contentOrNull
                     )
                 }
 
@@ -1020,19 +1034,166 @@ class DashboardService {
             val rootSpan = SpanResponse(
                 spanId = rootSpanId,
                 parentSpanId = null,
+                traceId = transaction.traceId.ifBlank { null },
+                transactionId = transaction.eventId,
                 op = transaction.op,
                 description = transaction.name,
                 startTimestamp = transaction.startTimestamp,
                 endTimestamp = transaction.startTimestamp + (transaction.duration / 1000.0),
                 duration = transaction.duration,
                 status = transaction.status,
-                tags = transaction.tags
+                tags = transaction.tags,
+                data = null
             )
 
             val mergedSpans = if (spans.any { it.spanId == rootSpanId }) spans else listOf(rootSpan) + spans
             TransactionWithSpansResponse(transaction = transaction, spans = mergedSpans)
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch spans for transaction $eventId" }
+            null
+        }
+    }
+
+    suspend fun getTraceDetails(projectId: Long, traceId: String): TraceDetailResponse? {
+        val retentionDays = getProjectRetentionDays(projectId)
+        val escapedTraceId = escapeSql(traceId)
+        
+        val query = """
+            SELECT
+                span_id,
+                parent_span_id,
+                trace_id,
+                toString(transaction_id) as transaction_id,
+                op,
+                description,
+                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
+                toUnixTimestamp64Milli(end_timestamp) as end_ts_ms,
+                duration_ms,
+                status,
+                tags,
+                data
+            FROM $clickhouseDb.spans
+            WHERE trace_id = '$escapedTraceId'
+                AND project_id = $projectId
+                AND ${timestampRetentionClause("start_timestamp", retentionDays)}
+            ORDER BY start_timestamp ASC
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            
+            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+                logger.error { "Failed to fetch trace $traceId: ${response.status} ${body.take(400)}" }
+                return null
+            }
+            
+            if (body.isBlank()) {
+                return null
+            }
+            
+            val spans = body.lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    SpanResponse(
+                        spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+                        parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.ifBlank { null },
+                        traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
+                        transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
+                        op = obj["op"]?.jsonPrimitive?.content ?: "",
+                        description = obj["description"]?.jsonPrimitive?.content ?: "",
+                        startTimestamp = (obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
+                        endTimestamp = (obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
+                        duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                        status = obj["status"]?.jsonPrimitive?.contentOrNull,
+                        tags = parseStringMap(obj["tags"]),
+                        data = obj["data"]?.jsonPrimitive?.contentOrNull
+                    )
+                }
+            
+            val startTimestamp = spans.minOfOrNull { it.startTimestamp } ?: 0.0
+            val endTimestamp = spans.maxOfOrNull { it.endTimestamp } ?: 0.0
+            val duration = (endTimestamp - startTimestamp) * 1000.0
+            
+            TraceDetailResponse(
+                traceId = traceId,
+                projectId = projectId,
+                spans = spans,
+                startTimestamp = startTimestamp,
+                endTimestamp = endTimestamp,
+                duration = duration
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch trace $traceId" }
+            null
+        }
+    }
+
+    suspend fun getSpanDetails(projectId: Long, spanId: String): SpanDetailResponse? {
+        val retentionDays = getProjectRetentionDays(projectId)
+        val escapedSpanId = escapeSql(spanId)
+        
+        val query = """
+            SELECT
+                span_id,
+                parent_span_id,
+                trace_id,
+                toString(transaction_id) as transaction_id,
+                op,
+                description,
+                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
+                toUnixTimestamp64Milli(end_timestamp) as end_ts_ms,
+                duration_ms,
+                status,
+                tags,
+                data
+            FROM $clickhouseDb.spans
+            WHERE span_id = '$escapedSpanId'
+                AND project_id = $projectId
+                AND ${timestampRetentionClause("start_timestamp", retentionDays)}
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return try {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            
+            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+                logger.error { "Failed to fetch span $spanId: ${response.status} ${body.take(400)}" }
+                return null
+            }
+            
+            if (body.isBlank()) {
+                return null
+            }
+            
+            val obj = json.parseToJsonElement(body.trim()).jsonObject
+            val span = SpanResponse(
+                spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+                parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.ifBlank { null },
+                traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
+                transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
+                op = obj["op"]?.jsonPrimitive?.content ?: "",
+                description = obj["description"]?.jsonPrimitive?.content ?: "",
+                startTimestamp = (obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
+                endTimestamp = (obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0) / 1000.0,
+                duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                status = obj["status"]?.jsonPrimitive?.contentOrNull,
+                tags = parseStringMap(obj["tags"]),
+                data = obj["data"]?.jsonPrimitive?.contentOrNull
+            )
+            
+            val transaction = span.transactionId?.let { getTransaction(it) }
+            
+            SpanDetailResponse(
+                span = span,
+                transaction = transaction
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch span $spanId" }
             null
         }
     }

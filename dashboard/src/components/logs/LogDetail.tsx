@@ -3,8 +3,9 @@ import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/
 import {Separator} from '@/components/ui/separator'
 import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
-import {Check, Copy} from 'lucide-react'
+import {Check, Copy, ExternalLink} from 'lucide-react'
 import {useCallback, useState} from 'react'
+import {Link, useParams} from '@tanstack/react-router'
 
 interface LogDetailProps {
   log: LogEntry | null
@@ -62,6 +63,29 @@ function DetailField({label, value, mono = false, copyable = false}: {label: str
   )
 }
 
+function LinkableField({label, value, to, mono = true}: {label: string; value?: string; to: string; mono?: boolean}) {
+  if (!value) return null
+
+  return (
+    <div className="space-y-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+      <div className="flex items-start gap-1.5">
+        <Link
+          to={to}
+          className={cn(
+            'flex-1 break-all text-xs text-primary hover:underline inline-flex items-center gap-1',
+            mono && 'font-mono'
+          )}
+        >
+          {value}
+          <ExternalLink className="h-3 w-3 inline shrink-0" />
+        </Link>
+        <CopyButton value={value} label={label} />
+      </div>
+    </div>
+  )
+}
+
 function MapSection({label, map}: {label: string; map: Record<string, string>}) {
   const entries = Object.entries(map)
   if (entries.length === 0) return null
@@ -108,6 +132,8 @@ function formatTimestamp(value: string): string {
 
 export function LogDetail({log, open, onClose}: LogDetailProps) {
   if (!log) return null
+  
+  const {projectId} = useParams({strict: false})
 
   const normalizedLevel = (log.level || 'info').toLowerCase()
   const body = log.body || ''
@@ -182,8 +208,20 @@ export function LogDetail({log, open, onClose}: LogDetailProps) {
           {hasTracing && (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
-                <DetailField label="Trace ID" value={log.traceId} mono copyable />
-                <DetailField label="Span ID" value={log.spanId} mono copyable />
+                {log.traceId && projectId && (
+                  <LinkableField
+                    label="Trace ID"
+                    value={log.traceId}
+                    to={`/projects/${projectId}/traces/${log.traceId}`}
+                  />
+                )}
+                {log.spanId && projectId && (
+                  <LinkableField
+                    label="Span ID"
+                    value={log.spanId}
+                    to={`/projects/${projectId}/spans/${log.spanId}`}
+                  />
+                )}
               </div>
               <Separator />
             </>

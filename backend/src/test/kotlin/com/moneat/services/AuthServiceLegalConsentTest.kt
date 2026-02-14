@@ -4,6 +4,7 @@ import com.moneat.models.*
 import io.ktor.server.config.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.test.*
@@ -14,14 +15,31 @@ class AuthServiceLegalConsentTest {
     private val termsVersion = appConfig.property("legal.termsVersion").getString()
     private val privacyVersion = appConfig.property("legal.privacyVersion").getString()
 
+    companion object {
+        private var dbInitialized = false
+    }
+
     @BeforeTest
     fun setupDatabase() {
-        Database.connect(
-            url = "jdbc:h2:mem:moneat_legal_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver"
-        )
+        // Initialize DB connection and schema once per test class
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_legal;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            transaction {
+                SchemaUtils.create(Users, UserLegalAcceptances, Organizations, Memberships, OrgInvitations)
+            }
+            dbInitialized = true
+        }
+        
+        // Clean up any existing test data from previous tests
         transaction {
-            SchemaUtils.create(Users, UserLegalAcceptances, Organizations, Memberships, OrgInvitations)
+            OrgInvitations.deleteAll()
+            UserLegalAcceptances.deleteAll()
+            Memberships.deleteAll()
+            Users.deleteAll()
+            Organizations.deleteAll()
         }
     }
 

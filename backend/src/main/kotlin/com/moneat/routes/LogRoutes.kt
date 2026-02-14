@@ -186,12 +186,109 @@ fun Route.logRoutes() {
                     return@get
                 }
 
-                val result = logService.getFilterOptions(
+                val result = logService.getFilterOptionsWithCounts(
                     projectId = projectId,
                     from = call.request.queryParameters["from"],
                     to = call.request.queryParameters["to"]
                 )
                 call.respond(HttpStatusCode.OK, result)
+            }
+
+            get("/projects/{projectId}/logs/aggregate") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val result = logService.aggregateLogs(
+                    projectId = projectId,
+                    from = call.request.queryParameters["from"],
+                    to = call.request.queryParameters["to"],
+                    interval = call.request.queryParameters["interval"],
+                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                    levels = parseLevelQueryParams(call),
+                    service = call.request.queryParameters["service"],
+                    environment = call.request.queryParameters["environment"],
+                    tags = parseTagQueryParams(call),
+                    groupBy = call.request.queryParameters["groupBy"]
+                )
+                call.respond(HttpStatusCode.OK, result)
+            }
+
+            get("/projects/{projectId}/logs/top") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val field = call.request.queryParameters["field"]
+                if (field.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing field parameter"))
+                    return@get
+                }
+
+                val result = logService.topValues(
+                    projectId = projectId,
+                    field = field,
+                    limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10,
+                    from = call.request.queryParameters["from"],
+                    to = call.request.queryParameters["to"],
+                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                    levels = parseLevelQueryParams(call),
+                    service = call.request.queryParameters["service"],
+                    environment = call.request.queryParameters["environment"],
+                    tags = parseTagQueryParams(call)
+                )
+                call.respond(HttpStatusCode.OK, result)
+            }
+
+            get("/projects/{projectId}/logs/export") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    return@get
+                }
+
+                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val csv = logService.exportCsv(
+                    projectId = projectId,
+                    from = call.request.queryParameters["from"],
+                    to = call.request.queryParameters["to"],
+                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                    levels = parseLevelQueryParams(call),
+                    service = call.request.queryParameters["service"],
+                    environment = call.request.queryParameters["environment"],
+                    tags = parseTagQueryParams(call),
+                    limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 5000
+                )
+
+                call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"logs-export.csv\"")
+                call.respondText(csv, ContentType.Text.CSV)
             }
         }
 

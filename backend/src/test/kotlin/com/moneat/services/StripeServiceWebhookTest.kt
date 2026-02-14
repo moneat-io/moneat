@@ -23,21 +23,39 @@ class StripeServiceWebhookTest {
     private val mockCustomerId = "cus_test_123"
     private val mockSubscriptionId = "sub_test_456"
 
+    companion object {
+        private var dbInitialized = false
+    }
+
     @BeforeTest
     fun setupDatabase() {
-        Database.connect(
-            url = "jdbc:h2:mem:stripe_webhook_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver"
-        )
-        transaction {
-            SchemaUtils.create(
-                Organizations,
-                Subscriptions,
-                StripeWebhookEvents,
-                PricingTierConfigs,
-                Memberships,
-                Users
+        // Initialize DB connection and schema once per test class
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:stripe_webhook_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
             )
+            transaction {
+                SchemaUtils.create(
+                    Organizations,
+                    Subscriptions,
+                    StripeWebhookEvents,
+                    PricingTierConfigs,
+                    Memberships,
+                    Users
+                )
+            }
+            dbInitialized = true
+        }
+        
+        // Clean up any existing test data from previous tests
+        transaction {
+            StripeWebhookEvents.deleteAll()
+            Subscriptions.deleteAll()
+            Memberships.deleteAll()
+            Organizations.deleteAll()
+            Users.deleteAll()
+            PricingTierConfigs.deleteAll()
         }
 
         // Setup test data

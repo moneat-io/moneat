@@ -13,6 +13,12 @@ import java.util.*
 
 private val logger = KotlinLogging.logger {}
 
+// Top-level fields that should not be searched in tags map
+private val topLevelFields = setOf(
+    "service", "environment", "host", "source", "level", "message", "body",
+    "container_name", "container_id", "container_image", "trace_id", "span_id", "status"
+)
+
 private data class LogWithCursor(
     val log: LogEntryResponse,
     val timestampMs: Long
@@ -22,6 +28,7 @@ class LogService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracking = UsageTrackingService.instance
+    private val queryParser = LogQueryParser()
 
     fun liveChannel(projectId: Long): String = "log:live:$projectId"
 
@@ -207,27 +214,28 @@ class LogService {
         }
 
         if (!request.query.isNullOrBlank()) {
-            val tokens = request.query
-                .trim()
-                .split(Regex("\\s+"))
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-                .take(8)
-
-            if (tokens.isNotEmpty()) {
-                val tokenConditions = tokens.joinToString(" AND ") { token ->
-                    val escaped = escapeSql(token)
-                    "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+            // Use Datadog-compatible query parser
+            try {
+                val parsed = queryParser.parse(request.query)
+                if (parsed.rootNode != null) {
+                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
+                        logger.info { "Generated query condition from '${request.query}': $queryCondition" }
+                        conditions += "($queryCondition)"
+                    }
                 }
-                conditions += tokenConditions
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                val escaped = escapeSql(request.query)
+                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
             }
         }
 
         request.tags.forEach { (key, value) ->
-            if (key.isNotBlank()) {
-                val escapedKey = escapeSql(key)
-                val escapedValue = escapeSql(value)
-                conditions += "mapContains(tags, '$escapedKey') AND tags['$escapedKey'] = '$escapedValue'"
+            val condition = buildTagCondition(key, value)
+            if (condition.isNotBlank()) {
+                conditions += condition
             }
         }
 
@@ -236,6 +244,10 @@ class LogService {
         }
 
         val whereClause = conditions.joinToString(" AND ")
+        
+        // Log the complete WHERE clause for debugging
+        logger.info { "Executing log query with WHERE clause: $whereClause" }
+        
         val query = """
             SELECT
                 toString(log_id) AS log_id,
@@ -266,7 +278,9 @@ class LogService {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-            throw IllegalStateException("Failed to query logs: ${body.take(600)}")
+            logger.error("ClickHouse query failed. WHERE clause: $whereClause")
+            logger.error("Full query: $query")
+            throw IllegalStateException("Failed to query logs: ${body.take(1000)}")
         }
 
         val parsed = parseQueryRows(body)
@@ -303,6 +317,422 @@ class LogService {
             hasMore = hasMore,
             totalCount = totalCount
         )
+    }
+
+    fun autoInterval(fromMs: Long?, toMs: Long?): String {
+        if (fromMs == null || toMs == null) return "1h"
+        val rangeMs = toMs - fromMs
+        return when {
+            rangeMs <= 3_600_000L -> "1m"           // ≤1h → 1m
+            rangeMs <= 21_600_000L -> "5m"          // ≤6h → 5m
+            rangeMs <= 86_400_000L -> "15m"         // ≤24h → 15m
+            rangeMs <= 604_800_000L -> "1h"         // ≤7d → 1h
+            else -> "1d"                            // >7d → 1d
+        }
+    }
+
+    private fun intervalToClickHouse(interval: String): String {
+        return when (interval) {
+            "1m" -> "1 MINUTE"
+            "5m" -> "5 MINUTE"
+            "15m" -> "15 MINUTE"
+            "1h" -> "1 HOUR"
+            "1d" -> "1 DAY"
+            else -> "1 HOUR"
+        }
+    }
+
+    suspend fun aggregateLogs(
+        projectId: Long,
+        from: String?,
+        to: String?,
+        interval: String?,
+        query: String?,
+        levels: List<String>,
+        service: String?,
+        environment: String?,
+        tags: Map<String, String>,
+        groupBy: String?
+    ): LogAggregateResponse {
+        val fromMs = parseTimeToMillis(from)
+        val toMs = parseTimeToMillis(to) ?: System.currentTimeMillis()
+        val resolvedInterval = if (interval.isNullOrBlank() || interval == "auto") {
+            autoInterval(fromMs, toMs)
+        } else interval
+        val chInterval = intervalToClickHouse(resolvedInterval)
+
+        val conditions = mutableListOf("project_id = $projectId")
+        if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
+        conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
+
+        if (!service.isNullOrBlank()) conditions += "service = '${escapeSql(service)}'"
+        if (!environment.isNullOrBlank()) conditions += "environment = '${escapeSql(environment)}'"
+        val normalizedLevels = levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
+        if (normalizedLevels.isNotEmpty()) {
+            val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
+            conditions += "level IN ($inClause)"
+        }
+        if (!query.isNullOrBlank()) {
+            // Use Datadog-compatible query parser
+            try {
+                val parsed = queryParser.parse(query)
+                if (parsed.rootNode != null) {
+                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
+                        conditions += "($queryCondition)"
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                val escaped = escapeSql(query)
+                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+            }
+        }
+        tags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value)
+            if (condition.isNotBlank()) {
+                conditions += condition
+            }
+        }
+
+        val whereClause = conditions.joinToString(" AND ")
+
+        val validGroupBy = groupBy?.takeIf { it in setOf("level", "service", "environment") }
+
+        val sql = if (validGroupBy != null) {
+            """
+            SELECT toStartOfInterval(timestamp, INTERVAL $chInterval) AS bucket,
+                   $validGroupBy AS group_value,
+                   count() AS cnt
+            FROM $clickhouseDb.logs
+            WHERE $whereClause
+            GROUP BY bucket, group_value
+            ORDER BY bucket
+            FORMAT JSONEachRow
+            """.trimIndent()
+        } else {
+            """
+            SELECT toStartOfInterval(timestamp, INTERVAL $chInterval) AS bucket,
+                   count() AS cnt
+            FROM $clickhouseDb.logs
+            WHERE $whereClause
+            GROUP BY bucket
+            ORDER BY bucket
+            FORMAT JSONEachRow
+            """.trimIndent()
+        }
+
+        val response = ClickHouseClient.execute(sql)
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            logger.warn { "Failed to aggregate logs: ${body.take(600)}" }
+            return LogAggregateResponse(buckets = emptyList(), totalCount = 0, interval = resolvedInterval)
+        }
+
+        val bucketMap = LinkedHashMap<String, MutableMap<String, Long>>()
+        var totalCount = 0L
+
+        body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
+            try {
+                val obj = json.parseToJsonElement(line).jsonObject
+                val bucketTs = obj["bucket"]?.jsonPrimitive?.content ?: return@forEach
+                val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
+                totalCount += cnt
+
+                val groups = bucketMap.getOrPut(bucketTs) { mutableMapOf() }
+                if (validGroupBy != null) {
+                    val groupValue = obj["group_value"]?.jsonPrimitive?.content ?: "unknown"
+                    groups[groupValue] = (groups[groupValue] ?: 0L) + cnt
+                } else {
+                    groups["_total"] = (groups["_total"] ?: 0L) + cnt
+                }
+            } catch (_: Exception) {}
+        }
+
+        val buckets = bucketMap.map { (ts, groups) ->
+            val count = groups.values.sum()
+            LogAggregateBucket(
+                timestamp = ts,
+                count = count,
+                groups = if (validGroupBy != null) groups else emptyMap()
+            )
+        }
+
+        return LogAggregateResponse(buckets = buckets, totalCount = totalCount, interval = resolvedInterval)
+    }
+
+    suspend fun topValues(
+        projectId: Long,
+        field: String,
+        limit: Int,
+        from: String?,
+        to: String?,
+        query: String?,
+        levels: List<String>,
+        service: String?,
+        environment: String?,
+        tags: Map<String, String>
+    ): LogTopResponse {
+        val conditions = mutableListOf("project_id = $projectId")
+        val fromMs = parseTimeToMillis(from)
+        if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
+        val toMs = parseTimeToMillis(to)
+        if (toMs != null) conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
+        if (!service.isNullOrBlank()) conditions += "service = '${escapeSql(service)}'"
+        if (!environment.isNullOrBlank()) conditions += "environment = '${escapeSql(environment)}'"
+        val normalizedLevels = levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
+        if (normalizedLevels.isNotEmpty()) {
+            val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
+            conditions += "level IN ($inClause)"
+        }
+        if (!query.isNullOrBlank()) {
+            // Use Datadog-compatible query parser
+            try {
+                val parsed = queryParser.parse(query)
+                if (parsed.rootNode != null) {
+                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
+                        conditions += "($queryCondition)"
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                val escaped = escapeSql(query)
+                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+            }
+        }
+        tags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value)
+            if (condition.isNotBlank()) {
+                conditions += condition
+            }
+        }
+
+        val whereClause = conditions.joinToString(" AND ")
+        val safeLimit = limit.coerceIn(1, 100)
+
+        // Determine the SQL column expression for the field
+        val columnExpr = when (field) {
+            "service", "level", "environment", "host", "container_name" -> field
+            else -> {
+                // Treat as tag key
+                val escapedKey = escapeSql(field)
+                "tags['$escapedKey']"
+            }
+        }
+
+        val sql = """
+            SELECT $columnExpr AS field_value, count() AS cnt
+            FROM $clickhouseDb.logs
+            WHERE $whereClause AND $columnExpr != ''
+            GROUP BY field_value
+            ORDER BY cnt DESC
+            LIMIT $safeLimit
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val response = ClickHouseClient.execute(sql)
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            logger.warn { "Failed to query top values: ${body.take(600)}" }
+            return LogTopResponse(field = field, values = emptyList(), totalCount = 0)
+        }
+
+        val values = mutableListOf<LogTopValue>()
+        body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
+            try {
+                val obj = json.parseToJsonElement(line).jsonObject
+                val value = obj["field_value"]?.jsonPrimitive?.content ?: return@forEach
+                val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
+                values += LogTopValue(value = value, count = cnt)
+            } catch (_: Exception) {}
+        }
+
+        // Get total count for percentage calculation
+        val totalSql = """
+            SELECT count() AS cnt FROM $clickhouseDb.logs WHERE $whereClause
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val totalResponse = ClickHouseClient.execute(totalSql)
+        val totalBody = totalResponse.bodyAsText()
+        val totalCount = try {
+            json.parseToJsonElement(totalBody.trim()).jsonObject["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
+        } catch (_: Exception) { 0L }
+
+        return LogTopResponse(field = field, values = values, totalCount = totalCount)
+    }
+
+    suspend fun exportCsv(
+        projectId: Long,
+        from: String?,
+        to: String?,
+        query: String?,
+        levels: List<String>,
+        service: String?,
+        environment: String?,
+        tags: Map<String, String>,
+        limit: Int
+    ): String {
+        val conditions = mutableListOf("project_id = $projectId")
+        val fromMs = parseTimeToMillis(from)
+        if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
+        val toMs = parseTimeToMillis(to)
+        if (toMs != null) conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
+        if (!service.isNullOrBlank()) conditions += "service = '${escapeSql(service)}'"
+        if (!environment.isNullOrBlank()) conditions += "environment = '${escapeSql(environment)}'"
+        val normalizedLevels = levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
+        if (normalizedLevels.isNotEmpty()) {
+            val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
+            conditions += "level IN ($inClause)"
+        }
+        if (!query.isNullOrBlank()) {
+            // Use Datadog-compatible query parser
+            try {
+                val parsed = queryParser.parse(query)
+                if (parsed.rootNode != null) {
+                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
+                        conditions += "($queryCondition)"
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                val escaped = escapeSql(query)
+                conditions += "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+            }
+        }
+        tags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value)
+            if (condition.isNotBlank()) {
+                conditions += condition
+            }
+        }
+
+        val whereClause = conditions.joinToString(" AND ")
+        val safeLimit = limit.coerceIn(1, 10_000)
+
+        val sql = """
+            SELECT
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp,
+                level, service, environment, host, message, body,
+                container_name, trace_id, span_id,
+                toJSONString(tags) AS tags
+            FROM $clickhouseDb.logs
+            WHERE $whereClause
+            ORDER BY timestamp DESC
+            LIMIT $safeLimit
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val response = ClickHouseClient.execute(sql)
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            throw IllegalStateException("Failed to export logs: ${body.take(600)}")
+        }
+
+        val sb = StringBuilder()
+        sb.appendLine("timestamp,level,service,environment,host,message,container_name,trace_id,span_id,tags")
+
+        body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
+            try {
+                val obj = json.parseToJsonElement(line).jsonObject
+                val csvRow = listOf(
+                    obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                    obj["level"]?.jsonPrimitive?.content ?: "",
+                    obj["service"]?.jsonPrimitive?.content ?: "",
+                    obj["environment"]?.jsonPrimitive?.content ?: "",
+                    obj["host"]?.jsonPrimitive?.content ?: "",
+                    obj["message"]?.jsonPrimitive?.content ?: "",
+                    obj["container_name"]?.jsonPrimitive?.content ?: "",
+                    obj["trace_id"]?.jsonPrimitive?.content ?: "",
+                    obj["span_id"]?.jsonPrimitive?.content ?: "",
+                    obj["tags"]?.jsonPrimitive?.content ?: "{}"
+                ).joinToString(",") { csvEscape(it) }
+                sb.appendLine(csvRow)
+            } catch (_: Exception) {}
+        }
+
+        return sb.toString()
+    }
+
+    private fun csvEscape(value: String): String {
+        if (value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r')) {
+            return "\"${value.replace("\"", "\"\"")}\""
+        }
+        return value
+    }
+
+    suspend fun getFilterOptionsWithCounts(projectId: Long, from: String?, to: String?): LogFilterOptionsWithCountsResponse {
+        val conditions = mutableListOf("project_id = $projectId")
+        val fromMs = parseTimeToMillis(from)
+        if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
+        val toMs = parseTimeToMillis(to)
+        if (toMs != null) conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
+        val whereClause = conditions.joinToString(" AND ")
+
+        val services = queryValueCounts(
+            """
+            SELECT service AS val, count() AS cnt
+            FROM $clickhouseDb.logs
+            WHERE $whereClause AND service != ''
+            GROUP BY val ORDER BY cnt DESC LIMIT 200
+            FORMAT JSONEachRow
+            """.trimIndent()
+        )
+
+        val environments = queryValueCounts(
+            """
+            SELECT environment AS val, count() AS cnt
+            FROM $clickhouseDb.logs
+            WHERE $whereClause AND environment != ''
+            GROUP BY val ORDER BY cnt DESC LIMIT 200
+            FORMAT JSONEachRow
+            """.trimIndent()
+        )
+
+        val tagKeys = queryDistinctLines(
+            """
+            SELECT DISTINCT tag_key
+            FROM (
+                SELECT arrayJoin(mapKeys(tags)) AS tag_key
+                FROM $clickhouseDb.logs
+                WHERE $whereClause
+            )
+            WHERE tag_key != ''
+            ORDER BY tag_key
+            LIMIT 200
+            FORMAT TSV
+            """.trimIndent()
+        )
+
+        return LogFilterOptionsWithCountsResponse(
+            services = services,
+            environments = environments,
+            levels = listOf("trace", "debug", "info", "warn", "error", "fatal"),
+            tagKeys = tagKeys
+        )
+    }
+
+    private suspend fun queryValueCounts(query: String): List<LogFilterOptionWithCount> {
+        val response = ClickHouseClient.execute(query)
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            logger.warn { "Failed to query value counts: ${body.take(600)}" }
+            return emptyList()
+        }
+        val results = mutableListOf<LogFilterOptionWithCount>()
+        body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
+            try {
+                val obj = json.parseToJsonElement(line).jsonObject
+                val value = obj["val"]?.jsonPrimitive?.content ?: return@forEach
+                val count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
+                results += LogFilterOptionWithCount(value = value, count = count)
+            } catch (_: Exception) {}
+        }
+        return results
     }
 
     suspend fun getFilterOptions(projectId: Long, from: String?, to: String?): LogFilterOptionsResponse {
@@ -366,7 +796,19 @@ class LogService {
         val escapedKey = escapeSql(key.trim())
         if (escapedKey.isBlank()) return LogTagValuesResponse(key = key, values = emptyList())
 
-        val conditions = mutableListOf("project_id = $projectId", "mapContains(tags, '$escapedKey')")
+        // Map status to level
+        val actualField = if (key == "status") "level" else key
+        
+        // Check if this is a top-level field or a tag
+        val isTopLevelField = actualField in topLevelFields
+        
+        val conditions = mutableListOf("project_id = $projectId")
+        
+        // Only add has() check for actual tags, not top-level fields
+        if (!isTopLevelField) {
+            conditions += "has(tags, '$escapedKey')"
+        }
+        
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) {
             conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
@@ -377,7 +819,21 @@ class LogService {
         }
         val whereClause = conditions.joinToString(" AND ")
 
-        val values = queryDistinctLines(
+        // Build the SELECT query based on field type
+        val query = if (isTopLevelField) {
+            // For top-level fields, select directly from the column
+            val enumFields = setOf("level", "source")
+            val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
+            """
+            SELECT DISTINCT $fieldRef AS tag_value
+            FROM $clickhouseDb.logs
+            WHERE $whereClause AND $fieldRef != ''
+            ORDER BY tag_value
+            LIMIT ${limit.coerceIn(1, 200)}
+            FORMAT TSV
+            """.trimIndent()
+        } else {
+            // For tags, access the tags map
             """
             SELECT DISTINCT tags['$escapedKey'] AS tag_value
             FROM $clickhouseDb.logs
@@ -386,7 +842,9 @@ class LogService {
             LIMIT ${limit.coerceIn(1, 200)}
             FORMAT TSV
             """.trimIndent()
-        )
+        }
+
+        val values = queryDistinctLines(query)
 
         return LogTagValuesResponse(key = key, values = values)
     }
@@ -753,6 +1211,56 @@ class LogService {
             ts to logId
         } catch (_: Exception) {
             null
+        }
+    }
+    
+    /**
+     * Check if a tag key/value looks like it contains Boolean operators.
+     * These should be in the query field instead.
+     */
+    private fun isTagMalformed(key: String, value: String): Boolean {
+        // Check for Boolean operators with various spacing
+        return key.contains(" OR", ignoreCase = true) ||
+               key.contains("OR ", ignoreCase = true) ||
+               key.contains(" AND", ignoreCase = true) ||
+               key.contains("AND ", ignoreCase = true) ||
+               key.startsWith("-") ||
+               value.contains(" OR", ignoreCase = true) ||
+               value.contains("OR ", ignoreCase = true) ||
+               value.contains(" AND", ignoreCase = true) ||
+               value.contains("AND ", ignoreCase = true)
+    }
+    
+    /**
+     * Build a SQL condition for a tag/field filter.
+     * Checks if the key is a top-level field or an actual tag.
+     */
+    internal fun buildTagCondition(key: String, value: String): String {
+        if (key.isBlank()) return ""
+        
+        // Ignore malformed tags that contain Boolean operators
+        if (isTagMalformed(key, value)) {
+            logger.warn { "Ignoring malformed tag with Boolean operators: $key=$value" }
+            return ""
+        }
+        
+        val escapedKey = escapeSql(key)
+        val escapedValue = escapeSql(value)
+        
+        // Map status to level
+        val actualField = if (key == "status") "level" else key
+        
+        // Enum8 columns need toString() cast for string comparison
+        val enumFields = setOf("level", "source")
+        
+        // Check if this is a top-level field
+        return if (actualField in topLevelFields) {
+            // Use toString() for Enum8 fields
+            val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
+            "$fieldRef = '$escapedValue'"
+        } else {
+            // Use has() for actual tags in the tags map
+            "has(tags, '$escapedKey') AND tags['$escapedKey'] = '$escapedValue'"
         }
     }
 }

@@ -3,6 +3,7 @@ package com.moneat.services
 import com.moneat.models.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -12,14 +13,30 @@ import kotlin.test.*
 class AuthServiceEmailVerificationTest {
     private val authService = AuthService()
 
+    companion object {
+        private var dbInitialized = false
+    }
+
     @BeforeTest
     fun setupDatabase() {
-        Database.connect(
-            url = "jdbc:h2:mem:moneat_email_verification_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver"
-        )
+        // Initialize DB connection and schema once per test class
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_email_verification;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            transaction {
+                SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances)
+            }
+            dbInitialized = true
+        }
+        
+        // Clean up any existing test data from previous tests
         transaction {
-            SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances)
+            UserLegalAcceptances.deleteAll()
+            Memberships.deleteAll()
+            Users.deleteAll()
+            Organizations.deleteAll()
         }
     }
 

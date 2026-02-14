@@ -1,0 +1,168 @@
+import {useMemo} from 'react'
+import {Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
+import type {LogAggregateBucket} from '@/lib/api'
+
+interface LogHistogramProps {
+  buckets: LogAggregateBucket[]
+  grouped?: boolean
+  height?: number
+  onBucketClick?: (timestamp: string) => void
+}
+
+interface HistogramPoint {
+  timestamp: string
+  timestampMs: number
+  total: number
+  [key: string]: string | number
+}
+
+const LEVEL_COLORS: Record<string, string> = {
+  fatal: '#e11d48',
+  error: '#ef4444',
+  warn: '#f59e0b',
+  info: '#6366f1',
+  debug: '#14b8a6',
+  trace: '#a1a1aa',
+}
+
+const GROUP_COLORS = ['#ef4444', '#f59e0b', '#6366f1', '#14b8a6', '#a855f7', '#22c55e', '#ec4899', '#0ea5e9']
+
+const levelOrder = ['fatal', 'error', 'warn', 'info', 'debug', 'trace']
+
+function colorForGroup(key: string): string {
+  if (LEVEL_COLORS[key]) return LEVEL_COLORS[key]
+  let hash = 0
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0
+  }
+  return GROUP_COLORS[hash % GROUP_COLORS.length]
+}
+
+function formatAxisTime(ts: number, totalRangeMs: number): string {
+  const date = new Date(ts)
+  if (totalRangeMs <= 21_600_000) {
+    return date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})
+  }
+  if (totalRangeMs <= 172_800_000) {
+    return date.toLocaleString('en-US', {day: 'numeric', hour: '2-digit'})
+  }
+  return date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
+}
+
+function formatTooltipTime(ts: number): string {
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export function LogHistogram({buckets, grouped = true, height = 120, onBucketClick}: LogHistogramProps) {
+  const {chartData, groupKeys, totalRangeMs} = useMemo(() => {
+    const keys = new Set<string>()
+    const data: HistogramPoint[] = buckets.map((b) => {
+      const point: HistogramPoint = {
+        timestamp: b.timestamp,
+        timestampMs: new Date(b.timestamp).getTime(),
+        total: b.count,
+      }
+      if (grouped && Object.keys(b.groups).length > 0) {
+        for (const [key, val] of Object.entries(b.groups)) {
+          keys.add(key)
+          point[key] = val
+        }
+      }
+      return point
+    })
+    const sortedKeys = [...keys].sort((a, b) => {
+      const ai = levelOrder.indexOf(a)
+      const bi = levelOrder.indexOf(b)
+      if (ai === -1 && bi === -1) return a.localeCompare(b)
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+    })
+    const firstTs = data[0]?.timestampMs ?? 0
+    const lastTs = data[data.length - 1]?.timestampMs ?? firstTs
+    return {
+      chartData: data,
+      groupKeys: sortedKeys,
+      totalRangeMs: Math.max(lastTs - firstTs, 60_000),
+    }
+  }, [buckets, grouped])
+
+  if (chartData.length === 0) return null
+
+  const useGroups = grouped && groupKeys.length > 0
+  const tickCount = Math.min(8, Math.max(3, Math.floor(chartData.length / 12)))
+
+  return (
+    <div className="w-full" style={{height}}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={chartData}
+          margin={{top: 2, right: 8, left: 0, bottom: 0}}
+          barGap={1}
+          barCategoryGap="10%"
+          onClick={(event) => {
+            const point = event?.activePayload?.[0]?.payload as HistogramPoint | undefined
+            if (point?.timestamp && onBucketClick) onBucketClick(point.timestamp)
+          }}
+        >
+          <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted/50" />
+          <XAxis
+            dataKey="timestampMs"
+            type="number"
+            domain={['dataMin', 'dataMax']}
+            tickFormatter={(ts) => formatAxisTime(ts, totalRangeMs)}
+            fontSize={10}
+            height={18}
+            minTickGap={40}
+            tickCount={tickCount}
+            tickLine={false}
+            axisLine={false}
+            className="fill-muted-foreground"
+          />
+          <YAxis
+            allowDecimals={false}
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+            width={35}
+            className="fill-muted-foreground"
+          />
+          <Tooltip
+            labelFormatter={(ts) => formatTooltipTime(ts as number)}
+            formatter={(value: number, name: string) => [value.toLocaleString(), name === 'total' ? 'logs' : name]}
+            contentStyle={{
+              backgroundColor: 'hsl(var(--popover) / 0.95)',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: '6px',
+              color: 'hsl(var(--popover-foreground))',
+              padding: '8px 12px',
+              fontSize: '12px',
+            }}
+          />
+          {useGroups ? (
+            groupKeys.map((key) => (
+              <Bar
+                key={key}
+                dataKey={key}
+                stackId="1"
+                fill={colorForGroup(key)}
+                isAnimationActive={false}
+                radius={[1, 1, 0, 0]}
+              />
+            ))
+          ) : (
+            <Bar
+              dataKey="total"
+              fill={LEVEL_COLORS.error}
+              isAnimationActive={false}
+              radius={[1, 1, 0, 0]}
+            />
+          )}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}

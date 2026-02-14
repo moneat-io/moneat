@@ -283,13 +283,21 @@ export function LogSearchBar({
             {query && (
               <Badge
                 variant="secondary"
-                className="gap-1 font-mono text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20"
+                className="gap-1 font-mono text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20"
+                onClick={() => {
+                  setInputValue(query)
+                  onQueryChange('')
+                  inputRef.current?.focus()
+                }}
               >
                 {query}
                 <button
                   type="button"
-                  onClick={clearQuery}
-                  className="ml-0.5 rounded-full hover:bg-blue-500/20"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    clearQuery()
+                  }}
+                  className="ml-0.5 rounded-full hover:bg-blue-500/30"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -302,17 +310,26 @@ export function LogSearchBar({
                 key={`${filter.key}-${filter.value}-${index}`}
                 variant="outline"
                 className={cn(
-                  'gap-1 font-mono text-xs',
+                  'gap-1 font-mono text-xs cursor-pointer hover:opacity-80',
                   filter.exclude && 'line-through opacity-75',
                   facetChipColors[filter.key] || 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
                 )}
+                onClick={() => {
+                  const token = `${filter.exclude ? '-' : ''}${filter.key}:${filter.value}`
+                  setInputValue(token)
+                  removeFacetFilter(index)
+                  inputRef.current?.focus()
+                }}
               >
                 {filter.exclude && '- '}
                 {filter.key}:{filter.value}
                 <button
                   type="button"
-                  onClick={() => removeFacetFilter(index)}
-                  className="ml-0.5 rounded-full hover:bg-foreground/10"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeFacetFilter(index)
+                  }}
+                  className="ml-0.5 rounded-full hover:bg-foreground/20"
                 >
                   <X className="h-3 w-3" />
                 </button>

@@ -1,15 +1,20 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import {api, formatErrorForLogging, type LogEntry, type LogFilterOptions} from '@/lib/api'
+import {api, formatErrorForLogging, type LogEntry, type LogFilterOptionsWithCounts} from '@/lib/api'
 import {type FacetFilter, LEVEL_OPTIONS, LogSearchBar, TIME_PRESETS} from '@/components/logs/LogSearchBar'
 import {TagFacets} from '@/components/logs/TagFacets'
 import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
 import {LiveTailToggle} from '@/components/logs/LiveTailToggle'
 import {LogSetupGuide} from '@/components/logs/LogSetupGuide'
+import {LogVizTabs, type LogVizMode} from '@/components/logs/LogVizTabs'
+import {LogHistogram} from '@/components/logs/LogHistogram'
+import {LogTopList} from '@/components/logs/LogTopList'
+import {LogPieChart} from '@/components/logs/LogPieChart'
+import {LogAggregateTable} from '@/components/logs/LogAggregateTable'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {cn} from '@/lib/utils'
-import {ChevronLeft, ChevronRight, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
+import {ChevronDown, ChevronLeft, ChevronRight, Download, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
 import {useQuery} from '@tanstack/react-query'
 
 interface LogExplorerProps {
@@ -67,6 +72,35 @@ function formatLiveTime(value: string): string {
   return `${base}.${ms}`
 }
 
+function formatLogCount(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
+function toDateTimeLocalValue(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function intervalToMs(interval: string | undefined): number {
+  switch (interval) {
+    case '1m':
+      return 60_000
+    case '5m':
+      return 5 * 60_000
+    case '15m':
+      return 15 * 60_000
+    case '1h':
+      return 60 * 60_000
+    case '1d':
+      return 24 * 60 * 60_000
+    default:
+      return 60 * 60_000
+  }
+}
+
 export function LogExplorer({
   projectId,
   systemId,
@@ -99,6 +133,11 @@ export function LogExplorer({
 
   // Facets sidebar
   const [showFacets, setShowFacets] = useState(enableFacets)
+
+  // Visualization mode
+  const [vizMode, setVizMode] = useState<LogVizMode>('list')
+  const [groupBy, setGroupBy] = useState<string>('level')
+  const [topField, setTopField] = useState<string>('service')
 
   // Live tail state
   const [liveTailEnabled, setLiveTailEnabled] = useState(false)
@@ -162,15 +201,14 @@ export function LogExplorer({
     setCursorHistory([])
   }, [projectId, systemId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
 
-  // Fetch filter options
+  // Fetch filter options (with counts)
   const {data: filterOptions} = useQuery({
     queryKey: ['log-filters', projectId, systemId, timeRange.from, timeRange.to],
     queryFn: async () => {
       if (projectId) {
         return api.getProjectLogFilters(projectId, {from: timeRange.from, to: timeRange.to})
       }
-      // TODO: Implement getSystemLogFilters if available
-      return {services: [], environments: [], levels: [], tagKeys: []} as LogFilterOptions
+      return {services: [], environments: [], levels: [], tagKeys: []} as LogFilterOptionsWithCounts
     },
     enabled: Boolean(projectId || systemId) && enableFacets,
   })
@@ -221,6 +259,80 @@ export function LogExplorer({
 
   const logs = logPage?.logs ?? []
   const totalCount = logPage?.totalCount ?? null
+
+  // Aggregate query for histogram - always enabled to show above all modes
+  const {data: aggregateData} = useQuery({
+    queryKey: [
+      'log-aggregate', projectId, timeRange.from, timeRange.to,
+      query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      JSON.stringify(derivedFilters.tags), groupBy,
+    ],
+    queryFn: () => {
+      if (!projectId) throw new Error('Missing projectId')
+      return api.getProjectLogAggregate(projectId, {
+        from: timeRange.from,
+        to: timeRange.to,
+        query: query || undefined,
+        levels: hasCustomLevelFilter ? levels : undefined,
+        service: derivedFilters.service,
+        environment: derivedFilters.environment,
+        tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+        groupBy,
+      })
+    },
+    enabled: Boolean(projectId),
+  })
+
+  // Top values query for toplist/pie/table views
+  const {data: topData} = useQuery({
+    queryKey: [
+      'log-top', projectId, topField, timeRange.from, timeRange.to,
+      query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      JSON.stringify(derivedFilters.tags),
+    ],
+    queryFn: () => {
+      if (!projectId) throw new Error('Missing projectId')
+      return api.getProjectLogTop(projectId, {
+        field: topField,
+        limit: 20,
+        from: timeRange.from,
+        to: timeRange.to,
+        query: query || undefined,
+        levels: hasCustomLevelFilter ? levels : undefined,
+        service: derivedFilters.service,
+        environment: derivedFilters.environment,
+        tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+      })
+    },
+    enabled: Boolean(projectId) && (vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table'),
+  })
+
+  const handleExportCsv = useCallback(async () => {
+    if (!projectId) return
+    try {
+      await api.downloadProjectLogExport(projectId, {
+        from: timeRange.from,
+        to: timeRange.to,
+        query: query || undefined,
+        levels: hasCustomLevelFilter ? levels : undefined,
+        service: derivedFilters.service,
+        environment: derivedFilters.environment,
+        tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+      })
+    } catch (error) {
+      console.error('CSV export failed:', formatErrorForLogging(error))
+    }
+  }, [projectId, timeRange, query, hasCustomLevelFilter, levels, derivedFilters])
+
+  const handleHistogramBucketClick = useCallback((bucketStartIso: string) => {
+    const bucketStart = new Date(bucketStartIso)
+    if (Number.isNaN(bucketStart.getTime())) return
+    const bucketMs = intervalToMs(aggregateData?.interval)
+    const bucketEnd = new Date(bucketStart.getTime() + bucketMs)
+    setTimePreset('custom')
+    setCustomFrom(toDateTimeLocalValue(bucketStart))
+    setCustomTo(toDateTimeLocalValue(bucketEnd))
+  }, [aggregateData?.interval])
 
   // Open detail when selecting a log
   const handleSelectLog = useCallback((log: LogEntry) => {
@@ -382,8 +494,8 @@ export function LogExplorer({
               levels={levels}
               onToggleLevel={toggleLevel}
               availableTagKeys={filterOptions?.tagKeys ?? []}
-              availableServices={filterOptions?.services ?? []}
-              availableEnvironments={filterOptions?.environments ?? []}
+              availableServices={(filterOptions?.services ?? []).map(s => s.value)}
+              availableEnvironments={(filterOptions?.environments ?? []).map(e => e.value)}
               timePreset={timePreset}
               onTimePresetChange={setTimePreset}
               customFrom={customFrom}
@@ -419,8 +531,8 @@ export function LogExplorer({
 
           {/* Log content area */}
           <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-            {/* Facets toggle + status bar */}
-            <div className="flex h-11 items-center gap-2 border-b bg-card/30 px-3">
+            {/* Toolbar: facets toggle, viz tabs, group by, export, pagination */}
+            <div className="flex items-center gap-2 border-b bg-card/30 px-3 py-1.5">
               {enableFacets && (
                 <button
                   type="button"
@@ -436,60 +548,161 @@ export function LogExplorer({
                 </button>
               )}
 
+              <LogVizTabs mode={vizMode} onModeChange={setVizMode} />
+
+              {/* Group By / Field selector for non-list views */}
+              {(vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table') && (
+                <div className="relative">
+                  <select
+                    value={topField}
+                    onChange={(e) => setTopField(e.target.value)}
+                    className="h-7 appearance-none rounded-md border bg-background px-2 pr-6 text-xs"
+                  >
+                    <option value="service">service</option>
+                    <option value="level">level</option>
+                    <option value="environment">environment</option>
+                    <option value="host">host</option>
+                    <option value="container_name">container</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+              )}
+
+              {aggregateData && aggregateData.buckets.length > 0 && (
+                <div className="relative">
+                  <select
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value)}
+                    className="h-7 appearance-none rounded-md border bg-background px-2 pr-6 text-xs"
+                  >
+                    <option value="level">Group by level</option>
+                    <option value="service">Group by service</option>
+                    <option value="environment">Group by environment</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+              )}
+
               <div className="flex-1 text-xs text-muted-foreground">
                 {isLoading ? (
                   <span className="flex items-center gap-1.5">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    Loading logs...
+                    Loading...
                   </span>
                 ) : (
                   <span>
-                    {logs.length} log{logs.length !== 1 ? 's' : ''} shown
+                    {aggregateData?.totalCount != null
+                      ? `${formatLogCount(aggregateData.totalCount)} results found`
+                      : `${logs.length} result${logs.length !== 1 ? 's' : ''} shown`}
                     {isFetching && (
                       <span className="ml-2 inline-flex items-center gap-1">
                         <Loader2 className="h-3 w-3 animate-spin" />
-                        refreshing
                       </span>
                     )}
                   </span>
                 )}
               </div>
 
-              {/* Pagination */}
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handlePreviousPage}
-                  disabled={cursorHistory.length === 0}
-                  className="h-7 w-7 p-0"
-                >
-                  <ChevronLeft className="h-4 w-4" />
+              {/* CSV Export */}
+              {projectId && (
+                <Button variant="ghost" size="sm" onClick={handleExportCsv} className="h-7 gap-1.5 text-xs">
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleNextPage}
-                  disabled={!logPage?.hasMore}
-                  className="h-7 w-7 p-0"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+              )}
+
+              {/* Pagination (only in list mode) */}
+              {vizMode === 'list' && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handlePreviousPage}
+                    disabled={cursorHistory.length === 0}
+                    className="h-7 w-7 p-0"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleNextPage}
+                    disabled={!logPage?.hasMore}
+                    className="h-7 w-7 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
 
-            {/* Log table or empty state */}
+            {/* Histogram - always visible above all modes (like Datadog) */}
+            {aggregateData && aggregateData.buckets.length > 0 && (
+              <div className="shrink-0 border-b bg-card/50">
+                <div className="px-3 pt-2 pb-1.5">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground">Log volume ({aggregateData.interval} buckets)</span>
+                    <span className="text-[10px] text-muted-foreground">Click a bar to zoom</span>
+                  </div>
+                  <LogHistogram
+                    buckets={aggregateData.buckets}
+                    grouped={true}
+                    height={108}
+                    onBucketClick={handleHistogramBucketClick}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Additional visualizations - shown compactly above list */}
+            {(vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table') && topData && (
+              <div className="shrink-0 border-b bg-card/50">
+                <div className="px-3 py-2">
+                  {vizMode === 'toplist' && (
+                    <div className="max-h-64 overflow-y-auto">
+                      <LogTopList
+                        values={topData.values.slice(0, 10)}
+                        totalCount={topData.totalCount}
+                        field={topField}
+                        onValueClick={(value) => {
+                          setFacetFilters(prev => [...prev.filter(f => f.key !== topField), {key: topField, value, exclude: false}])
+                        }}
+                      />
+                    </div>
+                  )}
+                  {vizMode === 'pie' && (
+                    <div className="max-h-72">
+                      <LogPieChart values={topData.values} field={topField} />
+                    </div>
+                  )}
+                  {vizMode === 'table' && (
+                    <div className="max-h-64 overflow-y-auto">
+                      <LogAggregateTable
+                        values={topData.values}
+                        totalCount={topData.totalCount}
+                        field={topField}
+                        onValueClick={(value) => {
+                          setFacetFilters(prev => [...prev.filter(f => f.key !== topField), {key: topField, value, exclude: false}])
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Content area - logs list */}
             <div className="flex-1 overflow-y-auto" ref={logContainerRef}>
               {showEmptyState ? (
                 <div className="px-3 pb-6 sm:px-4 sm:pb-8">
                   {dsn ? (
-                     <LogSetupGuide dsn={dsn} sdkVersions={sdkVersions} />
+                    <LogSetupGuide dsn={dsn} sdkVersions={sdkVersions} />
                   ) : (
                     <div className="flex items-center justify-center py-24">
-                       <div className="text-center">
-                         <TerminalSquare className="mx-auto h-10 w-10 text-muted-foreground/30" />
-                         <p className="mt-3 text-sm font-medium text-muted-foreground">No logs found</p>
-                       </div>
+                      <div className="text-center">
+                        <TerminalSquare className="mx-auto h-10 w-10 text-muted-foreground/30" />
+                        <p className="mt-3 text-sm font-medium text-muted-foreground">No logs found</p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -515,6 +728,7 @@ export function LogExplorer({
                   logs={logs}
                   selectedLogId={selectedLog?.logId}
                   onSelectLog={handleSelectLog}
+                  compact={true}
                 />
               )}
 

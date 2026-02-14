@@ -5,6 +5,7 @@ import com.moneat.models.PricingTierConfigs
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -15,15 +16,27 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class PricingTierServiceFeatureFlagsTest {
+    companion object {
+        private var dbInitialized = false
+    }
+    
     @BeforeTest
     fun setupDatabase() {
-        Database.connect(
-            url = "jdbc:h2:mem:moneat_pricing_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver"
-        )
-
+        // Initialize DB connection and schema once per test class
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_pricing;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            transaction {
+                SchemaUtils.create(PricingTierConfigs)
+            }
+            dbInitialized = true
+        }
+        
+        // Clean up any existing test data from previous tests
         transaction {
-            SchemaUtils.create(PricingTierConfigs)
+            PricingTierConfigs.deleteAll()
         }
     }
 

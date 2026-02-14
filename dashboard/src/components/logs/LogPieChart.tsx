@@ -1,0 +1,71 @@
+import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts'
+import type {LogTopValue} from '@/lib/api'
+
+interface LogPieChartProps {
+  values: LogTopValue[]
+  field: string
+  height?: number
+}
+
+const COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  '#6366f1',
+  '#14b8a6',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+]
+
+export function LogPieChart({values, field, height = 240}: LogPieChartProps) {
+  const chartData = values.slice(0, 8).map((v) => ({name: v.value, value: v.count}))
+
+  if (chartData.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+        No data for field "{field}"
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-2 py-2">
+      <div className="mb-1 px-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+        Distribution by {field}
+      </div>
+      <ResponsiveContainer width="100%" height={height}>
+        <PieChart>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            innerRadius={50}
+            outerRadius={80}
+            fill="#8884d8"
+            paddingAngle={2}
+            dataKey="value"
+            label={({name, percent}) => `${name} (${(percent * 100).toFixed(0)}%)`}
+          >
+            {chartData.map((_, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            contentStyle={{
+              backgroundColor: 'hsl(var(--popover) / 0.95)',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: '6px',
+              color: 'hsl(var(--popover-foreground))',
+              padding: '6px 10px',
+              fontSize: '11px',
+            }}
+          />
+          <Legend wrapperStyle={{fontSize: '10px'}} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}

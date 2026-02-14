@@ -144,3 +144,44 @@ data class LogTailFilters(
     val service: String? = null,
     val environment: String? = null
 )
+
+@Serializable
+data class LogAggregateBucket(
+    val timestamp: String,
+    val count: Long,
+    val groups: Map<String, Long> = emptyMap()
+)
+
+@Serializable
+data class LogAggregateResponse(
+    val buckets: List<LogAggregateBucket>,
+    @SerialName("total_count") val totalCount: Long,
+    val interval: String
+)
+
+@Serializable
+data class LogTopValue(
+    val value: String,
+    val count: Long
+)
+
+@Serializable
+data class LogTopResponse(
+    val field: String,
+    val values: List<LogTopValue>,
+    @SerialName("total_count") val totalCount: Long
+)
+
+@Serializable
+data class LogFilterOptionWithCount(
+    val value: String,
+    val count: Long
+)
+
+@Serializable
+data class LogFilterOptionsWithCountsResponse(
+    val services: List<LogFilterOptionWithCount>,
+    val environments: List<LogFilterOptionWithCount>,
+    val levels: List<String>,
+    @SerialName("tag_keys") val tagKeys: List<String>
+)

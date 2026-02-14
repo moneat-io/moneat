@@ -7,6 +7,7 @@ interface LogTableProps {
   selectedLogId?: string | null
   onSelectLog: (log: LogEntry) => void
   emptyMessage?: string
+  compact?: boolean
 }
 
 const levelStyles: Record<string, string> = {
@@ -54,7 +55,7 @@ function formatRelativeTime(value: string): string {
   return `${Math.floor(diffMs / 86_400_000)}d ago`
 }
 
-export function LogTable({logs, selectedLogId, onSelectLog}: LogTableProps) {
+export function LogTable({logs, selectedLogId, onSelectLog, compact = true}: LogTableProps) {
   if (logs.length === 0) {
     return null // Empty state is handled by parent
   }
@@ -68,15 +69,17 @@ export function LogTable({logs, selectedLogId, onSelectLog}: LogTableProps) {
             <col className="w-[1%]" />
             <col className="w-[1%]" />
             <col className="w-[1%]" />
+            <col className="w-[1%]" />
             <col />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
             <tr className="border-b text-left">
               <th className="w-[3px] p-0" />
-              <th className="w-[1%] whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Timestamp</th>
-              <th className="w-[1%] whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Level</th>
-              <th className="w-[1%] whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Service</th>
-              <th className="w-full px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Message</th>
+              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Date</th>
+              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Level</th>
+              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Host</th>
+              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Service</th>
+              <th className={cn("w-full px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Content</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -98,30 +101,46 @@ export function LogTable({logs, selectedLogId, onSelectLog}: LogTableProps) {
                   onClick={() => onSelectLog(log)}
                 >
                   <td className={cn('w-[3px] p-0 border-l-[3px]', levelBorderColors[normalizedLevel] || 'border-l-transparent')} />
-                  <td className="whitespace-nowrap px-2 py-1.5">
-                    <div className="flex flex-col">
-                      <span className="font-mono text-xs text-foreground/80">{formatTimestamp(log.timestamp)}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground/60">{formatRelativeTime(log.timestamp)}</span>
-                    </div>
+                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                    {compact ? (
+                      <span className="font-mono text-[11px] text-foreground/80">{formatTimestamp(log.timestamp)}</span>
+                    ) : (
+                      <div className="flex flex-col">
+                        <span className="font-mono text-xs text-foreground/80">{formatTimestamp(log.timestamp)}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground/60">{formatRelativeTime(log.timestamp)}</span>
+                      </div>
+                    )}
                   </td>
-                  <td className="whitespace-nowrap px-2 py-1.5">
+                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
                     <Badge
                       variant="outline"
-                      className={cn('font-mono text-[10px] uppercase px-1.5 py-0', levelStyles[normalizedLevel] || levelStyles.info)}
+                      className={cn(
+                        'font-mono uppercase px-1.5 py-0',
+                        compact ? 'text-[9px]' : 'text-[10px]',
+                        levelStyles[normalizedLevel] || levelStyles.info
+                      )}
                     >
                       {normalizedLevel}
                     </Badge>
                   </td>
-                  <td className="whitespace-nowrap px-2 py-1.5">
-                    {log.service ? (
-                      <span className="rounded bg-muted/80 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">{log.service}</span>
+                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                    {log.host ? (
+                      <span className={cn("rounded bg-muted/80 px-1.5 py-0.5 font-mono text-muted-foreground", compact ? "text-[11px]" : "text-xs")}>{log.host}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground/40">-</span>
                     )}
                   </td>
-                  <td className="min-w-0 px-2 py-1.5">
+                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                    {log.service ? (
+                      <span className={cn("rounded bg-muted/80 px-1.5 py-0.5 font-mono text-muted-foreground", compact ? "text-[11px]" : "text-xs")}>{log.service}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/40">-</span>
+                    )}
+                  </td>
+                  <td className={cn("min-w-0 px-2", compact ? "py-1" : "py-1.5")}>
                     <span className={cn(
-                      'line-clamp-2 break-all font-mono text-xs leading-snug',
+                      'break-all font-mono leading-snug',
+                      compact ? 'text-[11px] line-clamp-1' : 'text-xs line-clamp-2',
                       normalizedLevel === 'error' || normalizedLevel === 'fatal'
                         ? 'text-foreground'
                         : 'text-foreground/80'

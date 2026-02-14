@@ -6,15 +6,24 @@ import {Checkbox} from '@/components/ui/checkbox'
 import {ChevronRight, Minus, Tag} from 'lucide-react'
 import type {FacetFilter} from './LogSearchBar'
 
+import type {LogFilterOptionWithCount} from '@/lib/api'
+
 interface TagFacetsProps {
   projectId: number
   availableTagKeys: string[]
-  availableServices: string[]
-  availableEnvironments: string[]
+  availableServices: LogFilterOptionWithCount[]
+  availableEnvironments: LogFilterOptionWithCount[]
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   from?: string
   to?: string
+}
+
+function formatFacetCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  if (n === 0) return ''
+  return String(n)
 }
 
 function FacetSection({
@@ -26,7 +35,7 @@ function FacetSection({
   color,
 }: {
   title: string
-  values: string[]
+  values: LogFilterOptionWithCount[]
   facetKey: string
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
@@ -101,11 +110,11 @@ function FacetSection({
 
       {expanded && (
         <div className="space-y-0.5 px-2 pb-2">
-          {values.map((value) => {
-            const state = getFilterState(value)
+          {values.map((item) => {
+            const state = getFilterState(item.value)
             return (
               <div
-                key={value}
+                key={item.value}
                 className={cn(
                   'group flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent/50',
                   state === 'include' && 'bg-primary/5',
@@ -114,7 +123,7 @@ function FacetSection({
               >
                 <Checkbox
                   checked={state === 'include'}
-                  onCheckedChange={() => toggleFilter(value)}
+                  onCheckedChange={() => toggleFilter(item.value)}
                   className={cn(
                     'h-3.5 w-3.5',
                     state === 'exclude' && 'border-red-500 data-[state=checked]:bg-red-500'
@@ -122,18 +131,23 @@ function FacetSection({
                 />
                 <button
                   type="button"
-                  onClick={() => toggleFilter(value)}
+                  onClick={() => toggleFilter(item.value)}
                   className={cn(
                     'flex-1 truncate text-left font-mono text-xs',
                     state === 'exclude' && 'line-through text-muted-foreground'
                   )}
-                  title={value}
+                  title={item.value}
                 >
-                  {value}
+                  {item.value}
                 </button>
+                {item.count > 0 && (
+                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground/60">
+                    {formatFacetCount(item.count)}
+                  </span>
+                )}
                 <button
                   type="button"
-                  onClick={(e) => excludeFilter(value, e)}
+                  onClick={(e) => excludeFilter(item.value, e)}
                   title={state === 'exclude' ? 'Remove exclusion' : 'Exclude this value'}
                   className={cn(
                     'shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100',

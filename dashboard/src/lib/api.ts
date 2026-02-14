@@ -130,6 +130,8 @@ interface TransactionDetail {
 interface Span {
   spanId: string
   parentSpanId?: string | null
+  traceId?: string | null
+  transactionId?: string | null
   op: string
   description: string
   startTimestamp: number
@@ -137,11 +139,26 @@ interface Span {
   duration: number
   status?: string
   tags: Record<string, string>
+  data?: string | null
 }
 
 interface TransactionWithSpans {
   transaction: TransactionDetail
   spans: Span[]
+}
+
+interface TraceDetail {
+  traceId: string
+  projectId: number
+  spans: Span[]
+  startTimestamp: number
+  endTimestamp: number
+  duration: number
+}
+
+interface SpanDetail {
+  span: Span
+  transaction: TransactionDetail | null
 }
 
 interface SlowTransaction {
@@ -339,6 +356,41 @@ interface LogFilterOptions {
   environments: string[]
   levels: string[]
   tagKeys: string[]
+}
+
+interface LogFilterOptionWithCount {
+  value: string
+  count: number
+}
+
+interface LogFilterOptionsWithCounts {
+  services: LogFilterOptionWithCount[]
+  environments: LogFilterOptionWithCount[]
+  levels: string[]
+  tagKeys: string[]
+}
+
+interface LogAggregateBucket {
+  timestamp: string
+  count: number
+  groups: Record<string, number>
+}
+
+interface LogAggregateResponse {
+  buckets: LogAggregateBucket[]
+  totalCount: number
+  interval: string
+}
+
+interface LogTopValue {
+  value: string
+  count: number
+}
+
+interface LogTopResponse {
+  field: string
+  values: LogTopValue[]
+  totalCount: number
 }
 
 interface SdkVersionsResponse {
@@ -1947,7 +1999,7 @@ class ApiClient {
   async getProjectLogFilters(
     projectId: number,
     options: { from?: string; to?: string } = {}
-  ): Promise<LogFilterOptions> {
+  ): Promise<LogFilterOptionsWithCounts> {
     const params = new URLSearchParams()
     if (options.from) params.set('from', options.from)
     if (options.to) params.set('to', options.to)
@@ -1955,9 +2007,14 @@ class ApiClient {
     const response = await this.request<any>(
       `${API_BASE}/projects/${projectId}/logs/filters${query ? `?${query}` : ''}`
     )
+    // Support both old format (string[]) and new format (object with count)
+    const mapServices = (arr: any[]) =>
+      arr.map((item: any) =>
+        typeof item === 'string' ? { value: item, count: 0 } : { value: item.value, count: item.count ?? 0 }
+      )
     return {
-      services: response.services ?? [],
-      environments: response.environments ?? [],
+      services: mapServices(response.services ?? []),
+      environments: mapServices(response.environments ?? []),
       levels: response.levels ?? [],
       tagKeys: response.tagKeys ?? response.tag_keys ?? [],
     }
@@ -2004,6 +2061,130 @@ class ApiClient {
     return new EventSource(`${API_BASE}/projects/${projectId}/logs/tail?${params.toString()}`)
   }
 
+  private buildLogFilterParams(options: {
+    query?: string
+    levels?: string[]
+    service?: string
+    environment?: string
+    from?: string
+    to?: string
+    tags?: Record<string, string>
+  }): URLSearchParams {
+    const params = new URLSearchParams()
+    if (options.query) params.set('q', options.query)
+    if (options.levels && options.levels.length > 0) {
+      options.levels.forEach((level) => params.append('level', level))
+    }
+    if (options.service) params.set('service', options.service)
+    if (options.environment) params.set('environment', options.environment)
+    if (options.from) params.set('from', options.from)
+    if (options.to) params.set('to', options.to)
+    if (options.tags) {
+      Object.entries(options.tags).forEach(([key, value]) => {
+        if (key) params.append('tag', `${key}:${value}`)
+      })
+    }
+    return params
+  }
+
+  async getProjectLogAggregate(
+    projectId: number,
+    options: {
+      from?: string
+      to?: string
+      interval?: string
+      query?: string
+      levels?: string[]
+      service?: string
+      environment?: string
+      tags?: Record<string, string>
+      groupBy?: string
+    } = {}
+  ): Promise<LogAggregateResponse> {
+    const params = this.buildLogFilterParams(options)
+    if (options.interval) params.set('interval', options.interval)
+    if (options.groupBy) params.set('groupBy', options.groupBy)
+    const response = await this.request<any>(
+      `${API_BASE}/projects/${projectId}/logs/aggregate?${params.toString()}`
+    )
+    return {
+      buckets: (response.buckets ?? []).map((b: any) => ({
+        timestamp: b.timestamp,
+        count: b.count ?? 0,
+        groups: b.groups ?? {},
+      })),
+      totalCount: response.total_count ?? response.totalCount ?? 0,
+      interval: response.interval ?? 'auto',
+    }
+  }
+
+  async getProjectLogTop(
+    projectId: number,
+    options: {
+      field: string
+      limit?: number
+      from?: string
+      to?: string
+      query?: string
+      levels?: string[]
+      service?: string
+      environment?: string
+      tags?: Record<string, string>
+    }
+  ): Promise<LogTopResponse> {
+    const params = this.buildLogFilterParams(options)
+    params.set('field', options.field)
+    if (options.limit) params.set('limit', String(options.limit))
+    const response = await this.request<any>(
+      `${API_BASE}/projects/${projectId}/logs/top?${params.toString()}`
+    )
+    return {
+      field: response.field ?? options.field,
+      values: (response.values ?? []).map((v: any) => ({
+        value: v.value,
+        count: v.count ?? 0,
+      })),
+      totalCount: response.total_count ?? response.totalCount ?? 0,
+    }
+  }
+
+  async downloadProjectLogExport(
+    projectId: number,
+    options: {
+      from?: string
+      to?: string
+      query?: string
+      levels?: string[]
+      service?: string
+      environment?: string
+      tags?: Record<string, string>
+      limit?: number
+    } = {}
+  ): Promise<void> {
+    const params = this.buildLogFilterParams(options)
+    if (options.limit) params.set('limit', String(options.limit))
+
+    const token = this.getToken()
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const response = await fetch(
+      `${API_BASE}/projects/${projectId}/logs/export?${params.toString()}`,
+      { headers }
+    )
+    if (!response.ok) throw new Error('Export failed')
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'logs-export.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   async getTransactions(
     projectId: number,
     options: { period?: '24h' | '7d' | '30d' | '90d'; environment?: string; operation?: string } = {}
@@ -2045,6 +2226,18 @@ class ApiClient {
   async getTransactionSpans(eventId: string): Promise<TransactionWithSpans> {
     return this.request<TransactionWithSpans>(
       `${API_BASE}/transactions/${encodeURIComponent(eventId)}/spans`
+    )
+  }
+
+  async getTraceDetails(projectId: number, traceId: string): Promise<TraceDetail> {
+    return this.request<TraceDetail>(
+      `${API_BASE}/projects/${projectId}/traces/${encodeURIComponent(traceId)}`
+    )
+  }
+
+  async getSpanDetails(projectId: number, spanId: string): Promise<SpanDetail> {
+    return this.request<SpanDetail>(
+      `${API_BASE}/projects/${projectId}/spans/${encodeURIComponent(spanId)}`
     )
   }
 
@@ -3152,6 +3345,8 @@ export type {
   TransactionDetail,
   Span,
   TransactionWithSpans,
+  TraceDetail,
+  SpanDetail,
   SlowTransaction,
   PerformanceStats,
   Release,
@@ -3164,6 +3359,12 @@ export type {
   LogEntry,
   LogQueryResponse,
   LogFilterOptions,
+  LogFilterOptionsWithCounts,
+  LogFilterOptionWithCount,
+  LogAggregateBucket,
+  LogAggregateResponse,
+  LogTopValue,
+  LogTopResponse,
   SdkVersionsResponse,
   AuthToken,
   BillingTierConfig,

@@ -431,6 +431,58 @@ fun Route.apiRoutes() {
                 call.respond(relatedErrors)
             }
 
+            // Traces
+            get("/projects/{projectId}/traces/{traceId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                val traceId = call.parameters["traceId"]
+                
+                if (projectId == null || traceId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasTraceAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val trace = dashboardService.getTraceDetails(projectId, traceId)
+                if (trace == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(trace)
+                }
+            }
+
+            // Spans
+            get("/projects/{projectId}/spans/{spanId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val projectId = call.parameters["projectId"]?.toLongOrNull()
+                val spanId = call.parameters["spanId"]
+                
+                if (projectId == null || spanId == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@get
+                }
+
+                if (!dashboardService.hasSpanAccess(userId, projectId)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+
+                val span = dashboardService.getSpanDetails(projectId, spanId)
+                if (span == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(span)
+                }
+            }
+
             // Replays
             get("/projects/{projectId}/replays") {
                 val principal = call.principal<JWTPrincipal>()

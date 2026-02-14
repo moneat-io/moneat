@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -35,18 +36,33 @@ class EventServiceTest {
     private var validPublicKey: String = "test-public-key-valid"
     private var inactivePublicKey: String = "test-public-key-inactive"
 
+    companion object {
+        private var dbInitialized = false
+    }
+
     @BeforeTest
     fun setupDatabase() {
-        Database.connect(
-            url = "jdbc:h2:mem:moneat_event_service_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver"
-        )
-        transaction {
-            SchemaUtils.create(
-                Organizations,
-                Projects,
-                ProjectKeys
+        // Initialize DB connection and schema once per test class
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_event_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
             )
+            transaction {
+                SchemaUtils.create(
+                    Organizations,
+                    Projects,
+                    ProjectKeys
+                )
+            }
+            dbInitialized = true
+        }
+        
+        // Clean up any existing test data from previous tests
+        transaction {
+            ProjectKeys.deleteAll()
+            Projects.deleteAll()
+            Organizations.deleteAll()
         }
 
         // Setup test data

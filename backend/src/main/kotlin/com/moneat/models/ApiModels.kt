@@ -178,19 +178,38 @@ data class TransactionDetailResponse(
 data class SpanResponse(
     val spanId: String,
     val parentSpanId: String? = null,
+    val traceId: String? = null,
+    val transactionId: String? = null,
     val op: String,
     val description: String,
     val startTimestamp: Double,
     val endTimestamp: Double,
     val duration: Double,
     val status: String? = null,
-    val tags: Map<String, String> = emptyMap()
+    val tags: Map<String, String> = emptyMap(),
+    val data: String? = null
 )
 
 @Serializable
 data class TransactionWithSpansResponse(
     val transaction: TransactionDetailResponse,
     val spans: List<SpanResponse>
+)
+
+@Serializable
+data class TraceDetailResponse(
+    val traceId: String,
+    val projectId: Long,
+    val spans: List<SpanResponse>,
+    val startTimestamp: Double,
+    val endTimestamp: Double,
+    val duration: Double
+)
+
+@Serializable
+data class SpanDetailResponse(
+    val span: SpanResponse,
+    val transaction: TransactionDetailResponse?
 )
 
 @Serializable

@@ -84,6 +84,8 @@ import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/
 import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
+import { Route as ProjectsProjectIdTracesTraceIdRouteImport } from './routes/projects/$projectId/traces/$traceId'
+import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects/$projectId/spans/$spanId'
 
 const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
   id: '/verify-email-required',
@@ -465,6 +467,18 @@ const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   path: '/$orgId',
   getParentRoute: () => AdminOrganizationsRoute,
 } as any)
+const ProjectsProjectIdTracesTraceIdRoute =
+  ProjectsProjectIdTracesTraceIdRouteImport.update({
+    id: '/traces/$traceId',
+    path: '/traces/$traceId',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdSpansSpanIdRoute =
+  ProjectsProjectIdSpansSpanIdRouteImport.update({
+    id: '/spans/$spanId',
+    path: '/spans/$spanId',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -542,6 +556,8 @@ export interface FileRoutesByFullPath {
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -615,6 +631,8 @@ export interface FileRoutesByTo {
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -693,6 +711,8 @@ export interface FileRoutesById {
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -772,6 +792,8 @@ export interface FileRouteTypes {
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
+    | '/projects/$projectId/spans/$spanId'
+    | '/projects/$projectId/traces/$traceId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -845,6 +867,8 @@ export interface FileRouteTypes {
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
+    | '/projects/$projectId/spans/$spanId'
+    | '/projects/$projectId/traces/$traceId'
   id:
     | '__root__'
     | '/'
@@ -922,6 +946,8 @@ export interface FileRouteTypes {
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
+    | '/projects/$projectId/spans/$spanId'
+    | '/projects/$projectId/traces/$traceId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1488,6 +1514,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrganizationsOrgIdRouteImport
       parentRoute: typeof AdminOrganizationsRoute
     }
+    '/projects/$projectId/traces/$traceId': {
+      id: '/projects/$projectId/traces/$traceId'
+      path: '/traces/$traceId'
+      fullPath: '/projects/$projectId/traces/$traceId'
+      preLoaderRoute: typeof ProjectsProjectIdTracesTraceIdRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/spans/$spanId': {
+      id: '/projects/$projectId/spans/$spanId'
+      path: '/spans/$spanId'
+      fullPath: '/projects/$projectId/spans/$spanId'
+      preLoaderRoute: typeof ProjectsProjectIdSpansSpanIdRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
   }
 }
 
@@ -1643,11 +1683,15 @@ const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdLogsRoute: typeof ProjectsProjectIdLogsRoute
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
+  ProjectsProjectIdSpansSpanIdRoute: typeof ProjectsProjectIdSpansSpanIdRoute
+  ProjectsProjectIdTracesTraceIdRoute: typeof ProjectsProjectIdTracesTraceIdRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdLogsRoute: ProjectsProjectIdLogsRoute,
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
+  ProjectsProjectIdSpansSpanIdRoute: ProjectsProjectIdSpansSpanIdRoute,
+  ProjectsProjectIdTracesTraceIdRoute: ProjectsProjectIdTracesTraceIdRoute,
 }
 
 const ProjectsProjectIdRouteWithChildren =
