@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {useNavigate} from '@tanstack/react-router'
 import {api, formatErrorForLogging, type LogEntry, type LogFilterOptionsWithCounts} from '@/lib/api'
 import {type FacetFilter, LEVEL_OPTIONS, LogSearchBar, TIME_PRESETS} from '@/components/logs/LogSearchBar'
 import {TagFacets} from '@/components/logs/TagFacets'
@@ -14,8 +15,14 @@ import {LogAggregateTable} from '@/components/logs/LogAggregateTable'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {cn} from '@/lib/utils'
-import {ChevronDown, ChevronLeft, ChevronRight, Download, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
+import {ChevronDown, ChevronLeft, Download, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
 import {useQuery} from '@tanstack/react-query'
+import {
+  serializeLogViewState,
+  parseFacetFiltersFromUrl,
+  parseLevelsFromUrl,
+  type LogViewSearch,
+} from '@/components/logs/logViewUrlState'
 
 interface LogExplorerProps {
   projectId?: number
@@ -29,6 +36,8 @@ interface LogExplorerProps {
   enableFacets?: boolean
   defaultTimeRange?: string
   initialScrollToBottom?: boolean
+  enableUrlSync?: boolean
+  urlSearch?: LogViewSearch
 }
 
 function toIsoOrUndefined(value: string): string | undefined {
@@ -111,21 +120,64 @@ export function LogExplorer({
   className,
   enableLiveTail = true,
   enableFacets = true,
-  defaultTimeRange = '15m',
+  defaultTimeRange = '7d',
   // @ts-ignore - unused param kept for interface compatibility
-  initialScrollToBottom = false
+  initialScrollToBottom = false,
+  enableUrlSync = false,
+  urlSearch,
 }: LogExplorerProps) {
+  const navigate = useNavigate()
+  
+  // Hydrate from URL if enabled
+  const getInitialState = useCallback(() => {
+    if (enableUrlSync && urlSearch) {
+      return {
+        query: urlSearch.q || initialQuery,
+        facetFilters: parseFacetFiltersFromUrl(urlSearch.facets),
+        levels: urlSearch.levels ? parseLevelsFromUrl(urlSearch.levels) : [...LEVEL_OPTIONS],
+        timePreset: urlSearch.timePreset || defaultTimeRange,
+        customFrom: urlSearch.from || '',
+        customTo: urlSearch.to || '',
+        vizMode: urlSearch.viz || 'timeseries' as LogVizMode,
+        groupBy: urlSearch.groupBy || '',
+        topField: urlSearch.topField || 'service',
+        cursor: urlSearch.cursor || null,
+        selectedLogId: urlSearch.logId || null,
+      }
+    }
+    return {
+      query: initialQuery,
+      facetFilters: [] as FacetFilter[],
+      levels: [...LEVEL_OPTIONS],
+      timePreset: defaultTimeRange,
+      customFrom: '',
+      customTo: '',
+      vizMode: 'timeseries' as LogVizMode,
+      groupBy: '',
+      topField: 'service',
+      cursor: null,
+      selectedLogId: null,
+    }
+  }, [enableUrlSync, urlSearch, initialQuery, defaultTimeRange])
+  
+  const initialState = getInitialState()
+  
   // Search / filter state
-  const [query, setQuery] = useState(initialQuery)
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
-  const [levels, setLevels] = useState<string[]>(() => [...LEVEL_OPTIONS])
-  const [timePreset, setTimePreset] = useState(defaultTimeRange)
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const [query, setQuery] = useState(initialState.query)
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(initialState.facetFilters)
+  const [levels, setLevels] = useState<string[]>(initialState.levels)
+  const [timePreset, setTimePreset] = useState(initialState.timePreset)
+  const [customFrom, setCustomFrom] = useState(initialState.customFrom)
+  const [customTo, setCustomTo] = useState(initialState.customTo)
 
   // Pagination
-  const [cursor, setCursor] = useState<string | null>(null)
+  const [cursor, setCursor] = useState<string | null>(initialState.cursor)
   const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([])
+  
+  // Infinite scroll state
+  const [accumulatedLogs, setAccumulatedLogs] = useState<LogEntry[]>([])
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const scrollSentinelRef = useRef<HTMLDivElement>(null)
 
   // Detail panel
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
@@ -135,9 +187,9 @@ export function LogExplorer({
   const [showFacets, setShowFacets] = useState(enableFacets)
 
   // Visualization mode
-  const [vizMode, setVizMode] = useState<LogVizMode>('timeseries')
-  const [groupBy, setGroupBy] = useState<string>('')
-  const [topField, setTopField] = useState<string>('service')
+  const [vizMode, setVizMode] = useState<LogVizMode>(initialState.vizMode)
+  const [groupBy, setGroupBy] = useState<string>(initialState.groupBy)
+  const [topField, setTopField] = useState<string>(initialState.topField)
 
   // Live tail state
   const [liveTailEnabled, setLiveTailEnabled] = useState(false)
@@ -149,6 +201,67 @@ export function LogExplorer({
   const bufferedTailLogsRef = useRef<LogEntry[]>([])
   const pausedRef = useRef(false)
   const tailScrollRef = useRef<HTMLDivElement>(null)
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isHydratingRef = useRef(false)
+  
+  // Hydrate from URL on back/forward navigation
+  useEffect(() => {
+    if (!enableUrlSync || !urlSearch || isHydratingRef.current) return
+    
+    isHydratingRef.current = true
+    
+    setQuery(urlSearch.q || '')
+    setFacetFilters(parseFacetFiltersFromUrl(urlSearch.facets))
+    setLevels(urlSearch.levels ? parseLevelsFromUrl(urlSearch.levels) : [...LEVEL_OPTIONS])
+    setTimePreset(urlSearch.timePreset || defaultTimeRange)
+    setCustomFrom(urlSearch.from || '')
+    setCustomTo(urlSearch.to || '')
+    setVizMode(urlSearch.viz || 'timeseries')
+    setGroupBy(urlSearch.groupBy || '')
+    setTopField(urlSearch.topField || 'service')
+    setCursor(urlSearch.cursor || null)
+    
+    // Defer clearing hydration flag to avoid race conditions
+    setTimeout(() => {
+      isHydratingRef.current = false
+    }, 100)
+  }, [enableUrlSync, urlSearch, defaultTimeRange])
+  
+  // Sync state to URL with debounce
+  useEffect(() => {
+    if (!enableUrlSync || isHydratingRef.current) return
+    
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current)
+    }
+    
+    syncTimeoutRef.current = setTimeout(() => {
+      const newSearch = serializeLogViewState({
+        query,
+        levels,
+        facetFilters,
+        timePreset,
+        customFrom,
+        customTo,
+        vizMode,
+        groupBy,
+        topField,
+        cursor,
+        selectedLogId: selectedLog?.logId || null,
+      })
+      
+      navigate({
+        search: newSearch as any,
+        replace: true,
+      })
+    }, 300)
+    
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current)
+      }
+    }
+  }, [enableUrlSync, navigate, query, levels, facetFilters, timePreset, customFrom, customTo, vizMode, groupBy, topField, cursor, selectedLog])
 
   useEffect(() => {
     if (initialContainerName) {
@@ -225,6 +338,7 @@ export function LogExplorer({
   useEffect(() => {
     setCursor(null)
     setCursorHistory([])
+    setAccumulatedLogs([])
   }, [projectId, systemId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
 
   // Fetch filter options (with counts)
@@ -242,7 +356,7 @@ export function LogExplorer({
   // Fetch logs
   const {
     data: logPage,
-    isLoading,
+    isLoading: isInitialLoading,
     isFetching,
   } = useQuery({
     queryKey: [
@@ -287,7 +401,21 @@ export function LogExplorer({
     enabled: Boolean(projectId || systemId),
   })
 
-  const logs = logPage?.logs ?? []
+  // Accumulate logs when new page loads (only in list mode and not live tail)
+  useEffect(() => {
+    if (!logPage?.logs || liveTailEnabled || vizMode !== 'list') return
+    
+    // If cursor is null, this is the first page (or reset), so replace
+    if (cursor === null) {
+      setAccumulatedLogs(logPage.logs)
+    } else {
+      // Otherwise, append to accumulated logs
+      setAccumulatedLogs(prev => [...prev, ...logPage.logs])
+    }
+    setIsLoadingMore(false)
+  }, [logPage, cursor, liveTailEnabled, vizMode])
+  
+  const logs = vizMode === 'list' && !liveTailEnabled ? accumulatedLogs : (logPage?.logs ?? [])
   const totalCount = logPage?.totalCount ?? null
 
   // Aggregate query for histogram - always enabled to show above all modes
@@ -369,6 +497,35 @@ export function LogExplorer({
     setSelectedLog(log)
     setDetailOpen(true)
   }, [])
+  
+  // View in context: clear filters and show ±5 minute window around selected log
+  const handleViewInContext = useCallback((log: LogEntry) => {
+    const logTime = new Date(log.timestamp)
+    if (Number.isNaN(logTime.getTime())) return
+    
+    // Calculate ±5 minutes
+    const fiveMinutesMs = 5 * 60 * 1000
+    const contextFrom = new Date(logTime.getTime() - fiveMinutesMs)
+    const contextTo = new Date(logTime.getTime() + fiveMinutesMs)
+    
+    // Clear filters and query
+    setQuery('')
+    setFacetFilters([])
+    setLevels([...LEVEL_OPTIONS])
+    
+    // Set custom time range
+    setTimePreset('custom')
+    setCustomFrom(toDateTimeLocalValue(contextFrom))
+    setCustomTo(toDateTimeLocalValue(contextTo))
+    
+    // Reset pagination
+    setCursor(null)
+    setCursorHistory([])
+    
+    // Keep the log selected for highlight
+    setSelectedLog(log)
+    setDetailOpen(false)
+  }, [])
 
   // Live tail
   useEffect(() => {
@@ -424,18 +581,45 @@ export function LogExplorer({
     )
   }
 
-  const handleNextPage = () => {
-    if (!logPage?.nextCursor) return
+  const handleNextPage = useCallback(() => {
+    if (!logPage?.nextCursor || isLoadingMore) return
+    setIsLoadingMore(true)
     setCursorHistory((current) => [...current, cursor])
     setCursor(logPage.nextCursor)
-  }
+  }, [logPage?.nextCursor, isLoadingMore, cursor])
 
   const handlePreviousPage = () => {
     if (cursorHistory.length === 0) return
     const previous = cursorHistory[cursorHistory.length - 1] ?? null
     setCursorHistory((current) => current.slice(0, -1))
     setCursor(previous)
+    setAccumulatedLogs([])
   }
+  
+  // Infinite scroll with Intersection Observer
+  useEffect(() => {
+    if (!scrollSentinelRef.current || liveTailEnabled || vizMode !== 'list') return
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries
+        if (entry.isIntersecting && logPage?.hasMore && !isLoadingMore && !isFetching) {
+          handleNextPage()
+        }
+      },
+      {
+        root: logContainerRef.current,
+        rootMargin: '200px', // Load 200px before reaching the end
+        threshold: 0,
+      }
+    )
+    
+    observer.observe(scrollSentinelRef.current)
+    
+    return () => {
+      observer.disconnect()
+    }
+  }, [logPage?.hasMore, isLoadingMore, isFetching, liveTailEnabled, vizMode, handleNextPage])
 
   const handleToggleLiveTail = () => {
     setLiveTailEnabled((current) => {
@@ -445,6 +629,7 @@ export function LogExplorer({
         bufferedTailLogsRef.current = []
         setTailBufferedCount(0)
         setTailPaused(false)
+        setAccumulatedLogs([]) // Reset accumulated logs when starting live tail
       }
       return next
     })
@@ -482,7 +667,9 @@ export function LogExplorer({
     }
   }
 
-  const showEmptyState = !isLoading && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && totalCount === 0
+  // Show loading state only on initial load with no accumulated logs
+  const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
+  const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && totalCount === 0
   const logContainerRef = useRef<HTMLDivElement>(null)
 
   return (
@@ -615,7 +802,7 @@ export function LogExplorer({
               )}
 
               <div className="flex-1 text-xs text-muted-foreground">
-                {isLoading ? (
+                {isInitialLoadingState ? (
                   <span className="flex items-center gap-1.5">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     Loading...
@@ -625,11 +812,6 @@ export function LogExplorer({
                     {aggregateData?.totalCount != null
                       ? `${formatLogCount(aggregateData.totalCount)} results found`
                       : `${logs.length} result${logs.length !== 1 ? 's' : ''} shown`}
-                    {isFetching && (
-                      <span className="ml-2 inline-flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      </span>
-                    )}
                   </span>
                 )}
               </div>
@@ -642,8 +824,8 @@ export function LogExplorer({
                 </Button>
               )}
 
-              {/* Pagination (only in list mode) */}
-              {vizMode === 'list' && (
+              {/* Pagination (only in list mode, shown only if we have history) */}
+              {vizMode === 'list' && !liveTailEnabled && cursorHistory.length > 0 && (
                 <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
@@ -651,17 +833,9 @@ export function LogExplorer({
                     onClick={handlePreviousPage}
                     disabled={cursorHistory.length === 0}
                     className="h-7 w-7 p-0"
+                    title="Reset to first page"
                   >
                     <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleNextPage}
-                    disabled={!logPage?.hasMore}
-                    className="h-7 w-7 p-0"
-                  >
-                    <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               )}
@@ -737,7 +911,7 @@ export function LogExplorer({
                     </div>
                   )}
                 </div>
-              ) : isLoading ? (
+              ) : isInitialLoadingState ? (
                 <div className="flex items-center justify-center py-24">
                   <div className="text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
@@ -755,12 +929,35 @@ export function LogExplorer({
                   </div>
                 </div>
               ) : (
-                <LogTable
-                  logs={logs}
-                  selectedLogId={selectedLog?.logId}
-                  onSelectLog={handleSelectLog}
-                  compact={true}
-                />
+                <>
+                  <LogTable
+                    logs={logs}
+                    selectedLogId={selectedLog?.logId}
+                    onSelectLog={handleSelectLog}
+                    compact={true}
+                  />
+                  
+                  {/* Infinite scroll sentinel and loading indicator */}
+                  {vizMode === 'list' && !liveTailEnabled && (
+                    <div ref={scrollSentinelRef} className="px-3 py-4">
+                      {(isLoadingMore || isFetching) && logPage?.hasMore ? (
+                        <div className="flex items-center justify-center gap-2 py-2">
+                          <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+                            <div className="h-full w-1/2 animate-pulse bg-blue-500" style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}} />
+                          </div>
+                        </div>
+                      ) : logPage?.hasMore ? (
+                        <div className="text-center text-xs text-muted-foreground/50">
+                          Scroll for more
+                        </div>
+                      ) : logs.length > 150 ? (
+                        <div className="border-t pt-3 text-center text-xs text-muted-foreground/70">
+                          End of results • {logs.length} logs loaded
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Live tail stream */}
@@ -826,7 +1023,12 @@ export function LogExplorer({
       </div>
 
       {/* Log detail sheet */}
-      <LogDetail log={selectedLog} open={detailOpen} onClose={() => setDetailOpen(false)} />
+      <LogDetail 
+        log={selectedLog} 
+        open={detailOpen} 
+        onClose={() => setDetailOpen(false)} 
+        onViewInContext={enableUrlSync ? handleViewInContext : undefined}
+      />
     </div>
   )
 }

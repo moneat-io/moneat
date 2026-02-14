@@ -1142,15 +1142,16 @@ function SystemDetailPage() {
               </div>
 
               <div className="relative" style={{maxHeight: '60vh'}}>
-                <LogExplorer 
-                  systemId={system.id}
-                  initialContainerName={selectedContainer.name}
-                  className="border-none rounded-none"
-                  style={{height: '60vh'}}
-                  enableLiveTail={false}
-                  enableFacets={true}
-                  initialScrollToBottom={true}
-                />
+                <div style={{height: '60vh'}}>
+                  <LogExplorer 
+                    systemId={system.id}
+                    initialContainerName={selectedContainer.name}
+                    className="border-none rounded-none"
+                    enableLiveTail={false}
+                    enableFacets={true}
+                    initialScrollToBottom={true}
+                  />
+                </div>
               </div>
             </div>
           )}

@@ -1,16 +1,18 @@
 import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
 import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/components/ui/sheet'
 import {Separator} from '@/components/ui/separator'
 import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
-import {Check, Copy, ExternalLink} from 'lucide-react'
+import {Check, Copy, ExternalLink, Eye} from 'lucide-react'
 import {useCallback, useState} from 'react'
-import {Link, useParams} from '@tanstack/react-router'
+import {useParams} from '@tanstack/react-router'
 
 interface LogDetailProps {
   log: LogEntry | null
   open: boolean
   onClose: () => void
+  onViewInContext?: (log: LogEntry) => void
 }
 
 const levelStyles: Record<string, string> = {
@@ -132,7 +134,7 @@ function formatTimestamp(value: string): string {
   })
 }
 
-export function LogDetail({log, open, onClose}: LogDetailProps) {
+export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps) {
   if (!log) return null
   
   const {projectId} = useParams({strict: false})
@@ -171,6 +173,17 @@ export function LogDetail({log, open, onClose}: LogDetailProps) {
           <SheetTitle className="text-sm font-normal leading-relaxed text-foreground/90">
             {formatTimestamp(log.timestamp)}
           </SheetTitle>
+          {onViewInContext && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewInContext(log)}
+              className="w-full gap-2"
+            >
+              <Eye className="h-4 w-4" />
+              View in Context
+            </Button>
+          )}
           <SheetDescription className="sr-only">Log entry details</SheetDescription>
         </SheetHeader>
 

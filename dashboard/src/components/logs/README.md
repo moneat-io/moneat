@@ -10,6 +10,79 @@ The `EmbeddedLogs` component provides a reusable way to display logs with contex
 - **Pagination**: Navigate through log results
 - **Detail view**: Click any log to see full details in a slide-over panel
 
+---
+
+# Log Explorer URL State & Deep Linking
+
+The Log Explorer on the project logs page (`/projects/:id/logs`) supports **URL-based state persistence** for deep linking and sharing.
+
+## Shareable State
+
+All viewer state is encoded in URL query parameters, enabling:
+
+- **Share links**: Copy browser URL to share exact view with teammates
+- **Browser history**: Back/forward navigation preserves filter/query state
+- **Bookmarks**: Save frequently-used log views
+- **Context navigation**: Jump to time windows around specific logs
+
+### URL Parameters
+
+| Param | Type | Description | Example |
+|-------|------|-------------|---------|
+| `q` | `string` | Search query | `?q=error+timeout` |
+| `levels` | `string` | Comma-separated log levels | `?levels=error,warn` |
+| `facets` | `string` | JSON-encoded facet filters | `?facets=[{"key":"service","value":"api"}]` |
+| `timePreset` | `string` | Time range preset | `?timePreset=1h` |
+| `from` | `string` | Custom range start (ISO) | `?from=2024-01-15T10:00:00Z` |
+| `to` | `string` | Custom range end (ISO) | `?to=2024-01-15T11:00:00Z` |
+| `viz` | `string` | Visualization mode | `?viz=table` |
+| `groupBy` | `string` | Group by field (table viz) | `?groupBy=service` |
+| `topField` | `string` | Top field (toplist/pie) | `?topField=environment` |
+| `cursor` | `string` | Pagination cursor | `?cursor=abc123` |
+| `logId` | `string` | Selected log ID | `?logId=xyz789` |
+
+### Example URLs
+
+**Error logs from last hour:**
+```
+/projects/42/logs?levels=error,fatal&timePreset=1h
+```
+
+**Service filter with custom time range:**
+```
+/projects/42/logs?facets=[{"key":"service","value":"api"}]&from=2024-01-15T10:00:00Z&to=2024-01-15T11:00:00Z
+```
+
+**Table view grouped by environment:**
+```
+/projects/42/logs?viz=table&groupBy=environment
+```
+
+## View in Context Action
+
+The **View in Context** button in the log detail panel provides one-click navigation to a time-based context window around a selected log.
+
+### Behavior
+
+1. **Clears active filters**: Removes search query, facet filters, and level selection
+2. **Sets ±5 minute window**: Creates custom time range centered on log timestamp
+3. **Resets pagination**: Starts at first page of results
+4. **Preserves log selection**: Selected log remains highlighted in table
+5. **Updates URL**: Shares context view state via URL parameters
+
+### Use Cases
+
+- **Investigate surrounding activity**: See what happened before/after an error
+- **Full context view**: Remove filters that might hide related logs
+- **Share incident timeline**: Send URL showing exact time window to teammates
+
+### Technical Notes
+
+- Action only available when `enableUrlSync` prop is true (project logs route)
+- Uses existing `/logs` API endpoint with `from`/`to` parameters
+- No server-side state required; entire view is reproducible from URL
+- If target log not visible in first page, use pagination to locate
+
 ## Usage
 
 ### Basic Example
