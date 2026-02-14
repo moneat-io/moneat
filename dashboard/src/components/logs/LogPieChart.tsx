@@ -1,4 +1,4 @@
-import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts'
+import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, type TooltipProps} from 'recharts'
 import type {LogTopValue} from '@/lib/api'
 
 interface LogPieChartProps {
@@ -19,6 +19,26 @@ const COLORS = [
   '#ef4444',
   '#8b5cf6',
 ]
+
+function CustomTooltip({active, payload}: TooltipProps<number, string>) {
+  if (!active || !payload || !payload.length) return null
+  
+  const data = payload[0]
+  return (
+    <div
+      style={{
+        backgroundColor: 'hsl(var(--popover) / 0.95)',
+        border: '1px solid hsl(var(--border))',
+        borderRadius: '6px',
+        color: 'hsl(var(--popover-foreground))',
+        padding: '6px 10px',
+        fontSize: '11px',
+      }}
+    >
+      <div>{data.name}: {data.value}</div>
+    </div>
+  )
+}
 
 export function LogPieChart({values, field, height = 240}: LogPieChartProps) {
   const chartData = values.slice(0, 8).map((v) => ({name: v.value, value: v.count}))
@@ -47,22 +67,17 @@ export function LogPieChart({values, field, height = 240}: LogPieChartProps) {
             fill="#8884d8"
             paddingAngle={2}
             dataKey="value"
-            label={({name, percent}) => `${name} (${(percent * 100).toFixed(0)}%)`}
+            label={(entry) => {
+              const name = entry.name as string
+              const percent = entry.percent as number
+              return `${name} (${(percent * 100).toFixed(0)}%)`
+            }}
           >
             {chartData.map((_, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--popover) / 0.95)',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '6px',
-              color: 'hsl(var(--popover-foreground))',
-              padding: '6px 10px',
-              fontSize: '11px',
-            }}
-          />
+          <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{fontSize: '10px'}} />
         </PieChart>
       </ResponsiveContainer>
