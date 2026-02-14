@@ -563,12 +563,11 @@ export function VariantA() {
         </div>
         <div className="max-w-3xl mx-auto text-center relative z-10">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-            Ready to ditch the{' '}
-            <span className="line-through decoration-slate-600 text-slate-500">overpriced</span>{' '}
-            alternative?
+            Your app deserves better monitoring.
           </h2>
           <p className="text-lg text-slate-400 mb-8 max-w-xl mx-auto">
-            Create a free account in 30 seconds. No credit card required.
+            Start with 1 GB free — no credit card, no commitments.
+            See everything that&apos;s happening in your app in minutes.
           </p>
           <Button
             asChild
