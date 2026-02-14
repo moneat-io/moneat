@@ -135,8 +135,8 @@ export function LogExplorer({
   const [showFacets, setShowFacets] = useState(enableFacets)
 
   // Visualization mode
-  const [vizMode, setVizMode] = useState<LogVizMode>('list')
-  const [groupBy, setGroupBy] = useState<string>('level')
+  const [vizMode, setVizMode] = useState<LogVizMode>('timeseries')
+  const [groupBy, setGroupBy] = useState<string>('')
   const [topField, setTopField] = useState<string>('service')
 
   // Live tail state
@@ -605,6 +605,7 @@ export function LogExplorer({
                     onChange={(e) => setGroupBy(e.target.value)}
                     className="h-7 appearance-none rounded-md border bg-background px-2 pr-6 text-xs"
                   >
+                    <option value="">No grouping</option>
                     <option value="level">Group by level</option>
                     <option value="service">Group by service</option>
                     <option value="environment">Group by environment</option>

@@ -3,6 +3,8 @@ import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
 import {ChevronDown, Clock, Search, X} from 'lucide-react'
+import {DateTimePicker} from '@/components/ui/datetime-picker'
+import {format} from 'date-fns'
 
 export interface FacetFilter {
   key: string
@@ -274,10 +276,33 @@ export function LogSearchBar({
   }
 
   const activeTimeLabel = useMemo(() => {
-    if (timePreset === 'custom') return 'Custom'
+    if (timePreset === 'custom') {
+      if (!customFrom && !customTo) return 'Custom range'
+      
+      try {
+        const fromDate = customFrom ? new Date(customFrom) : null
+        const toDate = customTo ? new Date(customTo) : null
+        
+        if (fromDate && toDate) {
+          // Check if same day
+          const sameDay = format(fromDate, 'yyyy-MM-dd') === format(toDate, 'yyyy-MM-dd')
+          if (sameDay) {
+            return `${format(fromDate, 'MMM d, HH:mm')} - ${format(toDate, 'HH:mm')}`
+          }
+          return `${format(fromDate, 'MMM d, HH:mm')} - ${format(toDate, 'MMM d, HH:mm')}`
+        }
+        
+        if (fromDate) return `From ${format(fromDate, 'MMM d, HH:mm')}`
+        if (toDate) return `Until ${format(toDate, 'MMM d, HH:mm')}`
+      } catch {
+        // Invalid date
+      }
+      
+      return 'Custom range'
+    }
     const preset = TIME_PRESETS.find((p) => p.value === timePreset)
     return preset?.label ?? 'Last 15 minutes'
-  }, [timePreset])
+  }, [timePreset, customFrom, customTo])
 
   const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
 
@@ -482,20 +507,18 @@ export function LogSearchBar({
                   <div className="space-y-2 px-3 py-2">
                     <div>
                       <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">From</label>
-                      <input
-                        type="datetime-local"
+                      <DateTimePicker
                         value={customFrom}
-                        onChange={(e) => onCustomFromChange(e.target.value)}
-                        className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                        onChange={onCustomFromChange}
+                        placeholder="Select start time"
                       />
                     </div>
                     <div>
                       <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">To</label>
-                      <input
-                        type="datetime-local"
+                      <DateTimePicker
                         value={customTo}
-                        onChange={(e) => onCustomToChange(e.target.value)}
-                        className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                        onChange={onCustomToChange}
+                        placeholder="Select end time"
                       />
                     </div>
                   </div>
