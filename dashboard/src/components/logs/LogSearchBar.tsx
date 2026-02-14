@@ -193,7 +193,15 @@ export function LogSearchBar({
         const rawKey = isExclude ? token.slice(1, colonIndex).trim() : token.slice(0, colonIndex).trim()
         const value = token.slice(colonIndex + 1).trim()
 
-        if (!rawKey || !value) return
+        if (!rawKey) return
+        // Empty value (trailing colon) or wildcards → route to query parser
+        if (!value || value.includes('*') || value.includes('?')) {
+          const newQuery = query ? `${query} ${token}` : token
+          onQueryChange(newQuery.trim())
+          setInputValue('')
+          setShowSuggestions(false)
+          return
+        }
 
         // Handle special facets
         const key = rawKey.toLowerCase() === 'env' ? 'environment' : rawKey.toLowerCase()
@@ -202,12 +210,14 @@ export function LogSearchBar({
           if (!levels.includes(value.toLowerCase())) {
             onToggleLevel(value.toLowerCase())
           }
-        } else if (['service', 'environment', 'host', 'source'].includes(key)) {
+        } else if (!isExclude && ['service', 'environment', 'host', 'source'].includes(key)) {
+          // Only simple includes on known facet fields become facet filters
           const existing = facetFilters.filter((f) => f.key !== key || f.value !== value)
-          onFacetFiltersChange([...existing, {key, value, exclude: isExclude}])
+          onFacetFiltersChange([...existing, {key, value, exclude: false}])
         } else {
-          const existing = facetFilters.filter((f) => f.key !== rawKey || f.value !== value)
-          onFacetFiltersChange([...existing, {key: rawKey, value, exclude: isExclude}])
+          // Negated fields, message:, and custom fields → route to query parser
+          const newQuery = query ? `${query} ${token}` : token
+          onQueryChange(newQuery.trim())
         }
       } else {
         // Free text - append to query

@@ -1887,6 +1887,10 @@ class ApiClient {
       from?: string
       to?: string
       tags?: Record<string, string>
+      excludeService?: string
+      excludeEnvironment?: string
+      excludeContainerName?: string
+      excludeTags?: Record<string, string>
     } = {}
   ): Promise<LogQueryResponse> {
     const params = new URLSearchParams()
@@ -1904,6 +1908,14 @@ class ApiClient {
     if (options.tags) {
       Object.entries(options.tags).forEach(([key, value]) => {
         if (key) params.append('tag', `${key}:${value}`)
+      })
+    }
+    if (options.excludeService) params.set('excludeService', options.excludeService)
+    if (options.excludeEnvironment) params.set('excludeEnvironment', options.excludeEnvironment)
+    if (options.excludeContainerName) params.set('excludeContainerName', options.excludeContainerName)
+    if (options.excludeTags) {
+      Object.entries(options.excludeTags).forEach(([key, value]) => {
+        if (key) params.append('excludeTag', `${key}:${value}`)
       })
     }
 

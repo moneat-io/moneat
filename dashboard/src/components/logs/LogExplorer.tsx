@@ -171,21 +171,47 @@ export function LogExplorer({
     let environment: string | undefined
     let containerName: string | undefined
     const tags: Record<string, string> = {}
+    const excludeTags: Record<string, string> = {}
+    let excludeService: string | undefined
+    let excludeEnvironment: string | undefined
+    let excludeContainerName: string | undefined
 
     for (const filter of facetFilters) {
-      if (filter.exclude) continue // Exclude is handled differently if needed
-      if (filter.key === 'service') {
-        service = filter.value
-      } else if (filter.key === 'environment') {
-        environment = filter.value
-      } else if (filter.key === 'container_name') {
-        containerName = filter.value
+      if (filter.exclude) {
+        // Handle excludes
+        if (filter.key === 'service') {
+          excludeService = filter.value
+        } else if (filter.key === 'environment') {
+          excludeEnvironment = filter.value
+        } else if (filter.key === 'container_name') {
+          excludeContainerName = filter.value
+        } else {
+          excludeTags[filter.key] = filter.value
+        }
       } else {
-        tags[filter.key] = filter.value
+        // Handle includes
+        if (filter.key === 'service') {
+          service = filter.value
+        } else if (filter.key === 'environment') {
+          environment = filter.value
+        } else if (filter.key === 'container_name') {
+          containerName = filter.value
+        } else {
+          tags[filter.key] = filter.value
+        }
       }
     }
 
-    return {service, environment, containerName, tags}
+    return {
+      service, 
+      environment, 
+      containerName, 
+      tags,
+      excludeService,
+      excludeEnvironment,
+      excludeContainerName,
+      excludeTags
+    }
   }, [facetFilters])
 
   const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
@@ -245,6 +271,10 @@ export function LogExplorer({
         from: timeRange.from,
         to: timeRange.to,
         tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+        excludeService: derivedFilters.excludeService,
+        excludeEnvironment: derivedFilters.excludeEnvironment,
+        excludeContainerName: derivedFilters.excludeContainerName,
+        excludeTags: Object.keys(derivedFilters.excludeTags).length > 0 ? derivedFilters.excludeTags : undefined,
       }
 
       if (systemId) {
@@ -637,7 +667,7 @@ export function LogExplorer({
             </div>
 
             {/* Histogram - always visible above all modes (like Datadog) */}
-            {aggregateData && aggregateData.buckets.length > 0 && (
+            {vizMode === 'timeseries' && aggregateData && aggregateData.buckets.length > 0 && (
               <div className="shrink-0 border-b bg-card/50">
                 <div className="px-3 pt-2 pb-1.5">
                   <div className="mb-1 flex items-center justify-between">

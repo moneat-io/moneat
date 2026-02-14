@@ -133,7 +133,11 @@ fun Route.logRoutes() {
                     environment = call.request.queryParameters["environment"],
                     from = call.request.queryParameters["from"],
                     to = call.request.queryParameters["to"],
-                    tags = parseTagQueryParams(call)
+                    tags = parseTagQueryParams(call),
+                    excludeService = call.request.queryParameters["excludeService"],
+                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                    excludeTags = parseExcludeTagQueryParams(call)
                 )
 
                 val result = logService.queryLogs(projectId, request)
@@ -385,6 +389,21 @@ private fun parseLevelQueryParams(call: ApplicationCall): List<String> {
 private fun parseTagQueryParams(call: ApplicationCall): Map<String, String> {
     return call.request.queryParameters
         .getAll("tag")
+        .orEmpty()
+        .mapNotNull { token ->
+            val idx = token.indexOf(':')
+            if (idx <= 0) return@mapNotNull null
+            val key = token.substring(0, idx).trim()
+            val value = token.substring(idx + 1).trim()
+            if (key.isBlank()) return@mapNotNull null
+            key to value
+        }
+        .toMap()
+}
+
+private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, String> {
+    return call.request.queryParameters
+        .getAll("excludeTag")
         .orEmpty()
         .mapNotNull { token ->
             val idx = token.indexOf(':')

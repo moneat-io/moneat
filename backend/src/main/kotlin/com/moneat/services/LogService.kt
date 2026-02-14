@@ -238,6 +238,27 @@ class LogService {
             }
         }
 
+        // Add exclude filters
+        if (!request.excludeService.isNullOrBlank()) {
+            conditions += "service != '${escapeSql(request.excludeService)}'"
+        }
+
+        if (!request.excludeEnvironment.isNullOrBlank()) {
+            conditions += "environment != '${escapeSql(request.excludeEnvironment)}'"
+        }
+        
+        if (!request.excludeContainerName.isNullOrBlank()) {
+            conditions += "container_name != '${escapeSql(request.excludeContainerName)}'"
+        }
+
+        request.excludeTags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value)
+            if (condition.isNotBlank()) {
+                // Negate the condition by wrapping in NOT
+                conditions += "NOT ($condition)"
+            }
+        }
+
         decodeCursor(request.cursor)?.let { (cursorTs, cursorLogId) ->
             conditions += "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR (timestamp = fromUnixTimestamp64Milli($cursorTs) AND log_id < toUUID('${escapeSql(cursorLogId)}')))"
         }

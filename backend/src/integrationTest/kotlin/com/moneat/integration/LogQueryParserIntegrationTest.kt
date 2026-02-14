@@ -13,6 +13,7 @@ import org.junit.jupiter.api.MethodOrderer.OrderAnnotation
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private val logger = KotlinLogging.logger {}
@@ -831,5 +832,69 @@ class LogQueryParserIntegrationTest {
 
         val result = executeRawQuery(sql)
         assertTrue(result.isNotBlank(), "Hyphenated search with production SELECT should return results: $result")
+    }
+    // ==========================================
+    // 9. Edge case and regression tests
+    // ==========================================
+
+    @Test
+    @Order(130)
+    fun `trailing colon in field does not crash`() = runBlocking {
+        // "auth-service:" has empty value after colon — should parse as free text
+        val ids = queryLogIds("service:api-gateway OR auth-service:")
+        // Should not throw; api-gateway logs should still be found
+        assertTrue(ids.contains(logId(1)), "Should still find api-gateway logs: $ids")
+    }
+
+    @Test
+    @Order(131)
+    fun `wildcard field search on host`() = runBlocking {
+        // host:server* should match all hosts starting with "server"
+        val ids = queryLogIds("host:server*")
+        assertTrue(ids.isNotEmpty(), "host:server* should find logs: $ids")
+        assertTrue(ids.contains(logId(1)), "Should find server1 log: $ids")
+        assertTrue(ids.contains(logId(2)), "Should find server2 log: $ids")
+    }
+
+    @Test
+    @Order(132)
+    fun `negated field search excludes results`() = runBlocking {
+        // -host:server1 should exclude logs from server1
+        val ids = queryLogIds("-host:server1")
+        assertTrue(ids.isNotEmpty(), "Negated search should return some results: $ids")
+        assertFalse(ids.contains(logId(1)), "Should NOT contain server1 log: $ids")
+    }
+
+    @Test
+    @Order(133)
+    fun `message field wildcard search`() = runBlocking {
+        // message:Rate* should find "Rate limit approaching for client" (log 16)
+        val ids = queryLogIds("message:Rate*")
+        assertTrue(ids.contains(logId(16)), "message:Rate* should find rate limit log: $ids")
+    }
+
+    @Test
+    @Order(134)
+    fun `wildcard field search with production SELECT`() = runBlocking {
+        // Verify wildcard field search works with the production SELECT shape
+        val parsed = parser.parse("host:server*")
+        val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+
+        val sql = """
+            SELECT
+                toString(log_id) AS log_id,
+                toString(level) AS level_text,
+                message,
+                host,
+                toString(source) AS source_text
+            FROM logs
+            WHERE project_id = $PROJECT_ID AND ($whereCondition)
+            ORDER BY timestamp DESC
+            LIMIT 10
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val result = executeRawQuery(sql)
+        assertTrue(result.contains("server"), "Wildcard host search should return results: $result")
     }
 }

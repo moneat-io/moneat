@@ -135,7 +135,11 @@ data class LogQueryRequest(
     val to: String? = null,
     val tags: Map<String, String> = emptyMap(),
     val systemId: String? = null,
-    val containerName: String? = null
+    val containerName: String? = null,
+    val excludeService: String? = null,
+    val excludeEnvironment: String? = null,
+    val excludeContainerName: String? = null,
+    val excludeTags: Map<String, String> = emptyMap()
 )
 
 data class LogTailFilters(

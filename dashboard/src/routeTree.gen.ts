@@ -84,8 +84,8 @@ import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/
 import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
-import { Route as ProjectsProjectIdTracesTraceIdRouteImport } from './routes/projects/$projectId/traces/$traceId'
-import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects/$projectId/spans/$spanId'
+import { Route as ProjectsProjectIdTracesTraceIdRouteImport } from './routes/projects.$projectId.traces.$traceId'
+import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
 
 const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
   id: '/verify-email-required',

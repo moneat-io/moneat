@@ -752,4 +752,59 @@ class LogQueryParserTest {
         assertFalse(node.isWildcard, "Quoted field value wildcards should be literal")
         assertEquals("*test*", node.value)
     }
+    
+    @Test
+    fun `trailing colon with empty value should be treated as text`() {
+        // "auth-service:" — empty value after colon, should become free text search for "auth-service"
+        val result = parser.parse("auth-service:")
+        assertNotNull(result.rootNode)
+        assertTrue(result.rootNode is LogQueryParser.QueryNode.FullTextNode,
+            "Trailing colon should produce FullTextNode, got: ${result.rootNode}")
+        val node = result.rootNode as LogQueryParser.QueryNode.FullTextNode
+        assertEquals("auth-service", node.term)
+    }
+    
+    @Test
+    fun `trailing colon in OR expression should not crash`() {
+        // "(service:api OR auth-service:)" — auth-service: has empty value
+        val result = parser.parse("(service:api OR auth-service:)")
+        assertNotNull(result.rootNode)
+        // Should parse without exception — the OR should still work
+        val sql = parser.toClickHouseSql(result.rootNode!!, ::escapeSql)
+        assertTrue(sql.contains("service"), "Should contain service condition")
+    }
+    
+    @Test
+    fun `wildcard field search should produce wildcard FieldNode`() {
+        val result = parser.parse("host:api-prod*")
+        assertNotNull(result.rootNode)
+        assertTrue(result.rootNode is LogQueryParser.QueryNode.FieldNode)
+        val node = result.rootNode as LogQueryParser.QueryNode.FieldNode
+        assertEquals("host", node.field)
+        assertEquals("api-prod*", node.value)
+        assertTrue(node.isWildcard, "Should be wildcard")
+    }
+    
+    @Test
+    fun `negated field search should produce NotNode`() {
+        val result = parser.parse("-host:api-prod-3")
+        assertNotNull(result.rootNode)
+        assertTrue(result.rootNode is LogQueryParser.QueryNode.NotNode, 
+            "Should be NotNode, got: ${result.rootNode}")
+    }
+    
+    @Test
+    fun `message field search with wildcard should work`() {
+        val result = parser.parse("message:Rate*")
+        assertNotNull(result.rootNode)
+        assertTrue(result.rootNode is LogQueryParser.QueryNode.FieldNode)
+        val node = result.rootNode as LogQueryParser.QueryNode.FieldNode
+        assertEquals("message", node.field)
+        assertEquals("Rate*", node.value)
+        assertTrue(node.isWildcard)
+        
+        val sql = parser.toClickHouseSql(result.rootNode!!, ::escapeSql)
+        assertTrue(sql.contains("ILIKE"), "Wildcard message search should use ILIKE: $sql")
+        assertTrue(sql.contains("Rate%"), "Should convert * to %: $sql")
+    }
 }

@@ -249,6 +249,11 @@ class LogQueryParser {
             
             val value = valueSb.toString()
             
+            // Empty value after colon (e.g., "auth-service:") — treat as plain text search
+            if (value.isEmpty()) {
+                return Pair(Token.Text(field), i)
+            }
+            
             // Check for range syntax [X TO Y]
             if (value.startsWith('[') && value.contains(" TO ") && value.endsWith(']')) {
                 val rangeContent = value.substring(1, value.length - 1)

@@ -131,6 +131,7 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
             className="fill-muted-foreground"
           />
           <Tooltip
+            cursor={false}
             labelFormatter={(ts) => formatTooltipTime(ts as number)}
             formatter={(value: number, name: string) => [value.toLocaleString(), name === 'total' ? 'logs' : name]}
             contentStyle={{

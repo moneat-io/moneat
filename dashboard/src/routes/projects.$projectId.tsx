@@ -103,7 +103,7 @@ function CodeBlock({
 
 function SetupPage() {
   const routerState = useRouterState()
-  const showingChildPage = /^\/projects\/[^/]+\/(settings|logs)\/?$/.test(routerState.location.pathname)
+  const showingChildPage = /^\/projects\/[^/]+\/(settings|logs|traces|spans)\/?/.test(routerState.location.pathname)
   const { project } = Route.useLoaderData()
   const router = useRouter()
   const queryClient = useQueryClient()

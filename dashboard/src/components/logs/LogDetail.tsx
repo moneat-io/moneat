@@ -70,8 +70,10 @@ function LinkableField({label, value, to, mono = true}: {label: string; value?: 
     <div className="space-y-1">
       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       <div className="flex items-start gap-1.5">
-        <Link
-          to={to}
+        <a
+          href={to}
+          target="_blank"
+          rel="noopener noreferrer"
           className={cn(
             'flex-1 break-all text-xs text-primary hover:underline inline-flex items-center gap-1',
             mono && 'font-mono'
@@ -79,7 +81,7 @@ function LinkableField({label, value, to, mono = true}: {label: string; value?: 
         >
           {value}
           <ExternalLink className="h-3 w-3 inline shrink-0" />
-        </Link>
+        </a>
         <CopyButton value={value} label={label} />
       </div>
     </div>

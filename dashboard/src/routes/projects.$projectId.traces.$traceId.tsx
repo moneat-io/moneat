@@ -29,8 +29,25 @@ function TraceDetailPage() {
 
   if (error || !trace) {
     return (
-      <div className="p-6">
-        <div className="text-destructive">Failed to load trace details</div>
+      <div className="p-6 space-y-4">
+        <div className="text-destructive font-semibold">Trace not found</div>
+        <p className="text-muted-foreground text-sm">
+          The trace <span className="font-mono">{traceId}</span> could not be found in project {projectId}.
+        </p>
+        <p className="text-muted-foreground text-sm">
+          This could happen if:
+        </p>
+        <ul className="list-disc list-inside text-muted-foreground text-sm space-y-1 ml-2">
+          <li>The trace data hasn&apos;t been sent to Moneat yet (only the log was ingested)</li>
+          <li>The trace has expired based on your retention policy</li>
+          <li>The trace ID in the log doesn&apos;t match any actual trace data</li>
+        </ul>
+        <Button asChild variant="outline" size="sm" className="mt-4">
+          <Link to="/projects/$projectId/logs" params={{ projectId }}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Logs
+          </Link>
+        </Button>
       </div>
     )
   }
