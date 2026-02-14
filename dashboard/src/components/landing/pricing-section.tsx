@@ -121,7 +121,7 @@ export function PricingSection() {
             Simple GB-based pricing
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Pay for what you use. No per-seat fees, your whole team included.
+            Pay for what you use. Unlimited team members on every plan.
           </p>
 
           <div className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-1">
@@ -250,7 +250,7 @@ export function PricingSection() {
         <div className="text-center mt-8 pt-8 border-t border-border/40">
           <p className="text-sm text-muted-foreground">
             Need more data? <span className="font-semibold text-foreground">$0.40/GB</span> for overage.
-            On-call: <span className="font-semibold text-foreground">$5/user/mo</span>.
+            On-call add-on: <span className="font-semibold text-foreground">$5/user/mo</span> for responders.
             <span className="mx-2"> </span>
             <span className="text-xs">30-day money-back guarantee</span>
           </p>

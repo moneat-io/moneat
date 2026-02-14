@@ -326,7 +326,7 @@ export function VariantA() {
 
             <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up animation-delay-200">
               Errors, logs, uptime, on-call, and status pages — everything your team needs
-              to keep your app reliable, in one place. Simple GB pricing, no per-seat fees.
+              to keep your app reliable, in one place. Simple GB pricing — your whole team included.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up animation-delay-300">

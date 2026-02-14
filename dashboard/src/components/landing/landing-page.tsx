@@ -12,7 +12,7 @@ export function LandingPage() {
     name: 'Moneat',
     url: 'https://moneat.io',
     applicationCategory: 'DeveloperApplication',
-    description: 'Errors, logs, uptime, on-call, and status pages in one platform. Simple GB pricing, no per-seat fees.',
+    description: 'Errors, logs, uptime, on-call, and status pages in one platform. Simple GB pricing, unlimited seats.',
     operatingSystem: 'Web',
     offers: {
       '@type': 'Offer',
