@@ -147,6 +147,28 @@ object ReleaseFiles : Table("release_files") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object FileBlobs : Table("file_blobs") {
+    val id = integer("id").autoIncrement()
+    val checksum = varchar("checksum", 40)
+    val size = long("size").default(0)
+    val storage_path = varchar("storage_path", 500)
+    val created_at = long("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object ArtifactBundles : Table("artifact_bundles") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val checksum = varchar("checksum", 40)
+    val state = varchar("state", 20).default("created")
+    val detail = text("detail").nullable()
+    val version = varchar("version", 255).nullable()
+    val dist = varchar("dist", 255).nullable()
+    val storage_path = varchar("storage_path", 500).nullable()
+    val created_at = long("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object UsageRecords : Table("usage_records") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)

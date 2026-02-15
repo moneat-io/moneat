@@ -340,6 +340,35 @@ data class SourceMapFileResponse(
 )
 
 @Serializable
+data class ChunkUploadParameters(
+    val url: String,
+    val chunkSize: Long,
+    val chunksPerRequest: Int,
+    val maxFileSize: Long,
+    val maxRequestSize: Long,
+    val concurrency: Int,
+    val hashAlgorithm: String,
+    val compression: List<String>,
+    val accept: List<String>
+)
+
+@Serializable
+data class AssembleArtifactBundleRequest(
+    val checksum: String,
+    val chunks: List<String>,
+    val projects: List<String>,
+    val version: String? = null,
+    val dist: String? = null
+)
+
+@Serializable
+data class AssembleResponse(
+    val state: String,
+    val detail: String? = null,
+    val missingChunks: List<String> = emptyList()
+)
+
+@Serializable
 data class ReleaseListResponse(
     val version: String,
     val firstSeen: String,

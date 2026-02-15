@@ -1,5 +1,8 @@
 package com.moneat.routes
 
+import com.moneat.models.AssembleArtifactBundleRequest
+import com.moneat.models.ChunkUploadParameters
+import com.moneat.models.AssembleResponse
 import com.moneat.models.CreateReleaseRequest
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.services.AuthTokenService
@@ -12,6 +15,8 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import mu.KotlinLogging
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
 
 private val logger = KotlinLogging.logger {}
 
@@ -293,6 +298,176 @@ fun Route.releaseRoutes() {
                 
                 val files = releaseService.listReleaseFiles(projectId, version)
                 call.respond(files)
+            }
+        }
+        
+        // Chunk upload endpoint for sentry-cli
+        // GET /api/0/organizations/{orgSlug}/chunk-upload/
+        route("/api/0/organizations/{orgSlug}/chunk-upload") {
+            get("/") {
+                val principal = call.principal<AuthTokenPrincipal>()
+                    ?: run {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@get
+                    }
+                
+                val orgSlug = call.parameters["orgSlug"] ?: return@get
+                
+                if (!releaseService.hasOrgAccess(principal.userId, orgSlug)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@get
+                }
+                
+                val url = "/organizations/$orgSlug/chunk-upload/"
+                
+                call.respond(ChunkUploadParameters(
+                    url = url,
+                    chunkSize = 8388608, // 8 MiB (power of 2 for CLI compat)
+                    chunksPerRequest = 64,
+                    maxFileSize = 2147483648, // 2 GiB
+                    maxRequestSize = 33554432, // 32 MiB
+                    concurrency = 8,
+                    hashAlgorithm = "sha1",
+                    compression = listOf("gzip"),
+                    accept = listOf(
+                        "debug_files",
+                        "release_files",
+                        "pdbs",
+                        "sources",
+                        "bcsymbolmaps",
+                        "il2cpp",
+                        "portablepdbs",
+                        "artifact_bundles",
+                        "artifact_bundles_v2",
+                        "proguard",
+                        "dartsymbolmap"
+                    )
+                ))
+            }
+            
+            // POST /api/0/organizations/{orgSlug}/chunk-upload/
+            post("/") {
+                val principal = call.principal<AuthTokenPrincipal>()
+                    ?: run {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@post
+                    }
+                
+                val orgSlug = call.parameters["orgSlug"] ?: return@post
+                
+                if (!releaseService.hasOrgAccess(principal.userId, orgSlug)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@post
+                }
+                
+                val multipart = call.receiveMultipart()
+                var chunksProcessed = 0
+                
+                multipart.forEachPart { part ->
+                    if (part is PartData.FileItem) {
+                        val checksum = part.originalFileName ?: part.name ?: ""
+                        val rawBytes = part.streamProvider().readBytes()
+                        
+                        // Handle gzip-compressed chunks
+                        val bytes = if (part.name == "file_gzip") {
+                            try {
+                                val bos = ByteArrayOutputStream()
+                                GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
+                                bos.toByteArray()
+                            } catch (e: Exception) {
+                                rawBytes
+                            }
+                        } else {
+                            rawBytes
+                        }
+                        
+                        releaseService.storeChunk(checksum, bytes)
+                        chunksProcessed++
+                    }
+                    part.dispose()
+                }
+                
+                logger.info { "Stored $chunksProcessed chunks for org $orgSlug" }
+                call.respond(HttpStatusCode.OK)
+            }
+        }
+        
+        // Artifact bundle assemble endpoint
+        // POST /api/0/organizations/{orgSlug}/artifactbundle/assemble/
+        route("/api/0/organizations/{orgSlug}/artifactbundle") {
+            post("/assemble/") {
+                val principal = call.principal<AuthTokenPrincipal>()
+                    ?: run {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@post
+                    }
+                
+                val orgSlug = call.parameters["orgSlug"] ?: return@post
+                
+                val orgId = releaseService.getOrganizationIdBySlug(orgSlug)
+                    ?: run {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Organization not found"))
+                        return@post
+                    }
+                
+                if (!releaseService.hasOrgAccess(principal.userId, orgSlug)) {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@post
+                }
+                
+                val request = call.receive<AssembleArtifactBundleRequest>()
+                
+                if (request.projects.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "You need to specify at least one project"))
+                    return@post
+                }
+                
+                // Check for missing chunks
+                val missingChunks = releaseService.findMissingChunks(request.chunks.toSet())
+                if (missingChunks.isNotEmpty()) {
+                    call.respond(AssembleResponse(
+                        state = "not_found",
+                        missingChunks = missingChunks
+                    ))
+                    return@post
+                }
+                
+                // Check if already assembled
+                val existing = releaseService.getAssembleStatus(orgId, request.checksum)
+                if (existing != null) {
+                    call.respond(AssembleResponse(
+                        state = existing.first,
+                        detail = existing.second,
+                        missingChunks = emptyList()
+                    ))
+                    return@post
+                }
+                
+                // Assemble the bundle
+                try {
+                    releaseService.assembleArtifactBundle(
+                        orgId = orgId,
+                        checksum = request.checksum,
+                        chunks = request.chunks,
+                        projectSlugs = request.projects,
+                        version = request.version,
+                        dist = request.dist
+                    )
+                    
+                    val status = releaseService.getAssembleStatus(orgId, request.checksum)
+                    call.respond(AssembleResponse(
+                        state = status?.first ?: "ok",
+                        detail = status?.second,
+                        missingChunks = emptyList()
+                    ))
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to assemble artifact bundle" }
+                    call.respond(AssembleResponse(
+                        state = "error",
+                        detail = e.message,
+                        missingChunks = emptyList()
+                    ))
+                }
             }
         }
     }
