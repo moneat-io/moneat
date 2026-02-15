@@ -1,6 +1,8 @@
 import {forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState} from 'react'
 import {Pause, Play} from 'lucide-react'
 
+export type ReplayOrientation = 'portrait' | 'landscape'
+
 interface MobileReplayViewerProps {
   events: unknown[]
   platform: string
@@ -8,6 +10,7 @@ interface MobileReplayViewerProps {
   onTimeUpdate?: (offsetMs: number) => void
   onDurationReady?: (durationMs: number) => void
   onPlayingChange?: (playing: boolean) => void
+  onOrientationChange?: (orientation: ReplayOrientation) => void
   hideControls?: boolean
 }
 
@@ -24,6 +27,9 @@ interface ReplayEvent {
   data?: {
     tag?: string
     payload?: Record<string, unknown>
+    width?: number
+    height?: number
+    href?: string
   }
 }
 
@@ -308,7 +314,7 @@ function findSeekTarget(globalMs: number, durationsMs: number[]): GlobalSeekTarg
 }
 
 export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileReplayViewerProps>(function MobileReplayViewer(
-  { events, platform, className = '', onTimeUpdate, onDurationReady, onPlayingChange, hideControls },
+  { events, platform, className = '', onTimeUpdate, onDurationReady, onPlayingChange, onOrientationChange, hideControls },
   ref
 ) {
   const videoSegments = useMemo(
@@ -462,6 +468,53 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
     })
     return starts
   }, [replayEvents])
+
+  // Viewport metadata (type 4) events - emitted when orientation changes. width > height = landscape.
+  const viewportOrientationByTime = useMemo(() => {
+    const getWidthHeight = (e: ReplayEvent): { width: number; height: number } | null => {
+      const w = e.data?.width ?? (e.data?.payload as Record<string, unknown>)?.width
+      const h = e.data?.height ?? (e.data?.payload as Record<string, unknown>)?.height
+      if (typeof w === 'number' && typeof h === 'number') return { width: w, height: h }
+      return null
+    }
+    const viewportEvents = replayEvents
+      .filter((e) => e.type === 4 && getWidthHeight(e))
+      .map((e) => {
+        const wh = getWidthHeight(e)!
+        const segmentId = getEventSegmentId(e)
+        const segmentIndex = segmentId !== undefined ? filteredSegmentIndexById.get(segmentId) : undefined
+        if (segmentIndex === undefined) return null
+        const segmentStart = segmentStartTimestampById.get(segmentId!)
+        const segmentDuration = segmentDurationsMs[segmentIndex] ?? 0
+        const localMs = segmentStart !== undefined ? clamp(e.timestamp - segmentStart, 0, segmentDuration) : 0
+        const globalMs = (cumulativeOffsetsMs[segmentIndex] ?? 0) + localMs
+        const orientation: ReplayOrientation = wh.width > wh.height ? 'landscape' : 'portrait'
+        return { globalMs, orientation }
+      })
+      .filter((x): x is { globalMs: number; orientation: ReplayOrientation } => x !== null)
+      .sort((a, b) => a.globalMs - b.globalMs)
+    return viewportEvents
+  }, [
+    replayEvents,
+    filteredSegmentIndexById,
+    segmentStartTimestampById,
+    segmentDurationsMs,
+    cumulativeOffsetsMs,
+  ])
+
+  const currentOrientation = useMemo((): ReplayOrientation => {
+    if (viewportOrientationByTime.length === 0) return 'portrait'
+    let best = viewportOrientationByTime[0]
+    for (const v of viewportOrientationByTime) {
+      if (v.globalMs <= currentGlobalTimeMs) best = v
+      else break
+    }
+    return best.orientation
+  }, [viewportOrientationByTime, currentGlobalTimeMs])
+
+  useEffect(() => {
+    onOrientationChange?.(currentOrientation)
+  }, [currentOrientation, onOrientationChange])
 
   const timelineMarkers = useMemo((): TimelineMarker[] => {
     if (totalDurationMs <= 0) return []
