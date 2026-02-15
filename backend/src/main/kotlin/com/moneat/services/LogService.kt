@@ -266,8 +266,8 @@ class LogService {
 
         val whereClause = conditions.joinToString(" AND ")
         
-        // Log the complete WHERE clause for debugging
-        logger.info { "Executing log query with WHERE clause: $whereClause" }
+        // Log the complete WHERE clause for debugging (at DEBUG level to avoid logging user data in production)
+        logger.debug { "Executing log query with WHERE clause: $whereClause" }
         
         val query = """
             SELECT

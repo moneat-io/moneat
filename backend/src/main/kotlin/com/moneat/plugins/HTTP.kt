@@ -37,6 +37,10 @@ fun Application.configureHTTP() {
         call.response.headers.append("Referrer-Policy", "strict-origin-when-cross-origin")
         call.response.headers.append("X-XSS-Protection", "1; mode=block")
         
+        // Content Security Policy
+        call.response.headers.append("Content-Security-Policy", 
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'")
+        
         // HSTS - only in production (not on localhost)
         if (!call.request.local.remoteHost.contains("localhost") && 
             !call.request.local.remoteHost.contains("127.0.0.1")) {

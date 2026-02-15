@@ -39,6 +39,29 @@ function LoginPage() {
   const [showSsoInput, setShowSsoInput] = useState(false)
   const [ssoEmail, setSsoEmail] = useState('')
 
+  // Validate redirect URI against allowlist
+  const isValidRedirectUri = (uri: string): boolean => {
+    try {
+      const url = new URL(uri)
+      // Allow moneat:// scheme for mobile app
+      // Add other allowed schemes/domains as needed
+      const allowedSchemes = ['moneat']
+      const allowedHosts = ['moneat.io', 'www.moneat.io']
+      
+      if (allowedSchemes.includes(url.protocol.replace(':', ''))) {
+        return true
+      }
+      
+      if (url.protocol === 'https:' && allowedHosts.includes(url.hostname)) {
+        return true
+      }
+      
+      return false
+    } catch {
+      return false
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -49,6 +72,13 @@ function LoginPage() {
       if (inviteToken) {
         navigate({ to: '/accept-invite', search: { token: inviteToken } })
       } else if (redirectUri) {
+        // Validate redirect URI before redirecting
+        if (!isValidRedirectUri(redirectUri)) {
+          setError('Invalid redirect URI')
+          setLoading(false)
+          return
+        }
+        
         // Redirect back to mobile app with token
         // Use window.location for external redirect
         const hasQuery = redirectUri.includes('?')

@@ -84,7 +84,7 @@ class DashboardService {
     }
     
     private suspend fun getProjectIdForIssue(issueId: String): Long? {
-        val escapedIssueId = issueId.replace("'", "''")
+        val escapedIssueId = ClickHouseSqlUtils.escapeSql(issueId)
         val query = """
             SELECT project_id 
             FROM $clickhouseDb.issues 
@@ -1545,7 +1545,7 @@ class DashboardService {
 
     suspend fun getReleaseStats(projectId: Long, version: String): ReleaseDetailStats? {
         val retentionDays = getProjectRetentionDays(projectId)
-        val escapedVersion = version.replace("'", "''")
+        val escapedVersion = ClickHouseSqlUtils.escapeSql(version)
         val releasesQuery = """
             SELECT
                 formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
@@ -1698,7 +1698,7 @@ class DashboardService {
     }
 
     private suspend fun getNewIssueCountForRelease(projectId: Long, version: String, retentionDays: Int): Long {
-        val escapedVersion = version.replace("'", "''")
+        val escapedVersion = ClickHouseSqlUtils.escapeSql(version)
         val query = """
             SELECT count() as total FROM (
                 SELECT issue_id, argMin(release, timestamp) as first_release
@@ -1714,7 +1714,7 @@ class DashboardService {
     }
 
     private suspend fun getCrashFreeRateForRelease(projectId: Long, version: String, retentionDays: Int): Double? {
-        val escapedVersion = version.replace("'", "''")
+        val escapedVersion = ClickHouseSqlUtils.escapeSql(version)
         val query = """
             SELECT countIf(errors = 0) * 100.0 / count() as rate
             FROM $clickhouseDb.sessions
