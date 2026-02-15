@@ -179,8 +179,8 @@ describe('logViewUrlState', () => {
       expect(result.to).toBeUndefined()
     })
 
-    it('should omit default viz mode (timeseries)', () => {
-      const result = serializeLogViewState({vizMode: 'timeseries'})
+    it('should omit default viz mode (list)', () => {
+      const result = serializeLogViewState({vizMode: 'list'})
       expect(result.viz).toBeUndefined()
     })
 

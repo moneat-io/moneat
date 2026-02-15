@@ -7,11 +7,18 @@ echo "🌱 Seeding E2E test data..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+# Detect docker compose command (v1: docker-compose, v2: docker compose)
+if command -v docker-compose &> /dev/null; then
+  DOCKER_COMPOSE="docker-compose"
+else
+  DOCKER_COMPOSE="docker compose"
+fi
+
 # Check if database is accessible (whether backend is running or not)
 echo "Checking database connection..."
-if ! docker-compose ps postgres | grep -q "Up"; then
+if ! $DOCKER_COMPOSE ps postgres | grep -q "Up"; then
   echo "❌ PostgreSQL is not running. Please start database:"
-  echo "   docker-compose up -d postgres"
+  echo "   $DOCKER_COMPOSE up -d postgres"
   exit 1
 fi
 

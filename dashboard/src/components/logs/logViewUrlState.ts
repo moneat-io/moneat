@@ -161,8 +161,8 @@ export function serializeLogViewState(state: {
     }
   }
   
-  // Viz mode (omit default "timeseries")
-  if (state.vizMode && state.vizMode !== 'timeseries') {
+  // Viz mode (omit default "list")
+  if (state.vizMode && state.vizMode !== 'list') {
     result.viz = state.vizMode
   }
   

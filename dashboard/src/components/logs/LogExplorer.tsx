@@ -138,7 +138,7 @@ export function LogExplorer({
         timePreset: urlSearch.timePreset || defaultTimeRange,
         customFrom: urlSearch.from || '',
         customTo: urlSearch.to || '',
-        vizMode: urlSearch.viz || 'timeseries' as LogVizMode,
+        vizMode: urlSearch.viz || 'list' as LogVizMode,
         groupBy: urlSearch.groupBy || '',
         topField: urlSearch.topField || 'service',
         cursor: urlSearch.cursor || null,
@@ -152,7 +152,7 @@ export function LogExplorer({
       timePreset: defaultTimeRange,
       customFrom: '',
       customTo: '',
-      vizMode: 'timeseries' as LogVizMode,
+      vizMode: 'list' as LogVizMode,
       groupBy: '',
       topField: 'service',
       cursor: null,
@@ -216,7 +216,7 @@ export function LogExplorer({
     setTimePreset(urlSearch.timePreset || defaultTimeRange)
     setCustomFrom(urlSearch.from || '')
     setCustomTo(urlSearch.to || '')
-    setVizMode(urlSearch.viz || 'timeseries')
+    setVizMode(urlSearch.viz || 'list')
     setGroupBy(urlSearch.groupBy || '')
     setTopField(urlSearch.topField || 'service')
     setCursor(urlSearch.cursor || null)
@@ -403,17 +403,26 @@ export function LogExplorer({
 
   // Accumulate logs when new page loads (only in list mode and not live tail)
   useEffect(() => {
-    if (!logPage?.logs || liveTailEnabled || vizMode !== 'list') return
+    if (!logPage?.logs || liveTailEnabled) return
     
-    // If cursor is null, this is the first page (or reset), so replace
-    if (cursor === null) {
-      setAccumulatedLogs(logPage.logs)
+    // Only accumulate in list mode
+    if (vizMode === 'list') {
+      // If cursor is null, this is the first page (or reset), so replace
+      if (cursor === null) {
+        setAccumulatedLogs(logPage.logs)
+      } else {
+        // Otherwise, append to accumulated logs
+        setAccumulatedLogs(prev => [...prev, ...logPage.logs])
+      }
+      setIsLoadingMore(false)
     } else {
-      // Otherwise, append to accumulated logs
-      setAccumulatedLogs(prev => [...prev, ...logPage.logs])
+      // When switching away from list mode, populate accumulated logs
+      // so when switching back, we don't start empty
+      if (accumulatedLogs.length === 0 && cursor === null) {
+        setAccumulatedLogs(logPage.logs)
+      }
     }
-    setIsLoadingMore(false)
-  }, [logPage, cursor, liveTailEnabled, vizMode])
+  }, [logPage, cursor, liveTailEnabled, vizMode, accumulatedLogs.length])
   
   const logs = vizMode === 'list' && !liveTailEnabled ? accumulatedLogs : (logPage?.logs ?? [])
   const totalCount = logPage?.totalCount ?? null
