@@ -377,6 +377,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
   const [currentSegmentTimeMs, setCurrentSegmentTimeMs] = useState(0)
   const [hoveredTimelineMarkerId, setHoveredTimelineMarkerId] = useState<string | null>(null)
   const [loadedSegmentDurationsMs, setLoadedSegmentDurationsMs] = useState<Record<number, number>>({})
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const timelineTrackRef = useRef<HTMLDivElement>(null)
@@ -503,14 +504,18 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
   ])
 
   const currentOrientation = useMemo((): ReplayOrientation => {
-    if (viewportOrientationByTime.length === 0) return 'portrait'
-    let best = viewportOrientationByTime[0]
-    for (const v of viewportOrientationByTime) {
-      if (v.globalMs <= currentGlobalTimeMs) best = v
-      else break
+    if (viewportOrientationByTime.length > 0) {
+      let best = viewportOrientationByTime[0]
+      for (const v of viewportOrientationByTime) {
+        if (v.globalMs <= currentGlobalTimeMs) best = v
+        else break
+      }
+      return best.orientation
     }
-    return best.orientation
-  }, [viewportOrientationByTime, currentGlobalTimeMs])
+    // Fallback: infer from video dimensions when no viewport metadata events
+    if (videoDimensions && videoDimensions.width > videoDimensions.height) return 'landscape'
+    return 'portrait'
+  }, [viewportOrientationByTime, currentGlobalTimeMs, videoDimensions])
 
   useEffect(() => {
     onOrientationChange?.(currentOrientation)
@@ -641,6 +646,8 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                 onLoadedMetadata={() => {
                   const video = videoRef.current
                   if (!video || !selectedVideo) return
+
+                  setVideoDimensions({ width: video.videoWidth, height: video.videoHeight })
 
                   const loadedDurationMs = video.duration * 1000
                   if (Number.isFinite(loadedDurationMs) && loadedDurationMs > 0) {
