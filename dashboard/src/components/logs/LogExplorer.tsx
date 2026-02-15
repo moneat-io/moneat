@@ -15,6 +15,7 @@ import {LogAggregateTable} from '@/components/logs/LogAggregateTable'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {cn} from '@/lib/utils'
+import {stripAnsi} from '@/lib/ansi'
 import {ChevronDown, ChevronLeft, Download, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
 import {useQuery} from '@tanstack/react-query'
 import {
@@ -1016,7 +1017,7 @@ export function LogExplorer({
                                   {normalizedLevel}
                                 </Badge>
                                 <span className="font-mono text-xs break-all text-foreground/80">
-                                  {log.message}
+                                  {stripAnsi(log.message)}
                                 </span>
                               </div>
                             </button>

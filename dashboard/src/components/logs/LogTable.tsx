@@ -1,6 +1,7 @@
 import {Badge} from '@/components/ui/badge'
 import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
+import {stripAnsi} from '@/lib/ansi'
 
 interface LogTableProps {
   logs: LogEntry[]
@@ -62,16 +63,15 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true}: Log
 
   return (
     <div className="min-w-0 max-w-full bg-card/80">
-      <div className="max-w-full overflow-auto">
-        <table className="w-full min-w-0 table-auto text-sm">
-          <colgroup>
-            <col className="w-[3px]" />
-            <col className="w-[1%]" />
-            <col className="w-[1%]" />
-            <col className="w-[1%]" />
-            <col className="w-[1%]" />
-            <col />
-          </colgroup>
+      <table className="w-full min-w-0 table-auto text-sm">
+        <colgroup>
+          <col className="w-[3px]" />
+          <col className="w-[1%]" />
+          <col className="w-[1%]" />
+          <col className="w-[1%]" />
+          <col className="w-[1%]" />
+          <col />
+        </colgroup>
           <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
             <tr className="border-b text-left">
               <th className="w-[3px] p-0" />
@@ -145,7 +145,7 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true}: Log
                         ? 'text-foreground'
                         : 'text-foreground/80'
                     )}>
-                      {log.message || log.body || '-'}
+                      {stripAnsi(log.message || log.body) || '-'}
                     </span>
                   </td>
                 </tr>
@@ -154,6 +154,5 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true}: Log
           </tbody>
         </table>
       </div>
-    </div>
-  )
-}
+    )
+  }

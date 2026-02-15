@@ -4,6 +4,7 @@ import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/
 import {Separator} from '@/components/ui/separator'
 import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
+import {stripAnsi} from '@/lib/ansi'
 import {Check, Copy, ExternalLink, Eye} from 'lucide-react'
 import {useCallback, useState} from 'react'
 import {useParams} from '@tanstack/react-router'
@@ -140,7 +141,8 @@ export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps)
   const {projectId} = useParams({strict: false})
 
   const normalizedLevel = (log.level || 'info').toLowerCase()
-  const body = log.body || ''
+  const body = stripAnsi(log.body || '')
+  const message = stripAnsi(log.message || '')
   const {isJson, formatted: formattedBody} = body ? tryFormatJson(body) : {isJson: false, formatted: ''}
   const hasTracing = log.traceId || log.spanId
   const hasContainer = log.containerName || log.containerId || log.containerImage
@@ -193,14 +195,14 @@ export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps)
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Message</span>
             <div className="relative">
               <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
-                {log.message || '-'}
+                {message || '-'}
               </pre>
-              {log.message && <div className="absolute right-2 top-2"><CopyButton value={log.message} label="message" /></div>}
+              {message && <div className="absolute right-2 top-2"><CopyButton value={message} label="message" /></div>}
             </div>
           </div>
 
           {/* Body */}
-          {body && body !== log.message && (
+          {body && body !== message && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Body</span>
