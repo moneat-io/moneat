@@ -365,10 +365,105 @@ function ReplayDetailPage() {
     replayPlayerRef.current?.setSpeed(speed)
   }, [])
 
+  // Derive breadcrumb timeline items from recording events for mobile replays when backend timeline is empty.
+  const breadcrumbsFromEvents = useMemo(() => {
+    if (!isMobileReplay || !Array.isArray(events) || events.length === 0) return []
+    const startMs = recordingStartMs ?? 0
+
+    const breadcrumbEvents = events
+      .filter(
+        (e): e is { type: number; timestamp: number; data?: { tag?: string; payload?: Record<string, unknown> } } =>
+          typeof e === 'object' &&
+          e !== null &&
+          'type' in e &&
+          'timestamp' in e &&
+          (e as { type: unknown }).type === 5 &&
+          (e as { data?: { tag?: string } }).data?.tag === 'breadcrumb'
+      )
+      .filter((e) => {
+        const p = e.data?.payload ?? {}
+        const cat = p.category
+        const action = p.action
+        if (typeof cat === 'string' && cat.startsWith('device.')) return false
+        if (
+          typeof action === 'string' &&
+          ['SCREEN_OFF', 'SCREEN_ON', 'DREAMING_STARTED', 'DREAMING_STOPPED'].includes(action)
+        )
+          return false
+        return true
+      })
+      .sort((a, b) => a.timestamp - b.timestamp)
+
+    const formatBreadcrumbTitle = (p: Record<string, unknown>): string => {
+      const cat = (p.category ?? p.type ?? '') as string
+      if (typeof cat === 'string' && cat.length > 0) {
+        return cat
+          .split(/[._-]/)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+          .join(' ')
+      }
+      const msg = p.message
+      if (typeof msg === 'string' && msg.length > 0) return msg
+      return 'Breadcrumb'
+    }
+
+    const formatBreadcrumbDetail = (p: Record<string, unknown>, category: string): string | undefined => {
+      const cat = category.toLowerCase()
+      if (p.message && typeof p.message === 'string') return p.message
+      if (cat.includes('ui.lifecycle'))
+        return `${p.screen ?? 'Screen'}: ${p.state ?? ''}`
+      if (cat.includes('ui.click')) {
+        const viewClass = (p['view.class'] as string)?.split('.').pop() ?? ''
+        const viewId = p['view.id'] ?? ''
+        return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
+      }
+      if (cat.includes('navigation')) return `${p.from ?? ''} → ${p.to ?? ''}`
+      if (cat.includes('http') || cat.includes('network')) {
+        const parts: string[] = []
+        if (p.method) parts.push(String(p.method))
+        if (p.url) parts.push(String(p.url))
+        if (p.status_code != null) parts.push(String(p.status_code))
+        return parts.length > 0 ? parts.join(' ') : undefined
+      }
+      if (p.action && typeof p.action === 'string') return p.action
+      if (p.type && typeof p.type === 'string') return p.type
+      return undefined
+    }
+
+    return breadcrumbEvents.map((e, idx) => {
+      const p = e.data?.payload ?? {}
+      const cat = (p.category ?? p.type ?? '') as string
+      const title = formatBreadcrumbTitle(p)
+      const description = formatBreadcrumbDetail(p, cat)
+      let offsetMs = e.timestamp - startMs
+      if (mobileCompressedTimeMapper && Number.isFinite(e.timestamp)) {
+        offsetMs = mobileCompressedTimeMapper(e.timestamp)
+      }
+      offsetMs = Math.max(0, durationMs > 0 ? Math.min(offsetMs, durationMs) : offsetMs)
+      return {
+        id: `breadcrumb-${idx}-${e.timestamp}`,
+        type: 'span' as const,
+        timestamp: new Date(e.timestamp).toISOString(),
+        offsetMs,
+        title,
+        description,
+      }
+    })
+  }, [
+    isMobileReplay,
+    events,
+    recordingStartMs,
+    durationMs,
+    mobileCompressedTimeMapper,
+  ])
+
   // Align backend offsets (based on replay_start_timestamp) with player offsets (based on recording event start).
+  // For mobile replays with no backend timeline, use breadcrumbs derived from recording events.
   const timelineItems = useMemo(() => {
     const items = timeline?.items ?? []
-    if (items.length === 0) return items
+    if (items.length === 0) {
+      return breadcrumbsFromEvents
+    }
 
     const replayStartMs = timeline?.replayStartMs ?? 0
     const shouldAdjust =
@@ -397,7 +492,14 @@ function ReplayDetailPage() {
     }
 
     return out
-  }, [timeline?.items, timeline?.replayStartMs, recordingStartMs, durationMs, mobileCompressedTimeMapper])
+  }, [
+    timeline?.items,
+    timeline?.replayStartMs,
+    recordingStartMs,
+    durationMs,
+    mobileCompressedTimeMapper,
+    breadcrumbsFromEvents,
+  ])
 
   if (isLoading || !replay) {
     return (
@@ -481,7 +583,7 @@ function ReplayDetailPage() {
           ) : isMobileReplay ? (
             <MobileDeviceContainer
               platform={replay.platform === 'ios' ? 'ios' : 'android'}
-              className="py-4"
+              className="py-2"
             >
               <MobileReplayViewer
                 ref={mobileReplayViewerRef}

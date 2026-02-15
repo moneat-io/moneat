@@ -584,7 +584,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                 key={`${selectedVideo.segment_id ?? selectedVideo.resolvedSegmentId}-${selectedSegmentIdx}`}
                 src={videoSrc}
                 preload="metadata"
-                className="w-full max-h-[520px] bg-black"
+                className="w-full max-h-[min(520px,calc(100vh-280px))] bg-black"
                 aria-label={`${platform} replay video`}
                 onLoadedMetadata={() => {
                   const video = videoRef.current

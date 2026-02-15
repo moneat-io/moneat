@@ -41,7 +41,7 @@ fun Application.configureHTTP() {
     }
     
     // Add security headers to all responses
-    intercept(ApplicationCallPipeline.Call) {
+    intercept(ApplicationCallPipeline.Plugins) {
         call.response.headers.append("X-Content-Type-Options", "nosniff")
         call.response.headers.append("X-Frame-Options", "DENY")
         call.response.headers.append("Referrer-Policy", "strict-origin-when-cross-origin")
