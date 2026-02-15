@@ -12,7 +12,6 @@ function OAuthCallbackPage() {
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
-    const token = searchParams.get('token')
     const errorParam = searchParams.get('error')
     const message = searchParams.get('message')
 
@@ -24,20 +23,11 @@ function OAuthCallbackPage() {
       return
     }
 
-    if (token) {
-      // Store the token
-      localStorage.setItem('auth_token', token)
-      
-      // Redirect to home
-      setTimeout(() => {
-        navigate({ to: '/' })
-      }, 500)
-    } else {
-      setError('No authentication token received.')
-      setTimeout(() => {
-        navigate({ to: '/login' })
-      }, 3000)
-    }
+    // Auth token is now set as httpOnly cookie by the backend redirect
+    sessionStorage.setItem('authenticated', 'true')
+    setTimeout(() => {
+      navigate({ to: '/' })
+    }, 500)
   }, [navigate])
 
   return (

@@ -429,7 +429,10 @@ private fun authenticateTailRequest(call: ApplicationCall): Int? {
         ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
         ?.removePrefix("Bearer ")
         ?.trim()
-    val token = bearerToken ?: call.request.queryParameters["token"]
+    // Try: Authorization header → cookie → query param (legacy fallback)
+    val token = bearerToken
+        ?: call.request.cookies["auth_token"]
+        ?: call.request.queryParameters["token"]
 
     if (token.isNullOrBlank()) return null
 

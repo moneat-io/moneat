@@ -3,6 +3,7 @@ package com.moneat.routes
 import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.services.SsoService
+import com.moneat.utils.AuthCookieUtils
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -57,9 +58,9 @@ fun Route.ssoRoutes() {
                 
                 val callbackData = ssoService.handleSamlResponse(samlResponse, relayState)
                 
-                // Redirect to dashboard with token
+                AuthCookieUtils.setAuthCookie(call, callbackData.token)
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/auth/sso/callback?token=${callbackData.token}&email=${callbackData.email}&name=${callbackData.name}")
+                call.respondRedirect("$dashboardUrl/auth/sso/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "SAML ACS failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
@@ -78,9 +79,9 @@ fun Route.ssoRoutes() {
                 
                 val callbackData = ssoService.handleOidcCallback(code, state)
                 
-                // Redirect to dashboard with token
+                AuthCookieUtils.setAuthCookie(call, callbackData.token)
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/auth/sso/callback?token=${callbackData.token}&email=${callbackData.email}&name=${callbackData.name}")
+                call.respondRedirect("$dashboardUrl/auth/sso/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "OIDC callback failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")

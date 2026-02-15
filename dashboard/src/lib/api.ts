@@ -1546,21 +1546,22 @@ interface AiConversationDetail {
 class ApiClient {
   private authRedirectInProgress = false
 
-  private getToken(): string | null {
-    return sessionStorage.getItem('impersonate_token') || localStorage.getItem('auth_token')
+  private getImpersonateToken(): string | null {
+    return sessionStorage.getItem('impersonate_token')
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken()
+    const impersonateToken = this.getImpersonateToken()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     }
-    if (token) headers['Authorization'] = `Bearer ${token}`
+    // Only send Authorization header for impersonation; normal auth uses httpOnly cookie
+    if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
 
     let response: Response
     try {
-      response = await fetch(endpoint, { ...options, headers })
+      response = await fetch(endpoint, { ...options, headers, credentials: 'include' })
     } catch (err) {
       // Create a clean error without the massive stack trace from fetch
       const networkError = new Error('NETWORK_ERROR')
@@ -1568,7 +1569,7 @@ class ApiClient {
       throw networkError
     }
 
-    if (response.status === 401 && token) {
+    if (response.status === 401) {
       this.logout()
 
       if (
@@ -1663,7 +1664,8 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password, name, ...legalConsent }),
     })
-    localStorage.setItem('auth_token', response.token)
+    // Token is now set as httpOnly cookie by the backend
+    sessionStorage.setItem('authenticated', 'true')
     return response
   }
 
@@ -1672,7 +1674,8 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
-    localStorage.setItem('auth_token', response.token)
+    // Token is now set as httpOnly cookie by the backend
+    sessionStorage.setItem('authenticated', 'true')
     return response
   }
 
@@ -1713,11 +1716,29 @@ class ApiClient {
 
   logout() {
     sessionStorage.removeItem('impersonate_token')
-    localStorage.removeItem('auth_token')
+    sessionStorage.removeItem('authenticated')
+    // Clear the httpOnly auth cookie via backend
+    fetch(`${API_BASE.replace('/v1', '')}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {})
   }
 
   isAuthenticated(): boolean {
-    return !!this.getToken()
+    // Check impersonation token first, then session flag
+    // The session flag is set after successful login/signup; actual auth is via httpOnly cookie
+    return !!this.getImpersonateToken() || sessionStorage.getItem('authenticated') === 'true'
+  }
+
+  async checkAuth(): Promise<boolean> {
+    try {
+      await this.getCurrentUser()
+      sessionStorage.setItem('authenticated', 'true')
+      return true
+    } catch {
+      sessionStorage.removeItem('authenticated')
+      return false
+    }
   }
 
   async getProjects(): Promise<Project[]> {
@@ -2134,13 +2155,7 @@ class ApiClient {
       environment?: string
     } = {}
   ): EventSource {
-    const token = this.getToken()
-    if (!token) {
-      throw new Error('Missing auth token')
-    }
-
     const params = new URLSearchParams()
-    params.set('token', token)
     if (options.query) params.set('q', options.query)
     if (options.levels && options.levels.length > 0) {
       options.levels.forEach((level) => params.append('level', level))
@@ -2148,7 +2163,8 @@ class ApiClient {
     if (options.service) params.set('service', options.service)
     if (options.environment) params.set('environment', options.environment)
 
-    return new EventSource(`${API_BASE}/projects/${projectId}/logs/tail?${params.toString()}`)
+    // Auth is handled via httpOnly cookie (EventSource sends cookies for same-origin)
+    return new EventSource(`${API_BASE}/projects/${projectId}/logs/tail?${params.toString()}`, { withCredentials: true })
   }
 
   private buildLogFilterParams(options: {
@@ -2254,13 +2270,9 @@ class ApiClient {
     const params = this.buildLogFilterParams(options)
     if (options.limit) params.set('limit', String(options.limit))
 
-    const token = this.getToken()
-    const headers: Record<string, string> = {}
-    if (token) headers['Authorization'] = `Bearer ${token}`
-
     const response = await fetch(
       `${API_BASE}/projects/${projectId}/logs/export?${params.toString()}`,
-      { headers }
+      { credentials: 'include' }
     )
     if (!response.ok) throw new Error('Export failed')
 

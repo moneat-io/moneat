@@ -22,17 +22,17 @@ fun Application.configureSecurity() {
     val realm = config.property("jwt.realm").getString()
     val authTokenService = AuthTokenService()
     
+    val jwtVerifier = JWT
+        .require(Algorithm.HMAC256(secret))
+        .withAudience(audience)
+        .withIssuer(issuer)
+        .build()
+    
     install(Authentication) {
-        // JWT authentication for user sessions
+        // JWT authentication for user sessions (reads from Authorization header or auth_token cookie)
         jwt("auth-jwt") {
             this.realm = realm
-            verifier(
-                JWT
-                    .require(Algorithm.HMAC256(secret))
-                    .withAudience(audience)
-                    .withIssuer(issuer)
-                    .build()
-            )
+            verifier(jwtVerifier)
             validate { credential ->
                 val userId = credential.payload.getClaim("userId").asInt()
                 if (userId != null) {
@@ -44,6 +44,20 @@ fun Application.configureSecurity() {
                     JWTPrincipal(credential.payload)
                 } else {
                     null
+                }
+            }
+            // Fall back to reading JWT from httpOnly cookie when no Authorization header present
+            authHeader { call ->
+                val authHeader = call.request.headers["Authorization"]
+                if (authHeader != null) {
+                    try { io.ktor.http.parseAuthorizationHeader(authHeader) } catch (_: Exception) { null }
+                } else {
+                    val cookieToken = call.request.cookies["auth_token"]
+                    if (cookieToken != null) {
+                        io.ktor.http.auth.HttpAuthHeader.Single("Bearer", cookieToken)
+                    } else {
+                        null
+                    }
                 }
             }
         }
@@ -92,13 +106,7 @@ fun Application.configureSecurity() {
                 
                 // If not an auth token, try as JWT
                 try {
-                    val verifier = JWT
-                        .require(Algorithm.HMAC256(secret))
-                        .withAudience(audience)
-                        .withIssuer(issuer)
-                        .build()
-                    
-                    val decodedJWT = verifier.verify(tokenCredential.token)
+                    val decodedJWT = jwtVerifier.verify(tokenCredential.token)
                     val userId = decodedJWT.getClaim("userId").asInt()
                     
                     if (userId != null) {

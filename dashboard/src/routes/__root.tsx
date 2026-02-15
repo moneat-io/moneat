@@ -124,10 +124,19 @@ function RootComponent() {
   // Centralized email verification and onboarding check
   useEffect(() => {
     async function checkUserStatus() {
-      // Skip check if not authenticated or on public routes or public status pages
-      if (!isAuthenticated || PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
+      // Skip check on public routes and status pages
+      if (PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
         setOnboardingChecked(true)
         return
+      }
+
+      // If session flag is not set, try to validate via cookie (cold-load case)
+      if (!isAuthenticated) {
+        const hasSession = await api.checkAuth()
+        if (!hasSession) {
+          setOnboardingChecked(true)
+          return
+        }
       }
 
       try {

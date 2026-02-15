@@ -80,10 +80,9 @@ function LoginPage() {
         }
         
         // Redirect back to mobile app with token
-        // Use window.location for external redirect
-        const hasQuery = redirectUri.includes('?')
-        const separator = hasQuery ? '&' : '?'
-        window.location.href = `${redirectUri}${separator}token=${token}`
+        // Use URL fragment (#) instead of query parameter (?) to prevent
+        // token leakage via referrer headers, server logs, and browser history
+        window.location.href = `${redirectUri}#token=${token}`
       } else {
         navigate({ to: '/' })
       }

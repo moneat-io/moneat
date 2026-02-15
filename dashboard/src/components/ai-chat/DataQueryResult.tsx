@@ -25,12 +25,12 @@ export function DataQueryResult({query}: DataQueryResultProps) {
           })
         }
         
-        // Execute the query using the API client
+        // Execute the query using credentials (httpOnly cookie auth)
         const response = await fetch(url.pathname + url.search, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
         })
         
         if (!response.ok) {

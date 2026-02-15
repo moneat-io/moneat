@@ -5,6 +5,7 @@ import com.moneat.models.*
 import com.moneat.services.AuthService
 import com.moneat.services.OAuthService
 import com.moneat.services.SignupRequestContext
+import com.moneat.utils.AuthCookieUtils
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -47,6 +48,7 @@ fun Route.authRoutes() {
             
             try {
                 val result = authService.signup(request, context, inviteToken)
+                AuthCookieUtils.setAuthCookie(call, result.token)
                 call.respond(HttpStatusCode.Created, result)
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
@@ -59,6 +61,7 @@ fun Route.authRoutes() {
             try {
                 val result = authService.login(request)
                 if (result != null) {
+                    AuthCookieUtils.setAuthCookie(call, result.token)
                     call.respond(result)
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid credentials"))
@@ -117,6 +120,11 @@ fun Route.authRoutes() {
             }
         }
         
+        post("/logout") {
+            AuthCookieUtils.clearAuthCookie(call)
+            call.respond(mapOf("message" to "Logged out"))
+        }
+        
         // GitHub OAuth
         get("/github") {
             try {
@@ -171,8 +179,9 @@ fun Route.authRoutes() {
                 val userData = oauthService.handleGitHubCallback(code)
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)
                 
+                AuthCookieUtils.setAuthCookie(call, authResponse.token)
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/auth/oauth/callback?token=${authResponse.token}")
+                call.respondRedirect("$dashboardUrl/auth/oauth/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
@@ -238,8 +247,9 @@ fun Route.authRoutes() {
                 val userData = oauthService.handleAppleCallback(idToken)
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)
                 
+                AuthCookieUtils.setAuthCookie(call, authResponse.token)
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/auth/oauth/callback?token=${authResponse.token}")
+                call.respondRedirect("$dashboardUrl/auth/oauth/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Apple OAuth callback failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")

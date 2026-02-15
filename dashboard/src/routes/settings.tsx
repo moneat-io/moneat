@@ -2852,7 +2852,8 @@ function AccountTab() {
         title: 'Account deleted',
         description: 'Your account has been successfully deleted.',
       })
-      localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_token') // Clean up any legacy token
+      api.logout()
       window.location.href = '/login'
     },
     onError: (error: Error) => {

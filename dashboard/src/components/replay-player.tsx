@@ -77,7 +77,9 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
 
     const target = document.createElement('div')
     target.className = 'rrweb-player-wrapper'
-    containerRef.current.innerHTML = ''
+    while (containerRef.current.firstChild) {
+      containerRef.current.removeChild(containerRef.current.firstChild)
+    }
     containerRef.current.appendChild(target)
 
     let player: InstanceType<typeof rrwebPlayer> | null = null
@@ -109,14 +111,23 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
       }
     } catch (error) {
       console.error('Failed to initialize replay player:', formatErrorForLogging(error))
-      target.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; height: 400px; background: #f5f5f5; border-radius: 8px; padding: 2rem;">
-          <div style="text-align: center; max-width: 400px;">
-            <p style="color: #666; margin-bottom: 0.5rem; font-weight: 500;">Unable to load replay</p>
-            <p style="color: #999; font-size: 0.875rem;">The replay data format is not supported by the web player.</p>
-          </div>
-        </div>
-      `
+      while (target.firstChild) {
+        target.removeChild(target.firstChild)
+      }
+      const errorContainer = document.createElement('div')
+      errorContainer.style.cssText = 'display: flex; align-items: center; justify-content: center; height: 400px; background: #f5f5f5; border-radius: 8px; padding: 2rem;'
+      const errorContent = document.createElement('div')
+      errorContent.style.cssText = 'text-align: center; max-width: 400px;'
+      const errorTitle = document.createElement('p')
+      errorTitle.style.cssText = 'color: #666; margin-bottom: 0.5rem; font-weight: 500;'
+      errorTitle.textContent = 'Unable to load replay'
+      const errorDesc = document.createElement('p')
+      errorDesc.style.cssText = 'color: #999; font-size: 0.875rem;'
+      errorDesc.textContent = 'The replay data format is not supported by the web player.'
+      errorContent.appendChild(errorTitle)
+      errorContent.appendChild(errorDesc)
+      errorContainer.appendChild(errorContent)
+      target.appendChild(errorContainer)
       return
     }
 

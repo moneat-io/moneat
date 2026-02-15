@@ -41,7 +41,7 @@ fun Application.configureHTTP() {
     }
     
     // Add security headers to all responses
-    intercept(ApplicationCallPipeline.Plugins) {
+    intercept(ApplicationCallPipeline.Call) {
         call.response.headers.append("X-Content-Type-Options", "nosniff")
         call.response.headers.append("X-Frame-Options", "DENY")
         call.response.headers.append("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -57,5 +57,7 @@ fun Application.configureHTTP() {
             !call.request.local.remoteHost.contains("127.0.0.1")) {
             call.response.headers.append("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         }
+        
+        proceed()
     }
 }

@@ -12,7 +12,6 @@ function SsoCallbackPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const token = params.get('token')
     const errorParam = params.get('error')
     const errorMessage = params.get('message')
 
@@ -21,13 +20,9 @@ function SsoCallbackPage() {
       return
     }
 
-    if (token) {
-      localStorage.setItem('auth_token', token)
-      // Redirect to home page
-      navigate({ to: '/' })
-    } else {
-      setError('Invalid SSO callback. Missing authentication token.')
-    }
+    // Auth token is now set as httpOnly cookie by the backend redirect
+    sessionStorage.setItem('authenticated', 'true')
+    navigate({ to: '/' })
   }, [navigate])
 
   if (error) {

@@ -9,7 +9,8 @@ describe('ApiClient - Extended Methods', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
-    localStorage.setItem('auth_token', 'test-token')
+    // Auth is now cookie-based; set session flag for isAuthenticated() checks
+    sessionStorage.setItem('authenticated', 'true')
   })
 
   describe('Project Stats and Releases', () => {

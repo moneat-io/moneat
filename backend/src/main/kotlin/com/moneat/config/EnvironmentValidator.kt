@@ -51,7 +51,7 @@ class EnvironmentValidator {
     
     private fun validateConditionalConfig(errors: MutableList<String>) {
         // Validate Slack configuration when enabled
-        val slackEnabled = getConfigValue("SLACK_ENABLED")?.toBoolean() ?: true
+        val slackEnabled = getConfigValue("SLACK_ENABLED")?.toBoolean() ?: false
         if (slackEnabled) {
             validateRequired("SLACK_CLIENT_ID", "Slack integration is enabled", errors)
             validateRequired("SLACK_CLIENT_SECRET", "Slack integration is enabled", errors)

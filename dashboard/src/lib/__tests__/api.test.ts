@@ -12,22 +12,21 @@ describe('ApiClient', () => {
   })
 
   describe('Auth token handling', () => {
-    it('includes auth token in Authorization header when present', async () => {
-      let capturedHeaders: Headers | undefined
-      server.use(
-        http.get(`${API_BASE}/v1/projects`, ({ request }) => {
-          capturedHeaders = request.headers
-          return HttpResponse.json([])
-        })
-      )
+    it('sends requests with credentials include for cookie-based auth', async () => {
+      let capturedInit: RequestInit | undefined
+      const originalFetch = global.fetch
+      global.fetch = vi.fn(async (_url: any, init?: RequestInit) => {
+        capturedInit = init
+        return new Response(JSON.stringify([]), { status: 200 })
+      }) as any
 
-      localStorage.setItem('auth_token', 'test-token')
       await api.getProjects()
 
-      expect(capturedHeaders?.get('Authorization')).toBe('Bearer test-token')
+      expect(capturedInit?.credentials).toBe('include')
+      global.fetch = originalFetch
     })
 
-    it('prioritizes impersonate_token over auth_token', async () => {
+    it('includes impersonate_token in Authorization header when present', async () => {
       let capturedHeaders: Headers | undefined
       server.use(
         http.get(`${API_BASE}/v1/projects`, ({ request }) => {
@@ -36,14 +35,13 @@ describe('ApiClient', () => {
         })
       )
 
-      localStorage.setItem('auth_token', 'regular-token')
       sessionStorage.setItem('impersonate_token', 'admin-token')
       await api.getProjects()
 
       expect(capturedHeaders?.get('Authorization')).toBe('Bearer admin-token')
     })
 
-    it('makes request without Authorization header when no token present', async () => {
+    it('makes request without Authorization header when no impersonate token present', async () => {
       let capturedHeaders: Headers | undefined
       server.use(
         http.post(`${API_BASE}/auth/login`, ({ request }) => {
@@ -60,7 +58,7 @@ describe('ApiClient', () => {
       expect(capturedHeaders?.get('Authorization')).toBeNull()
     })
 
-    it('stores token in localStorage after successful login', async () => {
+    it('sets authenticated session flag after successful login', async () => {
       server.use(
         http.post(`${API_BASE}/auth/login`, () => {
           return HttpResponse.json({
@@ -72,10 +70,10 @@ describe('ApiClient', () => {
 
       await api.login('test@example.com', 'password')
 
-      expect(localStorage.getItem('auth_token')).toBe('login-token')
+      expect(sessionStorage.getItem('authenticated')).toBe('true')
     })
 
-    it('stores token in localStorage after successful signup', async () => {
+    it('sets authenticated session flag after successful signup', async () => {
       server.use(
         http.post(`${API_BASE}/auth/signup`, () => {
           return HttpResponse.json({
@@ -93,12 +91,12 @@ describe('ApiClient', () => {
       }
       await api.signup('test@example.com', 'password', 'Test User', consent)
 
-      expect(localStorage.getItem('auth_token')).toBe('signup-token')
+      expect(sessionStorage.getItem('authenticated')).toBe('true')
     })
   })
 
   describe('401 logout and redirect behavior', () => {
-    it('clears tokens and redirects to /login on 401', async () => {
+    it('clears session and redirects to /login on 401', async () => {
       const mockAssign = vi.fn()
       const originalLocation = window.location
       // @ts-expect-error - Mocking window.location for tests
@@ -106,7 +104,7 @@ describe('ApiClient', () => {
       // @ts-expect-error - Mocking window.location for tests
       window.location = { ...originalLocation, assign: mockAssign }
 
-      localStorage.setItem('auth_token', 'expired-token')
+      sessionStorage.setItem('authenticated', 'true')
       server.use(
         http.get(`${API_BASE}/v1/projects`, () => {
           return new HttpResponse(null, { status: 401 })
@@ -115,7 +113,7 @@ describe('ApiClient', () => {
 
       await expect(api.getProjects()).rejects.toThrow('Unauthorized')
 
-      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(sessionStorage.getItem('authenticated')).toBeNull()
       expect(mockAssign).toHaveBeenCalledWith('/login')
 
       // @ts-expect-error - Restoring window.location
@@ -130,7 +128,7 @@ describe('ApiClient', () => {
       // @ts-expect-error - Mocking window.location for tests
       window.location = { ...originalLocation, pathname: '/login', assign: mockAssign }
 
-      localStorage.setItem('auth_token', 'expired-token')
+      sessionStorage.setItem('authenticated', 'true')
       server.use(
         http.get(`${API_BASE}/v1/projects`, () => {
           return new HttpResponse(null, { status: 401 })
@@ -145,7 +143,7 @@ describe('ApiClient', () => {
       window.location = originalLocation
     })
 
-    it('does not redirect on 401 without token', async () => {
+    it('redirects on 401 even without session flag', async () => {
       const mockAssign = vi.fn()
       const originalLocation = window.location
       // @ts-expect-error - Mocking window.location for tests
@@ -154,26 +152,26 @@ describe('ApiClient', () => {
       window.location = { ...originalLocation, assign: mockAssign }
 
       server.use(
-        http.post(`${API_BASE}/auth/login`, () => {
+        http.get(`${API_BASE}/v1/projects`, () => {
           return new HttpResponse(null, { status: 401 })
         })
       )
 
-      await expect(api.login('bad@example.com', 'wrong')).rejects.toThrow()
+      await expect(api.getProjects()).rejects.toThrow('Unauthorized')
 
-      expect(mockAssign).not.toHaveBeenCalled()
+      expect(mockAssign).toHaveBeenCalledWith('/login')
 
       // @ts-expect-error - Restoring window.location
       window.location = originalLocation
     })
 
-    it('clears both localStorage and sessionStorage on logout', () => {
-      localStorage.setItem('auth_token', 'regular-token')
+    it('clears sessionStorage on logout', () => {
+      sessionStorage.setItem('authenticated', 'true')
       sessionStorage.setItem('impersonate_token', 'admin-token')
 
       api.logout()
 
-      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(sessionStorage.getItem('authenticated')).toBeNull()
       expect(sessionStorage.getItem('impersonate_token')).toBeNull()
     })
   })
@@ -216,7 +214,7 @@ describe('ApiClient', () => {
         })
       )
 
-      localStorage.setItem('auth_token', 'test-token')
+      sessionStorage.setItem('authenticated', 'true')
       const result = await api.deleteProject(1)
 
       expect(result).toBeUndefined()
@@ -224,8 +222,8 @@ describe('ApiClient', () => {
   })
 
   describe('Authentication state', () => {
-    it('isAuthenticated returns true when auth_token exists', () => {
-      localStorage.setItem('auth_token', 'test-token')
+    it('isAuthenticated returns true when session flag is set', () => {
+      sessionStorage.setItem('authenticated', 'true')
       expect(api.isAuthenticated()).toBe(true)
     })
 
@@ -234,7 +232,7 @@ describe('ApiClient', () => {
       expect(api.isAuthenticated()).toBe(true)
     })
 
-    it('isAuthenticated returns false when no tokens exist', () => {
+    it('isAuthenticated returns false when no session state exists', () => {
       expect(api.isAuthenticated()).toBe(false)
     })
   })
