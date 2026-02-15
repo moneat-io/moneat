@@ -7,6 +7,8 @@ import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.response.*
 
 fun Application.configureHTTP() {
+    val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+    
     install(CORS) {
         allowMethod(HttpMethod.Options)
         allowMethod(HttpMethod.Get)
@@ -18,12 +20,20 @@ fun Application.configureHTTP() {
         allowHeader(HttpHeaders.ContentType)
         allowHeader("X-Sentry-Auth")
         
-        // Configure allowed origins from environment
-        val allowedOrigins = EnvConfig.get("ALLOWED_ORIGINS", "https://moneat.io")
-        allowedOrigins.split(",").forEach { origin ->
-            val trimmedOrigin = origin.trim()
-            if (trimmedOrigin.isNotEmpty()) {
-                allowHost(trimmedOrigin.removePrefix("https://").removePrefix("http://"), schemes = listOf("https", "http"))
+        // Allow the frontend origin (derived from FRONTEND_URL)
+        val frontendHost = frontendUrl.removePrefix("https://").removePrefix("http://")
+        val frontendSchemes = if (frontendUrl.startsWith("https://")) listOf("https") else listOf("http")
+        allowHost(frontendHost, schemes = frontendSchemes)
+        
+        // Allow any additional origins from ALLOWED_ORIGINS
+        val allowedOrigins = EnvConfig.get("ALLOWED_ORIGINS", "")
+        if (allowedOrigins.isNotEmpty()) {
+            allowedOrigins.split(",").forEach { origin ->
+                val trimmedOrigin = origin.trim()
+                if (trimmedOrigin.isNotEmpty()) {
+                    val scheme = if (trimmedOrigin.startsWith("https://")) listOf("https") else listOf("http")
+                    allowHost(trimmedOrigin.removePrefix("https://").removePrefix("http://"), schemes = scheme)
+                }
             }
         }
         
@@ -38,8 +48,9 @@ fun Application.configureHTTP() {
         call.response.headers.append("X-XSS-Protection", "1; mode=block")
         
         // Content Security Policy
+        val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
         call.response.headers.append("Content-Security-Policy", 
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'")
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' $backendUrl")
         
         // HSTS - only in production (not on localhost)
         if (!call.request.local.remoteHost.contains("localhost") && 

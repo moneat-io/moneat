@@ -7,10 +7,14 @@ interface MobileReplayViewerProps {
   className?: string
   onTimeUpdate?: (offsetMs: number) => void
   onDurationReady?: (durationMs: number) => void
+  onPlayingChange?: (playing: boolean) => void
+  hideControls?: boolean
 }
 
 export interface MobileReplayViewerHandle {
   seekTo: (offsetMs: number) => void
+  play: () => void
+  pause: () => void
 }
 
 interface ReplayEvent {
@@ -304,7 +308,7 @@ function findSeekTarget(globalMs: number, durationsMs: number[]): GlobalSeekTarg
 }
 
 export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileReplayViewerProps>(function MobileReplayViewer(
-  { events, platform, className = '', onTimeUpdate, onDurationReady },
+  { events, platform, className = '', onTimeUpdate, onDurationReady, onPlayingChange, hideControls },
   ref
 ) {
   const videoSegments = useMemo(
@@ -542,6 +546,18 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
     seekTo(offsetMs: number) {
       seekToGlobalTimeRef.current(offsetMs)
     },
+    play() {
+      const video = videoRef.current
+      if (video) {
+        void video.play().catch(() => {})
+      }
+    },
+    pause() {
+      const video = videoRef.current
+      if (video) {
+        video.pause()
+      }
+    },
   }), [])
 
   useEffect(() => {
@@ -603,8 +619,8 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                   if (!video) return
                   setCurrentSegmentTimeMs(video.currentTime * 1000)
                 }}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
+                onPlay={() => { setIsPlaying(true); onPlayingChange?.(true) }}
+                onPause={() => { setIsPlaying(false); onPlayingChange?.(false) }}
                 onEnded={() => {
                   if (!autoStitchEnabled || selectedSegmentIdx >= filteredVideoSegments.length - 1) {
                     setIsPlaying(false)
@@ -618,100 +634,104 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
               />
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  const video = videoRef.current
-                  if (!video) return
-                  if (video.paused) {
-                    void video.play().catch(() => {
-                      // Browser may block autoplay without user gesture.
-                    })
-                  } else {
-                    video.pause()
-                  }
-                }}
-                className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded border bg-background hover:bg-muted"
-                aria-label={isPlaying ? 'Pause replay' : 'Play replay'}
-                title={isPlaying ? 'Pause' : 'Play'}
-              >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
-              </button>
+            {!hideControls && (
+              <>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const video = videoRef.current
+                      if (!video) return
+                      if (video.paused) {
+                        void video.play().catch(() => {
+                          // Browser may block autoplay without user gesture.
+                        })
+                      } else {
+                        video.pause()
+                      }
+                    }}
+                    className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded border bg-background hover:bg-muted"
+                    aria-label={isPlaying ? 'Pause replay' : 'Play replay'}
+                    title={isPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
+                  </button>
 
-              <div className="shrink-0 text-xs text-muted-foreground font-mono">
-                {formatClock(currentGlobalTimeMs)} / {formatClock(totalDurationMs)}
-              </div>
+                  <div className="shrink-0 text-xs text-muted-foreground font-mono">
+                    {formatClock(currentGlobalTimeMs)} / {formatClock(totalDurationMs)}
+                  </div>
 
-              <div
-                ref={timelineTrackRef}
-                className="relative h-9 flex-1 min-w-0 cursor-pointer group/timeline"
-                onClick={(event) => seekFromTimelinePointer(event.clientX)}
-                title="Timeline (click to seek)"
-              >
-                {/* Track background */}
-                <div
-                  className="absolute top-1/2 left-0 right-0 z-0 h-2 -translate-y-1/2 rounded-full border border-border"
-                  style={{ backgroundColor: 'hsl(var(--muted))' }}
-                />
+                  <div
+                    ref={timelineTrackRef}
+                    className="relative h-9 flex-1 min-w-0 cursor-pointer group/timeline"
+                    onClick={(event) => seekFromTimelinePointer(event.clientX)}
+                    title="Timeline (click to seek)"
+                  >
+                    {/* Track background */}
+                    <div
+                      className="absolute top-1/2 left-0 right-0 z-0 h-2 -translate-y-1/2 rounded-full border border-border"
+                      style={{ backgroundColor: 'hsl(var(--muted))' }}
+                    />
 
-                {/* Progress fill */}
-                <div
-                  className="absolute top-1/2 left-0 z-[5] h-2 -translate-y-1/2 rounded-full"
-                  style={{ width: `${playheadPercent}%`, backgroundColor: 'hsl(var(--muted-foreground))' }}
-                />
+                    {/* Progress fill */}
+                    <div
+                      className="absolute top-1/2 left-0 z-[5] h-2 -translate-y-1/2 rounded-full"
+                      style={{ width: `${playheadPercent}%`, backgroundColor: 'hsl(var(--muted-foreground))' }}
+                    />
 
-                {/* Playhead line */}
-                <div
-                  className="absolute top-1/2 z-30 h-5 w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full"
-                  style={{ left: `${playheadPercent}%`, backgroundColor: 'hsl(var(--foreground))' }}
-                />
+                    {/* Playhead line */}
+                    <div
+                      className="absolute top-1/2 z-30 h-5 w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                      style={{ left: `${playheadPercent}%`, backgroundColor: 'hsl(var(--foreground))' }}
+                    />
 
-                {timelineMarkers.map((marker) => {
-                  const isHovered = hoveredTimelineMarkerId === marker.id
-                  return (
-                    <button
-                      key={marker.id}
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        seekToGlobalTime(marker.globalTimeMs)
-                      }}
-                      onMouseEnter={() => setHoveredTimelineMarkerId(marker.id)}
-                      onMouseLeave={() => setHoveredTimelineMarkerId((current) => (current === marker.id ? null : current))}
-                      onFocus={() => setHoveredTimelineMarkerId(marker.id)}
-                      onBlur={() => setHoveredTimelineMarkerId((current) => (current === marker.id ? null : current))}
-                      className="absolute top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full hover:scale-125 transition-transform appearance-none p-0 focus:outline-none"
-                      style={{
-                        left: `${marker.percent}%`,
-                        width: 16,
-                        height: 16,
-                        backgroundColor: marker.markerBackgroundColor,
-                        border: '1.5px solid hsl(var(--background))',
-                        boxShadow: isHovered ? `0 0 6px 2px ${marker.markerBackgroundColor}` : `0 0 0 0.5px rgba(0,0,0,0.3)`,
-                      }}
-                      aria-label={`${marker.title} at ${formatClock(marker.globalTimeMs)}`}
-                    >
-                      {isHovered && (
-                        <div className="pointer-events-none absolute left-1/2 z-40 w-56 -translate-x-1/2 rounded-lg border bg-popover p-2.5 text-left shadow-lg" style={{ bottom: 'calc(100% + 10px)' }}>
-                          <div className="text-xs font-semibold" style={{ color: marker.tooltipAccentColor }}>
-                            {marker.title}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground mt-1 font-mono">{formatClock(marker.globalTimeMs)}</div>
-                          {marker.detail && (
-                            <div className="text-[11px] text-muted-foreground mt-1 break-words">{marker.detail}</div>
+                    {timelineMarkers.map((marker) => {
+                      const isHovered = hoveredTimelineMarkerId === marker.id
+                      return (
+                        <button
+                          key={marker.id}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            seekToGlobalTime(marker.globalTimeMs)
+                          }}
+                          onMouseEnter={() => setHoveredTimelineMarkerId(marker.id)}
+                          onMouseLeave={() => setHoveredTimelineMarkerId((current) => (current === marker.id ? null : current))}
+                          onFocus={() => setHoveredTimelineMarkerId(marker.id)}
+                          onBlur={() => setHoveredTimelineMarkerId((current) => (current === marker.id ? null : current))}
+                          className="absolute top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full hover:scale-125 transition-transform appearance-none p-0 focus:outline-none"
+                          style={{
+                            left: `${marker.percent}%`,
+                            width: 16,
+                            height: 16,
+                            backgroundColor: marker.markerBackgroundColor,
+                            border: '1.5px solid hsl(var(--background))',
+                            boxShadow: isHovered ? `0 0 6px 2px ${marker.markerBackgroundColor}` : `0 0 0 0.5px rgba(0,0,0,0.3)`,
+                          }}
+                          aria-label={`${marker.title} at ${formatClock(marker.globalTimeMs)}`}
+                        >
+                          {isHovered && (
+                            <div className="pointer-events-none absolute left-1/2 z-40 w-56 -translate-x-1/2 rounded-lg border bg-popover p-2.5 text-left shadow-lg" style={{ bottom: 'calc(100% + 10px)' }}>
+                              <div className="text-xs font-semibold" style={{ color: marker.tooltipAccentColor }}>
+                                {marker.title}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground mt-1 font-mono">{formatClock(marker.globalTimeMs)}</div>
+                              {marker.detail && (
+                                <div className="text-[11px] text-muted-foreground mt-1 break-words">{marker.detail}</div>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
 
-            <div className="text-xs text-muted-foreground">
-              {timelineMarkers.length} important event{timelineMarkers.length === 1 ? '' : 's'}
-            </div>
+                <div className="text-xs text-muted-foreground">
+                  {timelineMarkers.length} important event{timelineMarkers.length === 1 ? '' : 's'}
+                </div>
+              </>
+            )}
         </div>
       ) : (
         <div className="rounded border bg-muted/30 p-4 text-sm text-muted-foreground">

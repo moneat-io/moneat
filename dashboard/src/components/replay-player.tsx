@@ -8,13 +8,18 @@ interface ReplayPlayerProps {
   width?: number
   height?: number
   autoPlay?: boolean
+  showController?: boolean
   className?: string
   onTimeUpdate?: (offsetMs: number) => void
   onDurationReady?: (durationMs: number) => void
+  onPlayingChange?: (playing: boolean) => void
 }
 
 export interface ReplayPlayerHandle {
   seekTo: (offsetMs: number) => void
+  play: () => void
+  pause: () => void
+  setSpeed: (speed: number) => void
 }
 
 const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function ReplayPlayer(
@@ -23,9 +28,11 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
     width = 1024,
     height = 576,
     autoPlay = true,
+    showController = true,
     className = '',
     onTimeUpdate,
     onDurationReady,
+    onPlayingChange,
   },
   ref
 ) {
@@ -33,14 +40,34 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
   const playerRef = useRef<InstanceType<typeof rrwebPlayer> | null>(null)
   const onTimeUpdateRef = useRef(onTimeUpdate)
   const onDurationReadyRef = useRef(onDurationReady)
+  const onPlayingChangeRef = useRef(onPlayingChange)
   onTimeUpdateRef.current = onTimeUpdate
   onDurationReadyRef.current = onDurationReady
+  onPlayingChangeRef.current = onPlayingChange
 
   useImperativeHandle(ref, () => ({
     seekTo(offsetMs: number) {
       const p = playerRef.current
       if (p && typeof p.goto === 'function') {
         p.goto(offsetMs, false)
+      }
+    },
+    play() {
+      const p = playerRef.current
+      if (p && typeof p.play === 'function') {
+        p.play()
+      }
+    },
+    pause() {
+      const p = playerRef.current
+      if (p && typeof p.pause === 'function') {
+        p.pause()
+      }
+    },
+    setSpeed(speed: number) {
+      const p = playerRef.current
+      if (p && typeof p.setSpeed === 'function') {
+        p.setSpeed(speed)
       }
     },
   }), [])
@@ -62,7 +89,7 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
           width,
           height,
           autoPlay,
-          showController: true,
+          showController,
         },
       })
       playerRef.current = player
@@ -93,6 +120,8 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
       return
     }
 
+    // Track play/pause state for external scrubber
+    let lastKnownPlaying = autoPlay
     let rafId = 0
     const tick = () => {
       const cb = onTimeUpdateRef.current
@@ -102,6 +131,24 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
           if (replayer && typeof replayer.getCurrentTime === 'function') {
             const ms = replayer.getCurrentTime()
             cb(ms)
+          }
+        } catch {
+          // ignore
+        }
+      }
+      // Detect play/pause state changes from the rrweb controller
+      if (player && onPlayingChangeRef.current) {
+        try {
+          const replayer = player.getReplayer?.()
+          if (replayer) {
+            // rrweb replayer emits 'pause' and 'resume' events but they are not
+            // easily accessible. Instead, check the timer state.
+            const timer = (replayer as unknown as { timer?: { isActive?: () => boolean } }).timer
+            const isActive = typeof timer?.isActive === 'function' ? timer.isActive() : lastKnownPlaying
+            if (isActive !== lastKnownPlaying) {
+              lastKnownPlaying = isActive
+              onPlayingChangeRef.current(isActive)
+            }
           }
         } catch {
           // ignore
@@ -126,7 +173,7 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
         containerRef.current.removeChild(target)
       }
     }
-  }, [events, width, height, autoPlay])
+  }, [events, width, height, autoPlay, showController])
 
   if (!events || events.length === 0) {
     return (

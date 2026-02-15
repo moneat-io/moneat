@@ -31,6 +31,8 @@ fun Route.authRoutes() {
             val request = call.receive<SignupRequest>()
             val inviteToken = call.request.queryParameters["inviteToken"]
             
+            // Prefer CF-Connecting-IP when behind Cloudflare, fallback to X-Forwarded-For, then origin
+            val cfConnectingIp = call.request.headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotBlank() }
             val forwardedFor = call.request.headers["X-Forwarded-For"]
                 ?.split(",")
                 ?.firstOrNull()
@@ -39,7 +41,7 @@ fun Route.authRoutes() {
             val remoteHost = call.request.origin.remoteHost.takeIf { it.isNotBlank() }
             val userAgent = call.request.headers["User-Agent"]?.trim()?.takeIf { it.isNotBlank() }?.take(2048)
             val context = SignupRequestContext(
-                ipAddress = forwardedFor ?: remoteHost,
+                ipAddress = cfConnectingIp ?: forwardedFor ?: remoteHost,
                 userAgent = userAgent
             )
             
