@@ -1088,7 +1088,7 @@ function SystemDetailPage() {
       <Sheet open={!!selectedContainer} onOpenChange={(open) => !open && setSelectedContainer(null)}>
         <SheetContent
           side="right"
-          className="w-screen h-screen max-w-none sm:w-screen sm:max-w-none p-0 gap-0 border-none"
+          className="w-[65%] h-screen p-0 gap-0 border-none"
         >
           {selectedContainer && (
             <div className="flex flex-col h-full bg-background/50 backdrop-blur-sm">
@@ -1141,17 +1141,15 @@ function SystemDetailPage() {
                 </div>
               </div>
 
-              <div className="relative" style={{maxHeight: '60vh'}}>
-                <div style={{height: '60vh'}}>
-                  <LogExplorer 
-                    systemId={system.id}
-                    initialContainerName={selectedContainer.name}
-                    className="border-none rounded-none"
-                    enableLiveTail={false}
-                    enableFacets={true}
-                    initialScrollToBottom={true}
-                  />
-                </div>
+              <div className="flex-1 overflow-hidden">
+                <LogExplorer 
+                  systemId={system.id}
+                  initialContainerName={selectedContainer.name}
+                  className="border-none rounded-none h-full"
+                  enableLiveTail={false}
+                  enableFacets={true}
+                  initialScrollToBottom={true}
+                />
               </div>
             </div>
           )}
