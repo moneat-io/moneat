@@ -4,6 +4,9 @@ import com.moneat.models.AssembleArtifactBundleRequest
 import com.moneat.models.ChunkUploadParameters
 import com.moneat.models.AssembleResponse
 import com.moneat.models.CreateReleaseRequest
+import com.moneat.models.SentryAuthDetails
+import com.moneat.models.SentryAuthInfoResponse
+import com.moneat.models.SentryAuthUser
 import com.moneat.models.Users
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.services.AuthTokenService
@@ -42,16 +45,16 @@ fun Route.releaseRoutes() {
                     .where { Users.id eq principal.userId }
                     .firstOrNull()
                     ?.let { row ->
-                        mapOf(
-                            "email" to row[Users.email],
-                            "id" to row[Users.id].toString()
+                        SentryAuthUser(
+                            email = row[Users.email],
+                            id = row[Users.id].toString()
                         )
                     }
             }
             
-            call.respond(mapOf(
-                "auth" to mapOf("scopes" to principal.scopes),
-                "user" to userInfo
+            call.respond(SentryAuthInfoResponse(
+                auth = SentryAuthDetails(scopes = principal.scopes),
+                user = userInfo
             ))
         }
     }

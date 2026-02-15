@@ -670,3 +670,21 @@ data class OrgMembersResponse(
     val members: List<OrgMemberResponse>,
     val pendingInvitations: List<InvitationResponse>
 )
+
+// Sentry-compatible auth info response (used by sentry-cli)
+@Serializable
+data class SentryAuthInfoResponse(
+    val auth: SentryAuthDetails? = null,
+    val user: SentryAuthUser? = null
+)
+
+@Serializable
+data class SentryAuthDetails(
+    val scopes: List<String>
+)
+
+@Serializable
+data class SentryAuthUser(
+    val email: String,
+    val id: String
+)
