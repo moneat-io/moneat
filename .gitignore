@@ -97,3 +97,4 @@ active-slot
 # SSL credentials (server-only)
 deploy/certbot/
 
+mobile/sentry.properties
