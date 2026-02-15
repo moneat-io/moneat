@@ -578,13 +578,12 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
     <div className={`space-y-4 ${className}`}>
       {videoSrc ? (
         <div className="space-y-3">
-            <div className="rounded border bg-black overflow-hidden">
+            <div className="rounded border bg-black overflow-hidden min-h-[280px] flex items-center justify-center">
               <video
                 ref={videoRef}
-                key={`${selectedVideo.segment_id ?? selectedVideo.resolvedSegmentId}-${selectedSegmentIdx}`}
                 src={videoSrc}
                 preload="metadata"
-                className="w-full max-h-[min(520px,calc(100vh-280px))] bg-black"
+                className="w-full max-h-[min(520px,calc(100vh-280px))] bg-black object-contain"
                 aria-label={`${platform} replay video`}
                 onLoadedMetadata={() => {
                   const video = videoRef.current
