@@ -1088,7 +1088,7 @@ function SystemDetailPage() {
       <Sheet open={!!selectedContainer} onOpenChange={(open) => !open && setSelectedContainer(null)}>
         <SheetContent
           side="right"
-          className="w-[65%] h-screen p-0 gap-0 border-none"
+          className="h-screen w-[65vw] max-w-[65vw] p-0 gap-0 border-none sm:max-w-[65w]"
         >
           {selectedContainer && (
             <div className="flex flex-col h-full bg-background/50 backdrop-blur-sm">

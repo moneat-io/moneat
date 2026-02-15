@@ -149,7 +149,7 @@ export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps)
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent side="right" className="w-[60%] overflow-y-auto">
+      <SheetContent side="right" className="w-[32.5vw] max-w-[32.5vw] sm:max-w-[32.5vw] overflow-y-auto">
         <SheetHeader className="space-y-3 pb-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge

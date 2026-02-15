@@ -450,6 +450,8 @@ function ReplayDetailPage() {
         offsetMs,
         title,
         description,
+        category: cat || undefined,
+        data: Object.keys(p).length > 0 ? p : undefined,
       }
     })
   }, [
