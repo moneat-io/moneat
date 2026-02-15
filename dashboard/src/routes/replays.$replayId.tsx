@@ -576,9 +576,9 @@ function ReplayDetailPage() {
       </div>
 
       {/* ───── Two-column main content ───── */}
-      <div className="flex-1 px-3 lg:px-5 grid grid-cols-1 lg:grid-cols-5 gap-3 min-h-0">
+      <div className="flex-1 px-3 lg:px-5 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
         {/* Left column: Device container + replay */}
-        <div className="lg:col-span-3 flex flex-col min-h-0">
+        <div className="lg:col-span-5 flex flex-col min-h-0">
           {recordingLoading ? (
             replay.platform === 'android' || replay.platform === 'ios' ? (
               <MobileDeviceContainer
@@ -648,29 +648,21 @@ function ReplayDetailPage() {
           )}
         </div>
 
-        {/* Right column: Breadcrumbs / event list */}
-        <div className="lg:col-span-2 flex flex-col min-h-0">
-          <div className="rounded-lg border bg-card overflow-hidden flex flex-col min-h-[400px] max-h-[400px] lg:min-h-[calc(100vh-220px)] lg:max-h-[calc(100vh-220px)]">
-            {/* Panel header */}
-            <div className="px-3 py-2 border-b bg-muted/30 text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <Layers className="h-3.5 w-3.5" />
-              Breadcrumbs
-            </div>
-
-            {/* Scrollable event list */}
-            <div className="flex-1 overflow-y-auto min-h-0">
-              {timelineItems.length > 0 ? (
-                <ReplayTimelinePanel
-                  items={timelineItems}
-                  currentOffsetMs={currentOffsetMs}
-                  onSeek={handleSeek}
-                />
-              ) : (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  No breadcrumb events for this replay.
-                </div>
-              )}
-            </div>
+        {/* Right column: replay timeline */}
+        <div className="lg:col-span-7 flex flex-col min-h-0">
+          <div className="flex flex-col min-h-[400px] max-h-[400px] lg:min-h-[calc(100vh-220px)] lg:max-h-[calc(100vh-220px)]">
+            {timelineItems.length > 0 ? (
+              <ReplayTimelinePanel
+                items={timelineItems}
+                currentOffsetMs={currentOffsetMs}
+                durationMs={durationMs}
+                onSeek={handleSeek}
+              />
+            ) : (
+              <div className="flex-1 rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+                No breadcrumb events for this replay.
+              </div>
+            )}
           </div>
         </div>
       </div>
