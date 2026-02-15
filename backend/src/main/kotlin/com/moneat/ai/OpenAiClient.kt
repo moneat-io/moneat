@@ -35,7 +35,7 @@ object OpenAiClient {
         get() = EnvConfig.get("OPENAI_MAX_TOKENS", "2048").toIntOrNull() ?: 2048
 
     val isEnabled: Boolean
-        get() = EnvConfig.get("AI_CHAT_ENABLED", "false").toBoolean() && apiKey.isNotBlank()
+        get() = apiKey.isNotBlank()
 
     suspend fun chatCompletion(messages: List<OpenAiMessage>): OpenAiChatResponse {
         val request = OpenAiChatRequest(

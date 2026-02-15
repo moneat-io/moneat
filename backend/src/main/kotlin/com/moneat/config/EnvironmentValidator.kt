@@ -80,10 +80,10 @@ class EnvironmentValidator {
             validateRequired("EXPO_TOKEN", "On-Call mobile push notifications are enabled", errors)
         }
         
-        // Validate AI Chat configuration when enabled
-        val aiChatEnabled = getConfigValue("AI_CHAT_ENABLED")?.toBoolean() ?: false
-        if (aiChatEnabled) {
-            validateRequired("OPENAI_API_KEY", "AI Chat is enabled", errors)
+        // Validate AI Chat configuration when API key is present
+        val openAiApiKey = getConfigValue("OPENAI_API_KEY")
+        if (!openAiApiKey.isNullOrBlank()) {
+            logger.info { "OpenAI API key detected - AI chat will be available for admin users" }
         }
     }
     

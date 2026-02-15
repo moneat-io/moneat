@@ -175,7 +175,7 @@ function RootComponent() {
         <Outlet />
       </div>
       <Toaster />
-      {showSidebar && import.meta.env.VITE_AI_CHAT_ENABLED === 'true' && <ChatWidget />}
+      {showSidebar && user?.isAdmin && <ChatWidget />}
     </div>
   )
 }

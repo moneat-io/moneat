@@ -1,6 +1,7 @@
 package com.moneat.ai
 
 import com.moneat.models.Memberships
+import com.moneat.models.Users
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -29,6 +30,13 @@ fun Route.aiChatRoutes() {
 
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                // Check if user is admin
+                if (!isUserAdmin(userId)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "AI chat is only available for admin users"))
+                    return@post
+                }
+                
                 val orgId = getOrgIdForUser(userId)
                 if (orgId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
@@ -58,6 +66,13 @@ fun Route.aiChatRoutes() {
 
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                
+                // Check if user is admin
+                if (!isUserAdmin(userId)) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "AI chat is only available for admin users"))
+                    return@post
+                }
+                
                 val orgId = getOrgIdForUser(userId)
                 if (orgId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
@@ -143,5 +158,14 @@ private fun getOrgIdForUser(userId: Int): Int? {
             .where { Memberships.user_id eq userId }
             .firstOrNull()
             ?.get(Memberships.organization_id)
+    }
+}
+
+private fun isUserAdmin(userId: Int): Boolean {
+    return transaction {
+        Users.selectAll()
+            .where { Users.id eq userId }
+            .firstOrNull()
+            ?.get(Users.is_admin) ?: false
     }
 }
