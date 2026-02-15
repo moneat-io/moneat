@@ -28,7 +28,7 @@ class AuthServiceLegalConsentTest {
                 driver = "org.h2.Driver"
             )
             transaction {
-                SchemaUtils.create(Users, UserLegalAcceptances, Organizations, Memberships, OrgInvitations)
+                SchemaUtils.create(Users, UserLegalAcceptances, Organizations, Memberships, OrgInvitations, RefreshTokens)
             }
             dbInitialized = true
         }

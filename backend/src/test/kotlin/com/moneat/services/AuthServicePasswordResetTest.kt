@@ -26,7 +26,7 @@ class AuthServicePasswordResetTest {
                 driver = "org.h2.Driver"
             )
             transaction {
-                SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances)
+                SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens)
             }
             dbInitialized = true
         }

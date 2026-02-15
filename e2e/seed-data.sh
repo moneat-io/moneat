@@ -14,11 +14,18 @@ else
   DOCKER_COMPOSE="docker compose"
 fi
 
-# Check if database is accessible (whether backend is running or not)
+# Check if database is accessible (whether via docker-compose or service containers)
 echo "Checking database connection..."
-if ! $DOCKER_COMPOSE ps postgres | grep -q "Up"; then
-  echo "❌ PostgreSQL is not running. Please start database:"
+# First try docker-compose
+if $DOCKER_COMPOSE ps postgres 2>/dev/null | grep -q "Up"; then
+  echo "✅ PostgreSQL running via docker-compose"
+# If not via docker-compose, check if it's accessible directly (e.g., GitHub Actions service container)
+elif nc -z localhost 5499 2>/dev/null || pg_isready -h localhost -p 5499 -U moneat 2>/dev/null; then
+  echo "✅ PostgreSQL accessible on localhost:5499 (service container)"
+else
+  echo "❌ PostgreSQL is not running or accessible. Please start database:"
   echo "   $DOCKER_COMPOSE up -d postgres"
+  echo "   OR ensure PostgreSQL service container is running (CI environment)"
   exit 1
 fi
 
