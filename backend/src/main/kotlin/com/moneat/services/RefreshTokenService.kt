@@ -2,7 +2,6 @@ package com.moneat.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.config.EnvConfig
 import com.moneat.models.RefreshTokens
 import com.moneat.models.Users
 import org.jetbrains.exposed.sql.*
@@ -20,9 +19,10 @@ data class RefreshTokenResponse(
 )
 
 class RefreshTokenService {
-    private val jwtSecret = EnvConfig.get("JWT_SECRET")
-    private val jwtIssuer = EnvConfig.get("JWT_ISSUER", "moneat-api")
-    private val jwtAudience = EnvConfig.get("JWT_AUDIENCE", "moneat-dashboard")
+    private val config = io.ktor.server.config.ApplicationConfig("application.conf")
+    private val jwtSecret = config.property("jwt.secret").getString()
+    private val jwtIssuer = config.property("jwt.issuer").getString()
+    private val jwtAudience = config.property("jwt.audience").getString()
     
     companion object {
         private const val REFRESH_TOKEN_LENGTH = 64
