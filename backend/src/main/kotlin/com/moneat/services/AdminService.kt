@@ -812,6 +812,9 @@ class AdminService {
             // Delete promotional credit grants
             PromotionalCreditGrants.deleteWhere { PromotionalCreditGrants.organization_id eq orgId }
 
+            // Delete email tracking records
+            EmailsSent.deleteWhere { EmailsSent.organization_id eq orgId }
+
             // Delete alert templates
             OrganizationAlertTemplates.deleteWhere { OrganizationAlertTemplates.organization_id eq orgId }
 
