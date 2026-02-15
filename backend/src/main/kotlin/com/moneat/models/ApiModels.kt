@@ -23,6 +23,8 @@ data class LoginRequest(
 @Serializable
 data class AuthResponse(
     val token: String,
+    val refreshToken: String? = null,
+    val expiresIn: Long? = null,
     val user: UserResponse
 )
 
@@ -285,6 +287,11 @@ data class ForgotPasswordRequest(
 data class ResetPasswordRequest(
     val token: String,
     val newPassword: String
+)
+
+@Serializable
+data class RefreshTokenRequest(
+    val refreshToken: String
 )
 
 @Serializable

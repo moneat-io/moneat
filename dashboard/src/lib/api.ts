@@ -14,6 +14,8 @@ export function formatErrorForLogging(error: unknown): string {
 
 interface AuthResponse {
   token: string
+  refreshToken?: string
+  expiresIn?: number
   user: { 
     id: number
     email: string
@@ -1545,9 +1547,51 @@ interface AiConversationDetail {
 
 class ApiClient {
   private authRedirectInProgress = false
+  private refreshPromise: Promise<boolean> | null = null
 
   private getImpersonateToken(): string | null {
     return sessionStorage.getItem('impersonate_token')
+  }
+
+  private getRefreshToken(): string | null {
+    return localStorage.getItem('refresh_token')
+  }
+
+  private setRefreshToken(token: string): void {
+    localStorage.setItem('refresh_token', token)
+  }
+
+  private removeRefreshToken(): void {
+    localStorage.removeItem('refresh_token')
+  }
+
+  private async refreshAccessToken(): Promise<boolean> {
+    const refreshToken = this.getRefreshToken()
+    if (!refreshToken) return false
+
+    try {
+      const response = await fetch(`${API_BASE.replace('/v1', '')}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        this.removeRefreshToken()
+        return false
+      }
+
+      const data: AuthResponse = await response.json()
+      if (data.refreshToken) {
+        this.setRefreshToken(data.refreshToken)
+      }
+      sessionStorage.setItem('authenticated', 'true')
+      return true
+    } catch (err) {
+      this.removeRefreshToken()
+      return false
+    }
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -1570,6 +1614,21 @@ class ApiClient {
     }
 
     if (response.status === 401) {
+      // Try to refresh the token if we have one
+      if (!this.refreshPromise) {
+        this.refreshPromise = this.refreshAccessToken().finally(() => {
+          this.refreshPromise = null
+        })
+      }
+
+      const refreshed = await this.refreshPromise
+
+      if (refreshed) {
+        // Retry the original request with the new token
+        return this.request<T>(endpoint, options)
+      }
+
+      // Refresh failed, logout and redirect
       this.logout()
 
       if (
@@ -1665,6 +1724,10 @@ class ApiClient {
       body: JSON.stringify({ email, password, name, ...legalConsent }),
     })
     // Token is now set as httpOnly cookie by the backend
+    // Store refresh token in localStorage
+    if (response.refreshToken) {
+      this.setRefreshToken(response.refreshToken)
+    }
     sessionStorage.setItem('authenticated', 'true')
     return response
   }
@@ -1675,6 +1738,10 @@ class ApiClient {
       body: JSON.stringify({ email, password }),
     })
     // Token is now set as httpOnly cookie by the backend
+    // Store refresh token in localStorage
+    if (response.refreshToken) {
+      this.setRefreshToken(response.refreshToken)
+    }
     sessionStorage.setItem('authenticated', 'true')
     return response
   }
@@ -1717,6 +1784,7 @@ class ApiClient {
   logout() {
     sessionStorage.removeItem('impersonate_token')
     sessionStorage.removeItem('authenticated')
+    this.removeRefreshToken()
     // Clear the httpOnly auth cookie via backend
     fetch(`${API_BASE.replace('/v1', '')}/auth/logout`, {
       method: 'POST',

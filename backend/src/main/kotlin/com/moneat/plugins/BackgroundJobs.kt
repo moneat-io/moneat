@@ -27,6 +27,7 @@ fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
     val billingBackgroundService = BillingBackgroundService()
     val retentionBackgroundService = RetentionBackgroundService()
+    val refreshTokenCleanupService = RefreshTokenCleanupService()
     val uptimeScheduler = UptimeScheduler()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
@@ -73,11 +74,12 @@ fun Application.configureBackgroundJobs() {
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    // Start the monitor alert service, billing service, retention service, uptime scheduler, ingestion workers, escalation engine, and Slack usergroup sync
+    // Start the monitor alert service, billing service, retention service, refresh token cleanup, uptime scheduler, ingestion workers, escalation engine, and Slack usergroup sync
     logger.info { "Starting background jobs" }
     monitorAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
     retentionBackgroundService.start(jobScope)
+    refreshTokenCleanupService.start(jobScope)
     uptimeScheduler.start()
     ingestionWorker.start()
     logIngestionWorker.start()
@@ -91,6 +93,7 @@ fun Application.configureBackgroundJobs() {
         monitorAlertService.stop()
         billingBackgroundService.stop()
         retentionBackgroundService.stop()
+        refreshTokenCleanupService.stop()
         uptimeScheduler.stop()
         ingestionWorker.stop()
         logIngestionWorker.stop()

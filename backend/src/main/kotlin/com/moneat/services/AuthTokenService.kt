@@ -1,7 +1,10 @@
 package com.moneat.services
 
+import com.moneat.config.EnvConfig
 import com.moneat.models.AuthTokenResponse
 import com.moneat.models.AuthTokens
+import com.moneat.models.Memberships
+import com.moneat.models.Organizations
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
@@ -28,8 +31,23 @@ class AuthTokenService {
             "org:read"
         )
         
-        private const val TOKEN_PREFIX = "moneat_"
+        // sentry-cli compatible org auth token format: sntrys_{base64_payload}_{base64_secret}
+        private const val TOKEN_PREFIX = "sntrys_"
         private const val TOKEN_LENGTH = 32 // 32 bytes = 256 bits
+    }
+    
+    /**
+     * Build a sentry-cli compatible token string.
+     * Format: sntrys_{base64_payload}_{base64_secret}
+     * Payload JSON: {"iat": <epoch>, "url": "<backend_url>", "region_url": "<backend_url>", "org": "<org_slug>"}
+     */
+    private fun buildSentryToken(orgSlug: String, secretBytes: ByteArray): String {
+        val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
+        val iat = System.currentTimeMillis() / 1000.0
+        val payloadJson = """{"iat":$iat,"url":"$backendUrl","region_url":"$backendUrl","org":"$orgSlug"}"""
+        val payloadEncoded = Base64.getEncoder().encodeToString(payloadJson.toByteArray())
+        val secretEncoded = Base64.getEncoder().withoutPadding().encodeToString(secretBytes)
+        return "${TOKEN_PREFIX}${payloadEncoded}_${secretEncoded}"
     }
     
     /**
@@ -46,10 +64,19 @@ class AuthTokenService {
             throw IllegalArgumentException("Token name cannot be blank")
         }
         
-        // Generate secure random token
+        // Look up the user's org slug for the token payload
+        val orgSlug = transaction {
+            (Memberships innerJoin Organizations)
+                .selectAll()
+                .where { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?.get(Organizations.slug)
+        } ?: "default"
+        
+        // Generate secure random secret
         val tokenBytes = ByteArray(TOKEN_LENGTH)
         secureRandom.nextBytes(tokenBytes)
-        val tokenValue = TOKEN_PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes)
+        val tokenValue = buildSentryToken(orgSlug, tokenBytes)
         
         // Hash the token for storage
         val tokenHash = hashToken(tokenValue)
@@ -85,7 +112,7 @@ class AuthTokenService {
     }
     
     /**
-     * Validate a token and return user ID and scopes if valid
+     * Validate a token and return user ID and scopes if valid.
      */
     fun validateToken(token: String): TokenValidationResult? {
         if (!token.startsWith(TOKEN_PREFIX)) {

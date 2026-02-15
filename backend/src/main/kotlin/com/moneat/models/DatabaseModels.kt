@@ -123,6 +123,17 @@ object AuthTokens : Table("auth_tokens") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object RefreshTokens : Table("refresh_tokens") {
+    val id = integer("id").autoIncrement()
+    val user_id = integer("user_id").references(Users.id)
+    val token_hash = varchar("token_hash", 255)
+    val expires_at = long("expires_at")
+    val created_at = long("created_at")
+    val last_used_at = long("last_used_at").nullable()
+    val revoked = bool("revoked").default(false)
+    override val primaryKey = PrimaryKey(id)
+}
+
 object Releases : Table("releases") {
     val id = integer("id").autoIncrement()
     val project_id = long("project_id").references(Projects.id)

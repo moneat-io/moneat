@@ -32,6 +32,7 @@ class AuthService {
     private val emailService = EmailService()
     private val secureRandom = SecureRandom()
     private val ssoService by lazy { SsoService() }
+    private val refreshTokenService = RefreshTokenService()
     
     fun signup(request: SignupRequest, context: SignupRequestContext = SignupRequestContext(), inviteToken: String? = null): AuthResponse {
         if (request.email.isBlank() || request.password.length < 8) {
@@ -215,10 +216,12 @@ class AuthService {
             Quadruple(id, false, finalOrgId, finalOrgRole)
         }
         
-        val token = generateToken(userId, normalizedEmail, orgId, orgRole)
+        val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
         return AuthResponse(
-            token = token,
+            token = tokenPair.accessToken,
+            refreshToken = tokenPair.refreshToken,
+            expiresIn = tokenPair.expiresIn,
             user = UserResponse(userId, normalizedEmail, request.name, emailVerified, false, false)
         )
     }
@@ -310,9 +313,11 @@ class AuthService {
             val orgId = membership[Memberships.organization_id]
             val orgRole = membership[Memberships.role]
             
-            val token = generateToken(userId, user[Users.email], orgId, orgRole)
+            val tokenPair = refreshTokenService.generateRefreshToken(userId, user[Users.email], orgId, orgRole)
             AuthResponse(
-                token = token,
+                token = tokenPair.accessToken,
+                refreshToken = tokenPair.refreshToken,
+                expiresIn = tokenPair.expiresIn,
                 user = UserResponse(
                     userId, 
                     user[Users.email], 
@@ -490,5 +495,43 @@ class AuthService {
                 slug
             )
         }
+    }
+    
+    fun logout(userId: Int) {
+        refreshTokenService.revokeAllUserTokens(userId)
+    }
+    
+    fun refreshToken(token: String): AuthResponse? {
+        val tokenPair = refreshTokenService.validateAndRotate(token)
+            ?: return null
+        
+        // Get user info from the new access token to build response
+        val jwtVerifier = com.auth0.jwt.JWT
+            .require(com.auth0.jwt.algorithms.Algorithm.HMAC256(jwtSecret))
+            .build()
+        val decodedJWT = jwtVerifier.verify(tokenPair.accessToken)
+        val userId = decodedJWT.getClaim("userId").asInt()
+        val email = decodedJWT.getClaim("email").asString()
+        
+        val user = transaction {
+            val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                ?: return@transaction null
+            
+            UserResponse(
+                userId,
+                email,
+                userRow[Users.name],
+                userRow[Users.email_verified],
+                userRow[Users.onboarding_completed],
+                userRow[Users.is_admin]
+            )
+        } ?: return null
+        
+        return AuthResponse(
+            token = tokenPair.accessToken,
+            refreshToken = tokenPair.refreshToken,
+            expiresIn = tokenPair.expiresIn,
+            user = user
+        )
     }
 }

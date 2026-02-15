@@ -26,6 +26,8 @@ private val logger = KotlinLogging.logger {}
 fun Route.authRoutes() {
     val authService = AuthService()
     val oauthService = OAuthService()
+    val config = io.ktor.server.config.ApplicationConfig("application.conf")
+    val jwtSecret = config.property("jwt.secret").getString()
     
     route("/auth") {
         post("/signup") {
@@ -121,8 +123,45 @@ fun Route.authRoutes() {
         }
         
         post("/logout") {
+            // Get userId from auth if available to revoke refresh tokens
+            val authHeader = call.request.headers["Authorization"]
+            val tokenFromHeader = authHeader?.removePrefix("Bearer ")?.removePrefix("bearer ")?.trim()
+            val tokenFromCookie = call.request.cookies["auth_token"]
+            val token = tokenFromHeader ?: tokenFromCookie
+            
+            if (token != null) {
+                try {
+                    val jwtVerifier = com.auth0.jwt.JWT
+                        .require(com.auth0.jwt.algorithms.Algorithm.HMAC256(jwtSecret))
+                        .build()
+                    val decodedJWT = jwtVerifier.verify(token)
+                    val userId = decodedJWT?.getClaim("userId")?.asInt()
+                    if (userId != null) {
+                        authService.logout(userId)
+                    }
+                } catch (e: Exception) {
+                    // Token invalid or expired, continue with logout
+                }
+            }
+            
             AuthCookieUtils.clearAuthCookie(call)
             call.respond(mapOf("message" to "Logged out"))
+        }
+        
+        post("/refresh") {
+            val request = call.receive<RefreshTokenRequest>()
+            
+            try {
+                val result = authService.refreshToken(request.refreshToken)
+                if (result != null) {
+                    AuthCookieUtils.setAuthCookie(call, result.token)
+                    call.respond(result)
+                } else {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid or expired refresh token"))
+                }
+            } catch (e: IllegalArgumentException) {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to e.message))
+            }
         }
         
         // GitHub OAuth
