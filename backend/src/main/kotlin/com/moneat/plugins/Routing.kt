@@ -1,5 +1,6 @@
 package com.moneat.plugins
 
+import com.moneat.ai.aiChatRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.routes.*
@@ -113,5 +114,8 @@ fun Application.configureRouting() {
         priorityRoutes()
         deviceRoutes()
         incidentRoutes(::getIncidentManagementService)
+        
+        // AI chat assistant endpoints
+        aiChatRoutes()
     }
 }

@@ -2,6 +2,7 @@ import {createRootRoute, Outlet, useRouterState, useNavigate} from '@tanstack/re
 import {useEffect, useState} from 'react'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
 import {Toaster} from '../components/ui/toaster'
+import {ChatWidget} from '../components/ai-chat/ChatWidget'
 import {api} from '../lib/api'
 
 export const Route = createRootRoute({
@@ -174,6 +175,7 @@ function RootComponent() {
         <Outlet />
       </div>
       <Toaster />
+      {showSidebar && import.meta.env.VITE_AI_CHAT_ENABLED === 'true' && <ChatWidget />}
     </div>
   )
 }

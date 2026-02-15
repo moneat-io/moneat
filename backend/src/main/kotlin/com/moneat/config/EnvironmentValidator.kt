@@ -79,6 +79,12 @@ class EnvironmentValidator {
         if (onCallEnabled) {
             validateRequired("EXPO_TOKEN", "On-Call mobile push notifications are enabled", errors)
         }
+        
+        // Validate AI Chat configuration when enabled
+        val aiChatEnabled = getConfigValue("AI_CHAT_ENABLED")?.toBoolean() ?: false
+        if (aiChatEnabled) {
+            validateRequired("OPENAI_API_KEY", "AI Chat is enabled", errors)
+        }
     }
     
     private fun validateRequired(envVar: String, reason: String, errors: MutableList<String>) {

@@ -1465,6 +1465,84 @@ interface UpdateOnCallSeatsResponse {
   proratedAmountCents?: number
 }
 
+// ── AI Chat Types ─────────────────────────────────────────────────────
+
+interface AiChatResponseData {
+  message: string
+  actions?: AiAction[]
+  clarifications?: AiClarification[]
+  data_queries?: AiDataQuery[]
+  links?: AiLink[]
+  context_needed?: string[]
+}
+
+interface AiAction {
+  id: string
+  type: string
+  label: string
+  method: string
+  endpoint: string
+  params?: Record<string, string>
+}
+
+interface AiClarification {
+  id: string
+  question: string
+  field: string
+  options?: { label: string; value: string }[]
+  default?: string
+}
+
+interface AiDataQuery {
+  id: string
+  description: string
+  endpoint: string
+  params?: Record<string, string>
+}
+
+interface AiLink {
+  label: string
+  url: string
+}
+
+interface AiChatResponse {
+  conversationId: number
+  response: AiChatResponseData
+  model?: string
+  tokensUsed?: number
+}
+
+interface AiActionResult {
+  success: boolean
+  message: string
+  data?: Record<string, string>
+}
+
+interface AiConversationSummary {
+  id: number
+  title: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface AiMessageDto {
+  id: number
+  role: string
+  content: string
+  pageContext?: string
+  model?: string
+  tokensUsed?: number
+  createdAt: string
+}
+
+interface AiConversationDetail {
+  id: number
+  title: string | null
+  messages: AiMessageDto[]
+  createdAt: string
+  updatedAt: string
+}
+
 class ApiClient {
   private authRedirectInProgress = false
 
@@ -3339,6 +3417,34 @@ class ApiClient {
       body: JSON.stringify({ note }),
     })
   }
+
+  // ── AI Chat ─────────────────────────────────────────────────────────────
+
+  async sendChatMessage(conversationId: number | null, message: string, currentPage: string): Promise<AiChatResponse> {
+    return this.request<AiChatResponse>(`${API_BASE}/ai/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ conversationId, message, currentPage }),
+    })
+  }
+
+  async executeAiAction(conversationId: number, actionId: string, params: Record<string, string> = {}): Promise<AiActionResult> {
+    return this.request<AiActionResult>(`${API_BASE}/ai/execute-action`, {
+      method: 'POST',
+      body: JSON.stringify({ conversationId, actionId, params }),
+    })
+  }
+
+  async getAiConversations(): Promise<AiConversationSummary[]> {
+    return this.request<AiConversationSummary[]>(`${API_BASE}/ai/conversations`)
+  }
+
+  async getAiConversation(id: number): Promise<AiConversationDetail> {
+    return this.request<AiConversationDetail>(`${API_BASE}/ai/conversations/${id}`)
+  }
+
+  async deleteAiConversation(id: number): Promise<void> {
+    return this.request<void>(`${API_BASE}/ai/conversations/${id}`, { method: 'DELETE' })
+  }
 }
 
 export const api = new ApiClient()
@@ -3468,4 +3574,14 @@ export type {
   IncidentListFilters,
   SilencePeriod,
   CreateSilencePeriodRequest,
+  AiChatResponse,
+  AiChatResponseData,
+  AiAction,
+  AiClarification,
+  AiDataQuery,
+  AiLink,
+  AiActionResult,
+  AiConversationSummary,
+  AiConversationDetail,
+  AiMessageDto,
 }
