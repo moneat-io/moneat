@@ -4,9 +4,13 @@ import com.moneat.models.AssembleArtifactBundleRequest
 import com.moneat.models.ChunkUploadParameters
 import com.moneat.models.AssembleResponse
 import com.moneat.models.CreateReleaseRequest
+import com.moneat.models.Users
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.services.AuthTokenService
 import com.moneat.services.ReleaseService
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
@@ -23,6 +27,34 @@ private val logger = KotlinLogging.logger {}
 fun Route.releaseRoutes() {
     val releaseService = ReleaseService()
     val authTokenService = AuthTokenService()
+    
+    // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
+    authenticate("auth-combined") {
+        get("/api/0/") {
+            val principal = call.principal<AuthTokenPrincipal>()
+                ?: run {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@get
+                }
+            
+            val userInfo = transaction {
+                Users.selectAll()
+                    .where { Users.id eq principal.userId }
+                    .firstOrNull()
+                    ?.let { row ->
+                        mapOf(
+                            "email" to row[Users.email],
+                            "id" to row[Users.id].toString()
+                        )
+                    }
+            }
+            
+            call.respond(mapOf(
+                "auth" to mapOf("scopes" to principal.scopes),
+                "user" to userInfo
+            ))
+        }
+    }
     
     // Sentry-compatible release endpoints
     // These use auth-combined to support both JWT and Bearer tokens
