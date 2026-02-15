@@ -361,6 +361,17 @@ class DashboardService {
             // Create slug from name
             val slug = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
             
+            // Check if slug already exists in this organization
+            val existingProject = Projects.selectAll()
+                .where { 
+                    (Projects.organization_id eq orgId) and (Projects.slug eq slug)
+                }
+                .firstOrNull()
+            
+            if (existingProject != null) {
+                throw IllegalStateException("A project with this name already exists")
+            }
+            
             // Insert project
             val projectId = Projects.insert {
                 it[organization_id] = orgId

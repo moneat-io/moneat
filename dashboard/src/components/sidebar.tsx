@@ -128,10 +128,16 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
           ),
           variant: 'destructive',
         })
+      } else if (error.message.includes('already exists')) {
+        toast({
+          title: 'Project Already Exists',
+          description: 'A project with this name already exists. Please choose a different name.',
+          variant: 'destructive',
+        })
       } else {
         toast({
           title: 'Error',
-          description: 'Failed to create project. Please try again.',
+          description: error.message || 'Failed to create project. Please try again.',
           variant: 'destructive',
         })
       }

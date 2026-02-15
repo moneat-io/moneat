@@ -333,8 +333,14 @@ Sentry.captureMessage("Moneat test from KMP Desktop JVM")`,
 
   'react-native': createDocs('react-native', '@sentry/react-native', [
     {
-      title: 'Install the package',
-      description: 'Install the Sentry React Native SDK.',
+      title: 'Run the setup wizard (recommended)',
+      description: 'The Sentry wizard automatically configures your React Native project for both iOS and Android with a single DSN.',
+      code: `npx @sentry/wizard@latest -i reactNative`,
+      language: 'bash',
+    },
+    {
+      title: 'Or install manually',
+      description: 'If you prefer manual setup, install the package first.',
       code: `npm install @sentry/react-native
 
 # Or with yarn
@@ -343,7 +349,7 @@ yarn add @sentry/react-native`,
     },
     {
       title: 'Initialize in your app',
-      description: 'Initialize Sentry as early as possible in your app entry point (App.js or index.js).',
+      description: 'Initialize Sentry as early as possible in your app entry point (App.js or index.js). Use the same DSN for both iOS and Android.',
       code: `import * as Sentry from "@sentry/react-native";
 
 Sentry.init({
@@ -354,8 +360,8 @@ Sentry.init({
       language: 'javascript',
     },
     {
-      title: 'Wrap your app (optional)',
-      description: 'Wrap your root component for better error boundary support.',
+      title: 'Wrap your app',
+      description: 'Wrap your root component to enable touch event tracking and automatic tracing.',
       code: `import * as Sentry from "@sentry/react-native";
 
 export default Sentry.wrap(App);`,
@@ -363,15 +369,15 @@ export default Sentry.wrap(App);`,
     },
     {
       title: 'Verify installation',
-      description: 'Send a test event to confirm setup.',
+      description: 'Send a test event to confirm setup. This will work on both iOS and Android.',
       code: `import * as Sentry from "@sentry/react-native";
 
 Sentry.captureMessage("Moneat test event from React Native");`,
       language: 'javascript',
     },
     {
-      title: 'Upload source maps',
-      description: 'Add the Sentry Expo plugin to upload source maps during builds. Create an auth token in Settings > Auth Tokens with "releases:write" and "sourcemaps:write" scopes.',
+      title: 'Source maps (for Expo)',
+      description: 'If using Expo, add the Sentry plugin to upload source maps. Create an auth token in Settings > Auth Tokens.',
       code: `// app.json (or app.config.js)
 {
   "plugins": [
@@ -382,7 +388,7 @@ Sentry.captureMessage("Moneat test event from React Native");`,
   ]
 }
 
-// Set SENTRY_AUTH_TOKEN in your EAS secrets or eas.json:
+// Set SENTRY_AUTH_TOKEN in your environment or EAS secrets:
 // eas secret:create --name SENTRY_AUTH_TOKEN --value YOUR_AUTH_TOKEN`,
       language: 'json',
     },

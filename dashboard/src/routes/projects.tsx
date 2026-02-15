@@ -133,16 +133,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#9333ea',
-    category: 'mobile',
-    targets: [
-      { id: 'android', name: 'Android' },
-      { id: 'ios', name: 'iOS' },
-      { id: 'desktop-jvm', name: 'Desktop (JVM)' },
-      { id: 'desktop-native', name: 'Desktop (Native)' },
-      { id: 'web-js', name: 'Web (JS)' },
-      { id: 'web-wasm', name: 'Web (Wasm)' },
-    ],
-    defaultTargets: ['android', 'ios']
+    category: 'mobile'
   },
   {
     id: 'react-native',
@@ -154,12 +145,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#06b6d4',
-    category: 'mobile',
-    targets: [
-      { id: 'android', name: 'Android' },
-      { id: 'ios', name: 'iOS' },
-    ],
-    defaultTargets: ['android', 'ios']
+    category: 'mobile'
   },
   {
     id: 'flutter',
@@ -171,14 +157,7 @@ export const platforms: PlatformType[] = [
       </svg>
     ),
     color: '#3b82f6',
-    category: 'mobile',
-    targets: [
-      { id: 'android', name: 'Android' },
-      { id: 'ios', name: 'iOS' },
-      { id: 'web', name: 'Web' },
-      { id: 'desktop', name: 'Desktop' },
-    ],
-    defaultTargets: ['android', 'ios']
+    category: 'mobile'
   },
   {
     id: 'web',
