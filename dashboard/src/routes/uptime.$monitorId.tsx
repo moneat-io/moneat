@@ -7,10 +7,12 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Separator} from '@/components/ui/separator'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
-import {Activity, ArrowLeft, CheckCircle2, Clock, Pause, Play, Trash2, XCircle} from 'lucide-react'
+import {Activity, ArrowLeft, CheckCircle2, Clock, Pause, Play, Trash2, XCircle, Pencil} from 'lucide-react'
 import {useToast} from '@/hooks/use-toast'
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
 import HeartbeatBar from '@/components/uptime/heartbeat-bar'
+import EditMonitorDialog from '@/components/uptime/edit-monitor-dialog'
+import {useState} from 'react'
 
 export const Route = createFileRoute('/uptime/$monitorId')({
   beforeLoad: () => {
@@ -39,6 +41,7 @@ function UptimeDetailPage() {
   const navigate = useNavigate()
   const {toast} = useToast()
   const queryClient = useQueryClient()
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   const {data: monitor, isLoading} = useQuery({
     queryKey: ['uptime-monitor', monitorId],
@@ -134,6 +137,10 @@ function UptimeDetailPage() {
                 {monitor.url || monitor.hostname}
               </a>
               <Separator orientation="vertical" className="h-6 mx-2 hidden sm:block" />
+              <Button variant="ghost" size="sm" onClick={() => setEditDialogOpen(true)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
               {monitor.status !== 'paused' ? (
                 <Button variant="ghost" size="sm" onClick={() => pauseMutation.mutate()}>
                   <Pause className="mr-2 h-4 w-4" />
@@ -316,6 +323,13 @@ function UptimeDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Edit Dialog */}
+      <EditMonitorDialog 
+        open={editDialogOpen} 
+        onOpenChange={setEditDialogOpen}
+        monitor={monitor}
+      />
     </div>
   )
 }
