@@ -2,6 +2,8 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
+import com.moneat.models.SsoConfigurations
+import com.moneat.ai.AiConversations
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.datetime.*
@@ -815,6 +817,15 @@ class AdminService {
             // Delete email tracking records
             EmailsSent.deleteWhere { EmailsSent.organization_id eq orgId }
 
+            // Delete alert silence periods
+            AlertSilencePeriods.deleteWhere { AlertSilencePeriods.organization_id eq orgId }
+
+            // Delete SSO configurations (cascades to user_sso_links)
+            SsoConfigurations.deleteWhere { SsoConfigurations.organizationId eq orgId }
+
+            // Delete AI conversations (cascades to ai_messages)
+            AiConversations.deleteWhere { AiConversations.organization_id eq orgId }
+
             // Delete alert templates
             OrganizationAlertTemplates.deleteWhere { OrganizationAlertTemplates.organization_id eq orgId }
 
@@ -825,6 +836,7 @@ class AdminService {
             // Delete system alerts (through system relationship)
             systemIds.forEach { systemId ->
                 SystemAlerts.deleteWhere { SystemAlerts.system_id eq systemId }
+                SystemAlertSettings.deleteWhere { SystemAlertSettings.system_id eq systemId }
             }
             
             // Now delete systems

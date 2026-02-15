@@ -49,8 +49,9 @@ fun Application.configureSecurity() {
             // Fall back to reading JWT from httpOnly cookie when no Authorization header present
             authHeader { call ->
                 val authHeader = call.request.headers["Authorization"]
-                if (authHeader != null) {
-                    try { io.ktor.http.parseAuthorizationHeader(authHeader) } catch (_: Exception) { null }
+                if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
+                    val token = authHeader.removePrefix("Bearer ").removePrefix("bearer ").trim()
+                    io.ktor.http.auth.HttpAuthHeader.Single("Bearer", token)
                 } else {
                     val cookieToken = call.request.cookies["auth_token"]
                     if (cookieToken != null) {
