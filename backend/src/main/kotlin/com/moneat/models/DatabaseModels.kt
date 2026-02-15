@@ -1,8 +1,43 @@
 package com.moneat.models
 
+import org.jetbrains.exposed.sql.ColumnType
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.kotlin.datetime.date
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import java.sql.ResultSet
+
+class TextArrayColumnType : ColumnType() {
+    override fun sqlType(): String = "TEXT[]"
+
+    override fun valueFromDB(value: Any): List<String> {
+        return when (value) {
+            is java.sql.Array -> (value.array as Array<*>).filterIsInstance<String>()
+            is Array<*> -> value.filterIsInstance<String>()
+            is List<*> -> value.filterIsInstance<String>()
+            else -> throw IllegalArgumentException("Unexpected value type: ${value::class}")
+        }
+    }
+
+    override fun notNullValueToDB(value: Any): Any {
+        return when (value) {
+            is List<*> -> value.filterIsInstance<String>().toTypedArray()
+            is Array<*> -> value
+            else -> throw IllegalArgumentException("Unexpected value type: ${value::class}")
+        }
+    }
+
+    override fun setParameter(stmt: org.jetbrains.exposed.sql.statements.api.PreparedStatementApi, index: Int, value: Any?) {
+        if (value == null) {
+            stmt.setNull(index, this)
+        } else {
+            val preparedStatement = stmt as org.jetbrains.exposed.sql.statements.jdbc.JdbcPreparedStatementImpl
+            val array = notNullValueToDB(value) as Array<*>
+            val connection = preparedStatement.statement.connection
+            val sqlArray = connection.createArrayOf("text", array)
+            preparedStatement.statement.setArray(index, sqlArray)
+        }
+    }
+}
 
 object Users : Table("users") {
     val id = integer("id").autoIncrement()
@@ -81,7 +116,7 @@ object AuthTokens : Table("auth_tokens") {
     val user_id = integer("user_id").references(Users.id)
     val token_hash = varchar("token_hash", 64)
     val name = varchar("name", 255)
-    val scopes = text("scopes")
+    val scopes = registerColumn<List<String>>("scopes", TextArrayColumnType())
     val last_used_at = timestamp("last_used_at").nullable()
     val expires_at = timestamp("expires_at").nullable()
     val created_at = timestamp("created_at")

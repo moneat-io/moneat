@@ -66,7 +66,7 @@ class AuthTokenService {
                 it[user_id] = userId
                 it[token_hash] = tokenHash
                 it[AuthTokens.name] = name
-                it[AuthTokens.scopes] = scopes.joinToString(",")
+                it[AuthTokens.scopes] = scopes
                 it[AuthTokens.expires_at] = expiresAt
                 it[AuthTokens.created_at] = createdAt
                 it[last_used_at] = null
@@ -107,7 +107,7 @@ class AuthTokenService {
             }
             
             val userId = tokenRow[AuthTokens.user_id]
-            val scopes = tokenRow[AuthTokens.scopes].split(",").filter { it.isNotEmpty() }
+            val scopes = tokenRow[AuthTokens.scopes]
             val tokenId = tokenRow[AuthTokens.id]
             
             // Update last_used_at timestamp
@@ -146,7 +146,7 @@ class AuthTokenService {
                         id = row[AuthTokens.id],
                         name = row[AuthTokens.name],
                         token = null, // Never return the actual token
-                        scopes = row[AuthTokens.scopes].split(",").filter { it.isNotEmpty() },
+                        scopes = row[AuthTokens.scopes],
                         lastUsedAt = row[AuthTokens.last_used_at]?.toString(),
                         expiresAt = row[AuthTokens.expires_at]?.toString(),
                         createdAt = row[AuthTokens.created_at].toString()
@@ -191,7 +191,7 @@ class AuthTokenService {
             
             AuthTokens.update({ AuthTokens.id eq tokenId }) {
                 name?.let { newName -> it[AuthTokens.name] = newName }
-                scopes?.let { newScopes -> it[AuthTokens.scopes] = newScopes.joinToString(",") }
+                scopes?.let { newScopes -> it[AuthTokens.scopes] = newScopes }
             }
             
             true

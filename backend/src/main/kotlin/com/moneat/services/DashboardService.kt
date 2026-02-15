@@ -359,7 +359,7 @@ class DashboardService {
             }
             
             // Create slug from name
-            val slug = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+            val slug = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
             
             // Check if slug already exists in this organization
             val existingProject = Projects.selectAll()
@@ -448,7 +448,7 @@ class DashboardService {
             Projects.update({ Projects.id eq projectId }) {
                 if (request.name != null) {
                     it[name] = request.name
-                    it[slug] = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+                    it[slug] = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
                 }
                 if (request.framework != null) {
                     it[framework] = request.framework

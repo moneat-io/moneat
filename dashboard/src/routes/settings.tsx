@@ -609,7 +609,7 @@ function CreateTokenDialog({
             </DialogHeader>
             <div className="space-y-4">
               <div
-                className="flex items-center gap-2 rounded-md border bg-muted/50 p-3 font-mono text-sm break-all"
+                className="flex items-center gap-2 rounded-md border bg-muted/50 p-3 font-mono text-sm"
                 role="alert"
               >
                 <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
