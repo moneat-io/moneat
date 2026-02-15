@@ -308,6 +308,7 @@ function ReplayDetailPage() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [detailsExpanded, setDetailsExpanded] = useState(false)
   const [mobileReplayOrientation, setMobileReplayOrientation] = useState<'portrait' | 'landscape'>('portrait')
+  const [mobileStatusBarContext, setMobileStatusBarContext] = useState<import('@/components/mobile-replay-viewer').ReplayStatusBarContext>({})
   const replayPlayerRef = useRef<ReplayPlayerHandle>(null)
   const mobileReplayViewerRef = useRef<MobileReplayViewerHandle>(null)
 
@@ -586,6 +587,7 @@ function ReplayDetailPage() {
               platform={replay.platform === 'ios' ? 'ios' : 'android'}
               orientation={mobileReplayOrientation}
               className="py-2"
+              statusBarContext={mobileStatusBarContext}
             >
               <MobileReplayViewer
                 ref={mobileReplayViewerRef}
@@ -596,6 +598,7 @@ function ReplayDetailPage() {
                 onDurationReady={setRecordingDurationMs}
                 onPlayingChange={setIsPlaying}
                 onOrientationChange={setMobileReplayOrientation}
+                onStatusBarContextChange={setMobileStatusBarContext}
               />
             </MobileDeviceContainer>
           ) : hasRecording ? (

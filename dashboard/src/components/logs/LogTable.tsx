@@ -2,6 +2,7 @@ import {Badge} from '@/components/ui/badge'
 import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {stripAnsi} from '@/lib/ansi'
+import {groupExceptionLogs, type LogGroup} from '@/components/logs/groupExceptionLogs'
 
 interface LogTableProps {
   logs: LogEntry[]
@@ -9,6 +10,8 @@ interface LogTableProps {
   onSelectLog: (log: LogEntry) => void
   emptyMessage?: string
   compact?: boolean
+  /** Group exception stack traces into single rows (default: true) */
+  groupExceptions?: boolean
 }
 
 const levelStyles: Record<string, string> = {
@@ -56,10 +59,22 @@ function formatRelativeTime(value: string): string {
   return `${Math.floor(diffMs / 86_400_000)}d ago`
 }
 
-export function LogTable({logs, selectedLogId, onSelectLog, compact = true}: LogTableProps) {
+function toDisplayLog(group: LogGroup): LogEntry {
+  const first = group.logs[0]!
+  if (group.logs.length === 1) return first
+  return {
+    ...first,
+    message: group.mergedMessage,
+    body: '',
+  }
+}
+
+export function LogTable({logs, selectedLogId, onSelectLog, compact = true, groupExceptions = true}: LogTableProps) {
   if (logs.length === 0) {
     return null // Empty state is handled by parent
   }
+
+  const groups = groupExceptions ? groupExceptionLogs(logs) : logs.map((log) => ({logs: [log], mergedMessage: (log.message || log.body || '').trim()}))
 
   return (
     <div className="min-w-0 max-w-full bg-card/80">
@@ -83,9 +98,10 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true}: Log
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
-            {logs.map((log) => {
+            {groups.map((group) => {
+              const log = toDisplayLog(group)
               const normalizedLevel = (log.level || 'info').toLowerCase()
-              const isSelected = selectedLogId === log.logId
+              const isSelected = group.logs.some((l) => l.logId === selectedLogId)
               return (
                 <tr
                   key={log.logId}

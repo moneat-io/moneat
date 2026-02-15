@@ -3,6 +3,12 @@ import {Pause, Play} from 'lucide-react'
 
 export type ReplayOrientation = 'portrait' | 'landscape'
 
+export interface ReplayStatusBarContext {
+  deviceTimeMs?: number | null
+  batteryLevel?: number | null
+  isCharging?: boolean | null
+}
+
 interface MobileReplayViewerProps {
   events: unknown[]
   platform: string
@@ -11,6 +17,7 @@ interface MobileReplayViewerProps {
   onDurationReady?: (durationMs: number) => void
   onPlayingChange?: (playing: boolean) => void
   onOrientationChange?: (orientation: ReplayOrientation) => void
+  onStatusBarContextChange?: (context: ReplayStatusBarContext) => void
   hideControls?: boolean
 }
 
@@ -314,7 +321,7 @@ function findSeekTarget(globalMs: number, durationsMs: number[]): GlobalSeekTarg
 }
 
 export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileReplayViewerProps>(function MobileReplayViewer(
-  { events, platform, className = '', onTimeUpdate, onDurationReady, onPlayingChange, onOrientationChange, hideControls },
+  { events, platform, className = '', onTimeUpdate, onDurationReady, onPlayingChange, onOrientationChange, onStatusBarContextChange, hideControls },
   ref
 ) {
   const videoSegments = useMemo(
@@ -520,6 +527,68 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
   useEffect(() => {
     onOrientationChange?.(currentOrientation)
   }, [currentOrientation, onOrientationChange])
+
+  // Extract battery and device time context from breadcrumbs, indexed by global time
+  const deviceContextByTime = useMemo(() => {
+    const entries: { globalMs: number; batteryLevel?: number; isCharging?: boolean; deviceTimeMs: number }[] = []
+    replayEvents.forEach((event) => {
+      if (event.type !== 5 || event.data?.tag !== 'breadcrumb') return
+      const payload = event.data?.payload ?? {}
+      const segmentId = getEventSegmentId(event)
+      if (segmentId === undefined) return
+      const segmentIndex = filteredSegmentIndexById.get(segmentId)
+      if (segmentIndex === undefined) return
+      const segmentStart = segmentStartTimestampById.get(segmentId)
+      const segmentDuration = segmentDurationsMs[segmentIndex] ?? 0
+      const localMs = segmentStart !== undefined ? clamp(event.timestamp - segmentStart, 0, segmentDuration) : 0
+      const globalMs = (cumulativeOffsetsMs[segmentIndex] ?? 0) + localMs
+
+      const category = (payload.category ?? '') as string
+      const action = (payload.action ?? '') as string
+
+      if (category.includes('device') && (action.includes('BATTERY') || payload.level !== undefined)) {
+        const level = typeof payload.level === 'number' ? payload.level : undefined
+        const charging = typeof payload.charging === 'boolean' ? payload.charging : undefined
+        entries.push({ globalMs, batteryLevel: level, isCharging: charging, deviceTimeMs: event.timestamp })
+      } else {
+        // All breadcrumbs carry a timestamp we can use for device time
+        entries.push({ globalMs, deviceTimeMs: event.timestamp })
+      }
+    })
+    return entries.sort((a, b) => a.globalMs - b.globalMs)
+  }, [replayEvents, filteredSegmentIndexById, segmentStartTimestampById, segmentDurationsMs, cumulativeOffsetsMs])
+
+  const lastEmittedContextRef = useRef<{ deviceTimeMs?: number | null; batteryLevel?: number | null; isCharging?: boolean | null }>({})
+  const onStatusBarContextChangeRef = useRef(onStatusBarContextChange)
+  onStatusBarContextChangeRef.current = onStatusBarContextChange
+
+  useEffect(() => {
+    if (deviceContextByTime.length === 0) return
+    let bestTime = deviceContextByTime[0]
+    let bestBattery: { batteryLevel?: number; isCharging?: boolean } | null = null
+    for (const entry of deviceContextByTime) {
+      if (entry.globalMs <= currentGlobalTimeMs) {
+        bestTime = entry
+        if (entry.batteryLevel !== undefined) {
+          bestBattery = { batteryLevel: entry.batteryLevel, isCharging: entry.isCharging }
+        }
+      } else break
+    }
+    const nextDeviceTimeMs = bestTime.deviceTimeMs
+    const nextBatteryLevel = bestBattery?.batteryLevel ?? null
+    const nextIsCharging = bestBattery?.isCharging ?? null
+
+    const prev = lastEmittedContextRef.current
+    if (
+      prev.deviceTimeMs === nextDeviceTimeMs &&
+      prev.batteryLevel === nextBatteryLevel &&
+      prev.isCharging === nextIsCharging
+    ) return
+
+    const ctx: ReplayStatusBarContext = { deviceTimeMs: nextDeviceTimeMs, batteryLevel: nextBatteryLevel, isCharging: nextIsCharging }
+    lastEmittedContextRef.current = ctx
+    onStatusBarContextChangeRef.current?.(ctx)
+  }, [deviceContextByTime, currentGlobalTimeMs])
 
   const timelineMarkers = useMemo((): TimelineMarker[] => {
     if (totalDurationMs <= 0) return []
