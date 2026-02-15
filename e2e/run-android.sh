@@ -2,7 +2,7 @@
 set -e
 
 # DSN Configuration
-MONEAT_DSN="https://0349e94827864c0a8984d66d54f45a1d@moneat-backend.bandapella.com/1"
+MONEAT_DSN="https://414ee8498b8b4765a4a346e9d6342e11@moneat-backend.bandapella.com/4"
 SENTRY_SAAS_DSN="https://371e1ef6e7919c2c59c330db8adbc068@o4507459978133504.ingest.us.sentry.io/4510856838250496"
 
 # Parse arguments
