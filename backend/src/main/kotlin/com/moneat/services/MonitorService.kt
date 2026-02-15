@@ -2,6 +2,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.datetime.Clock
@@ -1049,7 +1050,7 @@ class MonitorService {
     }
     
     private fun escapeSql(value: String): String {
-        return value.replace("\\", "\\\\").replace("'", "\\'")
+        return ClickHouseSqlUtils.escapeSql(value)
     }
     
     private fun generateAgentKey(): String {

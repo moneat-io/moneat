@@ -2645,6 +2645,13 @@ class ApiClient {
     })
   }
 
+  async deleteAdminUsers(userIds: number[]) {
+    return this.request<{ success: boolean; deletedCount: number; errors: string[] }>(`${API_BASE}/admin/users`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userIds }),
+    })
+  }
+
   async testNotification(type: string, channel: string, testEmail?: string) {
     return this.request<{
       success: boolean

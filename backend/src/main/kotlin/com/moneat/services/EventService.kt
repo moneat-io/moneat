@@ -2,6 +2,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
@@ -333,15 +334,15 @@ class EventService(private val notificationService: NotificationService? = null)
                 'error',
                 '$eventLevel',
                 '${escapeSql(exceptionValue)}',
-                '${event.platform ?: "unknown"}',
-                '${event.environment ?: "production"}',
-                '${event.release ?: ""}',
-                '${event.dist ?: ""}',
-                '${event.server_name ?: ""}',
-                '${event.user?.id ?: ""}',
-                '${event.user?.email ?: ""}',
-                '${event.user?.username ?: ""}',
-                '${event.user?.ip_address ?: ""}',
+                '${escapeSql(event.platform ?: "unknown")}',
+                '${escapeSql(event.environment ?: "production")}',
+                '${escapeSql(event.release ?: "")}',
+                '${escapeSql(event.dist ?: "")}',
+                '${escapeSql(event.server_name ?: "")}',
+                '${escapeSql(event.user?.id ?: "")}',
+                '${escapeSql(event.user?.email ?: "")}',
+                '${escapeSql(event.user?.username ?: "")}',
+                '${escapeSql(event.user?.ip_address ?: "")}',
                 '${escapeSql(exceptionType)}',
                 '${escapeSql(exceptionValue)}',
                 '${escapeSql(stackTrace)}',
@@ -351,8 +352,8 @@ class EventService(private val notificationService: NotificationService? = null)
                 '${escapeSql(contexts)}',
                 '${escapeSql(breadcrumbs)}',
                 '${escapeSql(request)}',
-                '${event.sdk?.name ?: ""}',
-                '${event.sdk?.version ?: ""}'
+                '${escapeSql(event.sdk?.name ?: "")}',
+                '${escapeSql(event.sdk?.version ?: "")}'
             )
         """.trimIndent()
         
@@ -770,7 +771,7 @@ class EventService(private val notificationService: NotificationService? = null)
     }
     
     private fun escapeSql(str: String): String {
-        return str.replace("'", "''").replace("\\", "\\\\")
+        return ClickHouseSqlUtils.escapeSql(str)
     }
     
     private fun fingerprintToArray(fingerprint: List<String>): String {

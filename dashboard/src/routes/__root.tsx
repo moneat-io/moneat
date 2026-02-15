@@ -1,5 +1,6 @@
 import {createRootRoute, Outlet, useRouterState, useNavigate} from '@tanstack/react-router'
 import {useEffect, useState} from 'react'
+import {useQuery} from '@tanstack/react-query'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
 import {Toaster} from '../components/ui/toaster'
 import {ChatWidget} from '../components/ai-chat/ChatWidget'
@@ -109,6 +110,12 @@ function RootComponent() {
   const isAuthenticated = api.isAuthenticated()
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
+
+  const { data: user } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => api.getCurrentUser(),
+    enabled: isAuthenticated,
+  })
 
   useEffect(() => {
     document.title = getDocumentTitle(currentPath, isAuthenticated)

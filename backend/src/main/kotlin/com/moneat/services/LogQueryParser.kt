@@ -1,5 +1,7 @@
 package com.moneat.services
 
+import com.moneat.utils.ClickHouseSqlUtils
+
 /**
  * Datadog-compatible log search query parser.
  * 
@@ -569,6 +571,9 @@ class LogQueryParser {
     }
     
     private fun buildComparisonCondition(field: String, operator: String, value: String, escapeFn: (String) -> String): String {
+        // Validate operator to prevent SQL injection
+        ClickHouseSqlUtils.validateOperator(operator)
+        
         val actualField = when (field.lowercase()) {
             "status" -> "level"
             else -> field

@@ -522,6 +522,16 @@ fun Route.adminRoutes() {
                 }
             }
 
+            delete("/users") {
+                try {
+                    val request = call.receive<com.moneat.services.DeleteUsersRequest>()
+                    val result = adminService.deleteUsers(request.userIds)
+                    call.respond(HttpStatusCode.OK, result)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                }
+            }
+
             route("/billing") {
                 get("/tiers") {
                     val tierName = call.request.queryParameters["tier"]?.uppercase()

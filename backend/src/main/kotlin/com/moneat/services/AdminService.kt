@@ -9,9 +9,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.deleteWhere
 
 private val logger = KotlinLogging.logger {}
 
@@ -170,6 +172,18 @@ data class AdminUserSummary(
 data class UpdateUserRequest(
     val isAdmin: Boolean? = null,
     val emailVerified: Boolean? = null
+)
+
+@Serializable
+data class DeleteUsersRequest(
+    val userIds: List<Int>
+)
+
+@Serializable
+data class DeleteUsersResponse(
+    val success: Boolean,
+    val deletedCount: Int,
+    val errors: List<String> = emptyList()
 )
 
 class AdminService {
@@ -686,6 +700,140 @@ class AdminService {
             }
             
             true
+        }
+    }
+
+    fun deleteUsers(userIds: List<Int>): DeleteUsersResponse {
+        if (userIds.isEmpty()) {
+            return DeleteUsersResponse(success = false, deletedCount = 0, errors = listOf("No user IDs provided"))
+        }
+
+        val errors = mutableListOf<String>()
+        var deletedCount = 0
+
+        transaction {
+            userIds.forEach { userId ->
+                try {
+                    val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                    if (user == null) {
+                        errors.add("User $userId not found")
+                        return@forEach
+                    }
+
+                    // Find all organizations owned by this user (where they are the only member)
+                    val userOrgs = Memberships.selectAll().where { Memberships.user_id eq userId }
+                        .map { it[Memberships.organization_id] }
+                        .toSet()
+
+                    userOrgs.forEach { orgId ->
+                        val memberCount = Memberships.selectAll()
+                            .where { Memberships.organization_id eq orgId }
+                            .count()
+                        
+                        // If user is the only member, delete the entire organization and related data
+                        if (memberCount.toInt() == 1) {
+                            deleteOrganizationData(orgId)
+                        }
+                    }
+
+                    // Delete user's memberships
+                    Memberships.deleteWhere { Memberships.user_id eq userId }
+
+                    // Delete user's auth tokens
+                    AuthTokens.deleteWhere { AuthTokens.user_id eq userId }
+
+                    // Delete user's legal acceptances
+                    UserLegalAcceptances.deleteWhere { UserLegalAcceptances.user_id eq userId }
+
+                    // Delete user's notification preferences
+                    NotificationPreferences.deleteWhere { NotificationPreferences.user_id eq userId }
+
+                    // Delete alert notification preferences
+                    AlertNotificationPreferences.deleteWhere { AlertNotificationPreferences.user_id eq userId }
+
+                    // Delete the user
+                    Users.deleteWhere { Users.id eq userId }
+
+                    deletedCount++
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to delete user $userId" }
+                    errors.add("Failed to delete user $userId: ${e.message}")
+                }
+            }
+        }
+
+        return DeleteUsersResponse(
+            success = errors.isEmpty(),
+            deletedCount = deletedCount,
+            errors = errors
+        )
+    }
+
+    private fun deleteOrganizationData(orgId: Int) {
+        try {
+            // Get all projects for this organization
+            val projectIds = Projects.selectAll().where { Projects.organization_id eq orgId }
+                .map { it[Projects.id] }
+
+            // Delete project keys
+            projectIds.forEach { projectId ->
+                ProjectKeys.deleteWhere { ProjectKeys.project_id eq projectId }
+            }
+
+            // Get all release IDs for these projects
+            val releaseIds = Releases.selectAll().where { Releases.project_id inList projectIds }
+                .map { it[Releases.id] }
+
+            // Delete release files
+            releaseIds.forEach { releaseId ->
+                ReleaseFiles.deleteWhere { ReleaseFiles.release_id eq releaseId }
+            }
+
+            // Delete releases
+            projectIds.forEach { projectId ->
+                Releases.deleteWhere { Releases.project_id eq projectId }
+            }
+
+            // Delete projects
+            Projects.deleteWhere { Projects.organization_id eq orgId }
+
+            // Delete organization integrations
+            OrganizationIntegrations.deleteWhere { OrganizationIntegrations.organization_id eq orgId }
+
+            // Delete organization invitations
+            OrgInvitations.deleteWhere { OrgInvitations.organization_id eq orgId }
+
+            // Delete subscriptions
+            Subscriptions.deleteWhere { Subscriptions.organization_id eq orgId }
+
+            // Delete usage records
+            UsageRecords.deleteWhere { UsageRecords.organization_id eq orgId }
+
+            // Delete promotional credit grants
+            PromotionalCreditGrants.deleteWhere { PromotionalCreditGrants.organization_id eq orgId }
+
+            // Delete alert templates
+            OrganizationAlertTemplates.deleteWhere { OrganizationAlertTemplates.organization_id eq orgId }
+
+            // Delete systems
+            val systemIds = Systems.selectAll().where { Systems.organization_id eq orgId }
+                .map { it[Systems.id] }
+            
+            // Delete system alerts (through system relationship)
+            systemIds.forEach { systemId ->
+                SystemAlerts.deleteWhere { SystemAlerts.system_id eq systemId }
+            }
+            
+            // Now delete systems
+            Systems.deleteWhere { Systems.organization_id eq orgId }
+
+            // Delete the organization itself
+            Organizations.deleteWhere { Organizations.id eq orgId }
+
+            logger.info { "Deleted organization $orgId and all related data" }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to delete organization data for org $orgId" }
+            throw e
         }
     }
 }

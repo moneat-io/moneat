@@ -21,9 +21,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {Checkbox} from '@/components/ui/checkbox'
 import {Label} from '@/components/ui/label'
 import {Switch} from '@/components/ui/switch'
-import {ChevronLeft, ChevronRight, Search, Shield, User, Mail, CheckCircle, XCircle} from 'lucide-react'
+import {ChevronLeft, ChevronRight, Search, Shield, User, Mail, CheckCircle, XCircle, Trash2} from 'lucide-react'
 import {useState} from 'react'
 
 export const Route = createFileRoute('/admin/users')({
@@ -34,6 +45,8 @@ function AdminUsersPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [selectedUsers, setSelectedUsers] = useState<Set<number>>(new Set())
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [editUser, setEditUser] = useState<{
     id: number
     email: string
@@ -59,6 +72,18 @@ function AdminUsersPage() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (userIds: number[]) => api.deleteAdminUsers(userIds),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({queryKey: ['admin-users']})
+      setSelectedUsers(new Set())
+      setShowDeleteConfirm(false)
+      if (result.errors.length > 0) {
+        console.error('Delete errors:', result.errors)
+      }
+    },
+  })
+
   const handleSearch = () => {
     setSearch(searchInput)
     setPage(1)
@@ -81,6 +106,30 @@ function AdminUsersPage() {
     })
   }
 
+  const handleDeleteUsers = () => {
+    if (selectedUsers.size === 0) return
+    deleteMutation.mutate(Array.from(selectedUsers))
+  }
+
+  const handleToggleUser = (userId: number) => {
+    const newSelection = new Set(selectedUsers)
+    if (newSelection.has(userId)) {
+      newSelection.delete(userId)
+    } else {
+      newSelection.add(userId)
+    }
+    setSelectedUsers(newSelection)
+  }
+
+  const handleToggleAll = () => {
+    if (!data) return
+    if (selectedUsers.size === data.users.length) {
+      setSelectedUsers(new Set())
+    } else {
+      setSelectedUsers(new Set(data.users.map(u => u.id)))
+    }
+  }
+
   const totalPages = data ? Math.ceil(data.total / limit) : 0
 
   return (
@@ -90,6 +139,16 @@ function AdminUsersPage() {
           <h2 className="text-2xl font-bold tracking-tight">User Management</h2>
           <p className="text-muted-foreground">View and manage all registered users</p>
         </div>
+        {selectedUsers.size > 0 && (
+          <Button 
+            variant="destructive" 
+            onClick={() => setShowDeleteConfirm(true)}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete {selectedUsers.size} {selectedUsers.size === 1 ? 'User' : 'Users'}
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -131,6 +190,12 @@ function AdminUsersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={data.users.length > 0 && selectedUsers.size === data.users.length}
+                          onCheckedChange={handleToggleAll}
+                        />
+                      </TableHead>
                       <TableHead>User</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Organizations</TableHead>
@@ -141,6 +206,12 @@ function AdminUsersPage() {
                   <TableBody>
                     {data.users.map((user) => (
                       <TableRow key={user.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedUsers.has(user.id)}
+                            onCheckedChange={() => handleToggleUser(user.id)}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="flex items-center justify-center h-9 w-9 rounded-full bg-muted">
@@ -317,6 +388,35 @@ function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedUsers.size} {selectedUsers.size === 1 ? 'User' : 'Users'}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the selected {selectedUsers.size === 1 ? 'user' : 'users'} and all associated data including:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Organizations (if they are the sole member)</li>
+                <li>Projects and project keys</li>
+                <li>Auth tokens and sessions</li>
+                <li>Notification preferences</li>
+                <li>All related events and data</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUsers}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

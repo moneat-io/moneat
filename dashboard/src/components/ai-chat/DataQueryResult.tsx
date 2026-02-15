@@ -28,7 +28,7 @@ export function DataQueryResult({query}: DataQueryResultProps) {
         // Execute the query using the API client
         const response = await fetch(url.pathname + url.search, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('jwt')}`,
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
             'Content-Type': 'application/json',
           },
         })

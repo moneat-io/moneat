@@ -3,6 +3,7 @@ package com.moneat.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.models.*
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.encodeToString
@@ -1206,19 +1207,17 @@ class LogService {
     }
 
     private fun escapeSql(value: String?): String {
-        if (value == null) return ""
-        return value
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
+        return ClickHouseSqlUtils.escapeSql(value)
     }
 
     private fun buildSimpleSearchCondition(term: String): String {
-        val escaped = escapeSql(term)
+        val escaped = ClickHouseSqlUtils.escapeLikePattern(term)
         val hasSeparators = term.any { it == '-' || it == '.' || it == '/' || it == ':' || it == ' ' }
         return if (hasSeparators) {
             "(message ILIKE '%$escaped%' OR body ILIKE '%$escaped%')"
         } else {
-            "(hasTokenCaseInsensitive(message, '$escaped') OR hasTokenCaseInsensitive(body, '$escaped'))"
+            val tokenEscaped = ClickHouseSqlUtils.escapeSql(term)
+            "(hasTokenCaseInsensitive(message, '$tokenEscaped') OR hasTokenCaseInsensitive(body, '$tokenEscaped'))"
         }
     }
 

@@ -24,13 +24,19 @@ class AiChatService {
             "currentPage" to (request.currentPage ?: "none")
         ))
 
-        // 1. Resolve or create conversation
+        // 1. Sanitize and validate user input
+        val sanitizedMessage = sanitizeUserInput(request.message)
+        if (sanitizedMessage.isBlank()) {
+            throw IllegalArgumentException("Message cannot be empty")
+        }
+        
+        // 2. Resolve or create conversation
         val conversationId = SentryUtils.withSpan(tx, "ai.resolve_conversation") {
-            request.conversationId ?: createConversation(orgId, userId, request.message)
+            request.conversationId ?: createConversation(orgId, userId, sanitizedMessage)
         }
 
-        // 2. Persist user message
-        persistMessage(conversationId, "user", request.message, request.currentPage, null, null)
+        // 3. Persist user message
+        persistMessage(conversationId, "user", sanitizedMessage, request.currentPage, null, null)
 
         // 3. Load conversation history
         val history = loadHistory(conversationId)
@@ -271,5 +277,36 @@ class AiChatService {
             }
             deleted > 0
         }
+    }
+    
+    /**
+     * Sanitizes user input to prevent prompt injection attacks.
+     * Removes/escapes potentially dangerous patterns while preserving legitimate content.
+     */
+    private fun sanitizeUserInput(input: String): String {
+        val maxLength = 4000 // Reasonable limit for chat messages
+        val trimmed = input.trim().take(maxLength)
+        
+        // Remove common prompt injection patterns
+        val dangerous = listOf(
+            "ignore previous instructions",
+            "ignore all previous",
+            "forget previous",
+            "disregard",
+            "new instructions:",
+            "system:",
+            "assistant:",
+            "###",
+            "---",
+            "<|im_start|>",
+            "<|im_end|>"
+        )
+        
+        var sanitized = trimmed
+        dangerous.forEach { pattern ->
+            sanitized = sanitized.replace(pattern, "", ignoreCase = true)
+        }
+        
+        return sanitized.trim()
     }
 }

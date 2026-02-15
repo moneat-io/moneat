@@ -2,6 +2,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -610,6 +611,6 @@ class UptimeService(
     }
     
     private fun escapeSql(text: String): String {
-        return text.replace("\\", "\\\\").replace("'", "\\'")
+        return ClickHouseSqlUtils.escapeSql(text)
     }
 }
