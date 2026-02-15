@@ -15,6 +15,16 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     
     private val executor = Executors.newSingleThreadExecutor()
     
+    override fun start() {
+        super.start()
+        // Log appender configuration on startup
+        if (dsn.isBlank()) {
+            System.err.println("[MoneatLogAppender] WARNING: DSN is blank - logs will NOT be shipped to remote")
+        } else {
+            System.err.println("[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, environment=$environment, dsn=<set>")
+        }
+    }
+    
     override fun append(event: ILoggingEvent) {
         if (dsn.isBlank()) return
         
