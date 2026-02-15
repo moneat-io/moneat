@@ -214,7 +214,7 @@ function BreadcrumbsTimeline({ breadcrumbs }: { breadcrumbs?: string }) {
   }
 
   return (
-    <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
+    <div className="max-h-[630px] space-y-1.5 overflow-y-auto pr-1">
       {items.map((item, index) => {
         const crumb = (item || {}) as Record<string, unknown>
         const category = String(crumb.category || crumb.type || 'event')
@@ -554,7 +554,7 @@ function TransactionDetailPage() {
         {/* ── Bottom Sections: 3-col on desktop ───────────── */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {/* Tags & Context */}
-          <Card className="lg:col-span-1">
+          <Card className="lg:col-span-1 flex min-h-0 flex-col">
             <CardHeader className="px-4 py-3">
               <CardTitle className="flex items-center gap-2 text-sm">
                 <Tag className="h-4 w-4 text-violet-500" />
