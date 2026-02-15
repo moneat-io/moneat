@@ -7,6 +7,9 @@ import com.moneat.utils.SentryUtils
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 data class AuthTokenPrincipal(
     val userId: Int,
@@ -90,6 +93,7 @@ fun Application.configureSecurity() {
         bearer("auth-combined") {
             this.realm = realm
             authenticate { tokenCredential ->
+                logger.info { "auth-combined: received token, length=${tokenCredential.token.length}, prefix=${tokenCredential.token.take(10)}" }
                 // First try as auth token
                 val validationResult = authTokenService.validateToken(tokenCredential.token)
                 if (validationResult != null) {
