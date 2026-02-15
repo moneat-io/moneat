@@ -20,6 +20,7 @@ import {
   DatabaseZap,
   Globe,
   Layers,
+  Loader2,
   Monitor,
   Play,
   Smartphone,
@@ -579,9 +580,29 @@ function ReplayDetailPage() {
         {/* Left column: Device container + replay */}
         <div className="lg:col-span-3 flex flex-col min-h-0">
           {recordingLoading ? (
-            <div className="flex items-center justify-center h-[400px] rounded-lg border bg-muted">
-              <p className="text-muted-foreground">Loading recording...</p>
-            </div>
+            replay.platform === 'android' || replay.platform === 'ios' ? (
+              <MobileDeviceContainer
+                platform={replay.platform === 'ios' ? 'ios' : 'android'}
+                orientation="portrait"
+                className="py-2"
+              >
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Loading recording...</p>
+                </div>
+              </MobileDeviceContainer>
+            ) : (
+              <BrowserWindowContainer
+                url={replay.urls?.[0]}
+                browserName={replay.browserName}
+                osName={replay.osName}
+              >
+                <div className="w-full h-[450px] flex flex-col items-center justify-center gap-3 bg-black">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Loading recording...</p>
+                </div>
+              </BrowserWindowContainer>
+            )
           ) : isMobileReplay ? (
             <MobileDeviceContainer
               platform={replay.platform === 'ios' ? 'ios' : 'android'}
@@ -629,7 +650,7 @@ function ReplayDetailPage() {
 
         {/* Right column: Breadcrumbs / event list */}
         <div className="lg:col-span-2 flex flex-col min-h-0">
-          <div className="rounded-lg border bg-card overflow-hidden flex flex-col max-h-[400px] lg:max-h-[calc(100vh-220px)]">
+          <div className="rounded-lg border bg-card overflow-hidden flex flex-col min-h-[400px] max-h-[400px] lg:min-h-[calc(100vh-220px)] lg:max-h-[calc(100vh-220px)]">
             {/* Panel header */}
             <div className="px-3 py-2 border-b bg-muted/30 text-xs font-medium text-muted-foreground flex items-center gap-2">
               <Layers className="h-3.5 w-3.5" />

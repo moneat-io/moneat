@@ -167,7 +167,7 @@ const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(functio
   return (
     <div
       ref={ref}
-      className="overflow-y-auto rounded-md border bg-muted/30"
+      className="overflow-y-auto rounded-md border bg-muted/30 min-h-[280px]"
     >
       {items.length === 0 ? (
         <div className="p-4 text-sm text-muted-foreground text-center">
