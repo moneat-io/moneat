@@ -92,8 +92,10 @@ fun Route.apiRoutes() {
             get("/projects") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                val demoEpochMs = if (isDemo) principal.payload.getClaim("demoEpochMs")?.asLong() else null
                 
-                val projects = dashboardService.getProjects(userId)
+                val projects = dashboardService.getProjects(userId, demoEpochMs)
                 call.respond(projects)
             }
             
@@ -204,6 +206,8 @@ fun Route.apiRoutes() {
             get("/projects/{projectId}/issues") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                val demoEpochMs = if (isDemo) principal.payload.getClaim("demoEpochMs")?.asLong() else null
                 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -220,7 +224,7 @@ fun Route.apiRoutes() {
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
                 val status = call.request.queryParameters["status"]
                 
-                val issues = dashboardService.getIssues(projectId, page, limit, status)
+                val issues = dashboardService.getIssues(projectId, page, limit, status, demoEpochMs)
                 call.respond(issues)
             }
             

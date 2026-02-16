@@ -60,8 +60,13 @@ object EnvConfig {
         val enabled: Boolean
             get() = get("DEMO_ENABLED", "false").toBoolean()
 
+        /**
+         * Demo epoch timestamp in milliseconds.
+         * This "freezes" demo data at a specific point in time so events always look recent.
+         * Defaults to current time if not set - data will be generated relative to "now".
+         */
         val epochMs: Long
-            get() = get("DEMO_EPOCH_MS")?.toLongOrNull() ?: 0L
+            get() = get("DEMO_EPOCH_MS")?.toLongOrNull() ?: System.currentTimeMillis()
 
         // Demo user/org/project IDs are fixed in migration V50__add_demo_user.sql
         const val ORG_ID = -1L

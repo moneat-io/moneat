@@ -244,13 +244,14 @@ class DashboardService {
         }
     }
     
-    private suspend fun getIssueCount(projectId: Long): Long {
+    private suspend fun getIssueCount(projectId: Long, demoEpochMs: Long? = null): Long {
         val retentionDays = getProjectRetentionDays(projectId)
+        val projectIdClause = if (projectId < 0) "toInt64(project_id) = $projectId" else "project_id = $projectId"
         val query = """
             SELECT count(DISTINCT issue_id) as count
             FROM $clickhouseDb.issues
-            WHERE project_id = $projectId
-                AND ${timestampRetentionClause("last_seen", retentionDays)}
+            WHERE $projectIdClause
+                AND ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -271,7 +272,7 @@ class DashboardService {
         }
     }
     
-    suspend fun getProjects(userId: Int): List<ProjectResponse> {
+    suspend fun getProjects(userId: Int, demoEpochMs: Long? = null): List<ProjectResponse> {
         val projectsData = transaction {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
@@ -305,7 +306,7 @@ class DashboardService {
         
         // Get issue counts for all projects
         return projectsData.map { (projectId, projectResponse, _) ->
-            projectResponse.copy(issueCount = getIssueCount(projectId))
+            projectResponse.copy(issueCount = getIssueCount(projectId, demoEpochMs))
         }
     }
     
@@ -463,14 +464,16 @@ class DashboardService {
         }
     }
     
-    suspend fun getIssues(projectId: Long, page: Int, limit: Int, status: String?): List<IssueResponse> =
-        CacheService.cached("cache:issues:$projectId:$page:$limit:${status ?: ""}", 30) {
+    suspend fun getIssues(projectId: Long, page: Int, limit: Int, status: String?, demoEpochMs: Long? = null): List<IssueResponse> =
+        CacheService.cached("cache:issues:$projectId:$page:$limit:${status ?: ""}:${demoEpochMs ?: 0}", 30) {
         val offset = (page - 1) * limit
         val retentionDays = getProjectRetentionDays(projectId)
         val validStatuses = setOf("unresolved", "resolved", "ignored")
         val statusFilter = if (status != null && status in validStatuses) {
             "AND status = '${status.replace("'", "''")}'"
         } else ""
+        
+        val projectIdClause = if (projectId < 0) "toInt64(e.project_id) = $projectId" else "e.project_id = $projectId"
         
         // Query events table directly and aggregate
         val query = """
@@ -489,11 +492,11 @@ class DashboardService {
             LEFT JOIN (
                 SELECT issue_id, status 
                 FROM $clickhouseDb.issues FINAL
-                WHERE ${timestampRetentionClause("last_seen", retentionDays)}
+                WHERE ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             ) i USING issue_id
-            WHERE e.project_id = $projectId 
+            WHERE $projectIdClause 
                 AND e.event_type = 'error'
-                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
+                AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
                 $statusFilter
             GROUP BY issue_id
             ORDER BY last_seen DESC
@@ -1809,8 +1812,13 @@ class DashboardService {
         return retentionPolicyService.getRetentionDaysForProject(projectId) ?: PricingTier.FREE.retentionDays
     }
 
-    private fun timestampRetentionClause(column: String, retentionDays: Int): String {
-        return "$column >= now() - INTERVAL $retentionDays DAY"
+    private fun timestampRetentionClause(column: String, retentionDays: Int, demoEpochMs: Long? = null): String {
+        val nowClause = if (demoEpochMs != null) {
+            "toDateTime64(${demoEpochMs / 1000.0}, 3)"
+        } else {
+            "now()"
+        }
+        return "$column >= $nowClause - INTERVAL $retentionDays DAY"
     }
     
     private suspend fun executeScalarQuery(query: String, parentSpan: ISpan? = null): Long {
