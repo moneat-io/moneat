@@ -329,10 +329,6 @@ interface ReplayTimelineResponse {
   replayStartMs: number
 }
 
-interface OrgIssue extends Issue {
-  projectName: string
-}
-
 interface LogEntry {
   logId: string
   timestamp: string
@@ -2518,61 +2514,6 @@ class ApiClient {
     })
   }
 
-  // ── Org-level aggregate methods ──────────────────────────────────────
-
-  async getOrgIssues(page = 1, limit = 25, status?: string): Promise<OrgIssue[]> {
-    const params = new URLSearchParams()
-    params.set('page', String(page))
-    params.set('limit', String(limit))
-    if (status) params.set('status', status)
-    return this.request<OrgIssue[]>(`${API_BASE}/organizations/issues?${params.toString()}`)
-  }
-
-  async getOrgStats(period: '24h' | '7d' | '30d' | '90d' = '24h'): Promise<ProjectStats> {
-    return this.request<ProjectStats>(`${API_BASE}/organizations/stats?period=${period}`)
-  }
-
-  async getOrgReleases(): Promise<Release[]> {
-    return this.request<Release[]>(`${API_BASE}/organizations/releases`)
-  }
-
-  async getOrgReplays(options: { page?: number; limit?: number; period?: '24h' | '7d' | '30d' | '90d' } = {}): Promise<Replay[]> {
-    const params = new URLSearchParams()
-    params.set('page', String(options.page ?? 1))
-    params.set('limit', String(options.limit ?? 25))
-    params.set('period', options.period ?? '7d')
-    return this.request<Replay[]>(`${API_BASE}/organizations/replays?${params.toString()}`)
-  }
-
-  async getOrgFeedback(options: { page?: number; limit?: number; status?: string } = {}): Promise<Feedback[]> {
-    const params = new URLSearchParams()
-    params.set('page', String(options.page ?? 1))
-    params.set('limit', String(options.limit ?? 25))
-    if (options.status) params.set('status', options.status)
-    return this.request<Feedback[]>(`${API_BASE}/organizations/feedback?${params.toString()}`)
-  }
-
-  async getOrgTransactions(options: { period?: '24h' | '7d' | '30d' | '90d'; environment?: string; operation?: string } = {}): Promise<TransactionSummary[]> {
-    const params = new URLSearchParams()
-    params.set('period', options.period || '7d')
-    if (options.environment) params.set('environment', options.environment)
-    if (options.operation) params.set('operation', options.operation)
-    const rows = await this.request<Array<TransactionSummary & { latest_event_id?: string; failure_rate?: number }>>(`${API_BASE}/organizations/performance?${params.toString()}`)
-    return rows.map((row) => ({
-      ...row,
-      latestEventId: row.latestEventId || row.latest_event_id,
-      failureRate: row.failureRate ?? row.failure_rate ?? 0,
-    }))
-  }
-
-  async getOrgPerformanceStats(options: { period?: '24h' | '7d' | '30d' | '90d'; environment?: string; operation?: string } = {}): Promise<PerformanceStats> {
-    const params = new URLSearchParams()
-    params.set('period', options.period || '7d')
-    if (options.environment) params.set('environment', options.environment)
-    if (options.operation) params.set('operation', options.operation)
-    return this.request<PerformanceStats>(`${API_BASE}/organizations/performance/stats?${params.toString()}`)
-  }
-
   async getAuthTokens(): Promise<AuthToken[]> {
     return this.request<AuthToken[]>(`${API_BASE}/auth-tokens`)
   }
@@ -3616,7 +3557,6 @@ export type {
   Project,
   ProjectKey,
   Issue,
-  OrgIssue,
   IssueDetail,
   Event,
   ProjectStats,

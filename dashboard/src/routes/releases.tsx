@@ -42,13 +42,15 @@ function ReleasesPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId
+  const projectId = selectedProjectId || projects?.[0]?.id
 
   const { data: releases, isLoading, error } = useQuery({
-    queryKey: ['releases', projectId ?? 'all'],
+    queryKey: ['releases', projectId],
     queryFn: async () => {
-      return projectId ? api.getReleases(projectId) : api.getOrgReleases()
+      if (!projectId) return []
+      return api.getReleases(projectId)
     },
+    enabled: !!projectId,
   })
   
   if (error) {

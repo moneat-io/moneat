@@ -101,7 +101,7 @@ function PerformancePage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId
+  const projectId = selectedProjectId || projects?.[0]?.id
   const { data: billingUsage } = useQuery({
     queryKey: ['billing-usage'],
     queryFn: () => api.getBillingUsage(),
@@ -131,13 +131,15 @@ function PerformancePage() {
   } as const
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ['transactions', projectId ?? 'all', period, environment, operation],
-    queryFn: () => projectId ? api.getTransactions(projectId, filters) : api.getOrgTransactions(filters),
+    queryKey: ['transactions', projectId, period, environment, operation],
+    queryFn: () => (projectId ? api.getTransactions(projectId, filters) : []),
+    enabled: !!projectId,
   })
 
   const { data: stats } = useQuery({
-    queryKey: ['performance-stats', projectId ?? 'all', period, environment, operation],
-    queryFn: () => projectId ? api.getPerformanceStats(projectId, filters) : api.getOrgPerformanceStats(filters),
+    queryKey: ['performance-stats', projectId, period, environment, operation],
+    queryFn: () => (projectId ? api.getPerformanceStats(projectId, filters) : null),
+    enabled: !!projectId,
   })
 
   const operationOptions = useMemo(() => {

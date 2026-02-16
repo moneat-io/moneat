@@ -22,7 +22,6 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as OnCallRouteImport } from './routes/on-call'
-import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -152,11 +151,6 @@ const OnboardingRoute = OnboardingRouteImport.update({
 const OnCallRoute = OnCallRouteImport.update({
   id: '/on-call',
   path: '/on-call',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LogsRoute = LogsRouteImport.update({
-  id: '/logs',
-  path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -502,7 +496,6 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
-  '/logs': typeof LogsRoute
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -581,7 +574,6 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
-  '/logs': typeof LogsRoute
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
@@ -661,7 +653,6 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
-  '/logs': typeof LogsRoute
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -744,7 +735,6 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
-    | '/logs'
     | '/on-call'
     | '/onboarding'
     | '/performance'
@@ -823,7 +813,6 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
-    | '/logs'
     | '/onboarding'
     | '/privacy'
     | '/projects'
@@ -902,7 +891,6 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
-    | '/logs'
     | '/on-call'
     | '/onboarding'
     | '/performance'
@@ -984,7 +972,6 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
   LoginRoute: typeof LoginRoute
-  LogsRoute: typeof LogsRoute
   OnCallRoute: typeof OnCallRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
@@ -1104,13 +1091,6 @@ declare module '@tanstack/react-router' {
       path: '/on-call'
       fullPath: '/on-call'
       preLoaderRoute: typeof OnCallRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/logs': {
-      id: '/logs'
-      path: '/logs'
-      fullPath: '/logs'
-      preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -1782,7 +1762,6 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,
   LoginRoute: LoginRoute,
-  LogsRoute: LogsRoute,
   OnCallRoute: OnCallRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,

@@ -314,38 +314,53 @@ function UtilizationBar({
 
 // ─── Main Dashboard ───────────────────────────────────────────────────
 function DashboardPage() {
-  const {selectedProjectId} = useProject()
+  const {selectedProjectId, setSelectedProjectId} = useProject()
 
-  const projectId = selectedProjectId
+  const {data: projects} = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+  })
+
+  const projectId = selectedProjectId || projects?.[0]?.id
+
+  if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
+    setSelectedProjectId(projects[0].id)
+  }
 
   const {data: stats, isLoading: isLoadingStats} = useQuery({
-    queryKey: ['stats', projectId ?? 'all'],
-    queryFn: () => projectId ? api.getProjectStats(projectId, '24h') : api.getOrgStats('24h'),
+    queryKey: ['stats', projectId],
+    queryFn: () => (projectId ? api.getProjectStats(projectId, '24h') : null),
+    enabled: !!projectId,
   })
 
   const {data: issues = [], isLoading: isLoadingIssues} = useQuery({
-    queryKey: ['issues', projectId ?? 'all', 'unresolved'],
-    queryFn: () => projectId ? api.getIssues(projectId) : api.getOrgIssues(1, 25),
+    queryKey: ['issues', projectId, 'unresolved'],
+    queryFn: () => (projectId ? api.getIssues(projectId) : []),
+    enabled: !!projectId,
   })
 
   const {data: perfStats, isLoading: isLoadingPerf} = useQuery({
-    queryKey: ['perf-stats', projectId ?? 'all'],
-    queryFn: () => projectId ? api.getPerformanceStats(projectId, {period: '24h'}) : api.getOrgPerformanceStats({period: '24h'}),
+    queryKey: ['perf-stats', projectId],
+    queryFn: () => (projectId ? api.getPerformanceStats(projectId, {period: '24h'}) : null),
+    enabled: !!projectId,
   })
 
   const {data: releases = [], isLoading: isLoadingReleases} = useQuery({
-    queryKey: ['releases-overview', projectId ?? 'all'],
-    queryFn: () => projectId ? api.getReleases(projectId) : api.getOrgReleases(),
+    queryKey: ['releases-overview', projectId],
+    queryFn: () => (projectId ? api.getReleases(projectId) : []),
+    enabled: !!projectId,
   })
 
   const {data: replays = [], isLoading: isLoadingReplays} = useQuery({
-    queryKey: ['replays-overview', projectId ?? 'all'],
-    queryFn: () => projectId ? api.getReplays(projectId, {limit: 5, period: '24h'}) : api.getOrgReplays({limit: 5, period: '24h'}),
+    queryKey: ['replays-overview', projectId],
+    queryFn: () => (projectId ? api.getReplays(projectId, {limit: 5, period: '24h'}) : []),
+    enabled: !!projectId,
   })
 
   const {data: feedback = [], isLoading: isLoadingFeedback} = useQuery({
-    queryKey: ['feedback-overview', projectId ?? 'all'],
-    queryFn: () => projectId ? api.getFeedback(projectId, {limit: 5}) : api.getOrgFeedback({limit: 5}),
+    queryKey: ['feedback-overview', projectId],
+    queryFn: () => (projectId ? api.getFeedback(projectId, {limit: 5}) : []),
+    enabled: !!projectId,
   })
 
   const {data: uptimeMonitors = [], isLoading: isLoadingUptime} = useQuery({

@@ -140,7 +140,7 @@ function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set())
-  const { selectedProjectId } = useProject()
+  const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -150,17 +150,24 @@ function DashboardPage() {
   })
   const hasProjects = (projects?.length ?? 0) > 0
 
-  const projectId = selectedProjectId
+  const projectId = selectedProjectId || projects?.[0]?.id
   const currentProject = projects?.find(p => p.id === projectId)
 
+  // Auto-set the first project if none is selected
+  if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
+    setSelectedProjectId(projects[0].id)
+  }
+
   const { data: issues = [] } = useQuery({
-    queryKey: ['issues', projectId ?? 'all', statusFilter],
-    queryFn: () => projectId ? api.getIssues(projectId) : api.getOrgIssues(1, 100, statusFilter !== 'all' ? statusFilter : undefined),
+    queryKey: ['issues', projectId, statusFilter],
+    queryFn: () => (projectId ? api.getIssues(projectId) : []),
+    enabled: !!projectId,
   })
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['stats', projectId ?? 'all'],
-    queryFn: () => projectId ? api.getProjectStats(projectId, '24h') : api.getOrgStats('24h'),
+    queryKey: ['stats', projectId],
+    queryFn: () => (projectId ? api.getProjectStats(projectId, '24h') : null),
+    enabled: !!projectId,
   })
 
   const resolveMutation = useMutation({
@@ -421,7 +428,6 @@ function DashboardPage() {
                   <div className="w-5 shrink-0" />
                   <div className="w-14 shrink-0">Level</div>
                   <div className="flex-1 min-w-0">Issue</div>
-                  {!projectId && <div className="hidden lg:block w-24 shrink-0">Project</div>}
                   <div className="hidden lg:block w-20 shrink-0">Platform</div>
                   <div className="hidden lg:block w-20 shrink-0 text-center">Trend</div>
                   <div className="w-[55px] shrink-0 text-right">Events</div>
@@ -474,11 +480,6 @@ function DashboardPage() {
                               First seen {formatRelativeTime(issue.firstSeen)}
                             </div>
                           </div>
-                          {!projectId && 'projectName' in issue && (
-                            <div className="hidden lg:block w-24 shrink-0">
-                              <Badge variant="outline" className="text-[11px] px-1.5 py-0 truncate max-w-[90px]">{(issue as any).projectName}</Badge>
-                            </div>
-                          )}
                           <div className="hidden lg:block w-20 shrink-0">
                             <Badge variant="outline" className="text-[11px] px-1.5 py-0">{issue.platform}</Badge>
                           </div>
