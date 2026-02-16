@@ -104,9 +104,13 @@ jobs:
             cd /opt/moneat
             git fetch --depth=1 origin ${{ github.sha }}
             git checkout --detach ${{ github.sha }}
+            cd /opt/moneat-deploy
+            git fetch --depth=1 origin main
+            git checkout main
+            cd /opt/moneat
             export IMAGE_TAG=${{ github.sha }}
             export BACKEND_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-backend
             export DASHBOARD_IMAGE=${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-dashboard
-            ./deploy/scripts/deploy.sh ${{ github.sha }}
+            /opt/moneat-deploy/scripts/deploy.sh ${{ github.sha }}
         env:
           REGISTRY: ghcr.io

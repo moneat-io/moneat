@@ -29,22 +29,14 @@ A Sentry-compatible, open-source error monitoring platform built with Kotlin/Kto
 
 ## Self-Hosting
 
-Moneat is designed for self-hosting. The recommended deployment uses Docker Compose on a VPS:
+Moneat is designed for self-hosting. The recommended deployment uses Docker Compose on a VPS.
 
-```bash
-# Clone the repository
-git clone https://github.com/AElbadworthy/Moneat.git
-cd Moneat
-
-# Copy and configure environment
-cp .env.example .env
-# Edit .env with your settings (see ESSENTIAL_ENV_VARS.md)
-
-# Start all services
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for full production setup including SSL, Nginx, and blue/green deploys.
+See [moneat-deploy](https://github.com/AElbadworthy/moneat-deploy) for the complete production setup guide, including:
+- Docker Compose configuration for production
+- Nginx reverse proxy setup
+- SSL/TLS with Let's Encrypt
+- Blue/green deployment strategy
+- Database volume management
 
 ## Quick Start (Development)
 
@@ -102,9 +94,10 @@ moneat/
 ├── dashboard/               # React frontend (TanStack Router + shadcn/ui)
 ├── emails/                  # Maizzle email templates
 ├── e2e/                     # End-to-end test apps
-├── deploy/                  # Deployment scripts and configs
 └── docker-compose.yml       # Local development infrastructure
 ```
+
+Production deployment configuration is in the separate [moneat-deploy](https://github.com/AElbadworthy/moneat-deploy) repository.
 
 ### Tech Stack
 
