@@ -373,8 +373,8 @@ class AuthService {
     }
 
     fun generateDemoToken(): String {
-        val demoUserId = com.moneat.config.EnvConfig.Demo.USER_ID.toInt()
-        val demoOrgId = com.moneat.config.EnvConfig.Demo.ORG_ID.toInt()
+        val demoUserId = com.moneat.config.EnvConfig.Demo.USER_ID
+        val demoOrgId = com.moneat.config.EnvConfig.Demo.ORG_ID
         val demoEpochMs = com.moneat.config.EnvConfig.Demo.epochMs
 
         return JWT.create()
