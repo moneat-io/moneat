@@ -9,6 +9,9 @@ import com.moneat.services.DashboardService
 import com.moneat.services.EventService
 import com.moneat.services.LogService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -57,7 +60,7 @@ fun Route.logRoutes() {
                 ?: call.request.queryParameters["projectId"]?.toLongOrNull()
 
             if (projectId == null) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing project ID in DSN or query parameter"))
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing project ID in DSN or query parameter"))
                 return@post
             }
 
@@ -65,19 +68,19 @@ fun Route.logRoutes() {
                 ?: extractPublicKeyFromDsn(dsnLikeHeader)
 
             if (publicKey == null) {
-                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing DSN authentication"))
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing DSN authentication"))
                 return@post
             }
 
             val verification = eventService.verifyProjectKey(projectId, publicKey)
             if (!verification.isValid) {
-                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid DSN"))
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid DSN"))
                 return@post
             }
 
             val organizationId = eventService.getOrganizationIdForProject(projectId)
             if (organizationId == null) {
-                call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
                 return@post
             }
 
@@ -115,7 +118,7 @@ fun Route.logRoutes() {
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
                     return@get
                 }
 
@@ -150,7 +153,7 @@ fun Route.logRoutes() {
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
                     return@get
                 }
 
@@ -161,7 +164,7 @@ fun Route.logRoutes() {
 
                 val key = call.request.queryParameters["key"]
                 if (key.isNullOrBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing tag key parameter"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing tag key parameter"))
                     return@get
                 }
 
@@ -181,7 +184,7 @@ fun Route.logRoutes() {
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
                     return@get
                 }
 
@@ -204,7 +207,7 @@ fun Route.logRoutes() {
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
                     return@get
                 }
 
@@ -234,7 +237,7 @@ fun Route.logRoutes() {
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
                     return@get
                 }
 
@@ -245,7 +248,7 @@ fun Route.logRoutes() {
 
                 val field = call.request.queryParameters["field"]
                 if (field.isNullOrBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing field parameter"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing field parameter"))
                     return@get
                 }
 
@@ -270,7 +273,7 @@ fun Route.logRoutes() {
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
                     return@get
                 }
 
@@ -299,13 +302,13 @@ fun Route.logRoutes() {
         get("/projects/{projectId}/logs/tail") {
             val userId = authenticateTailRequest(call)
             if (userId == null) {
-                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Unauthorized"))
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
                 return@get
             }
 
             val projectId = call.parameters["projectId"]?.toLongOrNull()
             if (projectId == null) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid project ID"))
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
                 return@get
             }
 

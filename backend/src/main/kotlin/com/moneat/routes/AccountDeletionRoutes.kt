@@ -4,6 +4,9 @@ import com.moneat.models.Organizations
 import com.moneat.models.Memberships
 import com.moneat.services.AccountDeletionService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -37,7 +40,7 @@ fun Route.accountDeletionRoutes() {
 
         val orgId = call.parameters["orgId"]?.toIntOrNull()
         if (orgId == null) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid organization ID"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
             return@get
         }
 
@@ -53,7 +56,7 @@ fun Route.accountDeletionRoutes() {
         }
 
         if (orgWithRole == null) {
-            call.respond(HttpStatusCode.NotFound, mapOf("error" to "Organization not found"))
+            call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
             return@get
         }
 
@@ -72,7 +75,7 @@ fun Route.accountDeletionRoutes() {
         val request = try {
             call.receive<DeleteAccountRequest>()
         } catch (e: Exception) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid request body"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return@delete
         }
         
@@ -85,7 +88,7 @@ fun Route.accountDeletionRoutes() {
         }
         
         if (userEmail == null) {
-            call.respond(HttpStatusCode.NotFound, mapOf("error" to "User not found"))
+            call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
             return@delete
         }
         
@@ -127,14 +130,14 @@ fun Route.accountDeletionRoutes() {
         
         val orgId = call.parameters["orgId"]?.toIntOrNull()
         if (orgId == null) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid organization ID"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
             return@delete
         }
         
         val request = try {
             call.receive<DeleteOrganizationRequest>()
         } catch (e: Exception) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid request body"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return@delete
         }
         
@@ -147,7 +150,7 @@ fun Route.accountDeletionRoutes() {
         }
         
         if (orgName == null) {
-            call.respond(HttpStatusCode.NotFound, mapOf("error" to "Organization not found"))
+            call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
             return@delete
         }
         
@@ -202,7 +205,7 @@ fun Route.accountDeletionRoutes() {
         
         val orgId = call.parameters["orgId"]?.toIntOrNull()
         if (orgId == null) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid organization ID"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
             return@get
         }
         

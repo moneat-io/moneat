@@ -6,6 +6,10 @@ import com.moneat.services.AuthService
 import com.moneat.services.OAuthService
 import com.moneat.services.SignupRequestContext
 import com.moneat.utils.AuthCookieUtils
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
+import com.moneat.utils.DemoLoginResponse
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -53,7 +57,7 @@ fun Route.authRoutes() {
                 AuthCookieUtils.setAuthCookie(call, result.token)
                 call.respond(HttpStatusCode.Created, result)
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
         }
         
@@ -66,10 +70,10 @@ fun Route.authRoutes() {
                     AuthCookieUtils.setAuthCookie(call, result.token)
                     call.respond(result)
                 } else {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid credentials"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid credentials"))
                 }
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.Forbidden, mapOf("error" to e.message))
+                call.respond(HttpStatusCode.Forbidden, ErrorResponse(e.message))
             }
         }
         
@@ -78,9 +82,9 @@ fun Route.authRoutes() {
             
             val success = authService.verifyEmail(request.token)
             if (success) {
-                call.respond(mapOf("message" to "Email verified successfully"))
+                call.respond(MessageResponse("Email verified successfully"))
             } else {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid or expired token"))
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid or expired token"))
             }
         }
         
@@ -90,12 +94,12 @@ fun Route.authRoutes() {
             try {
                 val success = authService.resendVerificationEmail(request.email)
                 if (success) {
-                    call.respond(mapOf("message" to "Verification email sent"))
+                    call.respond(MessageResponse("Verification email sent"))
                 } else {
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to send email"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to send email"))
                 }
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
         }
         
@@ -104,7 +108,7 @@ fun Route.authRoutes() {
             
             // Always return success to prevent email enumeration
             authService.requestPasswordReset(request.email)
-            call.respond(mapOf("message" to "If an account exists with this email, a password reset link has been sent"))
+            call.respond(MessageResponse("If an account exists with this email, a password reset link has been sent"))
         }
         
         post("/reset-password") {
@@ -113,12 +117,12 @@ fun Route.authRoutes() {
             try {
                 val success = authService.resetPassword(request.token, request.newPassword)
                 if (success) {
-                    call.respond(mapOf("message" to "Password reset successfully"))
+                    call.respond(MessageResponse("Password reset successfully"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid or expired token"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid or expired token"))
                 }
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
         }
         
@@ -145,7 +149,7 @@ fun Route.authRoutes() {
             }
             
             AuthCookieUtils.clearAuthCookie(call)
-            call.respond(mapOf("message" to "Logged out"))
+            call.respond(MessageResponse("Logged out"))
         }
         
         post("/refresh") {
@@ -157,10 +161,10 @@ fun Route.authRoutes() {
                     AuthCookieUtils.setAuthCookie(call, result.token)
                     call.respond(result)
                 } else {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid or expired refresh token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid or expired refresh token"))
                 }
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to e.message))
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse(e.message))
             }
         }
         
@@ -168,7 +172,7 @@ fun Route.authRoutes() {
         get("/github") {
             try {
                 if (!oauthService.isGitHubEnabled()) {
-                    call.respond(HttpStatusCode.NotImplemented, mapOf("error" to "GitHub OAuth is not configured"))
+                    call.respond(HttpStatusCode.NotImplemented, ErrorResponse("GitHub OAuth is not configured"))
                     return@get
                 }
                 
@@ -236,7 +240,7 @@ fun Route.authRoutes() {
         get("/apple") {
             try {
                 if (!oauthService.isAppleEnabled()) {
-                    call.respond(HttpStatusCode.NotImplemented, mapOf("error" to "Apple Sign In is not configured"))
+                    call.respond(HttpStatusCode.NotImplemented, ErrorResponse("Apple Sign In is not configured"))
                     return@get
                 }
                 
@@ -299,6 +303,25 @@ fun Route.authRoutes() {
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
+
+        // Demo login endpoint (no authentication required)
+        post("/demo-login") {
+            if (!EnvConfig.Demo.enabled) {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Demo mode not enabled"))
+                return@post
+            }
+
+            try {
+                val token = authService.generateDemoToken()
+                call.respond(DemoLoginResponse(
+                    token = token,
+                    demoEpochMs = EnvConfig.Demo.epochMs
+                ))
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Demo login failed: ${e.message}" }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Demo mode not properly configured"))
+            }
+        }
     }
     
     authenticate("auth-jwt") {
@@ -306,7 +329,7 @@ fun Route.authRoutes() {
             get("/check-slug") {
                 val slug = call.request.queryParameters["slug"]
                 if (slug.isNullOrBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "slug parameter is required"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("slug parameter is required"))
                     return@get
                 }
                 
@@ -335,7 +358,7 @@ fun Route.authRoutes() {
                     existingOrg == null
                 }
                 
-                call.respond(mapOf("available" to available))
+                call.respond(BooleanResponse(available))
             }
             
             post("/complete-onboarding") {
@@ -358,7 +381,7 @@ fun Route.authRoutes() {
                     )
                     call.respond(user)
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
         }

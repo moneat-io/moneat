@@ -36,7 +36,8 @@ data class UserResponse(
     val emailVerified: Boolean = false,
     val onboardingCompleted: Boolean = false,
     val isAdmin: Boolean = false,
-    val organizationSlug: String? = null
+    val organizationSlug: String? = null,
+    val demoEpochMs: Long? = null
 )
 
 @Serializable

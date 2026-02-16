@@ -5,6 +5,10 @@ import com.moneat.models.LogIngestEntry
 import com.moneat.models.SentryEnvelope
 import com.moneat.services.*
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.DetailedErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -71,7 +75,7 @@ fun Route.ingestRoutes() {
                 if (quotaService.isEnforcementEnabled()) {
                     val orgId = eventService.getOrganizationIdForProject(projectId)
                     if (orgId == null) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
                         return@post
                     }
                     val groupedReservations = envelope.items
@@ -109,7 +113,7 @@ fun Route.ingestRoutes() {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to process envelope: ${e.message}" }
                 e.printStackTrace()
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid envelope format", "message" to (e.message ?: "Unknown error")))
+                call.respond(HttpStatusCode.BadRequest, DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error"))
             }
         }
 
@@ -140,7 +144,7 @@ fun Route.ingestRoutes() {
 
             val organizationId = eventService.getOrganizationIdForProject(projectId)
             if (organizationId == null) {
-                call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
                 return@post
             }
 
@@ -156,7 +160,7 @@ fun Route.ingestRoutes() {
                 json.decodeFromString<List<LogIngestEntry>>(payloadBytes.decodeToString())
             } catch (e: Exception) {
                 logger.warn(e) { "Invalid log payload for project $projectId" }
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid log payload"))
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                 return@post
             }
 
@@ -221,7 +225,7 @@ fun Route.ingestRoutes() {
                 if (quotaService.isEnforcementEnabled()) {
                     val orgId = eventService.getOrganizationIdForProject(projectId)
                     if (orgId == null) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project organization not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
                         return@post
                     }
                     val bodyBytes = body.toByteArray(Charsets.UTF_8).size.toLong()

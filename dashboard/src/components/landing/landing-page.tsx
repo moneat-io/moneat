@@ -45,6 +45,12 @@ export function LandingPage() {
             >
               Features
             </a>
+            <Link
+              to="/demo"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Live Demo
+            </Link>
             <a
               href="#pricing"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"

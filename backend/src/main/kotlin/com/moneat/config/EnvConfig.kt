@@ -54,4 +54,19 @@ object EnvConfig {
     }
 
     fun isLoaded(): Boolean = dotenv != null
+
+    // Demo mode configuration
+    object Demo {
+        val enabled: Boolean
+            get() = get("DEMO_ENABLED", "false").toBoolean()
+
+        val epochMs: Long
+            get() = get("DEMO_EPOCH_MS")?.toLongOrNull() ?: 0L
+
+        // Demo user/org/project IDs are fixed in migration V50__add_demo_user.sql
+        const val ORG_ID = -1L
+        const val PROJECT_ID = -1L
+        const val USER_ID = -1L
+        const val USER_EMAIL = "demo@moneat.dev"
+    }
 }

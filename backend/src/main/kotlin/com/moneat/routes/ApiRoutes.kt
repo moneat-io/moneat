@@ -6,6 +6,10 @@ import com.moneat.services.AlertNotificationPreferencesService
 import com.moneat.services.DashboardService
 import com.moneat.services.SdkVersionService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.DetailedErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -39,6 +43,10 @@ fun Route.apiRoutes() {
             get("/user") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                val demoEpochMs = if (isDemo) {
+                    principal.payload.getClaim("demoEpochMs")?.asLong()
+                } else null
                 
                 val (user, orgSlug) = transaction {
                     val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
@@ -59,7 +67,7 @@ fun Route.apiRoutes() {
                 }
                 
                 if (user == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "User not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
                 } else {
                     call.respond(UserResponse(
                         user[Users.id],
@@ -68,7 +76,8 @@ fun Route.apiRoutes() {
                         user[Users.email_verified],
                         user[Users.onboarding_completed],
                         user[Users.is_admin],
-                        orgSlug
+                        orgSlug,
+                        demoEpochMs
                     ))
                 }
             }
@@ -98,9 +107,9 @@ fun Route.apiRoutes() {
                     call.respond(HttpStatusCode.Created, project)
                 } catch (e: IllegalStateException) {
                     if (e.message == "project_limit_reached") {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "project_limit_reached", "message" to "Project limit reached for your plan"))
+                        call.respond(HttpStatusCode.Forbidden, DetailedErrorResponse("project_limit_reached", "Project limit reached for your plan"))
                     } else {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Failed to create project")))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create project")))
                     }
                 }
             }
@@ -148,7 +157,7 @@ fun Route.apiRoutes() {
                     val key = dashboardService.addProjectTarget(projectId, request.target)
                     call.respond(HttpStatusCode.Created, key)
                 } catch (e: IllegalStateException) {
-                    call.respond(HttpStatusCode.Conflict, mapOf("error" to (e.message ?: "Target already exists")))
+                    call.respond(HttpStatusCode.Conflict, ErrorResponse((e.message ?: "Target already exists")))
                 }
             }
 

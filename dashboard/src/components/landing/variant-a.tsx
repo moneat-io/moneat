@@ -329,25 +329,33 @@ export function VariantA() {
               to keep your app reliable, in one place. Simple GB pricing — your whole team included.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up animation-delay-300">
-              <Button
-                asChild
-                size="lg"
-                className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-400/40 transition-all duration-300 text-base px-8 h-12"
-              >
-                <Link to="/signup">
-                  Start Free
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-slate-600 transition-all duration-300 text-base px-8 h-12"
-              >
-                <a href="#pricing">View Pricing</a>
-              </Button>
+            <div className="flex flex-col items-center animate-fade-in-up animation-delay-300">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center w-full sm:w-auto mb-4">
+                <Button
+                  asChild
+                  size="lg"
+                  className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-400/40 transition-all duration-300 text-base px-8 h-12"
+                >
+                  <Link to="/signup">
+                    Start Free
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-slate-600 transition-all duration-300 text-base px-8 h-12"
+                >
+                  <Link to="/demo">
+                    <Play className="mr-2 h-4 w-4 fill-current" />
+                    Live Demo
+                  </Link>
+                </Button>
+              </div>
+              <p className="text-sm text-slate-500">
+                No credit card required &bull; No signup for demo
+              </p>
             </div>
           </div>
         </div>

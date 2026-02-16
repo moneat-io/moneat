@@ -7,6 +7,9 @@ import com.moneat.services.MonitorAlertService
 import com.moneat.services.MonitorService
 import com.moneat.services.UsageTrackingService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -79,13 +82,13 @@ fun Route.monitorRoutes() {
                 // Extract and validate agent key
                 val authHeader = call.request.header("Authorization")
                 if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing or invalid Authorization header"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid Authorization header"))
                     return@post
                 }
                 
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
                 val (systemId, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid agent key"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid agent key"))
                     return@post
                 }
                 
@@ -232,7 +235,7 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
                 
@@ -267,7 +270,7 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@post
                 }
                 
@@ -278,7 +281,7 @@ fun Route.monitorRoutes() {
                 if (!monitorService.checkSystemQuota(organizationId)) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "System limit reached for your plan")
+                        ErrorResponse("System limit reached for your plan")
                     )
                     return@post
                 }
@@ -326,20 +329,20 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
                 
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
                 
@@ -369,27 +372,27 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@delete
                 }
                 
                 // Check if system belongs to any of user's organizations
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@delete
                 }
                 
                 val deleted = monitorService.deleteSystem(systemId, system.organizationId)
                 if (!deleted) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@delete
                 }
                 
@@ -404,21 +407,21 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
                 
@@ -427,7 +430,7 @@ fun Route.monitorRoutes() {
                 val intervalParam = call.request.queryParameters["interval"]?.toIntOrNull()
                 
                 if (fromParam == null || toParam == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing required parameters: from, to"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing required parameters: from, to"))
                     return@get
                 }
                 
@@ -443,21 +446,21 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
                 
@@ -474,26 +477,26 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
                 
                 if (containerName == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing container name"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing container name"))
                     return@get
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
                 
@@ -502,7 +505,7 @@ fun Route.monitorRoutes() {
                 val intervalParam = call.request.queryParameters["interval"]?.toIntOrNull()
                 
                 if (fromParam == null || toParam == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing required parameters: from, to"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing required parameters: from, to"))
                     return@get
                 }
                 
@@ -520,21 +523,21 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
                 
@@ -575,21 +578,21 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
                 
@@ -605,20 +608,20 @@ fun Route.monitorRoutes() {
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
 
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
 
@@ -634,27 +637,27 @@ fun Route.monitorRoutes() {
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@put
                 }
 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@put
                 }
 
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@put
                 }
 
                 val request = call.receive<UpdateAlertScopeRequest>()
                 val scope = request.scope.lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@put
                 }
 
@@ -670,27 +673,27 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@post
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@post
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@post
                 }
                 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@post
                 }
 
@@ -708,40 +711,40 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@put
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@put
                 }
                 
                 val alertId = alertIdStr?.toIntOrNull()
                 if (alertId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@put
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@put
                 }
                 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@put
                 }
 
                 val request = call.receive<UpdateAlertRequest>()
                 val updated = monitorService.updateAlert(alertId, systemId, system.organizationId, request, scope)
                 if (!updated) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@put
                 }
                 
@@ -757,39 +760,39 @@ fun Route.monitorRoutes() {
                 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete
                 }
                 
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid system ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@delete
                 }
                 
                 val alertId = alertIdStr?.toIntOrNull()
                 if (alertId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@delete
                 }
                 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@delete
                 }
                 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert scope"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@delete
                 }
 
                 val deleted = monitorService.deleteAlert(alertId, systemId, system.organizationId, scope)
                 if (!deleted) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@delete
                 }
                 
@@ -804,7 +807,7 @@ fun Route.monitorRoutes() {
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
 
@@ -819,13 +822,13 @@ fun Route.monitorRoutes() {
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@post
                 }
 
                 val request = call.receive<CreateSilencePeriodRequest>()
                 if (request.endsAt <= request.startsAt) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "End time must be after start time"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("End time must be after start time"))
                     return@post
                 }
 
@@ -840,20 +843,20 @@ fun Route.monitorRoutes() {
                 val periodId = call.parameters["id"]?.toIntOrNull()
 
                 if (periodId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid silence period ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid silence period ID"))
                     return@delete
                 }
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete
                 }
 
                 val alertService = MonitorAlertService()
                 val deleted = alertService.deleteSilencePeriod(periodId, organizationIds.first())
                 if (!deleted) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Silence period not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Silence period not found"))
                     return@delete
                 }
 

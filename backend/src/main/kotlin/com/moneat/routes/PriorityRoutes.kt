@@ -4,6 +4,9 @@ import com.moneat.models.BusinessHoursWindow
 import com.moneat.services.oncall.PriorityService
 import com.moneat.services.oncall.BusinessHoursService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -47,7 +50,7 @@ fun Route.priorityRoutes() {
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
@@ -60,7 +63,7 @@ fun Route.priorityRoutes() {
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@put
                 }
                 
@@ -79,10 +82,10 @@ fun Route.priorityRoutes() {
                     if (priority != null) {
                         call.respond(priority)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Priority not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Priority not found"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
         }
@@ -95,7 +98,7 @@ fun Route.priorityRoutes() {
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
@@ -103,7 +106,7 @@ fun Route.priorityRoutes() {
                 if (config != null) {
                     call.respond(config)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Business hours not configured"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Business hours not configured"))
                 }
             }
             
@@ -112,7 +115,7 @@ fun Route.priorityRoutes() {
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@put
                 }
                 
@@ -135,7 +138,7 @@ fun Route.priorityRoutes() {
                     )
                     call.respond(config)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
         }

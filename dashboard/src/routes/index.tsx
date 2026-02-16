@@ -1,6 +1,7 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {LandingPage} from '@/components/landing/landing-page'
 import {useQuery} from '@tanstack/react-query'
+import {useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
@@ -180,7 +181,27 @@ export const Route = createFileRoute('/')({
 })
 
 function IndexPage() {
-  if (!api.isAuthenticated()) {
+  const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated())
+  const [isChecking, setIsChecking] = useState(true)
+
+  useEffect(() => {
+    async function checkAuth() {
+      // For cold loads, verify auth state via API
+      if (!api.isAuthenticated()) {
+        await api.checkAuth()
+      }
+      setIsAuthenticated(api.isAuthenticated())
+      setIsChecking(false)
+    }
+    checkAuth()
+  }, [])
+
+  // Show nothing while checking auth to avoid flash
+  if (isChecking) {
+    return null
+  }
+
+  if (!isAuthenticated) {
     return <LandingPage />
   }
   return <DashboardPage />

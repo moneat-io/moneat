@@ -3,6 +3,7 @@ import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {stripAnsi} from '@/lib/ansi'
 import {groupExceptionLogs, type LogGroup} from '@/components/logs/groupExceptionLogs'
+import { getNow } from '@/lib/demo'
 
 interface LogTableProps {
   logs: LogEntry[]
@@ -47,7 +48,7 @@ function formatTimestamp(value: string): string {
 }
 
 function formatRelativeTime(value: string): string {
-  const now = Date.now()
+  const now = getNow()
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   const diffMs = now - date.getTime()

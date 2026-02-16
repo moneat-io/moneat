@@ -4,6 +4,9 @@ import com.moneat.models.*
 import com.moneat.services.incident.IncidentProviderRegistry
 import com.moneat.services.incident.IncidentService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -234,16 +237,16 @@ fun Route.incidentProviderRoutes() {
                 } ?: return@post call.respond(HttpStatusCode.NotFound)
                 
                 val provider = IncidentProviderRegistry.getProvider(config.providerType)
-                    ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Provider not registered"))
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Provider not registered"))
                 
                 val result = provider.testConnection(config)
                 
                 result.fold(
                     onSuccess = { success ->
-                        call.respond(HttpStatusCode.OK, mapOf("success" to success))
+                        call.respond(HttpStatusCode.OK, BooleanResponse(success))
                     },
                     onFailure = { error ->
-                        call.respond(HttpStatusCode.OK, mapOf("success" to false, "error" to error.message))
+                        call.respond(HttpStatusCode.OK, ErrorResponse(error.message))
                     }
                 )
             }

@@ -1,5 +1,6 @@
 import {type UptimeHeartbeat} from '@/lib/api'
 import {cn} from '@/lib/utils'
+import { getNow } from '@/lib/demo'
 
 interface HeartbeatBarProps {
   heartbeats: UptimeHeartbeat[]
@@ -8,7 +9,7 @@ interface HeartbeatBarProps {
 
 export default function HeartbeatBar({heartbeats, maxBars = 100, className}: HeartbeatBarProps & {className?: string}) {
   // Group heartbeats into time slots
-  const now = Date.now()
+  const now = getNow()
   const slotDuration = 24 * 60 * 60 * 1000 / maxBars // 24 hours divided into slots
 
   const slots = Array.from({length: maxBars}, (_, i) => {

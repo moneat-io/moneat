@@ -355,6 +355,24 @@ class AuthService {
         
         return generateToken(userId, email, orgId, orgRole)
     }
+
+    fun generateDemoToken(): String {
+        val demoUserId = com.moneat.config.EnvConfig.Demo.USER_ID.toInt()
+        val demoOrgId = com.moneat.config.EnvConfig.Demo.ORG_ID.toInt()
+        val demoEpochMs = com.moneat.config.EnvConfig.Demo.epochMs
+
+        return JWT.create()
+            .withAudience(jwtAudience)
+            .withIssuer(jwtIssuer)
+            .withClaim("userId", demoUserId)
+            .withClaim("email", com.moneat.config.EnvConfig.Demo.USER_EMAIL)
+            .withClaim("orgId", demoOrgId)
+            .withClaim("orgRole", "viewer")
+            .withClaim("isDemo", true)
+            .withClaim("demoEpochMs", demoEpochMs)
+            .withExpiresAt(Date(System.currentTimeMillis() + 86400000)) // 24 hours
+            .sign(Algorithm.HMAC256(jwtSecret))
+    }
     
     private fun generateVerificationToken(): String {
         val bytes = ByteArray(32)

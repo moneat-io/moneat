@@ -6,6 +6,9 @@ import com.moneat.services.OrgInvitationService
 import com.moneat.services.OrgMembershipService
 import com.moneat.services.OrgRole
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -39,12 +42,12 @@ fun Route.orgManagementRoutes() {
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.payload.getClaim("orgId").asInt()
                 val targetUserId = call.parameters["userId"]?.toIntOrNull()
-                    ?: return@put call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid user ID"))
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
                 
                 val request = call.receive<UpdateMemberRoleRequest>()
                 
                 membershipService.updateMemberRole(orgId, targetUserId, request.role, requestingUserId)
-                call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                call.respond(HttpStatusCode.OK, BooleanResponse(true))
             }
             
             // Remove member
@@ -53,10 +56,10 @@ fun Route.orgManagementRoutes() {
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.payload.getClaim("orgId").asInt()
                 val targetUserId = call.parameters["userId"]?.toIntOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid user ID"))
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
                 
                 membershipService.removeMember(orgId, targetUserId, requestingUserId)
-                call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                call.respond(HttpStatusCode.OK, BooleanResponse(true))
             }
             
             // Invite single member
@@ -100,10 +103,10 @@ fun Route.orgManagementRoutes() {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
                 val invitationId = call.parameters["invitationId"]?.toIntOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid invitation ID"))
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
                 
                 invitationService.revokeInvitation(invitationId, userId)
-                call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                call.respond(HttpStatusCode.OK, BooleanResponse(true))
             }
             
             // Resend invitation
@@ -111,10 +114,10 @@ fun Route.orgManagementRoutes() {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
                 val invitationId = call.parameters["invitationId"]?.toIntOrNull()
-                    ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid invitation ID"))
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
                 
                 invitationService.resendInvitation(invitationId, userId)
-                call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                call.respond(HttpStatusCode.OK, BooleanResponse(true))
             }
             
             // Accept invitation (requires auth)
@@ -125,14 +128,14 @@ fun Route.orgManagementRoutes() {
                 val request = call.receive<AcceptInviteRequest>()
                 
                 invitationService.acceptInvitation(request.token, userId)
-                call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                call.respond(HttpStatusCode.OK, BooleanResponse(true))
             }
         }
         
         // Get invitation details (no auth required)
         get("/invitations/details") {
             val token = call.request.queryParameters["token"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Token required"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Token required"))
             
             val details = invitationService.getInvitationDetails(token)
             call.respond(details)

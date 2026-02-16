@@ -2,6 +2,9 @@ package com.moneat.routes
 
 import com.moneat.services.StripeService
 import io.ktor.http.HttpStatusCode
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.call
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
@@ -19,7 +22,7 @@ fun Route.stripeWebhookRoutes() {
         
         if (!stripeService.isStripeEnabled()) {
             logger.warn { "Stripe webhook rejected - Stripe is disabled" }
-            call.respond(HttpStatusCode.NotFound, mapOf("error" to "Stripe disabled"))
+            call.respond(HttpStatusCode.NotFound, ErrorResponse("Stripe disabled"))
             return@post
         }
 
@@ -31,7 +34,7 @@ fun Route.stripeWebhookRoutes() {
             stripeService.verifyAndParseEvent(payload, signature)
         } catch (e: Exception) {
             logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid webhook signature"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
             return@post
         }
         
@@ -119,7 +122,7 @@ fun Route.stripeWebhookRoutes() {
         } catch (e: Exception) {
             logger.error(e) { "Failed handling Stripe webhook ${event.id} (${event.type})" }
             stripeService.markEventProcessed(event, "failed", e.message)
-            call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Webhook handling failed"))
+            call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Webhook handling failed"))
         }
     }
 }

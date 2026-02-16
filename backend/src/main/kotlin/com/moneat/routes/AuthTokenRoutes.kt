@@ -4,6 +4,9 @@ import com.moneat.models.CreateAuthTokenRequest
 import com.moneat.models.UpdateAuthTokenRequest
 import com.moneat.services.AuthTokenService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -32,7 +35,7 @@ fun Route.authTokenRoutes() {
                     )
                     call.respond(HttpStatusCode.Created, tokenResponse)
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -52,7 +55,7 @@ fun Route.authTokenRoutes() {
                 
                 val tokenId = call.parameters["tokenId"]?.toIntOrNull()
                 if (tokenId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid token ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
                     return@delete
                 }
                 
@@ -60,7 +63,7 @@ fun Route.authTokenRoutes() {
                 if (success) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Token not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Token not found"))
                 }
             }
             
@@ -71,7 +74,7 @@ fun Route.authTokenRoutes() {
                 
                 val tokenId = call.parameters["tokenId"]?.toIntOrNull()
                 if (tokenId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid token ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
                     return@put
                 }
                 
@@ -88,10 +91,10 @@ fun Route.authTokenRoutes() {
                     if (success) {
                         call.respond(HttpStatusCode.OK)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Token not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Token not found"))
                     }
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
         }

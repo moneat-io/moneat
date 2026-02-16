@@ -38,6 +38,7 @@ import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
 import {Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription} from '@/components/ui/sheet'
 import {LogExplorer} from '@/components/logs/LogExplorer'
+import { getNowDate } from '@/lib/demo'
 import type {ContainerStats} from '@/lib/api'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
@@ -211,7 +212,7 @@ function SystemDetailPage() {
     availableRanges.find((r) => r.value === timeRange) ??
     availableRanges[availableRanges.length - 1] ??
     TIME_RANGES[0]
-  const now = new Date()
+  const now = getNowDate()
   const fromMs = now.getTime() - selectedRange.seconds * 1000
   const from = Math.floor(fromMs / 1000).toString()
   const to = Math.floor(now.getTime() / 1000).toString()

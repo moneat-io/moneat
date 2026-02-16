@@ -3,6 +3,9 @@ package com.moneat.routes
 import com.moneat.services.oncall.IncidentManagementService
 import com.moneat.services.oncall.OnCallIncidentService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -44,7 +47,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
@@ -71,12 +74,12 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
                 
@@ -85,7 +88,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 if (incident != null && incident.organizationId == organizationId) {
                     call.respond(incident)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                 }
             }
             
@@ -95,19 +98,19 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@get
                 }
                 
@@ -122,32 +125,32 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 if (jwtUserId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
 
                 val acknowledged = incidentService.acknowledge(incidentId, jwtUserId)
                 if (acknowledged) {
-                    call.respond(HttpStatusCode.OK, mapOf("message" to "Incident acknowledged"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Incident acknowledged"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Could not acknowledge incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not acknowledge incident"))
                 }
             }
             
@@ -158,32 +161,32 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 if (jwtUserId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
 
                 val resolved = incidentService.resolve(incidentId, jwtUserId)
                 if (resolved) {
-                    call.respond(HttpStatusCode.OK, mapOf("message" to "Incident resolved"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Incident resolved"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Could not resolve incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not resolve incident"))
                 }
             }
             
@@ -194,24 +197,24 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 if (byUserId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
                 
@@ -219,9 +222,9 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 
                 val reassigned = incidentService.reassign(incidentId, request.toUserId, byUserId)
                 if (reassigned) {
-                    call.respond(HttpStatusCode.OK, mapOf("message" to "Incident reassigned"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Incident reassigned"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Could not reassign incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not reassign incident"))
                 }
             }
             
@@ -232,24 +235,24 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
                 
@@ -266,24 +269,24 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
                 
                 incidentService.viewIncident(incidentId, userId)
-                call.respond(HttpStatusCode.OK, mapOf("message" to "Incident viewed"))
+                call.respond(HttpStatusCode.OK, MessageResponse("Incident viewed"))
             }
             
             post("/{id}/unavailable") {
@@ -293,27 +296,27 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
                 
                 val result = incidentService.markUnavailable(incidentId, userId)
                 if (result) {
-                    call.respond(HttpStatusCode.OK, mapOf("message" to "Escalated to next on-call"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Escalated to next on-call"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Could not escalate incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not escalate incident"))
                 }
             }
             
@@ -324,19 +327,19 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val alertId = call.parameters["alertId"]?.toIntOrNull()
                 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (alertId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid alert ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
                 
                 val incidentService = incidentServiceProvider()
                 val alert = incidentService.getIncident(alertId)
                 if (alert == null || alert.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Alert not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
                 
@@ -353,9 +356,9 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     )
                     call.respond(HttpStatusCode.Created, incident)
                 } catch (e: IllegalStateException) {
-                    call.respond(HttpStatusCode.Conflict, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.Conflict, ErrorResponse(e.message))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
         }
@@ -368,7 +371,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
@@ -384,17 +387,17 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
                 
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@get
                 }
                 
@@ -402,7 +405,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 if (incident != null) {
                     call.respond(incident)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                 }
             }
             
@@ -413,17 +416,17 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
                 
@@ -431,7 +434,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 if (incident != null) {
                     call.respond(incident)
                 } else {
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to resolve incident"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to resolve incident"))
                 }
             }
             
@@ -441,17 +444,17 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
                 
@@ -460,15 +463,15 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val alert = incidentService.getIncident(request.alertId)
                 
                 if (alert == null || alert.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Alert not found or not in organization"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Alert not found or not in organization"))
                     return@post
                 }
                 
                 try {
                     onCallIncidentService.addAlertToIncident(incidentId, request.alertId)
-                    call.respond(HttpStatusCode.OK, mapOf("message" to "Alert added to incident"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Alert added to incident"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -478,17 +481,17 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
                 
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@get
                 }
                 
@@ -503,23 +506,23 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidentId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
                 
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
                 
                 val request = call.receive<AddNoteRequest>()
                 onCallIncidentService.addNote(incidentId, userId, request.note)
-                call.respond(HttpStatusCode.OK, mapOf("message" to "Note added"))
+                call.respond(HttpStatusCode.OK, MessageResponse("Note added"))
             }
         }
     }

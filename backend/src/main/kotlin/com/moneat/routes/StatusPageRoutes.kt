@@ -3,6 +3,9 @@ package com.moneat.routes
 import com.moneat.models.*
 import com.moneat.services.StatusPageService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -58,7 +61,7 @@ fun Route.statusPageRoutes() {
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
                     
                     if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@get
                     }
                     
@@ -75,7 +78,7 @@ fun Route.statusPageRoutes() {
                     call.respond(HttpStatusCode.OK, statusPages)
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to list status pages" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to list status pages"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list status pages"))
                 }
             }
             
@@ -88,13 +91,13 @@ fun Route.statusPageRoutes() {
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
                     
                     if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@post
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
                     }
                     
@@ -105,10 +108,10 @@ fun Route.statusPageRoutes() {
                     call.respond(HttpStatusCode.Created, statusPage)
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid status page creation request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to create status page" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to create status page"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create status page"))
                 }
             }
             
@@ -122,18 +125,18 @@ fun Route.statusPageRoutes() {
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     
                     if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@get
                     }
                     
                     if (pageId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid page ID format"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid page ID format"))
                         return@get
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@get
                     }
                     
@@ -141,13 +144,13 @@ fun Route.statusPageRoutes() {
                     val statusPage = statusPageService.getStatusPage(pageId, organizationId)
                     
                     if (statusPage == null) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Status page not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Status page not found"))
                     } else {
                         call.respond(HttpStatusCode.OK, statusPage)
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to get status page" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to get status page"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get status page"))
                 }
             }
             
@@ -161,18 +164,18 @@ fun Route.statusPageRoutes() {
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     
                     if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@put
                     }
                     
                     if (pageId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid page ID format"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid page ID format"))
                         return@put
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@put
                     }
                     
@@ -182,16 +185,16 @@ fun Route.statusPageRoutes() {
                     val statusPage = statusPageService.updateStatusPage(pageId, organizationId, request)
                     
                     if (statusPage == null) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Status page not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Status page not found"))
                     } else {
                         call.respond(HttpStatusCode.OK, statusPage)
                     }
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid status page update request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to update status page" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to update status page"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update status page"))
                 }
             }
             
@@ -205,18 +208,18 @@ fun Route.statusPageRoutes() {
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     
                     if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@delete
                     }
                     
                     if (pageId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid page ID format"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid page ID format"))
                         return@delete
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@delete
                     }
                     
@@ -226,11 +229,11 @@ fun Route.statusPageRoutes() {
                     if (deleted) {
                         call.respond(HttpStatusCode.NoContent)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Status page not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Status page not found"))
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to delete status page" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to delete status page"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete status page"))
                 }
             }
             
@@ -244,13 +247,13 @@ fun Route.statusPageRoutes() {
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     
                     if (userId == null || pageId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
                     }
                     
@@ -261,10 +264,10 @@ fun Route.statusPageRoutes() {
                     call.respond(HttpStatusCode.OK, monitors)
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid monitor assignment request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to add monitors" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to add monitors"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add monitors"))
                 }
             }
             
@@ -279,18 +282,18 @@ fun Route.statusPageRoutes() {
                     val monitorId = call.parameters["monitorId"]?.toUUIDOrNull()
                     
                     if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@delete
                     }
                     
                     if (pageId == null || monitorId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid UUID format in path parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid UUID format in path parameters"))
                         return@delete
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@delete
                     }
                     
@@ -300,11 +303,11 @@ fun Route.statusPageRoutes() {
                     if (removed) {
                         call.respond(HttpStatusCode.NoContent)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Monitor not found on status page"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found on status page"))
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to remove monitor" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to remove monitor"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove monitor"))
                 }
             }
             
@@ -318,13 +321,13 @@ fun Route.statusPageRoutes() {
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     
                     if (userId == null || pageId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@get
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@get
                     }
                     
@@ -334,10 +337,10 @@ fun Route.statusPageRoutes() {
                     call.respond(HttpStatusCode.OK, incidents)
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident list request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to list incidents" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to list incidents"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list incidents"))
                 }
             }
             
@@ -351,13 +354,13 @@ fun Route.statusPageRoutes() {
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     
                     if (userId == null || pageId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
                     }
                     
@@ -368,10 +371,10 @@ fun Route.statusPageRoutes() {
                     call.respond(HttpStatusCode.Created, incident)
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident creation request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to create incident" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to create incident"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident"))
                 }
             }
             
@@ -386,18 +389,18 @@ fun Route.statusPageRoutes() {
                     val incidentId = call.parameters["incidentId"]?.toUUIDOrNull()
                     
                     if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@put
                     }
                     
                     if (pageId == null || incidentId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid UUID format in path parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid UUID format in path parameters"))
                         return@put
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@put
                     }
                     
@@ -407,16 +410,16 @@ fun Route.statusPageRoutes() {
                     val incident = statusPageService.updateIncident(pageId, organizationId, incidentId, request)
                     
                     if (incident == null) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     } else {
                         call.respond(HttpStatusCode.OK, incident)
                     }
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident update request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to update incident" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to update incident"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update incident"))
                 }
             }
             
@@ -431,13 +434,13 @@ fun Route.statusPageRoutes() {
                     val incidentId = call.parameters["incidentId"]?.toUUIDOrNull()
                     
                     if (userId == null || pageId == null || incidentId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
                     }
                     
@@ -447,16 +450,16 @@ fun Route.statusPageRoutes() {
                     val incident = statusPageService.createIncidentUpdate(pageId, organizationId, incidentId, request)
                     
                     if (incident == null) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Incident not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     } else {
                         call.respond(HttpStatusCode.Created, incident)
                     }
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident update request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to create incident update" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to create incident update"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident update"))
                 }
             }
             
@@ -470,13 +473,13 @@ fun Route.statusPageRoutes() {
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     
                     if (userId == null || pageId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
                     }
                     
@@ -487,10 +490,10 @@ fun Route.statusPageRoutes() {
                     call.respond(HttpStatusCode.Created, domain)
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid custom domain request" }
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to add custom domain" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to add custom domain"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add custom domain"))
                 }
             }
             
@@ -505,13 +508,13 @@ fun Route.statusPageRoutes() {
                     val domainId = call.parameters["domainId"]?.toIntOrNull()
                     
                     if (userId == null || pageId == null || domainId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
                     }
                     
@@ -519,13 +522,13 @@ fun Route.statusPageRoutes() {
                     val domain = statusPageService.verifyCustomDomain(pageId, organizationId, domainId)
                     
                     if (domain == null) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Domain not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Domain not found"))
                     } else {
                         call.respond(HttpStatusCode.OK, domain)
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to verify custom domain" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to verify custom domain"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to verify custom domain"))
                 }
             }
             
@@ -540,13 +543,13 @@ fun Route.statusPageRoutes() {
                     val domainId = call.parameters["domainId"]?.toIntOrNull()
                     
                     if (userId == null || pageId == null || domainId == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid parameters"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@delete
                     }
                     
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization found"))
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@delete
                     }
                     
@@ -556,11 +559,11 @@ fun Route.statusPageRoutes() {
                     if (removed) {
                         call.respond(HttpStatusCode.NoContent)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Domain not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Domain not found"))
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to remove custom domain" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to remove custom domain"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove custom domain"))
                 }
             }
         }
@@ -577,20 +580,20 @@ fun Route.statusPageRoutes() {
                 val slug = call.parameters["slug"]
                 
                 if (slug == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing slug"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing slug"))
                     return@get
                 }
                 
                 val statusPage = statusPageService.getPublicStatusPage(slug)
                 
                 if (statusPage == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Status page not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Status page not found"))
                 } else {
                     call.respond(HttpStatusCode.OK, statusPage)
                 }
             } catch (e: Exception) {
                 logger.error(e) { "Failed to get public status page" }
-                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to get status page"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get status page"))
             }
         }
         
@@ -602,20 +605,20 @@ fun Route.statusPageRoutes() {
                 val domain = call.parameters["domain"]
                 
                 if (domain == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing domain"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing domain"))
                     return@get
                 }
                 
                 val statusPage = statusPageService.getPublicStatusPageByDomain(domain)
                 
                 if (statusPage == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Status page not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Status page not found"))
                 } else {
                     call.respond(HttpStatusCode.OK, statusPage)
                 }
             } catch (e: Exception) {
                 logger.error(e) { "Failed to get public status page by domain" }
-                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to get status page"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get status page"))
             }
         }
     }

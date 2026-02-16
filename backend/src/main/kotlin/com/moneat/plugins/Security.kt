@@ -50,12 +50,20 @@ fun Application.configureSecurity() {
             authHeader { call ->
                 val authHeader = call.request.headers["Authorization"]
                 if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
-                    val token = authHeader.removePrefix("Bearer ").removePrefix("bearer ").trim()
-                    io.ktor.http.auth.HttpAuthHeader.Single("Bearer", token)
+                    try {
+                        val token = authHeader.removePrefix("Bearer ").removePrefix("bearer ").trim()
+                        io.ktor.http.auth.HttpAuthHeader.Single("Bearer", token)
+                    } catch (e: Exception) {
+                        null
+                    }
                 } else {
                     val cookieToken = call.request.cookies["auth_token"]
                     if (cookieToken != null) {
-                        io.ktor.http.auth.HttpAuthHeader.Single("Bearer", cookieToken)
+                        try {
+                            io.ktor.http.auth.HttpAuthHeader.Single("Bearer", cookieToken)
+                        } catch (e: Exception) {
+                            null
+                        }
                     } else {
                         null
                     }

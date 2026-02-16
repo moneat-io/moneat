@@ -7,6 +7,9 @@ import com.moneat.models.SlackUserMappings
 import com.moneat.services.DiscordService
 import com.moneat.services.SlackService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -852,14 +855,14 @@ fun Route.integrationCallbackRoutes() {
             try {
                 val rawBody = call.receiveText()
                 if (!verifySlackRequestSignature(call.request.headers, rawBody)) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid Slack signature"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid Slack signature"))
                     return@post
                 }
 
                 // Parse URL-encoded form data from Slack
                 val formParameters = parseQueryString(rawBody)
                 val payload = formParameters["payload"] ?: run {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing payload"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing payload"))
                     return@post
                 }
                 
@@ -929,7 +932,7 @@ fun Route.integrationCallbackRoutes() {
                 call.respond(HttpStatusCode.OK, mapOf("text" to "Action received"))
             } catch (e: Exception) {
                 logger.error("Error processing Slack interaction", e)
-                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Internal error"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
             }
         }
         
@@ -940,7 +943,7 @@ fun Route.integrationCallbackRoutes() {
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
@@ -978,10 +981,10 @@ fun Route.integrationCallbackRoutes() {
                         }
                     }
                     
-                    call.respond(HttpStatusCode.OK, mapOf("message" to "User linked successfully"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("User linked successfully"))
                 } catch (e: Exception) {
                     logger.error("Error linking Slack user", e)
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to link user"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to link user"))
                 }
             }
         }

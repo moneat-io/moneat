@@ -1,5 +1,5 @@
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
-const AUTH_PAGE_PATHS = new Set(['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
+const AUTH_PAGE_PATHS = new Set(['/', '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
 
 // Helper to format errors for logging without massive stack traces
 export function formatErrorForLogging(error: unknown): string {
@@ -1905,8 +1905,14 @@ class ApiClient {
     })
   }
 
-  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean; organizationSlug?: string }> {
+  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean; organizationSlug?: string; demoEpochMs?: number }> {
     return this.request(`${API_BASE}/user`)
+  }
+
+  async demoLogin(): Promise<{ token: string; demoEpochMs: number }> {
+    return this.request(`${API_BASE.replace('/v1', '')}/auth/demo-login`, {
+      method: 'POST',
+    })
   }
 
   async checkSlugAvailability(slug: string): Promise<{ available: boolean }> {

@@ -13,6 +13,7 @@ import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAx
 import HeartbeatBar from '@/components/uptime/heartbeat-bar'
 import EditMonitorDialog from '@/components/uptime/edit-monitor-dialog'
 import {useState} from 'react'
+import { getNow } from '@/lib/demo'
 
 export const Route = createFileRoute('/uptime/$monitorId')({
   beforeLoad: () => {
@@ -51,7 +52,7 @@ function UptimeDetailPage() {
   const {data: heartbeats = []} = useQuery({
     queryKey: ['uptime-heartbeats', monitorId],
     queryFn: () => {
-      const now = Date.now()
+      const now = getNow()
       const dayAgo = now - 24 * 60 * 60 * 1000
       return api.getUptimeHeartbeats(monitorId, dayAgo, now)
     },

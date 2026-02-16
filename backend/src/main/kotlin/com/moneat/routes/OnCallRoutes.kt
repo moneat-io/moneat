@@ -3,6 +3,9 @@ package com.moneat.routes
 import com.moneat.models.OnCallScheduleUsergroups
 import com.moneat.services.oncall.*
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -71,7 +74,7 @@ fun Route.onCallRoutes(
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
@@ -84,7 +87,7 @@ fun Route.onCallRoutes(
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
@@ -105,7 +108,7 @@ fun Route.onCallRoutes(
                     )
                     call.respond(HttpStatusCode.Created, schedule)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -115,17 +118,17 @@ fun Route.onCallRoutes(
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@get
                 }
                 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     return@get
                 }
                 
@@ -133,7 +136,7 @@ fun Route.onCallRoutes(
                 if (schedule != null) {
                     call.respond(schedule)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                 }
             }
             
@@ -143,17 +146,17 @@ fun Route.onCallRoutes(
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@put
                 }
                 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@put
                 }
                 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     return@put
                 }
                 
@@ -176,10 +179,10 @@ fun Route.onCallRoutes(
                     if (schedule != null) {
                         call.respond(schedule)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -189,17 +192,17 @@ fun Route.onCallRoutes(
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@delete
                 }
                 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@delete
                 }
                 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     return@delete
                 }
                 
@@ -207,7 +210,7 @@ fun Route.onCallRoutes(
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                 }
             }
             
@@ -217,17 +220,17 @@ fun Route.onCallRoutes(
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@get
                 }
                 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     return@get
                 }
                 
@@ -235,7 +238,7 @@ fun Route.onCallRoutes(
                 if (currentOnCall != null) {
                     call.respond(currentOnCall)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "No on-call user found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("No on-call user found"))
                 }
             }
             
@@ -246,22 +249,22 @@ fun Route.onCallRoutes(
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@post
                 }
                 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     return@post
                 }
                 
@@ -292,7 +295,7 @@ fun Route.onCallRoutes(
 
                     call.respond(HttpStatusCode.Created, override)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
         }
@@ -306,17 +309,17 @@ fun Route.onCallRoutes(
                 val overrideId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@delete
                 }
                 
                 if (overrideId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid override ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid override ID"))
                     return@delete
                 }
                 
                 if (!scheduleService.isOverrideInOrganization(overrideId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Override not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Override not found"))
                     return@delete
                 }
                 
@@ -324,7 +327,7 @@ fun Route.onCallRoutes(
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Override not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Override not found"))
                 }
             }
         }
@@ -340,17 +343,17 @@ fun Route.onCallRoutes(
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@put
                 }
                 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@put
                 }
                 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     return@put
                 }
                 
@@ -394,9 +397,9 @@ fun Route.onCallRoutes(
                         }
                     }
                     
-                    call.respond(HttpStatusCode.OK, mapOf("message" to "Slack usergroup mapping updated"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Slack usergroup mapping updated"))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -406,17 +409,17 @@ fun Route.onCallRoutes(
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@delete
                 }
                 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid schedule ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@delete
                 }
                 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
                     return@delete
                 }
                 
@@ -430,10 +433,10 @@ fun Route.onCallRoutes(
                     if (deleted > 0) {
                         call.respond(HttpStatusCode.NoContent)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "No mapping found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("No mapping found"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
         }

@@ -2,6 +2,9 @@ package com.moneat.routes
 
 import com.moneat.services.oncall.EscalationPolicyService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -49,7 +52,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
@@ -62,7 +65,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
@@ -91,7 +94,7 @@ fun Route.escalationRoutes() {
                     )
                     call.respond(HttpStatusCode.Created, policy)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -101,12 +104,12 @@ fun Route.escalationRoutes() {
                 val policyId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
                 if (policyId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid policy ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
                     return@get
                 }
                 
@@ -114,7 +117,7 @@ fun Route.escalationRoutes() {
                 if (policy != null && policy.organizationId == organizationId) {
                     call.respond(policy)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
                 }
             }
             
@@ -124,18 +127,18 @@ fun Route.escalationRoutes() {
                 val policyId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@put
                 }
                 
                 if (policyId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid policy ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
                     return@put
                 }
                 
                 val existingPolicy = policyService.getPolicy(policyId)
                 if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
                     return@put
                 }
                 
@@ -166,10 +169,10 @@ fun Route.escalationRoutes() {
                     if (policy != null) {
                         call.respond(policy)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -179,18 +182,18 @@ fun Route.escalationRoutes() {
                 val policyId = call.parameters["id"]?.toIntOrNull()
                 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@delete
                 }
                 
                 if (policyId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid policy ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
                     return@delete
                 }
                 
                 val existingPolicy = policyService.getPolicy(policyId)
                 if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
                     return@delete
                 }
                 
@@ -198,7 +201,7 @@ fun Route.escalationRoutes() {
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
                 }
             }
         }

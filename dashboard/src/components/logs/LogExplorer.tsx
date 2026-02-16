@@ -24,6 +24,7 @@ import {
   parseLevelsFromUrl,
   type LogViewSearch,
 } from '@/components/logs/logViewUrlState'
+import { getNowDate } from '@/lib/demo'
 
 interface LogExplorerProps {
   projectId?: number
@@ -62,7 +63,7 @@ function computeTimeRange(
 
   const match = TIME_PRESETS.find((p) => p.value === preset)
   if (match) {
-    const now = new Date()
+    const now = getNowDate()
     const from = new Date(now.getTime() - match.minutes * 60_000)
     return {from: from.toISOString(), to: undefined}
   }

@@ -1,5 +1,6 @@
 import {type ClassValue, clsx} from "clsx"
 import {twMerge} from "tailwind-merge"
+import { getNowDate } from './demo'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -18,7 +19,7 @@ export function formatRelativeTime(dateValue: string | number | undefined): stri
     date = new Date(dateValue + ' UTC')
   }
   
-  const now = new Date()
+  const now = getNowDate()
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 
   if (seconds < 60) return 'just now'

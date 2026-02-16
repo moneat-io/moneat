@@ -5,6 +5,8 @@ import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../compo
 import {Toaster} from '../components/ui/toaster'
 import {ChatWidget} from '../components/ai-chat/ChatWidget'
 import {api} from '../lib/api'
+import {setDemoEpoch} from '../lib/demo'
+import {DemoBanner} from '../components/demo/DemoBanner'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -107,9 +109,10 @@ function RootComponent() {
   const router = useRouterState()
   const navigate = useNavigate()
   const currentPath = router.location.pathname
-  const isAuthenticated = api.isAuthenticated()
+  const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated())
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
+  const [authCheckComplete, setAuthCheckComplete] = useState(false)
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -117,26 +120,38 @@ function RootComponent() {
     enabled: isAuthenticated,
   })
 
+  // Initialize demo mode when user data is loaded
+  useEffect(() => {
+    if (user?.demoEpochMs) {
+      setDemoEpoch(user.demoEpochMs)
+    }
+  }, [user?.demoEpochMs])
+
   useEffect(() => {
     document.title = getDocumentTitle(currentPath, isAuthenticated)
   }, [currentPath, isAuthenticated])
 
-  // Centralized email verification and onboarding check
+  // Centralized authentication and user status check
   useEffect(() => {
     async function checkUserStatus() {
       // Skip check on public routes and status pages
       if (PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
         setOnboardingChecked(true)
+        setAuthCheckComplete(true)
         return
       }
 
       // If session flag is not set, try to validate via cookie (cold-load case)
       if (!isAuthenticated) {
         const hasSession = await api.checkAuth()
+        setIsAuthenticated(hasSession) // Update state based on auth check
+        setAuthCheckComplete(true)
         if (!hasSession) {
           setOnboardingChecked(true)
           return
         }
+      } else {
+        setAuthCheckComplete(true)
       }
 
       try {
@@ -171,8 +186,13 @@ function RootComponent() {
   const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isDocsPage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
-  // Show loading state while checking onboarding
-  if (isAuthenticated && !onboardingChecked && !PUBLIC_ROUTES.has(currentPath) && !currentPath.startsWith('/s/') && !currentPath.startsWith('/auth/') && !currentPath.startsWith('/legal/') && !currentPath.startsWith('/docs')) {
+  // Show loading state while checking auth and onboarding
+  const isPublicRoute = PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')
+  if (!authCheckComplete && !isPublicRoute) {
+    return null
+  }
+  
+  if (isAuthenticated && !onboardingChecked && !isPublicRoute) {
     return null
   }
 
@@ -188,6 +208,7 @@ function RootComponent() {
         className="transition-[margin-left] duration-300"
         style={{ marginLeft: showSidebar ? sidebarWidth : 0 }}
       >
+        <DemoBanner />
         <Outlet />
       </div>
       <Toaster />

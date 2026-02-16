@@ -28,6 +28,7 @@ fun Application.module() {
         configureSerialization()
         configureMonitoring()
         configureRateLimiting()
+        configureDemoModeRestrictions()
         configureRedis()
         configureClickHouse()
         configureDatabases()

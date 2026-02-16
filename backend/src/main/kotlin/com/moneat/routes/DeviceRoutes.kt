@@ -2,6 +2,9 @@ package com.moneat.routes
 
 import com.moneat.services.oncall.PushNotificationService
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -27,7 +30,7 @@ fun Route.deviceRoutes() {
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
                 
@@ -40,7 +43,7 @@ fun Route.deviceRoutes() {
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
                 
@@ -55,12 +58,12 @@ fun Route.deviceRoutes() {
                     )
                     
                     if (registered) {
-                        call.respond(HttpStatusCode.Created, mapOf("message" to "Device registered"))
+                        call.respond(HttpStatusCode.Created, MessageResponse("Device registered"))
                     } else {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Failed to register device"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to register device"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
             
@@ -70,12 +73,12 @@ fun Route.deviceRoutes() {
                 val deviceToken = call.parameters["token"]
                 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@delete
                 }
                 
                 if (deviceToken == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid device token"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid device token"))
                     return@delete
                 }
                 
@@ -83,7 +86,7 @@ fun Route.deviceRoutes() {
                 if (unregistered) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Device not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Device not found"))
                 }
             }
         }

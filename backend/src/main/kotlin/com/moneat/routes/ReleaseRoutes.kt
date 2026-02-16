@@ -15,6 +15,9 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import io.ktor.http.*
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
+import com.moneat.utils.BooleanResponse
 import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -76,14 +79,14 @@ fun Route.releaseRoutes() {
                 if (!authTokenService.hasScope(principal.scopes, "releases:write")) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "Missing required scope: releases:write")
+                        ErrorResponse("Missing required scope: releases:write")
                     )
                     return@post
                 }
                 
                 val orgSlug = call.parameters["orgSlug"]
                     ?: run {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing organization slug"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organization slug"))
                         return@post
                     }
                 
@@ -93,13 +96,13 @@ fun Route.releaseRoutes() {
                 // For Sentry compatibility, we support the "projects" field in the request
                 val projectSlug = request.projects?.firstOrNull()
                     ?: run {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing project"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing project"))
                         return@post
                     }
                 
                 val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
                     ?: run {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
                         return@post
                     }
                 
@@ -120,7 +123,7 @@ fun Route.releaseRoutes() {
                     if (existingRelease != null) {
                         call.respond(HttpStatusCode.OK, existingRelease)
                     } else {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                     }
                 }
             }
@@ -137,14 +140,14 @@ fun Route.releaseRoutes() {
                 if (!authTokenService.hasScope(principal.scopes, "releases:read")) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "Missing required scope: releases:read")
+                        ErrorResponse("Missing required scope: releases:read")
                     )
                     return@get
                 }
                 
                 // For this endpoint, we'd need to know which project
                 // Sentry CLI typically uses project-specific endpoints
-                call.respond(HttpStatusCode.NotImplemented, mapOf("error" to "Use project-specific endpoint"))
+                call.respond(HttpStatusCode.NotImplemented, ErrorResponse("Use project-specific endpoint"))
             }
         }
         
@@ -161,7 +164,7 @@ fun Route.releaseRoutes() {
                 if (!authTokenService.hasScope(principal.scopes, "releases:write")) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "Missing required scope: releases:write")
+                        ErrorResponse("Missing required scope: releases:write")
                     )
                     return@post
                 }
@@ -171,7 +174,7 @@ fun Route.releaseRoutes() {
                 
                 val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
                     ?: run {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
                         return@post
                     }
                 
@@ -191,7 +194,7 @@ fun Route.releaseRoutes() {
                     if (existingRelease != null) {
                         call.respond(HttpStatusCode.OK, existingRelease)
                     } else {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                     }
                 }
             }
@@ -214,7 +217,7 @@ fun Route.releaseRoutes() {
                 
                 val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
                     ?: run {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
                         return@get
                     }
                 
@@ -239,7 +242,7 @@ fun Route.releaseRoutes() {
                 if (!authTokenService.hasScope(principal.scopes, "sourcemaps:write")) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "Missing required scope: sourcemaps:write")
+                        ErrorResponse("Missing required scope: sourcemaps:write")
                     )
                     return@post
                 }
@@ -250,7 +253,7 @@ fun Route.releaseRoutes() {
                 
                 val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
                     ?: run {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
                         return@post
                     }
                 
@@ -283,7 +286,7 @@ fun Route.releaseRoutes() {
                 
                 val finalFileName = filePath ?: fileName
                 if (finalFileName == null || fileBytes == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing file or filename"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing file or filename"))
                     return@post
                 }
                 
@@ -296,10 +299,10 @@ fun Route.releaseRoutes() {
                     )
                     call.respond(HttpStatusCode.Created, fileResponse)
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to upload source map" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Upload failed"))
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
                 }
             }
             
@@ -322,7 +325,7 @@ fun Route.releaseRoutes() {
                 
                 val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
                     ?: run {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Project not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
                         return@get
                     }
                 
@@ -441,7 +444,7 @@ fun Route.releaseRoutes() {
                 
                 val orgId = releaseService.getOrganizationIdBySlug(orgSlug)
                     ?: run {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Organization not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
                         return@post
                     }
                 
@@ -453,7 +456,7 @@ fun Route.releaseRoutes() {
                 val request = call.receive<AssembleArtifactBundleRequest>()
                 
                 if (request.projects.isEmpty()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "You need to specify at least one project"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("You need to specify at least one project"))
                     return@post
                 }
                 
