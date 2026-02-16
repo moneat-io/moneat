@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -22,23 +22,21 @@ import com.moneat.models.SentryEnvelope
 import com.moneat.services.EventService
 import com.moneat.services.IngestionWorker
 import com.moneat.services.LogService
+import com.moneat.services.EmailService
+import com.moneat.services.NotificationService
+import com.moneat.services.BillingQuotaService
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.application
 import io.ktor.server.application.call
-import io.ktor.server.application.environment
-import io.ktor.server.application.log
+import io.ktor.server.application.*
 import io.ktor.server.request.header
-import io.ktor.server.request.queryParameters
-import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
-import io.ktor.server.request.request
-import io.ktor.server.response.respond
-import io.ktor.server.response.response
+import io.ktor.server.request.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -126,12 +124,7 @@ fun Route.ingestRoutes() {
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
-                            mapOf(
-                                "error" to "Quota exceeded",
-                                "reason" to reservation.reason,
-                                "eventType" to reservation.eventType,
-                                "usage" to reservation.usage
-                            )
+                            ErrorResponse("Quota exceeded: ${reservation.reason}")
                         )
                         return@post
                     }
@@ -211,11 +204,7 @@ fun Route.ingestRoutes() {
                 if (!reservation.allowed) {
                     call.respond(
                         HttpStatusCode.TooManyRequests,
-                        mapOf(
-                            "error" to "Quota exceeded",
-                            "reason" to reservation.reason,
-                            "usage" to reservation.usage
-                        )
+                        ErrorResponse("Quota exceeded: ${reservation.reason}")
                     )
                     return@post
                 }
@@ -264,11 +253,7 @@ fun Route.ingestRoutes() {
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
-                            mapOf(
-                                "error" to "Quota exceeded",
-                                "reason" to reservation.reason,
-                                "usage" to reservation.usage
-                            )
+                            ErrorResponse("Quota exceeded: ${reservation.reason}")
                         )
                         return@post
                     }

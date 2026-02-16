@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
@@ -32,6 +33,9 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.and
 import org.slf4j.LoggerFactory
 
 class PushNotificationService {
@@ -110,7 +114,7 @@ class PushNotificationService {
                 setBody(messages)
             }
             
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 val result = Json.decodeFromString<ExpoResponse>(response.bodyAsText())
                 result.data?.forEachIndexed { index, ticket ->
                     if (ticket.status == "error") {
@@ -163,7 +167,7 @@ class PushNotificationService {
                 setBody(messages)
             }
             
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 logger.info("Sent on-call assignment alert to ${tokens.size} device(s) for user $userId")
             } else {
                 logger.error("Push notification request failed: ${response.status}")
@@ -199,7 +203,7 @@ class PushNotificationService {
                 setBody(messages)
             }
             
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 logger.info("Sent push notification to ${tokens.size} device(s) for user $userId")
             } else {
                 logger.error("Push notification request failed: ${response.status}")

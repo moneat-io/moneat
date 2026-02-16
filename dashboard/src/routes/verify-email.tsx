@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -46,9 +46,10 @@ function VerifyEmail() {
         setTimeout(() => {
           navigate({ to: '/login' })
         }, 2000)
-      } catch (error: any) {
+      } catch (error: unknown) {
         setStatus('error')
-        setMessage(error.response?.data?.error || 'Failed to verify email')
+        const err = error as { response?: { data?: { error?: string } } }
+        setMessage(err.response?.data?.error || 'Failed to verify email')
       }
     }
 

@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -29,10 +29,7 @@ import com.moneat.plugins.configureRateLimiting
 import com.moneat.plugins.configureRouting
 import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
-import io.ktor.server.application.environment
-import io.ktor.server.application.log
+import io.ktor.server.application.*
 import io.ktor.server.netty.EngineMain
 
 fun main(args: Array<String>) {

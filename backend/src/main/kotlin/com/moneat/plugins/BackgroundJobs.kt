@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -18,19 +18,22 @@ package com.moneat.plugins
 
 import com.moneat.config.RedisClient
 import com.moneat.services.BillingBackgroundService
+import com.moneat.services.IngestionWorker
+import com.moneat.services.LogIngestionWorker
 import com.moneat.services.MonitorAlertService
 import com.moneat.services.RefreshTokenCleanupService
 import com.moneat.services.RetentionBackgroundService
 import com.moneat.services.UptimeScheduler
+import com.moneat.services.SlackService
 import com.moneat.services.oncall.EscalationEngine
+import com.moneat.services.oncall.EscalationPolicyService
 import com.moneat.services.oncall.IncidentManagementService
 import com.moneat.services.oncall.OnCallHandoffService
+import com.moneat.services.oncall.OnCallScheduleService
 import com.moneat.services.oncall.PushNotificationService
 import com.moneat.services.oncall.SlackUserGroupSyncService
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
-import io.ktor.server.application.call
-import io.ktor.server.application.environment
+import io.ktor.server.application.*
+import io.ktor.events.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -115,7 +118,7 @@ fun Application.configureBackgroundJobs() {
     onCallHandoffServiceInstance?.start()
 
     // Register shutdown hook
-    environment.monitor.subscribe(ApplicationStopped) {
+    environment.monitor.subscribe(ApplicationStopping) {
         logger.info { "Stopping background jobs" }
         monitorAlertService.stop()
         billingBackgroundService.stop()

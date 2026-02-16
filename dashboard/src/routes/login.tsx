@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ export const Route = createFileRoute('/login')({
     // If user is already authenticated and there's NO redirect_uri (normal web login)
     // then redirect to home. But if redirect_uri exists (mobile login), allow
     // the page to load so they can log in again from mobile
-    const redirectUri = (search as any).redirect_uri
+    const redirectUri = (search as Record<string, unknown>).redirect_uri
     if (api.isAuthenticated() && !redirectUri) {
       throw redirect({ to: '/' })
     }

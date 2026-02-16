@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -127,7 +127,7 @@ function ChartTooltip({
   formatter,
 }: {
   active?: boolean
-  payload?: any[]
+  payload?: { color: string; name: string; value: number; dataKey: string }[]
   label?: string
   formatter?: (value: number, name: string) => string
 }) {
@@ -136,7 +136,7 @@ function ChartTooltip({
   return (
     <div className="bg-popover/95 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-xl">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      {payload.map((entry: any, idx: number) => (
+      {payload.map((entry, idx: number) => (
         <div key={idx} className="flex items-center gap-2 text-sm">
           <div className="h-2 w-2 rounded-full" style={{backgroundColor: entry.color}} />
           <span className="text-muted-foreground">{entry.name}:</span>
@@ -162,7 +162,7 @@ function MetricCard({
   title: string
   value: string
   subtitle: string
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
   iconColor: string
   gradientFrom: string
   gradientTo: string
@@ -1188,7 +1188,7 @@ function EmptyChart({height = 250}: {height?: number}) {
   )
 }
 
-function AlertTriangleIcon(props: any) {
+function AlertTriangleIcon(props: import('react').SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

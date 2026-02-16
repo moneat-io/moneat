@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -91,12 +91,13 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
   useEffect(() => {
     if (!containerRef.current || !events || events.length === 0) return
 
+    const container = containerRef.current
     const target = document.createElement('div')
     target.className = 'rrweb-player-wrapper'
-    while (containerRef.current.firstChild) {
-      containerRef.current.removeChild(containerRef.current.firstChild)
+    while (container.firstChild) {
+      container.removeChild(container.firstChild)
     }
-    containerRef.current.appendChild(target)
+    container.appendChild(target)
 
     let player: InstanceType<typeof rrwebPlayer> | null = null
     try {
@@ -196,8 +197,8 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
       } catch {
         // ignore
       }
-      if (containerRef.current && target.parentNode === containerRef.current) {
-        containerRef.current.removeChild(target)
+      if (container && target.parentNode === container) {
+        container.removeChild(target)
       }
     }
   }, [events, width, height, autoPlay, showController])

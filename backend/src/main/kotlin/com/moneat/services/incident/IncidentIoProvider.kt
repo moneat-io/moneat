@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
@@ -90,7 +91,7 @@ class IncidentIoProvider : IncidentProvider {
                 setBody(payload)
             }
             
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 val responseBody = response.body<AlertEventResponse>()
                 Result.success(responseBody.deduplication_key)
             } else {
@@ -122,7 +123,7 @@ class IncidentIoProvider : IncidentProvider {
                 setBody(payload)
             }
             
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 val responseBody = response.body<AlertEventResponse>()
                 Result.success(responseBody.deduplication_key)
             } else {
@@ -156,7 +157,7 @@ class IncidentIoProvider : IncidentProvider {
                 setBody(payload)
             }
             
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 // Immediately resolve the test alert
                 resolveAlert(testDedup, config)
                 Result.success(true)

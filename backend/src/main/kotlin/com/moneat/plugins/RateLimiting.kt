@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -17,13 +17,9 @@
 package com.moneat.plugins
 
 import com.moneat.routes.extractPublicKey
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
-import io.ktor.server.application.call
-import io.ktor.server.application.install
-import io.ktor.server.auth.principal
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import kotlin.time.Duration.Companion.seconds

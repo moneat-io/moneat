@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import com.moneat.routes.authTokenRoutes
 import com.moneat.routes.deviceRoutes
 import com.moneat.routes.escalationRoutes
 import com.moneat.routes.incidentProviderRoutes
+import com.moneat.routes.incidentRoutes
 import com.moneat.routes.ingestRoutes
 import com.moneat.routes.integrationRoutes
 import com.moneat.routes.logRoutes
@@ -40,15 +41,12 @@ import com.moneat.routes.statusPageRoutes
 import com.moneat.routes.stripeWebhookRoutes
 import com.moneat.routes.uptimeRoutes
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
 import io.ktor.server.application.call
-import io.ktor.server.application.environment
+import io.ktor.server.application.*
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
-import io.ktor.server.response.response
+import io.ktor.server.response.*
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable

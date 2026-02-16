@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -139,8 +139,8 @@ export function LogExplorer({
   enableLiveTail = true,
   enableFacets = true,
   defaultTimeRange = '7d',
-  // @ts-ignore - unused param kept for interface compatibility
-  initialScrollToBottom = false,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  initialScrollToBottom: _initialScrollToBottom = false,
   enableUrlSync = false,
   urlSearch,
 }: LogExplorerProps) {
@@ -269,7 +269,7 @@ export function LogExplorer({
       })
       
       navigate({
-        search: newSearch as any,
+        search: newSearch as never,
         replace: true,
       })
     }, 300)

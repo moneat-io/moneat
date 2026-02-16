@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -743,6 +743,7 @@ function BillingTab() {
         setPendingOnCallSeats(usage.oncallSeats)
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usage?.paygBudgetCents, usage?.oncallSeats])
 
   const updateOnCallSeatsMutation = useMutation({

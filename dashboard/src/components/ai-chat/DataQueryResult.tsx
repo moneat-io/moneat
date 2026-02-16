@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ interface DataQueryResultProps {
 export function DataQueryResult({query}: DataQueryResultProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<unknown>(null)
 
   useEffect(() => {
     const executeQuery = async () => {
@@ -85,7 +85,7 @@ export function DataQueryResult({query}: DataQueryResultProps) {
         </div>
       )}
       
-      {!loading && !error && result && (
+      {!loading && !error && result !== null && (
         <div className="text-xs">
           <pre className="bg-muted/50 p-2 rounded overflow-auto max-h-48">
             {JSON.stringify(result, null, 2)}

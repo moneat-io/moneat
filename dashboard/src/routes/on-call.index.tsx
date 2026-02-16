@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -71,7 +71,7 @@ function OnCallOverview() {
     queryFn: () => api.getEscalationPolicies(),
   })
 
-  const {data: _priorities} = useQuery({
+  const {data: _priorities} = useQuery({ // eslint-disable-line @typescript-eslint/no-unused-vars
     queryKey: ['priorities'],
     queryFn: () => api.getPriorities(),
   })

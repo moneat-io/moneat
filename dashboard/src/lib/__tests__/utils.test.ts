@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -43,17 +43,18 @@ describe('utils', () => {
       originalDate = global.Date
       const mockNow = new Date('2024-02-11T12:00:00Z')
       global.Date = class extends originalDate {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         constructor(...args: any[]) {
           if (args.length === 0) {
             super(mockNow.toISOString())
           } else {
-            super(...(args as [string]))
+            super(args[0])
           }
         }
         static now() {
           return mockNow.getTime()
         }
-      } as any
+      } as unknown as DateConstructor
     })
 
     afterEach(() => {

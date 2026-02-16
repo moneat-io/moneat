@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -242,12 +242,12 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` },
   ] : []
 
-  const getProjectPlatform = (project: any) => {
-    return project?.keys?.[0]?.platformTarget || project?.framework || null
+  const getProjectPlatform = (project: { keys?: { platformTarget?: string | null }[]; framework?: string }) => {
+    return project?.keys?.[0]?.platformTarget || project?.framework || undefined
   }
 
   const renderProjectPlatformIcon = (
-    project: any,
+    project: { keys?: { platformTarget?: string | null }[]; framework?: string },
     iconClassName = 'h-3.5 w-3.5',
     containerClassName = 'h-5 w-5'
   ) => {

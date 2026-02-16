@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -31,6 +31,9 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.and
 import org.msgpack.core.MessagePack
 import org.msgpack.core.MessageUnpacker
 import org.msgpack.value.ValueType
@@ -120,7 +123,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
             
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for issue $issueId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -146,7 +149,7 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for event $eventId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -172,7 +175,7 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get issue ID for event $eventId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -199,7 +202,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for replay $replayId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -225,7 +228,7 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for feedback $feedbackId: ${response.status} ${
                     body.take(400)}" }
                 return null
@@ -254,7 +257,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for transaction $eventId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -282,7 +285,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
             
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get issue count for project $projectId: ${response.status} ${body.take(400)}" }
                 return 0
             }
@@ -530,7 +533,7 @@ class DashboardService {
         try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch issues for project $projectId: ${response.status} ${body.take(400)}" }
                 return@cached emptyList<IssueResponse>()
             }
@@ -622,7 +625,7 @@ class DashboardService {
             
             val body = response.bodyAsText()
             
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch issue detail for $issueId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -633,7 +636,7 @@ class DashboardService {
             // Fetch latest event
             val latestEventResponse = ClickHouseClient.execute(latestEventQuery)
             val latestEventBody = latestEventResponse.bodyAsText()
-            val latestEvent = if (latestEventResponse.status.isSuccess() && latestEventBody.isNotBlank() && !latestEventBody.trimStart().startsWith("Code:")) {
+            val latestEvent = if (latestEventResponse.status.value in 200..299 && latestEventBody.isNotBlank() && !latestEventBody.trimStart().startsWith("Code:")) {
                 val eventObj = json.parseToJsonElement(latestEventBody.lines().first()).jsonObject
                 EventResponse(
                     eventId = eventObj["event_id"]?.jsonPrimitive?.content ?: "",
@@ -714,7 +717,7 @@ class DashboardService {
             
             val body = response.bodyAsText()
             
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch events for issue $issueId: ${response.status} ${body.take(400)}" }
                 return emptyList()
             }
@@ -794,7 +797,7 @@ class DashboardService {
 
             val body = response.bodyAsText()
             
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch transactions for issue $issueId: ${response.status} ${body.take(400)}" }
                 return emptyList()
             }
@@ -855,7 +858,7 @@ class DashboardService {
         try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch transactions for project $projectId: ${response.status} ${body.take(400)}" }
                 emptyList<TransactionSummaryResponse>()
             } else {
@@ -947,7 +950,7 @@ class DashboardService {
         try {
             val aggregateResponse = ClickHouseClient.execute(aggregateQuery)
             val aggregateBody = aggregateResponse.bodyAsText()
-            if (!aggregateResponse.status.isSuccess() || aggregateBody.trimStart().startsWith("Code:")) {
+            if (aggregateResponse.status.value !in 200..299 || aggregateBody.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch aggregate performance stats for project $projectId: ${aggregateResponse.status} ${aggregateBody.take(400)}" }
                 return@cached PerformanceStatsResponse(
                     apdex = 0.0,
@@ -1020,7 +1023,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
-            if (!response.status.isSuccess()) {
+            if (response.status.value !in 200..299) {
                 logger.error { "Failed to fetch transaction $eventId (status=${response.status}): ${body.take(400)}" }
                 return null
             }
@@ -1096,7 +1099,7 @@ class DashboardService {
 
             val body = response.bodyAsText()
             
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch spans for transaction $eventId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -1178,7 +1181,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch trace $traceId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -1255,7 +1258,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch span $spanId: ${response.status} ${body.take(400)}" }
                 return null
             }
@@ -1739,7 +1742,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to execute release markers query: ${response.status} ${body.take(400)}" }
                 return emptyList()
             }
@@ -1771,7 +1774,7 @@ class DashboardService {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute releases list query: ${response.status} ${body.take(400)}" }
             return emptyList()
         }
@@ -1903,7 +1906,7 @@ class DashboardService {
     private suspend fun executeScalarQuery(query: String, parentSpan: ISpan? = null): Long {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute scalar query: ${response.status} ${body.take(400)}" }
             return 0
         }
@@ -1916,7 +1919,7 @@ class DashboardService {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "ClickHouse query failed: ${body.take(400)}" }
             return emptyList()
         }
@@ -1941,7 +1944,7 @@ class DashboardService {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "ClickHouse query failed: ${body.take(400)}" }
             return emptyList()
         }
@@ -1971,7 +1974,7 @@ class DashboardService {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute map query: ${response.status} ${body.take(400)}" }
             return emptyMap()
         }
@@ -1990,7 +1993,7 @@ class DashboardService {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
         
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute top issues query: ${response.status} ${body.take(400)}" }
             return emptyList()
         }
@@ -2067,7 +2070,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
-            if (!response.status.isSuccess()) return emptyList()
+            if (response.status.value !in 200..299) return emptyList()
 
             body.lines()
                 .filter { it.isNotBlank() }
@@ -2141,7 +2144,7 @@ class DashboardService {
 
         return try {
             val response = ClickHouseClient.execute(query)
-            if (!response.status.isSuccess()) return 0
+            if (response.status.value !in 200..299) return 0
             val line = response.bodyAsText().lines().firstOrNull { it.isNotBlank() } ?: return 0
             val obj = json.parseToJsonElement(line).jsonObject
             obj["count"]?.jsonPrimitive?.intOrNull ?: 0
@@ -2177,7 +2180,7 @@ class DashboardService {
 
         return try {
             val response = ClickHouseClient.execute(query)
-            if (!response.status.isSuccess()) return emptyList()
+            if (response.status.value !in 200..299) return emptyList()
             response.bodyAsText()
                 .lines()
                 .filter { it.isNotBlank() }
@@ -2344,8 +2347,8 @@ class DashboardService {
                 runCatching {
                     val response = ClickHouseClient.execute(query)
                     val body = response.bodyAsText()
-                    if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                        if (!response.status.isSuccess()) logger.error { "Replay timeline errors by IDs failed: ${response.status} ${body.take(400)}" }
+                    if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                        if (response.status.value !in 200..299) logger.error { "Replay timeline errors by IDs failed: ${response.status} ${body.take(400)}" }
                         else logger.error { "Replay timeline errors by IDs (ClickHouse): ${body.take(400)}" }
                         return@runCatching
                     }
@@ -2406,8 +2409,8 @@ class DashboardService {
             runCatching {
                 val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
-                if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                    if (!response.status.isSuccess()) logger.error { "Replay timeline transactions by trace IDs failed: ${response.status} ${body.take(400)}" }
+                if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                    if (response.status.value !in 200..299) logger.error { "Replay timeline transactions by trace IDs failed: ${response.status} ${body.take(400)}" }
                     else logger.error { "Replay timeline transactions by trace IDs (ClickHouse): ${body.take(400)}" }
                     return@runCatching
                 }
@@ -2460,8 +2463,8 @@ class DashboardService {
             runCatching {
                 val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
-                if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                    if (!response.status.isSuccess()) logger.error { "Replay timeline spans by trace IDs failed: ${response.status} ${body.take(400)}" }
+                if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                    if (response.status.value !in 200..299) logger.error { "Replay timeline spans by trace IDs failed: ${response.status} ${body.take(400)}" }
                     else logger.error { "Replay timeline spans by trace IDs (ClickHouse): ${body.take(400)}" }
                     return@runCatching
                 }
@@ -2518,8 +2521,8 @@ class DashboardService {
         runCatching {
             val response = ClickHouseClient.execute(errorsInRangeQuery)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                if (!response.status.isSuccess()) logger.error { "Replay timeline errors by time range failed: ${response.status} ${body.take(400)}" }
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                if (response.status.value !in 200..299) logger.error { "Replay timeline errors by time range failed: ${response.status} ${body.take(400)}" }
                 else logger.error { "Replay timeline errors by time range (ClickHouse): ${body.take(400)}" }
                 return@runCatching
             }
@@ -2573,8 +2576,8 @@ class DashboardService {
         runCatching {
             val response = ClickHouseClient.execute(transactionsInRangeQuery)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                if (!response.status.isSuccess()) logger.error { "Replay timeline transactions by time range failed: ${response.status} ${body.take(400)}" }
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                if (response.status.value !in 200..299) logger.error { "Replay timeline transactions by time range failed: ${response.status} ${body.take(400)}" }
                 else logger.error { "Replay timeline transactions by time range (ClickHouse): ${body.take(400)}" }
                 return@runCatching
             }
@@ -2626,8 +2629,8 @@ class DashboardService {
         runCatching {
             val response = ClickHouseClient.execute(spansInRangeQuery)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
-                if (!response.status.isSuccess()) logger.error { "Replay timeline spans by time range failed: ${response.status} ${body.take(400)}" }
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                if (response.status.value !in 200..299) logger.error { "Replay timeline spans by time range failed: ${response.status} ${body.take(400)}" }
                 else logger.error { "Replay timeline spans by time range (ClickHouse): ${body.take(400)}" }
                 return@runCatching
             }
@@ -2931,7 +2934,7 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
-            if (!response.status.isSuccess()) return emptyList()
+            if (response.status.value !in 200..299) return emptyList()
 
             body.lines()
                 .filter { it.isNotBlank() }
@@ -3013,7 +3016,7 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess()) return emptyList()
+            if (response.status.value !in 200..299) return emptyList()
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->

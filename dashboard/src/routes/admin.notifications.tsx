@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -82,7 +82,7 @@ const notificationTypes: Array<{
   type: NotificationType
   label: string
   description: string
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
   supportsEmail: boolean
   supportsSlack: boolean
   supportsDiscord: boolean

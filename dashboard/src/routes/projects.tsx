@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -79,6 +79,7 @@ function createMonogramIcon(label: string): React.ComponentType<{ className?: st
 type PlatformCategory = 'mobile' | 'frontend' | 'backend' | 'desktop' | 'gaming'
 
 // Helper function to get platform info (with fallbacks for different naming conventions)
+// eslint-disable-next-line react-refresh/only-export-components
 export function getPlatformInfo(platformId?: string) {
   if (!platformId) return null
   
@@ -114,6 +115,7 @@ export type PlatformType = {
 }
 
 // Platform configurations with custom SVG icons
+// eslint-disable-next-line react-refresh/only-export-components
 export const platforms: PlatformType[] = [
   {
     id: 'android',

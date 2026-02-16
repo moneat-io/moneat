@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,8 @@
 
 package com.moneat.config
 
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
-import io.ktor.server.application.environment
-import io.ktor.server.application.log
+import io.ktor.server.application.*
+import io.ktor.events.*
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.api.StatefulRedisConnection
@@ -81,7 +79,7 @@ fun Application.configureRedis() {
         log.info("Connecting to Redis at $redisUrl...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
-        environment.monitor.subscribe(ApplicationStopped) {
+        environment.monitor.subscribe(ApplicationStopping) {
             RedisConfig.close()
         }
     } catch (e: Exception) {

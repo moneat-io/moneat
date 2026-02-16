@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ export interface TimelineEvent {
   eventType: string
   actorUserId?: number
   actorUserName?: string
-  details?: Record<string, any>
+  details?: Record<string, string | number | undefined>
   createdAt: string
 }
 
@@ -130,7 +130,7 @@ export function IncidentTimeline({ events }: IncidentTimelineProps) {
                             </p>
                           )}
                           {event.eventType === 'ESCALATED' && event.details.stepNumber !== undefined && (
-                            <p>to step {event.details.stepNumber + 1}</p>
+                            <p>to step {Number(event.details.stepNumber) + 1}</p>
                           )}
                           {event.eventType === 'REASSIGNED' && event.details.toUserName && (
                             <p>to {event.details.toUserName}</p>

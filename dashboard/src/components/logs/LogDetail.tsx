@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -152,9 +152,9 @@ function formatTimestamp(value: string): string {
 }
 
 export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps) {
-  if (!log) return null
-  
   const {projectId} = useParams({strict: false})
+
+  if (!log) return null
 
   const normalizedLevel = (log.level || 'info').toLowerCase()
   const body = stripAnsi(log.body || '')

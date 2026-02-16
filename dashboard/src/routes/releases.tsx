@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -73,7 +73,7 @@ function ReleasesPage() {
     console.error('Error loading releases:', formatErrorForLogging(error))
   }
 
-  const releaseList = releases ?? []
+  const releaseList = useMemo(() => releases ?? [], [releases])
 
   const summary = useMemo(() => {
     if (releaseList.length === 0) {

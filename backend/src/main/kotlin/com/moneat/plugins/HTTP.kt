@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -20,12 +20,9 @@ import com.moneat.config.EnvConfig
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
-import io.ktor.server.application.call
-import io.ktor.server.application.install
+import io.ktor.server.application.*
 import io.ktor.server.plugins.cors.routing.CORS
-import io.ktor.server.response.response
+import io.ktor.server.response.*
 
 fun Application.configureHTTP() {
     val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")

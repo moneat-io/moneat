@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -329,7 +329,7 @@ function ReplayDetailPage() {
   const replayPlayerRef = useRef<ReplayPlayerHandle>(null)
   const mobileReplayViewerRef = useRef<MobileReplayViewerHandle>(null)
 
-  const events = recording?.events ?? []
+  const events = useMemo(() => recording?.events ?? [], [recording?.events])
   const hasMobileVideoSegments = events.some((event) => {
     if (typeof event !== 'object' || event === null || !('type' in event)) return false
     return (event as { type: unknown }).type === 'mobile_replay_video'

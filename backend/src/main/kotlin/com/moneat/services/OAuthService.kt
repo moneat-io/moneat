@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.HttpHeaders
+import io.ktor.http.encodeURLParameter
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.config.*
 import io.ktor.util.decodeBase64Bytes
@@ -34,6 +35,9 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.and
 import java.security.KeyFactory
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.RSAPublicKeySpec
@@ -145,7 +149,7 @@ class OAuthService {
             parameter("code", code)
         }
         
-        if (!tokenResponse.status.isSuccess()) {
+        if (tokenResponse.status.value !in 200..299) {
             logger.error { "GitHub token exchange failed: ${tokenResponse.status}" }
             throw IllegalArgumentException("Failed to exchange code for token")
         }
@@ -161,7 +165,7 @@ class OAuthService {
             }
         }
         
-        if (!userResponse.status.isSuccess()) {
+        if (userResponse.status.value !in 200..299) {
             logger.error { "GitHub user fetch failed: ${userResponse.status}" }
             throw IllegalArgumentException("Failed to fetch user info")
         }
@@ -180,7 +184,7 @@ class OAuthService {
                 }
             }
             
-            if (emailsResponse.status.isSuccess()) {
+            if (emailsResponse.status.value in 200..299) {
                 val emails: List<GitHubEmail> = emailsResponse.body()
                 val primaryEmail = emails.firstOrNull { it.primary && it.verified }
                     ?: emails.firstOrNull { it.verified }

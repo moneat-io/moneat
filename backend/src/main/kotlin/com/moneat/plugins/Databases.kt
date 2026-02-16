@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -20,10 +20,8 @@ import com.moneat.config.configureClickHouseMigrations
 import com.moneat.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
-import io.ktor.server.application.environment
-import io.ktor.server.application.log
+import io.ktor.server.application.*
+import io.ktor.events.*
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
@@ -87,7 +85,7 @@ fun Application.configureDatabases() {
         }
         
         // Register shutdown hook
-        environment.monitor.subscribe(ApplicationStopped) {
+        environment.monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
             SystemStatusTracker.stop()
         }

@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -16,12 +16,23 @@
 
 package com.moneat.routes
 
-import com.moneat.models.Issues
 import com.moneat.models.Memberships
 import com.moneat.models.Organizations
 import com.moneat.models.Projects
 import com.moneat.models.Releases
 import com.moneat.models.Users
+import com.moneat.models.NotificationPreferences
+import com.moneat.models.UserResponse
+import com.moneat.models.CreateProjectRequest
+import com.moneat.models.AddTargetRequest
+import com.moneat.models.UpdateProjectRequest
+import com.moneat.models.IssueUpdateRequest
+import com.moneat.models.FeedbackUpdateRequest
+import com.moneat.models.NotificationPreferencesData
+import com.moneat.models.ProjectNotificationPreferences
+import com.moneat.models.NotificationPreferencesResponse
+import com.moneat.models.AlertNotificationPreferencesResponse
+import com.moneat.models.UpdateAlertNotificationPreferenceRequest
 import com.moneat.plugins.getSentryTransaction
 import com.moneat.plugins.isDemoUser
 import com.moneat.plugins.getDemoEpochMs
@@ -33,20 +44,16 @@ import com.moneat.utils.ErrorResponse
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.application
 import io.ktor.server.application.call
-import io.ktor.server.application.environment
+import io.ktor.server.application.*
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
-import io.ktor.server.request.queryParameters
-import io.ktor.server.request.receive
-import io.ktor.server.request.request
-import io.ktor.server.response.respond
-import io.ktor.server.response.response
+import io.ktor.server.request.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -58,6 +65,10 @@ import io.ktor.server.routing.routing
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteWhere
 
 fun Route.apiRoutes() {
     val dashboardService = DashboardService()

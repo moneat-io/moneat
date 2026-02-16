@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -92,7 +92,7 @@ export function SsoTab() {
         description: 'Your SSO settings have been updated successfully.',
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Failed to save SSO configuration',
         description: error.message || 'An error occurred. Please try again.',
@@ -125,7 +125,7 @@ export function SsoTab() {
         requireSso: false,
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Failed to delete SSO configuration',
         description: error.message || 'An error occurred. Please try again.',

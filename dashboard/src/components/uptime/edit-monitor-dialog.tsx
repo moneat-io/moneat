@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@ export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMon
       toast({title: 'Monitor updated successfully'})
       onOpenChange(false)
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Failed to update monitor',
         description: error.message,

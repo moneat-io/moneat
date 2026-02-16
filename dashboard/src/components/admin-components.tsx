@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -271,6 +271,7 @@ export function AdminSkeleton() {
 
 // ─── Formatters ─────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -279,6 +280,7 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(i > 1 ? 2 : 0)} ${units[i]}`
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
@@ -287,6 +289,7 @@ export function formatNumber(n: number): string {
 
 // ─── Event Type Colors ──────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const eventTypeColors = {
   error: { stroke: '#ef4444', fill: '#ef444433', label: 'Errors' },
   transaction: { stroke: '#3b82f6', fill: '#3b82f633', label: 'Transactions' },

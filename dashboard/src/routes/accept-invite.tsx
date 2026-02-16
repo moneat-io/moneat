@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -77,8 +77,8 @@ function AcceptInvitePage() {
       setTimeout(() => {
         navigate({ to: '/' })
       }, 2000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to accept invitation')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to accept invitation')
       setAccepting(false)
     }
   }

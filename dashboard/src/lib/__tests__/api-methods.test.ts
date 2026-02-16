@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -84,7 +84,7 @@ describe('ApiClient - Projects and Issues', () => {
 
       server.use(
         http.post(`${API_BASE}/v1/projects`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.name).toBe('New Project')
           expect(body.framework).toBe('vue')
           return HttpResponse.json(mockProject)
@@ -98,7 +98,7 @@ describe('ApiClient - Projects and Issues', () => {
     it('updates project', async () => {
       server.use(
         http.put(`${API_BASE}/v1/projects/1`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.name).toBe('Updated Name')
           return new HttpResponse(null, { status: 204 })
         })
@@ -187,7 +187,7 @@ describe('ApiClient - Projects and Issues', () => {
     it('updates issue status', async () => {
       server.use(
         http.patch(`${API_BASE}/v1/issues/issue-1`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.status).toBe('resolved')
           return new HttpResponse(null, { status: 204 })
         })
@@ -317,7 +317,7 @@ describe('ApiClient - Projects and Issues', () => {
     it('updates PAYG budget', async () => {
       server.use(
         http.put(`${API_BASE}/v1/billing/payg-budget`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.paygBudgetCents).toBe(10000)
           return HttpResponse.json({ paygBudgetCents: 10000 })
         })
@@ -340,7 +340,7 @@ describe('ApiClient - Projects and Issues', () => {
 
       server.use(
         http.post(`${API_BASE}/auth/complete-onboarding`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.organizationName).toBe('Acme Corp')
           expect(body.companySize).toBe('10-50')
           return HttpResponse.json(mockUser)
@@ -354,7 +354,7 @@ describe('ApiClient - Projects and Issues', () => {
     it('checks SSO required', async () => {
       server.use(
         http.post(`${API_BASE}/v1/sso/check-required`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.email).toBe('sso@example.com')
           return HttpResponse.json({ required: true })
         })
@@ -367,7 +367,7 @@ describe('ApiClient - Projects and Issues', () => {
     it('initiates SSO login', async () => {
       server.use(
         http.post(`${API_BASE}/auth/sso/init`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.email).toBe('sso@example.com')
           return HttpResponse.json({
             redirectUrl: 'https://sso.example.com/login',

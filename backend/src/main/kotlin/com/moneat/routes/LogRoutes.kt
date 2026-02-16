@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -33,23 +33,18 @@ import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.application
 import io.ktor.server.application.call
-import io.ktor.server.application.environment
-import io.ktor.server.application.log
+import io.ktor.server.application.*
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.authentication
 import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.request.header
-import io.ktor.server.request.queryParameters
-import io.ktor.server.request.receive
-import io.ktor.server.request.request
-import io.ktor.server.response.respond
+import io.ktor.server.request.*
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondTextWriter
-import io.ktor.server.response.response
+import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post

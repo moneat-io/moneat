@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -235,7 +235,7 @@ export function TeamSettings() {
           {inviteMutation.isError && (
             <Alert variant="destructive">
               <AlertDescription>
-                {(inviteMutation.error as any)?.message || 'Failed to send invitation'}
+                {inviteMutation.error instanceof Error ? inviteMutation.error.message : 'Failed to send invitation'}
               </AlertDescription>
             </Alert>
           )}

@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -69,7 +69,7 @@ function DeclaredIncidents() {
   const {data: incidents, isLoading} = useQuery({
     queryKey: ['declared-incidents', statusFilter, priorityFilter],
     queryFn: () => {
-      const filters: any = {}
+      const filters: { status?: string; priorityLevel?: string } = {}
       if (statusFilter !== 'all') filters.status = statusFilter
       if (priorityFilter !== 'all') filters.priorityLevel = priorityFilter
       return api.getOnCallIncidents(filters)

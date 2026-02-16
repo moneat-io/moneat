@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -413,6 +413,46 @@ interface LogTopResponse {
   totalCount: number
 }
 
+interface RawLogResponse {
+  logs?: Record<string, unknown>[]
+  nextCursor?: string | null
+  next_cursor?: string | null
+  hasMore?: boolean
+  has_more?: boolean
+}
+
+interface RawLogFilterResponse {
+  services?: (string | { value: string; count: number })[]
+  environments?: (string | { value: string; count: number })[]
+  levels?: string[]
+  tagKeys?: string[]
+  tag_keys?: string[]
+}
+
+interface RawLogAggregateResponse {
+  buckets?: { timestamp: string; count?: number; groups?: Record<string, number> }[]
+  total_count?: number
+  totalCount?: number
+  interval?: string
+}
+
+interface RawLogTopResponse {
+  field?: string
+  values?: { value: string; count?: number }[]
+  total_count?: number
+  totalCount?: number
+}
+
+interface RawSystemAlertConfigResponse {
+  scope?: string
+  globalAlerts?: Record<string, unknown>[]
+  global_alerts?: Record<string, unknown>[]
+  systemAlerts?: Record<string, unknown>[]
+  system_alerts?: Record<string, unknown>[]
+  effectiveAlerts?: Record<string, unknown>[]
+  effective_alerts?: Record<string, unknown>[]
+}
+
 interface SdkVersionsResponse {
   fetchedAt: string
   cacheTtlSeconds: number
@@ -722,7 +762,7 @@ interface CreateMonitorSystemResponse {
     os?: string
     arch?: string
     created_at: number
-    latest_metrics?: any
+    latest_metrics?: LatestMetrics
   }
   agent_key: string
   docker_command: string
@@ -1368,7 +1408,7 @@ interface Incident {
   resolvedAt?: string
   resolvedBy?: number
   resolvedByName?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   nextEscalationAt?: string
   viewedByCurrentUser?: boolean
 }
@@ -1379,12 +1419,50 @@ interface IncidentTimeline {
   eventType: 'TRIGGERED' | 'ESCALATED' | 'ACKNOWLEDGED' | 'RESOLVED' | 'REASSIGNED' | 'NOTE_ADDED' | 'STEP_TIMEOUT' | 'NOTIFICATION_SENT' | 'VIEWED'
   actorUserId?: number
   actorUserName?: string
-  details?: Record<string, any>
+  details?: Record<string, unknown>
   createdAt: string
 }
 
 interface IncidentDetail extends Incident {
   timeline?: IncidentTimeline[]
+}
+
+interface OnCallIncident {
+  id: number
+  organizationId: number
+  title: string
+  description?: string
+  priorityLevel: string
+  status: string
+  declaredBy: number
+  declaredByName?: string
+  declaredAt: string
+  resolvedBy?: number
+  resolvedByName?: string
+  resolvedAt?: string
+  alertCount: number
+  alerts?: Array<{ id: number; title: string; status: string }>
+  createdAt: string
+  updatedAt: string
+}
+
+interface OnCallIncidentDetail extends OnCallIncident {
+  timeline?: IncidentTimeline[]
+}
+
+interface SsoConfig {
+  providerType: string
+  isEnabled: boolean
+  idpEntityId?: string
+  idpSsoUrl?: string
+  idpCertificate?: string
+  oidcIssuerUrl?: string
+  oidcClientId?: string
+  oidcClientSecret?: string
+  emailDomain?: string
+  requireSso?: boolean
+  spEntityId?: string
+  hasClientSecret?: boolean
 }
 
 interface DeviceToken {
@@ -1671,59 +1749,60 @@ class ApiClient {
       } catch {
         // If parsing fails, use the default message
       }
-      const error = new Error(errorMessage)
-      ;(error as any).status = response.status
+      const error = new Error(errorMessage) as Error & { status: number }
+      error.status = response.status
       throw error
     }
     if (response.status === 204) return undefined as T
     return response.json()
   }
 
-  private mapMonitorSystem(row: any): MonitorSystemWithMetrics {
-    const latest = row.latest_metrics || {}
+  private mapMonitorSystem(row: Record<string, unknown>): MonitorSystemWithMetrics {
+    const latest = (row.latest_metrics ?? {}) as Record<string, unknown>
+
     return {
-      id: row.id,
-      projectId: row.projectId ?? row.project_id,
-      name: row.name,
-      host: row.host,
-      status: row.status,
-      lastSeenAt: row.lastSeenAt ?? row.last_seen_at,
-      agentVersion: row.agentVersion ?? row.agent_version,
-      os: row.os,
-      arch: row.arch,
-      createdAt: row.createdAt ?? row.created_at,
-      updatedAt: row.updatedAt ?? row.updated_at,
-      cpuPercent: row.cpuPercent ?? latest.cpu_percent,
-      memTotal: row.memTotal ?? latest.mem_total,
-      memUsed: row.memUsed ?? latest.mem_used,
-      memAvailable: row.memAvailable ?? latest.mem_available,
-      diskTotal: row.diskTotal ?? latest.disk_total,
-      diskUsed: row.diskUsed ?? latest.disk_used,
-      load1: row.load1 ?? latest.load_1,
-      load5: row.load5 ?? latest.load_5,
-      load15: row.load15 ?? latest.load_15,
-      netRecvBytes: row.netRecvBytes ?? latest.net_recv_bytes,
-      netSentBytes: row.netSentBytes ?? latest.net_sent_bytes,
-      tempMax: row.tempMax ?? latest.temp_max,
-      gpuPercent: row.gpuPercent ?? latest.gpu_percent,
-      batteryPercent: row.batteryPercent ?? latest.battery_percent,
-      latest_metrics: row.latest_metrics,
+      id: row.id as string,
+      projectId: (row.projectId ?? row.project_id) as number | undefined,
+      name: row.name as string,
+      host: row.host as string | undefined,
+      status: row.status as 'up' | 'down' | 'pending',
+      lastSeenAt: (row.lastSeenAt ?? row.last_seen_at) as string | number | undefined,
+      agentVersion: (row.agentVersion ?? row.agent_version) as string | undefined,
+      os: row.os as string | undefined,
+      arch: row.arch as string | undefined,
+      createdAt: (row.createdAt ?? row.created_at) as string | number | undefined,
+      updatedAt: (row.updatedAt ?? row.updated_at) as string | number | undefined,
+      cpuPercent: (row.cpuPercent ?? latest.cpu_percent) as number | undefined,
+      memTotal: (row.memTotal ?? latest.mem_total) as number | undefined,
+      memUsed: (row.memUsed ?? latest.mem_used) as number | undefined,
+      memAvailable: (row.memAvailable ?? latest.mem_available) as number | undefined,
+      diskTotal: (row.diskTotal ?? latest.disk_total) as number | undefined,
+      diskUsed: (row.diskUsed ?? latest.disk_used) as number | undefined,
+      load1: (row.load1 ?? latest.load_1) as number | undefined,
+      load5: (row.load5 ?? latest.load_5) as number | undefined,
+      load15: (row.load15 ?? latest.load_15) as number | undefined,
+      netRecvBytes: (row.netRecvBytes ?? latest.net_recv_bytes) as number | undefined,
+      netSentBytes: (row.netSentBytes ?? latest.net_sent_bytes) as number | undefined,
+      tempMax: (row.tempMax ?? latest.temp_max) as number | undefined,
+      gpuPercent: (row.gpuPercent ?? latest.gpu_percent) as number | undefined,
+      batteryPercent: (row.batteryPercent ?? latest.battery_percent) as number | undefined,
+      latest_metrics: row.latest_metrics as LatestMetrics | undefined,
     }
   }
 
-  private mapSystemAlert(row: any): SystemAlert {
+  private mapSystemAlert(row: Record<string, unknown>): SystemAlert {
     return {
-      id: row.id,
-      systemId: row.systemId ?? row.system_id,
+      id: row.id as number,
+      systemId: (row.systemId ?? row.system_id) as string | undefined,
       scope: (row.scope ?? 'system') as 'global' | 'system',
-      metric: row.metric,
-      condition: row.condition,
-      threshold: row.threshold,
-      durationSeconds: row.durationSeconds ?? row.duration_seconds ?? 0,
+      metric: row.metric as string,
+      condition: row.condition as string,
+      threshold: row.threshold as number,
+      durationSeconds: (row.durationSeconds ?? row.duration_seconds ?? 0) as number,
       enabled: row.enabled === true,
-      incidentSeverity: row.incidentSeverity ?? row.incident_severity ?? null,
-      lastTriggeredAt: row.lastTriggeredAt ?? row.last_triggered_at,
-      createdAt: row.createdAt ?? row.created_at,
+      incidentSeverity: (row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
+      lastTriggeredAt: (row.lastTriggeredAt ?? row.last_triggered_at) as number | undefined,
+      createdAt: (row.createdAt ?? row.created_at) as number,
     }
   }
 
@@ -1778,12 +1857,12 @@ class ApiClient {
     })
   }
 
-  async getSsoConfig(organizationId: number): Promise<any> {
-    return this.request(`${API_BASE}/sso/config?organizationId=${organizationId}`)
+  async getSsoConfig(organizationId: number): Promise<SsoConfig> {
+    return this.request<SsoConfig>(`${API_BASE}/sso/config?organizationId=${organizationId}`)
   }
 
-  async configureSso(organizationId: number, config: any): Promise<any> {
-    return this.request(`${API_BASE}/sso/config?organizationId=${organizationId}`, {
+  async configureSso(organizationId: number, config: SsoConfig): Promise<SsoConfig> {
+    return this.request<SsoConfig>(`${API_BASE}/sso/config?organizationId=${organizationId}`, {
       method: 'PUT',
       body: JSON.stringify(config),
     })
@@ -2119,8 +2198,8 @@ class ApiClient {
       })
     }
 
-    const response = await this.request<any>(`${API_BASE}/projects/${projectId}/logs?${params.toString()}`)
-    const rows: any[] = response.logs ?? []
+    const response = await this.request<RawLogResponse>(`${API_BASE}/projects/${projectId}/logs?${params.toString()}`)
+    const rows: Record<string, unknown>[] = response.logs ?? []
     const logs = rows.map((row) => ({
       logId: row.logId ?? row.log_id,
       timestamp: row.timestamp,
@@ -2180,8 +2259,8 @@ class ApiClient {
       })
     }
 
-    const response = await this.request<any>(`${API_BASE}/monitor/systems/${systemId}/logs?${params.toString()}`)
-    const rows: any[] = response.logs ?? []
+    const response = await this.request<RawLogResponse>(`${API_BASE}/monitor/systems/${systemId}/logs?${params.toString()}`)
+    const rows: Record<string, unknown>[] = response.logs ?? []
     const logs = rows.map((row) => ({
       logId: row.logId ?? row.log_id,
       timestamp: row.timestamp,
@@ -2216,12 +2295,12 @@ class ApiClient {
     if (options.from) params.set('from', options.from)
     if (options.to) params.set('to', options.to)
     const query = params.toString()
-    const response = await this.request<any>(
+    const response = await this.request<RawLogFilterResponse>(
       `${API_BASE}/projects/${projectId}/logs/filters${query ? `?${query}` : ''}`
     )
     // Support both old format (string[]) and new format (object with count)
-    const mapServices = (arr: any[]) =>
-      arr.map((item: any) =>
+    const mapServices = (arr: (string | { value: string; count: number })[]) =>
+      arr.map((item: string | { value: string; count: number }) =>
         typeof item === 'string' ? { value: item, count: 0 } : { value: item.value, count: item.count ?? 0 }
       )
     return {
@@ -2311,11 +2390,11 @@ class ApiClient {
     const params = this.buildLogFilterParams(options)
     if (options.interval) params.set('interval', options.interval)
     if (options.groupBy) params.set('groupBy', options.groupBy)
-    const response = await this.request<any>(
+    const response = await this.request<RawLogAggregateResponse>(
       `${API_BASE}/projects/${projectId}/logs/aggregate?${params.toString()}`
     )
     return {
-      buckets: (response.buckets ?? []).map((b: any) => ({
+      buckets: (response.buckets ?? []).map((b) => ({
         timestamp: b.timestamp,
         count: b.count ?? 0,
         groups: b.groups ?? {},
@@ -2342,12 +2421,12 @@ class ApiClient {
     const params = this.buildLogFilterParams(options)
     params.set('field', options.field)
     if (options.limit) params.set('limit', String(options.limit))
-    const response = await this.request<any>(
+    const response = await this.request<RawLogTopResponse>(
       `${API_BASE}/projects/${projectId}/logs/top?${params.toString()}`
     )
     return {
       field: response.field ?? options.field,
-      values: (response.values ?? []).map((v: any) => ({
+      values: (response.values ?? []).map((v) => ({
         value: v.value,
         count: v.count ?? 0,
       })),
@@ -2875,12 +2954,12 @@ class ApiClient {
 
   // Monitoring API
   async getMonitorSystems() {
-    const rows = await this.request<any[]>(`${API_BASE}/monitor/systems`)
+    const rows = await this.request<Record<string, unknown>[]>(`${API_BASE}/monitor/systems`)
     return rows.map((row) => this.mapMonitorSystem(row))
   }
 
   async getMonitorSystem(systemId: string) {
-    const row = await this.request<any>(`${API_BASE}/monitor/systems/${systemId}`)
+    const row = await this.request<Record<string, unknown>>(`${API_BASE}/monitor/systems/${systemId}`)
     return this.mapMonitorSystem(row) as MonitorSystemDetail
   }
 
@@ -2948,12 +3027,12 @@ class ApiClient {
   }
 
   async getSystemAlertConfig(systemId: string) {
-    const response = await this.request<any>(`${API_BASE}/monitor/systems/${systemId}/alerts/config`)
+    const response = await this.request<RawSystemAlertConfigResponse>(`${API_BASE}/monitor/systems/${systemId}/alerts/config`)
     return {
       scope: (response.scope ?? 'system') as 'global' | 'system',
-      globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map((row: any) => this.mapSystemAlert(row)),
-      systemAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map((row: any) => this.mapSystemAlert(row)),
-      effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map((row: any) => this.mapSystemAlert(row)),
+      globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map((row) => this.mapSystemAlert(row)),
+      systemAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map((row) => this.mapSystemAlert(row)),
+      effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map((row) => this.mapSystemAlert(row)),
     } as SystemAlertConfig
   }
 
@@ -3001,25 +3080,25 @@ class ApiClient {
 
   // Alert Silence Period Methods
 
-  private mapSilencePeriod(row: any): SilencePeriod {
+  private mapSilencePeriod(row: Record<string, unknown>): SilencePeriod {
     return {
-      id: row.id,
-      organizationId: row.organization_id ?? row.organizationId,
-      reason: row.reason ?? null,
-      startsAt: row.starts_at ?? row.startsAt,
-      endsAt: row.ends_at ?? row.endsAt,
-      createdBy: row.created_by ?? row.createdBy,
-      createdAt: row.created_at ?? row.createdAt,
+      id: row.id as number,
+      organizationId: (row.organization_id ?? row.organizationId) as number,
+      reason: (row.reason ?? null) as string | null,
+      startsAt: (row.starts_at ?? row.startsAt) as number,
+      endsAt: (row.ends_at ?? row.endsAt) as number,
+      createdBy: (row.created_by ?? row.createdBy) as number,
+      createdAt: (row.created_at ?? row.createdAt) as number,
     }
   }
 
   async getSilencePeriods(): Promise<SilencePeriod[]> {
-    const response = await this.request<any[]>(`${API_BASE}/monitor/silence-periods`)
-    return response.map((row: any) => this.mapSilencePeriod(row))
+    const response = await this.request<Record<string, unknown>[]>(`${API_BASE}/monitor/silence-periods`)
+    return response.map((row) => this.mapSilencePeriod(row))
   }
 
   async createSilencePeriod(data: CreateSilencePeriodRequest): Promise<SilencePeriod> {
-    const response = await this.request<any>(`${API_BASE}/monitor/silence-periods`, {
+    const response = await this.request<Record<string, unknown>>(`${API_BASE}/monitor/silence-periods`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -3514,21 +3593,21 @@ class ApiClient {
     const params = new URLSearchParams()
     if (filters.status) params.set('status', filters.status)
     if (filters.priorityLevel) params.set('priorityLevel', filters.priorityLevel)
-    return this.request<any[]>(`${API_BASE}/on-call-incidents?${params.toString()}`)
+    return this.request<OnCallIncident[]>(`${API_BASE}/on-call-incidents?${params.toString()}`)
   }
 
   async getOnCallIncident(id: number) {
-    return this.request<any>(`${API_BASE}/on-call-incidents/${id}`)
+    return this.request<OnCallIncidentDetail>(`${API_BASE}/on-call-incidents/${id}`)
   }
 
   async resolveOnCallIncident(id: number) {
-    return this.request<any>(`${API_BASE}/on-call-incidents/${id}/resolve`, {
+    return this.request<OnCallIncident>(`${API_BASE}/on-call-incidents/${id}/resolve`, {
       method: 'POST',
     })
   }
   
   async getOnCallIncidentTimeline(id: number) {
-    return this.request<any[]>(`${API_BASE}/on-call-incidents/${id}/timeline`)
+    return this.request<IncidentTimeline[]>(`${API_BASE}/on-call-incidents/${id}/timeline`)
   }
   
   async addOnCallIncidentNote(id: number, note: string) {
@@ -3682,6 +3761,8 @@ export type {
   Incident,
   IncidentTimeline,
   IncidentDetail,
+  OnCallIncident,
+  OnCallIncidentDetail,
   DeviceToken,
   CreateOnCallScheduleRequest,
   UpdateOnCallScheduleRequest,

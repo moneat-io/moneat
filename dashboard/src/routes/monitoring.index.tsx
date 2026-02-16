@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -503,7 +503,7 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
   )
 }
 
-function SystemCard({system, onDelete}: {system: any; onDelete: (id: string, name: string) => void}) {
+function SystemCard({system, onDelete}: {system: MonitorSystemWithMetrics; onDelete: (id: string, name: string) => void}) {
   const metrics = system.latest_metrics
   const memPercent =
     metrics?.mem_used && metrics?.mem_total ? (metrics.mem_used / metrics.mem_total) * 100 : undefined

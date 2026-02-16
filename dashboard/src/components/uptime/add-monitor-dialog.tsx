@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -150,7 +150,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
       toast({title: 'Monitor created successfully'})
       handleClose()
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Failed to create monitor',
         description: error.message,

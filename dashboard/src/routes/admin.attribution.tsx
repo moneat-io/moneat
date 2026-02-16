@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -158,7 +158,7 @@ function AttributionPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
             <label className="text-sm font-medium">Group By:</label>
-            <Select value={groupBy} onValueChange={(value: any) => setGroupBy(value)}>
+            <Select value={groupBy} onValueChange={(value: 'campaign' | 'source' | 'medium' | 'all') => setGroupBy(value)}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue />
               </SelectTrigger>

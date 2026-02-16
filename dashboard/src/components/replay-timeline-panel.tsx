@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -174,7 +174,7 @@ function CategoryIcon({ category, className }: { category?: string; className?: 
 
 function canFetchSpans(item: TimelineItem): boolean {
   if (item.type === 'transaction' && !!item.eventId) return true
-  if (!!item.traceId) return true
+  if (item.traceId) return true
   return false
 }
 
@@ -404,7 +404,7 @@ function ExpandedItemPanel({
 
 /* ── Main component ── */
 
-export function ReplayTimelinePanel({ items, currentOffsetMs, durationMs: _durationMs, projectId, onSeek }: ReplayTimelinePanelProps) {
+export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek }: ReplayTimelinePanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<FilterValue>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)

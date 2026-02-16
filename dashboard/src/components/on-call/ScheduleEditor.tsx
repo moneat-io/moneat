@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -122,8 +122,8 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
             <Label htmlFor="rotation-type">Rotation Type</Label>
             <Select
               value={schedule.rotationType}
-              onValueChange={(value: any) =>
-                setSchedule((prev) => ({ ...prev, rotationType: value }))
+              onValueChange={(value: string) =>
+                setSchedule((prev) => ({ ...prev, rotationType: value as OnCallScheduleData['rotationType'] }))
               }
             >
               <SelectTrigger id="rotation-type">

@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type IncidentListFilters} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {
@@ -82,8 +82,8 @@ function Incidents() {
   const {data: incidents, isLoading} = useQuery({
     queryKey: ['incidents', statusFilter, priorityFilter],
     queryFn: () => {
-      const filters: any = {}
-      if (statusFilter !== 'all') filters.status = statusFilter
+      const filters: IncidentListFilters = {}
+      if (statusFilter !== 'all') filters.status = statusFilter as IncidentListFilters['status']
       if (priorityFilter !== 'all') filters.priorityLevel = priorityFilter
       return api.getIncidents(filters)
     },

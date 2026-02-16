@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -21,12 +21,9 @@ import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.Application
-import io.ktor.server.application.application
-import io.ktor.server.application.environment
-import io.ktor.server.application.log
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.events.*
 import io.sentry.ISpan
 import io.sentry.Sentry
 
@@ -121,7 +118,7 @@ fun Application.configureClickHouse() {
         log.info("Initializing ClickHouse client for $url...")
         ClickHouseClient.init(url, database, user, password)
         log.info("ClickHouse client initialized")
-        environment.monitor.subscribe(ApplicationStopped) {
+        environment.monitor.subscribe(ApplicationStopping) {
             ClickHouseClient.close()
         }
     } catch (e: Exception) {

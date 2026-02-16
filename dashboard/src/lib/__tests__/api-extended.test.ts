@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -311,7 +311,7 @@ describe('ApiClient - Extended Methods', () => {
     it('updates feedback status', async () => {
       server.use(
         http.patch(`${API_BASE}/v1/feedback/fb-1`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.status).toBe('resolved')
           return new HttpResponse(null, { status: 204 })
         })
@@ -376,7 +376,7 @@ describe('ApiClient - Extended Methods', () => {
 
       server.use(
         http.post(`${API_BASE}/v1/auth-tokens`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.name).toBe('New Token')
           expect(body.scopes).toEqual(['project:read'])
           return HttpResponse.json(mockToken)
@@ -432,7 +432,7 @@ describe('ApiClient - Extended Methods', () => {
     it('updates notification preferences', async () => {
       server.use(
         http.put(`${API_BASE}/v1/notification-preferences`, async ({ request }) => {
-          const body = await request.json() as any
+          const body = await request.json() as Record<string, unknown>
           expect(body.issueAlerts).toBe(false)
           return new HttpResponse(null, { status: 204 })
         })

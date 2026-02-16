@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -19,16 +19,11 @@ package com.moneat.plugins
 import com.moneat.config.SentryConfig
 import com.moneat.utils.SentryUtils
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.application
-import io.ktor.server.application.call
-import io.ktor.server.application.install
+import io.ktor.server.application.*
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.request.request
-import io.ktor.server.response.respond
-import io.ktor.server.response.response
+import io.ktor.server.request.*
+import io.ktor.server.response.*
 import io.ktor.util.AttributeKey
 import io.sentry.ITransaction
 import io.sentry.Sentry

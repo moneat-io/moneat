@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -31,10 +31,10 @@ describe('ApiClient', () => {
     it('sends requests with credentials include for cookie-based auth', async () => {
       let capturedInit: RequestInit | undefined
       const originalFetch = global.fetch
-      global.fetch = vi.fn(async (_url: any, init?: RequestInit) => {
+      global.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
         capturedInit = init
         return new Response(JSON.stringify([]), { status: 200 })
-      }) as any
+      }) as typeof fetch
 
       await api.getProjects()
 
