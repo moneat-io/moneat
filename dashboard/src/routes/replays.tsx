@@ -126,7 +126,7 @@ function ReplaysPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
+  const projectId = selectedProjectId
   const { data: billingUsage } = useQuery({
     queryKey: ['billing-usage'],
     queryFn: () => api.getBillingUsage(),
@@ -150,19 +150,13 @@ function ReplaysPage() {
     }
   }, [availablePeriods, period, setPeriod, setPage])
 
-  const { data: replays = [], isLoading } = useQuery({
-    queryKey: ['replays', projectId, period, environment, page],
-    queryFn: () =>
-      projectId
-        ? api.getReplays(projectId, {
-            page,
-            limit: 25,
-            period,
-            environment: environment === 'all' ? undefined : environment,
-          })
-        : [],
-    enabled: !!projectId,
-  })
+	const { data: replays = [], isLoading } = useQuery({
+		queryKey: ['replays', projectId ?? 'all', period, environment, page],
+		queryFn: () => {
+			const opts = { page, limit: 25, period, environment: environment === 'all' ? undefined : environment }
+			return projectId ? api.getReplays(projectId, opts) : api.getOrgReplays(opts)
+		},
+	})
 
   const stats = useMemo(() => {
     const totalErrors = replays.reduce((sum, r) => sum + r.errorCount, 0)

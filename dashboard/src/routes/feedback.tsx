@@ -104,7 +104,7 @@ function FeedbackPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedFeedback, setSelectedFeedback] = useState<Set<string>>(new Set())
-  const { selectedProjectId, setSelectedProjectId } = useProject()
+  const { selectedProjectId } = useProject()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -114,33 +114,23 @@ function FeedbackPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
-
-  if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
-    setSelectedProjectId(projects[0].id)
-  }
+  const projectId = selectedProjectId
 
   // Fetch all feedback for stats (unfiltered)
   const { data: allFeedback = [] } = useQuery({
-    queryKey: ['feedback', projectId, 'all'],
+    queryKey: ['feedback', projectId ?? 'all', 'all'],
     queryFn: () =>
       projectId
         ? api.getFeedback(projectId, { page: 1, limit: 500 })
-        : [],
-    enabled: !!projectId,
+        : api.getOrgFeedback({ page: 1, limit: 500 }),
   })
 
   const { data: feedbackList = [] } = useQuery({
-    queryKey: ['feedback', projectId, statusFilter],
-    queryFn: () =>
-      projectId
-        ? api.getFeedback(projectId, {
-            page: 1,
-            limit: 100,
-            status: statusFilter === 'all' ? undefined : statusFilter,
-          })
-        : [],
-    enabled: !!projectId,
+    queryKey: ['feedback', projectId ?? 'all', statusFilter],
+    queryFn: () => {
+      const opts = { page: 1, limit: 100, status: statusFilter === 'all' ? undefined : statusFilter }
+      return projectId ? api.getFeedback(projectId, opts) : api.getOrgFeedback(opts)
+    },
   })
 
   const stats = useMemo(() => {

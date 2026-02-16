@@ -207,19 +207,19 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   }
 
   const navItems = [
-    { icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
-    { icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
-    { icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
-    { icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
-    { icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
-    { icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
-    { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
-    { icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
-    { icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
-    { icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
-    { icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false },
-    ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
-    { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
+    { icon: Home, label: 'Dashboard', href: '/' },
+    { icon: Timer, label: 'Performance', href: '/performance' },
+    { icon: AlertCircle, label: 'Issues', href: '/issues' },
+    { icon: ScrollText, label: 'Logs', href: '/logs' },
+    { icon: Play, label: 'Replays', href: '/replays' },
+    { icon: MessageSquare, label: 'Feedback', href: '/feedback' },
+    { icon: Package, label: 'Releases', href: '/releases' },
+    { icon: Activity, label: 'Uptime', href: '/uptime' },
+    { icon: Globe, label: 'Status Pages', href: '/status-pages' },
+    { icon: Server, label: 'Monitoring', href: '/monitoring' },
+    { icon: Bell, label: 'On-Call', href: '/on-call' },
+    ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', href: '/admin' }] : []),
+    { icon: Settings, label: 'Settings', href: '/settings' },
   ]
 
   const projectNavItems = activeProjectId ? [
