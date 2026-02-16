@@ -231,6 +231,16 @@ fun Route.apiRoutes() {
             get("/issues/{issueId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = try {
+                    principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                } catch (e: Exception) {
+                    false
+                }
+                val demoEpochMs = try {
+                    principal.payload.getClaim("demoEpochMs")?.asLong()
+                } catch (e: Exception) {
+                    null
+                }
                 
                 val issueId = call.parameters["issueId"]
                 if (issueId == null) {
@@ -238,12 +248,13 @@ fun Route.apiRoutes() {
                     return@get
                 }
                 
-                if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                // Skip permission check for demo users (they have access to all demo issues)
+                if (!isDemo && !dashboardService.hasIssueAccess(userId, issueId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
                 
-                val issue = dashboardService.getIssue(issueId)
+                val issue = dashboardService.getIssue(issueId, demoEpochMs)
                 if (issue == null) {
                     call.respond(HttpStatusCode.NotFound)
                 } else {
@@ -589,6 +600,16 @@ fun Route.apiRoutes() {
             get("/projects/{projectId}/feedback") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = try {
+                    principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                } catch (e: Exception) {
+                    false
+                }
+                val demoEpochMs = try {
+                    principal.payload.getClaim("demoEpochMs")?.asLong()
+                } catch (e: Exception) {
+                    null
+                }
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -596,7 +617,7 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
@@ -605,13 +626,18 @@ fun Route.apiRoutes() {
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
                 val status = call.request.queryParameters["status"]
 
-                val feedback = dashboardService.getFeedback(projectId, page, limit, status)
+                val feedback = dashboardService.getFeedback(projectId, page, limit, status, demoEpochMs)
                 call.respond(feedback)
             }
 
             get("/feedback/{feedbackId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = try {
+                    principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                } catch (e: Exception) {
+                    false
+                }
 
                 val feedbackId = call.parameters["feedbackId"]
                 if (feedbackId == null) {
@@ -619,7 +645,7 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasFeedbackAccess(userId, feedbackId)) {
+                if (!isDemo && !dashboardService.hasFeedbackAccess(userId, feedbackId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
@@ -700,6 +726,11 @@ fun Route.apiRoutes() {
             get("/projects/{projectId}/releases") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = try {
+                    principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                } catch (e: Exception) {
+                    false
+                }
                 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -707,7 +738,7 @@ fun Route.apiRoutes() {
                     return@get
                 }
                 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }

@@ -4,6 +4,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.sentry.ISpan
@@ -50,13 +51,19 @@ class DashboardService {
         return transaction {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
+            
+            logger.debug { "hasProjectAccess: userId=$userId, projectId=$projectId, orgIds=$orgIds" }
 
-            Projects.selectAll().where { (Projects.id eq projectId) and (Projects.organization_id inList orgIds) }.count() > 0
+            val hasAccess = Projects.selectAll().where { (Projects.id eq projectId) and (Projects.organization_id inList orgIds) }.count() > 0
+            logger.debug { "hasProjectAccess result: $hasAccess" }
+            hasAccess
         }
     }
     
     suspend fun hasIssueAccess(userId: Int, issueId: String): Boolean {
-        val projectId = getProjectIdForIssue(issueId) ?: return false
+        val projectId = getProjectIdForIssue(issueId)
+        logger.debug { "hasIssueAccess: issueId=$issueId, projectId=$projectId" }
+        if (projectId == null) return false
         return hasProjectAccess(userId, projectId)
     }
 
@@ -86,7 +93,7 @@ class DashboardService {
     private suspend fun getProjectIdForIssue(issueId: String): Long? {
         val escapedIssueId = ClickHouseSqlUtils.escapeSql(issueId)
         val query = """
-            SELECT project_id 
+            SELECT toInt64(project_id) as project_id
             FROM $clickhouseDb.issues 
             WHERE issue_id = '$escapedIssueId'
             LIMIT 1
@@ -192,7 +199,7 @@ class DashboardService {
     private suspend fun getProjectIdForFeedback(feedbackId: String): Long? {
         val normalizedFeedbackId = normalizeUuid(feedbackId) ?: return null
         val query = """
-            SELECT project_id
+            SELECT toInt64(project_id) as project_id
             FROM $clickhouseDb.user_feedback FINAL
             WHERE toString(feedback_id) = '$normalizedFeedbackId'
             LIMIT 1
@@ -535,10 +542,11 @@ class DashboardService {
         }
         }
 
-    suspend fun getIssue(issueId: String): IssueDetailResponse? {
+    suspend fun getIssue(issueId: String, demoEpochMs: Long? = null): IssueDetailResponse? {
         val projectId = getProjectIdForIssue(issueId) ?: return null
         val retentionDays = getProjectRetentionDays(projectId)
         val escapedIssueId = issueId.replace("'", "''")
+        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         
         // Query events table directly and aggregate
         val query = """
@@ -558,12 +566,38 @@ class DashboardService {
             LEFT JOIN (
                 SELECT issue_id, status 
                 FROM $clickhouseDb.issues FINAL
-                WHERE ${timestampRetentionClause("last_seen", retentionDays)}
+                WHERE ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             ) i USING issue_id
             WHERE e.issue_id = '$escapedIssueId'
-                AND e.project_id = $projectId
-                AND ${timestampRetentionClause("e.timestamp", retentionDays)}
+                AND $projectIdClause
+                AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
             GROUP BY issue_id
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        // Fetch latest event with full details
+        val latestEventQuery = """
+            SELECT 
+                event_id,
+                timestamp,
+                message,
+                platform,
+                level,
+                environment,
+                release,
+                user_id,
+                user_email,
+                user_username,
+                tags,
+                contexts,
+                stack_trace,
+                breadcrumbs
+            FROM $clickhouseDb.events
+            WHERE issue_id = '$escapedIssueId'
+                AND $projectIdClause
+                AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+            ORDER BY timestamp DESC
+            LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
         
@@ -580,6 +614,35 @@ class DashboardService {
             
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             
+            // Fetch latest event
+            val latestEventResponse = ClickHouseClient.execute(latestEventQuery)
+            val latestEventBody = latestEventResponse.bodyAsText()
+            val latestEvent = if (latestEventResponse.status.isSuccess() && latestEventBody.isNotBlank() && !latestEventBody.trimStart().startsWith("Code:")) {
+                val eventObj = json.parseToJsonElement(latestEventBody.lines().first()).jsonObject
+                EventResponse(
+                    eventId = eventObj["event_id"]?.jsonPrimitive?.content ?: "",
+                    timestamp = eventObj["timestamp"]?.jsonPrimitive?.content ?: "",
+                    message = eventObj["message"]?.jsonPrimitive?.content ?: "",
+                    platform = eventObj["platform"]?.jsonPrimitive?.content ?: "",
+                    level = eventObj["level"]?.jsonPrimitive?.content ?: "error",
+                    environment = eventObj["environment"]?.jsonPrimitive?.contentOrNull,
+                    release = eventObj["release"]?.jsonPrimitive?.contentOrNull,
+                    user = eventObj["user_id"]?.jsonPrimitive?.content?.let {
+                        UserInfo(
+                            id = it,
+                            email = eventObj["user_email"]?.jsonPrimitive?.contentOrNull,
+                            username = eventObj["user_username"]?.jsonPrimitive?.contentOrNull
+                        )
+                    },
+                    tags = HashMap(eventObj["tags"]?.jsonObject?.mapValues { 
+                        it.value.jsonPrimitive.content 
+                    } ?: emptyMap()),
+                    contexts = eventObj["contexts"]?.jsonPrimitive?.content ?: "{}",
+                    exception = eventObj["stack_trace"]?.jsonPrimitive?.contentOrNull,
+                    breadcrumbs = eventObj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
+                )
+            } else null
+            
             IssueDetailResponse(
                 id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
                 projectId = projectId,
@@ -593,7 +656,7 @@ class DashboardService {
                 userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
                 status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
                 fingerprint = obj["fingerprint"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-                latestEvent = null // TODO: Fetch latest event
+                latestEvent = latestEvent
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch issue detail" }
@@ -1518,7 +1581,7 @@ class DashboardService {
     suspend fun getReleases(projectId: Long, parentSpan: ISpan? = null): List<ReleaseListResponse> =
         CacheService.cached("cache:releases:$projectId", 120, parentSpan) {
         val retentionDays = getProjectRetentionDays(projectId)
-        val escapedProjectId = projectId
+        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val releasesQuery = """
             SELECT
                 release as version,
@@ -1527,7 +1590,7 @@ class DashboardService {
                 count() as event_count,
                 uniq(user_id) as user_count
             FROM $clickhouseDb.events
-            WHERE project_id = $escapedProjectId AND release != ''
+            WHERE $projectIdClause AND release != ''
                 AND ${timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY release
             ORDER BY first_seen DESC
@@ -2887,10 +2950,12 @@ class DashboardService {
         projectId: Long,
         page: Int = 1,
         limit: Int = 25,
-        status: String? = null
+        status: String? = null,
+        demoEpochMs: Long? = null
     ): List<FeedbackListItem> {
         val offset = (page - 1) * limit
         val retentionDays = getProjectRetentionDays(projectId)
+        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val validStatuses = setOf("unresolved", "resolved", "archived")
         val statusFilter = if (status != null && status in validStatuses) {
             "AND status = '${status.replace("'", "''")}'"
@@ -2914,8 +2979,8 @@ class DashboardService {
                 associated_event_id,
                 replay_id
             FROM $clickhouseDb.user_feedback FINAL
-            WHERE project_id = $projectId
-                AND ${timestampRetentionClause("timestamp", retentionDays)}
+            WHERE $projectIdClause
+                AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
                 $statusFilter
             ORDER BY timestamp DESC
             LIMIT $limit OFFSET $offset
@@ -2960,7 +3025,10 @@ class DashboardService {
     suspend fun getFeedbackDetail(feedbackId: String): FeedbackDetailResponse? {
         val normalizedFeedbackId = normalizeUuid(feedbackId) ?: return null
         val projectId = getProjectIdForFeedback(normalizedFeedbackId) ?: return null
-        val retentionDays = getProjectRetentionDays(projectId)
+        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        
+        // For feedback detail, we don't apply retention filtering since we're looking up a specific ID
+        // The feedback item was already shown in the list (which did apply retention), so we know it exists
         val query = """
             SELECT
                 toString(feedback_id) as feedback_id,
@@ -2983,8 +3051,7 @@ class DashboardService {
                 sdk_version
             FROM $clickhouseDb.user_feedback FINAL
             WHERE toString(feedback_id) = '$normalizedFeedbackId'
-                AND project_id = $projectId
-                AND ${timestampRetentionClause("timestamp", retentionDays)}
+                AND $projectIdClause
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()

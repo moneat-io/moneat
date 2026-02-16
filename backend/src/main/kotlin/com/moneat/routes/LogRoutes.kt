@@ -115,6 +115,16 @@ fun Route.logRoutes() {
             get("/projects/{projectId}/logs") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = try {
+                    principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+                } catch (e: Exception) {
+                    false
+                }
+                val demoEpochMs = try {
+                    principal.payload.getClaim("demoEpochMs")?.asLong()
+                } catch (e: Exception) {
+                    null
+                }
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -122,9 +132,23 @@ fun Route.logRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
+                }
+
+                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
+                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                    twentyFourHoursAgo.toString()
+                } else {
+                    call.request.queryParameters["from"]
+                }
+
+                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                    demoEpochMs.toString()
+                } else {
+                    call.request.queryParameters["to"]
                 }
 
                 val request = LogQueryRequest(
@@ -134,8 +158,8 @@ fun Route.logRoutes() {
                     levels = parseLevelQueryParams(call),
                     service = call.request.queryParameters["service"],
                     environment = call.request.queryParameters["environment"],
-                    from = call.request.queryParameters["from"],
-                    to = call.request.queryParameters["to"],
+                    from = defaultFrom,
+                    to = defaultTo,
                     tags = parseTagQueryParams(call),
                     excludeService = call.request.queryParameters["excludeService"],
                     excludeEnvironment = call.request.queryParameters["excludeEnvironment"],

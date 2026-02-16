@@ -4,6 +4,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.models.*
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.encodeToString
@@ -1142,7 +1143,7 @@ class LogService {
     private fun buildScopeFilter(projectId: Long, systemId: String?): String? {
         val rawSystemId = systemId?.trim()
         if (rawSystemId.isNullOrEmpty()) {
-            return "project_id = $projectId"
+            return ClickHouseQueryUtils.projectIdClause(projectId)
         }
 
         val parsed = try {
