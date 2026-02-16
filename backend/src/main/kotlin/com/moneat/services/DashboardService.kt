@@ -1996,16 +1996,23 @@ class DashboardService {
         page: Int = 1,
         limit: Int = 25,
         environment: String? = null,
-        period: String = "7d"
+        period: String = "7d",
+        demoEpochMs: Long? = null
     ): List<ReplayListItem> {
         val offset = (page - 1) * limit
         val retentionDays = getProjectRetentionDays(projectId)
-        val periodClause = when (period) {
-            "24h" -> "replay_start_timestamp >= now64(3) - INTERVAL 1 DAY"
-            "30d" -> "replay_start_timestamp >= now64(3) - INTERVAL 30 DAY"
-            "90d" -> "replay_start_timestamp >= now64(3) - INTERVAL 90 DAY"
-            else -> "replay_start_timestamp >= now64(3) - INTERVAL 7 DAY"
+        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        
+        val nowMs = demoEpochMs ?: System.currentTimeMillis()
+        val periodMs = when (period) {
+            "24h" -> 24 * 60 * 60 * 1000L
+            "30d" -> 30 * 24 * 60 * 60 * 1000L
+            "90d" -> 90 * 24 * 60 * 60 * 1000L
+            else -> 7 * 24 * 60 * 60 * 1000L
         }
+        val periodStartMs = nowMs - periodMs
+        val retentionStartMs = nowMs - (retentionDays * 24 * 60 * 60 * 1000L)
+        
         val envClause = if (environment != null && environment.isNotBlank()) {
             "AND environment = '${environment.replace("'", "''")}'"
         } else ""
@@ -2013,7 +2020,7 @@ class DashboardService {
         val query = """
             SELECT
                 toString(replay_id) as replay_id,
-                project_id,
+                toInt64(project_id) as project_id,
                 formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as started_at,
                 formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as finished_at,
                 toUnixTimestamp64Milli(min(replay_start_timestamp)) as started_ms,
@@ -2030,9 +2037,9 @@ class DashboardService {
                 argMax(os_version, timestamp) as os_version,
                 argMax(activity, timestamp) as activity
             FROM $clickhouseDb.replay_events
-            WHERE project_id = $projectId
-                AND $periodClause
-                AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+            WHERE $projectIdClause
+                AND replay_start_timestamp >= fromUnixTimestamp64Milli($periodStartMs)
+                AND timestamp >= fromUnixTimestamp64Milli($retentionStartMs)
                 $envClause
             GROUP BY replay_id, project_id
             ORDER BY max(timestamp) DESC

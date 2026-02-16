@@ -58,7 +58,7 @@ object EnvConfig {
     // Demo mode configuration
     object Demo {
         val enabled: Boolean
-            get() = get("DEMO_ENABLED", "false").toBoolean()
+            get() = get("DEMO_ENABLED", "true").toBoolean()
 
         /**
          * Demo epoch timestamp in milliseconds.

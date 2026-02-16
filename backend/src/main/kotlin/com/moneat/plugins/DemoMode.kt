@@ -14,7 +14,8 @@ private val logger = KotlinLogging.logger {}
  * Demo users can only perform read operations (GET requests).
  */
 fun Application.configureDemoModeRestrictions() {
-    intercept(ApplicationCallPipeline.Call) {
+    // Use Plugins phase which runs after authentication
+    intercept(ApplicationCallPipeline.Plugins) {
         val principal = call.principal<JWTPrincipal>()
         val isDemo = principal?.payload?.getClaim("isDemo")?.asBoolean() ?: false
 
@@ -37,5 +38,31 @@ fun Application.configureDemoModeRestrictions() {
                 finish()
             }
         }
+    }
+}
+
+/**
+ * Extension function to check if the current user is a demo user.
+ * Useful for bypassing permission checks or other demo-specific logic.
+ */
+fun ApplicationCall.isDemoUser(): Boolean {
+    val principal = principal<JWTPrincipal>() ?: return false
+    return try {
+        principal.payload.getClaim("isDemo")?.asBoolean() ?: false
+    } catch (e: Exception) {
+        false
+    }
+}
+
+/**
+ * Extension function to get demo epoch milliseconds from JWT.
+ * Returns null if not a demo user or if demoEpochMs is not set.
+ */
+fun ApplicationCall.getDemoEpochMs(): Long? {
+    val principal = principal<JWTPrincipal>() ?: return null
+    return try {
+        principal.payload.getClaim("demoEpochMs")?.asLong()
+    } catch (e: Exception) {
+        null
     }
 }

@@ -4,6 +4,8 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.LogQueryRequest
 import com.moneat.models.LogTailFilters
+import com.moneat.plugins.isDemoUser
+import com.moneat.plugins.getDemoEpochMs
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.DashboardService
 import com.moneat.services.EventService
@@ -115,16 +117,8 @@ fun Route.logRoutes() {
             get("/projects/{projectId}/logs") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val isDemo = try {
-                    principal.payload.getClaim("isDemo")?.asBoolean() ?: false
-                } catch (e: Exception) {
-                    false
-                }
-                val demoEpochMs = try {
-                    principal.payload.getClaim("demoEpochMs")?.asLong()
-                } catch (e: Exception) {
-                    null
-                }
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
