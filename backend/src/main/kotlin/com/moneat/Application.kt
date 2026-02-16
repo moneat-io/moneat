@@ -20,9 +20,20 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.EnvironmentValidator
 import com.moneat.config.configureClickHouse
 import com.moneat.config.configureRedis
-import com.moneat.plugins.*
-import io.ktor.server.application.*
-import io.ktor.server.netty.*
+import com.moneat.plugins.configureBackgroundJobs
+import com.moneat.plugins.configureDatabases
+import com.moneat.plugins.configureDemoModeRestrictions
+import com.moneat.plugins.configureHTTP
+import com.moneat.plugins.configureMonitoring
+import com.moneat.plugins.configureRateLimiting
+import com.moneat.plugins.configureRouting
+import com.moneat.plugins.configureSecurity
+import com.moneat.plugins.configureSerialization
+import io.ktor.server.application.Application
+import io.ktor.server.application.application
+import io.ktor.server.application.environment
+import io.ktor.server.application.log
+import io.ktor.server.netty.EngineMain
 
 fun main(args: Array<String>) {
     // Load .env file into system properties before starting the server

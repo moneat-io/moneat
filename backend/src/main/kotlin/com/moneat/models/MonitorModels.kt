@@ -18,7 +18,7 @@ package com.moneat.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.util.*
+import java.util.UUID
 
 // Agent-facing models
 @Serializable

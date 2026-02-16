@@ -19,19 +19,26 @@ package com.moneat.routes
 import com.moneat.models.Organizations
 import com.moneat.models.Memberships
 import com.moneat.services.AccountDeletionService
-import io.ktor.http.*
+import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
-import io.ktor.server.request.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.server.application.application
+import io.ktor.server.application.call
+import io.ktor.server.auth.principal
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.request.receive
+import io.ktor.server.request.request
+import io.ktor.server.response.respond
+import io.ktor.server.response.response
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}

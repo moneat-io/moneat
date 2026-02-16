@@ -20,7 +20,10 @@ import com.moneat.config.configureClickHouseMigrations
 import com.moneat.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import io.ktor.server.application.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.application
+import io.ktor.server.application.environment
+import io.ktor.server.application.log
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database

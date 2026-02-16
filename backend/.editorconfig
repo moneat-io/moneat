@@ -8,14 +8,6 @@ insert_final_newline = true
 
 # Disable rules with widespread pre-existing violations.
 # Enable incrementally as the codebase is cleaned up.
-ktlint_standard_no-trailing-spaces = disabled
-ktlint_standard_indent = disabled
-ktlint_standard_multiline-expression-wrapping = disabled
-ktlint_standard_function-signature = disabled
-ktlint_standard_chain-method-continuation = disabled
-ktlint_standard_trailing-comma-on-call-site = disabled
-ktlint_standard_blank-line-before-declaration = disabled
-ktlint_standard_trailing-comma-on-declaration-site = disabled
 ktlint_standard_no-wildcard-imports = disabled
 ktlint_standard_string-template-indent = disabled
 ktlint_standard_argument-list-wrapping = disabled

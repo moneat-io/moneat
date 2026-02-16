@@ -22,7 +22,7 @@ import com.moneat.models.*
 import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.*
-import io.ktor.http.*
+import io.ktor.http.HttpStatusCode
 import io.sentry.ISpan
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope

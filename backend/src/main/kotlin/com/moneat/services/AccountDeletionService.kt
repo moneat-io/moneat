@@ -18,7 +18,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
-import io.ktor.http.*
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KotlinLogging

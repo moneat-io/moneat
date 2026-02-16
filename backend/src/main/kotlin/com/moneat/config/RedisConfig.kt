@@ -16,7 +16,10 @@
 
 package com.moneat.config
 
-import io.ktor.server.application.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.application
+import io.ktor.server.application.environment
+import io.ktor.server.application.log
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.api.StatefulRedisConnection

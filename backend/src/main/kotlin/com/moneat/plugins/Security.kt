@@ -20,9 +20,15 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.services.AuthTokenService
 import com.moneat.utils.SentryUtils
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.application
+import io.ktor.server.application.call
+import io.ktor.server.application.environment
+import io.ktor.server.application.install
+import io.ktor.server.auth.authenticate
+import io.ktor.server.auth.authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
 
 data class AuthTokenPrincipal(
     val userId: Int,

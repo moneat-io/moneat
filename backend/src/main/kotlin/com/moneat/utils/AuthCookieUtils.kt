@@ -17,7 +17,9 @@
 package com.moneat.utils
 
 import io.ktor.http.*
-import io.ktor.server.application.*
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.application
+import io.ktor.server.application.call
 import io.ktor.server.plugins.*
 
 object AuthCookieUtils {

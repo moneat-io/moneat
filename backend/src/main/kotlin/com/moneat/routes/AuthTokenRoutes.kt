@@ -19,16 +19,27 @@ package com.moneat.routes
 import com.moneat.models.CreateAuthTokenRequest
 import com.moneat.models.UpdateAuthTokenRequest
 import com.moneat.services.AuthTokenService
-import io.ktor.http.*
+import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
-import io.ktor.server.request.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.server.application.application
+import io.ktor.server.application.call
+import io.ktor.server.auth.authenticate
+import io.ktor.server.auth.principal
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.request.receive
+import io.ktor.server.request.request
+import io.ktor.server.response.respond
+import io.ktor.server.response.response
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.put
+import io.ktor.server.routing.route
+import io.ktor.server.routing.routing
 
 fun Route.authTokenRoutes() {
     val authTokenService = AuthTokenService()

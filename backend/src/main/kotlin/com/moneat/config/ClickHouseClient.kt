@@ -21,8 +21,12 @@ import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.server.application.*
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.Application
+import io.ktor.server.application.application
+import io.ktor.server.application.environment
+import io.ktor.server.application.log
 import io.sentry.ISpan
 import io.sentry.Sentry
 
