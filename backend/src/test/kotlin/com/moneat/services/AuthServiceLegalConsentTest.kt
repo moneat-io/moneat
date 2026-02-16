@@ -36,6 +36,7 @@ class AuthServiceLegalConsentTest {
         // Clean up any existing test data from previous tests
         transaction {
             OrgInvitations.deleteAll()
+            RefreshTokens.deleteAll()
             UserLegalAcceptances.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

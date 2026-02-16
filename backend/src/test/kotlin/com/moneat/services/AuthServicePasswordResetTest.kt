@@ -33,6 +33,7 @@ class AuthServicePasswordResetTest {
         
         // Clean up any existing test data from previous tests
         transaction {
+            RefreshTokens.deleteAll()
             UserLegalAcceptances.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()
