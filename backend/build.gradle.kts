@@ -298,6 +298,11 @@ tasks.test {
 
 tasks.check {
     dependsOn(integrationTest)
+    dependsOn("detekt")
+}
+
+tasks.build {
+    dependsOn("detekt")
 }
 
 tasks.withType<KotlinCompile>().configureEach {

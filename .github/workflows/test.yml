@@ -51,6 +51,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Run detekt (Kotlin linter)
+        working-directory: backend
+        run: ./gradlew detekt --no-daemon
+
       - name: Run backend unit tests
         working-directory: backend
         run: ./gradlew test --no-daemon
@@ -102,6 +106,10 @@ jobs:
       - name: Install dependencies
         working-directory: dashboard
         run: npm ci
+
+      - name: Run ESLint
+        working-directory: dashboard
+        run: npm run lint
 
       - name: Run frontend tests
         working-directory: dashboard
