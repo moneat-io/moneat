@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type OnCallSchedule, type OrganizationIntegration} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
@@ -70,7 +70,7 @@ function OnCallSchedules() {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [showEditor, setShowEditor] = useState(false)
-  const [editingSchedule, setEditingSchedule] = useState<any>(null)
+  const [editingSchedule, setEditingSchedule] = useState<OnCallSchedule | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const {data: schedules, isLoading} = useQuery({
@@ -91,11 +91,11 @@ function OnCallSchedules() {
   const {data: slackUsergroups} = useQuery({
     queryKey: ['slack-usergroups'],
     queryFn: () => api.getSlackUsergroups(),
-    enabled: integrations?.some((i: any) => i.integrationType === 'slack' && i.enabled) ?? false,
+    enabled: integrations?.some((i: OrganizationIntegration) => i.integrationType === 'slack' && i.enabled) ?? false,
   })
 
   const users = orgMembers?.members?.map(m => ({id: m.userId, name: m.name || m.email})) || []
-  const slackEnabled = integrations?.some((i: any) => i.integrationType === 'slack' && i.enabled) ?? false
+  const slackEnabled = integrations?.some((i: OrganizationIntegration) => i.integrationType === 'slack' && i.enabled) ?? false
 
   const createMutation = useMutation({
     mutationFn: (data: OnCallScheduleData) => api.createOnCallSchedule({
@@ -110,7 +110,7 @@ function OnCallSchedules() {
       setShowEditor(false)
       toast({title: 'Schedule Created', description: 'On-call schedule has been created.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const updateMutation = useMutation({
@@ -127,7 +127,7 @@ function OnCallSchedules() {
       setEditingSchedule(null)
       toast({title: 'Schedule Updated', description: 'On-call schedule has been updated.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const deleteMutation = useMutation({
@@ -136,7 +136,7 @@ function OnCallSchedules() {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
       toast({title: 'Schedule Deleted', description: 'On-call schedule has been removed.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const setUsergroupMutation = useMutation({
@@ -146,7 +146,7 @@ function OnCallSchedules() {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
       toast({title: 'Slack User Group Set', description: 'Schedule will sync to this Slack user group.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const removeUsergroupMutation = useMutation({
@@ -155,7 +155,7 @@ function OnCallSchedules() {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
       toast({title: 'Slack User Group Removed', description: 'Schedule will no longer sync.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const handleSave = (data: OnCallScheduleData) => {
@@ -166,7 +166,7 @@ function OnCallSchedules() {
     }
   }
 
-  const handleEdit = (schedule: any) => {
+  const handleEdit = (schedule: OnCallSchedule) => {
     setEditingSchedule(schedule)
     setShowEditor(true)
   }
@@ -446,8 +446,8 @@ function OnCallSchedules() {
               handoffTime: editingSchedule.handoffTime,
               timezone: editingSchedule.timezone,
               participantIds: editingSchedule.participants
-                .sort((a: any, b: any) => a.position - b.position)
-                .map((p: any) => p.userId),
+                .sort((a: {position: number}, b: {position: number}) => a.position - b.position)
+                .map((p: {userId: number}) => p.userId),
             } : undefined}
             users={users}
             onSave={handleSave}

@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type IncidentTimeline} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
@@ -35,6 +35,29 @@ import {useToast} from '@/hooks/use-toast'
 import {AlertTriangle, CheckCircle2, Clock, ArrowLeft, Zap, User, Calendar, CheckCircle, Bell, UserPlus, MessageSquare, Eye, Send, Link as LinkIcon} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
+
+interface DeclaredIncidentDetail {
+  id: number
+  title: string
+  description?: string
+  severity: string
+  status: string
+  declaredAt: string
+  declaredByName: string
+  resolvedAt?: string
+  resolvedBy?: number
+  resolvedByName?: string
+  alerts?: Array<{id: number; title: string; status: string}>
+  priorityLevel: string
+  [key: string]: unknown
+}
+
+interface DeclaredIncidentTimelineEvent extends Omit<IncidentTimeline, 'eventType'> {
+  eventType: string
+  source?: string
+  alertTitle?: string
+  actorName?: string
+}
 
 export const Route = createFileRoute('/on-call/declared-incidents/$incidentId')({
   component: DeclaredIncidentDetail,
@@ -80,7 +103,7 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
-function getTimelineDescription(event: any): string | null {
+function getTimelineDescription(event: DeclaredIncidentTimelineEvent): string | null {
   if (event.eventType === 'NOTIFICATION_SENT' && event.details) {
     const toName = event.details.toUserName || event.actorUserName
     const channel = event.details.channel
@@ -98,7 +121,7 @@ function getTimelineDescription(event: any): string | null {
     return 'user marked as unavailable'
   }
   if (event.eventType === 'ALERT_LINKED' && event.details?.alertTitle) {
-    return event.details.alertTitle
+    return event.details.alertTitle as string
   }
   return null
 }
@@ -114,12 +137,15 @@ function DeclaredIncidentDetail() {
 
   const {data: incident, isLoading} = useQuery({
     queryKey: ['declared-incident', incidentId],
-    queryFn: () => api.getOnCallIncident(Number(incidentId)),
+    queryFn: async () => {
+      const result = await api.getOnCallIncident(Number(incidentId))
+      return result as unknown as DeclaredIncidentDetail
+    },
   })
   
   const {data: timeline} = useQuery({
     queryKey: ['declared-incident-timeline', incidentId],
-    queryFn: () => api.getOnCallIncidentTimeline(Number(incidentId)),
+    queryFn: () => api.getOnCallIncidentTimeline(Number(incidentId)) as Promise<DeclaredIncidentTimelineEvent[]>,
   })
 
   const resolveMutation = useMutation({
@@ -134,7 +160,7 @@ function DeclaredIncidentDetail() {
         description: 'This incident has been marked as resolved.',
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
@@ -149,7 +175,7 @@ function DeclaredIncidentDetail() {
         description: 'Your note has been added to the incident timeline.',
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
@@ -284,7 +310,7 @@ function DeclaredIncidentDetail() {
                 <CardDescription>{incident.alerts.length} alert{incident.alerts.length !== 1 ? 's' : ''} linked to this incident</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {incident.alerts.map((alert: any) => (
+                {incident.alerts.map((alert: {id: number; title: string; status: string}) => (
                   <div key={alert.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
                     <div className="flex-1">
                       <p className="text-sm font-medium">{alert.title}</p>
@@ -314,7 +340,7 @@ function DeclaredIncidentDetail() {
               </CardHeader>
               <CardContent>
                 <div className="relative">
-                  {timeline.map((event: any, idx: number) => {
+                  {timeline.map((event: DeclaredIncidentTimelineEvent, idx: number) => {
                     const config = EVENT_CONFIG[event.eventType] || {
                       icon: Clock,
                       color: 'text-muted-foreground',
@@ -357,8 +383,8 @@ function DeclaredIncidentDetail() {
                           {description && (
                             <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                           )}
-                          {event.details && event.eventType === 'NOTE_ADDED' && event.details.note && (
-                            <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{event.details.note}&quot;</p>
+                          {event.details && event.eventType === 'NOTE_ADDED' && !!event.details.note && (
+                            <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{String(event.details.note)}&quot;</p>
                           )}
                         </div>
                       </div>

@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -52,6 +52,34 @@ import {
     TerminalSquare,
     Zap,
 } from 'lucide-react'
+
+interface StackFrame {
+  function?: string
+  filename?: string
+  module?: string
+  lineno?: number
+  colno?: number
+  context_line?: string
+  pre_context?: string[]
+  post_context?: string[]
+  vars?: Record<string, unknown>
+  in_app?: boolean
+}
+
+interface ExceptionValue {
+  type?: string
+  value?: string
+  stacktrace?: { frames?: StackFrame[] }
+}
+
+interface Breadcrumb {
+  timestamp?: number
+  category?: string
+  type?: string
+  message?: string
+  data?: Record<string, unknown>
+  level?: string
+}
 
 // Helper function to get level color
 function getLevelColor(level: string): string {
@@ -597,12 +625,12 @@ function IssueDetailPage() {
   )
 }
 
-function formatAsStackTrace(exception: any): JSX.Element[] {
+function formatAsStackTrace(exception: unknown): JSX.Element[] {
   try {
     const parsed = typeof exception === 'string' ? JSON.parse(exception) : exception
     const exceptions = parsed.values || [parsed]
     
-    return exceptions.map((value: any, exIdx: number) => {
+    return exceptions.map((value: ExceptionValue, exIdx: number) => {
       const frames = value.stacktrace?.frames ? [...value.stacktrace.frames].reverse() : []
       
       return (
@@ -610,7 +638,7 @@ function formatAsStackTrace(exception: any): JSX.Element[] {
           <div className="text-red-600 dark:text-red-400 font-semibold mb-1 break-words [overflow-wrap:anywhere]">
             {value.type}: {value.value}
           </div>
-          {frames.map((frame: any, idx: number) => {
+          {frames.map((frame: StackFrame, idx: number) => {
             const method = frame.function || '<unknown>'
             const file = frame.filename || frame.module || '<unknown>'
             const line = frame.lineno ? `:${frame.lineno}` : ''
@@ -639,16 +667,16 @@ function formatAsStackTrace(exception: any): JSX.Element[] {
   }
 }
 
-function formatAsStackTraceText(exception: any): string {
+function formatAsStackTraceText(exception: unknown): string {
   try {
     const parsed = typeof exception === 'string' ? JSON.parse(exception) : exception
     const exceptions = parsed.values || [parsed]
     
-    return exceptions.map((value: any, exIdx: number) => {
+    return exceptions.map((value: ExceptionValue, exIdx: number) => {
       const frames = value.stacktrace?.frames ? [...value.stacktrace.frames].reverse() : []
       let text = `${value.type}: ${value.value}\n`
       
-      frames.forEach((frame: any) => {
+      frames.forEach((frame: StackFrame) => {
         const method = frame.function || '<unknown>'
         const file = frame.filename || frame.module || '<unknown>'
         const line = frame.lineno ? `:${frame.lineno}` : ''
@@ -709,14 +737,14 @@ function StackTraceViewer({ exception }: { exception: string }) {
         
         <TabsContent value="formatted" className="mt-4">
           <div className="space-y-6">
-            {exceptions.map((value: any, idx: number) => (
+            {exceptions.map((value: ExceptionValue, idx: number) => (
               <div key={idx}>
                 <div className="font-semibold text-red-600 dark:text-red-400 mb-4 text-lg break-words [overflow-wrap:anywhere]">
                   {value.type}: {value.value}
                 </div>
                 {value.stacktrace?.frames && value.stacktrace.frames.length > 0 ? (
                   <div className="space-y-1">
-                    {value.stacktrace.frames.map((frame: any, frameIdx: number) => (
+                    {value.stacktrace.frames.map((frame: StackFrame, frameIdx: number) => (
                       <StackFrame key={frameIdx} frame={frame} />
                     ))}
                   </div>
@@ -748,7 +776,7 @@ function StackTraceViewer({ exception }: { exception: string }) {
   }
 }
 
-function StackFrame({ frame }: { frame: any }) {
+function StackFrame({ frame }: { frame: StackFrame }) {
   const hasContext = frame.context_line
   const hasVars = frame.vars && Object.keys(frame.vars).length > 0
   
@@ -791,7 +819,7 @@ function StackFrame({ frame }: { frame: any }) {
             <div className="pt-2 border-t border-muted-foreground/20">
               <div className="text-muted-foreground text-[10px] uppercase mb-1">Variables</div>
               <div className="space-y-0.5">
-                {Object.entries(frame.vars).map(([key, val]) => (
+                {Object.entries(frame.vars!).map(([key, val]) => (
                   <div key={key} className="flex gap-2 min-w-0">
                     <span className="text-primary flex-shrink-0">{key}:</span>
                     <span className="text-muted-foreground min-w-0 break-all">{String(val)}</span>
@@ -883,7 +911,7 @@ function getBreadcrumbCategoryColor(category: string): { border: string; icon: s
 }
 
 // Helper to get icon for breadcrumb category
-function getBreadcrumbIcon(category: string, data?: any) {
+function getBreadcrumbIcon(category: string, data?: Record<string, unknown>) {
   if (!category) return <Circle className="h-4 w-4" />
   
   const cat = category.toLowerCase()
@@ -905,7 +933,7 @@ function getBreadcrumbIcon(category: string, data?: any) {
   }
   if (cat.includes('device')) {
     // Check if it's battery-related
-    if (data && (data.action?.includes('BATTERY') || data.level !== undefined)) {
+    if (data && ((data.action as string)?.includes('BATTERY') || data.level !== undefined)) {
       return <Battery className="h-4 w-4" />
     }
     return <Smartphone className="h-4 w-4" />
@@ -918,7 +946,7 @@ function getBreadcrumbIcon(category: string, data?: any) {
 }
 
 // Helper to format breadcrumb data nicely
-function formatBreadcrumbData(crumb: any): string {
+function formatBreadcrumbData(crumb: Breadcrumb): string {
   if (crumb.message) {
     return crumb.message
   }
@@ -927,7 +955,7 @@ function formatBreadcrumbData(crumb: any): string {
     return ''
   }
   
-  const data = crumb.data
+  const data = crumb.data as Record<string, string | number | boolean | undefined>
   const category = (crumb.category || crumb.type || '').toLowerCase()
   
   if (!category) {
@@ -946,18 +974,18 @@ function formatBreadcrumbData(crumb: any): string {
   
   // UI Click
   if (category.includes('ui.click')) {
-    const viewClass = data['view.class']?.split('.').pop() || ''
+    const viewClass = (data['view.class'] as string)?.split('.').pop() || ''
     const viewId = data['view.id'] || ''
     return `Clicked ${viewClass}${viewId ? ` (${viewId})` : ''}`
   }
   
   // Device events
   if (category.includes('device.event')) {
-    if (data.action?.includes('BATTERY')) {
+    if ((data.action as string)?.includes('BATTERY')) {
       const charging = data.charging ? '⚡' : ''
       return `Battery ${data.level}%${charging ? ' (charging)' : ''}`
     }
-    return data.action || 'Device event'
+    return (data.action as string) || 'Device event'
   }
   
   // Navigation
@@ -966,10 +994,10 @@ function formatBreadcrumbData(crumb: any): string {
   }
   
   // Default: show key data points
-  const parts = []
-  if (data.url) parts.push(data.url)
+  const parts: string[] = []
+  if (data.url) parts.push(String(data.url))
   if (data.status_code) parts.push(`${data.status_code}`)
-  if (data.method) parts.push(data.method)
+  if (data.method) parts.push(String(data.method))
   
   return parts.length > 0 ? parts.join(' ') : JSON.stringify(data)
 }
@@ -981,7 +1009,7 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
 
     return (
       <div className="relative">
-        {crumbs.map((crumb: any, idx: number) => {
+        {crumbs.map((crumb: Breadcrumb, idx: number) => {
           // Handle timestamps - they could be in seconds or milliseconds
           let timestamp = crumb.timestamp
           if (timestamp) {

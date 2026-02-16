@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type IncidentTimeline} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
@@ -78,7 +78,7 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
-function getTimelineDescription(event: any): string | null {
+function getTimelineDescription(event: IncidentTimeline): string | null {
   if (event.eventType === 'NOTIFICATION_SENT' && event.details) {
     const toName = event.details.toUserName || event.actorUserName
     const channel = event.details.channel
@@ -132,7 +132,7 @@ function IncidentDetailPage() {
       setDeclareOpen(false)
       toast({title: 'Incident Declared', description: 'New incident created successfully.'})
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     }
   })
@@ -143,11 +143,12 @@ function IncidentDetailPage() {
   })
 
   // Mark as viewed (deduplicated on backend)
+  const incidentLoaded = !!incident
   useEffect(() => {
-    if (incident) {
+    if (incidentLoaded) {
       api.viewIncident(Number(incidentId)).catch(() => {})
     }
-  }, [incident?.id])
+  }, [incidentLoaded, incidentId])
 
   const acknowledgeMutation = useMutation({
     mutationFn: () => api.acknowledgeIncident(Number(incidentId)),
@@ -160,7 +161,7 @@ function IncidentDetailPage() {
         description: 'You have been assigned to this incident.',
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
@@ -176,7 +177,7 @@ function IncidentDetailPage() {
         description: 'This incident has been marked as resolved.',
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
@@ -192,7 +193,7 @@ function IncidentDetailPage() {
         description: 'You have been marked as unavailable. The incident will be escalated.',
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
@@ -205,7 +206,7 @@ function IncidentDetailPage() {
       setNote('')
       toast({title: 'Note Added', description: 'Your note has been added to the incident timeline.'})
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
@@ -404,7 +405,7 @@ function IncidentDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="relative">
-                {incidentTimeline.map((event: any, idx: number) => {
+                {incidentTimeline.map((event: IncidentTimeline, idx: number) => {
                   const config = EVENT_CONFIG[event.eventType] || {
                     icon: Clock,
                     color: 'text-muted-foreground',
@@ -442,8 +443,8 @@ function IncidentDetailPage() {
                         {description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                         )}
-                        {event.details && event.eventType === 'NOTE_ADDED' && event.details.note && (
-                          <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{event.details.note}&quot;</p>
+                        {event.details && event.eventType === 'NOTE_ADDED' && !!event.details.note && (
+                          <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{String(event.details.note)}&quot;</p>
                         )}
                       </div>
                     </div>

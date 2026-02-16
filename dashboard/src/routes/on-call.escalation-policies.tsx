@@ -1,4 +1,4 @@
-// Moneat - Mobile-First Error Monitoring Platform
+// Moneat - observability platform
 // Copyright (C) 2026 Moneat
 //
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type EscalationPolicy, type EscalationStep, type EscalationTarget} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
@@ -50,7 +50,7 @@ function EscalationPolicies() {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [showEditor, setShowEditor] = useState(false)
-  const [editingPolicy, setEditingPolicy] = useState<any>(null)
+  const [editingPolicy, setEditingPolicy] = useState<EscalationPolicy | null>(null)
 
   const {data: policies, isLoading} = useQuery({
     queryKey: ['escalation-policies'],
@@ -89,7 +89,7 @@ function EscalationPolicies() {
       setShowEditor(false)
       toast({title: 'Policy Created', description: 'Escalation policy has been created.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const updateMutation = useMutation({
@@ -112,7 +112,7 @@ function EscalationPolicies() {
       setEditingPolicy(null)
       toast({title: 'Policy Updated', description: 'Escalation policy has been updated.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const deleteMutation = useMutation({
@@ -121,7 +121,7 @@ function EscalationPolicies() {
       queryClient.invalidateQueries({queryKey: ['escalation-policies']})
       toast({title: 'Policy Deleted', description: 'Escalation policy has been removed.'})
     },
-    onError: (e: any) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
+    onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
 
   const handleSave = (data: EscalationPolicyData) => {
@@ -132,7 +132,7 @@ function EscalationPolicies() {
     }
   }
 
-  const handleEdit = (policy: any) => {
+  const handleEdit = (policy: EscalationPolicy) => {
     setEditingPolicy(policy)
     setShowEditor(true)
   }
@@ -314,11 +314,11 @@ function EscalationPolicies() {
               name: editingPolicy.name,
               description: editingPolicy.description || '',
               repeatCount: editingPolicy.repeatCount,
-              steps: editingPolicy.steps.map((s: any) => ({
+              steps: editingPolicy.steps.map((s: EscalationStep) => ({
                 id: `step_${s.id}`,
                 stepOrder: s.stepOrder,
                 timeoutMinutes: s.timeoutMinutes,
-                targets: s.targets.map((t: any) => ({
+                targets: s.targets.map((t: EscalationTarget) => ({
                   id: `${t.targetType}_${t.targetId}_${t.id}`,
                   targetType: t.targetType,
                   targetId: t.targetId,

@@ -16,7 +16,7 @@
 
 import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type StatusPageDetail, type MonitorAssignment, type CreateIncidentRequest} from '@/lib/api'
+import {api, type StatusPageDetail, type MonitorAssignment, type CreateIncidentRequest, type UpdateStatusPageRequest, type StatusPageIncident, type IncidentUpdate} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
@@ -29,6 +29,7 @@ import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, Di
 import {Badge} from '@/components/ui/badge'
 import {Separator} from '@/components/ui/separator'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
+import type {LucideIcon} from 'lucide-react'
 import {
   Globe,
   ArrowLeft,
@@ -89,7 +90,7 @@ function StatusPageDetailPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) => api.updateStatusPage(pageId, data),
+    mutationFn: (data: UpdateStatusPageRequest) => api.updateStatusPage(pageId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['status-page', pageId]})
       toast({title: 'Status page updated', description: 'Your changes have been saved.'})
@@ -377,7 +378,7 @@ function StatusPageDetailPage() {
 // OVERVIEW TAB
 // ==========================================
 
-function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage: StatusPageDetail; onUpdate: (data: any) => void; isSaving?: boolean; showPreview: boolean}) {
+function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage: StatusPageDetail; onUpdate: (data: UpdateStatusPageRequest) => void; isSaving?: boolean; showPreview: boolean}) {
   const [formData, setFormData] = useState({
     name: statusPage.name,
     description: statusPage.description || '',
@@ -1126,7 +1127,7 @@ function IncidentsTab({pageId}: {pageId: string}) {
   )
 }
 
-function IncidentCard({incident}: {incident: any}) {
+function IncidentCard({incident}: {incident: StatusPageIncident}) {
   const statusConfig = getIncidentStatusConfig(incident.status)
   const impactConfig = getIncidentImpactConfig(incident.impact)
 
@@ -1164,7 +1165,7 @@ function IncidentCard({incident}: {incident: any}) {
         {/* Updates Timeline */}
         {incident.updates && incident.updates.length > 0 && (
           <div className="space-y-3 mt-4 pl-4 border-l-2 border-muted/50 ml-4">
-            {incident.updates.map((update: any) => (
+            {incident.updates.map((update: IncidentUpdate) => (
               <div key={update.id} className="relative">
                 <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-muted border-2 border-background"></div>
                 <p className="text-sm text-foreground/90">{update.message}</p>
@@ -1406,7 +1407,7 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
 // ==========================================
 
 function getIncidentStatusConfig(status: string) {
-  const configs: Record<string, any> = {
+  const configs: Record<string, {borderColor: string; iconBg: string; iconColor: string; icon: LucideIcon; badgeClass: string}> = {
     investigating: {
       borderColor: '#ef4444',
       iconBg: 'bg-red-500/10',
@@ -1461,7 +1462,7 @@ function getIncidentStatusConfig(status: string) {
 }
 
 function getIncidentImpactConfig(impact: string) {
-  const configs: Record<string, any> = {
+  const configs: Record<string, {badgeClass: string; icon: LucideIcon | null}> = {
     none: {
       badgeClass: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
       icon: null,
