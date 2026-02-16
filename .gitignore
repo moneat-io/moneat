@@ -97,4 +97,13 @@ active-slot
 # SSL credentials (server-only)
 deploy/certbot/
 
-mobile/sentry.properties
+# Backup and temp files
+*.bak
+*.backup
+*.tmp
+*.orig
+*.swp
+*~
+
+# Kotlin build errors
+.kotlin/

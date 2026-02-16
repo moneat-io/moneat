@@ -1,43 +1,57 @@
 # Moneat - Mobile-First Error Monitoring Platform
 
-A Sentry-compatible error monitoring platform built with Kotlin/Ktor, focused on mobile monitoring with native on-call escalation and cost-effective VPS deployment.
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
+A Sentry-compatible, open-source error monitoring platform built with Kotlin/Ktor. Self-hostable with native on-call escalation and cost-effective VPS deployment.
 
 ## Features
 
 ### Error Monitoring
-- ✅ Sentry-compatible envelope ingestion API
-- ✅ Real-time error tracking and grouping
-- ✅ Issue management with fingerprinting
-- ✅ PostgreSQL for operational data
-- ✅ ClickHouse for high-performance event analytics
-- ✅ JWT-based authentication
-- ✅ Multi-project support
-- ✅ Self-monitoring with Sentry integration (optional)
-- ✅ React dashboard
+- Sentry-compatible envelope ingestion API
+- Real-time error tracking and grouping with fingerprinting
+- Issue management with resolve/unresolve workflows
+- ClickHouse-powered high-performance event analytics
+- Session replays, performance transactions, and user feedback
+- Source map upload and release tracking
 
 ### On-Call & Incident Management
-- ✅ Native escalation engine (PagerDuty/Opsgenie-style)
-- ✅ On-call schedules with rotation support
-- ✅ Priority-based escalation (P0-P5)
-- ✅ Business hours configuration
-- ✅ Push notifications via Expo mobile app
-- ✅ Incident timeline and audit trail
-- ✅ Visual escalation policy editor
-- ✅ Slack DM notifications with interactive buttons
+- Native escalation engine (PagerDuty/Opsgenie-style)
+- On-call schedules with rotation support
+- Priority-based escalation (P0-P5) with business hours
+- Push notifications and Slack DM integration
+- Incident timeline and audit trail
 
-### Mobile App (Expo React Native)
-- ✅ iOS and Android support
-- ✅ Push notifications for on-call alerts
-- ✅ Incident management (view, acknowledge, resolve)
-- ✅ On-call schedule visibility
-- ✅ JWT authentication with secure storage
+### Dashboard
+- React dashboard with TanStack Router
+- Project management, issue detail views, analytics
+- Visual escalation policy and schedule editors
+- Infrastructure monitoring with alerts
 
-## Quick Start
+## Self-Hosting
+
+Moneat is designed for self-hosting. The recommended deployment uses Docker Compose on a VPS:
+
+```bash
+# Clone the repository
+git clone https://github.com/AElbadworthy/Moneat.git
+cd Moneat
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your settings (see ESSENTIAL_ENV_VARS.md)
+
+# Start all services
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full production setup including SSL, Nginx, and blue/green deploys.
+
+## Quick Start (Development)
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- Java 17+ (for local development)
+- Java 17+ (for backend development)
 - Node.js 18+ (for dashboard development)
 
 ### Setup
@@ -48,12 +62,9 @@ A Sentry-compatible error monitoring platform built with Kotlin/Ktor, focused on
 docker-compose up -d
 ```
 
-This starts:
-- PostgreSQL (port 5499)
-- ClickHouse (ports 8123, 9000)
-- Redis (port 6379)
+This starts PostgreSQL (port 5499), ClickHouse (ports 8123, 9000), and Redis (port 6379).
 
-2. **Build and run the backend:**
+2. **Run the backend:**
 
 ```bash
 cd backend
@@ -62,59 +73,25 @@ cd backend
 
 The API will be available at `http://localhost:8080`
 
+3. **Run the dashboard:**
+
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+The dashboard will be available at `http://localhost:5173`
+
 ### Testing the Ingestion API
 
-1. **Sign up a user:**
-
 ```bash
+# 1. Sign up a user
 curl -X POST http://localhost:8080/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "test@example.com",
-    "password": "password123",
-    "name": "Test User",
-    "acceptTerms": true,
-    "acceptPrivacy": true,
-    "termsVersion": "2026-02-08",
-    "privacyVersion": "2026-02-08"
-  }'
-```
+  -d '{"email": "test@example.com", "password": "password123", "name": "Test User", "acceptTerms": true, "acceptPrivacy": true, "termsVersion": "2026-02-08", "privacyVersion": "2026-02-08"}'
 
-2. **Create a project and get DSN** (manual SQL for now):
-
-```bash
-docker exec -it moneat-postgres psql -U moneat -d moneat
-```
-
-```sql
--- Insert a project
-INSERT INTO projects (organization_id, name, slug, platform) 
-VALUES (1, 'My App', 'my-app', 'android');
-
--- Insert a project key
-INSERT INTO project_keys (project_id, public_key, secret_key, name, is_active) 
-VALUES (1, 'abc123', 'secret123', 'Default Key', true);
-```
-
-3. **Send a test error:**
-
-```bash
-curl -X POST http://localhost:8080/api/1/store/ \
-  -H "X-Sentry-Auth: Sentry sentry_key=abc123, sentry_version=7" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_id": "fc6d8c0c4332497da0dd03f967f87c82",
-    "timestamp": '$(date +%s)',
-    "level": "error",
-    "platform": "javascript",
-    "message": "This is a test error",
-    "exception": {
-      "values": [{
-        "type": "Error",
-        "value": "Test error message"
-      }]
-    }
-  }'
+# 2. Create a project via the dashboard, then send a test error using the DSN
 ```
 
 ## Architecture
@@ -122,38 +99,23 @@ curl -X POST http://localhost:8080/api/1/store/ \
 ```
 moneat/
 ├── backend/                 # Kotlin/Ktor backend
-├── dashboard/               # React frontend
-├── mobile/                  # Expo React Native mobile app
+├── dashboard/               # React frontend (TanStack Router + shadcn/ui)
 ├── emails/                  # Maizzle email templates
+├── e2e/                     # End-to-end test apps
+├── deploy/                  # Deployment scripts and configs
 └── docker-compose.yml       # Local development infrastructure
 ```
 
 ### Tech Stack
 
-**Backend:**
-- Kotlin 1.9.22
-- Ktor 2.3.7 (Web framework)
-- Exposed (SQL DSL)
-- PostgreSQL (Operational data)
-- ClickHouse (Event analytics)
-
-**Frontend:**
-- React with TanStack Router
-- shadcn/ui components
-- TanStack Query for data fetching
-
-**Mobile:**
-- React Native with Expo
-- Push notifications via Expo Push API
-- JWT authentication with secure storage
-- Redis (Caching, queues)
-
-**Frontend (planned):**
-- React 18
-- Vite
-- TanStack Query/Router
-- Tailwind CSS
-- shadcn/ui
+| Component | Technology |
+|-----------|-----------|
+| Backend | Kotlin 1.9.22, Ktor 2.3.7, Exposed ORM |
+| Operational DB | PostgreSQL |
+| Analytics DB | ClickHouse |
+| Cache/Queue | Redis |
+| Frontend | React, TanStack Router/Query, shadcn/ui |
+| Email | Maizzle templates |
 
 ## API Endpoints
 
@@ -164,192 +126,51 @@ moneat/
 ### Ingestion (Sentry-compatible)
 - `POST /api/{projectId}/envelope/` - Envelope format (primary)
 - `POST /api/{projectId}/store/` - Legacy JSON format
-- `GET /api/{projectId}/security/` - CORS preflight
 
 ### Dashboard API (requires JWT auth)
 - `GET /v1/projects` - List projects
-- `GET /v1/projects/{id}` - Get project details
 - `GET /v1/projects/{id}/issues` - List issues
 - `GET /v1/issues/{id}` - Get issue detail
 - `GET /v1/issues/{id}/events` - Get issue events
 
 ### On-Call API (requires JWT auth)
-- `GET /v1/escalation-policies` - List escalation policies
-- `POST /v1/escalation-policies` - Create policy
-- `GET /v1/on-call/schedules` - List on-call schedules
-- `POST /v1/on-call/schedules` - Create schedule
-- `GET /v1/on-call/schedules/{id}/current` - Get current on-call person
-- `GET /v1/incidents` - List incidents
-- `POST /v1/incidents/{id}/acknowledge` - Acknowledge incident
-- `POST /v1/incidents/{id}/resolve` - Resolve incident
-- `POST /v1/devices` - Register mobile device for push notifications
+- `GET /v1/escalation-policies` - List/manage escalation policies
+- `GET /v1/on-call/schedules` - List/manage on-call schedules
+- `GET /v1/incidents` - List/manage incidents
 
-See [docs/ONCALL.md](docs/ONCALL.md) for detailed on-call documentation.
+See [docs/](docs/README.md) for full documentation.
 
 ## Development
 
-### Demo Data & Screenshots
-
-To seed realistic demo data for taking screenshots and demos:
-
 ```bash
-# Start services first
-docker-compose up -d
-
-# Seed demo data
-./scripts/seed-demo-data.sh
-```
-
-This creates:
-- Demo user: `demo@moneat.dev` / `demo123`
-- Organization: "Acme Mobile Inc"
-- 3 projects (Android, iOS, React Native)
-- ~10 realistic issues with varied error types
-- Hundreds of events with realistic device info
-- Multiple releases
-
-#### Automated Screenshot Generation
-
-To generate screenshots for the homepage/marketing site:
-
-```bash
-# Make sure dashboard is running
-cd dashboard && npm run dev
-
-# In another terminal, run screenshot automation
-./scripts/take-screenshots.sh
-
-# Or run in debug mode to watch the browser
-./scripts/take-screenshots.sh --debug
-```
-
-The script uses Playwright to automatically log in, navigate pages, and capture screenshots to `dashboard/public/screenshots/`. See [scripts/README-screenshots.md](scripts/README-screenshots.md) for details.
-
-### E2E Testing
-
-Moneat includes end-to-end testing apps for Android and Kotlin Multiplatform:
-
-```bash
-# Set up E2E environment
-cd e2e
-./setup.sh
-
-# Start Moneat services (from project root)
-cd ..
-docker-compose up -d
-
-# Seed test data (creates projects, users, and DSNs)
-cd e2e
-./seed-data.sh
-
-# Configure DSNs in local.properties files (copy from seed output)
-
-# Run Android E2E app
-./run-android.sh
-
-# Or run KMP E2E app
-./run-kmp.sh
-```
-
-See [e2e/README.md](e2e/README.md) for detailed instructions.
-
-### Email Templates
-
-Email templates are built with [Maizzle](https://maizzle.com):
-
-```bash
-cd emails
-npm install
-npm run dev                  # Preview with live reload
-npm run build:production     # Build for production
-```
-
-Built templates are in `emails/build/templates/email/` with `{{ variable }}` placeholders.
-
-### Backend
-
-```bash
+# Backend
 cd backend
-./gradlew run  # Run server
-./gradlew test # Run tests
+./gradlew run    # Run server
+./gradlew test   # Run tests
+
+# Dashboard
+cd dashboard
+npm run dev      # Dev server
+npm run lint     # ESLint
+npm test         # Run tests
+
+# Infrastructure
+docker-compose up -d      # Start services
+docker-compose down -v    # Reset data
 ```
 
-### Infrastructure Management
-
-```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-
-# Reset data
-docker-compose down -v
-docker-compose up -d
-```
-
-## Configuration
-
-Environment variables:
-
-```bash
-# Database
-DATABASE_URL=jdbc:postgresql://localhost:5499/moneat
-DATABASE_USER=moneat
-DATABASE_PASSWORD=moneat_dev_password
-
-# ClickHouse
-CLICKHOUSE_URL=http://localhost:8123
-CLICKHOUSE_USER=moneat
-CLICKHOUSE_PASSWORD=moneat_dev_password
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# JWT
-JWT_SECRET=your-secret-key
-
-# Server
-PORT=8080
-
-# Sentry (optional - for self-monitoring)
-SENTRY_DSN=  # Use http://PUBLIC_KEY@localhost:8080/api/PROJECT_ID or see docs/SENTRY_SETUP.md
-SENTRY_ENVIRONMENT=production
-```
-
-For self-monitoring setup (using Moneat to monitor itself!), see [docs/SENTRY_SETUP.md](docs/SENTRY_SETUP.md).
-
-## Roadmap
-
-- [x] Phase 1: Foundation
-  - [x] Ktor backend with Sentry ingestion
-  - [x] PostgreSQL + ClickHouse setup
-  - [x] User authentication
-  - [x] Basic API endpoints
-  
-- [ ] Phase 2: Dashboard
-  - [ ] React dashboard
-  - [ ] Issues list and detail views
-  - [ ] Project management UI
-  
-- [ ] Phase 3: Production Features
-  - [ ] Source map upload and symbolication
-  - [ ] Email alerts
-  - [ ] Release tracking
-  - [ ] Stripe billing
-
-- [ ] Phase 4: KMP SDK
-  - [ ] Core commonMain module
-  - [ ] Android implementation
-  - [ ] iOS implementation
-
-## License
-
-MIT
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup.
 
 ## Contributing
 
-Contributions welcome! Please open an issue or PR.
+We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+All contributions require signing off with the Developer Certificate of Origin (DCO).
+
+## License
+
+Copyright (C) 2026 Moneat
+
+This program is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License v3.0](LICENSE) as published by the Free Software Foundation.
+
+This means you can self-host, modify, and redistribute Moneat, but any modifications to the source code must be made available under the same license when used to provide a network service.
