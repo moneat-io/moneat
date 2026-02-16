@@ -11,12 +11,9 @@ import kotlinx.datetime.plus
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
-import mu.KotlinLogging
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
-
-private val logger = KotlinLogging.logger {}
 
 class AuthTokenService {
     private val secureRandom = SecureRandom()
@@ -118,23 +115,17 @@ class AuthTokenService {
      * Validate a token and return user ID and scopes if valid.
      */
     fun validateToken(token: String): TokenValidationResult? {
-        logger.info { "validateToken called, token starts with sntrys_: ${token.startsWith(TOKEN_PREFIX)}, length: ${token.length}" }
         if (!token.startsWith(TOKEN_PREFIX)) {
-            logger.warn { "Token does not start with expected prefix. First 10 chars: ${token.take(10)}" }
             return null
         }
         
         val tokenHash = hashToken(token)
-        logger.info { "Token hash: $tokenHash" }
         
         return transaction {
             val tokenRow = AuthTokens.selectAll()
                 .where { AuthTokens.token_hash eq tokenHash }
                 .firstOrNull()
-            if (tokenRow == null) {
-                logger.warn { "No token found in DB for hash: $tokenHash" }
-                return@transaction null
-            }
+                ?: return@transaction null
             
             // Check if token is expired
             val expiresAt = tokenRow[AuthTokens.expires_at]
