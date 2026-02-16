@@ -97,6 +97,8 @@ services:
       DATABASE_URL: jdbc:postgresql://postgres:5432/moneat
       CLICKHOUSE_URL: http://clickhouse:8123
       REDIS_URL: redis://redis:6379
+    volumes:
+      - moneat_backend_storage:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,6 +120,8 @@ services:
       CLICKHOUSE_URL: http://clickhouse:8123
       REDIS_URL: redis://redis:6379
       # All other env vars (SENTRY_DSN, JWT_SECRET, etc.) come from .env
+    volumes:
+      - moneat_backend_storage:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,6 +151,7 @@ volumes:
     external: true
   moneat_redis_data:
     external: true
+  moneat_backend_storage:
   certbot_conf:
     external: true
   certbot_www:

@@ -22,6 +22,7 @@ FROM eclipse-temurin:17-jre-alpine
 RUN addgroup -S moneat && adduser -S moneat -G moneat
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
+RUN mkdir -p /app/storage/chunks /app/storage/artifact_bundles && chown -R moneat:moneat /app/storage
 USER moneat
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
