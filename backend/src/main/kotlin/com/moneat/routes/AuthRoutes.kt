@@ -313,6 +313,10 @@ fun Route.authRoutes() {
 
             try {
                 val token = authService.generateDemoToken()
+                
+                // Set httpOnly auth cookie (same as normal login)
+                AuthCookieUtils.setAuthCookie(call, token)
+                
                 call.respond(DemoLoginResponse(
                     token = token,
                     demoEpochMs = EnvConfig.Demo.epochMs

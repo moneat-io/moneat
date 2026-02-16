@@ -43,11 +43,23 @@ npm run build:production # Build for production
 Built templates are in `emails/build/templates/email/` with `{{ variable }}` placeholders for Kotlin template engine.
 
 ### Infrastructure
+
+**IMPORTANT:** 
+- **Database services** (PostgreSQL, ClickHouse, Redis) run on remote SSH host `ubuntu1` via Docker
+- **Backend** (Kotlin/Ktor) runs **locally** on port 8080 and connects to remote databases
+- **Frontend** (React/Vite) runs **locally** on port 5173
+
+DO NOT start Docker services locally.
+
+To access the remote database:
 ```bash
-docker-compose up -d     # Start PostgreSQL, ClickHouse, Redis
-docker-compose down      # Stop services
-docker-compose down -v   # Reset data volumes
+ssh ubuntu1 "docker exec -i moneat-postgres psql -U moneat -d moneat -c 'YOUR_QUERY'"
 ```
+
+Backend connects to remote services at:
+- PostgreSQL: `ubuntu1:5499`
+- ClickHouse: `ubuntu1:8123` (HTTP), `ubuntu1:9000` (native)
+- Redis: `ubuntu1:6379`
 
 ## Architecture Overview
 

@@ -1,3 +1,5 @@
+import {setDemoEpoch} from './demo'
+
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
 const AUTH_PAGE_PATHS = new Set(['/', '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
 
@@ -1781,15 +1783,21 @@ class ApiClient {
     return this.request(`${API_BASE}/admin/impersonate/${userId}`, { method: 'POST' })
   }
 
-  logout() {
+  async logout() {
     sessionStorage.removeItem('impersonate_token')
     sessionStorage.removeItem('authenticated')
     this.removeRefreshToken()
+    // Clear demo mode
+    setDemoEpoch(null)
     // Clear the httpOnly auth cookie via backend
-    fetch(`${API_BASE.replace('/v1', '')}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-    }).catch(() => {})
+    try {
+      await fetch(`${API_BASE.replace('/v1', '')}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } catch (e) {
+      // Ignore errors - cookie might already be cleared
+    }
   }
 
   isAuthenticated(): boolean {
@@ -1910,9 +1918,12 @@ class ApiClient {
   }
 
   async demoLogin(): Promise<{ token: string; demoEpochMs: number }> {
-    return this.request(`${API_BASE.replace('/v1', '')}/auth/demo-login`, {
+    const response = await this.request<{ token: string; demoEpochMs: number }>(`${API_BASE.replace('/v1', '')}/auth/demo-login`, {
       method: 'POST',
     })
+    // Mark as authenticated (cookie is set by backend)
+    sessionStorage.setItem('authenticated', 'true')
+    return response
   }
 
   async checkSlugAvailability(slug: string): Promise<{ available: boolean }> {

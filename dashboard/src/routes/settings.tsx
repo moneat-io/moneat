@@ -2847,13 +2847,13 @@ function AccountTab() {
   
   const deleteAccountMutation = useMutation({
     mutationFn: () => api.deleteAccount(accountConfirmation.trim()),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: 'Account deleted',
         description: 'Your account has been successfully deleted.',
       })
       localStorage.removeItem('auth_token') // Clean up any legacy token
-      api.logout()
+      await api.logout()
       window.location.href = '/login'
     },
     onError: (error: Error) => {

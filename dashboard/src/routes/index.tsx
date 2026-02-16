@@ -194,7 +194,7 @@ function IndexPage() {
       setIsChecking(false)
     }
     checkAuth()
-  }, [])
+  }, []) // Re-run when component mounts
 
   // Show nothing while checking auth to avoid flash
   if (isChecking) {

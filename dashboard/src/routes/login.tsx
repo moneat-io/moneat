@@ -264,6 +264,12 @@ function LoginPage() {
                 Sign up
               </Link>
             </div>
+            
+            <div className="mt-2 flex justify-center text-sm text-muted-foreground">
+              <Link to="/demo" className="text-primary hover:underline">
+                Try live demo
+              </Link>
+            </div>
           </div>
         </div>
       </div>

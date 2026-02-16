@@ -52,6 +52,7 @@ const PUBLIC_ROUTES = new Set([
   '/onboarding',
   '/terms',
   '/privacy',
+  '/demo',
 ])
 
 function normalizePath(pathname: string): string {

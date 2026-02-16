@@ -572,8 +572,8 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
           <Button
             variant="ghost"
             className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              api.logout()
+            onClick={async () => {
+              await api.logout()
               window.location.href = '/login'
             }}
           >
@@ -586,8 +586,8 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
               <Button
                 variant="ghost"
                 className="w-full justify-center px-0 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  api.logout()
+                onClick={async () => {
+                  await api.logout()
                   window.location.href = '/login'
                 }}
               >
