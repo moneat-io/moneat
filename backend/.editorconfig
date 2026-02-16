@@ -1,0 +1,52 @@
+root = true
+
+[*.{kt,kts}]
+indent_size = 4
+indent_style = space
+max_line_length = 140
+insert_final_newline = true
+
+# Disable rules with widespread pre-existing violations.
+# Enable incrementally as the codebase is cleaned up.
+ktlint_standard_no-trailing-spaces = disabled
+ktlint_standard_indent = disabled
+ktlint_standard_multiline-expression-wrapping = disabled
+ktlint_standard_function-signature = disabled
+ktlint_standard_chain-method-continuation = disabled
+ktlint_standard_trailing-comma-on-call-site = disabled
+ktlint_standard_blank-line-before-declaration = disabled
+ktlint_standard_trailing-comma-on-declaration-site = disabled
+ktlint_standard_no-wildcard-imports = disabled
+ktlint_standard_string-template-indent = disabled
+ktlint_standard_argument-list-wrapping = disabled
+ktlint_standard_function-expression-body = disabled
+ktlint_standard_wrapping = disabled
+ktlint_standard_if-else-wrapping = disabled
+ktlint_standard_class-signature = disabled
+ktlint_standard_no-unused-imports = disabled
+ktlint_standard_max-line-length = disabled
+ktlint_standard_multiline-if-else = disabled
+ktlint_standard_no-blank-line-in-list = disabled
+ktlint_standard_function-literal = disabled
+ktlint_standard_no-empty-first-line-in-class-body = disabled
+ktlint_standard_no-empty-first-line-in-method-block = disabled
+ktlint_standard_property-naming = disabled
+ktlint_standard_no-multi-spaces = disabled
+ktlint_standard_keyword-spacing = disabled
+ktlint_standard_parameter-list-wrapping = disabled
+ktlint_standard_value-argument-comment = disabled
+ktlint_standard_binary-expression-wrapping = disabled
+ktlint_standard_condition-wrapping = disabled
+ktlint_standard_when-entry = disabled
+ktlint_standard_annotation = disabled
+ktlint_standard_try-catch-finally-spacing = disabled
+ktlint_standard_if-else-bracing = disabled
+ktlint_standard_import-ordering = disabled
+ktlint_standard_parameter-list-spacing = disabled
+ktlint_standard_statement-wrapping = disabled
+ktlint_standard_string-template = disabled
+ktlint_standard_value-parameter-comment = disabled
+ktlint_standard_enum-wrapping = disabled
+ktlint_standard_no-consecutive-blank-lines = disabled
+ktlint_standard_no-blank-line-before-rbrace = disabled
+ktlint_standard_filename = disabled

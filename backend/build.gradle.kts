@@ -11,6 +11,8 @@ plugins {
     kotlin("plugin.serialization") version "1.9.22"
     id("io.ktor.plugin") version "2.3.7"
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.2"
     jacoco
 }
 
@@ -301,5 +303,24 @@ tasks.check {
 tasks.withType<KotlinCompile>().configureEach {
     kotlinOptions {
         allWarningsAsErrors = true
+    }
+}
+
+// Detekt - static analysis
+detekt {
+    config.setFrom(files("$projectDir/detekt.yml"))
+    buildUponDefaultConfig = true
+    parallel = true
+    source.setFrom(files("src/main/kotlin", "src/test/kotlin", "src/integrationTest/kotlin"))
+}
+
+// ktlint - formatting and style
+ktlint {
+    version.set("1.5.0")
+    android.set(false)
+    outputToConsole.set(true)
+    ignoreFailures.set(false)
+    filter {
+        exclude("*.kts")
     }
 }
