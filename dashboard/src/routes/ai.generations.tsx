@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ChevronLeft, ChevronRight, Brain, Eye } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Brain } from 'lucide-react'
 
 export const Route = createFileRoute('/ai/generations')({
   component: GenerationsPage,
