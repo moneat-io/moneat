@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ChevronLeft, ChevronRight, Brain } from 'lucide-react'
+import { ProviderLogo } from '@/components/icons/ai-providers'
 
 export const Route = createFileRoute('/ai/generations')({
   component: GenerationsPage,
@@ -164,9 +165,12 @@ function GenerationsPage() {
                     {gen.name || '-'}
                   </TableCell>
                   <TableCell>
-                    <div>
-                      <div className="text-sm">{gen.model || '-'}</div>
-                      <div className="text-xs text-muted-foreground">{gen.provider}</div>
+                    <div className="flex items-center gap-2">
+                      <ProviderLogo provider={gen.provider} showName={false} className="shrink-0" />
+                      <div>
+                        <div className="text-sm">{gen.model || '-'}</div>
+                        <div className="text-xs text-muted-foreground">{gen.provider}</div>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>

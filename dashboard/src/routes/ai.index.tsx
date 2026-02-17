@@ -26,7 +26,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Brain, Coins, Clock, AlertTriangle, Hash, Zap, BookOpen, ArrowRight } from 'lucide-react'
+import { Brain, Coins, Clock, AlertTriangle, Hash, Zap, BookOpen, ArrowRight, TrendingUp } from 'lucide-react'
+import { ProviderLogo } from '@/components/icons/ai-providers'
 
 export const Route = createFileRoute('/ai/')({
   component: AiOverviewPage,
@@ -73,10 +74,12 @@ function AiOverviewPage() {
 
   const modelBreakdown: Record<string, number> = {}
   const tokenBreakdown: Record<string, number> = {}
+  const costBreakdown: Record<string, number> = {}
   overview?.topModels.forEach(m => {
     const label = m.model || 'unknown'
     modelBreakdown[label] = Number(m.callCount)
     tokenBreakdown[label] = Number(m.totalTokens)
+    costBreakdown[label] = m.totalCost
   })
 
   return (
@@ -157,63 +160,68 @@ function AiOverviewPage() {
         <BarChart data={modelBreakdown} title="Calls by Model" height={250} />
       </div>
 
-      {/* Token Breakdown */}
+      {/* Token Breakdown & Cost */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <BarChart data={tokenBreakdown} title="Tokens by Model" height={250} />
+        <BarChart data={costBreakdown} title="Cost by Model" height={250} />
+      </div>
 
-        {/* Top Models Table */}
-        <Card>
-          <CardHeader className="px-4 py-3">
-            <CardTitle className="text-sm">Top Models</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3 pt-0 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Model</TableHead>
-                  <TableHead className="text-right">Calls</TableHead>
-                  <TableHead className="text-right">Tokens</TableHead>
-                  <TableHead className="text-right">Cost</TableHead>
-                  <TableHead className="text-right">Avg Latency</TableHead>
-                  <TableHead className="text-right">Errors</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {overview?.topModels.map((m) => (
-                  <TableRow key={`${m.provider}-${m.model}`}>
-                    <TableCell>
-                      <div>
+      {/* Top Models Table */}
+      <Card>
+        <CardHeader className="px-4 py-3 flex flex-row items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm">Top Models</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-3 pt-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Model</TableHead>
+                <TableHead className="text-right">Calls</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="text-right">Avg Latency</TableHead>
+                <TableHead className="text-right">Errors</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {overview?.topModels.map((m) => (
+                <TableRow key={`${m.provider}-${m.model}`}>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <ProviderLogo provider={m.provider} showName={false} className="shrink-0" />
+                      <div className="min-w-0">
                         <div className="font-medium text-sm">{m.model || 'unknown'}</div>
                         <div className="text-xs text-muted-foreground">{m.provider}</div>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right">{m.callCount}</TableCell>
-                    <TableCell className="text-right">{formatTokens(Number(m.totalTokens))}</TableCell>
-                    <TableCell className="text-right">{formatCost(m.totalCost)}</TableCell>
-                    <TableCell className="text-right">{formatDuration(m.avgDurationMs)}</TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant={m.errorRate > 5 ? 'destructive' : 'secondary'} className="text-xs">
-                        {m.errorRate.toFixed(1)}%
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(!overview?.topModels || overview.topModels.length === 0) && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No LLM data yet.{' '}
-                      <Link to="/docs/ai-observability" className="text-primary hover:underline">
-                        Read the docs
-                      </Link>{' '}
-                      to get started.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{m.callCount}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatTokens(Number(m.totalTokens))}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCost(m.totalCost)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatDuration(m.avgDurationMs)}</TableCell>
+                  <TableCell className="text-right">
+                    <Badge variant={m.errorRate > 5 ? 'destructive' : 'secondary'} className="text-xs tabular-nums">
+                      {m.errorRate.toFixed(1)}%
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {(!overview?.topModels || overview.topModels.length === 0) && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    No LLM data yet.{' '}
+                    <Link to="/docs/ai-observability" className="text-primary hover:underline">
+                      Read the docs
+                    </Link>{' '}
+                    to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {/* Quick Links */}
       <div className="flex gap-3">
@@ -221,7 +229,7 @@ function AiOverviewPage() {
           View All Generations →
         </Link>
         <Link to="/docs/ai-observability" className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors">
-          Get Started →
+          Documentation →
         </Link>
       </div>
     </div>
