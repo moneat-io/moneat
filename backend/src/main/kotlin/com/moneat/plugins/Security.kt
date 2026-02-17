@@ -23,6 +23,9 @@ import com.moneat.utils.SentryUtils
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 data class AuthTokenPrincipal(
     val userId: Int,
@@ -113,9 +116,25 @@ fun Application.configureSecurity() {
         // Use this for endpoints that should work with both user sessions and auth tokens
         bearer("auth-combined") {
             this.realm = realm
+            authSchemes("Bearer")
+            authHeader { call ->
+                // Extract Authorization header manually
+                val authHeader = call.request.headers["Authorization"]
+                logger.warn { "!!! authHeader block called, Authorization header: ${authHeader?.take(80)}" }
+                if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
+                    val token = authHeader.removePrefix("Bearer ").removePrefix("bearer ").trim()
+                    logger.warn { "!!! Extracted token: ${token.take(50)}..." }
+                    io.ktor.http.auth.HttpAuthHeader.Single("Bearer", token)
+                } else {
+                    logger.warn { "!!! No Bearer header found" }
+                    null
+                }
+            }
             authenticate { tokenCredential ->
+                logger.warn { "!!! auth-combined authenticate() called with token: ${tokenCredential.token.take(50)}..." }
                 // First try as auth token
                 val validationResult = authTokenService.validateToken(tokenCredential.token)
+                logger.warn { "!!! validateToken returned: $validationResult" }
                 if (validationResult != null) {
                     // Set user context in Sentry
                     SentryUtils.setUser(validationResult.userId)

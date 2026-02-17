@@ -60,10 +60,12 @@ private val logger = KotlinLogging.logger {}
 fun Route.releaseRoutes() {
     val releaseService = ReleaseService()
     val authTokenService = AuthTokenService()
+    val logger = KotlinLogging.logger {}
     
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
-    authenticate("auth-combined") {
+    authenticate("auth-bearer") {
         get("/api/0/") {
+            logger.warn { "!!! /api/0/ endpoint hit!" }
             val principal = call.principal<AuthTokenPrincipal>()
                 ?: run {
                     call.respond(HttpStatusCode.Unauthorized)
