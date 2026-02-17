@@ -140,14 +140,12 @@ fun Application.configureSecurity() {
         // Bearer token authentication for build tools (CLI, CI/CD)
         bearer("auth-bearer") {
             this.realm = realm
-            logger.warn("!!! Configuring auth-bearer provider")
             authSchemes("Bearer")
             authHeader { call ->
                 parseBearerHeaderForKtor(call.request.headers["Authorization"])
             }
             authenticate { tokenCredential ->
                 val token = decodeKtorBearerToken(tokenCredential)
-                logger.warn("!!! auth-bearer authenticate() called with token: ${token.take(50)}...")
                 val validationResult = authTokenService.validateToken(token)
                 if (validationResult != null) {
                     // Set user context in Sentry
@@ -174,20 +172,12 @@ fun Application.configureSecurity() {
             authHeader { call ->
                 // Extract Authorization header manually
                 val authHeader = call.request.headers["Authorization"]
-                logger.warn("!!! authHeader block called, Authorization header: ${authHeader?.take(80)}")
-                parseBearerHeaderForKtor(authHeader)?.also {
-                    logger.warn("!!! Extracted token from Bearer header")
-                } ?: run {
-                    logger.warn("!!! No Bearer header found")
-                    null
-                }
+                parseBearerHeaderForKtor(authHeader)
             }
             authenticate { tokenCredential ->
                 val token = decodeKtorBearerToken(tokenCredential)
-                logger.warn("!!! auth-combined authenticate() called with token: ${token.take(50)}...")
                 // First try as auth token
                 val validationResult = authTokenService.validateToken(token)
-                logger.warn("!!! validateToken returned: $validationResult")
                 if (validationResult != null) {
                     // Set user context in Sentry
                     SentryUtils.setUser(validationResult.userId)

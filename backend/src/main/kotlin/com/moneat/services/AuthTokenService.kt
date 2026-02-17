@@ -24,7 +24,6 @@ import com.moneat.models.Organizations
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
-import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -34,8 +33,6 @@ import org.jetbrains.exposed.sql.and
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
-
-private val logger = KotlinLogging.logger {}
 
 class AuthTokenService {
     private val secureRandom = SecureRandom()
@@ -137,24 +134,19 @@ class AuthTokenService {
      * Validate a token and return user ID and scopes if valid.
      */
     fun validateToken(token: String): TokenValidationResult? {
-        logger.warn("!!! validateToken called: length=${token.length}, starts with sntrys_=${token.startsWith(TOKEN_PREFIX)}")
         if (!token.startsWith(TOKEN_PREFIX)) {
-            logger.warn("!!! Token doesn't start with prefix")
             return null
         }
         
         val tokenHash = hashToken(token)
-        logger.warn("!!! Token hash: $tokenHash")
         
         return transaction {
             val tokenRow = AuthTokens.selectAll()
                 .where { AuthTokens.token_hash eq tokenHash }
                 .firstOrNull()
             if (tokenRow == null) {
-                logger.warn("!!! No token found in DB for hash: $tokenHash")
                 return@transaction null
             }
-            logger.warn("!!! Token found in DB!")
             
             // Check if token is expired
             val expiresAt = tokenRow[AuthTokens.expires_at]
