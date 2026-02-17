@@ -62,11 +62,11 @@ export default function HeartbeatBar({heartbeats, maxBars = 100, className}: Hea
             slot.status === 'up' && 'bg-emerald-500',
             slot.status === 'down' && 'bg-red-500',
             slot.status === 'pending' && 'bg-yellow-500',
-            slot.status === 'unknown' && 'bg-muted'
+            slot.status === 'unknown' && 'bg-slate-200 dark:bg-muted'
           )}
           style={{
             height: slot.count > 0 ? '100%' : '20%',
-            opacity: slot.count > 0 ? 1 : 0.3,
+            opacity: slot.count > 0 ? 1 : 0.5,
           }}
           title={
             slot.count > 0
