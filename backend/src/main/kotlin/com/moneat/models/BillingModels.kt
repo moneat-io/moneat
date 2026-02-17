@@ -30,8 +30,11 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val monthly_transaction_limit = long("monthly_transaction_limit").default(0)
     val monthly_replay_limit = long("monthly_replay_limit").default(0)
     val monthly_feedback_limit = long("monthly_feedback_limit").default(0)
+    val monthly_llm_event_limit = long("monthly_llm_event_limit").default(0)
     val monthly_gb_limit = long("monthly_gb_limit").default(0)
     val retention_days = integer("retention_days")
+    val replay_retention_days = integer("replay_retention_days").default(0)
+    val llm_retention_days = integer("llm_retention_days").default(0)
     val log_retention_days = integer("log_retention_days")
     val status_pages_enabled = bool("status_pages_enabled").default(true)
     val status_page_custom_domain_enabled = bool("status_page_custom_domain_enabled").default(true)
@@ -53,6 +56,9 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val payg_enabled = bool("payg_enabled").default(false)
     val payg_rate_micros_per_unit = long("payg_rate_micros_per_unit").default(0)
     val overage_rate_cents_per_gb = integer("overage_rate_cents_per_gb").default(0)
+    val error_overage_rate_cents_per_1k = integer("error_overage_rate_cents_per_1k").default(0)
+    val replay_overage_rate_cents_per_gb = integer("replay_overage_rate_cents_per_gb").default(0)
+    val llm_overage_rate_cents_per_1k = integer("llm_overage_rate_cents_per_1k").default(0)
     val oncall_per_user_monthly_cents = integer("oncall_per_user_monthly_cents").default(0)
     val oncall_per_user_yearly_cents = integer("oncall_per_user_yearly_cents").default(0)
     val oncall_enabled = bool("oncall_enabled").default(false)
@@ -77,6 +83,7 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_transactions = long("used_transactions").default(0)
     val used_replays = long("used_replays").default(0)
     val used_feedback = long("used_feedback").default(0)
+    val used_llm_events = long("used_llm_events").default(0)
     val used_bytes = long("used_bytes").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
@@ -112,9 +119,12 @@ data class PricingTierConfigResponse(
     val monthlyTransactionLimit: Long,
     val monthlyReplayLimit: Long,
     val monthlyFeedbackLimit: Long,
+    val monthlyLlmEventLimit: Long,
     val monthlyGbLimit: Long,
     val retentionDays: Int,
     val logRetentionDays: Int,
+    val replayRetentionDays: Int,
+    val llmRetentionDays: Int,
     val statusPagesEnabled: Boolean,
     val statusPageCustomDomainEnabled: Boolean,
     val sessionReplayEnabled: Boolean,
@@ -135,6 +145,9 @@ data class PricingTierConfigResponse(
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
     val overageRateCentsPerGb: Int,
+    val errorOverageRateCentsPer1k: Int = 0,
+    val replayOverageRateCentsPerGb: Int = 0,
+    val llmOverageRateCentsPer1k: Int = 0,
     val oncallPerUserMonthlyCents: Int = 0,
     val oncallPerUserYearlyCents: Int = 0,
     val oncallEnabled: Boolean = false,
@@ -175,6 +188,8 @@ data class BillingUsageResponse(
     val replayLimit: Long,
     val usedFeedback: Long,
     val feedbackLimit: Long,
+    val usedLlmEvents: Long = 0,
+    val llmEventLimit: Long = 0,
     val usedLogs: Long = 0,
     val usedBytes: Long,
     val bytesLimit: Long,
@@ -257,9 +272,12 @@ data class CreateTierVersionRequest(
     val monthlyTransactionLimit: Long = 0,
     val monthlyReplayLimit: Long = 0,
     val monthlyFeedbackLimit: Long = 0,
+    val monthlyLlmEventLimit: Long = 0,
     val monthlyGbLimit: Long? = null,
     val retentionDays: Int,
     val logRetentionDays: Int? = null,
+    val replayRetentionDays: Int? = null,
+    val llmRetentionDays: Int? = null,
     val statusPagesEnabled: Boolean? = null,
     val statusPageCustomDomainEnabled: Boolean? = null,
     val sessionReplayEnabled: Boolean? = null,
@@ -280,6 +298,9 @@ data class CreateTierVersionRequest(
     val paygEnabled: Boolean,
     val paygRateMicrosPerUnit: Long,
     val overageRateCentsPerGb: Int? = null,
+    val errorOverageRateCentsPer1k: Int? = null,
+    val replayOverageRateCentsPerGb: Int? = null,
+    val llmOverageRateCentsPer1k: Int? = null,
     val oncallPerUserMonthlyCents: Int? = null,
     val oncallPerUserYearlyCents: Int? = null,
     val oncallEnabled: Boolean? = null,

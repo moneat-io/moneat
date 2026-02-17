@@ -108,12 +108,31 @@ class BillingQuotaService(
 
         return transaction {
             val state = loadQuotaState(organizationId, lockRows = true)
-            val requestedTotal = normalizedRequests.values.sum()
-            val totalAfter = state.usedUnits + requestedTotal
+            val requestedLlm = normalizedRequests["llm"] ?: 0L
+            val requestedAggregate = normalizedRequests.filterKeys { it != "llm" }.values.sum()
+            val totalAfter = state.usedUnits + requestedAggregate
             val requestedTotalBytes = normalizedBytes.values.sum()
             val bytesAfter = state.usedBytes + requestedTotalBytes
 
             for ((eventType, requestedUnits) in normalizedRequests) {
+                if (eventType == "llm") {
+                    val llmAfter = state.usedLlmEvents + requestedUnits
+                    if (state.llmEventLimit >= 0 && llmAfter > state.llmEventLimit) {
+                        SentryUtils.breadcrumb("billing", "LLM event quota exceeded", mapOf(
+                            "organization_id" to organizationId,
+                            "requested_llm" to requestedUnits,
+                            "used_llm_events" to state.usedLlmEvents,
+                            "llm_event_limit" to state.llmEventLimit
+                        ))
+                        return@transaction QuotaReservationResult(
+                            allowed = false,
+                            reason = "event_type_quota_exceeded",
+                            eventType = "llm",
+                            usage = toUsageResponse(state)
+                        )
+                    }
+                    continue
+                }
                 val usedForType = usedUnitsForType(state, eventType)
                 val typeLimit = baseLimitForType(state, eventType)
                 val typeAfter = usedForType + requestedUnits
@@ -145,7 +164,7 @@ class BillingQuotaService(
             if (totalAfter > effectiveTotalLimit) {
                 SentryUtils.breadcrumb("billing", "Quota exceeded", mapOf(
                     "organization_id" to organizationId,
-                    "requested_units" to requestedTotal,
+                    "requested_units" to requestedAggregate,
                     "used_units" to state.usedUnits,
                     "total_limit" to state.totalLimitUnits,
                     "bonus_units" to state.bonusUnits
@@ -195,6 +214,7 @@ class BillingQuotaService(
                 it[used_transactions] = state.usedTransactions + requestedTransactions
                 it[used_replays] = state.usedReplays + requestedReplays
                 it[used_feedback] = state.usedFeedback + requestedFeedback
+                it[used_llm_events] = state.usedLlmEvents + requestedLlm
                 it[used_bytes] = bytesAfter
                 it[updated_at] = Clock.System.now()
             }
@@ -239,11 +259,13 @@ class BillingQuotaService(
         val usedTransactions: Long,
         val usedReplays: Long,
         val usedFeedback: Long,
+        val usedLlmEvents: Long,
         val usedBytes: Long,
         val errorLimit: Long,
         val transactionLimit: Long,
         val replayLimit: Long,
         val feedbackLimit: Long,
+        val llmEventLimit: Long,
         val bytesLimit: Long,
         val baseLimitUnits: Long,
         val paygLimitUnits: Long,
@@ -330,6 +352,7 @@ class BillingQuotaService(
                 it[used_transactions] = 0
                 it[used_replays] = 0
                 it[used_feedback] = 0
+                it[used_llm_events] = 0
                 it[updated_at] = Clock.System.now()
             }
         }
@@ -354,8 +377,10 @@ class BillingQuotaService(
         val usedTransactions = usageRow[OrgUsageCounters.used_transactions]
         val usedReplays = usageRow[OrgUsageCounters.used_replays]
         val usedFeedback = usageRow[OrgUsageCounters.used_feedback]
+        val usedLlmEvents = usageRow[OrgUsageCounters.used_llm_events]
         val usedBytes = usageRow[OrgUsageCounters.used_bytes]
         val errorLimit = tier.monthlyErrorLimit
+        val llmEventLimit = tier.monthlyLlmEventLimit
         val transactionLimit = tier.monthlyTransactionLimit
         val replayLimit = tier.monthlyReplayLimit
         val feedbackLimit = tier.monthlyFeedbackLimit
@@ -397,8 +422,10 @@ class BillingQuotaService(
             usedTransactions = usedTransactions,
             usedReplays = usedReplays,
             usedFeedback = usedFeedback,
+            usedLlmEvents = usedLlmEvents,
             usedBytes = usedBytes,
             errorLimit = errorLimit,
+            llmEventLimit = llmEventLimit,
             transactionLimit = transactionLimit,
             replayLimit = replayLimit,
             feedbackLimit = feedbackLimit,
@@ -431,6 +458,7 @@ class BillingQuotaService(
         ).all { (used, limit) ->
             limit < 0 || used <= (limit + state.paygLimitUnits + state.bonusUnits)
         }
+        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= state.llmEventLimit
         val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes)
 
         return BillingUsageResponse(
@@ -447,6 +475,8 @@ class BillingQuotaService(
             replayLimit = state.replayLimit,
             usedFeedback = state.usedFeedback,
             feedbackLimit = state.feedbackLimit,
+            usedLlmEvents = state.usedLlmEvents,
+            llmEventLimit = state.llmEventLimit,
             usedBytes = state.usedBytes,
             bytesLimit = state.bytesLimit,
             baseLimitUnits = state.baseLimitUnits,
@@ -461,7 +491,7 @@ class BillingQuotaService(
             oncallEnabled = state.oncallEnabled,
             plan = state.plan,
             status = state.status,
-            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && bytesWithinBudget,
+            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
             bonusGbBytes = state.bonusGbBytes,
             bonusUnits = state.bonusUnits,
             bonusReason = state.bonusReason
@@ -478,9 +508,12 @@ class BillingQuotaService(
             monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
             monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
             monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
+            monthlyLlmEventLimit = row[PricingTierConfigs.monthly_llm_event_limit],
             monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
             logRetentionDays = row[PricingTierConfigs.log_retention_days],
+            replayRetentionDays = row[PricingTierConfigs.replay_retention_days],
+            llmRetentionDays = row[PricingTierConfigs.llm_retention_days],
             statusPagesEnabled = row[PricingTierConfigs.status_pages_enabled],
             statusPageCustomDomainEnabled = row[PricingTierConfigs.status_page_custom_domain_enabled],
             sessionReplayEnabled = row[PricingTierConfigs.session_replay_enabled],
@@ -501,6 +534,9 @@ class BillingQuotaService(
             paygEnabled = row[PricingTierConfigs.payg_enabled],
             paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
             overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
+            errorOverageRateCentsPer1k = row[PricingTierConfigs.error_overage_rate_cents_per_1k],
+            replayOverageRateCentsPerGb = row[PricingTierConfigs.replay_overage_rate_cents_per_gb],
+            llmOverageRateCentsPer1k = row[PricingTierConfigs.llm_overage_rate_cents_per_1k],
             stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
             stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
             stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
@@ -525,9 +561,12 @@ class BillingQuotaService(
             monthlyTransactionLimit = 0,
             monthlyReplayLimit = tier.monthlyReplayLimit,
             monthlyFeedbackLimit = 0,
+            monthlyLlmEventLimit = tier.monthlyLlmEventLimit,
             monthlyGbLimit = tier.monthlyGbBytes,
             retentionDays = tier.retentionDays,
-            logRetentionDays = tier.retentionDays,  // Fallback: use same as retentionDays
+            logRetentionDays = tier.retentionDays,
+            replayRetentionDays = tier.retentionDays,
+            llmRetentionDays = tier.retentionDays,
             statusPagesEnabled = true,
             statusPageCustomDomainEnabled = true,
             sessionReplayEnabled = true,
@@ -558,6 +597,9 @@ class BillingQuotaService(
             paygEnabled = tier != PricingTier.FREE,
             paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,
             overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
+            errorOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 10,
+            replayOverageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
+            llmOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 100,
             stripeBasePriceId = null,
             stripeOveragePriceId = null,
             stripeYearlyBasePriceId = null,
@@ -577,6 +619,7 @@ class BillingQuotaService(
             "transaction" -> "transaction"
             "replay" -> "replay"
             "feedback" -> "feedback"
+            "llm" -> "llm"
             "log", "logs" -> "error"
             else -> "error"
         }
@@ -588,6 +631,7 @@ class BillingQuotaService(
             "transaction" -> state.usedTransactions
             "replay" -> state.usedReplays
             "feedback" -> state.usedFeedback
+            "llm" -> state.usedLlmEvents
             else -> state.usedErrors
         }
     }
@@ -598,6 +642,7 @@ class BillingQuotaService(
             "transaction" -> state.transactionLimit
             "replay" -> state.replayLimit
             "feedback" -> state.feedbackLimit
+            "llm" -> state.llmEventLimit
             else -> state.errorLimit
         }
     }

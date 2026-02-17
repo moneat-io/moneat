@@ -179,6 +179,14 @@ class PricingTierService {
             val resolvedYearlyPriceCents = request.yearlyPriceCents ?: currentConfig?.yearlyPriceCents ?: 0
             val resolvedTrialDays = request.trialDays ?: currentConfig?.trialDays ?: defaultTrialDaysForTier(canonicalName)
             val resolvedOverageRateCentsPerGb = request.overageRateCentsPerGb ?: currentConfig?.overageRateCentsPerGb ?: 0
+            val resolvedReplayRetentionDays = request.replayRetentionDays ?: currentConfig?.replayRetentionDays ?: request.retentionDays
+            val resolvedLlmRetentionDays = request.llmRetentionDays ?: currentConfig?.llmRetentionDays ?: request.retentionDays
+            val resolvedErrorOverageRateCentsPer1k = request.errorOverageRateCentsPer1k ?: currentConfig?.errorOverageRateCentsPer1k ?: 0
+            val resolvedReplayOverageRateCentsPerGb = request.replayOverageRateCentsPerGb ?: currentConfig?.replayOverageRateCentsPerGb ?: 0
+            val resolvedLlmOverageRateCentsPer1k = request.llmOverageRateCentsPer1k ?: currentConfig?.llmOverageRateCentsPer1k ?: 0
+            val resolvedOncallPerUserMonthlyCents = request.oncallPerUserMonthlyCents ?: currentConfig?.oncallPerUserMonthlyCents ?: 0
+            val resolvedOncallPerUserYearlyCents = request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
+            val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
 
             val resolvedStatusPagesEnabled = request.statusPagesEnabled
                 ?: currentConfig?.statusPagesEnabled
@@ -226,9 +234,12 @@ class PricingTierService {
                 it[monthly_transaction_limit] = monthlyTransactionLimit
                 it[monthly_replay_limit] = monthlyReplayLimit
                 it[monthly_feedback_limit] = monthlyFeedbackLimit
+                it[monthly_llm_event_limit] = request.monthlyLlmEventLimit
                 it[monthly_gb_limit] = resolvedMonthlyGbLimit
                 it[retention_days] = request.retentionDays
                 it[log_retention_days] = resolvedLogRetentionDays
+                it[replay_retention_days] = resolvedReplayRetentionDays
+                it[llm_retention_days] = resolvedLlmRetentionDays
                 it[status_pages_enabled] = resolvedStatusPagesEnabled
                 it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
                 it[session_replay_enabled] = resolvedSessionReplayEnabled
@@ -249,10 +260,18 @@ class PricingTierService {
                 it[payg_enabled] = request.paygEnabled
                 it[payg_rate_micros_per_unit] = request.paygRateMicrosPerUnit
                 it[overage_rate_cents_per_gb] = resolvedOverageRateCentsPerGb
+                it[error_overage_rate_cents_per_1k] = resolvedErrorOverageRateCentsPer1k
+                it[replay_overage_rate_cents_per_gb] = resolvedReplayOverageRateCentsPerGb
+                it[llm_overage_rate_cents_per_1k] = resolvedLlmOverageRateCentsPer1k
+                it[oncall_per_user_monthly_cents] = resolvedOncallPerUserMonthlyCents
+                it[oncall_per_user_yearly_cents] = resolvedOncallPerUserYearlyCents
+                it[oncall_enabled] = resolvedOncallEnabled
                 it[stripe_base_price_id] = request.stripeBasePriceId
                 it[stripe_overage_price_id] = request.stripeOveragePriceId
                 it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
                 it[stripe_yearly_overage_price_id] = request.stripeYearlyOveragePriceId
+                it[stripe_oncall_price_id] = request.stripeOncallPriceId
+                it[stripe_oncall_yearly_price_id] = request.stripeOncallYearlyPriceId
                 it[is_current] = true
             } get PricingTierConfigs.id
 
@@ -270,6 +289,13 @@ class PricingTierService {
         require(request.monthlyTransactionLimit >= 0) { "Monthly transaction limit must be non-negative" }
         require(request.monthlyReplayLimit >= -1) { "Monthly replay limit must be -1 (unlimited) or non-negative" }
         require(request.monthlyFeedbackLimit >= 0) { "Monthly feedback limit must be non-negative" }
+        require(request.monthlyLlmEventLimit >= 0) { "Monthly LLM event limit must be non-negative" }
+        if (request.replayRetentionDays != null) {
+            require(request.replayRetentionDays in 1..90) { "Replay retention days must be between 1 and 90" }
+        }
+        if (request.llmRetentionDays != null) {
+            require(request.llmRetentionDays in 1..90) { "LLM retention days must be between 1 and 90" }
+        }
         if (request.monthlyGbLimit != null) {
             require(request.monthlyGbLimit >= 0) { "Monthly GB limit must be non-negative" }
         }
@@ -281,6 +307,15 @@ class PricingTierService {
         }
         if (request.overageRateCentsPerGb != null) {
             require(request.overageRateCentsPerGb >= 0) { "Overage rate cannot be negative" }
+        }
+        if (request.errorOverageRateCentsPer1k != null) {
+            require(request.errorOverageRateCentsPer1k >= 0) { "Error overage rate cannot be negative" }
+        }
+        if (request.replayOverageRateCentsPerGb != null) {
+            require(request.replayOverageRateCentsPerGb >= 0) { "Replay overage rate cannot be negative" }
+        }
+        if (request.llmOverageRateCentsPer1k != null) {
+            require(request.llmOverageRateCentsPer1k >= 0) { "LLM overage rate cannot be negative" }
         }
     }
 
@@ -406,9 +441,12 @@ class PricingTierService {
             monthlyTransactionLimit = 0,
             monthlyReplayLimit = tier.monthlyReplayLimit,
             monthlyFeedbackLimit = 0,
+            monthlyLlmEventLimit = tier.monthlyLlmEventLimit,
             monthlyGbLimit = tier.monthlyGbBytes,
             retentionDays = tier.retentionDays,
-            logRetentionDays = tier.retentionDays,  // Use same as retentionDays for fallback
+            logRetentionDays = tier.retentionDays,
+            replayRetentionDays = tier.retentionDays,
+            llmRetentionDays = tier.retentionDays,
             statusPagesEnabled = true,
             statusPageCustomDomainEnabled = true,
             sessionReplayEnabled = true,
@@ -429,10 +467,18 @@ class PricingTierService {
             paygEnabled = tier != PricingTier.FREE,
             paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,  // $0.40/GB in micros
             overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,  // $0.40/GB
+            errorOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 10,
+            replayOverageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
+            llmOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 100,
+            oncallPerUserMonthlyCents = 500,  // Default $5
+            oncallPerUserYearlyCents = 5000,  // Default $50
+            oncallEnabled = tier != PricingTier.FREE,
             stripeBasePriceId = null,
             stripeOveragePriceId = null,
             stripeYearlyBasePriceId = null,
             stripeYearlyOveragePriceId = null,
+            stripeOncallPriceId = null,
+            stripeOncallYearlyPriceId = null,
             isCurrent = true
         )
     }
@@ -447,9 +493,12 @@ class PricingTierService {
             monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
             monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
             monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
+            monthlyLlmEventLimit = row[PricingTierConfigs.monthly_llm_event_limit],
             monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
             retentionDays = row[PricingTierConfigs.retention_days],
             logRetentionDays = row[PricingTierConfigs.log_retention_days],
+            replayRetentionDays = row[PricingTierConfigs.replay_retention_days],
+            llmRetentionDays = row[PricingTierConfigs.llm_retention_days],
             statusPagesEnabled = row[PricingTierConfigs.status_pages_enabled],
             statusPageCustomDomainEnabled = row[PricingTierConfigs.status_page_custom_domain_enabled],
             sessionReplayEnabled = row[PricingTierConfigs.session_replay_enabled],
@@ -470,10 +519,18 @@ class PricingTierService {
             paygEnabled = row[PricingTierConfigs.payg_enabled],
             paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
             overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
+            errorOverageRateCentsPer1k = row[PricingTierConfigs.error_overage_rate_cents_per_1k],
+            replayOverageRateCentsPerGb = row[PricingTierConfigs.replay_overage_rate_cents_per_gb],
+            llmOverageRateCentsPer1k = row[PricingTierConfigs.llm_overage_rate_cents_per_1k],
+            oncallPerUserMonthlyCents = row[PricingTierConfigs.oncall_per_user_monthly_cents],
+            oncallPerUserYearlyCents = row[PricingTierConfigs.oncall_per_user_yearly_cents],
+            oncallEnabled = row[PricingTierConfigs.oncall_enabled],
             stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
             stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
             stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
             stripeYearlyOveragePriceId = row[PricingTierConfigs.stripe_yearly_overage_price_id],
+            stripeOncallPriceId = row[PricingTierConfigs.stripe_oncall_price_id],
+            stripeOncallYearlyPriceId = row[PricingTierConfigs.stripe_oncall_yearly_price_id],
             isCurrent = row[PricingTierConfigs.is_current]
         )
     }

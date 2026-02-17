@@ -90,7 +90,11 @@ interface ValidationErrors {
   monthlyTransactionLimit?: string
   monthlyReplayLimit?: string
   monthlyFeedbackLimit?: string
+  monthlyLlmEventLimit?: string
   retentionDays?: string
+  logRetentionDays?: string
+  replayRetentionDays?: string
+  llmRetentionDays?: string
   maxSystems?: string
   monitorIntervalSeconds?: string
   monthlyPriceCents?: string
@@ -98,6 +102,11 @@ interface ValidationErrors {
   monthlyGbLimitGb?: string
   trialDays?: string
   paygRateMicrosPerUnit?: string
+  errorOverageRateCentsPer1k?: string
+  replayOverageRateCentsPerGb?: string
+  llmOverageRateCentsPer1k?: string
+  oncallPerUserMonthlyCents?: string
+  oncallPerUserYearlyCents?: string
 }
 
 function validateCreateForm(form: CreateFormState): ValidationErrors {
@@ -107,11 +116,21 @@ function validateCreateForm(form: CreateFormState): ValidationErrors {
   if (form.monthlyTransactionLimit < 0) errors.monthlyTransactionLimit = 'Cannot be negative'
   if (form.monthlyReplayLimit < -1) errors.monthlyReplayLimit = 'Cannot be less than -1 (use -1 for unlimited)'
   if (form.monthlyFeedbackLimit < 0) errors.monthlyFeedbackLimit = 'Cannot be negative'
+  if (form.monthlyLlmEventLimit < 0) errors.monthlyLlmEventLimit = 'Cannot be negative'
   if (form.retentionDays < 1) {
     errors.retentionDays = 'Must be at least 1 day'
   }
   if (form.retentionDays > 90) {
     errors.retentionDays = 'Cannot exceed 90 days'
+  }
+  if (form.logRetentionDays < 1 || form.logRetentionDays > 90) {
+    errors.logRetentionDays = 'Must be between 1 and 90 days'
+  }
+  if (form.replayRetentionDays < 1 || form.replayRetentionDays > 90) {
+    errors.replayRetentionDays = 'Must be between 1 and 90 days'
+  }
+  if (form.llmRetentionDays < 1 || form.llmRetentionDays > 90) {
+    errors.llmRetentionDays = 'Must be between 1 and 90 days'
   }
   if (form.maxSystems < 1) {
     errors.maxSystems = 'Must be at least 1 system'
@@ -140,6 +159,11 @@ function validateCreateForm(form: CreateFormState): ValidationErrors {
   if (form.paygEnabled && form.paygRateMicrosPerUnit < 1) {
     errors.paygRateMicrosPerUnit = 'PAYG rate must be at least 1 micro'
   }
+  if (form.errorOverageRateCentsPer1k < 0) errors.errorOverageRateCentsPer1k = 'Cannot be negative'
+  if (form.replayOverageRateCentsPerGb < 0) errors.replayOverageRateCentsPerGb = 'Cannot be negative'
+  if (form.llmOverageRateCentsPer1k < 0) errors.llmOverageRateCentsPer1k = 'Cannot be negative'
+  if (form.oncallPerUserMonthlyCents < 0) errors.oncallPerUserMonthlyCents = 'Cannot be negative'
+  if (form.oncallPerUserYearlyCents < 0) errors.oncallPerUserYearlyCents = 'Cannot be negative'
 
   return errors
 }
@@ -151,7 +175,11 @@ interface CreateFormState {
   monthlyTransactionLimit: number
   monthlyReplayLimit: number
   monthlyFeedbackLimit: number
+  monthlyLlmEventLimit: number
   retentionDays: number
+  logRetentionDays: number
+  replayRetentionDays: number
+  llmRetentionDays: number
   maxProjects: string
   maxSystems: number
   monitorIntervalSeconds: number
@@ -161,6 +189,13 @@ interface CreateFormState {
   trialDays: number
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
+  overageRateCentsPerGb: number
+  errorOverageRateCentsPer1k: number
+  replayOverageRateCentsPerGb: number
+  llmOverageRateCentsPer1k: number
+  oncallEnabled: boolean
+  oncallPerUserMonthlyCents: number
+  oncallPerUserYearlyCents: number
   stripeBasePriceId: string
   stripeOveragePriceId: string
   stripeYearlyBasePriceId: string
@@ -170,9 +205,13 @@ interface CreateFormState {
 const DEFAULT_FORM: CreateFormState = {
   monthlyErrorLimit: 500_000,
   monthlyTransactionLimit: 0,
-  monthlyReplayLimit: 0,
+  monthlyReplayLimit: 300,
   monthlyFeedbackLimit: 0,
+  monthlyLlmEventLimit: 10_000,
   retentionDays: 30,
+  logRetentionDays: 30,
+  replayRetentionDays: 14,
+  llmRetentionDays: 30,
   maxProjects: '',
   maxSystems: 5,
   monitorIntervalSeconds: 15,
@@ -182,6 +221,13 @@ const DEFAULT_FORM: CreateFormState = {
   trialDays: 14,
   paygEnabled: true,
   paygRateMicrosPerUnit: 10,
+  overageRateCentsPerGb: 40,
+  errorOverageRateCentsPer1k: 10,
+  replayOverageRateCentsPerGb: 40,
+  llmOverageRateCentsPer1k: 100,
+  oncallEnabled: true,
+  oncallPerUserMonthlyCents: 500,
+  oncallPerUserYearlyCents: 5000,
   stripeBasePriceId: '',
   stripeOveragePriceId: '',
   stripeYearlyBasePriceId: '',
@@ -316,6 +362,7 @@ function AdminBillingPage() {
           yearlyPriceCents: createForm.yearlyPriceCents,
           trialDays: createForm.trialDays,
           monthlyGbLimit: Math.max(0, Math.round(createForm.monthlyGbLimitGb * BYTES_PER_GB)),
+          monthlyLlmEventLimit: createForm.monthlyLlmEventLimit,
           retentionDays: createForm.retentionDays,
           maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
           maxSystems: createForm.maxSystems,
@@ -331,6 +378,8 @@ function AdminBillingPage() {
           prioritySupportEnabled: currentTierConfig.prioritySupportEnabled,
           slaEnabled: currentTierConfig.slaEnabled,
           customRetentionEnabled: currentTierConfig.customRetentionEnabled,
+          oncallEnabled: createForm.oncallEnabled,
+          oncallPerUserMonthlyCents: createForm.oncallPerUserMonthlyCents,
         }
       : null
 
@@ -356,7 +405,11 @@ function AdminBillingPage() {
         monthlyTransactionLimit: config.monthlyTransactionLimit,
         monthlyReplayLimit: config.monthlyReplayLimit,
         monthlyFeedbackLimit: config.monthlyFeedbackLimit,
+        monthlyLlmEventLimit: config.monthlyLlmEventLimit ?? 0,
         retentionDays: config.retentionDays,
+        logRetentionDays: config.logRetentionDays ?? config.retentionDays,
+        replayRetentionDays: config.replayRetentionDays ?? config.retentionDays,
+        llmRetentionDays: config.llmRetentionDays ?? config.retentionDays,
         maxProjects: config.maxProjects != null ? String(config.maxProjects) : '',
         maxSystems: config.maxSystems,
         monitorIntervalSeconds: config.monitorIntervalSeconds,
@@ -366,6 +419,13 @@ function AdminBillingPage() {
         trialDays: config.trialDays,
         paygEnabled: config.paygEnabled,
         paygRateMicrosPerUnit: config.paygRateMicrosPerUnit,
+        overageRateCentsPerGb: config.overageRateCentsPerGb ?? 40,
+        errorOverageRateCentsPer1k: config.errorOverageRateCentsPer1k ?? 10,
+        replayOverageRateCentsPerGb: config.replayOverageRateCentsPerGb ?? 40,
+        llmOverageRateCentsPer1k: config.llmOverageRateCentsPer1k ?? 100,
+        oncallEnabled: config.oncallEnabled ?? false,
+        oncallPerUserMonthlyCents: config.oncallPerUserMonthlyCents ?? 500,
+        oncallPerUserYearlyCents: config.oncallPerUserYearlyCents ?? 5000,
         stripeBasePriceId: config.stripeBasePriceId ?? '',
         stripeOveragePriceId: config.stripeOveragePriceId ?? '',
         stripeYearlyBasePriceId: config.stripeYearlyBasePriceId ?? '',
@@ -408,7 +468,11 @@ function AdminBillingPage() {
         monthlyTransactionLimit: Number(createForm.monthlyTransactionLimit),
         monthlyReplayLimit: Number(createForm.monthlyReplayLimit),
         monthlyFeedbackLimit: Number(createForm.monthlyFeedbackLimit),
+        monthlyLlmEventLimit: Number(createForm.monthlyLlmEventLimit),
         retentionDays: Number(createForm.retentionDays),
+        logRetentionDays: Number(createForm.logRetentionDays),
+        replayRetentionDays: Number(createForm.replayRetentionDays),
+        llmRetentionDays: Number(createForm.llmRetentionDays),
         maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
         maxSystems: Number(createForm.maxSystems),
         monitorIntervalSeconds: Number(createForm.monitorIntervalSeconds),
@@ -418,6 +482,13 @@ function AdminBillingPage() {
         trialDays: Number(createForm.trialDays),
         paygEnabled: Boolean(createForm.paygEnabled),
         paygRateMicrosPerUnit: Number(createForm.paygRateMicrosPerUnit),
+        overageRateCentsPerGb: Number(createForm.overageRateCentsPerGb),
+        errorOverageRateCentsPer1k: Number(createForm.errorOverageRateCentsPer1k),
+        replayOverageRateCentsPerGb: Number(createForm.replayOverageRateCentsPerGb),
+        llmOverageRateCentsPer1k: Number(createForm.llmOverageRateCentsPer1k),
+        oncallEnabled: Boolean(createForm.oncallEnabled),
+        oncallPerUserMonthlyCents: Number(createForm.oncallPerUserMonthlyCents),
+        oncallPerUserYearlyCents: Number(createForm.oncallPerUserYearlyCents),
         stripeBasePriceId: createForm.stripeBasePriceId.trim() || null,
         stripeOveragePriceId: createForm.stripeOveragePriceId.trim() || null,
         stripeYearlyBasePriceId: createForm.stripeYearlyBasePriceId.trim() || null,
@@ -527,6 +598,7 @@ function AdminBillingPage() {
                     <TableHead>Transactions</TableHead>
                     <TableHead>Replays</TableHead>
                     <TableHead>Feedback</TableHead>
+                    <TableHead>LLM</TableHead>
                     <TableHead>Retention</TableHead>
                     <TableHead>Max Systems</TableHead>
                     <TableHead>Interval</TableHead>
@@ -547,6 +619,7 @@ function AdminBillingPage() {
                       <TableCell>{plan.tier.monthlyTransactionLimit.toLocaleString()}</TableCell>
                       <TableCell>{plan.tier.monthlyReplayLimit.toLocaleString()}</TableCell>
                       <TableCell>{plan.tier.monthlyFeedbackLimit.toLocaleString()}</TableCell>
+                      <TableCell>{(plan.tier.monthlyLlmEventLimit ?? 0).toLocaleString()}</TableCell>
                       <TableCell>{plan.tier.retentionDays}d</TableCell>
                       <TableCell>{plan.tier.maxSystems}</TableCell>
                       <TableCell>{formatInterval(plan.tier.monitorIntervalSeconds)}</TableCell>
@@ -715,11 +788,34 @@ function AdminBillingPage() {
                 )}
               </div>
 
-              {/* Retention Days */}
+              <div className="space-y-1.5">
+                <Label htmlFor="monthlyLlmEventLimit">
+                  LLM Event Limit
+                  <HelpTip text="Monthly limit for AI observability events (LLM generations). Customer-facing." />
+                </Label>
+                <Input
+                  id="monthlyLlmEventLimit"
+                  type="number"
+                  min={0}
+                  max={1_000_000_000}
+                  value={createForm.monthlyLlmEventLimit}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, monthlyLlmEventLimit: Number(e.target.value)}))
+                  }
+                />
+                <FieldHint>
+                  {createForm.monthlyLlmEventLimit.toLocaleString()} AI observability events/month
+                </FieldHint>
+                {validationErrors.monthlyLlmEventLimit && (
+                  <p className="text-xs text-destructive">{validationErrors.monthlyLlmEventLimit}</p>
+                )}
+              </div>
+
+              {/* Per-Type Retention */}
               <div className="space-y-1.5">
                 <Label htmlFor="retentionDays">
-                  Retention Days
-                  <HelpTip text="How long event data is stored before automatic deletion. Retention is capped at 90 days." />
+                  Error Retention (days)
+                  <HelpTip text="How long error/event data is stored before automatic deletion." />
                 </Label>
                 <Input
                   id="retentionDays"
@@ -731,11 +827,59 @@ function AdminBillingPage() {
                     setCreateForm((p) => ({...p, retentionDays: Number(e.target.value)}))
                   }
                 />
-                <FieldHint>
-                  {createForm.retentionDays} {createForm.retentionDays === 1 ? 'day' : 'days'} of data retention
-                </FieldHint>
                 {validationErrors.retentionDays && (
                   <p className="text-xs text-destructive">{validationErrors.retentionDays}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="logRetentionDays">Log Retention (days)</Label>
+                <Input
+                  id="logRetentionDays"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={createForm.logRetentionDays}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, logRetentionDays: Number(e.target.value)}))
+                  }
+                />
+                {validationErrors.logRetentionDays && (
+                  <p className="text-xs text-destructive">{validationErrors.logRetentionDays}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="replayRetentionDays">Replay Retention (days)</Label>
+                <Input
+                  id="replayRetentionDays"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={createForm.replayRetentionDays}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, replayRetentionDays: Number(e.target.value)}))
+                  }
+                />
+                {validationErrors.replayRetentionDays && (
+                  <p className="text-xs text-destructive">{validationErrors.replayRetentionDays}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="llmRetentionDays">LLM Retention (days)</Label>
+                <Input
+                  id="llmRetentionDays"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={createForm.llmRetentionDays}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, llmRetentionDays: Number(e.target.value)}))
+                  }
+                />
+                {validationErrors.llmRetentionDays && (
+                  <p className="text-xs text-destructive">{validationErrors.llmRetentionDays}</p>
                 )}
               </div>
 
@@ -949,6 +1093,143 @@ function AdminBillingPage() {
 
             <Separator />
 
+            {/* Per-Type Overage Rates */}
+            <div className="space-y-4">
+              <p className="text-sm font-medium">Per-Type Overage Rates</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="overageRateCentsPerGb">
+                    Log Overage (cents/GB)
+                    <HelpTip text="Cost per GB of log data over the included limit." />
+                  </Label>
+                  <Input
+                    id="overageRateCentsPerGb"
+                    type="number"
+                    min={0}
+                    value={createForm.overageRateCentsPerGb}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, overageRateCentsPerGb: Number(e.target.value)}))
+                    }
+                  />
+                  <FieldHint>${(createForm.overageRateCentsPerGb / 100).toFixed(2)}/GB</FieldHint>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="errorOverageRateCentsPer1k">
+                    Error Overage (cents/1K)
+                    <HelpTip text="Cost per 1,000 errors over the included limit." />
+                  </Label>
+                  <Input
+                    id="errorOverageRateCentsPer1k"
+                    type="number"
+                    min={0}
+                    value={createForm.errorOverageRateCentsPer1k}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, errorOverageRateCentsPer1k: Number(e.target.value)}))
+                    }
+                  />
+                  <FieldHint>${(createForm.errorOverageRateCentsPer1k / 100).toFixed(2)}/1K errors</FieldHint>
+                  {validationErrors.errorOverageRateCentsPer1k && (
+                    <p className="text-xs text-destructive">{validationErrors.errorOverageRateCentsPer1k}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="replayOverageRateCentsPerGb">
+                    Replay Overage (cents/GB)
+                    <HelpTip text="Cost per GB of replay data over the included limit." />
+                  </Label>
+                  <Input
+                    id="replayOverageRateCentsPerGb"
+                    type="number"
+                    min={0}
+                    value={createForm.replayOverageRateCentsPerGb}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, replayOverageRateCentsPerGb: Number(e.target.value)}))
+                    }
+                  />
+                  <FieldHint>${(createForm.replayOverageRateCentsPerGb / 100).toFixed(2)}/GB</FieldHint>
+                  {validationErrors.replayOverageRateCentsPerGb && (
+                    <p className="text-xs text-destructive">{validationErrors.replayOverageRateCentsPerGb}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="llmOverageRateCentsPer1k">
+                    LLM Overage (cents/1K)
+                    <HelpTip text="Cost per 1,000 AI observability events over the included limit." />
+                  </Label>
+                  <Input
+                    id="llmOverageRateCentsPer1k"
+                    type="number"
+                    min={0}
+                    value={createForm.llmOverageRateCentsPer1k}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, llmOverageRateCentsPer1k: Number(e.target.value)}))
+                    }
+                  />
+                  <FieldHint>${(createForm.llmOverageRateCentsPer1k / 100).toFixed(2)}/1K events</FieldHint>
+                  {validationErrors.llmOverageRateCentsPer1k && (
+                    <p className="text-xs text-destructive">{validationErrors.llmOverageRateCentsPer1k}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* On-Call Pricing */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="oncallEnabled"
+                  checked={createForm.oncallEnabled}
+                  onCheckedChange={(checked) =>
+                    setCreateForm((p) => ({...p, oncallEnabled: checked}))
+                  }
+                />
+                <Label htmlFor="oncallEnabled" className="cursor-pointer">
+                  Enable On-Call
+                  <HelpTip text="When enabled, subscribers can add on-call seats at the per-user rate." />
+                </Label>
+              </div>
+              {createForm.oncallEnabled && (
+                <div className="grid gap-4 sm:grid-cols-2 pl-4 border-l-2 border-muted">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="oncallPerUserMonthlyCents">Per-User Monthly (cents)</Label>
+                    <Input
+                      id="oncallPerUserMonthlyCents"
+                      type="number"
+                      min={0}
+                      value={createForm.oncallPerUserMonthlyCents}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, oncallPerUserMonthlyCents: Number(e.target.value)}))
+                      }
+                    />
+                    <FieldHint>${(createForm.oncallPerUserMonthlyCents / 100).toFixed(2)}/user/mo</FieldHint>
+                    {validationErrors.oncallPerUserMonthlyCents && (
+                      <p className="text-xs text-destructive">{validationErrors.oncallPerUserMonthlyCents}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="oncallPerUserYearlyCents">Per-User Yearly (cents)</Label>
+                    <Input
+                      id="oncallPerUserYearlyCents"
+                      type="number"
+                      min={0}
+                      value={createForm.oncallPerUserYearlyCents}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, oncallPerUserYearlyCents: Number(e.target.value)}))
+                      }
+                    />
+                    <FieldHint>${(createForm.oncallPerUserYearlyCents / 100).toFixed(2)}/user/yr</FieldHint>
+                    {validationErrors.oncallPerUserYearlyCents && (
+                      <p className="text-xs text-destructive">{validationErrors.oncallPerUserYearlyCents}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
             {/* Stripe IDs */}
             <div className="space-y-3">
               <p className="text-sm font-medium flex items-center gap-1">
@@ -1104,11 +1385,14 @@ function AdminBillingPage() {
                 <p><strong>Transactions:</strong> {createForm.monthlyTransactionLimit.toLocaleString()}</p>
                 <p><strong>Replays:</strong> {createForm.monthlyReplayLimit.toLocaleString()}</p>
                 <p><strong>Feedback:</strong> {createForm.monthlyFeedbackLimit.toLocaleString()}</p>
-                <p><strong>Retention:</strong> {createForm.retentionDays} days</p>
+                <p><strong>LLM Events:</strong> {createForm.monthlyLlmEventLimit.toLocaleString()}</p>
+                <p><strong>Retention:</strong> {createForm.retentionDays}d errors, {createForm.logRetentionDays}d logs, {createForm.replayRetentionDays}d replays, {createForm.llmRetentionDays}d LLM</p>
                 <p><strong>Max Projects:</strong> {createForm.maxProjects || 'Unlimited'}</p>
                 <p><strong>Max Systems:</strong> {createForm.maxSystems}</p>
                 <p><strong>Monitor Interval:</strong> {formatInterval(createForm.monitorIntervalSeconds)}</p>
                 <p><strong>PAYG:</strong> {createForm.paygEnabled ? `Enabled (${createForm.paygRateMicrosPerUnit} micros/unit)` : 'Disabled'}</p>
+                <p><strong>Overage:</strong> ${(createForm.overageRateCentsPerGb / 100).toFixed(2)}/GB logs, ${(createForm.errorOverageRateCentsPer1k / 100).toFixed(2)}/1K errors, ${(createForm.replayOverageRateCentsPerGb / 100).toFixed(2)}/GB replays, ${(createForm.llmOverageRateCentsPer1k / 100).toFixed(2)}/1K LLM</p>
+                <p><strong>On-Call:</strong> {createForm.oncallEnabled ? `$${(createForm.oncallPerUserMonthlyCents / 100).toFixed(2)}/user/mo` : 'Disabled'}</p>
               </div>
               <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3">
                 <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
@@ -1345,7 +1629,8 @@ function AdminBillingPage() {
                 <p>Transactions: {targetTierConfig.monthlyTransactionLimit.toLocaleString()}</p>
                 <p>Replays: {targetTierConfig.monthlyReplayLimit.toLocaleString()}</p>
                 <p>Feedback: {targetTierConfig.monthlyFeedbackLimit.toLocaleString()}</p>
-                <p>Retention: {targetTierConfig.retentionDays} days</p>
+                <p>LLM Events: {(targetTierConfig.monthlyLlmEventLimit ?? 0).toLocaleString()}</p>
+                <p>Retention: {targetTierConfig.retentionDays}d errors, {targetTierConfig.replayRetentionDays ?? targetTierConfig.retentionDays}d replays, {targetTierConfig.llmRetentionDays ?? targetTierConfig.retentionDays}d LLM</p>
                 <p>Max Systems: {targetTierConfig.maxSystems}</p>
                 <p>PAYG: {targetTierConfig.paygEnabled ? 'Enabled' : 'Disabled'}</p>
               </div>
@@ -1573,11 +1858,43 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
       to: form.monthlyFeedbackLimit.toLocaleString(),
     })
   }
+  const currentLlm = current.monthlyLlmEventLimit ?? 0
+  if (currentLlm !== form.monthlyLlmEventLimit) {
+    changes.push({
+      field: 'LLM Event Limit',
+      from: currentLlm.toLocaleString(),
+      to: form.monthlyLlmEventLimit.toLocaleString(),
+    })
+  }
   if (current.retentionDays !== form.retentionDays) {
     changes.push({
-      field: 'Retention Days',
+      field: 'Error Retention',
       from: `${current.retentionDays}d`,
       to: `${form.retentionDays}d`,
+    })
+  }
+  const currentLogRet = current.logRetentionDays ?? current.retentionDays
+  if (currentLogRet !== form.logRetentionDays) {
+    changes.push({
+      field: 'Log Retention',
+      from: `${currentLogRet}d`,
+      to: `${form.logRetentionDays}d`,
+    })
+  }
+  const currentReplayRet = current.replayRetentionDays ?? current.retentionDays
+  if (currentReplayRet !== form.replayRetentionDays) {
+    changes.push({
+      field: 'Replay Retention',
+      from: `${currentReplayRet}d`,
+      to: `${form.replayRetentionDays}d`,
+    })
+  }
+  const currentLlmRet = current.llmRetentionDays ?? current.retentionDays
+  if (currentLlmRet !== form.llmRetentionDays) {
+    changes.push({
+      field: 'LLM Retention',
+      from: `${currentLlmRet}d`,
+      to: `${form.llmRetentionDays}d`,
     })
   }
   const formMaxProjects = form.maxProjects.trim() ? Number(form.maxProjects) : null
@@ -1643,6 +1960,46 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
       field: 'PAYG Rate',
       from: `${current.paygRateMicrosPerUnit} micros`,
       to: `${form.paygRateMicrosPerUnit} micros`,
+    })
+  }
+  const currentLogOverage = current.overageRateCentsPerGb ?? 40
+  if (currentLogOverage !== form.overageRateCentsPerGb) {
+    changes.push({
+      field: 'Log Overage',
+      from: `${(currentLogOverage / 100).toFixed(2)}/GB`,
+      to: `${(form.overageRateCentsPerGb / 100).toFixed(2)}/GB`,
+    })
+  }
+  const currentErrOverage = current.errorOverageRateCentsPer1k ?? 10
+  if (currentErrOverage !== form.errorOverageRateCentsPer1k) {
+    changes.push({
+      field: 'Error Overage',
+      from: `${(currentErrOverage / 100).toFixed(2)}/1K`,
+      to: `${(form.errorOverageRateCentsPer1k / 100).toFixed(2)}/1K`,
+    })
+  }
+  const currentReplayOverage = current.replayOverageRateCentsPerGb ?? 40
+  if (currentReplayOverage !== form.replayOverageRateCentsPerGb) {
+    changes.push({
+      field: 'Replay Overage',
+      from: `${(currentReplayOverage / 100).toFixed(2)}/GB`,
+      to: `${(form.replayOverageRateCentsPerGb / 100).toFixed(2)}/GB`,
+    })
+  }
+  const currentLlmOverage = current.llmOverageRateCentsPer1k ?? 100
+  if (currentLlmOverage !== form.llmOverageRateCentsPer1k) {
+    changes.push({
+      field: 'LLM Overage',
+      from: `${(currentLlmOverage / 100).toFixed(2)}/1K`,
+      to: `${(form.llmOverageRateCentsPer1k / 100).toFixed(2)}/1K`,
+    })
+  }
+  const currentOncall = current.oncallPerUserMonthlyCents ?? 500
+  if (current.oncallEnabled !== form.oncallEnabled || currentOncall !== form.oncallPerUserMonthlyCents) {
+    changes.push({
+      field: 'On-Call',
+      from: current.oncallEnabled ? `$${(currentOncall / 100).toFixed(2)}/user` : 'Disabled',
+      to: form.oncallEnabled ? `$${(form.oncallPerUserMonthlyCents / 100).toFixed(2)}/user` : 'Disabled',
     })
   }
 

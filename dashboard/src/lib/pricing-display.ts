@@ -25,6 +25,7 @@ export interface PricingCardTierInput {
   yearlyPriceCents: number
   trialDays?: number | null
   monthlyGbLimit: number
+  monthlyLlmEventLimit?: number
   retentionDays: number
   maxProjects: number | null
   maxSystems: number
@@ -100,6 +101,15 @@ function buildTierFeatures(tier: PricingCardTierInput): string[] {
   ]
 
   if (tier.sessionReplayEnabled) features.push('Session replays and events')
+
+  if (tier.monthlyLlmEventLimit != null && tier.monthlyLlmEventLimit > 0) {
+    const llmFormatted = tier.monthlyLlmEventLimit >= 1_000_000
+      ? `${(tier.monthlyLlmEventLimit / 1_000_000).toFixed(1)}M`
+      : tier.monthlyLlmEventLimit >= 1_000
+        ? `${(tier.monthlyLlmEventLimit / 1_000).toFixed(0)}K`
+        : tier.monthlyLlmEventLimit.toString()
+    features.push(`${llmFormatted} AI observability events`)
+  }
 
   if (tier.statusPagesEnabled && tier.statusPageCustomDomainEnabled) {
     features.push('Custom status pages with custom domains')

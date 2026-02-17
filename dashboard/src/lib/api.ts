@@ -519,8 +519,11 @@ interface BillingTierConfig {
   monthlyTransactionLimit: number
   monthlyReplayLimit: number
   monthlyFeedbackLimit: number
+  monthlyLlmEventLimit: number
   logRetentionDays: number
   retentionDays: number
+  replayRetentionDays: number
+  llmRetentionDays: number
   statusPagesEnabled: boolean
   statusPageCustomDomainEnabled: boolean
   sessionReplayEnabled: boolean
@@ -541,6 +544,10 @@ interface BillingTierConfig {
   monthlyGbLimit: number
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
+  overageRateCentsPerGb: number
+  errorOverageRateCentsPer1k?: number
+  replayOverageRateCentsPerGb?: number
+  llmOverageRateCentsPer1k?: number
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null
@@ -576,6 +583,8 @@ interface BillingUsage {
   replayLimit: number
   usedFeedback: number
   feedbackLimit: number
+  usedLlmEvents?: number
+  llmEventLimit?: number
   usedLogs?: number
   usedBytes: number
   bytesLimit: number
@@ -653,9 +662,12 @@ interface CreateTierVersionRequest {
   monthlyTransactionLimit: number
   monthlyReplayLimit: number
   monthlyFeedbackLimit: number
+  monthlyLlmEventLimit?: number
   monthlyGbLimit?: number | null
   retentionDays: number
   logRetentionDays?: number | null
+  replayRetentionDays?: number | null
+  llmRetentionDays?: number | null
   statusPagesEnabled?: boolean | null
   statusPageCustomDomainEnabled?: boolean | null
   sessionReplayEnabled?: boolean | null
@@ -676,10 +688,18 @@ interface CreateTierVersionRequest {
   paygEnabled: boolean
   paygRateMicrosPerUnit: number
   overageRateCentsPerGb?: number | null
+  errorOverageRateCentsPer1k?: number | null
+  replayOverageRateCentsPerGb?: number | null
+  llmOverageRateCentsPer1k?: number | null
+  oncallPerUserMonthlyCents?: number | null
+  oncallPerUserYearlyCents?: number | null
+  oncallEnabled?: boolean | null
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null
   stripeYearlyOveragePriceId?: string | null
+  stripeOncallPriceId?: string | null
+  stripeOncallYearlyPriceId?: string | null
 }
 
 interface TierMigrationResponse {
