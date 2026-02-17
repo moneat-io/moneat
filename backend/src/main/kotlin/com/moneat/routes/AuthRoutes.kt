@@ -430,7 +430,8 @@ fun Route.authRoutes() {
                         request.utmMedium,
                         request.utmCampaign,
                         request.utmContent,
-                        request.utmTerm
+                        request.utmTerm,
+                        request.sidebarHiddenItems
                     )
                     call.respond(user)
                 } catch (e: IllegalArgumentException) {

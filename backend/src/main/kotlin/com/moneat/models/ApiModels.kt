@@ -53,7 +53,8 @@ data class UserResponse(
     val onboardingCompleted: Boolean = false,
     val isAdmin: Boolean = false,
     val organizationSlug: String? = null,
-    val demoEpochMs: Long? = null
+    val demoEpochMs: Long? = null,
+    val sidebarHiddenItems: List<String> = emptyList()
 )
 
 @Serializable
@@ -292,7 +293,8 @@ data class CompleteOnboardingRequest(
     val utmMedium: String? = null,
     val utmCampaign: String? = null,
     val utmContent: String? = null,
-    val utmTerm: String? = null
+    val utmTerm: String? = null,
+    val sidebarHiddenItems: List<String>? = null
 )
 
 @Serializable
@@ -704,4 +706,15 @@ data class SentryAuthDetails(
 data class SentryAuthUser(
     val email: String,
     val id: String
+)
+
+// Sidebar preferences request/response
+@Serializable
+data class UpdateSidebarPreferencesRequest(
+    val hiddenItems: List<String>
+)
+
+@Serializable
+data class SidebarPreferencesResponse(
+    val hiddenItems: List<String>
 )

@@ -471,7 +471,8 @@ class AuthService {
         utmMedium: String? = null,
         utmCampaign: String? = null,
         utmContent: String? = null,
-        utmTerm: String? = null
+        utmTerm: String? = null,
+        sidebarHiddenItems: List<String>? = null
     ): UserResponse {
         return transaction {
             val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
@@ -484,6 +485,7 @@ class AuthService {
                 ?: throw IllegalArgumentException("No organization found for user")
             
             val orgId = membership[Memberships.organization_id]
+            val membershipId = membership[Memberships.id]
             
             // Generate slug from custom input or organization name
             val baseSlug = (customSlug ?: organizationName).lowercase()
@@ -514,6 +516,19 @@ class AuthService {
                 it[utm_term] = utmTerm
             }
             
+            // Update sidebar preferences if provided
+            val hiddenItems = if (sidebarHiddenItems != null) {
+                SidebarPreferenceService.updatePreferences(
+                    membershipId = membershipId,
+                    userId = userId,
+                    organizationId = orgId,
+                    hiddenItems = sidebarHiddenItems,
+                    source = "onboarding"
+                )
+            } else {
+                emptyList()
+            }
+            
             // Mark onboarding as completed
             Users.update({ Users.id eq userId }) {
                 it[onboarding_completed] = true
@@ -526,7 +541,9 @@ class AuthService {
                 user[Users.email_verified],
                 true,
                 user[Users.is_admin],
-                slug
+                slug,
+                null,
+                hiddenItems
             )
         }
     }

@@ -2102,8 +2102,9 @@ class ApiClient {
     utmMedium?: string,
     utmCampaign?: string,
     utmContent?: string,
-    utmTerm?: string
-  ): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; organizationSlug?: string }> {
+    utmTerm?: string,
+    sidebarHiddenItems?: string[]
+  ): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; organizationSlug?: string; sidebarHiddenItems?: string[] }> {
     return this.request(`${API_BASE.replace('/v1', '')}/auth/complete-onboarding`, {
       method: 'POST',
       body: JSON.stringify({ 
@@ -2115,13 +2116,21 @@ class ApiClient {
         utmMedium,
         utmCampaign,
         utmContent,
-        utmTerm
+        utmTerm,
+        sidebarHiddenItems
       }),
     })
   }
 
-  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean; organizationSlug?: string; demoEpochMs?: number }> {
+  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean; organizationSlug?: string; demoEpochMs?: number; sidebarHiddenItems?: string[] }> {
     return this.request(`${API_BASE}/user`)
+  }
+
+  async updateSidebarPreferences(hiddenItems: string[]): Promise<{ hiddenItems: string[] }> {
+    return this.request(`${API_BASE}/user/sidebar-preferences`, {
+      method: 'PUT',
+      body: JSON.stringify({ hiddenItems }),
+    })
   }
 
   async demoLogin(): Promise<{ token: string; demoEpochMs: number }> {

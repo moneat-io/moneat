@@ -33,12 +33,15 @@ import com.moneat.models.ProjectNotificationPreferences
 import com.moneat.models.NotificationPreferencesResponse
 import com.moneat.models.AlertNotificationPreferencesResponse
 import com.moneat.models.UpdateAlertNotificationPreferenceRequest
+import com.moneat.models.UpdateSidebarPreferencesRequest
+import com.moneat.models.SidebarPreferencesResponse
 import com.moneat.plugins.getSentryTransaction
 import com.moneat.plugins.isDemoUser
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.services.AlertNotificationPreferencesService
 import com.moneat.services.DashboardService
 import com.moneat.services.SdkVersionService
+import com.moneat.services.SidebarPreferenceService
 import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.DetailedErrorResponse
@@ -94,9 +97,9 @@ fun Route.apiRoutes() {
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val demoEpochMs = call.getDemoEpochMs()
                 
-                val (user, orgSlug) = transaction {
+                val (user, orgSlug, sidebarHiddenItems) = transaction {
                     val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                        ?: return@transaction Pair(null, null)
+                        ?: return@transaction Triple(null, null, emptyList())
                     
                     val membership = Memberships.selectAll()
                         .where { Memberships.user_id eq userId }
@@ -109,7 +112,9 @@ fun Route.apiRoutes() {
                             ?.get(Organizations.slug)
                     }
                     
-                    Pair(userRow, slug)
+                    val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
+                    
+                    Triple(userRow, slug, hiddenItems)
                 }
                 
                 if (user == null) {
@@ -123,8 +128,42 @@ fun Route.apiRoutes() {
                         user[Users.onboarding_completed],
                         user[Users.is_admin],
                         orgSlug,
-                        demoEpochMs
+                        demoEpochMs,
+                        sidebarHiddenItems
                     ))
+                }
+            }
+
+            // Update sidebar preferences
+            put("/user/sidebar-preferences") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val request = call.receive<UpdateSidebarPreferencesRequest>()
+                
+                val hiddenItems = transaction {
+                    // Get user's membership
+                    val membership = Memberships.selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?: return@transaction null
+                    
+                    val membershipId = membership[Memberships.id]
+                    val organizationId = membership[Memberships.organization_id]
+                    
+                    // Update preferences
+                    SidebarPreferenceService.updatePreferences(
+                        membershipId = membershipId,
+                        userId = userId,
+                        organizationId = organizationId,
+                        hiddenItems = request.hiddenItems,
+                        source = "settings"
+                    )
+                }
+                
+                if (hiddenItems == null) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("User membership not found"))
+                } else {
+                    call.respond(SidebarPreferencesResponse(hiddenItems))
                 }
             }
 

@@ -54,6 +54,7 @@ import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {Logo} from '@/components/logo'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
+import {isSidebarItemVisible} from '@/lib/sidebar-config'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
@@ -224,21 +225,21 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   }
 
   const navItems = [
-    { icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
-    { icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
-    { icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
-    { icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
-    { icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
-    { icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
-    { icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
-    { icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
-    { icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
-    { icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
-    { icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
-    { icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false },
-    ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
-    { icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
-  ]
+    { key: 'dashboard', icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
+    { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
+    { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
+    { key: 'logs', icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
+    { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
+    { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
+    { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
+    { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
+    { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
+    { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
+    { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
+    { key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false },
+    ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
+    { key: 'settings', icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
+  ].filter(item => isSidebarItemVisible(item.key, user?.sidebarHiddenItems || []))
 
   const projectNavItems = activeProjectId ? [
     { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` },

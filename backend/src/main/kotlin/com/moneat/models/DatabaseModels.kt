@@ -105,6 +105,18 @@ object Memberships : Table("memberships") {
     val user_id = integer("user_id").references(Users.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val role = varchar("role", 50)
+    val sidebar_hidden_items = registerColumn<List<String>>("sidebar_hidden_items", TextArrayColumnType())
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SidebarPreferenceEvents : Table("sidebar_preference_events") {
+    val id = integer("id").autoIncrement()
+    val membership_id = integer("membership_id").references(Memberships.id)
+    val user_id = integer("user_id").references(Users.id)
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val hidden_items = registerColumn<List<String>>("hidden_items", TextArrayColumnType())
+    val event_source = varchar("source", 32)
+    val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
 

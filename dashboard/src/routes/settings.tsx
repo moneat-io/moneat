@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { type FormEvent, Fragment, useEffect, useMemo, useState } from 'react'
-import { createFileRoute, redirect, useSearch, Link } from '@tanstack/react-router'
+import { createFileRoute, redirect, useSearch, Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, useElements, useStripe, PaymentElement } from '@stripe/react-stripe-js'
@@ -71,10 +71,12 @@ import {
   Info,
   Users,
   Calendar,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { SsoTab } from '@/components/sso-settings'
 import { TeamSettings } from '@/components/settings/team-settings'
 import { useAuth } from '@/hooks/useAuth'
+import { CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys } from '@/lib/sidebar-config'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -142,6 +144,7 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
   const search = useSearch({ from: '/settings' })
+  const navigate = useNavigate({ from: '/settings' })
   const { user } = useAuth()
   
   const { data: subscription } = useQuery({
@@ -157,101 +160,138 @@ function SettingsPage() {
   return (
     <div>
       <div className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
           <Settings className="h-6 w-6 text-muted-foreground" />
           Settings
         </h1>
-        <Tabs defaultValue={search.tab || 'auth-tokens'} className="space-y-6">
-          <TabsList className="w-full justify-start h-auto p-1 bg-muted/50">
-            <TabsTrigger 
-              value="auth-tokens" 
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-900/20 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm"
-            >
-              <Key className="h-4 w-4" />
-              Auth Tokens
-            </TabsTrigger>
-            <TabsTrigger 
-              value="integrations" 
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 dark:data-[state=active]:bg-purple-900/20 dark:data-[state=active]:text-purple-400 data-[state=active]:shadow-sm"
-            >
-              <Plug className="h-4 w-4" />
-              Integrations
-            </TabsTrigger>
-            <TabsTrigger 
-              value="notifications" 
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-900/20 dark:data-[state=active]:text-amber-400 data-[state=active]:shadow-sm"
-            >
-              <Bell className="h-4 w-4" />
-              Notifications
-            </TabsTrigger>
-            <TabsTrigger 
-              value="silence" 
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700 dark:data-[state=active]:bg-orange-900/20 dark:data-[state=active]:text-orange-400 data-[state=active]:shadow-sm"
-            >
-              <BellOff className="h-4 w-4" />
-              Silence Periods
-            </TabsTrigger>
+        <Tabs 
+          value={search.tab || 'auth-tokens'} 
+          onValueChange={(tab) => navigate({ search: { tab } })}
+          orientation="vertical"
+          className="flex flex-col md:flex-row gap-8 items-start"
+        >
+          <aside className="w-full md:w-64 flex-shrink-0">
+            <TabsList className="flex flex-col h-auto bg-transparent p-0 gap-1 items-stretch">
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                General
+              </div>
+              <TabsTrigger 
+                value="auth-tokens" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Key className="h-4 w-4 mr-2" />
+                Auth Tokens
+              </TabsTrigger>
+              <TabsTrigger 
+                value="sidebar" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <SlidersHorizontal className="h-4 w-4 mr-2" />
+                Sidebar
+              </TabsTrigger>
+
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
+                Monitoring
+              </div>
+              <TabsTrigger 
+                value="integrations" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Plug className="h-4 w-4 mr-2" />
+                Integrations
+              </TabsTrigger>
+              <TabsTrigger 
+                value="notifications" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Bell className="h-4 w-4 mr-2" />
+                Notifications
+              </TabsTrigger>
+              <TabsTrigger 
+                value="silence" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <BellOff className="h-4 w-4 mr-2" />
+                Silence Periods
+              </TabsTrigger>
+
+              {(canManageTeam || canUseSso) && (
+                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
+                  Organization
+                </div>
+              )}
+              {canManageTeam && (
+                <TabsTrigger 
+                  value="team" 
+                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Team
+                </TabsTrigger>
+              )}
+              <TabsTrigger 
+                value="billing" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Billing
+              </TabsTrigger>
+              {canUseSso && (
+                <TabsTrigger 
+                  value="sso" 
+                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                >
+                  <Shield className="h-4 w-4 mr-2" />
+                  SSO
+                </TabsTrigger>
+              )}
+
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
+                User
+              </div>
+              <TabsTrigger 
+                value="account" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Account
+              </TabsTrigger>
+            </TabsList>
+          </aside>
+          
+          <div className="flex-1 w-full min-w-0">
+            <TabsContent value="auth-tokens" className="space-y-4 mt-0">
+              <AuthTokensTab />
+            </TabsContent>
+            <TabsContent value="integrations" className="space-y-4 mt-0">
+              <IntegrationsTab />
+            </TabsContent>
+            <TabsContent value="notifications" className="space-y-4 mt-0">
+              <NotificationsTab />
+            </TabsContent>
+            <TabsContent value="silence" className="space-y-4 mt-0">
+              <SilencePeriodsTab />
+            </TabsContent>
             {canManageTeam && (
-              <TabsTrigger 
-                value="team" 
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-700 dark:data-[state=active]:bg-indigo-900/20 dark:data-[state=active]:text-indigo-400 data-[state=active]:shadow-sm"
-              >
-                <Users className="h-4 w-4" />
-                Team
-              </TabsTrigger>
+              <TabsContent value="team" className="space-y-4 mt-0">
+                <TeamSettings />
+              </TabsContent>
             )}
-            <TabsTrigger 
-              value="billing" 
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-900/20 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm"
-            >
-              <CreditCard className="h-4 w-4" />
-              Billing
-            </TabsTrigger>
+            <TabsContent value="sidebar" className="space-y-4 mt-0">
+              <SidebarTab />
+            </TabsContent>
+            <TabsContent value="billing" className="space-y-4 mt-0">
+              <BillingTab />
+            </TabsContent>
             {canUseSso && (
-              <TabsTrigger 
-                value="sso" 
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 dark:data-[state=active]:bg-rose-900/20 dark:data-[state=active]:text-rose-400 data-[state=active]:shadow-sm"
-              >
-                <Shield className="h-4 w-4" />
-                SSO
-              </TabsTrigger>
+              <TabsContent value="sso" className="space-y-4 mt-0">
+                <SsoTab />
+              </TabsContent>
             )}
-            <TabsTrigger 
-              value="account" 
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-red-100 data-[state=active]:text-red-700 dark:data-[state=active]:bg-red-900/20 dark:data-[state=active]:text-red-400 data-[state=active]:shadow-sm"
-            >
-              <Trash2 className="h-4 w-4" />
-              Account
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="auth-tokens" className="space-y-4">
-            <AuthTokensTab />
-          </TabsContent>
-          <TabsContent value="integrations" className="space-y-4">
-            <IntegrationsTab />
-          </TabsContent>
-          <TabsContent value="notifications" className="space-y-4">
-            <NotificationsTab />
-          </TabsContent>
-          <TabsContent value="silence" className="space-y-4">
-            <SilencePeriodsTab />
-          </TabsContent>
-          {canManageTeam && (
-            <TabsContent value="team" className="space-y-4">
-              <TeamSettings />
+            <TabsContent value="account" className="space-y-4 mt-0">
+              <AccountTab />
             </TabsContent>
-          )}
-          <TabsContent value="billing" className="space-y-4">
-            <BillingTab />
-          </TabsContent>
-          {canUseSso && (
-            <TabsContent value="sso" className="space-y-4">
-              <SsoTab />
-            </TabsContent>
-          )}
-          <TabsContent value="account" className="space-y-4">
-            <AccountTab />
-          </TabsContent>
+          </div>
         </Tabs>
       </div>
     </div>
@@ -2255,13 +2295,37 @@ function NotificationsTab() {
   const getSourceLabel = (source: AlertSource) => {
     switch (source) {
       case 'SYSTEM_ALERT':
-        return { label: 'System Alerts', desc: 'Metric threshold breaches (CPU, memory, disk)', icon: Zap }
+        return { 
+          label: 'System Alerts', 
+          desc: 'Metric threshold breaches (CPU, memory, disk)', 
+          icon: Zap,
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-500/10'
+        }
       case 'SYSTEM_DOWN':
-        return { label: 'System Down', desc: 'Server stops reporting', icon: Server }
+        return { 
+          label: 'System Down', 
+          desc: 'Server stops reporting', 
+          icon: Server,
+          color: 'text-red-600',
+          bgColor: 'bg-red-500/10'
+        }
       case 'UPTIME_MONITOR':
-        return { label: 'Uptime Monitors', desc: 'Website or service goes down', icon: Activity }
+        return { 
+          label: 'Uptime Monitors', 
+          desc: 'Website or service goes down', 
+          icon: Activity,
+          color: 'text-green-600',
+          bgColor: 'bg-green-500/10'
+        }
       case 'ERROR_ALERT':
-        return { label: 'Error Alerts', desc: 'New errors and exceptions in your projects', icon: Shield }
+        return { 
+          label: 'Error Alerts', 
+          desc: 'New errors and exceptions in your projects', 
+          icon: Shield,
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-500/10'
+        }
     }
   }
 
@@ -2278,8 +2342,8 @@ function NotificationsTab() {
     return (
       <div className="flex items-center justify-between py-4 border-b last:border-0" key={source}>
         <div className="flex items-start gap-3">
-          <div className="mt-1 bg-primary/10 p-2 rounded-full hidden sm:block">
-            <Icon className="h-4 w-4 text-primary" />
+          <div className={`mt-1 p-2 rounded-full hidden sm:block ${info.bgColor}`}>
+            <Icon className={`h-4 w-4 ${info.color}`} />
           </div>
           <div>
             <p className="font-medium">{info.label}</p>
@@ -2345,12 +2409,16 @@ function NotificationsTab() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            <CardTitle>Notification Channels</CardTitle>
+            <div className="p-2 bg-amber-500/10 rounded-full">
+              <Bell className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <CardTitle>Notification Channels</CardTitle>
+              <CardDescription>
+                Configure how you want to be notified for different types of alerts.
+              </CardDescription>
+            </div>
           </div>
-          <CardDescription>
-            Configure how you want to be notified for different types of alerts.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-[1fr,auto] gap-4 mb-2 border-b pb-2">
@@ -2380,7 +2448,12 @@ function NotificationsTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Additional Settings</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-amber-500/10 rounded-full">
+              <Settings className="h-5 w-5 text-amber-600" />
+            </div>
+            <CardTitle>Additional Settings</CardTitle>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
@@ -2425,10 +2498,17 @@ function NotificationsTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Per-Project Overrides</CardTitle>
-          <CardDescription>
-            Customize notification settings for specific projects
-          </CardDescription>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-amber-500/10 rounded-full">
+              <Layers className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <CardTitle>Per-Project Overrides</CardTitle>
+              <CardDescription>
+                Customize notification settings for specific projects
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {projects.length === 0 ? (
@@ -2830,6 +2910,126 @@ function SilencePeriodsTab() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function SidebarTab() {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+
+  const { data: user } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => api.getCurrentUser(),
+  })
+
+  const [hiddenItems, setHiddenItems] = useState<string[]>(user?.sidebarHiddenItems || [])
+
+  // Update local state when user data changes
+  useEffect(() => {
+    if (user?.sidebarHiddenItems) {
+      setHiddenItems(user.sidebarHiddenItems)
+    }
+  }, [user?.sidebarHiddenItems])
+
+  const saveMutation = useMutation({
+    mutationFn: (items: string[]) => api.updateSidebarPreferences(items),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] })
+      toast({
+        title: 'Preferences saved',
+        description: 'Your sidebar preferences have been updated.',
+      })
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to save sidebar preferences.',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const toggleItem = (itemKey: string) => {
+    setHiddenItems(prev => {
+      if (prev.includes(itemKey)) {
+        return prev.filter(k => k !== itemKey)
+      } else {
+        return [...prev, itemKey]
+      }
+    })
+  }
+
+  const checkAll = () => {
+    setHiddenItems([])
+  }
+
+  const uncheckAll = () => {
+    setHiddenItems(getAllSidebarItemKeys())
+  }
+
+  const hasChanges = JSON.stringify(hiddenItems.sort()) !== JSON.stringify((user?.sidebarHiddenItems || []).sort())
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Sidebar Navigation</CardTitle>
+          <CardDescription>
+            Customize which features appear in your sidebar. Settings and Admin are always visible.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2 mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={checkAll}
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Show All
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={uncheckAll}
+            >
+              <Minus className="h-4 w-4 mr-2" />
+              Hide All
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {CONFIGURABLE_SIDEBAR_ITEMS.map(item => (
+              <div key={item.key} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`sidebar-${item.key}`}
+                  checked={!hiddenItems.includes(item.key)}
+                  onCheckedChange={() => toggleItem(item.key)}
+                />
+                <Label
+                  htmlFor={`sidebar-${item.key}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  {item.label}
+                </Label>
+              </div>
+            ))}
+          </div>
+
+          {hasChanges && (
+            <div className="flex justify-end pt-4 border-t">
+              <Button
+                onClick={() => saveMutation.mutate(hiddenItems)}
+                disabled={saveMutation.isPending}
+              >
+                {saveMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

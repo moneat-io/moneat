@@ -53,12 +53,29 @@ CREATE TABLE IF NOT EXISTS memberships (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     role VARCHAR(50) NOT NULL DEFAULT 'member',
+    sidebar_hidden_items TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, organization_id)
 );
 
 CREATE INDEX idx_memberships_user ON memberships(user_id);
 CREATE INDEX idx_memberships_org ON memberships(organization_id);
+CREATE INDEX idx_memberships_sidebar_hidden_items ON memberships USING GIN (sidebar_hidden_items);
+
+-- Sidebar preference events for product insights
+CREATE TABLE IF NOT EXISTS sidebar_preference_events (
+    id SERIAL PRIMARY KEY,
+    membership_id INTEGER NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    hidden_items TEXT[] NOT NULL,
+    source VARCHAR(32) NOT NULL CHECK (source IN ('onboarding', 'settings')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_sidebar_events_org_created ON sidebar_preference_events(organization_id, created_at);
+CREATE INDEX idx_sidebar_events_user_created ON sidebar_preference_events(user_id, created_at);
+CREATE INDEX idx_sidebar_events_source ON sidebar_preference_events(source);
 
 -- Projects
 CREATE TABLE IF NOT EXISTS projects (
