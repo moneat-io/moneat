@@ -84,7 +84,12 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_replays = long("used_replays").default(0)
     val used_feedback = long("used_feedback").default(0)
     val used_llm_events = long("used_llm_events").default(0)
+    val used_logs = long("used_logs").default(0)
     val used_bytes = long("used_bytes").default(0)
+    val used_error_bytes = long("used_error_bytes").default(0)
+    val used_replay_bytes = long("used_replay_bytes").default(0)
+    val used_log_bytes = long("used_log_bytes").default(0)
+    val used_llm_bytes = long("used_llm_bytes").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -179,6 +184,9 @@ data class BillingUsageResponse(
     val periodStart: String,
     val periodEnd: String,
     val retentionDays: Int,
+    val logRetentionDays: Int = 0,
+    val replayRetentionDays: Int = 0,
+    val llmRetentionDays: Int = 0,
     val usedUnits: Long,
     val usedErrors: Long,
     val errorLimit: Long,
@@ -192,6 +200,10 @@ data class BillingUsageResponse(
     val llmEventLimit: Long = 0,
     val usedLogs: Long = 0,
     val usedBytes: Long,
+    val usedErrorBytes: Long = 0,
+    val usedReplayBytes: Long = 0,
+    val usedLogBytes: Long = 0,
+    val usedLlmBytes: Long = 0,
     val bytesLimit: Long,
     val baseLimitUnits: Long,
     val paygLimitUnits: Long,
@@ -199,6 +211,15 @@ data class BillingUsageResponse(
     val paygBudgetCents: Int,
     val paygUsedUnits: Long,
     val paygUsedCentsEstimate: Int,
+    val errorOverageCentsEstimate: Int = 0,
+    val replayOverageCentsEstimate: Int = 0,
+    val logOverageCentsEstimate: Int = 0,
+    val llmOverageCentsEstimate: Int = 0,
+    val totalOverageCentsEstimate: Int = 0,
+    val errorOverageRateCentsPer1k: Int = 0,
+    val replayOverageRateCentsPerGb: Int = 0,
+    val logOverageRateCentsPerGb: Int = 0,
+    val llmOverageRateCentsPer1k: Int = 0,
     val oncallSeats: Int = 0,
     val oncallUsedSeats: Int = 0,
     val oncallPerUserMonthlyCents: Int = 0,

@@ -49,3 +49,40 @@ SET
     llm_overage_rate_cents_per_1k = CASE WHEN tier_name = 'FREE' THEN 0 ELSE 100 END,
     monthly_replay_limit = 300
 WHERE tier_name IN ('FREE', 'PRO', 'TEAM', 'BUSINESS');
+
+-- Backfill existing nonstandard tiers to avoid unsafe zero defaults.
+UPDATE pricing_tier_configs
+SET
+    monthly_llm_event_limit = CASE
+        WHEN monthly_llm_event_limit > 0 THEN monthly_llm_event_limit
+        WHEN monthly_error_limit > 0 THEN monthly_error_limit
+        WHEN monthly_unit_limit > 0 THEN monthly_unit_limit
+        WHEN monthly_price_cents = 0 THEN 1000
+        ELSE 10000
+    END,
+    replay_retention_days = CASE
+        WHEN replay_retention_days > 0 THEN replay_retention_days
+        WHEN log_retention_days > 0 THEN log_retention_days
+        ELSE COALESCE(NULLIF(retention_days, 0), 30)
+    END,
+    llm_retention_days = CASE
+        WHEN llm_retention_days > 0 THEN llm_retention_days
+        WHEN log_retention_days > 0 THEN log_retention_days
+        ELSE COALESCE(NULLIF(retention_days, 0), 30)
+    END,
+    error_overage_rate_cents_per_1k = CASE
+        WHEN error_overage_rate_cents_per_1k > 0 THEN error_overage_rate_cents_per_1k
+        WHEN monthly_price_cents = 0 THEN 0
+        ELSE 10
+    END,
+    replay_overage_rate_cents_per_gb = CASE
+        WHEN replay_overage_rate_cents_per_gb > 0 THEN replay_overage_rate_cents_per_gb
+        WHEN monthly_price_cents = 0 THEN 0
+        ELSE 40
+    END,
+    llm_overage_rate_cents_per_1k = CASE
+        WHEN llm_overage_rate_cents_per_1k > 0 THEN llm_overage_rate_cents_per_1k
+        WHEN monthly_price_cents = 0 THEN 0
+        ELSE 100
+    END
+WHERE tier_name NOT IN ('FREE', 'PRO', 'TEAM', 'BUSINESS');

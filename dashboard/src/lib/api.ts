@@ -574,6 +574,9 @@ interface BillingUsage {
   periodStart: string
   periodEnd: string
   retentionDays: number
+  logRetentionDays?: number
+  replayRetentionDays?: number
+  llmRetentionDays?: number
   usedUnits: number
   usedErrors: number
   errorLimit: number
@@ -587,6 +590,10 @@ interface BillingUsage {
   llmEventLimit?: number
   usedLogs?: number
   usedBytes: number
+  usedErrorBytes?: number
+  usedReplayBytes?: number
+  usedLogBytes?: number
+  usedLlmBytes?: number
   bytesLimit: number
   baseLimitUnits: number
   paygLimitUnits: number
@@ -594,6 +601,15 @@ interface BillingUsage {
   paygBudgetCents: number
   paygUsedUnits: number
   paygUsedCentsEstimate: number
+  errorOverageCentsEstimate?: number
+  replayOverageCentsEstimate?: number
+  logOverageCentsEstimate?: number
+  llmOverageCentsEstimate?: number
+  totalOverageCentsEstimate?: number
+  errorOverageRateCentsPer1k?: number
+  replayOverageRateCentsPerGb?: number
+  logOverageRateCentsPerGb?: number
+  llmOverageRateCentsPer1k?: number
   oncallSeats?: number
   oncallUsedSeats?: number
   oncallPerUserMonthlyCents?: number
@@ -601,6 +617,9 @@ interface BillingUsage {
   plan: string
   status: string
   withinQuota: boolean
+  bonusGbBytes?: number
+  bonusUnits?: number
+  bonusReason?: string
 }
 
 interface CheckoutSessionRequest {

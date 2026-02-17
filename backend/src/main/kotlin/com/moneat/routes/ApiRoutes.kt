@@ -138,32 +138,59 @@ fun Route.apiRoutes() {
             put("/user/sidebar-preferences") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val organizationIdClaim = principal.payload.getClaim("orgId").asInt()
                 val request = call.receive<UpdateSidebarPreferencesRequest>()
-                
-                val hiddenItems = transaction {
-                    // Get user's membership
-                    val membership = Memberships.selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?: return@transaction null
-                    
+
+                val (hiddenItems, errorStatus, errorMessage) = transaction {
+                    val membership = if (organizationIdClaim != null) {
+                        Memberships.selectAll()
+                            .where {
+                                (Memberships.user_id eq userId) and
+                                    (Memberships.organization_id eq organizationIdClaim)
+                            }
+                            .firstOrNull()
+                    } else {
+                        // Avoid cross-org writes when token is missing org context.
+                        val memberships = Memberships.selectAll()
+                            .where { Memberships.user_id eq userId }
+                            .limit(2)
+                            .toList()
+                        when {
+                            memberships.isEmpty() -> null
+                            memberships.size == 1 -> memberships.first()
+                            else -> return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
+                                null,
+                                HttpStatusCode.BadRequest,
+                                "Organization context required for users in multiple organizations"
+                            )
+                        }
+                    }
+                        ?: return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
+                            null,
+                            HttpStatusCode.NotFound,
+                            "User membership not found"
+                        )
+
                     val membershipId = membership[Memberships.id]
                     val organizationId = membership[Memberships.organization_id]
-                    
-                    // Update preferences
-                    SidebarPreferenceService.updatePreferences(
-                        membershipId = membershipId,
-                        userId = userId,
-                        organizationId = organizationId,
-                        hiddenItems = request.hiddenItems,
-                        source = "settings"
+
+                    Triple(
+                        SidebarPreferenceService.updatePreferences(
+                            membershipId = membershipId,
+                            userId = userId,
+                            organizationId = organizationId,
+                            hiddenItems = request.hiddenItems,
+                            source = "settings"
+                        ),
+                        null,
+                        null
                     )
                 }
-                
-                if (hiddenItems == null) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("User membership not found"))
+
+                if (errorStatus != null) {
+                    call.respond(errorStatus, ErrorResponse(errorMessage ?: "Unable to update sidebar preferences"))
                 } else {
-                    call.respond(SidebarPreferencesResponse(hiddenItems))
+                    call.respond(SidebarPreferencesResponse(hiddenItems!!))
                 }
             }
 

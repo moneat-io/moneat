@@ -55,14 +55,12 @@ import {
   TrendingUp,
   Zap,
   Activity,
-  MessageSquare,
   FileText,
   AlertCircle,
   Download,
   Receipt,
   Check,
   Clock,
-  Wallet,
   Layers,
   Plug,
   Shield,
@@ -73,6 +71,8 @@ import {
   Users,
   Calendar,
   SlidersHorizontal,
+  Brain,
+  Database,
 } from 'lucide-react'
 import { SsoTab } from '@/components/sso-settings'
 import { TeamSettings } from '@/components/settings/team-settings'
@@ -237,6 +237,13 @@ function SettingsPage() {
                 <CreditCard className="h-4 w-4 mr-2" />
                 Billing
               </TabsTrigger>
+              <TabsTrigger 
+                value="usage" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Layers className="h-4 w-4 mr-2" />
+                Usage
+              </TabsTrigger>
               {canUseSso && (
                 <TabsTrigger 
                   value="sso" 
@@ -283,6 +290,9 @@ function SettingsPage() {
             </TabsContent>
             <TabsContent value="billing" className="space-y-4 mt-0">
               <BillingTab />
+            </TabsContent>
+            <TabsContent value="usage" className="space-y-4 mt-0">
+              <UsageTab />
             </TabsContent>
             {canUseSso && (
               <TabsContent value="sso" className="space-y-4 mt-0">
@@ -738,10 +748,216 @@ function RevokeTokenDialog({ token, onClose, onConfirm, isRevoking }: RevokeToke
   )
 }
 
+function UsageTab() {
+  const { data: usage, isLoading } = useQuery({
+    queryKey: ['billingUsage'],
+    queryFn: () => api.getBillingUsage(),
+    enabled: api.isAuthenticated(),
+  })
+
+  if (isLoading || !usage) {
+    return <p className="text-sm text-muted-foreground">Loading usage data...</p>
+  }
+
+  const periodLabel = `${formatDate(usage.periodStart)} – ${formatDate(usage.periodEnd)}`
+
+  const usageRows = [
+    {
+      key: 'error',
+      label: 'Errors',
+      used: usage.usedErrors,
+      limit: usage.errorLimit,
+      icon: AlertCircle,
+      color: 'text-red-500',
+      bgColor: 'bg-red-500',
+      retentionDays: usage.retentionDays,
+      overageCents: usage.errorOverageCentsEstimate ?? 0,
+      overageRate: usage.errorOverageRateCentsPer1k ? `$${(usage.errorOverageRateCentsPer1k / 100).toFixed(2)}/1K` : null,
+      unit: 'events',
+    },
+    {
+      key: 'replay',
+      label: 'Replays',
+      used: usage.usedReplays,
+      limit: usage.replayLimit,
+      icon: Zap,
+      color: 'text-yellow-500',
+      bgColor: 'bg-yellow-500',
+      retentionDays: usage.replayRetentionDays ?? usage.retentionDays,
+      overageCents: usage.replayOverageCentsEstimate ?? 0,
+      overageRate: usage.replayOverageRateCentsPerGb ? `$${(usage.replayOverageRateCentsPerGb / 100).toFixed(2)}/GB` : null,
+      unit: 'sessions',
+    },
+    {
+      key: 'log',
+      label: 'Log Data',
+      used: usage.usedLogBytes ?? 0,
+      limit: usage.bytesLimit,
+      icon: FileText,
+      color: 'text-cyan-500',
+      bgColor: 'bg-cyan-500',
+      retentionDays: usage.logRetentionDays ?? usage.retentionDays,
+      overageCents: usage.logOverageCentsEstimate ?? 0,
+      overageRate: usage.logOverageRateCentsPerGb ? `$${(usage.logOverageRateCentsPerGb / 100).toFixed(2)}/GB` : null,
+      unit: 'bytes',
+    },
+    {
+      key: 'llm',
+      label: 'AI Observability',
+      used: usage.usedLlmEvents ?? 0,
+      limit: usage.llmEventLimit ?? 0,
+      icon: Brain,
+      color: 'text-violet-500',
+      bgColor: 'bg-violet-500',
+      retentionDays: usage.llmRetentionDays ?? usage.retentionDays,
+      overageCents: usage.llmOverageCentsEstimate ?? 0,
+      overageRate: usage.llmOverageRateCentsPer1k ? `$${(usage.llmOverageRateCentsPer1k / 100).toFixed(2)}/1K` : null,
+      unit: 'events',
+    },
+  ] as const
+
+  const UNLIMITED_SENTINEL = 9_007_199_254_740_000
+
+  const isUnlimitedValue = (value: number) => value >= UNLIMITED_SENTINEL || value < 0
+
+  const formatLimit = (value: number, unit: string) => {
+    if (value <= 0 || isUnlimitedValue(value)) return 'Unlimited'
+    if (unit === 'bytes') return `${formatGB(value)} GB`
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+    if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`
+    return value.toLocaleString()
+  }
+
+  const formatUsed = (value: number, unit: string) => {
+    if (unit === 'bytes') return `${formatGB(value)} GB`
+    return value.toLocaleString()
+  }
+
+  const getPercent = (used: number, limit: number) => {
+    if (limit <= 0 || isUnlimitedValue(limit)) return used > 0 ? 5 : 0
+    return Math.min(100, (used / limit) * 100)
+  }
+
+  const getBarClass = (percent: number) =>
+    percent >= 100 ? 'bg-red-500' : percent >= 80 ? 'bg-amber-500' : 'bg-emerald-500'
+
+  const totalOverageCents = usage.totalOverageCentsEstimate ?? 0
+
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`
+  const BYTES_PER_GB = 1024 * 1024 * 1024
+
+  // GB conversion: 1 GB = 1,073,741,824 bytes (binary)
+  const formatGB = (bytes: number) => (bytes / BYTES_PER_GB).toFixed(2)
+  const usedGB = formatGB(usage.usedBytes)
+  const limitGB = usage.bytesLimit > 0 ? formatGB(usage.bytesLimit) : null
+  const isUnlimitedGB = !usage.bytesLimit || usage.bytesLimit <= 0
+  const overageGB = usage.bytesLimit > 0 && usage.usedBytes > usage.bytesLimit
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-blue-500/10 rounded-full">
+                <Layers className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <CardTitle>Usage & Limits</CardTitle>
+                <CardDescription>
+                  Per-type usage for this billing period ({periodLabel}).
+                </CardDescription>
+              </div>
+            </div>
+            {totalOverageCents > 0 && (
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                <TrendingUp className="h-4 w-4 text-amber-500" />
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Est. overage</p>
+                  <p className="text-sm font-bold text-amber-600">{formatCurrency(totalOverageCents)}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {usageRows.map((row) => {
+            const Icon = row.icon
+            const percent = getPercent(row.used, row.limit)
+            const barClass = getBarClass(percent)
+            const isOver = row.limit > 0 && !isUnlimitedValue(row.limit) && row.used > row.limit
+            const isUnlimited = row.limit <= 0 || isUnlimitedValue(row.limit)
+
+            return (
+              <div key={row.key} className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-md ${row.bgColor}/10`}>
+                      <Icon className={`h-4 w-4 ${row.color}`} />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">{row.label}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{row.retentionDays}d retention</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold">{formatUsed(row.used, row.unit)}</span>
+                    <span className="text-xs text-muted-foreground"> / {formatLimit(row.limit, row.unit)}</span>
+                  </div>
+                </div>
+
+                <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${Math.max(isUnlimited && row.used > 0 ? 5 : 0, percent)}%` }} />
+                </div>
+
+                {(isOver || row.overageCents > 0) && (
+                  <div className="flex items-center justify-between text-xs">
+                    {isOver && (
+                      <div className="flex items-center gap-1 text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded">
+                        <AlertTriangle className="h-3 w-3" />
+                        <span>Over limit</span>
+                      </div>
+                    )}
+                    {row.overageCents > 0 && (
+                      <div className="flex items-center gap-2 ml-auto text-muted-foreground">
+                        <span>Overage: <span className="font-medium text-foreground">{formatCurrency(row.overageCents)}</span></span>
+                        {row.overageRate && <span className="text-muted-foreground/60">({row.overageRate})</span>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Total data volume */}
+          <div className="rounded-lg border border-dashed p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">Total data ingested</span>
+              </div>
+              <span className="text-sm font-semibold">
+                {usedGB} GB
+                {limitGB && !isUnlimitedGB && <span className="text-xs text-muted-foreground font-normal"> / {limitGB} GB</span>}
+              </span>
+            </div>
+            {overageGB && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600">
+                <AlertTriangle className="h-3 w-3" />
+                <span>Total data exceeds base GB limit.</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function BillingTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const [budgetDollars, setBudgetDollars] = useState('0')
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [setupClientSecret, setSetupClientSecret] = useState<string | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -778,14 +994,11 @@ function BillingTab() {
   }, [plansData?.publishableKey])
 
   useEffect(() => {
-    if (usage) {
-      setBudgetDollars((usage.paygBudgetCents / 100).toString())
-      if (pendingOnCallSeats === null && usage.oncallSeats !== undefined) {
-        setPendingOnCallSeats(usage.oncallSeats)
-      }
+    if (usage && pendingOnCallSeats === null && usage.oncallSeats !== undefined) {
+      setPendingOnCallSeats(usage.oncallSeats)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usage?.paygBudgetCents, usage?.oncallSeats])
+  }, [usage?.oncallSeats])
 
   const updateOnCallSeatsMutation = useMutation({
     mutationFn: (seats: number) => api.updateOnCallSeats(seats),
@@ -802,21 +1015,6 @@ function BillingTab() {
     onError: (err: Error) => {
       toast({
         title: 'Failed to update seats',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const updateBudgetMutation = useMutation({
-    mutationFn: (paygBudgetCents: number) => api.updatePaygBudget(paygBudgetCents),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['billingUsage'] })
-      toast({ title: 'PAYG budget updated' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to update PAYG budget',
         description: err.message,
         variant: 'destructive',
       })
@@ -886,36 +1084,8 @@ function BillingTab() {
 
   const isPaidTier = usage.plan !== 'free'
   const currentPlan = plansData?.plans?.find((p) => p.tier.tierName.toLowerCase() === usage.plan.toLowerCase())
-  const paygAvailable = isPaidTier && (currentPlan?.tier.paygEnabled ?? false)
   const billablePlans = plansData?.plans?.filter((p) => p.tier.tierName !== 'FREE') ?? []
   const periodLabel = `${formatDate(usage.periodStart)} – ${formatDate(usage.periodEnd)}`
-
-  const usageRows = [
-    { key: 'error', label: 'Errors', used: usage.usedErrors, limit: usage.errorLimit, icon: AlertCircle, color: 'text-red-500' },
-    { key: 'transaction', label: 'Transactions', used: usage.usedTransactions, limit: usage.transactionLimit, icon: Activity, color: 'text-blue-500' },
-    { key: 'replay', label: 'Replays', used: usage.usedReplays, limit: usage.replayLimit, icon: Zap, color: 'text-yellow-500' },
-    { key: 'feedback', label: 'Feedback', used: usage.usedFeedback, limit: usage.feedbackLimit, icon: MessageSquare, color: 'text-purple-500' },
-    { key: 'log', label: 'Logs', used: usage.usedLogs ?? 0, limit: 0, icon: FileText, color: 'text-cyan-500' },
-  ] as const
-
-  const saveBudget = () => {
-    const cents = Math.round(Number(budgetDollars) * 100)
-    if (!Number.isFinite(cents) || cents < 0 || cents % 500 !== 0) {
-      toast({
-        title: 'Invalid budget',
-        description: 'Budget must be in $5 increments.',
-        variant: 'destructive',
-      })
-      return
-    }
-    updateBudgetMutation.mutate(cents)
-  }
-
-  const incrementBudget = (deltaDollars: number) => {
-    const current = Number(budgetDollars)
-    const next = Number.isFinite(current) ? Math.max(0, current + deltaDollars) : Math.max(0, deltaDollars)
-    setBudgetDollars(next.toString())
-  }
 
   const onPaymentMethodUpdated = () => {
     setShowPaymentForm(false)
@@ -926,24 +1096,7 @@ function BillingTab() {
 
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`
   const statusBadgeVariant = usage.status === 'active' || usage.status === 'trialing' ? 'default' : 'secondary'
-  const BYTES_PER_GB = 1024 * 1024 * 1024
 
-  // GB conversion: 1 GB = 1,073,741,824 bytes (binary)
-  const formatGB = (bytes: number) => (bytes / BYTES_PER_GB).toFixed(2)
-  const usedGB = formatGB(usage.usedBytes)
-  const limitGB = usage.bytesLimit > 0 ? formatGB(usage.bytesLimit) : null
-  const isUnlimitedGB = !usage.bytesLimit || usage.bytesLimit <= 0
-  const gbPercent = usage.bytesLimit > 0
-    ? Math.min(100, (usage.usedBytes / usage.bytesLimit) * 100)
-    : usage.bytesLimit === 0
-      ? (usage.usedBytes > 0 ? 100 : 0)
-      : 0
-  const gbBarClass = gbPercent >= 100
-    ? 'bg-red-500'
-    : gbPercent >= 80
-      ? 'bg-amber-500'
-      : 'bg-emerald-500'
-  const overageGB = usage.bytesLimit > 0 && usage.usedBytes > usage.bytesLimit
   const calculateProration = (seatDiff: number) => {
     if (!usage || !usage.oncallPerUserMonthlyCents) return 0
     const now = new Date().getTime()
@@ -1101,125 +1254,6 @@ function BillingTab() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-blue-500/10 rounded-full">
-              <Layers className="h-5 w-5 text-blue-500" />
-            </div>
-            <div>
-              <CardTitle>Data Usage</CardTitle>
-              <CardDescription>
-                Includes all data ingested in this billing period, even if older data has expired from retention.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4 text-blue-500" />
-                <span className="font-medium">Data ingested</span>
-              </div>
-              <span className="text-muted-foreground">
-                <span className="font-medium text-foreground">{usedGB} GB</span>
-                {' / '}
-                {isUnlimitedGB ? 'Unlimited' : `${limitGB} GB`}
-              </span>
-            </div>
-            <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
-              <div className={`h-full rounded-full transition-all ${gbBarClass}`} style={{ width: `${gbPercent}%` }} />
-            </div>
-            {overageGB && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded w-fit">
-                <AlertTriangle className="h-3 w-3" />
-                <span>{overageGB} GB over base limit.</span>
-              </div>
-            )}
-          </div>
-
-          <div className="pt-6 border-t">
-            <div className="space-y-2 mb-4">
-              <p className="text-sm font-medium text-muted-foreground">Usage breakdown</p>
-              <p className="text-xs text-muted-foreground">
-                Billing is based on data (GB) ingested. Event counts below are for reference—there are no separate limits per event type.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              {usageRows.map((row) => {
-                const Icon = row.icon
-                return (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center gap-1.5">
-                      <Icon className={`h-3.5 w-3.5 ${row.color}`} />
-                      <span className="text-xs text-muted-foreground">{row.label}</span>
-                    </div>
-                    <p className="text-lg font-semibold">{row.used.toLocaleString()}</p>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {paygAvailable && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-emerald-500/10 rounded-full">
-                <Wallet className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <CardTitle>PAYG Budget</CardTitle>
-                <CardDescription>
-                  Set a monthly overage budget in $5 increments.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="payg-budget">PAYG budget (USD, $5 increments)</Label>
-              <Input
-                id="payg-budget"
-                value={budgetDollars}
-                onChange={(e) => setBudgetDollars(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => incrementBudget(-5)}
-                disabled={updateBudgetMutation.isPending}
-              >
-                <Minus className="h-4 w-4 mr-1" />
-                $5
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => incrementBudget(5)}
-                disabled={updateBudgetMutation.isPending}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                $5
-              </Button>
-              <Button onClick={saveBudget} disabled={updateBudgetMutation.isPending}>
-                {updateBudgetMutation.isPending ? 'Saving...' : 'Save budget'}
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Current PAYG spend: {formatCurrency(usage.paygUsedCentsEstimate)}
-            </p>
           </CardContent>
         </Card>
       )}
@@ -3035,22 +3069,28 @@ function SidebarTab() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {CONFIGURABLE_SIDEBAR_ITEMS.map(item => (
-              <div key={item.key} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`sidebar-${item.key}`}
-                  checked={!hiddenItems.includes(item.key)}
-                  onCheckedChange={() => toggleItem(item.key)}
-                />
-                <Label
-                  htmlFor={`sidebar-${item.key}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  {item.label}
-                </Label>
-              </div>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {CONFIGURABLE_SIDEBAR_ITEMS.map(item => {
+              const ItemIcon = item.icon
+              return (
+                <div key={item.key} className="flex items-center justify-between space-x-2 rounded-lg border p-3">
+                  <div className="flex items-center space-x-3">
+                    {ItemIcon && <ItemIcon className="h-4 w-4 text-muted-foreground" />}
+                    <Label
+                      htmlFor={`sidebar-${item.key}`}
+                      className="text-sm font-medium leading-none cursor-pointer"
+                    >
+                      {item.label}
+                    </Label>
+                  </div>
+                  <Switch
+                    id={`sidebar-${item.key}`}
+                    checked={!hiddenItems.includes(item.key)}
+                    onCheckedChange={() => toggleItem(item.key)}
+                  />
+                </div>
+              )
+            })}
           </div>
 
           {hasChanges && (

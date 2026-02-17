@@ -105,7 +105,7 @@ object Memberships : Table("memberships") {
     val user_id = integer("user_id").references(Users.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val role = varchar("role", 50)
-    val sidebar_hidden_items = registerColumn<List<String>>("sidebar_hidden_items", TextArrayColumnType())
+    val sidebar_hidden_items = registerColumn<List<String>>("sidebar_hidden_items", TextArrayColumnType()).default(emptyList())
     override val primaryKey = PrimaryKey(id)
 }
 

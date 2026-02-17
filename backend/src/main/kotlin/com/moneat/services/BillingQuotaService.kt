@@ -109,34 +109,19 @@ class BillingQuotaService(
         return transaction {
             val state = loadQuotaState(organizationId, lockRows = true)
             val requestedLlm = normalizedRequests["llm"] ?: 0L
-            val requestedAggregate = normalizedRequests.filterKeys { it != "llm" }.values.sum()
+            val requestedLogUnits = normalizedRequests["log"] ?: 0L
+            val requestedAggregate = normalizedRequests.filterKeys { it != "llm" && it != "log" }.values.sum()
             val totalAfter = state.usedUnits + requestedAggregate
             val requestedTotalBytes = normalizedBytes.values.sum()
             val bytesAfter = state.usedBytes + requestedTotalBytes
 
             for ((eventType, requestedUnits) in normalizedRequests) {
-                if (eventType == "llm") {
-                    val llmAfter = state.usedLlmEvents + requestedUnits
-                    if (state.llmEventLimit >= 0 && llmAfter > state.llmEventLimit) {
-                        SentryUtils.breadcrumb("billing", "LLM event quota exceeded", mapOf(
-                            "organization_id" to organizationId,
-                            "requested_llm" to requestedUnits,
-                            "used_llm_events" to state.usedLlmEvents,
-                            "llm_event_limit" to state.llmEventLimit
-                        ))
-                        return@transaction QuotaReservationResult(
-                            allowed = false,
-                            reason = "event_type_quota_exceeded",
-                            eventType = "llm",
-                            usage = toUsageResponse(state)
-                        )
-                    }
-                    continue
-                }
+                // Logs are byte-limited only, skip unit-based quota check
+                if (eventType == "log") continue
+
                 val usedForType = usedUnitsForType(state, eventType)
                 val typeLimit = baseLimitForType(state, eventType)
                 val typeAfter = usedForType + requestedUnits
-                // Include bonus units in per-type limit
                 val effectiveTypeLimit = if (typeLimit >= 0) typeLimit + state.paygLimitUnits + state.bonusUnits else Long.MAX_VALUE
 
                 if (typeLimit >= 0 && typeAfter > effectiveTypeLimit) {
@@ -159,7 +144,7 @@ class BillingQuotaService(
                 }
             }
 
-            // Include bonus units in total limit
+            // Aggregate unit check (excludes LLM and logs)
             val effectiveTotalLimit = state.totalLimitUnits + state.bonusUnits
             if (totalAfter > effectiveTotalLimit) {
                 SentryUtils.breadcrumb("billing", "Quota exceeded", mapOf(
@@ -177,7 +162,7 @@ class BillingQuotaService(
                 )
             }
 
-            // Include bonus bytes in GB limit
+            // GB/byte limit check
             val effectiveBytesLimit = if (state.bytesLimit > 0) {
                 state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes
             } else {
@@ -205,6 +190,11 @@ class BillingQuotaService(
             val requestedReplays = normalizedRequests["replay"] ?: 0L
             val requestedFeedback = normalizedRequests["feedback"] ?: 0L
 
+            val errorBytes = normalizedBytes["error"] ?: 0L
+            val replayBytes = normalizedBytes["replay"] ?: 0L
+            val logBytes = normalizedBytes["log"] ?: 0L
+            val llmBytes = normalizedBytes["llm"] ?: 0L
+
             OrgUsageCounters.update({
                 (OrgUsageCounters.organization_id eq organizationId) and
                     (OrgUsageCounters.period_start eq state.periodStart)
@@ -215,7 +205,12 @@ class BillingQuotaService(
                 it[used_replays] = state.usedReplays + requestedReplays
                 it[used_feedback] = state.usedFeedback + requestedFeedback
                 it[used_llm_events] = state.usedLlmEvents + requestedLlm
+                it[used_logs] = state.usedLogs + requestedLogUnits
                 it[used_bytes] = bytesAfter
+                it[used_error_bytes] = state.usedErrorBytes + errorBytes
+                it[used_replay_bytes] = state.usedReplayBytes + replayBytes
+                it[used_log_bytes] = state.usedLogBytes + logBytes
+                it[used_llm_bytes] = state.usedLlmBytes + llmBytes
                 it[updated_at] = Clock.System.now()
             }
 
@@ -251,6 +246,9 @@ class BillingQuotaService(
         val plan: String,
         val status: String,
         val retentionDays: Int,
+        val logRetentionDays: Int,
+        val replayRetentionDays: Int,
+        val llmRetentionDays: Int,
         val subscriptionId: Int?,
         val periodStart: LocalDate,
         val periodEnd: LocalDate,
@@ -260,7 +258,12 @@ class BillingQuotaService(
         val usedReplays: Long,
         val usedFeedback: Long,
         val usedLlmEvents: Long,
+        val usedLogs: Long,
         val usedBytes: Long,
+        val usedErrorBytes: Long,
+        val usedReplayBytes: Long,
+        val usedLogBytes: Long,
+        val usedLlmBytes: Long,
         val errorLimit: Long,
         val transactionLimit: Long,
         val replayLimit: Long,
@@ -282,7 +285,11 @@ class BillingQuotaService(
         val oncallEnabled: Boolean,
         val bonusGbBytes: Long,
         val bonusUnits: Long,
-        val bonusReason: String?
+        val bonusReason: String?,
+        val errorOverageRateCentsPer1k: Int,
+        val replayOverageRateCentsPerGb: Int,
+        val logOverageRateCentsPerGb: Int,
+        val llmOverageRateCentsPer1k: Int
     )
 
     private fun loadQuotaState(organizationId: Int, lockRows: Boolean): QuotaState {
@@ -378,7 +385,12 @@ class BillingQuotaService(
         val usedReplays = usageRow[OrgUsageCounters.used_replays]
         val usedFeedback = usageRow[OrgUsageCounters.used_feedback]
         val usedLlmEvents = usageRow[OrgUsageCounters.used_llm_events]
+        val usedLogs = usageRow[OrgUsageCounters.used_logs]
         val usedBytes = usageRow[OrgUsageCounters.used_bytes]
+        val usedErrorBytes = usageRow[OrgUsageCounters.used_error_bytes]
+        val usedReplayBytes = usageRow[OrgUsageCounters.used_replay_bytes]
+        val usedLogBytes = usageRow[OrgUsageCounters.used_log_bytes]
+        val usedLlmBytes = usageRow[OrgUsageCounters.used_llm_bytes]
         val errorLimit = tier.monthlyErrorLimit
         val llmEventLimit = tier.monthlyLlmEventLimit
         val transactionLimit = tier.monthlyTransactionLimit
@@ -414,6 +426,9 @@ class BillingQuotaService(
             plan = tier.tierName.lowercase(),
             status = sub?.get(Subscriptions.status) ?: "active",
             retentionDays = tier.retentionDays,
+            logRetentionDays = tier.logRetentionDays,
+            replayRetentionDays = tier.replayRetentionDays,
+            llmRetentionDays = tier.llmRetentionDays,
             subscriptionId = sub?.get(Subscriptions.id),
             periodStart = periodStart,
             periodEnd = periodEnd,
@@ -423,7 +438,12 @@ class BillingQuotaService(
             usedReplays = usedReplays,
             usedFeedback = usedFeedback,
             usedLlmEvents = usedLlmEvents,
+            usedLogs = usedLogs,
             usedBytes = usedBytes,
+            usedErrorBytes = usedErrorBytes,
+            usedReplayBytes = usedReplayBytes,
+            usedLogBytes = usedLogBytes,
+            usedLlmBytes = usedLlmBytes,
             errorLimit = errorLimit,
             llmEventLimit = llmEventLimit,
             transactionLimit = transactionLimit,
@@ -445,27 +465,55 @@ class BillingQuotaService(
             oncallEnabled = tier.oncallEnabled,
             bonusGbBytes = bonusGbBytes,
             bonusUnits = bonusUnits,
-            bonusReason = bonusReason
+            bonusReason = bonusReason,
+            errorOverageRateCentsPer1k = tier.errorOverageRateCentsPer1k,
+            replayOverageRateCentsPerGb = tier.replayOverageRateCentsPerGb,
+            logOverageRateCentsPerGb = tier.overageRateCentsPerGb,
+            llmOverageRateCentsPer1k = tier.llmOverageRateCentsPer1k
         )
     }
 
     private fun toUsageResponse(state: QuotaState): BillingUsageResponse {
+        val effectivePaygHeadroom = state.paygLimitUnits + state.bonusUnits
         val eventLimitsWithinBudget = listOf(
             state.usedErrors to state.errorLimit,
             state.usedTransactions to state.transactionLimit,
             state.usedReplays to state.replayLimit,
             state.usedFeedback to state.feedbackLimit
         ).all { (used, limit) ->
-            limit < 0 || used <= (limit + state.paygLimitUnits + state.bonusUnits)
+            limit < 0 || used <= (limit + effectivePaygHeadroom)
         }
-        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= state.llmEventLimit
+        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + effectivePaygHeadroom)
         val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes)
+
+        // Per-type overage cost estimates
+        val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
+        val errorOverageCents = if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0)
+            ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt() else 0
+
+        val replayOverageCents = if (state.replayOverageRateCentsPerGb > 0 && state.usedReplayBytes > 0) {
+            val overageReplays = max(0, state.usedReplays - state.replayLimit)
+            ((overageReplays * state.replayOverageRateCentsPerGb) / 100).toInt()
+        } else 0
+
+        val logOverageBytes = max(0, state.usedLogBytes - state.bytesLimit)
+        val logOverageCents = if (state.logOverageRateCentsPerGb > 0 && logOverageBytes > 0)
+            ((logOverageBytes * state.logOverageRateCentsPerGb) / BYTES_PER_GB).toInt() else 0
+
+        val llmOverageUnits = max(0, state.usedLlmEvents - state.llmEventLimit)
+        val llmOverageCents = if (state.llmOverageRateCentsPer1k > 0 && llmOverageUnits > 0)
+            ((llmOverageUnits * state.llmOverageRateCentsPer1k) / 1000).toInt() else 0
+
+        val totalOverageCents = errorOverageCents + replayOverageCents + logOverageCents + llmOverageCents
 
         return BillingUsageResponse(
             organizationId = state.organizationId,
             periodStart = state.periodStart.toString(),
             periodEnd = state.periodEnd.toString(),
             retentionDays = state.retentionDays,
+            logRetentionDays = state.logRetentionDays,
+            replayRetentionDays = state.replayRetentionDays,
+            llmRetentionDays = state.llmRetentionDays,
             usedUnits = state.usedUnits,
             usedErrors = state.usedErrors,
             errorLimit = state.errorLimit,
@@ -477,7 +525,12 @@ class BillingQuotaService(
             feedbackLimit = state.feedbackLimit,
             usedLlmEvents = state.usedLlmEvents,
             llmEventLimit = state.llmEventLimit,
+            usedLogs = state.usedLogs,
             usedBytes = state.usedBytes,
+            usedErrorBytes = state.usedErrorBytes,
+            usedReplayBytes = state.usedReplayBytes,
+            usedLogBytes = state.usedLogBytes,
+            usedLlmBytes = state.usedLlmBytes,
             bytesLimit = state.bytesLimit,
             baseLimitUnits = state.baseLimitUnits,
             paygLimitUnits = state.paygLimitUnits,
@@ -485,6 +538,15 @@ class BillingQuotaService(
             paygBudgetCents = state.paygBudgetCents,
             paygUsedUnits = state.paygUsedUnits,
             paygUsedCentsEstimate = (state.paygUsedMicros / 10_000L).toInt(),
+            errorOverageCentsEstimate = errorOverageCents,
+            replayOverageCentsEstimate = replayOverageCents,
+            logOverageCentsEstimate = logOverageCents,
+            llmOverageCentsEstimate = llmOverageCents,
+            totalOverageCentsEstimate = totalOverageCents,
+            errorOverageRateCentsPer1k = state.errorOverageRateCentsPer1k,
+            replayOverageRateCentsPerGb = state.replayOverageRateCentsPerGb,
+            logOverageRateCentsPerGb = state.logOverageRateCentsPerGb,
+            llmOverageRateCentsPer1k = state.llmOverageRateCentsPer1k,
             oncallSeats = state.oncallSeats,
             oncallUsedSeats = state.oncallUsedSeats,
             oncallPerUserMonthlyCents = state.oncallPerUserMonthlyCents,
@@ -620,7 +682,7 @@ class BillingQuotaService(
             "replay" -> "replay"
             "feedback" -> "feedback"
             "llm" -> "llm"
-            "log", "logs" -> "error"
+            "log", "logs" -> "log"
             else -> "error"
         }
     }
@@ -632,6 +694,7 @@ class BillingQuotaService(
             "replay" -> state.usedReplays
             "feedback" -> state.usedFeedback
             "llm" -> state.usedLlmEvents
+            "log" -> state.usedLogs
             else -> state.usedErrors
         }
     }
@@ -643,6 +706,7 @@ class BillingQuotaService(
             "replay" -> state.replayLimit
             "feedback" -> state.feedbackLimit
             "llm" -> state.llmEventLimit
+            "log" -> -1L // Logs are byte-limited, not unit-limited
             else -> state.errorLimit
         }
     }

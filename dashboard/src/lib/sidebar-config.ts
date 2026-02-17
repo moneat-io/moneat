@@ -5,31 +5,46 @@
  * and provides labels for the settings UI.
  */
 
+import { LucideIcon } from 'lucide-react';
+
 export interface SidebarItem {
   key: string;
   label: string;
-  icon?: string;
+  icon?: LucideIcon;
 }
 
+import {
+  Activity,
+  AlertCircle,
+  Bell,
+  Brain,
+  Globe,
+  MessageSquare,
+  Package,
+  Play,
+  ScrollText,
+  Server,
+  Timer,
+} from 'lucide-react';
+
 // Configurable sidebar items (can be hidden by user)
-// Note: 'admin' and 'settings' are always visible and not included here
+// Note: 'dashboard', 'admin' and 'settings' are always visible and not included here
 export const CONFIGURABLE_SIDEBAR_ITEMS: SidebarItem[] = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'performance', label: 'Performance' },
-  { key: 'issues', label: 'Issues' },
-  { key: 'logs', label: 'Logs' },
-  { key: 'replays', label: 'Replays' },
-  { key: 'feedback', label: 'Feedback' },
-  { key: 'releases', label: 'Releases' },
-  { key: 'ai', label: 'AI Assistant' },
-  { key: 'uptime', label: 'Uptime' },
-  { key: 'status-pages', label: 'Status Pages' },
-  { key: 'monitoring', label: 'Monitoring' },
-  { key: 'on-call', label: 'On-Call' },
+  { key: 'performance', label: 'Performance', icon: Timer },
+  { key: 'issues', label: 'Issues', icon: AlertCircle },
+  { key: 'logs', label: 'Logs', icon: ScrollText },
+  { key: 'replays', label: 'Replays', icon: Play },
+  { key: 'feedback', label: 'Feedback', icon: MessageSquare },
+  { key: 'releases', label: 'Releases', icon: Package },
+  { key: 'ai', label: 'AI Monitoring', icon: Brain },
+  { key: 'uptime', label: 'Uptime', icon: Activity },
+  { key: 'status-pages', label: 'Status Pages', icon: Globe },
+  { key: 'monitoring', label: 'Monitoring', icon: Server },
+  { key: 'on-call', label: 'On-Call', icon: Bell },
 ];
 
 // Always visible items (not configurable)
-export const ALWAYS_VISIBLE_ITEMS = ['admin', 'settings'];
+export const ALWAYS_VISIBLE_ITEMS = ['dashboard', 'admin', 'settings'];
 
 /**
  * Check if a sidebar item should be visible based on user preferences
