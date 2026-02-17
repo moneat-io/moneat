@@ -17,6 +17,7 @@
 package com.moneat.routes
 
 import com.moneat.plugins.getDemoEpochMs
+import com.moneat.plugins.isDemoUser
 import com.moneat.services.DashboardService
 import com.moneat.services.LlmDashboardService
 import com.moneat.utils.ErrorResponse
@@ -38,12 +39,13 @@ fun Route.llmRoutes() {
                 get("/overview") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
                         return@get
                     }
-                    if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
@@ -55,12 +57,13 @@ fun Route.llmRoutes() {
                 get("/generations") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
                         return@get
                     }
-                    if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
@@ -78,12 +81,13 @@ fun Route.llmRoutes() {
                 get("/generations/{id}") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
                         return@get
                     }
-                    if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
@@ -102,12 +106,13 @@ fun Route.llmRoutes() {
                 get("/traces/{traceId}") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
                         return@get
                     }
-                    if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
@@ -126,12 +131,13 @@ fun Route.llmRoutes() {
                 get("/models") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
                         return@get
                     }
-                    if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
@@ -143,12 +149,13 @@ fun Route.llmRoutes() {
                 get("/costs") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
                         return@get
                     }
-                    if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
