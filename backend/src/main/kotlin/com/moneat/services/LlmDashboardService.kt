@@ -71,10 +71,23 @@ class LlmDashboardService {
         }
     }
 
-    suspend fun getOverview(projectId: Long, range: String): LlmOverviewResponse {
+    private fun nowClause(demoEpochMs: Long?): String {
+        return if (demoEpochMs != null) {
+            "toDateTime64(${demoEpochMs / 1000.0}, 3)"
+        } else {
+            "now()"
+        }
+    }
+
+    private fun rangeClause(range: String, demoEpochMs: Long?): String {
         val interval = intervalFromRange(range)
+        return "timestamp >= ${nowClause(demoEpochMs)} - INTERVAL $interval"
+    }
+
+    suspend fun getOverview(projectId: Long, range: String, demoEpochMs: Long? = null): LlmOverviewResponse {
         val bucket = bucketFromRange(range)
         val projectFilter = projectIdClause(projectId)
+        val timeFilter = rangeClause(range, demoEpochMs)
 
         // Stats query
         val statsQuery = """
@@ -86,7 +99,7 @@ class LlmDashboardService {
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
             FROM $clickhouseDb.llm_generations
             WHERE $projectFilter
-              AND timestamp >= now() - INTERVAL $interval
+              AND $timeFilter
             FORMAT JSONEachRow
         """.trimIndent()
 
@@ -100,7 +113,7 @@ class LlmDashboardService {
                 countIf(status = 'error') as errors
             FROM $clickhouseDb.llm_generations
             WHERE $projectFilter
-              AND timestamp >= now() - INTERVAL $interval
+              AND $timeFilter
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONEachRow
@@ -118,7 +131,7 @@ class LlmDashboardService {
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
             FROM $clickhouseDb.llm_generations
             WHERE $projectFilter
-              AND timestamp >= now() - INTERVAL $interval
+              AND $timeFilter
             GROUP BY model, provider
             ORDER BY call_count DESC
             LIMIT 20
@@ -176,15 +189,16 @@ class LlmDashboardService {
         type: String?,
         status: String?,
         page: Int,
-        pageSize: Int
+        pageSize: Int,
+        demoEpochMs: Long? = null
     ): LlmGenerationsListResponse {
-        val interval = intervalFromRange(range)
         val offset = (page - 1) * pageSize
         val projectFilter = projectIdClause(projectId)
+        val timeFilter = rangeClause(range, demoEpochMs)
 
         val filters = buildList {
             add(projectFilter)
-            add("timestamp >= now() - INTERVAL $interval")
+            add(timeFilter)
             model?.let { add("model = '${ClickHouseSqlUtils.escapeSql(it)}'") }
             provider?.let { add("provider = '${ClickHouseSqlUtils.escapeSql(it)}'") }
             type?.let { add("type = '${ClickHouseSqlUtils.escapeSql(it)}'") }
@@ -389,10 +403,10 @@ class LlmDashboardService {
         )
     }
 
-    suspend fun getCosts(projectId: Long, range: String): LlmCostsResponse {
-        val interval = intervalFromRange(range)
+    suspend fun getCosts(projectId: Long, range: String, demoEpochMs: Long? = null): LlmCostsResponse {
         val bucket = bucketFromRange(range)
         val projectFilter = projectIdClause(projectId)
+        val timeFilter = rangeClause(range, demoEpochMs)
 
         val breakdownQuery = """
             SELECT
@@ -401,7 +415,7 @@ class LlmDashboardService {
                 sum(total_tokens) as total_tokens,
                 count() as call_count
             FROM $clickhouseDb.llm_generations
-            WHERE $projectFilter AND timestamp >= now() - INTERVAL $interval
+            WHERE $projectFilter AND $timeFilter
             GROUP BY model, provider
             ORDER BY total_cost DESC
             FORMAT JSONEachRow
@@ -415,7 +429,7 @@ class LlmDashboardService {
                 sum(cost_usd) as cost,
                 countIf(status = 'error') as errors
             FROM $clickhouseDb.llm_generations
-            WHERE $projectFilter AND timestamp >= now() - INTERVAL $interval
+            WHERE $projectFilter AND $timeFilter
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONEachRow
@@ -453,9 +467,9 @@ class LlmDashboardService {
         )
     }
 
-    suspend fun getModels(projectId: Long, range: String): List<LlmModelStats> {
-        val interval = intervalFromRange(range)
+    suspend fun getModels(projectId: Long, range: String, demoEpochMs: Long? = null): List<LlmModelStats> {
         val projectFilter = projectIdClause(projectId)
+        val timeFilter = rangeClause(range, demoEpochMs)
         val query = """
             SELECT
                 model, provider,
@@ -465,7 +479,7 @@ class LlmDashboardService {
                 avg(duration_ms) as avg_duration_ms,
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
             FROM $clickhouseDb.llm_generations
-            WHERE $projectFilter AND timestamp >= now() - INTERVAL $interval
+            WHERE $projectFilter AND $timeFilter
             GROUP BY model, provider
             ORDER BY call_count DESC
             FORMAT JSONEachRow

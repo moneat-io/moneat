@@ -16,6 +16,7 @@
 
 package com.moneat.routes
 
+import com.moneat.plugins.getDemoEpochMs
 import com.moneat.services.DashboardService
 import com.moneat.services.LlmDashboardService
 import com.moneat.utils.ErrorResponse
@@ -47,7 +48,8 @@ fun Route.llmRoutes() {
                         return@get
                     }
                     val range = call.request.queryParameters["range"] ?: "24h"
-                    call.respond(llmService.getOverview(projectId, range))
+                    val demoEpochMs = call.getDemoEpochMs()
+                    call.respond(llmService.getOverview(projectId, range, demoEpochMs))
                 }
 
                 get("/generations") {
@@ -69,7 +71,8 @@ fun Route.llmRoutes() {
                     val status = call.request.queryParameters["status"]
                     val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
                     val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 25
-                    call.respond(llmService.getGenerations(projectId, range, model, provider, type, status, page, pageSize))
+                    val demoEpochMs = call.getDemoEpochMs()
+                    call.respond(llmService.getGenerations(projectId, range, model, provider, type, status, page, pageSize, demoEpochMs))
                 }
 
                 get("/generations/{id}") {
@@ -133,7 +136,8 @@ fun Route.llmRoutes() {
                         return@get
                     }
                     val range = call.request.queryParameters["range"] ?: "24h"
-                    call.respond(llmService.getModels(projectId, range))
+                    val demoEpochMs = call.getDemoEpochMs()
+                    call.respond(llmService.getModels(projectId, range, demoEpochMs))
                 }
 
                 get("/costs") {
@@ -149,7 +153,8 @@ fun Route.llmRoutes() {
                         return@get
                     }
                     val range = call.request.queryParameters["range"] ?: "24h"
-                    call.respond(llmService.getCosts(projectId, range))
+                    val demoEpochMs = call.getDemoEpochMs()
+                    call.respond(llmService.getCosts(projectId, range, demoEpochMs))
                 }
             }
         }

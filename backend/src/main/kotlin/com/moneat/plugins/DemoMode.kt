@@ -16,37 +16,44 @@
 
 package com.moneat.plugins
 
+import com.moneat.config.EnvConfig
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import io.ktor.server.request.path
 import io.ktor.server.response.*
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
+private val demoUserId = EnvConfig.Demo.USER_ID
+private val demoUserEmail = EnvConfig.Demo.USER_EMAIL
+private val demoSafeWritePaths = setOf(
+    "/auth/demo-login",
+    "/auth/demo-refresh",
+    "/auth/refresh",
+    "/auth/logout"
+)
 
 /**
  * Plugin to block write operations for demo users.
- * Demo users can only perform read operations (GET requests).
+ * Demo users can only perform read operations.
  */
 fun Application.configureDemoModeRestrictions() {
     // Use Plugins phase which runs after authentication
     intercept(ApplicationCallPipeline.Plugins) {
-        val principal = call.principal<JWTPrincipal>()
-        val isDemo = principal?.payload?.getClaim("isDemo")?.asBoolean() ?: false
+        val isDemo = call.isDemoUser()
 
         if (isDemo) {
-            val method = call.request.local.method
-            val path = call.request.local.uri
-
-            // Allow the demo login endpoint
-            if (path.contains("/auth/demo-login")) {
+            val method = call.request.httpMethod
+            val path = call.request.path()
+            if (path in demoSafeWritePaths) {
                 return@intercept
             }
 
-            // Allow only GET and OPTIONS requests for demo users
-            if (method != HttpMethod.Get && method != HttpMethod.Options) {
+            // Allow only safe methods for demo users
+            if (method != HttpMethod.Get && method != HttpMethod.Options && method != HttpMethod.Head) {
                 logger.warn { "Demo user attempted ${method.value} on $path" }
                 call.respond(
                     HttpStatusCode.Forbidden,
@@ -63,10 +70,24 @@ fun Application.configureDemoModeRestrictions() {
  * Useful for bypassing permission checks or other demo-specific logic.
  */
 fun ApplicationCall.isDemoUser(): Boolean {
-    val principal = principal<JWTPrincipal>() ?: return false
-    return try {
-        principal.payload.getClaim("isDemo")?.asBoolean() ?: false
-    } catch (e: Exception) {
+    val jwtPrincipal = principal<JWTPrincipal>()
+    if (jwtPrincipal != null) {
+        try {
+            if (jwtPrincipal.payload.getClaim("isDemo")?.asBoolean() == true) return true
+            val userId = jwtPrincipal.payload.getClaim("userId")?.asLong()
+                ?: jwtPrincipal.payload.getClaim("userId")?.asInt()?.toLong()
+            if (userId == demoUserId) return true
+            val email = jwtPrincipal.payload.getClaim("email")?.asString()
+            if (email != null && email.equals(demoUserEmail, ignoreCase = true)) return true
+        } catch (_: Exception) {
+            // Fall through and try other principal types.
+        }
+    }
+
+    val tokenPrincipal = principal<AuthTokenPrincipal>()
+    return if (tokenPrincipal != null) {
+        tokenPrincipal.userId.toLong() == demoUserId
+    } else {
         false
     }
 }
@@ -76,10 +97,14 @@ fun ApplicationCall.isDemoUser(): Boolean {
  * Returns null if not a demo user or if demoEpochMs is not set.
  */
 fun ApplicationCall.getDemoEpochMs(): Long? {
-    val principal = principal<JWTPrincipal>() ?: return null
+    val principal = principal<JWTPrincipal>()
+    if (principal == null) {
+        return if (isDemoUser()) EnvConfig.Demo.epochMs else null
+    }
     return try {
         principal.payload.getClaim("demoEpochMs")?.asLong()
-    } catch (e: Exception) {
-        null
+            ?: if (isDemoUser()) EnvConfig.Demo.epochMs else null
+    } catch (_: Exception) {
+        if (isDemoUser()) EnvConfig.Demo.epochMs else null
     }
 }

@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.config.EnvConfig
 import com.moneat.models.RefreshTokens
 import com.moneat.models.Users
 import org.jetbrains.exposed.sql.*
@@ -165,14 +166,25 @@ class RefreshTokenService {
      * Generate a JWT access token
      */
     private fun generateAccessToken(userId: Int, email: String, orgId: Int, orgRole: String): String {
-        return JWT.create()
+        val isDemoIdentity = userId.toLong() == EnvConfig.Demo.USER_ID ||
+            email.equals(EnvConfig.Demo.USER_EMAIL, ignoreCase = true)
+        val effectiveRole = if (isDemoIdentity) "viewer" else orgRole
+
+        val jwtBuilder = JWT.create()
             .withAudience(jwtAudience)
             .withIssuer(jwtIssuer)
             .withClaim("userId", userId)
             .withClaim("email", email)
             .withClaim("orgId", orgId)
-            .withClaim("orgRole", orgRole)
+            .withClaim("orgRole", effectiveRole)
             .withExpiresAt(Date(System.currentTimeMillis() + (ACCESS_TOKEN_EXPIRY_HOURS * 3600000)))
-            .sign(Algorithm.HMAC256(jwtSecret))
+
+        if (isDemoIdentity) {
+            jwtBuilder
+                .withClaim("isDemo", true)
+                .withClaim("demoEpochMs", EnvConfig.Demo.epochMs)
+        }
+
+        return jwtBuilder.sign(Algorithm.HMAC256(jwtSecret))
     }
 }
