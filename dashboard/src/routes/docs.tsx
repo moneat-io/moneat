@@ -22,6 +22,7 @@ import {DocsSearch} from '@/components/docs/search'
 import {
   BookOpen,
   Rocket,
+  Brain,
   Bug,
   ListChecks,
   Bell,
