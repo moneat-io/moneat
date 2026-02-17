@@ -90,6 +90,11 @@ describe('logViewUrlState', () => {
       expect(result.viz).toBe('table')
     })
 
+    it('should migrate list viz mode to timeseries', () => {
+      const result = parseLogViewSearch({viz: 'list'})
+      expect(result.viz).toBe('timeseries')
+    })
+
     it('should ignore invalid viz mode', () => {
       const result = parseLogViewSearch({viz: 'invalid-mode'})
       expect(result.viz).toBeUndefined()
@@ -195,8 +200,8 @@ describe('logViewUrlState', () => {
       expect(result.to).toBeUndefined()
     })
 
-    it('should omit default viz mode (list)', () => {
-      const result = serializeLogViewState({vizMode: 'list'})
+    it('should omit default viz mode (timeseries)', () => {
+      const result = serializeLogViewState({vizMode: 'timeseries'})
       expect(result.viz).toBeUndefined()
     })
 

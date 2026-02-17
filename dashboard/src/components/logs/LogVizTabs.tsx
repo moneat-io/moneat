@@ -15,9 +15,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {cn} from '@/lib/utils'
-import {BarChart3, List, PieChart, Table2, TrendingUp} from 'lucide-react'
+import {BarChart3, PieChart, Table2, TrendingUp} from 'lucide-react'
 
-export type LogVizMode = 'list' | 'timeseries' | 'toplist' | 'table' | 'pie'
+export type LogVizMode = 'timeseries' | 'toplist' | 'table' | 'pie'
 
 interface LogVizTabsProps {
   mode: LogVizMode
@@ -25,7 +25,6 @@ interface LogVizTabsProps {
 }
 
 const tabs: {value: LogVizMode; label: string; icon: React.ElementType}[] = [
-  {value: 'list', label: 'List', icon: List},
   {value: 'timeseries', label: 'Timeseries', icon: TrendingUp},
   {value: 'toplist', label: 'Top List', icon: BarChart3},
   {value: 'table', label: 'Table', icon: Table2},

@@ -50,6 +50,7 @@ import {
 } from 'lucide-react'
 import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
+import {getNow} from '@/lib/demo'
 
 // ─── Subtle badge colors ─────────────────────────────────────────────
 function getLevelBadge(level: string): string {
@@ -430,7 +431,7 @@ function DashboardPage() {
   const recentReleases = releases.slice(0, 5)
   const recentFeedback = feedback.slice(0, 5)
   const dashboardUptimeMonitors = uptimeMonitors.slice(0, 6)
-  const nowMs = Date.now()
+  const nowMs = getNow()
   const uptimeMonitorStatusById = new Map(uptimeMonitors.map((monitor) => [monitor.id, monitor.status]))
 
   const {data: uptimeHeartbeatsByMonitor = {}} = useQuery({

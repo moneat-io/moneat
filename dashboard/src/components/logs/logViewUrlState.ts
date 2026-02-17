@@ -44,7 +44,7 @@ export interface LogViewSearch {
   logId?: string
 }
 
-const VALID_VIZ_MODES: LogVizMode[] = ['list', 'timeseries', 'table', 'toplist', 'pie']
+const VALID_VIZ_MODES: LogVizMode[] = ['timeseries', 'table', 'toplist', 'pie']
 const VALID_TIME_PRESETS = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '3d', '7d', 'custom']
 
 /**
@@ -98,9 +98,12 @@ export function parseLogViewSearch(search: Record<string, unknown>): LogViewSear
     }
   }
   
-  // Viz mode
-  if (typeof search.viz === 'string' && VALID_VIZ_MODES.includes(search.viz as LogVizMode)) {
-    result.viz = search.viz as LogVizMode
+  // Viz mode - migrate 'list' to 'timeseries' for backwards compatibility
+  if (typeof search.viz === 'string') {
+    const vizMode = search.viz === 'list' ? 'timeseries' : search.viz
+    if (VALID_VIZ_MODES.includes(vizMode as LogVizMode)) {
+      result.viz = vizMode as LogVizMode
+    }
   }
   
   // Group by / top field
@@ -177,8 +180,8 @@ export function serializeLogViewState(state: {
     }
   }
   
-  // Viz mode (omit default "list")
-  if (state.vizMode && state.vizMode !== 'list') {
+  // Viz mode (omit default "timeseries")
+  if (state.vizMode && state.vizMode !== 'timeseries') {
     result.viz = state.vizMode
   }
   

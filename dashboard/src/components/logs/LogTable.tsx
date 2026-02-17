@@ -63,6 +63,19 @@ function formatTimestamp(value: string): string {
   return `${base}.${ms}`
 }
 
+function formatMobileTimestamp(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const time = date.toLocaleTimeString(undefined, {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const ms = String(date.getMilliseconds()).padStart(3, '0')
+  return `${time}.${ms}`
+}
+
 function formatRelativeTime(value: string): string {
   const now = getNow()
   const date = new Date(value)
@@ -99,18 +112,18 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
         <colgroup>
           <col className="w-[3px]" />
           <col className="w-[1%]" />
-          <col className="w-[1%]" />
-          <col className="w-[1%]" />
-          <col className="w-[1%]" />
+          <col className="hidden sm:table-column w-[1%]" />
+          <col className="hidden lg:table-column w-[1%]" />
+          <col className="hidden md:table-column w-[1%]" />
           <col />
         </colgroup>
           <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
             <tr className="border-b text-left">
               <th className="w-[3px] p-0" />
               <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Date</th>
-              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Level</th>
-              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Host</th>
-              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Service</th>
+              <th className={cn("hidden sm:table-cell w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Level</th>
+              <th className={cn("hidden lg:table-cell w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Host</th>
+              <th className={cn("hidden md:table-cell w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Service</th>
               <th className={cn("w-full px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Content</th>
             </tr>
           </thead>
@@ -136,15 +149,19 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                   <td className={cn('w-[3px] p-0 border-l-[3px]', levelBorderColors[normalizedLevel] || 'border-l-transparent')} />
                   <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
                     {compact ? (
-                      <span className="font-mono text-[11px] text-foreground/80">{formatTimestamp(log.timestamp)}</span>
+                      <>
+                        <span className="hidden sm:inline font-mono text-[11px] text-foreground/80">{formatTimestamp(log.timestamp)}</span>
+                        <span className="sm:hidden font-mono text-[11px] text-foreground/80">{formatMobileTimestamp(log.timestamp)}</span>
+                      </>
                     ) : (
                       <div className="flex flex-col">
-                        <span className="font-mono text-xs text-foreground/80">{formatTimestamp(log.timestamp)}</span>
+                        <span className="hidden sm:inline font-mono text-xs text-foreground/80">{formatTimestamp(log.timestamp)}</span>
+                        <span className="sm:hidden font-mono text-xs text-foreground/80">{formatMobileTimestamp(log.timestamp)}</span>
                         <span className="font-mono text-[10px] text-muted-foreground/60">{formatRelativeTime(log.timestamp)}</span>
                       </div>
                     )}
                   </td>
-                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("hidden sm:table-cell whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
                     <Badge
                       variant="outline"
                       className={cn(
@@ -156,14 +173,14 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                       {normalizedLevel}
                     </Badge>
                   </td>
-                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("hidden lg:table-cell whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
                     {log.host ? (
                       <span className={cn("rounded bg-muted/80 px-1.5 py-0.5 font-mono text-muted-foreground", compact ? "text-[11px]" : "text-xs")}>{log.host}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground/40">-</span>
                     )}
                   </td>
-                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("hidden md:table-cell whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
                     {log.service ? (
                       <span className={cn("rounded bg-muted/80 px-1.5 py-0.5 font-mono text-muted-foreground", compact ? "text-[11px]" : "text-xs")}>{log.service}</span>
                     ) : (
@@ -178,6 +195,16 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                         ? 'text-foreground'
                         : 'text-foreground/80'
                     )}>
+                      {/* Show colored dot on mobile to indicate level since column is hidden */}
+                      <span className={cn(
+                        "sm:hidden inline-block w-1.5 h-1.5 rounded-full mr-1.5 mb-0.5",
+                        normalizedLevel === 'trace' && "bg-zinc-500",
+                        normalizedLevel === 'debug' && "bg-teal-500",
+                        normalizedLevel === 'info' && "bg-indigo-500",
+                        normalizedLevel === 'warn' && "bg-amber-500",
+                        normalizedLevel === 'error' && "bg-red-500",
+                        normalizedLevel === 'fatal' && "bg-rose-500"
+                      )} />
                       {stripAnsi(log.message || log.body) || '-'}
                     </span>
                   </td>

@@ -38,6 +38,21 @@ object AuthCookieUtils {
         )
     }
 
+    fun setDemoCookie(call: ApplicationCall, token: String) {
+        val isSecure = call.request.origin.scheme == "https"
+        call.response.cookies.append(
+            Cookie(
+                name = "auth_token",
+                value = token,
+                httpOnly = true,
+                secure = isSecure,
+                path = "/",
+                maxAge = 86400, // 24 hours, matches demo JWT expiration
+                extensions = mapOf("SameSite" to if (isSecure) "Strict" else "Lax")
+            )
+        )
+    }
+
     fun clearAuthCookie(call: ApplicationCall) {
         val isSecure = call.request.origin.scheme == "https"
         call.response.cookies.append(

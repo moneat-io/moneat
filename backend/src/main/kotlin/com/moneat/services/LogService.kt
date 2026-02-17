@@ -390,6 +390,10 @@ class LogService {
         service: String?,
         environment: String?,
         tags: Map<String, String>,
+        excludeService: String?,
+        excludeEnvironment: String?,
+        excludeContainerName: String?,
+        excludeTags: Map<String, String>,
         groupBy: String?
     ): LogAggregateResponse {
         val fromMs = parseTimeToMillis(from)
@@ -399,7 +403,7 @@ class LogService {
         } else interval
         val chInterval = intervalToClickHouse(resolvedInterval)
 
-        val conditions = mutableListOf("project_id = $projectId")
+        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
 
@@ -432,6 +436,17 @@ class LogService {
                 conditions += condition
             }
         }
+        
+        // Exclude filters
+        if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
+        if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
+        if (!excludeContainerName.isNullOrBlank()) conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        excludeTags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value, exclude = true)
+            if (condition.isNotBlank()) {
+                conditions += condition
+            }
+        }
 
         val whereClause = conditions.joinToString(" AND ")
 
@@ -460,8 +475,10 @@ class LogService {
             """.trimIndent()
         }
 
+        logger.debug { "Aggregate logs SQL for project $projectId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql" }
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
+        logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(500)}" }
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
             logger.warn { "Failed to aggregate logs: ${body.take(600)}" }
             return LogAggregateResponse(buckets = emptyList(), totalCount = 0, interval = resolvedInterval)
@@ -496,6 +513,7 @@ class LogService {
             )
         }
 
+        logger.debug { "Aggregate logs result for project $projectId: ${buckets.size} buckets, totalCount=$totalCount, interval=$resolvedInterval" }
         return LogAggregateResponse(buckets = buckets, totalCount = totalCount, interval = resolvedInterval)
     }
 
@@ -509,9 +527,13 @@ class LogService {
         levels: List<String>,
         service: String?,
         environment: String?,
-        tags: Map<String, String>
+        tags: Map<String, String>,
+        excludeService: String?,
+        excludeEnvironment: String?,
+        excludeContainerName: String?,
+        excludeTags: Map<String, String>
     ): LogTopResponse {
-        val conditions = mutableListOf("project_id = $projectId")
+        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         val toMs = parseTimeToMillis(to)
@@ -541,6 +563,17 @@ class LogService {
         }
         tags.forEach { (key, value) ->
             val condition = buildTagCondition(key, value)
+            if (condition.isNotBlank()) {
+                conditions += condition
+            }
+        }
+        
+        // Exclude filters
+        if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
+        if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
+        if (!excludeContainerName.isNullOrBlank()) conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        excludeTags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value, exclude = true)
             if (condition.isNotBlank()) {
                 conditions += condition
             }
@@ -609,9 +642,13 @@ class LogService {
         service: String?,
         environment: String?,
         tags: Map<String, String>,
+        excludeService: String?,
+        excludeEnvironment: String?,
+        excludeContainerName: String?,
+        excludeTags: Map<String, String>,
         limit: Int
     ): String {
-        val conditions = mutableListOf("project_id = $projectId")
+        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         val toMs = parseTimeToMillis(to)
@@ -645,13 +682,24 @@ class LogService {
                 conditions += condition
             }
         }
+        
+        // Exclude filters
+        if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
+        if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
+        if (!excludeContainerName.isNullOrBlank()) conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        excludeTags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value, exclude = true)
+            if (condition.isNotBlank()) {
+                conditions += condition
+            }
+        }
 
         val whereClause = conditions.joinToString(" AND ")
         val safeLimit = limit.coerceIn(1, 10_000)
 
         val sql = """
             SELECT
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp,
+                timestamp,
                 level, service, environment, host, message, body,
                 container_name, trace_id, span_id,
                 toJSONString(tags) AS tags
@@ -662,9 +710,11 @@ class LogService {
             FORMAT JSONEachRow
         """.trimIndent()
 
+        logger.debug { "Export CSV SQL: $sql" }
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
         if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            logger.error { "ClickHouse export error. SQL: $sql\nError: ${body.take(600)}" }
             throw IllegalStateException("Failed to export logs: ${body.take(600)}")
         }
 
@@ -674,8 +724,9 @@ class LogService {
         body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
             try {
                 val obj = json.parseToJsonElement(line).jsonObject
+                val timestampStr = obj["timestamp"]?.jsonPrimitive?.content ?: ""
                 val csvRow = listOf(
-                    obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                    timestampStr,
                     obj["level"]?.jsonPrimitive?.content ?: "",
                     obj["service"]?.jsonPrimitive?.content ?: "",
                     obj["environment"]?.jsonPrimitive?.content ?: "",
@@ -687,7 +738,9 @@ class LogService {
                     obj["tags"]?.jsonPrimitive?.content ?: "{}"
                 ).joinToString(",") { csvEscape(it) }
                 sb.appendLine(csvRow)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to parse log line for CSV: $line" }
+            }
         }
 
         return sb.toString()
@@ -701,7 +754,7 @@ class LogService {
     }
 
     suspend fun getFilterOptionsWithCounts(projectId: Long, from: String?, to: String?): LogFilterOptionsWithCountsResponse {
-        val conditions = mutableListOf("project_id = $projectId")
+        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         val toMs = parseTimeToMillis(to)
@@ -771,7 +824,7 @@ class LogService {
     }
 
     suspend fun getFilterOptions(projectId: Long, from: String?, to: String?): LogFilterOptionsResponse {
-        val conditions = mutableListOf("project_id = $projectId")
+        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) {
             conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
@@ -837,7 +890,7 @@ class LogService {
         // Check if this is a top-level field or a tag
         val isTopLevelField = actualField in topLevelFields
         
-        val conditions = mutableListOf("project_id = $projectId")
+        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         
         // Only add has() check for actual tags, not top-level fields
         if (!isTopLevelField) {
@@ -1278,7 +1331,7 @@ class LogService {
      * Build a SQL condition for a tag/field filter.
      * Checks if the key is a top-level field or an actual tag.
      */
-    internal fun buildTagCondition(key: String, value: String): String {
+    internal fun buildTagCondition(key: String, value: String, exclude: Boolean = false): String {
         if (key.isBlank()) return ""
         
         // If the tag value contains Boolean operators, it's actually a query that was
@@ -1288,7 +1341,8 @@ class LogService {
             return try {
                 val parsed = queryParser.parse("$key:$value")
                 if (parsed.rootNode != null) {
-                    queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                    val condition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                    if (exclude && condition.isNotBlank()) "NOT ($condition)" else condition
                 } else ""
             } catch (e: Exception) {
                 logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
@@ -1306,13 +1360,18 @@ class LogService {
         val enumFields = setOf("level", "source")
         
         // Check if this is a top-level field
+        val operator = if (exclude) "!=" else "="
         return if (actualField in topLevelFields) {
             // Use toString() for Enum8 fields
             val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
-            "$fieldRef = '$escapedValue'"
+            "$fieldRef $operator '$escapedValue'"
         } else {
             // Use has() for actual tags in the tags map
-            "has(tags, '$escapedKey') AND tags['$escapedKey'] = '$escapedValue'"
+            if (exclude) {
+                "NOT (has(tags, '$escapedKey') AND tags['$escapedKey'] = '$escapedValue')"
+            } else {
+                "has(tags, '$escapedKey') AND tags['$escapedKey'] = '$escapedValue'"
+            }
         }
     }
 }

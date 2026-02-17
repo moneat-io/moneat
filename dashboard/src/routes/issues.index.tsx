@@ -42,6 +42,7 @@ import {useState} from 'react'
 import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
 import {useToast} from '@/hooks/use-toast'
+import {getNow} from '@/lib/demo'
 
 // Helper function to get level color for badges
 function getLevelColor(level: string): string {
@@ -75,7 +76,7 @@ function getLevelBorderColor(level: string): string {
 
 // Get freshness color based on how recently the last event occurred
 function getLastSeenColor(lastSeen: string): string {
-  const diff = Date.now() - new Date(lastSeen).getTime()
+  const diff = getNow() - new Date(lastSeen).getTime()
   const hours = diff / (1000 * 60 * 60)
   if (hours < 1) return 'text-red-500 dark:text-red-400'
   if (hours < 24) return 'text-amber-600 dark:text-amber-400'
@@ -84,7 +85,7 @@ function getLastSeenColor(lastSeen: string): string {
 
 // Check if an issue is new (first seen within last 24 hours)
 function isNewIssue(firstSeen: string): boolean {
-  const diff = Date.now() - new Date(firstSeen).getTime()
+  const diff = getNow() - new Date(firstSeen).getTime()
   return diff < 24 * 60 * 60 * 1000
 }
 
@@ -245,7 +246,7 @@ function DashboardPage() {
     <div className="min-h-screen">
       <div className="px-6 py-4">
         {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div>
               <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
@@ -256,7 +257,7 @@ function DashboardPage() {
             <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
           </div>
           {hasProjects && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               {projectId && (
                 <Link to="/projects/$projectId/settings" params={{ projectId: String(projectId) }}>
                   <Button
@@ -269,9 +270,9 @@ function DashboardPage() {
                   </Button>
                 </Link>
               )}
-              <Link to="/projects">
-                <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary/10 hover:border-primary/50">
-                  <Plus className="h-4 w-4" />
+              <Link to="/projects" className="flex-1 sm:flex-none">
+                <Button size="sm" variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary/50">
+                  <Plus className="h-4 w-4 mr-2" />
                   New Project
                 </Button>
               </Link>
@@ -457,7 +458,7 @@ function DashboardPage() {
                       key={issue.id}
                       className={`hover:bg-accent/40 transition border-l-[3px] ${getLevelBorderColor(issue.level)}`}
                     >
-                      <div className="flex items-center gap-3 py-2.5 px-4">
+                      <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
                         <Checkbox
                           checked={selectedIssues.has(issue.id)}
                           onCheckedChange={() => handleToggleIssue(issue.id)}
@@ -468,14 +469,15 @@ function DashboardPage() {
                         <Link
                           to="/issues/$issueId"
                           params={{ issueId: issue.id }}
-                          className="flex-1 flex items-center gap-3 min-w-0"
+                          className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
                         >
-                          <Badge className={`${getLevelColor(issue.level)} shrink-0 text-[11px] px-1.5 py-0 w-14 justify-center`}>
-                            {issue.level.toUpperCase()}
+                          <Badge className={`${getLevelColor(issue.level)} shrink-0 text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0 w-12 sm:w-14 justify-center`}>
+                            {issue.level.toUpperCase().slice(0, 3)}
+                            <span className="hidden sm:inline">{issue.level.toUpperCase().slice(3)}</span>
                           </Badge>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-semibold truncate flex-1 min-w-0" title={getIssueDisplayTitle(issue)}>
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                              <span className="font-semibold truncate flex-1 min-w-0 text-sm sm:text-base" title={getIssueDisplayTitle(issue)}>
                                 {getIssueDisplayTitle(issue)}
                               </span>
                               <div className="flex items-center gap-2 shrink-0">

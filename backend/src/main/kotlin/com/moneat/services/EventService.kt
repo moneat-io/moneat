@@ -407,6 +407,12 @@ class EventService(private val notificationService: NotificationService? = null)
     }
 
     private suspend fun storeFeedback(projectId: Long, feedback: SentryFeedback) {
+        // Validate project ID — allow negative demo project IDs (-1, -2, -3)
+        if (projectId == 0L) {
+            logger.error { "Invalid projectId $projectId for feedback, skipping insert" }
+            return
+        }
+        
         val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
         val timestamp = feedback.timestamp?.let {
             try {
@@ -474,6 +480,12 @@ class EventService(private val notificationService: NotificationService? = null)
     }
 
     private suspend fun storeReplayEvent(projectId: Long, replayEvent: SentryReplayEvent) {
+        // Validate project ID — allow negative demo project IDs (-1, -2, -3)
+        if (projectId == 0L) {
+            logger.error { "Invalid projectId $projectId for replay event, skipping insert" }
+            return
+        }
+        
         val replayId = replayEvent.replay_id ?: UUID.randomUUID().toString()
         val segmentId = replayEvent.segment_id ?: 0
         val ts = replayEvent.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
@@ -585,6 +597,12 @@ class EventService(private val notificationService: NotificationService? = null)
         segmentId: Int,
         @Suppress("UNUSED_PARAMETER") envelope: SentryEnvelope
     ) {
+        // Validate project ID — allow negative demo project IDs (-1, -2, -3)
+        if (projectId == 0L) {
+            logger.error { "Invalid projectId $projectId for synthetic replay event, skipping insert" }
+            return
+        }
+        
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
         

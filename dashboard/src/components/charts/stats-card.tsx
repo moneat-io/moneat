@@ -70,11 +70,11 @@ export function StatsCard({ title, value, icon: Icon, trend, subtitle, accent, v
   return (
     <Card className={cn('overflow-hidden', className)}>
       {styles && <div className={`h-1 w-full shrink-0 ${styles.bar}`} aria-hidden />}
-      <CardContent className="px-4 py-3">
-        <div className="flex items-center gap-3">
+      <CardContent className="px-3 py-2 sm:px-4 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div
             className={cn(
-              'h-9 w-9 shrink-0 rounded-lg flex items-center justify-center',
+              'h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-lg flex items-center justify-center',
               styles ? styles.icon : 'bg-primary/10 text-primary'
             )}
           >

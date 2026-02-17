@@ -81,6 +81,12 @@ fun Application.configureDatabases() {
                     log.error("Failed to run ClickHouse migrations. Make sure ClickHouse is running and accessible.", e)
                     throw e
                 }
+                // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)
+                try {
+                    com.moneat.config.DemoDataReseeder.reseedIfNeeded()
+                } catch (e: Exception) {
+                    log.warn("Demo data reseed failed (non-fatal)", e)
+                }
             }
         }
         

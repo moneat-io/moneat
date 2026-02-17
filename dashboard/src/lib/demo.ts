@@ -27,13 +27,25 @@ let demoEpochMs: number | null = null;
  */
 export function setDemoEpoch(ms: number | null) {
   demoEpochMs = ms;
+  if (ms !== null) {
+    sessionStorage.setItem('demoEpochMs', String(ms));
+  } else {
+    sessionStorage.removeItem('demoEpochMs');
+  }
 }
 
 /**
  * Check if currently in demo mode.
  */
 export function isDemo(): boolean {
-  return demoEpochMs !== null;
+  if (demoEpochMs !== null) return true;
+  // Recover from sessionStorage if module state was lost (e.g. HMR)
+  const stored = sessionStorage.getItem('demoEpochMs');
+  if (stored) {
+    demoEpochMs = Number(stored);
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -41,7 +53,14 @@ export function isDemo(): boolean {
  * In demo mode, returns the demo epoch; otherwise returns actual current time.
  */
 export function getNow(): number {
-  return demoEpochMs ?? Date.now();
+  if (demoEpochMs !== null) return demoEpochMs;
+  // Recover from sessionStorage if needed
+  const stored = sessionStorage.getItem('demoEpochMs');
+  if (stored) {
+    demoEpochMs = Number(stored);
+    return demoEpochMs;
+  }
+  return Date.now();
 }
 
 /**

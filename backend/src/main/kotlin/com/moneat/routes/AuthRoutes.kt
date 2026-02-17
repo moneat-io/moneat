@@ -342,8 +342,8 @@ fun Route.authRoutes() {
             try {
                 val token = authService.generateDemoToken()
                 
-                // Set httpOnly auth cookie (same as normal login)
-                AuthCookieUtils.setAuthCookie(call, token)
+                // Set httpOnly auth cookie with extended lifetime for demo
+                AuthCookieUtils.setDemoCookie(call, token)
                 
                 call.respond(DemoLoginResponse(
                     token = token,
@@ -351,6 +351,27 @@ fun Route.authRoutes() {
                 ))
             } catch (e: IllegalStateException) {
                 logger.error(e) { "Demo login failed: ${e.message}" }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Demo mode not properly configured"))
+            }
+        }
+
+        // Demo refresh endpoint — reissues a demo JWT without a refresh token
+        post("/demo-refresh") {
+            if (!EnvConfig.Demo.enabled) {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Demo mode not enabled"))
+                return@post
+            }
+
+            try {
+                val token = authService.generateDemoToken()
+                AuthCookieUtils.setDemoCookie(call, token)
+
+                call.respond(DemoLoginResponse(
+                    token = token,
+                    demoEpochMs = EnvConfig.Demo.epochMs
+                ))
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Demo refresh failed: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Demo mode not properly configured"))
             }
         }

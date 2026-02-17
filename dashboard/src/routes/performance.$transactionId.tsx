@@ -44,6 +44,7 @@ import {
   Tag,
   XCircle,
 } from 'lucide-react'
+import {getNow} from '@/lib/demo'
 
 export const Route = createFileRoute('/performance/$transactionId')({
   beforeLoad: () => {
@@ -102,7 +103,7 @@ function formatDuration(ms: number) {
 }
 
 function formatRelativeTime(timestamp: string) {
-  const now = Date.now()
+  const now = getNow()
   const then = new Date(timestamp).getTime()
   const diffMs = now - then
   const diffSec = Math.floor(diffMs / 1000)

@@ -409,10 +409,10 @@ export function LogSearchBar({
               onKeyDown={handleKeyDown}
               placeholder={
                 hasActiveFilters
-                  ? 'Add more filters...'
-                  : 'Search logs... (try service:api or tag:value)'
+                  ? 'Add...'
+                  : 'Search...'
               }
-              className="min-w-[200px] flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="min-w-[80px] sm:min-w-[200px] flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
 
             {hasActiveFilters && (
@@ -473,16 +473,16 @@ export function LogSearchBar({
 
         {/* Time range selector */}
         <div className="relative" ref={timeDropdownRef}>
-          <Button
-            variant="outline"
-            size="default"
-            className="h-[40px] gap-2 whitespace-nowrap font-normal"
-            onClick={() => setShowTimeDropdown(!showTimeDropdown)}
-          >
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{activeTimeLabel}</span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </Button>
+            <Button
+              variant="outline"
+              size="default"
+              className="h-[40px] px-3 sm:px-4 gap-2 whitespace-nowrap font-normal"
+              onClick={() => setShowTimeDropdown(!showTimeDropdown)}
+            >
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="hidden sm:inline text-sm">{activeTimeLabel}</span>
+              <ChevronDown className="hidden sm:inline h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
 
           {showTimeDropdown && (
             <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-lg border bg-popover p-1 shadow-lg">

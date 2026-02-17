@@ -302,6 +302,8 @@ fun Route.apiRoutes() {
             get("/issues/{issueId}/events") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
                 
                 val issueId = call.parameters["issueId"]
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
@@ -311,18 +313,20 @@ fun Route.apiRoutes() {
                     return@get
                 }
                 
-                if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                if (!isDemo && !dashboardService.hasIssueAccess(userId, issueId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
                 
-                val events = dashboardService.getIssueEvents(issueId, limit)
+                val events = dashboardService.getIssueEvents(issueId, limit, demoEpochMs)
                 call.respond(events)
             }
 
             get("/issues/{issueId}/transactions") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val issueId = call.parameters["issueId"]
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 20
@@ -332,12 +336,12 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                if (!isDemo && !dashboardService.hasIssueAccess(userId, issueId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
 
-                val transactions = dashboardService.getIssueTransactions(issueId, limit)
+                val transactions = dashboardService.getIssueTransactions(issueId, limit, demoEpochMs)
                 call.respond(transactions)
             }
             
@@ -365,6 +369,8 @@ fun Route.apiRoutes() {
             get("/projects/{projectId}/stats") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
                 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -372,19 +378,21 @@ fun Route.apiRoutes() {
                     return@get
                 }
                 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
                 
                 val period = call.request.queryParameters["period"] ?: "7d"
-                val stats = dashboardService.getProjectStats(projectId, period, call.getSentryTransaction())
+                val stats = dashboardService.getProjectStats(projectId, period, call.getSentryTransaction(), demoEpochMs)
                 call.respond(stats)
             }
 
             get("/projects/{projectId}/transactions") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -392,7 +400,7 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
@@ -400,13 +408,15 @@ fun Route.apiRoutes() {
                 val period = call.request.queryParameters["period"] ?: "7d"
                 val environment = call.request.queryParameters["environment"]
                 val operation = call.request.queryParameters["operation"]
-                val transactions = dashboardService.getTransactions(projectId, period, environment, operation)
+                val transactions = dashboardService.getTransactions(projectId, period, environment, operation, demoEpochMs)
                 call.respond(transactions)
             }
 
             get("/projects/{projectId}/transactions/stats") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -414,7 +424,7 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
@@ -422,7 +432,7 @@ fun Route.apiRoutes() {
                 val period = call.request.queryParameters["period"] ?: "7d"
                 val environment = call.request.queryParameters["environment"]
                 val operation = call.request.queryParameters["operation"]
-                val stats = dashboardService.getPerformanceStats(projectId, period, environment, operation)
+                val stats = dashboardService.getPerformanceStats(projectId, period, environment, operation, demoEpochMs)
                 call.respond(stats)
             }
 
@@ -574,6 +584,8 @@ fun Route.apiRoutes() {
             get("/replays/{replayId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val replayId = call.parameters["replayId"]
                 if (replayId == null) {
@@ -581,12 +593,12 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasReplayAccess(userId, replayId)) {
+                if (!isDemo && !dashboardService.hasReplayAccess(userId, replayId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
 
-                val replay = dashboardService.getReplay(replayId)
+                val replay = dashboardService.getReplay(replayId, demoEpochMs)
                 if (replay == null) {
                     call.respond(HttpStatusCode.NotFound)
                 } else {
@@ -597,6 +609,7 @@ fun Route.apiRoutes() {
             get("/replays/{replayId}/recording") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
 
                 val replayId = call.parameters["replayId"]
                 if (replayId == null) {
@@ -604,7 +617,7 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasReplayAccess(userId, replayId)) {
+                if (!isDemo && !dashboardService.hasReplayAccess(userId, replayId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
@@ -620,6 +633,8 @@ fun Route.apiRoutes() {
             get("/replays/{replayId}/timeline") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val replayId = call.parameters["replayId"]
                 if (replayId == null) {
@@ -627,12 +642,12 @@ fun Route.apiRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasReplayAccess(userId, replayId)) {
+                if (!isDemo && !dashboardService.hasReplayAccess(userId, replayId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
 
-                val timeline = dashboardService.getReplayTimeline(replayId)
+                val timeline = dashboardService.getReplayTimeline(replayId, demoEpochMs)
                 call.respond(timeline)
             }
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {setDemoEpoch} from './demo'
+import {isDemo, setDemoEpoch} from './demo'
 
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
 const AUTH_PAGE_PATHS = new Set(['/', '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
@@ -1663,6 +1663,25 @@ class ApiClient {
 
   private async refreshAccessToken(): Promise<boolean> {
     const refreshToken = this.getRefreshToken()
+
+    // Demo users don't have refresh tokens — re-issue via demo-refresh
+    if (!refreshToken && isDemo()) {
+      try {
+        const response = await fetch(`${API_BASE.replace('/v1', '')}/auth/demo-refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        })
+        if (!response.ok) return false
+        const data = await response.json()
+        if (data.demoEpochMs) setDemoEpoch(data.demoEpochMs)
+        sessionStorage.setItem('authenticated', 'true')
+        return true
+      } catch {
+        return false
+      }
+    }
+
     if (!refreshToken) return false
 
     try {
@@ -2355,6 +2374,10 @@ class ApiClient {
     from?: string
     to?: string
     tags?: Record<string, string>
+    excludeService?: string
+    excludeEnvironment?: string
+    excludeContainerName?: string
+    excludeTags?: Record<string, string>
   }): URLSearchParams {
     const params = new URLSearchParams()
     if (options.query) params.set('q', options.query)
@@ -2368,6 +2391,14 @@ class ApiClient {
     if (options.tags) {
       Object.entries(options.tags).forEach(([key, value]) => {
         if (key) params.append('tag', `${key}:${value}`)
+      })
+    }
+    if (options.excludeService) params.set('excludeService', options.excludeService)
+    if (options.excludeEnvironment) params.set('excludeEnvironment', options.excludeEnvironment)
+    if (options.excludeContainerName) params.set('excludeContainerName', options.excludeContainerName)
+    if (options.excludeTags) {
+      Object.entries(options.excludeTags).forEach(([key, value]) => {
+        if (key) params.append('excludeTag', `${key}:${value}`)
       })
     }
     return params
@@ -2384,6 +2415,10 @@ class ApiClient {
       service?: string
       environment?: string
       tags?: Record<string, string>
+      excludeService?: string
+      excludeEnvironment?: string
+      excludeContainerName?: string
+      excludeTags?: Record<string, string>
       groupBy?: string
     } = {}
   ): Promise<LogAggregateResponse> {
@@ -2416,6 +2451,10 @@ class ApiClient {
       service?: string
       environment?: string
       tags?: Record<string, string>
+      excludeService?: string
+      excludeEnvironment?: string
+      excludeContainerName?: string
+      excludeTags?: Record<string, string>
     }
   ): Promise<LogTopResponse> {
     const params = this.buildLogFilterParams(options)
@@ -2444,6 +2483,10 @@ class ApiClient {
       service?: string
       environment?: string
       tags?: Record<string, string>
+      excludeService?: string
+      excludeEnvironment?: string
+      excludeContainerName?: string
+      excludeTags?: Record<string, string>
       limit?: number
     } = {}
   ): Promise<void> {

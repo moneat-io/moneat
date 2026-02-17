@@ -156,7 +156,7 @@ export function LogExplorer({
         timePreset: urlSearch.timePreset || defaultTimeRange,
         customFrom: urlSearch.from || '',
         customTo: urlSearch.to || '',
-        vizMode: urlSearch.viz || 'list' as LogVizMode,
+        vizMode: urlSearch.viz || 'timeseries' as LogVizMode,
         groupBy: urlSearch.groupBy || '',
         topField: urlSearch.topField || 'service',
         cursor: urlSearch.cursor || null,
@@ -170,7 +170,7 @@ export function LogExplorer({
       timePreset: defaultTimeRange,
       customFrom: '',
       customTo: '',
-      vizMode: 'list' as LogVizMode,
+      vizMode: 'timeseries' as LogVizMode,
       groupBy: '',
       topField: 'service',
       cursor: null,
@@ -204,6 +204,13 @@ export function LogExplorer({
   // Facets sidebar
   const [showFacets, setShowFacets] = useState(enableFacets)
 
+  // Collapse facets on mobile by default
+  useEffect(() => {
+    if (window.innerWidth < 1024) { // lg breakpoint - collapse on smaller screens
+      setShowFacets(false)
+    }
+  }, [])
+
   // Visualization mode
   const [vizMode, setVizMode] = useState<LogVizMode>(initialState.vizMode)
   const [groupBy, setGroupBy] = useState<string>(initialState.groupBy)
@@ -234,7 +241,7 @@ export function LogExplorer({
     setTimePreset(urlSearch.timePreset || defaultTimeRange)
     setCustomFrom(urlSearch.from || '')
     setCustomTo(urlSearch.to || '')
-    setVizMode(urlSearch.viz || 'list')
+    setVizMode(urlSearch.viz || 'timeseries')
     setGroupBy(urlSearch.groupBy || '')
     setTopField(urlSearch.topField || 'service')
     setCursor(urlSearch.cursor || null)
@@ -390,6 +397,10 @@ export function LogExplorer({
       derivedFilters.environment,
       derivedFilters.containerName,
       JSON.stringify(derivedFilters.tags),
+      derivedFilters.excludeService,
+      derivedFilters.excludeEnvironment,
+      derivedFilters.excludeContainerName,
+      JSON.stringify(derivedFilters.excludeTags),
     ],
     queryFn: () => {
       const commonOptions = {
@@ -419,30 +430,21 @@ export function LogExplorer({
     enabled: Boolean(projectId || systemId),
   })
 
-  // Accumulate logs when new page loads (only in list mode and not live tail)
+  // Accumulate logs when new page loads (not in live tail)
   useEffect(() => {
     if (!logPage?.logs || liveTailEnabled) return
     
-    // Only accumulate in list mode
-    if (vizMode === 'list') {
-      // If cursor is null, this is the first page (or reset), so replace
-      if (cursor === null) {
-        setAccumulatedLogs(logPage.logs)
-      } else {
-        // Otherwise, append to accumulated logs
-        setAccumulatedLogs(prev => [...prev, ...logPage.logs])
-      }
-      setIsLoadingMore(false)
+    // If cursor is null, this is the first page (or reset), so replace
+    if (cursor === null) {
+      setAccumulatedLogs(logPage.logs)
     } else {
-      // When switching away from list mode, populate accumulated logs
-      // so when switching back, we don't start empty
-      if (accumulatedLogs.length === 0 && cursor === null) {
-        setAccumulatedLogs(logPage.logs)
-      }
+      // Otherwise, append to accumulated logs
+      setAccumulatedLogs(prev => [...prev, ...logPage.logs])
     }
-  }, [logPage, cursor, liveTailEnabled, vizMode, accumulatedLogs.length])
+    setIsLoadingMore(false)
+  }, [logPage, cursor, liveTailEnabled])
   
-  const logs = vizMode === 'list' && !liveTailEnabled ? accumulatedLogs : (logPage?.logs ?? [])
+  const logs = !liveTailEnabled ? accumulatedLogs : (logPage?.logs ?? [])
   const totalCount = logPage?.totalCount ?? null
 
   // Aggregate query for histogram - always enabled to show above all modes
@@ -451,6 +453,8 @@ export function LogExplorer({
       'log-aggregate', projectId, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
       JSON.stringify(derivedFilters.tags), groupBy,
+      derivedFilters.excludeService, derivedFilters.excludeEnvironment,
+      derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
     ],
     queryFn: () => {
       if (!projectId) throw new Error('Missing projectId')
@@ -462,6 +466,10 @@ export function LogExplorer({
         service: derivedFilters.service,
         environment: derivedFilters.environment,
         tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+        excludeService: derivedFilters.excludeService,
+        excludeEnvironment: derivedFilters.excludeEnvironment,
+        excludeContainerName: derivedFilters.excludeContainerName,
+        excludeTags: Object.keys(derivedFilters.excludeTags).length > 0 ? derivedFilters.excludeTags : undefined,
         groupBy,
       })
     },
@@ -474,6 +482,8 @@ export function LogExplorer({
       'log-top', projectId, topField, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
       JSON.stringify(derivedFilters.tags),
+      derivedFilters.excludeService, derivedFilters.excludeEnvironment,
+      derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
     ],
     queryFn: () => {
       if (!projectId) throw new Error('Missing projectId')
@@ -487,6 +497,10 @@ export function LogExplorer({
         service: derivedFilters.service,
         environment: derivedFilters.environment,
         tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+        excludeService: derivedFilters.excludeService,
+        excludeEnvironment: derivedFilters.excludeEnvironment,
+        excludeContainerName: derivedFilters.excludeContainerName,
+        excludeTags: Object.keys(derivedFilters.excludeTags).length > 0 ? derivedFilters.excludeTags : undefined,
       })
     },
     enabled: Boolean(projectId) && (vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table'),
@@ -503,6 +517,10 @@ export function LogExplorer({
         service: derivedFilters.service,
         environment: derivedFilters.environment,
         tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+        excludeService: derivedFilters.excludeService,
+        excludeEnvironment: derivedFilters.excludeEnvironment,
+        excludeContainerName: derivedFilters.excludeContainerName,
+        excludeTags: Object.keys(derivedFilters.excludeTags).length > 0 ? derivedFilters.excludeTags : undefined,
       })
     } catch (error) {
       console.error('CSV export failed:', formatErrorForLogging(error))
@@ -625,7 +643,7 @@ export function LogExplorer({
   
   // Infinite scroll with Intersection Observer
   useEffect(() => {
-    if (!scrollSentinelRef.current || liveTailEnabled || vizMode !== 'list') return
+    if (!scrollSentinelRef.current || liveTailEnabled) return
     
     const observer = new IntersectionObserver(
       (entries) => {
@@ -646,7 +664,7 @@ export function LogExplorer({
     return () => {
       observer.disconnect()
     }
-  }, [logPage?.hasMore, isLoadingMore, isFetching, liveTailEnabled, vizMode, handleNextPage])
+  }, [logPage?.hasMore, isLoadingMore, isFetching, liveTailEnabled, handleNextPage])
 
   const handleToggleLiveTail = () => {
     setLiveTailEnabled((current) => {
@@ -703,14 +721,14 @@ export function LogExplorer({
     <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]", className)}>
       {/* Header bar */}
       <div className="shrink-0 border-b bg-background/95 backdrop-blur-sm z-20">
-          <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-6">
+          <div className="flex items-center justify-between gap-4 px-3 py-2 sm:px-4 sm:py-3 lg:px-6">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-gradient-to-br from-blue-500/15 to-violet-500/15 p-2 ring-1 ring-blue-500/20">
                 <TerminalSquare className="h-5 w-5 text-blue-500" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold leading-tight">Log Explorer</h2>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="hidden sm:block text-[11px] text-muted-foreground">
                   Search, filter, and stream logs in real time
                 </p>
               </div>
@@ -729,7 +747,7 @@ export function LogExplorer({
           </div>
 
           {/* Search bar */}
-          <div className="border-t bg-card/40 px-4 py-3 lg:px-6">
+          <div className="border-t bg-card/40 px-3 py-2 sm:px-4 sm:py-3 lg:px-6">
             <LogSearchBar
               query={query}
               onQueryChange={setQuery}
@@ -851,8 +869,8 @@ export function LogExplorer({
                 </Button>
               )}
 
-              {/* Pagination (only in list mode, shown only if we have history) */}
-              {vizMode === 'list' && !liveTailEnabled && cursorHistory.length > 0 && (
+              {/* Pagination (shown only if we have history) */}
+              {!liveTailEnabled && cursorHistory.length > 0 && (
                 <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
@@ -965,7 +983,7 @@ export function LogExplorer({
                   />
                   
                   {/* Infinite scroll sentinel and loading indicator */}
-                  {vizMode === 'list' && !liveTailEnabled && (
+                  {!liveTailEnabled && (
                     <div ref={scrollSentinelRef} className="px-3 py-4">
                       {(isLoadingMore || isFetching) && logPage?.hasMore ? (
                         <div className="flex items-center justify-center gap-2 py-2">

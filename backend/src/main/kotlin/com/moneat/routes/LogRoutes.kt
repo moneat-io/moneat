@@ -55,6 +55,7 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.pubsub.RedisPubSubAdapter
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
@@ -164,13 +165,13 @@ fun Route.logRoutes() {
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
                     val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
-                    twentyFourHoursAgo.toString()
+                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                 } else {
                     call.request.queryParameters["from"]
                 }
 
                 val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                    demoEpochMs.toString()
+                    Instant.ofEpochMilli(demoEpochMs).toString()
                 } else {
                     call.request.queryParameters["to"]
                 }
@@ -229,6 +230,8 @@ fun Route.logRoutes() {
             get("/projects/{projectId}/logs/filters") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -236,15 +239,29 @@ fun Route.logRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
 
+                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
+                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
+                } else {
+                    call.request.queryParameters["from"]
+                }
+
+                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                    Instant.ofEpochMilli(demoEpochMs).toString()
+                } else {
+                    call.request.queryParameters["to"]
+                }
+
                 val result = logService.getFilterOptionsWithCounts(
                     projectId = projectId,
-                    from = call.request.queryParameters["from"],
-                    to = call.request.queryParameters["to"]
+                    from = defaultFrom,
+                    to = defaultTo
                 )
                 call.respond(HttpStatusCode.OK, result)
             }
@@ -252,6 +269,8 @@ fun Route.logRoutes() {
             get("/projects/{projectId}/logs/aggregate") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -259,29 +278,50 @@ fun Route.logRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
 
+                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
+                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
+                } else {
+                    call.request.queryParameters["from"]
+                }
+
+                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                    Instant.ofEpochMilli(demoEpochMs).toString()
+                } else {
+                    call.request.queryParameters["to"]
+                }
+
                 val result = logService.aggregateLogs(
                     projectId = projectId,
-                    from = call.request.queryParameters["from"],
-                    to = call.request.queryParameters["to"],
+                    from = defaultFrom,
+                    to = defaultTo,
                     interval = call.request.queryParameters["interval"],
                     query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
                     levels = parseLevelQueryParams(call),
                     service = call.request.queryParameters["service"],
                     environment = call.request.queryParameters["environment"],
                     tags = parseTagQueryParams(call),
+                    excludeService = call.request.queryParameters["excludeService"],
+                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                    excludeTags = parseExcludeTagQueryParams(call),
                     groupBy = call.request.queryParameters["groupBy"]
                 )
+                logger.debug { "Aggregate logs response for project $projectId: ${result.buckets.size} buckets, totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, to=$defaultTo, isDemo=$isDemo" }
                 call.respond(HttpStatusCode.OK, result)
             }
 
             get("/projects/{projectId}/logs/top") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
+                val isDemo = call.isDemoUser()
+                val demoEpochMs = call.getDemoEpochMs()
 
                 val projectId = call.parameters["projectId"]?.toLongOrNull()
                 if (projectId == null) {
@@ -289,7 +329,7 @@ fun Route.logRoutes() {
                     return@get
                 }
 
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
                     return@get
                 }
@@ -300,17 +340,35 @@ fun Route.logRoutes() {
                     return@get
                 }
 
+                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
+                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
+                } else {
+                    call.request.queryParameters["from"]
+                }
+
+                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                    Instant.ofEpochMilli(demoEpochMs).toString()
+                } else {
+                    call.request.queryParameters["to"]
+                }
+
                 val result = logService.topValues(
                     projectId = projectId,
                     field = field,
                     limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10,
-                    from = call.request.queryParameters["from"],
-                    to = call.request.queryParameters["to"],
+                    from = defaultFrom,
+                    to = defaultTo,
                     query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
                     levels = parseLevelQueryParams(call),
                     service = call.request.queryParameters["service"],
                     environment = call.request.queryParameters["environment"],
-                    tags = parseTagQueryParams(call)
+                    tags = parseTagQueryParams(call),
+                    excludeService = call.request.queryParameters["excludeService"],
+                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                    excludeTags = parseExcludeTagQueryParams(call)
                 )
                 call.respond(HttpStatusCode.OK, result)
             }
@@ -339,6 +397,10 @@ fun Route.logRoutes() {
                     service = call.request.queryParameters["service"],
                     environment = call.request.queryParameters["environment"],
                     tags = parseTagQueryParams(call),
+                    excludeService = call.request.queryParameters["excludeService"],
+                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                    excludeTags = parseExcludeTagQueryParams(call),
                     limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 5000
                 )
 
