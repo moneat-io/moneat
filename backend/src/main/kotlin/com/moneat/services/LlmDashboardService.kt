@@ -84,7 +84,7 @@ class LlmDashboardService {
         // Timeline query
         val timelineQuery = """
             SELECT
-                formatDateTime($bucket(timestamp), '%Y-%m-%dT%H:%i:%S') as ts,
+                formatDateTime($bucket(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts,
                 count() as cnt,
                 sum(total_tokens) as tokens,
                 sum(cost_usd) as cost,
@@ -190,7 +190,7 @@ class LlmDashboardService {
             SELECT
                 toString(generation_id) as generation_id,
                 trace_id, span_id, parent_span_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S') as ts,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts,
                 duration_ms, name, model, provider,
                 toString(type) as type,
                 input_tokens, output_tokens, total_tokens, cost_usd,
@@ -250,7 +250,7 @@ class LlmDashboardService {
             SELECT
                 toString(generation_id) as generation_id,
                 trace_id, span_id, parent_span_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S') as ts,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts,
                 duration_ms, name, model, provider,
                 toString(type) as type,
                 input, output,
@@ -311,7 +311,7 @@ class LlmDashboardService {
             SELECT
                 toString(generation_id) as generation_id,
                 trace_id, span_id, parent_span_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S') as ts,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts,
                 duration_ms, name, model, provider,
                 toString(type) as type,
                 input, output,
@@ -396,7 +396,7 @@ class LlmDashboardService {
 
         val timelineQuery = """
             SELECT
-                formatDateTime($bucket(timestamp), '%Y-%m-%dT%H:%i:%S') as ts,
+                formatDateTime($bucket(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts,
                 count() as cnt,
                 sum(total_tokens) as tokens,
                 sum(cost_usd) as cost,

@@ -24,6 +24,7 @@ import com.moneat.models.Organizations
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
+import mu.KotlinLogging
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -33,6 +34,8 @@ import org.jetbrains.exposed.sql.and
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
+
+private val logger = KotlinLogging.logger {}
 
 class AuthTokenService {
     private val secureRandom = SecureRandom()

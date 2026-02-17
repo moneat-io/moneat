@@ -27,7 +27,6 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.time.Instant
-import java.time.format.DateTimeFormatter
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
@@ -146,17 +145,12 @@ class LlmIngestionWorker(
             ${rows.joinToString(",\n")}
         """.trimIndent()
 
-        try {
-            val response = ClickHouseClient.execute(query)
-            if (!response.status.isSuccess()) {
-                val body = response.bodyAsText()
-                logger.error { "Failed to insert LLM generations: $body" }
-            } else {
-                logger.info { "Inserted ${rows.size} LLM generations for project $projectId" }
-            }
-        } catch (e: Exception) {
-            logger.error(e) { "Error inserting LLM generations into ClickHouse" }
+        val response = ClickHouseClient.execute(query)
+        if (!response.status.isSuccess()) {
+            val body = response.bodyAsText()
+            throw IllegalStateException("Failed to insert LLM generations: ${body.take(600)}")
         }
+        logger.info { "Inserted ${rows.size} LLM generations for project $projectId" }
     }
 
     private fun parseTimestampMs(timestamp: String?): Long {

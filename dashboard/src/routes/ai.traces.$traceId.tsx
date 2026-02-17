@@ -56,15 +56,26 @@ function typeColor(type: string): string {
 type GenerationNode = LlmGenerationDetail & { children: GenerationNode[] }
 
 function buildTree(generations: LlmGenerationDetail[]): GenerationNode[] {
-  const nodeMap = new Map<string, GenerationNode>()
+  const nodes = generations.map((gen) => ({ ...gen, children: [] as GenerationNode[] }))
+  const spanIndex = new Map<string, GenerationNode[]>()
   const roots: GenerationNode[] = []
 
-  for (const gen of generations) {
-    nodeMap.set(gen.spanId, { ...gen, children: [] })
+  for (const node of nodes) {
+    if (!node.spanId) continue
+    const bucket = spanIndex.get(node.spanId)
+    if (bucket) {
+      bucket.push(node)
+    } else {
+      spanIndex.set(node.spanId, [node])
+    }
   }
 
-  for (const node of nodeMap.values()) {
-    const parent = node.parentSpanId ? nodeMap.get(node.parentSpanId) : undefined
+  for (const bucket of spanIndex.values()) {
+    bucket.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  }
+
+  for (const node of nodes) {
+    const parent = findParentBySpanId(spanIndex.get(node.parentSpanId), node)
     if (parent) {
       parent.children.push(node)
     } else {
@@ -78,6 +89,23 @@ function buildTree(generations: LlmGenerationDetail[]): GenerationNode[] {
   }
   sortNodes(roots)
   return roots
+}
+
+function findParentBySpanId(candidates: GenerationNode[] | undefined, child: GenerationNode): GenerationNode | undefined {
+  if (!candidates || candidates.length === 0) return undefined
+
+  const childTs = new Date(child.timestamp).getTime()
+  let fallback: GenerationNode | undefined
+
+  for (const candidate of candidates) {
+    if (candidate.generationId === child.generationId) continue
+    fallback = candidate
+    if (new Date(candidate.timestamp).getTime() > childTs) {
+      break
+    }
+  }
+
+  return fallback
 }
 
 function TraceDetailPage() {
