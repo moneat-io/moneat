@@ -16,6 +16,7 @@
 
 package com.moneat.plugins
 
+import com.auth0.jwt.JWT
 import com.moneat.config.EnvConfig
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -36,12 +37,45 @@ private val demoSafeWritePaths = setOf(
     "/auth/logout"
 )
 
+private fun String.removeBearerPrefix(): String {
+    return removePrefix("Bearer ").removePrefix("bearer ").trim()
+}
+
+private fun ApplicationCall.extractAuthToken(): String? {
+    val headerToken = request.headers["Authorization"]
+        ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+        ?.removeBearerPrefix()
+        ?.takeIf { it.isNotBlank() }
+    if (headerToken != null) return headerToken
+
+    return request.cookies["auth_token"]?.trim()?.takeIf { it.isNotBlank() }
+}
+
+private fun isDemoToken(token: String?): Boolean {
+    if (token.isNullOrBlank()) return false
+
+    return try {
+        val decoded = JWT.decode(token)
+        if (decoded.getClaim("isDemo")?.asBoolean() == true) return true
+
+        val userId = decoded.getClaim("userId")?.asLong()
+            ?: decoded.getClaim("userId")?.asInt()?.toLong()
+        if (userId == demoUserId) return true
+
+        val email = decoded.getClaim("email")?.asString()
+        email != null && email.equals(demoUserEmail, ignoreCase = true)
+    } catch (_: Exception) {
+        false
+    }
+}
+
 /**
  * Plugin to block write operations for demo users.
  * Demo users can only perform read operations.
  */
 fun Application.configureDemoModeRestrictions() {
-    // Use Plugins phase which runs after authentication
+    // Keep this early in the pipeline; we also decode the auth token directly
+    // so demo restrictions still apply even when principal resolution has not run.
     intercept(ApplicationCallPipeline.Plugins) {
         val isDemo = call.isDemoUser()
 
@@ -85,11 +119,11 @@ fun ApplicationCall.isDemoUser(): Boolean {
     }
 
     val tokenPrincipal = principal<AuthTokenPrincipal>()
-    return if (tokenPrincipal != null) {
-        tokenPrincipal.userId.toLong() == demoUserId
-    } else {
-        false
+    if (tokenPrincipal != null) {
+        return tokenPrincipal.userId.toLong() == demoUserId
     }
+
+    return isDemoToken(extractAuthToken())
 }
 
 /**

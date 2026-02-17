@@ -166,10 +166,10 @@ export function EventsChart({
             <Area
               type="monotone"
               dataKey="count"
-              stroke="hsl(var(--primary))"
-              fill="hsl(var(--primary))"
-              strokeWidth={compact ? 2.25 : 1.5}
-              fillOpacity={compact ? 0.35 : 0.2}
+              stroke="hsl(var(--chart-1))"
+              fill="hsl(var(--chart-1))"
+              strokeWidth={compact ? 2.25 : 2}
+              fillOpacity={compact ? 0.35 : 0.15}
             />
             {releaseLines.map((marker) => (
               <ReferenceLine

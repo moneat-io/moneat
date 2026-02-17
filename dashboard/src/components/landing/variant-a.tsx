@@ -340,8 +340,16 @@ export function VariantA() {
               </span>
             </h1>
 
+            <div className="flex flex-wrap justify-center gap-2.5 mb-8 animate-fade-in-up animation-delay-150">
+              {['Error Tracking', 'Log Management', 'LLM Monitoring', 'Session Replay', 'Uptime', 'On-Call'].map(tag => (
+                <span key={tag} className="text-sm text-slate-300/80 border border-slate-700/50 rounded-full px-3.5 py-1 bg-white/[0.03] backdrop-blur-sm">
+                  {tag}
+                </span>
+              ))}
+            </div>
+
             <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up animation-delay-200">
-              Errors, logs, uptime, on-call, and status pages — everything your team needs
+              Errors, logs, uptime, LLM monitoring, on-call, and status pages — everything your team needs
               to keep your app reliable, in one place. Simple GB pricing — your whole team included.
             </p>
 

@@ -115,6 +115,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
 
   const activeProject = projects?.find((project) => project.id === selectedProjectId) ?? projects?.[0] ?? null
   const activeProjectId = activeProject?.id ?? null
+  const isDemoUser = Boolean(user?.demoEpochMs)
 
   // Get current tier from billing usage
   const currentPlan = billingPlans?.plans?.find((p) => p.tier.tierName === billingUsage?.plan?.toUpperCase())
@@ -224,7 +225,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     }
   }
 
-  const navItems = [
+  const baseNavItems = [
     { key: 'dashboard', icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
     { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
@@ -239,7 +240,14 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false },
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { key: 'settings', icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
-  ].filter(item => isSidebarItemVisible(item.key, user?.sidebarHiddenItems || []))
+  ]
+
+  const navItems = baseNavItems.filter(item => {
+    if (isDemoUser && item.key === 'settings') {
+      return true
+    }
+    return isSidebarItemVisible(item.key, user?.sidebarHiddenItems || [])
+  })
 
   const projectNavItems = activeProjectId ? [
     { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` },

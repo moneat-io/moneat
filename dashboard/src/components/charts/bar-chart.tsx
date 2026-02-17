@@ -15,13 +15,25 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
-import {Bar, BarChart as RechartsBarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
+import {Bar, BarChart as RechartsBarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,} from 'recharts'
+
+const BAR_COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-5))',
+  'hsl(210 70% 55%)',
+  'hsl(150 60% 45%)',
+  'hsl(350 70% 55%)',
+]
 
 interface BarChartProps {
   data: Record<string, number>
   title: string
   height?: number
   color?: string
+  colors?: string[]
   layout?: 'vertical' | 'horizontal'
 }
 
@@ -29,7 +41,8 @@ export function BarChart({
   data,
   title,
   height = 300,
-  color = 'hsl(var(--primary))',
+  color,
+  colors,
   layout = 'horizontal',
 }: BarChartProps) {
   const chartData = Object.entries(data)
@@ -38,6 +51,8 @@ export function BarChart({
       value,
     }))
     .sort((a, b) => b.value - a.value)
+
+  const palette = colors ?? BAR_COLORS
 
   return (
     <Card className="h-full">
@@ -110,9 +125,13 @@ export function BarChart({
             />
             <Bar 
               dataKey="value" 
-              fill={color} 
               radius={4}
-            />
+              fill={color}
+            >
+              {!color && chartData.map((_, index) => (
+                <Cell key={`cell-${index}`} fill={palette[index % palette.length]} />
+              ))}
+            </Bar>
           </RechartsBarChart>
         </ResponsiveContainer>
       </CardContent>
