@@ -91,7 +91,7 @@ object DemoDataReseeder {
             SELECT count() as cnt
             FROM llm_generations
             WHERE project_id IN ($P1, $P2, $P3)
-                AND timestamp >= now() - INTERVAL 7 DAY
+                AND timestamp >= now() - INTERVAL 12 HOUR
         """.trimIndent()
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()

@@ -265,10 +265,10 @@ const secondaryFeatures: Feature[] = [
 ]
 
 const stats = [
-  {value: '$0.40/GB', label: 'Simple usage-based pricing'},
-  {value: '1 GB free', label: 'No credit card required'},
+  {value: 'Free forever', label: 'No credit card required'},
+  {value: 'From $29/mo', label: 'Full observability platform'},
   {value: 'Zero', label: 'Per-seat fees'},
-  {value: '99.9%', label: 'Uptime SLA'},
+  {value: 'Unlimited', label: 'Projects on paid plans'},
 ]
 
 // ────────────────────────────────────────────────────────────────
