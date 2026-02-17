@@ -1641,6 +1641,99 @@ interface AiConversationDetail {
   updatedAt: string
 }
 
+// --- LLM Observability types ---
+
+interface LlmTimelinePoint {
+  timestamp: string
+  count: number
+  tokens: number
+  cost: number
+  errors: number
+}
+
+interface LlmModelStats {
+  model: string
+  provider: string
+  callCount: number
+  totalTokens: number
+  totalCost: number
+  avgDurationMs: number
+  errorRate: number
+}
+
+interface LlmOverviewResponse {
+  totalGenerations: number
+  totalTokens: number
+  totalCost: number
+  avgDurationMs: number
+  errorRate: number
+  timeline: LlmTimelinePoint[]
+  topModels: LlmModelStats[]
+}
+
+interface LlmGeneration {
+  generationId: string
+  traceId: string
+  spanId: string
+  parentSpanId: string
+  timestamp: string
+  durationMs: number
+  name: string
+  model: string
+  provider: string
+  type: string
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  costUsd: number
+  status: string
+  errorMessage: string
+  userId: string
+  environment: string
+  release: string
+}
+
+interface LlmGenerationDetail extends LlmGeneration {
+  input: string
+  output: string
+  temperature: number
+  maxTokens: number
+  topP: number
+  statusCode: number
+  sessionId: string
+  tags: Record<string, string>
+  metadata: string
+}
+
+interface LlmGenerationsListResponse {
+  generations: LlmGeneration[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+interface LlmTraceResponse {
+  traceId: string
+  generations: LlmGenerationDetail[]
+  totalDurationMs: number
+  totalTokens: number
+  totalCost: number
+}
+
+interface LlmCostBreakdown {
+  model: string
+  provider: string
+  totalCost: number
+  totalTokens: number
+  callCount: number
+}
+
+interface LlmCostsResponse {
+  totalCost: number
+  breakdown: LlmCostBreakdown[]
+  timeline: LlmTimelinePoint[]
+}
+
 class ApiClient {
   private authRedirectInProgress = false
   private refreshPromise: Promise<boolean> | null = null
@@ -3687,6 +3780,40 @@ class ApiClient {
   async deleteAiConversation(id: number): Promise<void> {
     return this.request<void>(`${API_BASE}/ai/conversations/${id}`, { method: 'DELETE' })
   }
+
+  // --- LLM Observability ---
+
+  async getLlmOverview(projectId: number, range = '24h'): Promise<LlmOverviewResponse> {
+    return this.request<LlmOverviewResponse>(`${API_BASE}/llm/overview?projectId=${projectId}&range=${range}`)
+  }
+
+  async getLlmGenerations(projectId: number, params: { range?: string; model?: string; provider?: string; type?: string; status?: string; page?: number; pageSize?: number } = {}): Promise<LlmGenerationsListResponse> {
+    const searchParams = new URLSearchParams({ projectId: String(projectId) })
+    if (params.range) searchParams.set('range', params.range)
+    if (params.model) searchParams.set('model', params.model)
+    if (params.provider) searchParams.set('provider', params.provider)
+    if (params.type) searchParams.set('type', params.type)
+    if (params.status) searchParams.set('status', params.status)
+    if (params.page) searchParams.set('page', String(params.page))
+    if (params.pageSize) searchParams.set('pageSize', String(params.pageSize))
+    return this.request<LlmGenerationsListResponse>(`${API_BASE}/llm/generations?${searchParams}`)
+  }
+
+  async getLlmGenerationDetail(projectId: number, generationId: string): Promise<LlmGenerationDetail> {
+    return this.request<LlmGenerationDetail>(`${API_BASE}/llm/generations/${generationId}?projectId=${projectId}`)
+  }
+
+  async getLlmTrace(projectId: number, traceId: string): Promise<LlmTraceResponse> {
+    return this.request<LlmTraceResponse>(`${API_BASE}/llm/traces/${traceId}?projectId=${projectId}`)
+  }
+
+  async getLlmModels(projectId: number, range = '24h'): Promise<LlmModelStats[]> {
+    return this.request<LlmModelStats[]>(`${API_BASE}/llm/models?projectId=${projectId}&range=${range}`)
+  }
+
+  async getLlmCosts(projectId: number, range = '24h'): Promise<LlmCostsResponse> {
+    return this.request<LlmCostsResponse>(`${API_BASE}/llm/costs?projectId=${projectId}&range=${range}`)
+  }
 }
 
 export const api = new ApiClient()
@@ -3828,4 +3955,13 @@ export type {
   AiConversationSummary,
   AiConversationDetail,
   AiMessageDto,
+  LlmTimelinePoint,
+  LlmModelStats,
+  LlmOverviewResponse,
+  LlmGeneration,
+  LlmGenerationDetail,
+  LlmGenerationsListResponse,
+  LlmTraceResponse,
+  LlmCostBreakdown,
+  LlmCostsResponse,
 }

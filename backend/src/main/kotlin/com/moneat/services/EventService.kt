@@ -281,6 +281,16 @@ class EventService(private val notificationService: NotificationService? = null)
             }
 
             logger.info { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
+            
+            // Detect ai.* spans and cross-insert into llm_generations
+            val aiSpans = spans.filter { span ->
+                val op = span.op ?: ""
+                op.startsWith("ai.")
+            }
+            if (aiSpans.isNotEmpty()) {
+                insertAiSpansAsLlmGenerations(projectId, traceId, transaction, aiSpans)
+            }
+            
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                 try {
                     ReleaseService().upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
@@ -790,6 +800,104 @@ class EventService(private val notificationService: NotificationService? = null)
         }
 
         return UUID.randomUUID().toString()
+    }
+
+    private suspend fun insertAiSpansAsLlmGenerations(
+        projectId: Long,
+        traceId: String,
+        transaction: SentryTransaction,
+        aiSpans: List<SentrySpan>
+    ) {
+        try {
+            val rows = aiSpans.mapNotNull { span ->
+                val spanStart = span.start_timestamp ?: return@mapNotNull null
+                val spanEnd = span.timestamp ?: return@mapNotNull null
+                val spanDurationMs = durationMs(spanStart, spanEnd)
+                val spanTimestampMs = unixSecondsToMillis(spanEnd)
+                val generationId = UUID.randomUUID().toString()
+                val spanId = span.span_id ?: ""
+                val parentSpanId = span.parent_span_id ?: ""
+                val op = span.op ?: ""
+                val data = span.data
+
+                val model = data?.get("ai.model_id")?.jsonPrimitive?.contentOrNull
+                    ?: data?.get("model")?.jsonPrimitive?.contentOrNull ?: ""
+                val provider = data?.get("ai.provider")?.jsonPrimitive?.contentOrNull ?: ""
+                val inputTokens = data?.get("ai.input_tokens")?.jsonPrimitive?.intOrNull
+                    ?: data?.get("ai.prompt_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
+                val outputTokens = data?.get("ai.output_tokens")?.jsonPrimitive?.intOrNull
+                    ?: data?.get("ai.completion_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
+                val totalTokens = data?.get("ai.total_tokens_used")?.jsonPrimitive?.intOrNull
+                    ?: (inputTokens + outputTokens)
+                val input = data?.get("ai.input_messages")?.toString() ?: ""
+                val output = data?.get("ai.responses")?.toString() ?: ""
+
+                val type = when {
+                    op.contains("chat_completion") -> "chat"
+                    op.contains("embedding") -> "embedding"
+                    op.contains("tool_call") || op.contains("tool") -> "tool_call"
+                    op.contains("agent") -> "agent"
+                    op.contains("chain") || op.contains("pipeline") -> "chain"
+                    op.contains("retriever") -> "retriever"
+                    else -> "completion"
+                }
+
+                val status = if (span.status == "ok" || span.status == null) "success" else "error"
+
+                """(
+                    toUUID('$generationId'),
+                    $projectId,
+                    '${escapeSql(traceId)}',
+                    '${escapeSql(spanId)}',
+                    '${escapeSql(parentSpanId)}',
+                    fromUnixTimestamp64Milli($spanTimestampMs),
+                    $spanDurationMs,
+                    '${escapeSql(span.description ?: op)}',
+                    '${escapeSql(model)}',
+                    '${escapeSql(provider)}',
+                    '$type',
+                    '${escapeSql(input)}',
+                    '${escapeSql(output)}',
+                    $inputTokens,
+                    $outputTokens,
+                    $totalTokens,
+                    0.0,
+                    0, 0, 0,
+                    '$status',
+                    '', 0,
+                    '${escapeSql(transaction.user?.id ?: "")}',
+                    '',
+                    '${escapeSql(transaction.environment ?: "")}',
+                    '${escapeSql(transaction.release ?: "")}',
+                    ${tagsToMap(span.tags)},
+                    '{}'
+                )""".trimIndent()
+            }
+
+            if (rows.isEmpty()) return
+
+            val query = """
+                INSERT INTO $clickhouseDb.llm_generations (
+                    generation_id, project_id, trace_id, span_id, parent_span_id,
+                    timestamp, duration_ms, name, model, provider, type,
+                    input, output, input_tokens, output_tokens, total_tokens, cost_usd,
+                    temperature, max_tokens, top_p,
+                    status, error_message, status_code,
+                    user_id, session_id, environment, release, tags, metadata
+                ) VALUES
+                ${rows.joinToString(",\n")}
+            """.trimIndent()
+
+            val response = ClickHouseClient.execute(query)
+            if (!response.status.isSuccess()) {
+                val body = response.bodyAsText()
+                logger.error { "Failed to insert ai.* spans as LLM generations: $body" }
+            } else {
+                logger.info { "Cross-inserted ${rows.size} ai.* spans as LLM generations for project $projectId" }
+            }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
+        }
     }
 
     private fun unixSecondsToMillis(value: Double): Long {

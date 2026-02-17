@@ -38,6 +38,7 @@ import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
+import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
@@ -68,6 +69,7 @@ import { Route as DocsGettingStartedRouteImport } from './routes/docs.getting-st
 import { Route as DocsErrorMonitoringRouteImport } from './routes/docs.error-monitoring'
 import { Route as DocsBillingRouteImport } from './routes/docs.billing'
 import { Route as DocsApiTokensRouteImport } from './routes/docs.api-tokens'
+import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
 import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
@@ -84,6 +86,7 @@ import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.
 import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
 import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
+import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 import { Route as ProjectsProjectIdTracesTraceIdRouteImport } from './routes/projects.$projectId.traces.$traceId'
 import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
@@ -232,6 +235,11 @@ const DocsIndexRoute = DocsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DocsRoute,
+} as any)
+const AiIndexRoute = AiIndexRouteImport.update({
+  id: '/ai/',
+  path: '/ai/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
@@ -385,6 +393,11 @@ const DocsApiTokensRoute = DocsApiTokensRouteImport.update({
   path: '/api-tokens',
   getParentRoute: () => DocsRoute,
 } as any)
+const AiGenerationsRoute = AiGenerationsRouteImport.update({
+  id: '/ai/generations',
+  path: '/ai/generations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -468,6 +481,11 @@ const AuthOauthCallbackRoute = AuthOauthCallbackRouteImport.update({
   path: '/auth/oauth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiTracesTraceIdRoute = AiTracesTraceIdRouteImport.update({
+  id: '/ai/traces/$traceId',
+  path: '/ai/traces/$traceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   id: '/$orgId',
   path: '/$orgId',
@@ -519,6 +537,7 @@ export interface FileRoutesByFullPath {
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
+  '/ai/generations': typeof AiGenerationsRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -549,6 +568,7 @@ export interface FileRoutesByFullPath {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/ai/': typeof AiIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
@@ -557,6 +577,7 @@ export interface FileRoutesByFullPath {
   '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
@@ -595,6 +616,7 @@ export interface FileRoutesByTo {
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
+  '/ai/generations': typeof AiGenerationsRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -625,6 +647,7 @@ export interface FileRoutesByTo {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin': typeof AdminIndexRoute
+  '/ai': typeof AiIndexRoute
   '/docs': typeof DocsIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
@@ -633,6 +656,7 @@ export interface FileRoutesByTo {
   '/status-pages': typeof StatusPagesIndexRoute
   '/uptime': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
@@ -676,6 +700,7 @@ export interface FileRoutesById {
   '/admin/revenue': typeof AdminRevenueRoute
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
+  '/ai/generations': typeof AiGenerationsRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -706,6 +731,7 @@ export interface FileRoutesById {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/ai/': typeof AiIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
@@ -714,6 +740,7 @@ export interface FileRoutesById {
   '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
+  '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
@@ -758,6 +785,7 @@ export interface FileRouteTypes {
     | '/admin/revenue'
     | '/admin/usage'
     | '/admin/users'
+    | '/ai/generations'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -788,6 +816,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
+    | '/ai/'
     | '/docs/'
     | '/issues/'
     | '/monitoring/'
@@ -796,6 +825,7 @@ export interface FileRouteTypes {
     | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
+    | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
     | '/on-call/declared-incidents/$incidentId'
@@ -834,6 +864,7 @@ export interface FileRouteTypes {
     | '/admin/revenue'
     | '/admin/usage'
     | '/admin/users'
+    | '/ai/generations'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -864,6 +895,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin'
+    | '/ai'
     | '/docs'
     | '/issues'
     | '/monitoring'
@@ -872,6 +904,7 @@ export interface FileRouteTypes {
     | '/status-pages'
     | '/uptime'
     | '/admin/organizations/$orgId'
+    | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
     | '/on-call/declared-incidents/$incidentId'
@@ -914,6 +947,7 @@ export interface FileRouteTypes {
     | '/admin/revenue'
     | '/admin/usage'
     | '/admin/users'
+    | '/ai/generations'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -944,6 +978,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
+    | '/ai/'
     | '/docs/'
     | '/issues/'
     | '/monitoring/'
@@ -952,6 +987,7 @@ export interface FileRouteTypes {
     | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
+    | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
     | '/on-call/declared-incidents/$incidentId'
@@ -985,6 +1021,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
+  AiGenerationsRoute: typeof AiGenerationsRoute
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
@@ -992,10 +1029,12 @@ export interface RootRouteChildren {
   SSlugRoute: typeof SSlugRoute
   StatusPagesPageIdRoute: typeof StatusPagesPageIdRoute
   UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
+  AiIndexRoute: typeof AiIndexRoute
   IssuesIndexRoute: typeof IssuesIndexRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
   StatusPagesIndexRoute: typeof StatusPagesIndexRoute
   UptimeIndexRoute: typeof UptimeIndexRoute
+  AiTracesTraceIdRoute: typeof AiTracesTraceIdRoute
   AuthOauthCallbackRoute: typeof AuthOauthCallbackRoute
   AuthSsoCallbackRoute: typeof AuthSsoCallbackRoute
 }
@@ -1204,6 +1243,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/docs/'
       preLoaderRoute: typeof DocsIndexRouteImport
       parentRoute: typeof DocsRoute
+    }
+    '/ai/': {
+      id: '/ai/'
+      path: '/ai'
+      fullPath: '/ai/'
+      preLoaderRoute: typeof AiIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/': {
       id: '/admin/'
@@ -1415,6 +1461,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsApiTokensRouteImport
       parentRoute: typeof DocsRoute
     }
+    '/ai/generations': {
+      id: '/ai/generations'
+      path: '/ai/generations'
+      fullPath: '/ai/generations'
+      preLoaderRoute: typeof AiGenerationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/users': {
       id: '/admin/users'
       path: '/users'
@@ -1525,6 +1578,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/oauth/callback'
       fullPath: '/auth/oauth/callback'
       preLoaderRoute: typeof AuthOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/traces/$traceId': {
+      id: '/ai/traces/$traceId'
+      path: '/ai/traces/$traceId'
+      fullPath: '/ai/traces/$traceId'
+      preLoaderRoute: typeof AiTracesTraceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/organizations/$orgId': {
@@ -1775,6 +1835,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
+  AiGenerationsRoute: AiGenerationsRoute,
   IssuesIssueIdRoute: IssuesIssueIdRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,
@@ -1782,10 +1843,12 @@ const rootRouteChildren: RootRouteChildren = {
   SSlugRoute: SSlugRoute,
   StatusPagesPageIdRoute: StatusPagesPageIdRoute,
   UptimeMonitorIdRoute: UptimeMonitorIdRoute,
+  AiIndexRoute: AiIndexRoute,
   IssuesIndexRoute: IssuesIndexRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
   StatusPagesIndexRoute: StatusPagesIndexRoute,
   UptimeIndexRoute: UptimeIndexRoute,
+  AiTracesTraceIdRoute: AiTracesTraceIdRoute,
   AuthOauthCallbackRoute: AuthOauthCallbackRoute,
   AuthSsoCallbackRoute: AuthSsoCallbackRoute,
 }

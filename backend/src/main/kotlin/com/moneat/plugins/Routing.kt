@@ -30,6 +30,8 @@ import com.moneat.routes.incidentProviderRoutes
 import com.moneat.routes.incidentRoutes
 import com.moneat.routes.ingestRoutes
 import com.moneat.routes.integrationRoutes
+import com.moneat.routes.llmIngestRoutes
+import com.moneat.routes.llmRoutes
 import com.moneat.routes.logRoutes
 import com.moneat.routes.monitorRoutes
 import com.moneat.routes.onCallRoutes
@@ -107,6 +109,7 @@ fun Application.configureRouting() {
         // Sentry-compatible ingestion endpoints (rate limited per project key)
         rateLimit(RateLimitName("ingestion")) {
             ingestRoutes()
+            llmIngestRoutes()
         }
 
         // Stripe webhooks
@@ -114,6 +117,9 @@ fun Application.configureRouting() {
         
         // Dashboard API endpoints
         apiRoutes()
+        
+        // LLM observability API endpoints
+        llmRoutes()
         
         // Authentication endpoints
         authRoutes()

@@ -19,6 +19,7 @@ package com.moneat.plugins
 import com.moneat.config.RedisClient
 import com.moneat.services.BillingBackgroundService
 import com.moneat.services.IngestionWorker
+import com.moneat.services.LlmIngestionWorker
 import com.moneat.services.LogIngestionWorker
 import com.moneat.services.MonitorAlertService
 import com.moneat.services.RefreshTokenCleanupService
@@ -67,6 +68,10 @@ fun Application.configureBackgroundJobs() {
     val logDlqKey = environment.config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq"
     val logWorkerCount = environment.config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull() ?: 2
     val logIngestionWorker = LogIngestionWorker(logQueueKey, logDlqKey, logWorkerCount)
+    val llmQueueKey = environment.config.propertyOrNull("llm.queueKey")?.getString() ?: "moneat:llm:queue"
+    val llmDlqKey = environment.config.propertyOrNull("llm.dlqKey")?.getString() ?: "moneat:llm:dlq"
+    val llmWorkerCount = environment.config.propertyOrNull("llm.workerCount")?.getString()?.toIntOrNull() ?: 2
+    val llmIngestionWorker = LlmIngestionWorker(llmQueueKey, llmDlqKey, llmWorkerCount)
     
     // Initialize on-call services
     val escalationPolicyService = EscalationPolicyService()
@@ -113,6 +118,7 @@ fun Application.configureBackgroundJobs() {
     uptimeScheduler.start()
     ingestionWorker.start()
     logIngestionWorker.start()
+    llmIngestionWorker.start()
     escalationEngineInstance.start()
     slackUserGroupSyncServiceInstance?.start()
     onCallHandoffServiceInstance?.start()
@@ -127,6 +133,7 @@ fun Application.configureBackgroundJobs() {
         uptimeScheduler.stop()
         ingestionWorker.stop()
         logIngestionWorker.stop()
+        llmIngestionWorker.stop()
         escalationEngineInstance.stop()
         slackUserGroupSyncServiceInstance?.stop()
         onCallHandoffServiceInstance?.stop()
