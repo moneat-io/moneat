@@ -83,12 +83,12 @@ function GenerationsPage() {
 
   return (
     <div className="space-y-4 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Brain className="h-6 w-6" />
           Generations
         </h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Input
             placeholder="Filter by model..."
             value={modelFilter}
@@ -135,7 +135,7 @@ function GenerationsPage() {
       </div>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -148,12 +148,15 @@ function GenerationsPage() {
                 <TableHead className="text-right">Duration</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Trace</TableHead>
-                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {data?.generations.map((gen) => (
-                <TableRow key={gen.generationId} className="cursor-pointer hover:bg-accent/50">
+                <TableRow
+                  key={gen.generationId}
+                  className="cursor-pointer hover:bg-accent/50"
+                  onClick={() => setSelectedGenId(gen.generationId)}
+                >
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                     {new Date(gen.timestamp).toLocaleString()}
                   </TableCell>
@@ -189,26 +192,17 @@ function GenerationsPage() {
                         params={{ traceId: gen.traceId }}
                         search={{ projectId: selectedProjectId }}
                         className="text-xs text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         {gen.traceId.slice(0, 8)}...
                       </Link>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => setSelectedGenId(gen.generationId)}
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                  </TableCell>
                 </TableRow>
               ))}
               {(!data?.generations || data.generations.length === 0) && !isLoading && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground py-12">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                     No generations found for the selected filters.
                   </TableCell>
                 </TableRow>

@@ -16,6 +16,7 @@
 
 const BYTES_PER_GB = 1024 * 1024 * 1024
 const UNLIMITED_SYSTEMS_SENTINEL = 2147483647
+const UNLIMITED_SENTINEL = 9_007_199_254_740_000 // Anything above this is "unlimited" (JS safe threshold for Long.MAX_VALUE)
 
 export type BillingInterval = 'monthly' | 'yearly'
 
@@ -25,8 +26,13 @@ export interface PricingCardTierInput {
   yearlyPriceCents: number
   trialDays?: number | null
   monthlyGbLimit: number
+  monthlyErrorLimit?: number
+  monthlyReplayLimit?: number
   monthlyLlmEventLimit?: number
   retentionDays: number
+  logRetentionDays?: number
+  replayRetentionDays?: number
+  llmRetentionDays?: number
   maxProjects: number | null
   maxSystems: number
   monitorIntervalSeconds: number
@@ -43,6 +49,15 @@ export interface PricingCardTierInput {
   customRetentionEnabled: boolean
   oncallPerUserMonthlyCents?: number
   oncallEnabled?: boolean
+  overageRateCentsPerGb?: number
+  errorOverageRateCentsPer1k?: number
+  replayOverageRateCentsPerGb?: number
+  llmOverageRateCentsPer1k?: number
+}
+
+export interface OverageItem {
+  label: string
+  rate: string
 }
 
 export interface PricingCardModel {
@@ -53,10 +68,14 @@ export interface PricingCardModel {
   yearlyMonthlyPrice: number
   yearlyTotalPrice: number
   displayPrice: number
-  features: string[]
+  includedLimits: string[]
+  platformFeatures: string[]
+  overages: OverageItem[]
   cta: string
   ctaLink: string
   highlight: boolean
+  /** @deprecated Use includedLimits + platformFeatures instead */
+  features: string[]
 }
 
 function formatCompactNumber(value: number): string {
@@ -70,6 +89,19 @@ function formatDataLimit(bytesLimit: number): string {
     return `${formatCompactNumber(gbLimit / 1024)} TB`
   }
   return `${formatCompactNumber(gbLimit)} GB`
+}
+
+function isUnlimited(value: number | undefined): boolean {
+  if (value == null) return false
+  return value >= UNLIMITED_SENTINEL || value < 0
+}
+
+function formatEventLimit(value: number | undefined): string {
+  if (value == null || value === 0) return '0'
+  if (isUnlimited(value)) return 'Unlimited'
+  if (value >= 1_000_000) return `${formatCompactNumber(value / 1_000_000)}M`
+  if (value >= 1_000) return `${formatCompactNumber(value / 1_000)}K`
+  return value.toLocaleString()
 }
 
 function formatMonitorLimit(maxSystems: number): string {
@@ -92,43 +124,91 @@ function tierDescription(tierName: string): string {
   }
 }
 
-function buildTierFeatures(tier: PricingCardTierInput): string[] {
-  const features = [
-    `${formatDataLimit(tier.monthlyGbLimit)}/mo data`,
-    `${tier.retentionDays}-day retention`,
-    tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`,
-    `${formatMonitorLimit(tier.maxSystems)} (${tier.monitorIntervalSeconds}s interval)`,
-  ]
+function formatCentsRate(cents: number, unit: string): string {
+  return `$${(cents / 100).toFixed(2)}/${unit}`
+}
 
-  if (tier.sessionReplayEnabled) features.push('Session replays and events')
+function buildIncludedLimits(tier: PricingCardTierInput): string[] {
+  const limits: string[] = []
 
-  if (tier.monthlyLlmEventLimit != null && tier.monthlyLlmEventLimit > 0) {
-    const llmFormatted = tier.monthlyLlmEventLimit >= 1_000_000
-      ? `${(tier.monthlyLlmEventLimit / 1_000_000).toFixed(1)}M`
-      : tier.monthlyLlmEventLimit >= 1_000
-        ? `${(tier.monthlyLlmEventLimit / 1_000).toFixed(0)}K`
-        : tier.monthlyLlmEventLimit.toString()
-    features.push(`${llmFormatted} AI observability events`)
+  const errorLimit = tier.monthlyErrorLimit
+  if (errorLimit != null && errorLimit > 0) {
+    limits.push(`${isUnlimited(errorLimit) ? 'Unlimited' : formatEventLimit(errorLimit)} errors`)
   }
 
+  if (tier.sessionReplayEnabled) {
+    const replayLimit = tier.monthlyReplayLimit
+    if (replayLimit != null && replayLimit > 0) {
+      limits.push(`${isUnlimited(replayLimit) ? 'Unlimited' : formatEventLimit(replayLimit)} session replays`)
+    } else {
+      limits.push('Session replays')
+    }
+  }
+
+  limits.push(`${formatDataLimit(tier.monthlyGbLimit)} log data`)
+
+  const llmLimit = tier.monthlyLlmEventLimit
+  if (llmLimit != null && llmLimit > 0) {
+    limits.push(`${isUnlimited(llmLimit) ? 'Unlimited' : formatEventLimit(llmLimit)} AI observability events`)
+  }
+
+  const retentionParts: string[] = []
+  const errRet = tier.retentionDays
+  const logRet = tier.logRetentionDays ?? errRet
+  const replayRet = tier.replayRetentionDays ?? errRet
+  const llmRet = tier.llmRetentionDays ?? errRet
+  const allSame = logRet === errRet && replayRet === errRet && llmRet === errRet
+  if (allSame) {
+    retentionParts.push(`${errRet}-day retention`)
+  } else {
+    retentionParts.push(`${errRet}d errors, ${replayRet}d replays, ${logRet}d logs, ${llmRet}d AI`)
+  }
+  limits.push(retentionParts[0])
+
+  limits.push(tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`)
+  limits.push(`${formatMonitorLimit(tier.maxSystems)} (${tier.monitorIntervalSeconds}s interval)`)
+
+  return limits
+}
+
+function buildPlatformFeatures(tier: PricingCardTierInput): string[] {
+  const features: string[] = []
+
   if (tier.statusPagesEnabled && tier.statusPageCustomDomainEnabled) {
-    features.push('Custom status pages with custom domains')
+    features.push('Status pages with custom domains')
   } else if (tier.statusPagesEnabled) {
     features.push('Custom status pages')
   }
 
   if (tier.slackEnabled) features.push('Slack integration')
   if (tier.discordEnabled) features.push('Discord integration')
-  if (tier.samlEnabled) features.push('SAML SSO integration')
-  if (tier.oidcEnabled) features.push('OIDC SSO integration')
+  if (tier.oncallEnabled && tier.oncallPerUserMonthlyCents) {
+    features.push(`On-call (+$${tier.oncallPerUserMonthlyCents / 100}/user/mo)`)
+  }
+  if (tier.samlEnabled) features.push('SAML SSO')
+  if (tier.oidcEnabled) features.push('OIDC SSO')
   if (tier.prioritySupportEnabled) features.push('Priority support')
   if (tier.slaEnabled) features.push('SLA guarantee')
   if (tier.customRetentionEnabled) features.push('Custom retention')
-  if (tier.oncallEnabled && tier.oncallPerUserMonthlyCents) {
-    features.push(`On-call scheduling (+$${tier.oncallPerUserMonthlyCents / 100}/user)`)
-  }
 
   return features
+}
+
+function buildOverages(tier: PricingCardTierInput): OverageItem[] {
+  if (tier.monthlyPriceCents === 0) return []
+
+  const overages: OverageItem[] = []
+  const errRate = tier.errorOverageRateCentsPer1k
+  const logRate = tier.overageRateCentsPerGb
+  const replayRate = tier.replayOverageRateCentsPerGb
+  const llmRate = tier.llmOverageRateCentsPer1k
+
+  if (errRate != null && errRate > 0) overages.push({label: 'Errors', rate: formatCentsRate(errRate, '1K')})
+  if (replayRate != null && replayRate > 0) overages.push({label: 'Replays', rate: formatCentsRate(replayRate, 'GB')})
+  if (logRate != null && logRate > 0) overages.push({label: 'Logs', rate: formatCentsRate(logRate, 'GB')})
+  if (llmRate != null && llmRate > 0) overages.push({label: 'AI events', rate: formatCentsRate(llmRate, '1K')})
+
+  return overages
 }
 
 function ctaForTier(tier: PricingCardTierInput): string {
@@ -145,6 +225,9 @@ export function buildPricingCardModel(
   const monthlyPrice = tier.monthlyPriceCents / 100
   const yearlyMonthlyPrice = tier.yearlyPriceCents / (100 * 12)
   const yearlyTotalPrice = tier.yearlyPriceCents / 100
+  const includedLimits = buildIncludedLimits(tier)
+  const platformFeatures = buildPlatformFeatures(tier)
+  const overages = buildOverages(tier)
 
   return {
     tierName: tier.tierName,
@@ -154,7 +237,10 @@ export function buildPricingCardModel(
     yearlyMonthlyPrice,
     yearlyTotalPrice,
     displayPrice: billingInterval === 'yearly' ? yearlyMonthlyPrice : monthlyPrice,
-    features: buildTierFeatures(tier),
+    includedLimits,
+    platformFeatures,
+    overages,
+    features: [...includedLimits, ...platformFeatures],
     cta: ctaForTier(tier),
     ctaLink,
     highlight: tier.tierName === 'PRO',

@@ -52,6 +52,7 @@ import {
   Minus,
   Plus,
   Trash2,
+  TrendingUp,
   Zap,
   Activity,
   MessageSquare,
@@ -1468,14 +1469,47 @@ function BillingTab() {
                       )}
                     </div>
 
-                    <ul className="space-y-3 mb-8 flex-1">
-                      {model.features.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <CheckCircle2 className={`h-4 w-4 flex-shrink-0 mt-0.5 ${isCurrentPlan ? 'text-primary' : 'text-emerald-500'}`} />
-                          <span className="text-sm leading-tight">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="space-y-4 mb-8 flex-1">
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Included</p>
+                        <ul className="space-y-2">
+                          {model.includedLimits.map((limit, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                              <CheckCircle2 className={`h-4 w-4 flex-shrink-0 mt-0.5 ${isCurrentPlan ? 'text-primary' : 'text-emerald-500'}`} />
+                              <span className="text-sm leading-tight">{limit}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      {model.overages.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Overages</p>
+                          <ul className="space-y-1.5">
+                            {model.overages.map((o, i) => (
+                              <li key={i} className="flex items-center gap-2 text-sm">
+                                <TrendingUp className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                <span className="text-muted-foreground">
+                                  {o.label}: <span className="font-medium text-foreground">{o.rate}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {model.platformFeatures.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Features</p>
+                          <ul className="space-y-2">
+                            {model.platformFeatures.map((feature, i) => (
+                              <li key={i} className="flex items-start gap-2 text-sm">
+                                <CheckCircle2 className={`h-4 w-4 flex-shrink-0 mt-0.5 ${isCurrentPlan ? 'text-primary' : 'text-emerald-500'}`} />
+                                <span className="text-sm leading-tight">{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
 
                     <Button
                       className="w-full"

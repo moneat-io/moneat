@@ -16,11 +16,11 @@
 
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery} from '@tanstack/react-query'
-import {Check} from 'lucide-react'
+import {Check, TrendingUp} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from '@/components/ui/card'
 import {api} from '@/lib/api'
-import {buildPricingCardModel} from '@/lib/pricing-display'
+import {buildPricingCardModel, type PricingCardModel} from '@/lib/pricing-display'
 import {useToast} from '@/hooks/use-toast'
 import {useState} from 'react'
 
@@ -106,7 +106,7 @@ export function PricingSection() {
     },
   })
 
-  const tiers = billingPlans?.plans.map((plan) => {
+  const tiers: PricingCardModel[] = billingPlans?.plans.map((plan) => {
     return buildPricingCardModel(
       {
         ...plan.tier,
@@ -134,10 +134,10 @@ export function PricingSection() {
             Pricing
           </p>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-            Simple GB-based pricing
+            Simple, transparent pricing
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Pay for what you use. Unlimited team members on every plan.
+            Per-type limits so you only pay for what you use. Unlimited team members on every plan.
           </p>
 
           <div className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-1">
@@ -178,15 +178,17 @@ export function PricingSection() {
             {tiers.map((tier) => {
               const displayPrice = tier.displayPrice
               const isYearly = billingInterval === 'yearly'
+              const accentClass = tier.highlight ? 'text-sky-500' : 'text-emerald-500'
+              const accentBgClass = tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'
 
               return (
                 <Card
                   key={tier.name}
-                  className={
+                  className={`flex flex-col ${
                     tier.highlight
                       ? 'relative border-sky-500/50 shadow-xl shadow-sky-500/10'
                       : 'border-border/60'
-                  }
+                  }`}
                 >
                   {tier.highlight && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -211,21 +213,61 @@ export function PricingSection() {
                       </span>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2.5">
-                      {tier.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2">
-                          <div
-                            className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'}`}
-                          >
-                            <Check
-                              className={`h-3 w-3 ${tier.highlight ? 'text-sky-500' : 'text-emerald-500'}`}
-                            />
-                          </div>
-                          <span className="text-xs leading-tight">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  <CardContent className="flex-1 space-y-4">
+                    {/* Included limits */}
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        Included
+                      </p>
+                      <ul className="space-y-2">
+                        {tier.includedLimits.map((limit) => (
+                          <li key={limit} className="flex items-start gap-2">
+                            <div className={`mt-0.5 rounded-full p-0.5 ${accentBgClass}`}>
+                              <Check className={`h-3 w-3 ${accentClass}`} />
+                            </div>
+                            <span className="text-xs leading-tight">{limit}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Overages */}
+                    {tier.overages.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                          Overages
+                        </p>
+                        <ul className="space-y-1.5">
+                          {tier.overages.map((o) => (
+                            <li key={o.label} className="flex items-center gap-2">
+                              <TrendingUp className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                              <span className="text-xs text-muted-foreground">
+                                {o.label}: <span className="font-medium text-foreground">{o.rate}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Platform features */}
+                    {tier.platformFeatures.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                          Features
+                        </p>
+                        <ul className="space-y-2">
+                          {tier.platformFeatures.map((feature) => (
+                            <li key={feature} className="flex items-start gap-2">
+                              <div className={`mt-0.5 rounded-full p-0.5 ${accentBgClass}`}>
+                                <Check className={`h-3 w-3 ${accentClass}`} />
+                              </div>
+                              <span className="text-xs leading-tight">{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </CardContent>
                   <CardFooter>
                     {isAuthenticated && tier.tierName !== 'FREE' ? (
@@ -265,9 +307,8 @@ export function PricingSection() {
 
         <div className="text-center mt-8 pt-8 border-t border-border/40">
           <p className="text-sm text-muted-foreground">
-            Need more data? <span className="font-semibold text-foreground">$0.40/GB</span> for overage.
-            On-call add-on: <span className="font-semibold text-foreground">$5/user/mo</span> for responders.
-            <span className="mx-2"> </span>
+            Unlimited team members on every plan.
+            <span className="mx-1.5">·</span>
             <span className="text-xs">30-day money-back guarantee</span>
           </p>
         </div>

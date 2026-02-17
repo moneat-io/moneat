@@ -82,9 +82,9 @@ function AiOverviewPage() {
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 whitespace-nowrap">
             <Brain className="h-6 w-6" />
             AI Observability
           </h1>
@@ -100,19 +100,21 @@ function AiOverviewPage() {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
-        <Select value={range} onValueChange={setRange}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1h">Last 1h</SelectItem>
-            <SelectItem value="6h">Last 6h</SelectItem>
-            <SelectItem value="24h">Last 24h</SelectItem>
-            <SelectItem value="7d">Last 7d</SelectItem>
-            <SelectItem value="14d">Last 14d</SelectItem>
-            <SelectItem value="30d">Last 30d</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-auto">
+          <Select value={range} onValueChange={setRange}>
+            <SelectTrigger className="w-full sm:w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1h">Last 1h</SelectItem>
+              <SelectItem value="6h">Last 6h</SelectItem>
+              <SelectItem value="24h">Last 24h</SelectItem>
+              <SelectItem value="7d">Last 7d</SelectItem>
+              <SelectItem value="14d">Last 14d</SelectItem>
+              <SelectItem value="30d">Last 30d</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Stats Row */}
@@ -164,7 +166,7 @@ function AiOverviewPage() {
           <CardHeader className="px-4 py-3">
             <CardTitle className="text-sm">Top Models</CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-3 pt-0">
+          <CardContent className="px-4 pb-3 pt-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

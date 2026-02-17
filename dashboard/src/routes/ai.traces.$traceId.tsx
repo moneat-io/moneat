@@ -26,6 +26,19 @@ import { Brain, Clock, Coins, Hash } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/ai/traces/$traceId')({
+  validateSearch: (search: Record<string, unknown>) => {
+    const rawProjectId = search.projectId
+    const parsedProjectId =
+      typeof rawProjectId === 'number'
+        ? rawProjectId
+        : typeof rawProjectId === 'string'
+          ? Number(rawProjectId)
+          : undefined
+
+    return {
+      projectId: Number.isFinite(parsedProjectId) ? parsedProjectId : undefined,
+    }
+  },
   component: TraceDetailPage,
 })
 
@@ -110,16 +123,21 @@ function findParentBySpanId(candidates: GenerationNode[] | undefined, child: Gen
 
 function TraceDetailPage() {
   const { traceId } = Route.useParams()
+  const search = Route.useSearch()
   const { selectedProjectId } = useProject()
   const [selectedGen, setSelectedGen] = useState<LlmGenerationDetail | null>(null)
 
-  const projectId = selectedProjectId ?? 0
+  const projectId = search.projectId ?? selectedProjectId
 
   const { data: trace, isLoading } = useQuery({
     queryKey: ['llm-trace', projectId, traceId],
-    queryFn: () => api.getLlmTrace(projectId, traceId),
-    enabled: projectId > 0,
+    queryFn: () => api.getLlmTrace(projectId!, traceId),
+    enabled: projectId !== null && projectId !== undefined,
   })
+
+  if (projectId === null || projectId === undefined) {
+    return <div className="p-6 text-muted-foreground">Select a project to view this trace.</div>
+  }
 
   if (isLoading) {
     return <div className="p-6 text-muted-foreground">Loading trace...</div>
