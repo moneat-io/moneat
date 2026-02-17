@@ -105,10 +105,10 @@ const featureCards = [
 ]
 
 const configCards = [
-  {icon: Code, title: 'SDK Setup', href: '/docs/sdk-setup', description: 'Install and configure Sentry-compatible SDKs.'},
-  {icon: Shield, title: 'SSO & Auth', href: '/docs/sso-authentication', description: 'Set up OAuth and SSO providers.'},
-  {icon: Key, title: 'API Tokens', href: '/docs/api-tokens', description: 'Create and manage API tokens.'},
-  {icon: CreditCard, title: 'Billing', href: '/docs/billing', description: 'Plans, usage, and billing management.'},
+  {icon: Code, title: 'SDK Setup', href: '/docs/sdk-setup', description: 'Install and configure Sentry-compatible SDKs.', color: 'text-blue-500'},
+  {icon: Shield, title: 'SSO & Auth', href: '/docs/sso-authentication', description: 'Set up OAuth and SSO providers.', color: 'text-indigo-500'},
+  {icon: Key, title: 'API Tokens', href: '/docs/api-tokens', description: 'Create and manage API tokens.', color: 'text-pink-500'},
+  {icon: CreditCard, title: 'Billing', href: '/docs/billing', description: 'Plans, usage, and billing management.', color: 'text-green-500'},
 ]
 
 function DocsIndex() {
@@ -125,8 +125,12 @@ function DocsIndex() {
 
       <div className="max-w-4xl">
         {/* Hero */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold tracking-tight mb-3">Moneat Documentation</h1>
+        <div className="mb-12 relative">
+          <div className="absolute -top-20 -left-20 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+          <div className="absolute -top-20 -right-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+          <h1 className="text-4xl font-bold tracking-tight mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 pb-1">
+            Moneat Documentation
+          </h1>
           <p className="text-lg text-muted-foreground max-w-2xl">
             Moneat is a Sentry-compatible observability platform for error monitoring, incident management,
             uptime tracking, and structured logging. Use any existing Sentry SDK to get started in minutes.
@@ -143,19 +147,21 @@ function DocsIndex() {
 
         {/* Feature Cards */}
         <section className="mb-12">
-          <h2 className="text-xl font-semibold mb-4">Features</h2>
+          <h2 className="text-xl font-semibold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">Features</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {featureCards.map((card) => {
               const Icon = card.icon
+              const bgClass = card.color.replace('text-', 'bg-')
               return (
                 <Link
                   key={card.href}
                   to={card.href}
-                  className="group flex items-start gap-3 p-4 rounded-lg border hover:border-primary/30 hover:bg-accent/50 transition-all"
+                  className="group flex items-start gap-3 p-4 rounded-lg border hover:border-primary/30 hover:bg-accent/50 transition-all relative overflow-hidden"
                 >
+                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity ${bgClass}`} />
                   <Icon className={`h-5 w-5 shrink-0 mt-0.5 ${card.color}`} />
                   <div>
-                    <h3 className="text-sm font-semibold group-hover:text-primary transition-colors">{card.title}</h3>
+                    <h3 className={`text-sm font-semibold transition-colors ${card.color}`}>{card.title}</h3>
                     <p className="text-sm text-muted-foreground mt-0.5">{card.description}</p>
                   </div>
                 </Link>
@@ -166,19 +172,21 @@ function DocsIndex() {
 
         {/* Config Cards */}
         <section>
-          <h2 className="text-xl font-semibold mb-4">Configuration & Account</h2>
+          <h2 className="text-xl font-semibold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-pink-600 to-orange-600">Configuration & Account</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {configCards.map((card) => {
               const Icon = card.icon
+              const bgClass = card.color.replace('text-', 'bg-')
               return (
                 <Link
                   key={card.href}
                   to={card.href}
-                  className="group flex items-center gap-3 p-3 rounded-lg border hover:border-primary/30 hover:bg-accent/50 transition-all"
+                  className="group flex items-center gap-3 p-3 rounded-lg border hover:border-primary/30 hover:bg-accent/50 transition-all relative overflow-hidden"
                 >
-                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity ${bgClass}`} />
+                  <Icon className={`h-4 w-4 shrink-0 transition-colors ${card.color}`} />
                   <div>
-                    <h3 className="text-sm font-medium">{card.title}</h3>
+                    <h3 className={`text-sm font-medium transition-colors ${card.color}`}>{card.title}</h3>
                     <p className="text-xs text-muted-foreground">{card.description}</p>
                   </div>
                 </Link>
