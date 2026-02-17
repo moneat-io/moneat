@@ -26,7 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Brain, Coins, Clock, AlertTriangle, Hash, Zap } from 'lucide-react'
+import { Brain, Coins, Clock, AlertTriangle, Hash, Zap, BookOpen, ArrowRight } from 'lucide-react'
 
 export const Route = createFileRoute('/ai/')({
   component: AiOverviewPage,
@@ -91,6 +91,14 @@ function AiOverviewPage() {
           <p className="text-muted-foreground text-sm mt-1">
             Monitor your LLM applications, trace agent executions, and track costs.
           </p>
+          <Link
+            to="/docs/ai-observability"
+            className="inline-flex items-center gap-2 mt-3 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            <BookOpen className="h-4 w-4" />
+            Get Started
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
         <Select value={range} onValueChange={setRange}>
           <SelectTrigger className="w-32">

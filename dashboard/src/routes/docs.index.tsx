@@ -31,6 +31,7 @@ import {
   CreditCard,
   ArrowRight,
   Rocket,
+  Brain,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/docs/')({
@@ -93,6 +94,13 @@ const featureCards = [
     description: 'Connect Slack, Discord, and webhooks for notifications.',
     href: '/docs/integrations',
     color: 'text-pink-500',
+  },
+  {
+    icon: Brain,
+    title: 'AI Observability',
+    description: 'Monitor LLM applications, trace agent executions, and track token costs.',
+    href: '/docs/ai-observability',
+    color: 'text-purple-500',
   },
 ]
 

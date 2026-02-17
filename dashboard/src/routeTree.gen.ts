@@ -69,6 +69,7 @@ import { Route as DocsGettingStartedRouteImport } from './routes/docs.getting-st
 import { Route as DocsErrorMonitoringRouteImport } from './routes/docs.error-monitoring'
 import { Route as DocsBillingRouteImport } from './routes/docs.billing'
 import { Route as DocsApiTokensRouteImport } from './routes/docs.api-tokens'
+import { Route as DocsAiObservabilityRouteImport } from './routes/docs.ai-observability'
 import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
@@ -393,6 +394,11 @@ const DocsApiTokensRoute = DocsApiTokensRouteImport.update({
   path: '/api-tokens',
   getParentRoute: () => DocsRoute,
 } as any)
+const DocsAiObservabilityRoute = DocsAiObservabilityRouteImport.update({
+  id: '/ai-observability',
+  path: '/ai-observability',
+  getParentRoute: () => DocsRoute,
+} as any)
 const AiGenerationsRoute = AiGenerationsRouteImport.update({
   id: '/ai/generations',
   path: '/ai/generations',
@@ -538,6 +544,7 @@ export interface FileRoutesByFullPath {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/docs/ai-observability': typeof DocsAiObservabilityRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -617,6 +624,7 @@ export interface FileRoutesByTo {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/docs/ai-observability': typeof DocsAiObservabilityRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -701,6 +709,7 @@ export interface FileRoutesById {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/docs/ai-observability': typeof DocsAiObservabilityRoute
   '/docs/api-tokens': typeof DocsApiTokensRoute
   '/docs/billing': typeof DocsBillingRoute
   '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
@@ -786,6 +795,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/docs/ai-observability'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -865,6 +875,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/docs/ai-observability'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -948,6 +959,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/docs/ai-observability'
     | '/docs/api-tokens'
     | '/docs/billing'
     | '/docs/error-monitoring'
@@ -1461,6 +1473,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsApiTokensRouteImport
       parentRoute: typeof DocsRoute
     }
+    '/docs/ai-observability': {
+      id: '/docs/ai-observability'
+      path: '/ai-observability'
+      fullPath: '/docs/ai-observability'
+      preLoaderRoute: typeof DocsAiObservabilityRouteImport
+      parentRoute: typeof DocsRoute
+    }
     '/ai/generations': {
       id: '/ai/generations'
       path: '/ai/generations'
@@ -1653,6 +1672,7 @@ const AdminRouteChildren: AdminRouteChildren = {
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface DocsRouteChildren {
+  DocsAiObservabilityRoute: typeof DocsAiObservabilityRoute
   DocsApiTokensRoute: typeof DocsApiTokensRoute
   DocsBillingRoute: typeof DocsBillingRoute
   DocsErrorMonitoringRoute: typeof DocsErrorMonitoringRoute
@@ -1670,6 +1690,7 @@ interface DocsRouteChildren {
 }
 
 const DocsRouteChildren: DocsRouteChildren = {
+  DocsAiObservabilityRoute: DocsAiObservabilityRoute,
   DocsApiTokensRoute: DocsApiTokensRoute,
   DocsBillingRoute: DocsBillingRoute,
   DocsErrorMonitoringRoute: DocsErrorMonitoringRoute,
