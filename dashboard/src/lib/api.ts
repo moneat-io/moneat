@@ -733,6 +733,8 @@ interface UpdateStripePriceIdsRequest {
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null
   stripeYearlyOveragePriceId?: string | null
+  stripeOncallPriceId?: string | null
+  stripeOncallYearlyPriceId?: string | null
 }
 
 // Monitoring types

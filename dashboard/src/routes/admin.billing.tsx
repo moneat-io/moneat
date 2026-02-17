@@ -200,6 +200,8 @@ interface CreateFormState {
   stripeOveragePriceId: string
   stripeYearlyBasePriceId: string
   stripeYearlyOveragePriceId: string
+  stripeOncallPriceId: string
+  stripeOncallYearlyPriceId: string
 }
 
 const DEFAULT_FORM: CreateFormState = {
@@ -232,6 +234,8 @@ const DEFAULT_FORM: CreateFormState = {
   stripeOveragePriceId: '',
   stripeYearlyBasePriceId: '',
   stripeYearlyOveragePriceId: '',
+  stripeOncallPriceId: '',
+  stripeOncallYearlyPriceId: '',
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -253,6 +257,8 @@ function AdminBillingPage() {
     stripeOveragePriceId: '',
     stripeYearlyBasePriceId: '',
     stripeYearlyOveragePriceId: '',
+    stripeOncallPriceId: '',
+    stripeOncallYearlyPriceId: '',
   })
   const [showCreateConfirm, setShowCreateConfirm] = useState(false)
   const [showMigrateConfirm, setShowMigrateConfirm] = useState(false)
@@ -430,6 +436,8 @@ function AdminBillingPage() {
         stripeOveragePriceId: config.stripeOveragePriceId ?? '',
         stripeYearlyBasePriceId: config.stripeYearlyBasePriceId ?? '',
         stripeYearlyOveragePriceId: config.stripeYearlyOveragePriceId ?? '',
+        stripeOncallPriceId: config.stripeOncallPriceId ?? '',
+        stripeOncallYearlyPriceId: config.stripeOncallYearlyPriceId ?? '',
       })
     },
     [],
@@ -450,6 +458,8 @@ function AdminBillingPage() {
         stripeOveragePriceId: selectedUpdateTierConfig.stripeOveragePriceId ?? '',
         stripeYearlyBasePriceId: selectedUpdateTierConfig.stripeYearlyBasePriceId ?? '',
         stripeYearlyOveragePriceId: selectedUpdateTierConfig.stripeYearlyOveragePriceId ?? '',
+        stripeOncallPriceId: selectedUpdateTierConfig.stripeOncallPriceId ?? '',
+        stripeOncallYearlyPriceId: selectedUpdateTierConfig.stripeOncallYearlyPriceId ?? '',
       })
     }
   }, [selectedUpdateTierConfig])
@@ -493,6 +503,8 @@ function AdminBillingPage() {
         stripeOveragePriceId: createForm.stripeOveragePriceId.trim() || null,
         stripeYearlyBasePriceId: createForm.stripeYearlyBasePriceId.trim() || null,
         stripeYearlyOveragePriceId: createForm.stripeYearlyOveragePriceId.trim() || null,
+        stripeOncallPriceId: createForm.stripeOncallPriceId.trim() || null,
+        stripeOncallYearlyPriceId: createForm.stripeOncallYearlyPriceId.trim() || null,
       }),
     onSuccess: (tier) => {
       queryClient.invalidateQueries({queryKey: ['admin-billing-current-plans']})
@@ -544,6 +556,8 @@ function AdminBillingPage() {
         stripeOveragePriceId: updatePriceForm.stripeOveragePriceId.trim() || null,
         stripeYearlyBasePriceId: updatePriceForm.stripeYearlyBasePriceId.trim() || null,
         stripeYearlyOveragePriceId: updatePriceForm.stripeYearlyOveragePriceId.trim() || null,
+        stripeOncallPriceId: updatePriceForm.stripeOncallPriceId.trim() || null,
+        stripeOncallYearlyPriceId: updatePriceForm.stripeOncallYearlyPriceId.trim() || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['admin-billing-tier-versions', updateTier]})
@@ -1285,6 +1299,30 @@ function AdminBillingPage() {
                   />
                   <FieldHint>The Stripe Price ID for yearly metered PAYG overage charges</FieldHint>
                 </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="stripeOncallPriceId">Stripe On-Call Price ID (Monthly)</Label>
+                  <Input
+                    id="stripeOncallPriceId"
+                    placeholder="price_..."
+                    value={createForm.stripeOncallPriceId}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, stripeOncallPriceId: e.target.value}))
+                    }
+                  />
+                  <FieldHint>The Stripe Price ID for monthly on-call seats</FieldHint>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="stripeOncallYearlyPriceId">Stripe On-Call Price ID (Yearly)</Label>
+                  <Input
+                    id="stripeOncallYearlyPriceId"
+                    placeholder="price_..."
+                    value={createForm.stripeOncallYearlyPriceId}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, stripeOncallYearlyPriceId: e.target.value}))
+                    }
+                  />
+                  <FieldHint>The Stripe Price ID for yearly on-call seats</FieldHint>
+                </div>
               </div>
             </div>
 
@@ -1539,6 +1577,32 @@ function AdminBillingPage() {
                         }
                       />
                       <FieldHint>Stripe Price ID for yearly metered overage</FieldHint>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="updateStripeOncallPriceId">Monthly On-Call Price ID</Label>
+                      <Input
+                        id="updateStripeOncallPriceId"
+                        placeholder="price_..."
+                        value={updatePriceForm.stripeOncallPriceId}
+                        onChange={(e) =>
+                          setUpdatePriceForm((p) => ({ ...p, stripeOncallPriceId: e.target.value }))
+                        }
+                      />
+                      <FieldHint>Stripe Price ID for monthly on-call seat charges</FieldHint>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="updateStripeOncallYearlyPriceId">Yearly On-Call Price ID</Label>
+                      <Input
+                        id="updateStripeOncallYearlyPriceId"
+                        placeholder="price_..."
+                        value={updatePriceForm.stripeOncallYearlyPriceId}
+                        onChange={(e) =>
+                          setUpdatePriceForm((p) => ({ ...p, stripeOncallYearlyPriceId: e.target.value }))
+                        }
+                      />
+                      <FieldHint>Stripe Price ID for yearly on-call seat charges</FieldHint>
                     </div>
                   </div>
 
@@ -1817,16 +1881,21 @@ function AdminBillingPage() {
 
 function ChangeSummary({current, form}: {current: BillingTierConfig; form: CreateFormState}) {
   const changes: Array<{field: string; from: string; to: string}> = []
+  const currentTotalLimit =
+    current.monthlyErrorLimit +
+    current.monthlyTransactionLimit +
+    current.monthlyReplayLimit +
+    current.monthlyFeedbackLimit
   const formTotalLimit =
     form.monthlyErrorLimit +
     form.monthlyTransactionLimit +
     form.monthlyReplayLimit +
     form.monthlyFeedbackLimit
 
-  if (current.monthlyUnitLimit !== formTotalLimit) {
+  if (currentTotalLimit !== formTotalLimit) {
     changes.push({
       field: 'Total Unit Limit',
-      from: current.monthlyUnitLimit.toLocaleString(),
+      from: currentTotalLimit.toLocaleString(),
       to: Number(formTotalLimit).toLocaleString(),
     })
   }
