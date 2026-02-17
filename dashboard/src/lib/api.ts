@@ -552,6 +552,8 @@ interface BillingTierConfig {
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null
   stripeYearlyOveragePriceId?: string | null
+  stripeOncallPriceId?: string | null
+  stripeOncallYearlyPriceId?: string | null
   oncallPerUserMonthlyCents?: number
   oncallPerUserYearlyCents?: number
   oncallEnabled?: boolean

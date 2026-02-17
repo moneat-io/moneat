@@ -376,6 +376,8 @@ class PricingTierService {
                 it[stripe_overage_price_id] = request.stripeOveragePriceId
                 it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
                 it[stripe_yearly_overage_price_id] = request.stripeYearlyOveragePriceId
+                it[stripe_oncall_price_id] = request.stripeOncallPriceId
+                it[stripe_oncall_yearly_price_id] = request.stripeOncallYearlyPriceId
             }
 
             logger.info { "Updated Stripe price IDs for $canonicalName v$version" }
