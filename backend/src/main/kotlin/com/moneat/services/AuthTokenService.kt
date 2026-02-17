@@ -62,7 +62,7 @@ class AuthTokenService {
      */
     private fun buildSentryToken(orgSlug: String, secretBytes: ByteArray): String {
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
-        val iat = System.currentTimeMillis() / 1000.0
+        val iat = System.currentTimeMillis() / 1000  // Use Long instead of Double to avoid scientific notation
         val payloadJson = """{"iat":$iat,"url":"$backendUrl","region_url":"$backendUrl","org":"$orgSlug"}"""
         val payloadEncoded = Base64.getEncoder().encodeToString(payloadJson.toByteArray())
         val secretEncoded = Base64.getEncoder().withoutPadding().encodeToString(secretBytes)
