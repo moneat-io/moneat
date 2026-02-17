@@ -46,7 +46,7 @@ fun Application.configureDemoModeRestrictions() {
         val isDemo = call.isDemoUser()
 
         if (isDemo) {
-            val method = call.request.httpMethod
+            val method = call.request.local.method
             val path = call.request.path()
             if (path in demoSafeWritePaths) {
                 return@intercept
