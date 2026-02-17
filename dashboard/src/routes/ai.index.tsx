@@ -218,6 +218,9 @@ function AiOverviewPage() {
         <Link to="/ai/generations" className="text-sm text-primary hover:underline">
           View All Generations →
         </Link>
+        <Link to="/docs/ai-observability" className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors">
+          Get Started →
+        </Link>
       </div>
     </div>
   )
