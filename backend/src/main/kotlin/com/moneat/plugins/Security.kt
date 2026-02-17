@@ -20,10 +20,12 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.services.AuthTokenService
 import com.moneat.utils.SentryUtils
+import io.ktor.http.auth.HttpAuthHeader
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import mu.KotlinLogging
+import java.util.Base64
 
 private val logger = KotlinLogging.logger {}
 
@@ -32,6 +34,58 @@ data class AuthTokenPrincipal(
     val scopes: List<String>,
     val tokenId: Int
 ) : Principal
+
+private fun extractBearerToken(rawHeader: String?): String? {
+    if (rawHeader == null || !rawHeader.startsWith("Bearer ", ignoreCase = true)) {
+        return null
+    }
+
+    val rawToken = rawHeader.removePrefix("Bearer ").removePrefix("bearer ").trim()
+    if (rawToken.isBlank()) {
+        return null
+    }
+
+    val token = if (rawToken.any { it.isWhitespace() }) {
+        logger.warn("Authorization token contains whitespace; normalizing before parsing")
+        rawToken.filterNot { it.isWhitespace() }
+    } else {
+        rawToken
+    }
+
+    return token.takeIf { it.isNotBlank() }
+}
+
+private fun parseBearerHeaderSafely(rawHeader: String?): HttpAuthHeader? {
+    val token = extractBearerToken(rawHeader) ?: return null
+
+    return try {
+        HttpAuthHeader.Single("Bearer", token)
+    } catch (e: Exception) {
+        logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
+        null
+    }
+}
+
+private fun parseBearerHeaderForKtor(rawHeader: String?): HttpAuthHeader? {
+    val token = extractBearerToken(rawHeader) ?: return null
+    val encodedToken = Base64.getUrlEncoder().withoutPadding().encodeToString(token.toByteArray())
+
+    return try {
+        HttpAuthHeader.Single("Bearer", encodedToken)
+    } catch (e: Exception) {
+        logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
+        null
+    }
+}
+
+private fun decodeKtorBearerToken(tokenCredential: BearerTokenCredential): String {
+    return try {
+        String(Base64.getUrlDecoder().decode(tokenCredential.token))
+    } catch (_: IllegalArgumentException) {
+        // Backward compatibility for already token68-safe tokens.
+        tokenCredential.token
+    }
+}
 
 fun Application.configureSecurity() {
     val config = environment.config
@@ -68,14 +122,7 @@ fun Application.configureSecurity() {
             // Fall back to reading JWT from httpOnly cookie when no Authorization header present
             authHeader { call ->
                 val authHeader = call.request.headers["Authorization"]
-                if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
-                    try {
-                        val token = authHeader.removePrefix("Bearer ").removePrefix("bearer ").trim()
-                        io.ktor.http.auth.HttpAuthHeader.Single("Bearer", token)
-                    } catch (e: Exception) {
-                        null
-                    }
-                } else {
+                parseBearerHeaderSafely(authHeader) ?: run {
                     val cookieToken = call.request.cookies["auth_token"]
                     if (cookieToken != null) {
                         try {
@@ -94,9 +141,14 @@ fun Application.configureSecurity() {
         bearer("auth-bearer") {
             this.realm = realm
             logger.warn("!!! Configuring auth-bearer provider")
+            authSchemes("Bearer")
+            authHeader { call ->
+                parseBearerHeaderForKtor(call.request.headers["Authorization"])
+            }
             authenticate { tokenCredential ->
-                logger.warn("!!! auth-bearer authenticate() called with token: ${tokenCredential.token.take(50)}...")
-                val validationResult = authTokenService.validateToken(tokenCredential.token)
+                val token = decodeKtorBearerToken(tokenCredential)
+                logger.warn("!!! auth-bearer authenticate() called with token: ${token.take(50)}...")
+                val validationResult = authTokenService.validateToken(token)
                 if (validationResult != null) {
                     // Set user context in Sentry
                     SentryUtils.setUser(validationResult.userId)
@@ -123,19 +175,18 @@ fun Application.configureSecurity() {
                 // Extract Authorization header manually
                 val authHeader = call.request.headers["Authorization"]
                 logger.warn("!!! authHeader block called, Authorization header: ${authHeader?.take(80)}")
-                if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
-                    val token = authHeader.removePrefix("Bearer ").removePrefix("bearer ").trim()
-                    logger.warn("!!! Extracted token: ${token.take(50)}...")
-                    io.ktor.http.auth.HttpAuthHeader.Single("Bearer", token)
-                } else {
+                parseBearerHeaderForKtor(authHeader)?.also {
+                    logger.warn("!!! Extracted token from Bearer header")
+                } ?: run {
                     logger.warn("!!! No Bearer header found")
                     null
                 }
             }
             authenticate { tokenCredential ->
-                logger.warn("!!! auth-combined authenticate() called with token: ${tokenCredential.token.take(50)}...")
+                val token = decodeKtorBearerToken(tokenCredential)
+                logger.warn("!!! auth-combined authenticate() called with token: ${token.take(50)}...")
                 // First try as auth token
-                val validationResult = authTokenService.validateToken(tokenCredential.token)
+                val validationResult = authTokenService.validateToken(token)
                 logger.warn("!!! validateToken returned: $validationResult")
                 if (validationResult != null) {
                     // Set user context in Sentry
@@ -152,7 +203,7 @@ fun Application.configureSecurity() {
                 
                 // If not an auth token, try as JWT
                 try {
-                    val decodedJWT = jwtVerifier.verify(tokenCredential.token)
+                    val decodedJWT = jwtVerifier.verify(token)
                     val userId = decodedJWT.getClaim("userId").asInt()
                     
                     if (userId != null) {
