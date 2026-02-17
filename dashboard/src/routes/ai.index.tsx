@@ -199,7 +199,11 @@ function AiOverviewPage() {
                 {(!overview?.topModels || overview.topModels.length === 0) && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No LLM data yet. Start sending generation events to see analytics.
+                      No LLM data yet.{' '}
+                      <Link to="/docs/ai-observability" className="text-primary hover:underline">
+                        Read the docs
+                      </Link>{' '}
+                      to get started.
                     </TableCell>
                   </TableRow>
                 )}
