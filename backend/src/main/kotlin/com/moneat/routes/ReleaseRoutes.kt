@@ -65,7 +65,7 @@ fun Route.releaseRoutes() {
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
     authenticate("auth-bearer") {
         get("/api/0/") {
-            logger.warn { "!!! /api/0/ endpoint hit!" }
+            logger.warn("!!! /api/0/ endpoint hit!")
             val principal = call.principal<AuthTokenPrincipal>()
                 ?: run {
                     call.respond(HttpStatusCode.Unauthorized)

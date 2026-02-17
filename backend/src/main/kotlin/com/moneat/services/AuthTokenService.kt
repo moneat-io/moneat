@@ -137,24 +137,24 @@ class AuthTokenService {
      * Validate a token and return user ID and scopes if valid.
      */
     fun validateToken(token: String): TokenValidationResult? {
-        logger.warn { "!!! validateToken called: length=${token.length}, starts with sntrys_=${token.startsWith(TOKEN_PREFIX)}" }
+        logger.warn("!!! validateToken called: length=${token.length}, starts with sntrys_=${token.startsWith(TOKEN_PREFIX)}")
         if (!token.startsWith(TOKEN_PREFIX)) {
-            logger.warn { "!!! Token doesn't start with prefix" }
+            logger.warn("!!! Token doesn't start with prefix")
             return null
         }
         
         val tokenHash = hashToken(token)
-        logger.warn { "!!! Token hash: $tokenHash" }
+        logger.warn("!!! Token hash: $tokenHash")
         
         return transaction {
             val tokenRow = AuthTokens.selectAll()
                 .where { AuthTokens.token_hash eq tokenHash }
                 .firstOrNull()
             if (tokenRow == null) {
-                logger.warn { "!!! No token found in DB for hash: $tokenHash" }
+                logger.warn("!!! No token found in DB for hash: $tokenHash")
                 return@transaction null
             }
-            logger.warn { "!!! Token found in DB!" }
+            logger.warn("!!! Token found in DB!")
             
             // Check if token is expired
             val expiresAt = tokenRow[AuthTokens.expires_at]
