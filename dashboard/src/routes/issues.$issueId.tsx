@@ -193,6 +193,13 @@ function IssueDetailPage() {
             Dashboard
           </Link>
           <span className="text-muted-foreground/50">/</span>
+          <Link
+            to="/issues"
+            className="text-muted-foreground hover:text-foreground transition-colors truncate max-w-[120px] sm:max-w-none"
+          >
+            {issue.projectName || 'Issues'}
+          </Link>
+          <span className="text-muted-foreground/50">/</span>
           <span className="text-foreground font-medium truncate max-w-[200px] sm:max-w-none" title={issue.title}>
             Issue
           </span>

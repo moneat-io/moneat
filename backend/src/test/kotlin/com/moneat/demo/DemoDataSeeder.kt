@@ -1307,12 +1307,45 @@ object DemoDataSeeder {
             // Generate realistic contexts
             val contexts = generateContexts(template.platform, device, osVersion)
             
+            // Generate realistic tags
+            val releaseVersion = "1.${random.nextInt(0, 4)}.${random.nextInt(0, 2)}"
+            val userId = UUID.randomUUID().toString()
+            val username = userEmail.substringBefore("@").replace(".", "_")
+            val userIp = "${random.nextInt(1, 255)}.${random.nextInt(0, 255)}.${random.nextInt(0, 255)}.${random.nextInt(1, 255)}"
+            val (sdkName, sdkVersion) = when (template.platform) {
+                "android" -> Pair("sentry.java.android", "7.${random.nextInt(0, 5)}.${random.nextInt(0, 10)}")
+                "cocoa" -> Pair("sentry.cocoa", "8.${random.nextInt(15, 30)}.${random.nextInt(0, 5)}")
+                else -> Pair("sentry.javascript.react-native", "5.${random.nextInt(15, 30)}.${random.nextInt(0, 5)}")
+            }
+            val tags = buildString {
+                append("{'environment':'production'")
+                append(",'release':'$releaseVersion'")
+                append(",'platform':'${template.platform}'")
+                append(",'level':'${template.level}'")
+                append(",'os.name':'${if (template.platform == "android") "Android" else if (template.platform == "cocoa") "iOS" else "JavaScript"}'")
+                append(",'os.version':'$osVersion'")
+                append(",'device':'$device'")
+                append(",'user':'$username'")
+                append(",'sdk.name':'$sdkName'")
+                append(",'sdk.version':'$sdkVersion'")
+                if (random.nextBoolean()) append(",'handled':'no'")
+                if (random.nextBoolean()) append(",'mechanism':'${listOf("AppExceptionHandler","UncaughtExceptionHandler","NSException","unhandledrejection").random(random)}'")
+                append("}")
+            }
+            
+            // Generate request context
+            val requestUrl = when (template.platform) {
+                "android", "cocoa" -> "https://api.acmeshopping.com/v1/${listOf("products","cart","user/profile","orders","checkout").random(random)}"
+                else -> "https://acmeshopping.com/${listOf("products","cart","checkout","profile").random(random)}"
+            }
+            val requestBody = """{"url":"$requestUrl","method":"${listOf("GET","POST","PUT").random(random)}","headers":{"User-Agent":"${sdkName}/${sdkVersion}","Content-Type":"application/json"},"env":{"REMOTE_ADDR":"$userIp"}}"""
+            
             val eventQuery = """
                 INSERT INTO $db.events (
                     event_id, project_id, issue_id, timestamp, received_at, event_type,
                     platform, level, message, exception_type, exception_value,
-                    stack_trace, environment, release, user_id, user_email,
-                    device_model, os_name, os_version, breadcrumbs, contexts
+                    stack_trace, environment, release, user_id, user_email, user_username, user_ip_address,
+                    device_model, os_name, os_version, breadcrumbs, contexts, tags, sdk_name, sdk_version, request
                 ) VALUES (
                     '$eventId',
                     $projectId,
@@ -1327,14 +1360,20 @@ object DemoDataSeeder {
                     '${template.exceptionValue.replace("'", "''")}',
                     '[$stackTraceJson]',
                     'production',
-                    '1.${random.nextInt(0, 4)}.${random.nextInt(0, 2)}',
-                    '${UUID.randomUUID()}',
+                    '$releaseVersion',
+                    '$userId',
                     '$userEmail',
+                    '$username',
+                    '$userIp',
                     '$device',
                     '${if (template.platform == "android") "Android" else if (template.platform == "cocoa") "iOS" else "JavaScript"}',
                     '$osVersion',
                     '${breadcrumbs.replace("'", "\\'")}',
-                    '${contexts.replace("'", "\\'")}'
+                    '${contexts.replace("'", "\\'")}',
+                    $tags,
+                    '$sdkName',
+                    '$sdkVersion',
+                    '${requestBody.replace("'", "\\'")}'
                 )
             """.trimIndent()
             
@@ -2463,39 +2502,110 @@ object DemoDataSeeder {
         println("✅ Seeded 1 status page with ${monitorIds.size} monitors and ${incidents.size} incidents")
     }
     
-    private fun generateBreadcrumbs(platform: String, @Suppress("UNUSED_PARAMETER") errorTitle: String): String {
+    private fun generateBreadcrumbs(platform: String, errorTitle: String): String {
         val breadcrumbs = mutableListOf<String>()
         val now = System.currentTimeMillis()
         
+        // Determine flow variant based on error title for diversity
+        val isAuthError = errorTitle.contains("auth", ignoreCase = true) || errorTitle.contains("login", ignoreCase = true) || errorTitle.contains("token", ignoreCase = true)
+        val isNetworkError = errorTitle.contains("network", ignoreCase = true) || errorTitle.contains("timeout", ignoreCase = true) || errorTitle.contains("connection", ignoreCase = true)
+        val isCheckoutError = errorTitle.contains("payment", ignoreCase = true) || errorTitle.contains("checkout", ignoreCase = true) || errorTitle.contains("cart", ignoreCase = true)
+        val productId = random.nextInt(100, 999)
+        
         when (platform) {
             "android" -> {
-                // Android-specific breadcrumbs
-                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 30000}}""")
-                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped product item #123","level":"info","timestamp":${now - 25000}}""")
-                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductListFragment -> ProductDetailFragment","level":"info","timestamp":${now - 20000}}""")
-                breadcrumbs.add("""{"type":"http","category":"http","message":"GET /api/products/123","level":"info","data":{"status_code":200,"method":"GET"},"timestamp":${now - 18000}}""")
-                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped add to cart button","level":"info","timestamp":${now - 12000}}""")
-                breadcrumbs.add("""{"type":"http","category":"http","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"method":"POST"},"timestamp":${now - 10000}}""")
-                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductDetailFragment -> CartFragment","level":"info","timestamp":${now - 5000}}""")
-                breadcrumbs.add("""{"type":"debug","category":"lifecycle","message":"CartFragment.onViewCreated called","level":"debug","timestamp":${now - 3000}}""")
+                if (isAuthError) {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"SplashActivity -> LoginActivity","level":"info","timestamp":${now - 45000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped email field","level":"info","timestamp":${now - 38000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped password field","level":"info","timestamp":${now - 32000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped Sign In button","level":"info","timestamp":${now - 25000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"POST /api/auth/login","level":"info","data":{"status_code":401,"method":"POST","url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"auth","message":"Token refresh attempted","level":"debug","timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"POST /api/auth/refresh","level":"info","data":{"status_code":403,"method":"POST"},"timestamp":${now - 15000}}""")
+                    breadcrumbs.add("""{"type":"error","category":"auth","message":"Authentication failed: invalid credentials","level":"error","timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"lifecycle","message":"LoginActivity.onResume called","level":"debug","timestamp":${now - 5000}}""")
+                } else if (isNetworkError) {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 40000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"network","message":"Network connectivity: WIFI connected","level":"debug","timestamp":${now - 35000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"GET /api/products?page=1","level":"info","data":{"status_code":200,"method":"GET","duration_ms":134},"timestamp":${now - 30000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User scrolled to bottom of list","level":"info","timestamp":${now - 22000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"GET /api/products?page=2","level":"info","data":{"status_code":200,"method":"GET","duration_ms":156},"timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"network","message":"Network connectivity: switching to cellular","level":"warning","timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"GET /api/products?page=3","level":"error","data":{"status_code":0,"method":"GET","reason":"Connection timed out"},"timestamp":${now - 8000}}""")
+                    breadcrumbs.add("""{"type":"error","category":"network","message":"Request failed: java.net.SocketTimeoutException","level":"error","timestamp":${now - 5000}}""")
+                } else if (isCheckoutError) {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 60000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped product #$productId","level":"info","timestamp":${now - 52000}}""")
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductListFragment -> ProductDetailFragment","level":"info","timestamp":${now - 50000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"GET /api/products/$productId","level":"info","data":{"status_code":200,"method":"GET","duration_ms":89},"timestamp":${now - 48000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped Add to Cart","level":"info","timestamp":${now - 35000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"method":"POST"},"timestamp":${now - 33000}}""")
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductDetailFragment -> CartFragment","level":"info","timestamp":${now - 28000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped Proceed to Checkout","level":"info","timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"CartFragment -> CheckoutFragment","level":"info","timestamp":${now - 16000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"POST /api/orders/checkout","level":"error","data":{"status_code":500,"method":"POST","url":"https://api.acmeshopping.com/v1/orders/checkout"},"timestamp":${now - 8000}}""")
+                    breadcrumbs.add("""{"type":"error","category":"payment","message":"Payment processing failed: gateway timeout","level":"error","timestamp":${now - 5000}}""")
+                } else {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 30000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped product item #$productId","level":"info","timestamp":${now - 25000}}""")
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductListFragment -> ProductDetailFragment","level":"info","timestamp":${now - 20000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"GET /api/products/$productId","level":"info","data":{"status_code":200,"method":"GET","duration_ms":112},"timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"User tapped add to cart button","level":"info","timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"http","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"method":"POST"},"timestamp":${now - 10000}}""")
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductDetailFragment -> CartFragment","level":"info","timestamp":${now - 5000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"lifecycle","message":"CartFragment.onViewCreated called","level":"debug","timestamp":${now - 3000}}""")
+                }
             }
             "cocoa" -> {
-                // iOS-specific breadcrumbs
-                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"HomeViewController -> ProductListViewController","level":"info","timestamp":${now - 28000}}""")
-                breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped product cell","level":"info","timestamp":${now - 22000}}""")
-                breadcrumbs.add("""{"type":"http","category":"network","message":"GET /api/products/456","level":"info","data":{"status_code":200},"timestamp":${now - 20000}}""")
-                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductListViewController -> ProductDetailViewController","level":"info","timestamp":${now - 15000}}""")
-                breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped Add to Cart","level":"info","timestamp":${now - 8000}}""")
-                breadcrumbs.add("""{"type":"debug","category":"app.lifecycle","message":"viewWillAppear called","level":"debug","timestamp":${now - 2000}}""")
+                if (isAuthError) {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"LaunchScreen -> LoginViewController","level":"info","timestamp":${now - 42000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped email field","level":"info","timestamp":${now - 35000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped Sign In","level":"info","timestamp":${now - 25000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"network","message":"POST /api/auth/login","level":"info","data":{"status_code":401,"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"app.lifecycle","message":"Keychain read failed: item not found","level":"warning","timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"network","message":"POST /api/auth/refresh","level":"error","data":{"status_code":403},"timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"error","category":"auth","message":"Token refresh failed, user must re-authenticate","level":"error","timestamp":${now - 8000}}""")
+                } else if (isNetworkError) {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"HomeViewController -> ProductListViewController","level":"info","timestamp":${now - 38000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"network","message":"URLSession configuration: .default","level":"debug","timestamp":${now - 33000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"network","message":"GET /api/products","level":"info","data":{"status_code":200,"duration_ms":98},"timestamp":${now - 30000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped product cell","level":"info","timestamp":${now - 20000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"network","message":"GET /api/products/$productId","level":"error","data":{"status_code":0,"reason":"The network connection was lost"},"timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"app.lifecycle","message":"Reachability changed: notReachable","level":"warning","timestamp":${now - 8000}}""")
+                } else {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"HomeViewController -> ProductListViewController","level":"info","timestamp":${now - 28000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped product cell","level":"info","timestamp":${now - 22000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"network","message":"GET /api/products/$productId","level":"info","data":{"status_code":200,"duration_ms":75},"timestamp":${now - 20000}}""")
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"ProductListViewController -> ProductDetailViewController","level":"info","timestamp":${now - 15000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"touch","message":"User tapped Add to Cart","level":"info","timestamp":${now - 8000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"network","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"duration_ms":143},"timestamp":${now - 5000}}""")
+                    breadcrumbs.add("""{"type":"debug","category":"app.lifecycle","message":"viewWillDisappear called","level":"debug","timestamp":${now - 2000}}""")
+                }
             }
             else -> {
-                // React Native / JS breadcrumbs
-                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /products","level":"info","timestamp":${now - 25000}}""")
-                breadcrumbs.add("""{"type":"http","category":"fetch","message":"GET /api/products","level":"info","data":{"status":200},"timestamp":${now - 23000}}""")
-                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click on product item","level":"info","timestamp":${now - 18000}}""")
-                breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /products/789","level":"info","timestamp":${now - 15000}}""")
-                breadcrumbs.add("""{"type":"console","category":"console","message":"Product data loaded successfully","level":"log","timestamp":${now - 12000}}""")
-                breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click add to cart","level":"info","timestamp":${now - 6000}}""")
+                if (isAuthError) {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /login","level":"info","timestamp":${now - 35000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click Sign In button","level":"info","timestamp":${now - 25000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"fetch","message":"POST /api/auth/login","level":"info","data":{"status":401,"url":"/api/auth/login"},"timestamp":${now - 22000}}""")
+                    breadcrumbs.add("""{"type":"console","category":"console","message":"AuthService: token validation failed","level":"warn","timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"fetch","message":"POST /api/auth/refresh","level":"error","data":{"status":403},"timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"console","category":"console","message":"Redirecting to login: session expired","level":"log","timestamp":${now - 6000}}""")
+                } else if (isNetworkError) {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /products","level":"info","timestamp":${now - 30000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"fetch","message":"GET /api/products","level":"info","data":{"status":200,"duration_ms":87},"timestamp":${now - 27000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click on product item","level":"info","timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"fetch","message":"GET /api/products/$productId","level":"error","data":{"status":0,"reason":"Failed to fetch"},"timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"console","category":"console","message":"Unhandled promise rejection: NetworkError","level":"error","timestamp":${now - 8000}}""")
+                } else {
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /products","level":"info","timestamp":${now - 25000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"fetch","message":"GET /api/products","level":"info","data":{"status":200,"duration_ms":92},"timestamp":${now - 23000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click on product item","level":"info","timestamp":${now - 18000}}""")
+                    breadcrumbs.add("""{"type":"navigation","category":"navigation","message":"Navigate to /products/$productId","level":"info","timestamp":${now - 15000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"fetch","message":"GET /api/products/$productId","level":"info","data":{"status":200,"duration_ms":65},"timestamp":${now - 13000}}""")
+                    breadcrumbs.add("""{"type":"console","category":"console","message":"Product data loaded successfully","level":"log","timestamp":${now - 12000}}""")
+                    breadcrumbs.add("""{"type":"user","category":"ui.click","message":"Click add to cart","level":"info","timestamp":${now - 6000}}""")
+                    breadcrumbs.add("""{"type":"http","category":"fetch","message":"POST /api/cart/items","level":"info","data":{"status":200},"timestamp":${now - 4000}}""")
+                }
             }
         }
         
@@ -2503,6 +2613,8 @@ object DemoDataSeeder {
     }
     
     private fun generateContexts(platform: String, device: String, osVersion: String): String {
+        val traceId = UUID.randomUUID().toString().replace("-", "")
+        val spanId = (1..16).map { "0123456789abcdef".random(random) }.joinToString("")
         val contexts = when (platform) {
             "android" -> """
 {
@@ -2544,6 +2656,16 @@ object DemoDataSeeder {
   "culture": {
     "locale": "en_US",
     "timezone": "America/New_York"
+  },
+  "trace": {
+    "trace_id": "$traceId",
+    "span_id": "$spanId",
+    "op": "ui.load",
+    "status": "internal_error"
+  },
+  "runtime": {
+    "name": "Android Runtime",
+    "version": "$osVersion"
   }
 }
             """.trimIndent()
@@ -2586,18 +2708,36 @@ object DemoDataSeeder {
   "culture": {
     "locale": "en_US",
     "timezone": "America/Los_Angeles"
+  },
+  "trace": {
+    "trace_id": "$traceId",
+    "span_id": "$spanId",
+    "op": "ui.load",
+    "status": "internal_error"
+  },
+  "runtime": {
+    "name": "Swift",
+    "version": "5.9"
   }
 }
             """.trimIndent()
             
-            else -> """
+            else -> {
+                val browsers = listOf(
+                    "Chrome" to "120.0.${random.nextInt(6000)}.${random.nextInt(200)}",
+                    "Firefox" to "121.0",
+                    "Safari" to "17.${random.nextInt(3)}",
+                    "Edge" to "120.0.${random.nextInt(2000)}.${random.nextInt(100)}"
+                ).random(random)
+                val osList = listOf("Windows 10", "Windows 11", "macOS 14.2", "Ubuntu 22.04")
+                """
 {
   "browser": {
-    "name": "Chrome",
-    "version": "120.0.${random.nextInt(6000)}.${random.nextInt(200)}"
+    "name": "${browsers.first}",
+    "version": "${browsers.second}"
   },
   "os": {
-    "name": "Windows",
+    "name": "${osList.random(random)}",
     "version": "10.0.${random.nextInt(20000)}"
   },
   "runtime": {
@@ -2610,10 +2750,17 @@ object DemoDataSeeder {
   },
   "culture": {
     "locale": "en-US",
-    "timezone": "America/Chicago"
+    "timezone": "${listOf("America/Chicago","America/New_York","America/Los_Angeles","Europe/London").random(random)}"
+  },
+  "trace": {
+    "trace_id": "$traceId",
+    "span_id": "$spanId",
+    "op": "pageload",
+    "status": "internal_error"
   }
 }
-            """.trimIndent()
+                """.trimIndent()
+            }
         }
         
         return contexts

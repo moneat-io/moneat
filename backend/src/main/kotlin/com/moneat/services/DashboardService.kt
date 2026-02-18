@@ -669,9 +669,20 @@ class DashboardService {
                 )
             } else null
             
+            val projectName = when {
+                projectId == -1L -> "Android"
+                projectId == -2L -> "iOS"
+                projectId == -3L -> "React Native"
+                else -> transaction {
+                    Projects.selectAll().where { Projects.id eq projectId }
+                        .firstOrNull()?.get(Projects.name) ?: ""
+                }
+            }
+            
             IssueDetailResponse(
                 id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
                 projectId = projectId,
+                projectName = projectName,
                 title = obj["title"]?.jsonPrimitive?.content ?: "",
                 culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
                 level = obj["level"]?.jsonPrimitive?.content ?: "error",

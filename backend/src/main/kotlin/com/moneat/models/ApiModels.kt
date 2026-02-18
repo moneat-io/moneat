@@ -93,6 +93,7 @@ data class IssueResponse(
 data class IssueDetailResponse(
     val id: String,
     val projectId: Long,
+    val projectName: String,
     val title: String,
     val culprit: String,
     val level: String,

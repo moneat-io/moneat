@@ -133,6 +133,7 @@ export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>) => {
     return {
       tab: (search.tab as string) || 'auth-tokens',
+      ...(search.checkout ? { checkout: search.checkout as string } : {}),
     }
   },
   beforeLoad: async () => {
@@ -147,6 +148,20 @@ function SettingsPage() {
   const search = useSearch({ from: '/settings' })
   const navigate = useNavigate({ from: '/settings' })
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (search.checkout === 'success') {
+      if (typeof window.gtag === 'function') {
+        window.gtag('event', 'conversion', {
+          send_to: 'AW-17961775987/zpfQCPec6vobEPPm6_RC',
+          value: 1.0,
+          currency: 'USD',
+          transaction_id: '',
+        })
+      }
+      navigate({ search: (prev) => ({ ...prev, checkout: undefined }), replace: true })
+    }
+  }, [search.checkout, navigate])
   
   const { data: subscription } = useQuery({
     queryKey: ['subscription'],
@@ -1026,8 +1041,8 @@ function BillingTab() {
       api.createBillingCheckoutSession({
         tierName,
         billingInterval: interval,
-        successUrl: `${window.location.origin}/settings`,
-        cancelUrl: `${window.location.origin}/settings`,
+        successUrl: `${window.location.origin}/settings?checkout=success&tab=billing`,
+        cancelUrl: `${window.location.origin}/settings?tab=billing`,
       }),
     onSuccess: (session) => {
       if (session.url) {

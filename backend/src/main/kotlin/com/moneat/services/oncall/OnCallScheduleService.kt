@@ -23,6 +23,9 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.selectAll
+import java.time.ZoneId
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.and
 import java.time.LocalTime
@@ -166,9 +169,16 @@ class OnCallScheduleService {
             else -> 7
         }
         
-        // Calculate days since epoch
-        val epochSeconds = 0L
-        val daysSinceEpoch = ((now.epochSeconds - epochSeconds) / 86400).toInt()
+        // Calculate days since epoch using schedule timezone and handoffTime
+        val zoneId = ZoneId.of(schedule[OnCallSchedules.timezone])
+        val handoffLocalTime = schedule[OnCallSchedules.handoffTime]
+        val zonedNow = now.toJavaInstant().atZone(zoneId)
+        val rotationDate = if (zonedNow.toLocalTime().isBefore(handoffLocalTime)) {
+            zonedNow.toLocalDate().minusDays(1)
+        } else {
+            zonedNow.toLocalDate()
+        }
+        val daysSinceEpoch = ChronoUnit.DAYS.between(LocalDate.EPOCH, rotationDate).toInt()
         
         // Calculate which participant should be on call
         val rotationCycle = (daysSinceEpoch / rotationDays) % participants.size

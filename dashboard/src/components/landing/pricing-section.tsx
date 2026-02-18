@@ -89,7 +89,7 @@ export function PricingSection() {
       api.createBillingCheckoutSession({
         tierName,
         billingInterval: interval,
-        successUrl: `${window.location.origin}/settings`,
+        successUrl: `${window.location.origin}/settings?checkout=success&tab=billing`,
         cancelUrl: `${window.location.origin}/#pricing`,
       }),
     onSuccess: (session) => {
