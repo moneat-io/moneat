@@ -1781,6 +1781,13 @@ interface LlmCostsResponse {
   timeline: LlmTimelinePoint[]
 }
 
+interface OnCallContactSettings {
+  phoneNumber: string | null
+  onCallPhoneOptIn: boolean
+  onCallPhoneConsentedAt: string | null
+  onCallPhoneConsentVersion: string | null
+}
+
 class ApiClient {
   private authRedirectInProgress = false
   private refreshPromise: Promise<boolean> | null = null
@@ -3888,10 +3895,27 @@ class ApiClient {
     return this.request<{phoneNumber: string | null}>(`${API_BASE}/on-call/caller-number`)
   }
 
-  async testSmsCall(channel: 'sms' | 'call', phoneNumber: string) {
+  async testSmsCall(channel: 'sms' | 'call') {
     return this.request<{success: boolean}>(`${API_BASE}/admin/test-sms-call`, {
       method: 'POST',
-      body: JSON.stringify({ channel, phoneNumber }),
+      body: JSON.stringify({ channel }),
+    })
+  }
+
+  async getOnCallContact() {
+    return this.request<OnCallContactSettings>(`${API_BASE}/user/on-call-contact`)
+  }
+
+  async updateOnCallContact(req: { phoneNumber: string; consentAccepted: boolean; consentVersion: string }) {
+    return this.request<{message: string}>(`${API_BASE}/user/on-call-contact`, {
+      method: 'PUT',
+      body: JSON.stringify(req),
+    })
+  }
+
+  async deleteOnCallContact() {
+    return this.request<{message: string}>(`${API_BASE}/user/on-call-contact`, {
+      method: 'DELETE',
     })
   }
 }
@@ -4044,4 +4068,5 @@ export type {
   LlmTraceResponse,
   LlmCostBreakdown,
   LlmCostsResponse,
+  OnCallContactSettings,
 }

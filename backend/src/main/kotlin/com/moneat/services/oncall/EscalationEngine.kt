@@ -214,9 +214,9 @@ class EscalationEngine(
     }
     
     private fun notifyUser(incidentId: Int, userId: Int, title: String, priorityLevel: String, smsFallbackDelayMinutes: Int = 2) {
-        val (userName, phoneNumber) = transaction {
+        val (userName, phoneNumber, phoneOptIn) = transaction {
             val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
-            Pair(row?.get(Users.name), row?.get(Users.phone_number))
+            Triple(row?.get(Users.name), row?.get(Users.phone_number), row?.get(Users.oncall_phone_opt_in) ?: false)
         }
         
         scope.launch {
@@ -234,9 +234,22 @@ class EscalationEngine(
                     mapOf("channel" to JsonPrimitive("push,slack"), "toUserName" to JsonPrimitive(userName ?: "Unknown"))
                 )
 
-                // Schedule SMS/call fallback if user has a phone number and delay > 0
+                // Schedule SMS/call fallback only when phone is set AND user has consented
                 if (!phoneNumber.isNullOrBlank() && smsFallbackDelayMinutes > 0 && twilioService.isEnabled()) {
-                    scheduleSmsFallback(incidentId, userId, phoneNumber, title, priorityLevel, smsFallbackDelayMinutes.toLong())
+                    if (phoneOptIn) {
+                        scheduleSmsFallback(incidentId, userId, phoneNumber, title, priorityLevel, smsFallbackDelayMinutes.toLong())
+                    } else {
+                        logTimelineEvent(
+                            incidentId,
+                            "NOTIFICATION_SKIPPED",
+                            userId,
+                            mapOf(
+                                "channel" to JsonPrimitive("sms,call"),
+                                "reason" to JsonPrimitive("consent_missing"),
+                                "toUserName" to JsonPrimitive(userName ?: "Unknown")
+                            )
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 logger.error("Failed to notify user $userId for incident $incidentId", e)

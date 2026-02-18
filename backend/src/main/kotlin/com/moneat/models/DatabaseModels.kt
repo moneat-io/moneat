@@ -70,7 +70,25 @@ object Users : Table("users") {
     val oauth_provider = varchar("oauth_provider", 20).nullable()
     val oauth_provider_id = varchar("oauth_provider_id", 512).nullable()
     val phone_number = varchar("phone_number", 20).nullable()
+    val oncall_phone_opt_in = bool("oncall_phone_opt_in").default(false)
+    val oncall_phone_consented_at = timestamp("oncall_phone_consented_at").nullable()
+    val oncall_phone_consent_version = varchar("oncall_phone_consent_version", 50).nullable()
+    val oncall_phone_consent_ip = varchar("oncall_phone_consent_ip", 45).nullable()
+    val oncall_phone_consent_user_agent = text("oncall_phone_consent_user_agent").nullable()
+    val oncall_phone_opted_out_at = timestamp("oncall_phone_opted_out_at").nullable()
     val deletedAt = timestamp("deleted_at").nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+object OnCallPhoneConsentEvents : Table("oncall_phone_consent_events") {
+    val id = integer("id").autoIncrement()
+    val user_id = integer("user_id").references(Users.id)
+    val phone_number = varchar("phone_number", 20)
+    val event_type = varchar("event_type", 20) // OPT_IN, OPT_OUT, PHONE_REMOVED
+    val consent_version = varchar("consent_version", 50).nullable()
+    val ip_address = varchar("ip_address", 45).nullable()
+    val user_agent = text("user_agent").nullable()
+    val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
 

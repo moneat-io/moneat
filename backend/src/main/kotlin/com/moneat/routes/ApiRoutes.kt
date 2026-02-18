@@ -72,6 +72,10 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
+import com.moneat.models.OnCallPhoneConsentEvents
+import com.moneat.models.OnCallContactResponse
+import com.moneat.models.UpdateOnCallContactRequest
+import kotlinx.datetime.Clock
 
 fun Route.apiRoutes() {
     val dashboardService = DashboardService()
@@ -155,6 +159,9 @@ fun Route.apiRoutes() {
                 transaction {
                     Users.update({ Users.id eq userId }) {
                         it[phone_number] = phone
+                        it[oncall_phone_opt_in] = false
+                        it[oncall_phone_consented_at] = null
+                        it[oncall_phone_consent_version] = null
                     }
                 }
                 call.respond(com.moneat.utils.MessageResponse("Phone number updated"))
@@ -167,9 +174,118 @@ fun Route.apiRoutes() {
                 transaction {
                     Users.update({ Users.id eq userId }) {
                         it[phone_number] = null
+                        it[oncall_phone_opt_in] = false
+                        it[oncall_phone_consented_at] = null
+                        it[oncall_phone_consent_version] = null
                     }
                 }
                 call.respond(com.moneat.utils.MessageResponse("Phone number removed"))
+            }
+
+            // Get on-call contact/consent status
+            get("/user/on-call-contact") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val user = transaction {
+                    Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                }
+                if (user == null) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
+                    return@get
+                }
+                call.respond(OnCallContactResponse(
+                    phoneNumber = user[Users.phone_number],
+                    onCallPhoneOptIn = user[Users.oncall_phone_opt_in],
+                    onCallPhoneConsentedAt = user[Users.oncall_phone_consented_at]?.toString(),
+                    onCallPhoneConsentVersion = user[Users.oncall_phone_consent_version]
+                ))
+            }
+
+            // Set on-call phone number with explicit consent
+            put("/user/on-call-contact") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val request = call.receive<UpdateOnCallContactRequest>()
+                val phone = request.phoneNumber.trim()
+
+                if (!phone.matches(Regex("^\\+[1-9]\\d{1,14}$"))) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Phone number must be in E.164 format (e.g. +15551234567)"))
+                    return@put
+                }
+                if (request.consentVersion != "v1") {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid consent version"))
+                    return@put
+                }
+
+                val ip = call.request.headers["X-Forwarded-For"]?.split(",")?.first()?.trim()
+                    ?: call.request.local.remoteHost
+                val ua = call.request.headers["User-Agent"]
+
+                transaction {
+                    val existing = Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                    val phoneChanged = existing?.get(Users.phone_number) != phone
+
+                    Users.update({ Users.id eq userId }) {
+                        it[phone_number] = phone
+                        it[oncall_phone_opt_in] = request.consentAccepted
+                        if (request.consentAccepted) {
+                            it[oncall_phone_consented_at] = Clock.System.now()
+                            it[oncall_phone_consent_version] = request.consentVersion
+                            it[oncall_phone_consent_ip] = ip
+                            it[oncall_phone_consent_user_agent] = ua
+                            it[oncall_phone_opted_out_at] = null
+                        } else if (phoneChanged) {
+                            it[oncall_phone_consented_at] = null
+                            it[oncall_phone_consent_version] = null
+                            it[oncall_phone_consent_ip] = null
+                            it[oncall_phone_consent_user_agent] = null
+                        }
+                    }
+
+                    if (request.consentAccepted) {
+                        OnCallPhoneConsentEvents.insert {
+                            it[user_id] = userId
+                            it[this.phone_number] = phone
+                            it[event_type] = "OPT_IN"
+                            it[consent_version] = request.consentVersion
+                            it[ip_address] = ip
+                            it[user_agent] = ua
+                            it[created_at] = Clock.System.now()
+                        }
+                    }
+                }
+                call.respond(com.moneat.utils.MessageResponse(
+                    if (request.consentAccepted) "On-call contact saved and opted in" else "On-call contact saved"
+                ))
+            }
+
+            // Remove on-call phone number and consent
+            delete("/user/on-call-contact") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                transaction {
+                    val existing = Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                    val phone = existing?.get(Users.phone_number)
+                    if (phone != null) {
+                        OnCallPhoneConsentEvents.insert {
+                            it[user_id] = userId
+                            it[this.phone_number] = phone
+                            it[event_type] = "PHONE_REMOVED"
+                            it[created_at] = Clock.System.now()
+                        }
+                    }
+                    Users.update({ Users.id eq userId }) {
+                        it[phone_number] = null
+                        it[oncall_phone_opt_in] = false
+                        it[oncall_phone_consented_at] = null
+                        it[oncall_phone_consent_version] = null
+                        it[oncall_phone_consent_ip] = null
+                        it[oncall_phone_consent_user_agent] = null
+                        it[oncall_phone_opted_out_at] = null
+                    }
+                }
+                call.respond(com.moneat.utils.MessageResponse("On-call contact removed"))
             }
 
             // Update sidebar preferences

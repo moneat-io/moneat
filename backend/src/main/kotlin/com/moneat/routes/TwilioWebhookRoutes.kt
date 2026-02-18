@@ -17,6 +17,8 @@
 package com.moneat.routes
 
 import com.moneat.config.EnvConfig
+import com.moneat.models.OnCallPhoneConsentEvents
+import com.moneat.models.Users
 import com.moneat.services.oncall.EscalationEngineHolder
 import com.moneat.services.oncall.TwilioService
 import io.ktor.http.ContentType
@@ -27,7 +29,13 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import kotlinx.datetime.Clock
 import mu.KotlinLogging
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 
 private val logger = KotlinLogging.logger {}
 
@@ -108,6 +116,61 @@ fun Route.twilioWebhookRoutes() {
                 }
             } else {
                 """<Response><Say voice="alice">Invalid input. Goodbye.</Say></Response>"""
+            }
+
+            call.respondText(twiml, ContentType.Text.Xml, HttpStatusCode.OK)
+        }
+
+        // Inbound SMS: handle opt-out/help/start keywords
+        post("/inbound-sms") {
+            val params = call.receiveParameters()
+            val signature = call.request.headers["X-Twilio-Signature"] ?: ""
+            val url = "${EnvConfig.get("BACKEND_URL", "https://api.moneat.io")}/v1/webhooks/twilio/inbound-sms"
+            val paramMap = params.entries().associate { it.key to (it.value.firstOrNull() ?: "") }
+            if (!twilioService.validateSignature(signature, url, paramMap)) {
+                logger.warn { "Invalid Twilio signature on /inbound-sms" }
+                call.respondText("Forbidden", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+                return@post
+            }
+
+            val from = params["From"] ?: ""
+            val body = params["Body"]?.trim()?.uppercase() ?: ""
+
+            val stopKeywords = setOf("STOP", "UNSUBSCRIBE", "CANCEL", "END", "QUIT")
+            val twiml = when {
+                stopKeywords.contains(body) -> {
+                    // Opt out ALL accounts associated with this phone number and record audit events.
+                    // Phone numbers are not unique in the DB, so we use a bulk update rather than
+                    // singleOrNull() to avoid a crash if duplicates exist.
+                    transaction {
+                        val now = Clock.System.now()
+                        val users = Users.selectAll().where { Users.phone_number eq from }.toList()
+                        users.forEach { user ->
+                            val userId = user[Users.id]
+                            Users.update({ Users.id eq userId }) {
+                                it[Users.oncall_phone_opt_in] = false
+                                it[Users.oncall_phone_opted_out_at] = now
+                            }
+                            OnCallPhoneConsentEvents.insert {
+                                it[OnCallPhoneConsentEvents.user_id] = userId
+                                it[OnCallPhoneConsentEvents.phone_number] = from
+                                it[OnCallPhoneConsentEvents.event_type] = "OPT_OUT"
+                                it[OnCallPhoneConsentEvents.created_at] = now
+                            }
+                            logger.info { "User $userId opted out via SMS STOP keyword" }
+                        }
+                    }
+                    """<Response><Message>You have been unsubscribed from Moneat on-call alerts. You will not receive further SMS messages. To re-enable, update your notification settings in the Moneat app.</Message></Response>"""
+                }
+                body == "HELP" -> {
+                    """<Response><Message>Moneat on-call alerts: Reply STOP to unsubscribe. To manage settings, visit the Moneat app. For support, contact support@moneat.io</Message></Response>"""
+                }
+                body == "START" || body == "YES" -> {
+                    """<Response><Message>To re-enable on-call SMS alerts, please open the Moneat app and update your notification settings. This ensures your consent is properly recorded.</Message></Response>"""
+                }
+                else -> {
+                    """<Response></Response>"""
+                }
             }
 
             call.respondText(twiml, ContentType.Text.Xml, HttpStatusCode.OK)

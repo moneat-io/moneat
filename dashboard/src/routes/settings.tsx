@@ -2360,6 +2360,50 @@ function NotificationsTab() {
     },
   })
 
+  const { data: onCallContact, isLoading: isLoadingOnCallContact } = useQuery({
+    queryKey: ['on-call-contact'],
+    queryFn: () => api.getOnCallContact(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const [onCallPhone, setOnCallPhone] = useState('')
+  const [onCallConsent, setOnCallConsent] = useState(false)
+
+  useEffect(() => {
+    if (onCallContact?.phoneNumber) {
+      setOnCallPhone(onCallContact.phoneNumber)
+    }
+  }, [onCallContact?.phoneNumber])
+
+  const updateOnCallContactMutation = useMutation({
+    mutationFn: () => api.updateOnCallContact({
+      phoneNumber: onCallPhone.trim(),
+      consentAccepted: onCallConsent,
+      consentVersion: 'v1',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['on-call-contact'] })
+      setOnCallConsent(false)
+      toast({ title: 'On-call contact saved', description: onCallConsent ? 'You are now opted in to SMS and voice call alerts.' : 'Phone number saved (not yet opted in).' })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to save', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const deleteOnCallContactMutation = useMutation({
+    mutationFn: () => api.deleteOnCallContact(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['on-call-contact'] })
+      setOnCallPhone('')
+      setOnCallConsent(false)
+      toast({ title: 'On-call contact removed' })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to remove', description: err.message, variant: 'destructive' })
+    },
+  })
+
   if (isLoadingAlertPrefs || isLoadingPrefs) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -2665,6 +2709,108 @@ function NotificationsTab() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* On-Call SMS & Voice Fallback */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            On-Call SMS &amp; Voice Fallback
+          </CardTitle>
+          <CardDescription>
+            Receive SMS messages and voice calls when you don't acknowledge a push or Slack on-call alert within the configured delay.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoadingOnCallContact ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          ) : onCallContact?.onCallPhoneOptIn ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium">Opted in — {onCallContact.phoneNumber}</span>
+              </div>
+              {onCallContact.onCallPhoneConsentedAt && (
+                <p className="text-xs text-muted-foreground">
+                  Consented on {new Date(onCallContact.onCallPhoneConsentedAt).toLocaleDateString()}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => deleteOnCallContactMutation.mutate()}
+                  disabled={deleteOnCallContactMutation.isPending}
+                >
+                  {deleteOnCallContactMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Remove & opt out'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 max-w-sm">
+              {onCallContact?.phoneNumber && !onCallContact.onCallPhoneOptIn && (
+                <div className="flex items-center gap-2 text-amber-600 text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  Phone number saved but not opted in yet. Check the consent box below to enable alerts.
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="oncall-phone">Mobile number (E.164 format)</Label>
+                <Input
+                  id="oncall-phone"
+                  type="tel"
+                  placeholder="+15551234567"
+                  value={onCallPhone}
+                  onChange={(e) => setOnCallPhone(e.target.value)}
+                />
+              </div>
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="oncall-consent"
+                  checked={onCallConsent}
+                  onCheckedChange={(c) => setOnCallConsent(c === true)}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="oncall-consent" className="text-sm font-normal leading-snug cursor-pointer">
+                  I agree to receive on-call alert SMS messages and voice calls from Moneat at the number provided.
+                  Message and data rates may apply. Reply STOP to unsubscribe or HELP for help.
+                  I understand I can manage this setting anytime in my account.{' '}
+                  <Link to="/legal/sms-consent" className="underline text-primary" target="_blank">
+                    Learn more
+                  </Link>
+                </Label>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => updateOnCallContactMutation.mutate()}
+                disabled={
+                  !onCallPhone.trim().match(/^\+[1-9]\d{1,14}$/) ||
+                  !onCallConsent ||
+                  updateOnCallContactMutation.isPending
+                }
+              >
+                {updateOnCallContactMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
+                ) : (
+                  'Save & opt in'
+                )}
+              </Button>
+              {onCallContact?.phoneNumber && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => deleteOnCallContactMutation.mutate()}
+                  disabled={deleteOnCallContactMutation.isPending}
+                >
+                  Remove number
+                </Button>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

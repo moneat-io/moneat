@@ -34,6 +34,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.slf4j.LoggerFactory
 import java.util.Base64
@@ -98,6 +99,19 @@ class TwilioService {
             return
         }
 
+        // Race-condition guard: re-check consent AND that the stored number still matches.
+        // This prevents sends to an old number if the user changed their number while opted in.
+        val stillConsented = transaction {
+            val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
+            val optedIn = row?.get(Users.oncall_phone_opt_in) ?: false
+            val storedPhone = row?.get(Users.phone_number)
+            optedIn && storedPhone == toNumber
+        }
+        if (!stillConsented) {
+            logger.warn("User $userId consent check failed (opted out or phone mismatch) before SMS, skipping")
+            return
+        }
+
         val acknowledgeUrl = "$frontendUrl/incidents/$incidentId"
         val body = "[$priorityLevel] $incidentTitle - Acknowledge: $acknowledgeUrl"
         val statusCallback = "$backendUrl/v1/webhooks/twilio/sms-status"
@@ -137,6 +151,19 @@ class TwilioService {
     ) {
         if (!isEnabled()) {
             logger.warn("Twilio not configured, skipping call to $toNumber")
+            return
+        }
+
+        // Race-condition guard: re-check consent AND that the stored number still matches.
+        // This prevents calls to an old number if the user changed their number while opted in.
+        val stillConsented = transaction {
+            val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
+            val optedIn = row?.get(Users.oncall_phone_opt_in) ?: false
+            val storedPhone = row?.get(Users.phone_number)
+            optedIn && storedPhone == toNumber
+        }
+        if (!stillConsented) {
+            logger.warn("User $userId consent check failed (opted out or phone mismatch) before call, skipping")
             return
         }
 

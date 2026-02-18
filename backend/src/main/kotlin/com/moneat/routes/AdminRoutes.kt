@@ -519,13 +519,13 @@ fun Route.adminRoutes() {
 
             post("/test-sms-call") {
                 val principal = call.principal<JWTPrincipal>()
-                principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                val userId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
                     call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
                     return@post
                 }
 
                 @kotlinx.serialization.Serializable
-                data class TestSmsCallRequest(val channel: String, val phoneNumber: String)
+                data class TestSmsCallRequest(val channel: String)
 
                 try {
                     val request = call.receive<TestSmsCallRequest>()
@@ -536,9 +536,23 @@ fun Route.adminRoutes() {
                         return@post
                     }
 
+                    // Use the authenticated admin's own saved, consented on-call number
+                    val user = transaction {
+                        Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                    }
+                    val phoneNumber = user?.get(Users.phone_number)
+                    val consented = user?.get(Users.oncall_phone_opt_in) ?: false
+
+                    if (phoneNumber.isNullOrBlank() || !consented) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(
+                            "No consented on-call phone number configured. Please set up your on-call contact in notification settings first."
+                        ))
+                        return@post
+                    }
+
                     when (request.channel) {
-                        "sms" -> twilioService.sendTestSms(request.phoneNumber)
-                        "call" -> twilioService.makeTestCall(request.phoneNumber)
+                        "sms" -> twilioService.sendTestSms(phoneNumber)
+                        "call" -> twilioService.makeTestCall(phoneNumber)
                         else -> {
                             call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("channel must be 'sms' or 'call'"))
                             return@post

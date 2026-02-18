@@ -720,3 +720,18 @@ data class UpdateSidebarPreferencesRequest(
 data class SidebarPreferencesResponse(
     val hiddenItems: List<String>
 )
+
+@Serializable
+data class OnCallContactResponse(
+    val phoneNumber: String?,
+    val onCallPhoneOptIn: Boolean,
+    val onCallPhoneConsentedAt: String?,
+    val onCallPhoneConsentVersion: String?
+)
+
+@Serializable
+data class UpdateOnCallContactRequest(
+    val phoneNumber: String,
+    val consentAccepted: Boolean,
+    val consentVersion: String
+)

@@ -53,6 +53,7 @@ import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.e
 import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
 import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
 import { Route as LegalTermsRouteImport } from './routes/legal.terms'
+import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
@@ -314,6 +315,11 @@ const LegalTermsRoute = LegalTermsRouteImport.update({
   path: '/legal/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LegalSmsConsentRoute = LegalSmsConsentRouteImport.update({
+  id: '/legal/sms-consent',
+  path: '/legal/sms-consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
   id: '/legal/privacy',
   path: '/legal/privacy',
@@ -561,6 +567,7 @@ export interface FileRoutesByFullPath {
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
@@ -641,6 +648,7 @@ export interface FileRoutesByTo {
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
@@ -726,6 +734,7 @@ export interface FileRoutesById {
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
@@ -812,6 +821,7 @@ export interface FileRouteTypes {
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
+    | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
     | '/on-call/declared-incidents'
@@ -892,6 +902,7 @@ export interface FileRouteTypes {
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
+    | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
     | '/on-call/declared-incidents'
@@ -976,6 +987,7 @@ export interface FileRouteTypes {
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
+    | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
     | '/on-call/declared-incidents'
@@ -1036,6 +1048,7 @@ export interface RootRouteChildren {
   AiGenerationsRoute: typeof AiGenerationsRoute
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
+  LegalSmsConsentRoute: typeof LegalSmsConsentRoute
   LegalTermsRoute: typeof LegalTermsRoute
   MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
   SSlugRoute: typeof SSlugRoute
@@ -1359,6 +1372,13 @@ declare module '@tanstack/react-router' {
       path: '/legal/terms'
       fullPath: '/legal/terms'
       preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/sms-consent': {
+      id: '/legal/sms-consent'
+      path: '/legal/sms-consent'
+      fullPath: '/legal/sms-consent'
+      preLoaderRoute: typeof LegalSmsConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal/privacy': {
@@ -1859,6 +1879,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiGenerationsRoute: AiGenerationsRoute,
   IssuesIssueIdRoute: IssuesIssueIdRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
+  LegalSmsConsentRoute: LegalSmsConsentRoute,
   LegalTermsRoute: LegalTermsRoute,
   MonitoringSystemIdRoute: MonitoringSystemIdRoute,
   SSlugRoute: SSlugRoute,

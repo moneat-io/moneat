@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute} from '@tanstack/react-router'
-import {useMutation} from '@tanstack/react-query'
+import {useMutation, useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useState, useEffect} from 'react'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
@@ -159,22 +159,22 @@ const notificationTypes: Array<{
 function AdminNotificationsPage() {
   const { toast } = useToast()
   const [testEmail, setTestEmail] = useState('')
-  const [testPhone, setTestPhone] = useState('')
   const [lastResult, setLastResult] = useState<{
     type: NotificationType
     channel: Channel
     result: TestNotificationResult
   } | null>(null)
 
+  const { data: onCallContact } = useQuery({
+    queryKey: ['on-call-contact'],
+    queryFn: () => api.getOnCallContact(),
+  })
+
   // Load test email from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('moneat_test_email')
     if (saved) {
       setTestEmail(saved)
-    }
-    const savedPhone = localStorage.getItem('moneat_test_phone')
-    if (savedPhone) {
-      setTestPhone(savedPhone)
     }
   }, [])
 
@@ -184,20 +184,15 @@ function AdminNotificationsPage() {
     localStorage.setItem('moneat_test_email', email)
   }
 
-  const handlePhoneChange = (phone: string) => {
-    setTestPhone(phone)
-    localStorage.setItem('moneat_test_phone', phone)
-  }
-
   const smsCallMutation = useMutation({
     mutationFn: async ({channel}: {channel: 'sms' | 'call'}) => {
-      if (!testPhone) throw new Error('Phone number is required')
-      return api.testSmsCall(channel, testPhone)
+      return api.testSmsCall(channel)
     },
     onSuccess: (_, variables) => {
+      const phone = onCallContact?.phoneNumber ?? ''
       toast({
         title: `Test ${variables.channel === 'sms' ? 'SMS' : 'call'} sent!`,
-        description: `Test ${variables.channel === 'sms' ? 'SMS message sent' : 'call initiated'} to ${testPhone}`,
+        description: `Test ${variables.channel === 'sms' ? 'SMS message sent' : 'call initiated'} to ${phone}`,
       })
     },
     onError: (error) => {
@@ -306,23 +301,19 @@ function AdminNotificationsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2 max-w-md">
-            <div className="flex-1">
-              <Label htmlFor="test-phone" className="sr-only">Test Phone Number</Label>
-              <Input
-                id="test-phone"
-                type="tel"
-                placeholder="+15551234567 (E.164 format)"
-                value={testPhone}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-              />
-            </div>
-            {testPhone && (
-              <Button variant="ghost" size="sm" onClick={() => handlePhoneChange('')}>
-                Clear
-              </Button>
-            )}
-          </div>
+          {onCallContact?.phoneNumber && onCallContact.onCallPhoneOptIn ? (
+            <p className="text-sm text-muted-foreground">
+              Will send to your configured on-call number: <strong>{onCallContact.phoneNumber}</strong>
+            </p>
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No consented on-call phone number configured. Set up your on-call contact in{' '}
+                <strong>Settings → Notifications</strong> before testing.
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="flex gap-2">
             <Badge variant="secondary" className="gap-1.5">
               <MessageSquare className="h-3 w-3" />
@@ -338,7 +329,7 @@ function AdminNotificationsPage() {
               size="sm"
               variant="outline"
               onClick={() => smsCallMutation.mutate({channel: 'sms'})}
-              disabled={smsCallMutation.isPending || !testPhone}
+              disabled={smsCallMutation.isPending || !onCallContact?.phoneNumber || !onCallContact.onCallPhoneOptIn}
             >
               <MessageSquare className="h-4 w-4 mr-2" />
               Test SMS
@@ -347,7 +338,7 @@ function AdminNotificationsPage() {
               size="sm"
               variant="outline"
               onClick={() => smsCallMutation.mutate({channel: 'call'})}
-              disabled={smsCallMutation.isPending || !testPhone}
+              disabled={smsCallMutation.isPending || !onCallContact?.phoneNumber || !onCallContact.onCallPhoneOptIn}
             >
               <Phone className="h-4 w-4 mr-2" />
               Test Call
