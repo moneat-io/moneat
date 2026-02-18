@@ -41,6 +41,7 @@ import com.moneat.routes.releaseRoutes
 import com.moneat.routes.ssoRoutes
 import com.moneat.routes.statusPageRoutes
 import com.moneat.routes.stripeWebhookRoutes
+import com.moneat.routes.twilioWebhookRoutes
 import com.moneat.routes.uptimeRoutes
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -114,6 +115,9 @@ fun Application.configureRouting() {
 
         // Stripe webhooks
         stripeWebhookRoutes()
+        
+        // Twilio webhooks (SMS/call status callbacks and DTMF gather)
+        twilioWebhookRoutes()
         
         // Dashboard API endpoints
         apiRoutes()

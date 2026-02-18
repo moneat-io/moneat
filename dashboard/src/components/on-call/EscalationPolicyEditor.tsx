@@ -51,6 +51,7 @@ export interface EscalationStep {
   id: string
   stepOrder: number
   timeoutMinutes: number
+  smsFallbackDelayMinutes: number
   targets: EscalationTarget[]
 }
 
@@ -229,6 +230,24 @@ function SortableStep({ step, index, users, schedules, onUpdate, onRemove }: Sor
               <span className="text-sm text-muted-foreground">minutes</span>
             </div>
           </div>
+
+          <div className="space-y-2">
+            <Label>SMS/Call fallback delay</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={1440}
+                value={step.smsFallbackDelayMinutes}
+                onChange={(e) => onUpdate({ ...step, smsFallbackDelayMinutes: parseInt(e.target.value) || 0 })}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">minutes (0 = disabled)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              If unacknowledged after this delay, Moneat will call and text the on-call user.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -279,6 +298,7 @@ export function EscalationPolicyEditor({
       id: `step_${Date.now()}`,
       stepOrder: policy.steps.length,
       timeoutMinutes: 5,
+      smsFallbackDelayMinutes: 2,
       targets: [],
     }
     setPolicy((prev) => ({

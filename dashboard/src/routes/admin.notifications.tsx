@@ -37,6 +37,8 @@ import {
   Activity,
   Key,
   LockKeyhole,
+  Phone,
+  MessageSquare,
 } from 'lucide-react'
 import {SectionHeader} from '@/components/admin-components'
 
@@ -157,6 +159,7 @@ const notificationTypes: Array<{
 function AdminNotificationsPage() {
   const { toast } = useToast()
   const [testEmail, setTestEmail] = useState('')
+  const [testPhone, setTestPhone] = useState('')
   const [lastResult, setLastResult] = useState<{
     type: NotificationType
     channel: Channel
@@ -169,6 +172,10 @@ function AdminNotificationsPage() {
     if (saved) {
       setTestEmail(saved)
     }
+    const savedPhone = localStorage.getItem('moneat_test_phone')
+    if (savedPhone) {
+      setTestPhone(savedPhone)
+    }
   }, [])
 
   // Save test email to localStorage when it changes
@@ -176,6 +183,31 @@ function AdminNotificationsPage() {
     setTestEmail(email)
     localStorage.setItem('moneat_test_email', email)
   }
+
+  const handlePhoneChange = (phone: string) => {
+    setTestPhone(phone)
+    localStorage.setItem('moneat_test_phone', phone)
+  }
+
+  const smsCallMutation = useMutation({
+    mutationFn: async ({channel}: {channel: 'sms' | 'call'}) => {
+      if (!testPhone) throw new Error('Phone number is required')
+      return api.testSmsCall(channel, testPhone)
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: `Test ${variables.channel === 'sms' ? 'SMS' : 'call'} sent!`,
+        description: `Test ${variables.channel === 'sms' ? 'SMS message sent' : 'call initiated'} to ${testPhone}`,
+      })
+    },
+    onError: (error) => {
+      toast({
+        title: 'Failed to send test',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      })
+    },
+  })
 
   const testMutation = useMutation({
     mutationFn: async ({type, channel}: {type: NotificationType; channel: Channel}) => {
@@ -258,6 +290,71 @@ function AdminNotificationsPage() {
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             If not specified, tests will be sent to your account email
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* SMS/Call Test Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            On-Call SMS &amp; Voice Call
+          </CardTitle>
+          <CardDescription>
+            Test Twilio SMS and voice call alerts. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER to be configured.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2 max-w-md">
+            <div className="flex-1">
+              <Label htmlFor="test-phone" className="sr-only">Test Phone Number</Label>
+              <Input
+                id="test-phone"
+                type="tel"
+                placeholder="+15551234567 (E.164 format)"
+                value={testPhone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+              />
+            </div>
+            {testPhone && (
+              <Button variant="ghost" size="sm" onClick={() => handlePhoneChange('')}>
+                Clear
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Badge variant="secondary" className="gap-1.5">
+              <MessageSquare className="h-3 w-3" />
+              SMS
+            </Badge>
+            <Badge variant="secondary" className="gap-1.5">
+              <Phone className="h-3 w-3" />
+              Voice Call
+            </Badge>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => smsCallMutation.mutate({channel: 'sms'})}
+              disabled={smsCallMutation.isPending || !testPhone}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Test SMS
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => smsCallMutation.mutate({channel: 'call'})}
+              disabled={smsCallMutation.isPending || !testPhone}
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              Test Call
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            SMS/call fallback fires automatically when a user doesn't acknowledge a push/Slack alert within the configured delay per escalation step.
           </p>
         </CardContent>
       </Card>

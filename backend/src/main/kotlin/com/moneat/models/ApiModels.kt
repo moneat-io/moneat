@@ -54,7 +54,8 @@ data class UserResponse(
     val isAdmin: Boolean = false,
     val organizationSlug: String? = null,
     val demoEpochMs: Long? = null,
-    val sidebarHiddenItems: List<String> = emptyList()
+    val sidebarHiddenItems: List<String> = emptyList(),
+    val phoneNumber: String? = null
 )
 
 @Serializable

@@ -469,4 +469,16 @@ fun Route.onCallRoutes(
             }
         }
     }
+
+    // Returns the Twilio from-number so mobile apps can save it as a contact
+    route("/v1/on-call/caller-number") {
+        authenticate("auth-jwt") {
+            get {
+                val twilioService = com.moneat.services.oncall.TwilioService.instance
+                @kotlinx.serialization.Serializable
+                data class CallerNumberResponse(val phoneNumber: String?)
+                call.respond(CallerNumberResponse(if (twilioService.isEnabled()) twilioService.getFromNumber() else null))
+            }
+        }
+    }
 }

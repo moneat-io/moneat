@@ -35,6 +35,12 @@ import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+// Singleton holder so webhook routes can access the running engine instance
+object EscalationEngineHolder {
+    @Volatile
+    var instance: EscalationEngine? = null
+}
+
 class EscalationEngine(
     private val escalationPolicyService: EscalationPolicyService,
     private val onCallScheduleService: OnCallScheduleService,
@@ -45,18 +51,22 @@ class EscalationEngine(
     private val logger = LoggerFactory.getLogger(EscalationEngine::class.java)
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var timeoutPollingJob: Job? = null
+    private val twilioService = TwilioService()
     
     companion object {
         private const val TIMEOUT_KEY_PREFIX = "escalation:timeout:"
         private const val ACTIVE_INCIDENTS_KEY = "escalation:active"
+        private const val SMS_FALLBACK_KEY = "escalation:sms_fallback"
     }
     
     fun start() {
         logger.info("Starting escalation engine timeout polling")
+        EscalationEngineHolder.instance = this
         timeoutPollingJob = scope.launch {
             while (isActive) {
                 try {
                     checkTimeouts()
+                    checkSmsFallbackTimeouts()
                 } catch (e: Exception) {
                     logger.error("Error checking escalation timeouts", e)
                 }
@@ -67,6 +77,7 @@ class EscalationEngine(
     
     fun stop() {
         logger.info("Stopping escalation engine")
+        EscalationEngineHolder.instance = null
         timeoutPollingJob?.cancel()
         scope.cancel()
     }
@@ -177,12 +188,12 @@ class EscalationEngine(
             step.targets.forEach { target ->
                 when (target.targetType) {
                     "USER" -> {
-                        notifyUser(incidentId, target.targetId, incident[Incidents.title], incident[Incidents.priorityLevel])
+                        notifyUser(incidentId, target.targetId, incident[Incidents.title], incident[Incidents.priorityLevel], step.smsFallbackDelayMinutes)
                     }
                     "ON_CALL_SCHEDULE" -> {
                         val onCall = onCallScheduleService.getCurrentOnCall(target.targetId)
                         if (onCall != null) {
-                            notifyUser(incidentId, onCall.userId, incident[Incidents.title], incident[Incidents.priorityLevel])
+                            notifyUser(incidentId, onCall.userId, incident[Incidents.title], incident[Incidents.priorityLevel], step.smsFallbackDelayMinutes)
                         } else {
                             logger.warn("No on-call user found for schedule ${target.targetId}")
                         }
@@ -202,9 +213,10 @@ class EscalationEngine(
         }
     }
     
-    private fun notifyUser(incidentId: Int, userId: Int, title: String, priorityLevel: String) {
-        val userName = transaction {
-            Users.selectAll().where { Users.id eq userId }.singleOrNull()?.get(Users.name)
+    private fun notifyUser(incidentId: Int, userId: Int, title: String, priorityLevel: String, smsFallbackDelayMinutes: Int = 2) {
+        val (userName, phoneNumber) = transaction {
+            val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
+            Pair(row?.get(Users.name), row?.get(Users.phone_number))
         }
         
         scope.launch {
@@ -221,6 +233,11 @@ class EscalationEngine(
                     userId,
                     mapOf("channel" to JsonPrimitive("push,slack"), "toUserName" to JsonPrimitive(userName ?: "Unknown"))
                 )
+
+                // Schedule SMS/call fallback if user has a phone number and delay > 0
+                if (!phoneNumber.isNullOrBlank() && smsFallbackDelayMinutes > 0 && twilioService.isEnabled()) {
+                    scheduleSmsFallback(incidentId, userId, phoneNumber, title, priorityLevel, smsFallbackDelayMinutes.toLong())
+                }
             } catch (e: Exception) {
                 logger.error("Failed to notify user $userId for incident $incidentId", e)
             }
@@ -255,6 +272,85 @@ class EscalationEngine(
         }
     }
     
+    private fun scheduleSmsFallback(
+        incidentId: Int,
+        userId: Int,
+        phoneNumber: String,
+        title: String,
+        priorityLevel: String,
+        delayMinutes: Long
+    ) {
+        val fireAt = Clock.System.now().plus(delayMinutes.minutes)
+        val data = mapOf(
+            "incidentId" to incidentId.toString(),
+            "userId" to userId.toString(),
+            "phoneNumber" to phoneNumber,
+            "title" to title,
+            "priorityLevel" to priorityLevel
+        )
+        redisClient.zadd(SMS_FALLBACK_KEY, fireAt.epochSeconds.toDouble(), Json.encodeToString(kotlinx.serialization.serializer(), data))
+        logger.debug("Scheduled SMS/call fallback for incident $incidentId at $fireAt")
+    }
+
+    private fun removeSmsFallback(incidentId: Int) {
+        val members = redisClient.zrange(SMS_FALLBACK_KEY, 0, -1)
+        members.forEach { member ->
+            val data = try {
+                Json.decodeFromString<Map<String, String>>(member)
+            } catch (e: Exception) {
+                return@forEach
+            }
+            if (data["incidentId"] == incidentId.toString()) {
+                redisClient.zrem(SMS_FALLBACK_KEY, member)
+            }
+        }
+    }
+
+    private fun checkSmsFallbackTimeouts() {
+        val now = Clock.System.now()
+        val expiredItems = redisClient.zrangebyscore(SMS_FALLBACK_KEY, 0.0, now.epochSeconds.toDouble())
+
+        expiredItems.forEach { item ->
+            try {
+                val data = Json.decodeFromString<Map<String, String>>(item)
+                val incidentId = data["incidentId"]?.toIntOrNull() ?: return@forEach
+                val userId = data["userId"]?.toIntOrNull() ?: return@forEach
+                val phoneNumber = data["phoneNumber"] ?: return@forEach
+                val title = data["title"] ?: return@forEach
+                val priorityLevel = data["priorityLevel"] ?: return@forEach
+
+                // Only fire if incident is still TRIGGERED
+                val stillTriggered = transaction {
+                    Incidents.selectAll().where { Incidents.id eq incidentId }
+                        .singleOrNull()?.get(Incidents.status) == "TRIGGERED"
+                }
+
+                if (stillTriggered) {
+                    logger.info("SMS/call fallback firing for incident $incidentId, user $userId")
+                    scope.launch {
+                        try {
+                            twilioService.sendSms(phoneNumber, incidentId, title, priorityLevel, userId)
+                            twilioService.makeCall(phoneNumber, incidentId, title, priorityLevel, userId)
+                            logTimelineEvent(
+                                incidentId,
+                                "NOTIFICATION_SENT",
+                                userId,
+                                mapOf("channel" to JsonPrimitive("sms,call"), "toPhone" to JsonPrimitive(phoneNumber))
+                            )
+                        } catch (e: Exception) {
+                            logger.error("Failed to send SMS/call fallback for incident $incidentId", e)
+                        }
+                    }
+                }
+
+                redisClient.zrem(SMS_FALLBACK_KEY, item)
+            } catch (e: Exception) {
+                logger.error("Error processing SMS fallback item: $item", e)
+                redisClient.zrem(SMS_FALLBACK_KEY, item)
+            }
+        }
+    }
+
     private fun checkTimeouts() {
         val now = Clock.System.now()
         val expiredItems = redisClient.zrangebyscore(ACTIVE_INCIDENTS_KEY, 0.0, now.epochSeconds.toDouble())
@@ -294,8 +390,29 @@ class EscalationEngine(
         
         if (updated > 0) {
             removeTimeout(incidentId)
+            removeSmsFallback(incidentId)
             logTimelineEvent(incidentId, "ACKNOWLEDGED", userId, null)
             logger.info("Incident $incidentId acknowledged by user $userId")
+            true
+        } else {
+            false
+        }
+    }
+    
+    fun acknowledgeIncidentByPhone(incidentId: Int): Boolean = transaction {
+        val now = Clock.System.now()
+        val updated = Incidents.update({
+            (Incidents.id eq incidentId) and (Incidents.status eq "TRIGGERED")
+        }) {
+            it[status] = "ACKNOWLEDGED"
+            it[acknowledgedAt] = now
+            it[updatedAt] = now
+        }
+        if (updated > 0) {
+            removeTimeout(incidentId)
+            removeSmsFallback(incidentId)
+            logTimelineEvent(incidentId, "ACKNOWLEDGED", null, mapOf("channel" to JsonPrimitive("phone")))
+            logger.info("Incident $incidentId acknowledged via phone call")
             true
         } else {
             false
@@ -316,6 +433,7 @@ class EscalationEngine(
         
         if (updated > 0) {
             removeTimeout(incidentId)
+            removeSmsFallback(incidentId)
             logTimelineEvent(incidentId, "RESOLVED", userId, null)
             logger.info("Incident $incidentId resolved by user $userId")
             true

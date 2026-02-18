@@ -50,6 +50,7 @@ data class CreatePolicyRequest(
 data class CreatePolicyStepRequest(
     val stepOrder: Int,
     val timeoutMinutes: Int,
+    val smsFallbackDelayMinutes: Int = 2,
     val targets: List<CreatePolicyTargetRequest>
 )
 
@@ -101,6 +102,7 @@ fun Route.escalationRoutes() {
                         EscalationPolicyService.CreateStepData(
                             stepOrder = step.stepOrder,
                             timeoutMinutes = step.timeoutMinutes,
+                            smsFallbackDelayMinutes = step.smsFallbackDelayMinutes,
                             targets = step.targets.map { target ->
                                 EscalationPolicyService.CreateTargetData(
                                     targetType = target.targetType,
@@ -174,6 +176,7 @@ fun Route.escalationRoutes() {
                         EscalationPolicyService.CreateStepData(
                             stepOrder = step.stepOrder,
                             timeoutMinutes = step.timeoutMinutes,
+                            smsFallbackDelayMinutes = step.smsFallbackDelayMinutes,
                             targets = step.targets.map { target ->
                                 EscalationPolicyService.CreateTargetData(
                                     targetType = target.targetType,

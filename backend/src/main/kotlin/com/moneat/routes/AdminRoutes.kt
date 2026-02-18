@@ -517,6 +517,40 @@ fun Route.adminRoutes() {
                 }
             }
 
+            post("/test-sms-call") {
+                val principal = call.principal<JWTPrincipal>()
+                principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                    call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                    return@post
+                }
+
+                @kotlinx.serialization.Serializable
+                data class TestSmsCallRequest(val channel: String, val phoneNumber: String)
+
+                try {
+                    val request = call.receive<TestSmsCallRequest>()
+                    val twilioService = com.moneat.services.oncall.TwilioService.instance
+
+                    if (!twilioService.isEnabled()) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)"))
+                        return@post
+                    }
+
+                    when (request.channel) {
+                        "sms" -> twilioService.sendTestSms(request.phoneNumber)
+                        "call" -> twilioService.makeTestCall(request.phoneNumber)
+                        else -> {
+                            call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("channel must be 'sms' or 'call'"))
+                            return@post
+                        }
+                    }
+
+                    call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.InternalServerError, com.moneat.models.ErrorResponse(e.message ?: "Unknown error"))
+                }
+            }
+
             get("/users") {
                 val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25

@@ -140,6 +140,7 @@ object EscalationSteps : IntIdTable("escalation_steps") {
     val escalationPolicyId = integer("escalation_policy_id").references(EscalationPolicies.id, onDelete = ReferenceOption.CASCADE)
     val stepOrder = integer("step_order")
     val timeoutMinutes = integer("timeout_minutes")
+    val smsFallbackDelayMinutes = integer("sms_call_fallback_delay_minutes").default(2)
     val createdAt = timestamp("created_at")
 }
 
@@ -163,6 +164,7 @@ data class EscalationStep(
     val id: Int,
     val stepOrder: Int,
     val timeoutMinutes: Int,
+    val smsFallbackDelayMinutes: Int = 2,
     val targets: List<EscalationStepTarget>,
     val createdAt: String
 )
@@ -420,6 +422,18 @@ data class SlackUserMapping(
     val createdAt: String,
     val updatedAt: String
 )
+
+// ===== Twilio Notifications =====
+
+object TwilioNotificationsSent : IntIdTable("twilio_notifications_sent") {
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val incidentId = integer("incident_id").references(Incidents.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val channel = varchar("channel", 10) // 'sms' or 'call'
+    val twilioSid = varchar("twilio_sid", 64).nullable()
+    val status = varchar("status", 20)
+    val phoneNumber = varchar("phone_number", 20)
+    val createdAt = timestamp("created_at")
+}
 
 // ===== LocalTime Serializer =====
 

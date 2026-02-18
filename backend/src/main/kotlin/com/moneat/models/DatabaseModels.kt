@@ -69,6 +69,7 @@ object Users : Table("users") {
     val onboarding_completed = bool("onboarding_completed").default(false)
     val oauth_provider = varchar("oauth_provider", 20).nullable()
     val oauth_provider_id = varchar("oauth_provider_id", 512).nullable()
+    val phone_number = varchar("phone_number", 20).nullable()
     val deletedAt = timestamp("deleted_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }

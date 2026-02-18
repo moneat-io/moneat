@@ -129,9 +129,47 @@ fun Route.apiRoutes() {
                         user[Users.is_admin],
                         orgSlug,
                         demoEpochMs,
-                        sidebarHiddenItems
+                        sidebarHiddenItems,
+                        user[Users.phone_number]
                     ))
                 }
+            }
+
+            // Update phone number
+            put("/user/phone-number") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                @kotlinx.serialization.Serializable
+                data class UpdatePhoneRequest(val phoneNumber: String)
+
+                val request = call.receive<UpdatePhoneRequest>()
+                val phone = request.phoneNumber.trim()
+
+                // Basic E.164 validation
+                if (!phone.matches(Regex("^\\+[1-9]\\d{1,14}$"))) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Phone number must be in E.164 format (e.g. +15551234567)"))
+                    return@put
+                }
+
+                transaction {
+                    Users.update({ Users.id eq userId }) {
+                        it[phone_number] = phone
+                    }
+                }
+                call.respond(com.moneat.utils.MessageResponse("Phone number updated"))
+            }
+
+            // Remove phone number
+            delete("/user/phone-number") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                transaction {
+                    Users.update({ Users.id eq userId }) {
+                        it[phone_number] = null
+                    }
+                }
+                call.respond(com.moneat.utils.MessageResponse("Phone number removed"))
             }
 
             // Update sidebar preferences

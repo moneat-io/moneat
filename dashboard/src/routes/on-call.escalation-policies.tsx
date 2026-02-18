@@ -78,6 +78,7 @@ function EscalationPolicies() {
       steps: data.steps.map((step, idx) => ({
         stepOrder: idx,
         timeoutMinutes: step.timeoutMinutes,
+        smsFallbackDelayMinutes: step.smsFallbackDelayMinutes ?? 2,
         targets: step.targets.map(t => ({
           targetType: t.targetType,
           targetId: t.targetId,
@@ -100,6 +101,7 @@ function EscalationPolicies() {
       steps: data.steps.map((step, idx) => ({
         stepOrder: idx,
         timeoutMinutes: step.timeoutMinutes,
+        smsFallbackDelayMinutes: step.smsFallbackDelayMinutes ?? 2,
         targets: step.targets.map(t => ({
           targetType: t.targetType,
           targetId: t.targetId,
@@ -318,6 +320,7 @@ function EscalationPolicies() {
                 id: `step_${s.id}`,
                 stepOrder: s.stepOrder,
                 timeoutMinutes: s.timeoutMinutes,
+                smsFallbackDelayMinutes: s.smsFallbackDelayMinutes ?? 2,
                 targets: s.targets.map((t: EscalationTarget) => ({
                   id: `${t.targetType}_${t.targetId}_${t.id}`,
                   targetType: t.targetType,

@@ -46,6 +46,7 @@ class EscalationPolicyService {
                     id = stepId,
                     stepOrder = stepRow[EscalationSteps.stepOrder],
                     timeoutMinutes = stepRow[EscalationSteps.timeoutMinutes],
+                    smsFallbackDelayMinutes = stepRow[EscalationSteps.smsFallbackDelayMinutes],
                     targets = targets,
                     createdAt = stepRow[EscalationSteps.createdAt].toString()
                 )
@@ -180,6 +181,7 @@ class EscalationPolicyService {
                     id = stepId,
                     stepOrder = stepRow[EscalationSteps.stepOrder],
                     timeoutMinutes = stepRow[EscalationSteps.timeoutMinutes],
+                    smsFallbackDelayMinutes = stepRow[EscalationSteps.smsFallbackDelayMinutes],
                     targets = targets,
                     createdAt = stepRow[EscalationSteps.createdAt].toString()
                 )
@@ -201,6 +203,7 @@ class EscalationPolicyService {
     data class CreateStepData(
         val stepOrder: Int,
         val timeoutMinutes: Int,
+        val smsFallbackDelayMinutes: Int = 2,
         val targets: List<CreateTargetData>
     )
     
@@ -232,6 +235,7 @@ class EscalationPolicyService {
                 it[escalationPolicyId] = policyId
                 it[stepOrder] = step.stepOrder
                 it[timeoutMinutes] = step.timeoutMinutes
+                it[smsFallbackDelayMinutes] = step.smsFallbackDelayMinutes
                 it[createdAt] = now
             }.value
             
@@ -282,6 +286,7 @@ class EscalationPolicyService {
                     it[escalationPolicyId] = policyId
                     it[stepOrder] = step.stepOrder
                     it[timeoutMinutes] = step.timeoutMinutes
+                    it[smsFallbackDelayMinutes] = step.smsFallbackDelayMinutes
                     it[createdAt] = now
                 }.value
                 

@@ -1423,6 +1423,7 @@ interface EscalationStep {
   escalationPolicyId: number
   stepOrder: number
   timeoutMinutes: number
+  smsFallbackDelayMinutes: number
   createdAt: string
   targets: EscalationTarget[]
 }
@@ -1548,6 +1549,7 @@ interface CreateEscalationPolicyRequest {
   steps: {
     stepOrder: number
     timeoutMinutes: number
+    smsFallbackDelayMinutes?: number
     targets: {
       targetType: 'USER' | 'ON_CALL_SCHEDULE'
       targetId: number
@@ -1562,6 +1564,7 @@ interface UpdateEscalationPolicyRequest {
   steps?: {
     stepOrder: number
     timeoutMinutes: number
+    smsFallbackDelayMinutes?: number
     targets: {
       targetType: 'USER' | 'ON_CALL_SCHEDULE'
       targetId: number
@@ -3866,6 +3869,30 @@ class ApiClient {
 
   async getLlmCosts(projectId: number, range = '24h'): Promise<LlmCostsResponse> {
     return this.request<LlmCostsResponse>(`${API_BASE}/llm/costs?projectId=${projectId}&range=${range}`)
+  }
+
+  async updatePhoneNumber(phoneNumber: string) {
+    return this.request<{message: string}>(`${API_BASE}/user/phone-number`, {
+      method: 'PUT',
+      body: JSON.stringify({ phoneNumber }),
+    })
+  }
+
+  async deletePhoneNumber() {
+    return this.request<{message: string}>(`${API_BASE}/user/phone-number`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getCallerNumber() {
+    return this.request<{phoneNumber: string | null}>(`${API_BASE}/on-call/caller-number`)
+  }
+
+  async testSmsCall(channel: 'sms' | 'call', phoneNumber: string) {
+    return this.request<{success: boolean}>(`${API_BASE}/admin/test-sms-call`, {
+      method: 'POST',
+      body: JSON.stringify({ channel, phoneNumber }),
+    })
   }
 }
 
