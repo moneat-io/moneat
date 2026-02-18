@@ -20,10 +20,31 @@ import org.jetbrains.exposed.sql.ColumnType
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.kotlin.datetime.date
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.sql.ResultSet
 
 class TextArrayColumnType : ColumnType() {
-    override fun sqlType(): String = "TEXT[]"
+    private fun isH2(): Boolean =
+        TransactionManager.currentOrNull()?.db?.url?.contains("h2", ignoreCase = true) == true
+
+    override fun sqlType(): String = if (isH2()) "VARCHAR ARRAY" else "TEXT[]"
+
+    override fun nonNullValueToString(value: Any): String {
+        if (isH2()) {
+            val list = when (value) {
+                is List<*> -> value.filterIsInstance<String>()
+                is Array<*> -> value.filterIsInstance<String>()
+                else -> emptyList()
+            }
+            return "ARRAY[${list.joinToString(",") { "'$it'" }}]"
+        }
+        val list = when (value) {
+            is List<*> -> value.filterIsInstance<String>()
+            is Array<*> -> value.filterIsInstance<String>()
+            else -> emptyList()
+        }
+        return "ARRAY[${list.joinToString(",") { "'$it'" }}]::TEXT[]"
+    }
 
     override fun valueFromDB(value: Any): List<String> {
         return when (value) {
