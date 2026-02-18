@@ -21,6 +21,26 @@
     <meta name="twitter:description" content="Sentry-compatible error, performance, and session replay monitoring. Built for developers who care about reliability." />
     <meta name="twitter:image" content="https://moneat.io/og-image.png" />
     <title>Moneat | Error, Performance, and Replay Monitoring</title>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17961775987"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+
+      // Default to denied until user consents (required for EEA/GDPR)
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500,
+      });
+
+      gtag('js', new Date());
+      gtag('config', 'AW-17961775987');
+    </script>
+
     <script>
       // Apply theme immediately to prevent flash
       const theme = localStorage.getItem('theme') || 'dark';

@@ -15,3 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 /// <reference types="vite/client" />
+
+interface Window {
+  gtag: (...args: unknown[]) => void
+  dataLayer: unknown[]
+}
