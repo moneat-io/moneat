@@ -32,10 +32,10 @@ The CLA does **not** change your copyright ownership. You retain full rights to 
 ### Pull Requests
 
 1. Fork the repository
-2. Create a feature branch from `main`
+2. Create a feature branch from `develop`
 3. Make your changes following the coding conventions below
 4. Ensure tests pass: `cd backend && ./gradlew test` and `cd dashboard && npm test`
-5. Open a pull request against `main`
+5. Open a pull request against `develop`
 6. Sign the CLA when prompted by the bot
 
 ### Coding Conventions
