@@ -80,6 +80,7 @@ interface Issue {
 }
 
 interface IssueDetail extends Issue {
+  projectName?: string
   fingerprint: string[]
   latestEvent?: Event
 }
