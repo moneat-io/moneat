@@ -211,7 +211,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
 - SSO/SAML/OIDC authentication
 - Native Slack integration for acknowledgment and resolution from chat
 
-→ [Enterprise pricing](https://moneat.io/pricing) · [Contact sales](mailto:licensing@moneat.io)
+→ [Enterprise pricing](https://moneat.io/pricing) · [Contact sales](mailto:support@moneat.io)
 
 <p align="center">
   <img src="dashboard/public/screenshots/escalation-policies.png" alt="Escalation Policies" width="800">
