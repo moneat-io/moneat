@@ -27,7 +27,6 @@ import com.moneat.services.BillingQuotaService
 import com.moneat.services.PricingTierService
 import com.moneat.services.StripeService
 import com.moneat.services.UsageTrackingService
-import com.moneat.services.oncall.OnCallScheduleService
 import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
@@ -305,7 +304,14 @@ fun Route.billingRoutes() {
             }
 
             // Check if seats >= currently used
-            val usedSeats = OnCallScheduleService().getOnCallUsedSeats(orgId)
+            val usedSeats = try {
+                val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
+                val instance = clazz.getDeclaredConstructor().newInstance()
+                val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
+                method.invoke(instance, orgId) as? Int ?: 0
+            } catch (_: Exception) {
+                0
+            }
             if (request.seats < usedSeats) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Cannot reduce seats below currently assigned users ($usedSeats)"))
                 return@put

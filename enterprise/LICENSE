@@ -1,0 +1,73 @@
+Moneat Enterprise License
+Copyright (c) 2026 Moneat
+
+IMPORTANT: READ CAREFULLY BEFORE USING THIS SOFTWARE
+
+This license applies to all files in the enterprise/ directory and its
+subdirectories (the "Enterprise Software"). All other files in this repository
+are licensed under the GNU Affero General Public License v3.0 (AGPLv3).
+
+1. GRANT OF LICENSE
+
+   Subject to the terms of this license, Moneat grants you a limited,
+   non-exclusive, non-transferable license to:
+
+   a) Use, copy, and modify the Enterprise Software for development,
+      testing, and evaluation purposes without a paid subscription.
+
+   b) Use the Enterprise Software in production environments ONLY with
+      a valid, paid Moneat Enterprise subscription agreement.
+
+2. RESTRICTIONS
+
+   Without a valid Moneat Enterprise subscription, you may NOT:
+
+   a) Use the Enterprise Software in a production environment or to
+      provide services to third parties.
+
+   b) Distribute, sublicense, sell, or otherwise make the Enterprise
+      Software available to any third party as a standalone product
+      or service.
+
+   c) Remove or alter any proprietary notices, labels, or marks on the
+      Enterprise Software.
+
+3. ENTERPRISE SUBSCRIPTION
+
+   Production use of the Enterprise Software requires an active Moneat
+   Enterprise subscription. Subscriptions are available at:
+
+     https://moneat.io/pricing
+
+   Subscription terms, including seat limits and data volume allowances,
+   are governed by the Moneat Enterprise Subscription Agreement executed
+   between you and Moneat.
+
+4. CONTRIBUTIONS
+
+   By submitting code, documentation, or other materials ("Contributions")
+   to the enterprise/ directory, you agree that your Contributions are
+   licensed under this Moneat Enterprise License and that Moneat may use,
+   modify, and sublicense your Contributions without restriction.
+
+5. DISCLAIMER OF WARRANTIES
+
+   THE ENTERPRISE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+   KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+   OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+   NONINFRINGEMENT. IN NO EVENT SHALL MONEAT BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE ENTERPRISE
+   SOFTWARE.
+
+6. TERMINATION
+
+   This license terminates automatically if you breach any of its terms.
+   Upon termination, you must cease all use of the Enterprise Software
+   and destroy all copies in your possession.
+
+7. GOVERNING LAW
+
+   This license is governed by the laws of the United Kingdom, without
+   regard to conflict of law principles.
+
+For licensing inquiries, contact: licensing@moneat.io

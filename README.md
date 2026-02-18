@@ -1,8 +1,9 @@
 # Moneat - observability platform
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Enterprise](https://img.shields.io/badge/Enterprise-Proprietary-orange.svg)](enterprise/LICENSE)
 
-A Sentry-compatible, open-source error monitoring platform built with Kotlin/Ktor. Self-hostable with native on-call escalation and cost-effective VPS deployment.
+A Sentry-compatible, open-source error monitoring platform built with Kotlin/Ktor. Self-hostable with cost-effective VPS deployment.
 
 ## Features
 
@@ -14,12 +15,16 @@ A Sentry-compatible, open-source error monitoring platform built with Kotlin/Kto
 - Session replays, performance transactions, and user feedback
 - Source map upload and release tracking
 
-### On-Call & Incident Management
+### On-Call & Incident Management (Enterprise)
 - Native escalation engine (PagerDuty/Opsgenie-style)
 - On-call schedules with rotation support
 - Priority-based escalation (P0-P5) with business hours
 - Push notifications and Slack DM integration
 - Incident timeline and audit trail
+- SSO/SAML/OIDC authentication
+
+> Enterprise features require a [Moneat Enterprise license](https://moneat.io/pricing).
+> Contact [licensing@moneat.io](mailto:licensing@moneat.io) for details.
 
 ### Dashboard
 - React dashboard with TanStack Router
@@ -90,8 +95,11 @@ curl -X POST http://localhost:8080/auth/signup \
 
 ```
 moneat/
-├── backend/                 # Kotlin/Ktor backend
-├── dashboard/               # React frontend (TanStack Router + shadcn/ui)
+├── backend/                 # Kotlin/Ktor backend (AGPLv3)
+├── dashboard/               # React frontend (AGPLv3)
+├── enterprise/              # Enterprise features (proprietary license)
+│   ├── backend/             #   SSO, on-call, escalation
+│   └── dashboard/           #   Enterprise UI components
 ├── emails/                  # Maizzle email templates
 ├── e2e/                     # End-to-end test apps
 └── docker-compose.yml       # Local development infrastructure
@@ -126,7 +134,7 @@ Production deployment configuration is in the separate [moneat-deploy](https://g
 - `GET /v1/issues/{id}` - Get issue detail
 - `GET /v1/issues/{id}/events` - Get issue events
 
-### On-Call API (requires JWT auth)
+### On-Call API (Enterprise, requires JWT auth)
 - `GET /v1/escalation-policies` - List/manage escalation policies
 - `GET /v1/on-call/schedules` - List/manage on-call schedules
 - `GET /v1/incidents` - List/manage incidents
@@ -158,12 +166,15 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup.
 
 We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-All contributions require signing off with the Developer Certificate of Origin (DCO).
+All contributions require signing our [Contributor License Agreement (CLA)](CLA.md).
 
 ## License
 
 Copyright (C) 2026 Moneat
 
-This program is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License v3.0](LICENSE) as published by the Free Software Foundation.
+Moneat uses a dual-license model:
 
-This means you can self-host, modify, and redistribute Moneat, but any modifications to the source code must be made available under the same license when used to provide a network service.
+- **Core (AGPLv3)**: All code outside `enterprise/` is licensed under the [GNU Affero General Public License v3.0](LICENSE). You can self-host, modify, and redistribute, but modifications must be shared under the same license when used to provide a network service.
+- **Enterprise (Proprietary)**: Code in the `enterprise/` directory is licensed under the [Moneat Enterprise License](enterprise/LICENSE). Free for development and testing; production use requires a paid subscription.
+
+For licensing questions, contact [licensing@moneat.io](mailto:licensing@moneat.io).

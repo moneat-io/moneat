@@ -1,3 +1,21 @@
+Moneat Dual-License Notice
+Copyright (c) 2026 Moneat
+
+This repository uses a dual-license model:
+
+  1. CORE (AGPLv3): All files OUTSIDE of the enterprise/ directory are
+     licensed under the GNU Affero General Public License v3.0, the full
+     text of which follows below.
+
+  2. ENTERPRISE (Proprietary): All files INSIDE the enterprise/ directory
+     are licensed under the Moneat Enterprise License. See enterprise/LICENSE
+     for the full terms. Production use of enterprise features requires a
+     paid Moneat Enterprise subscription.
+
+If you have questions about licensing, contact licensing@moneat.io.
+
+================================================================================
+
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 

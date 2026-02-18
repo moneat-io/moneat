@@ -17,7 +17,6 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import com.moneat.services.oncall.OnCallScheduleService
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
 import kotlinx.datetime.*
@@ -40,8 +39,7 @@ data class QuotaReservationResult(
 )
 
 class BillingQuotaService(
-    private val pricingTierService: PricingTierService = PricingTierService(),
-    private val onCallScheduleService: OnCallScheduleService = OnCallScheduleService()
+    private val pricingTierService: PricingTierService = PricingTierService()
 ) {
     companion object {
         private const val BYTES_PER_GB = 1_073_741_824L
@@ -460,7 +458,7 @@ class BillingQuotaService(
             paygRateMicrosPerUnit = paygRateMicros,
             paygLimitBytes = paygLimitBytes,
             oncallSeats = sub?.get(Subscriptions.oncall_seats) ?: 0,
-            oncallUsedSeats = onCallScheduleService.getOnCallUsedSeats(organizationId),
+            oncallUsedSeats = getOnCallUsedSeatsIfAvailable(organizationId),
             oncallPerUserMonthlyCents = tier.oncallPerUserMonthlyCents,
             oncallEnabled = tier.oncallEnabled,
             bonusGbBytes = bonusGbBytes,
@@ -708,6 +706,22 @@ class BillingQuotaService(
             "llm" -> state.llmEventLimit
             "log" -> -1L // Logs are byte-limited, not unit-limited
             else -> state.errorLimit
+        }
+    }
+
+    /**
+     * Returns on-call used seats from the enterprise module if available, otherwise 0.
+     */
+    private fun getOnCallUsedSeatsIfAvailable(organizationId: Int): Int {
+        return try {
+            val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
+            val instance = clazz.getDeclaredConstructor().newInstance()
+            val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
+            method.invoke(instance, organizationId) as? Int ?: 0
+        } catch (_: ClassNotFoundException) {
+            0
+        } catch (_: Exception) {
+            0
         }
     }
 }

@@ -2,23 +2,24 @@
 
 Thank you for your interest in contributing to Moneat! This document outlines how to contribute and the requirements for doing so.
 
-## Developer Certificate of Origin (DCO)
+## Dual-License Structure
 
-By contributing to this project, you agree to the Developer Certificate of Origin (DCO). This means you certify that you wrote or otherwise have the right to submit the code you are contributing to the project.
+Moneat uses an open-core dual-license model:
 
-You sign-off that you adhere to these requirements by adding a `Signed-off-by` line to your commit messages:
+- **Core (AGPLv3)**: All code outside the `enterprise/` directory is licensed under the GNU Affero General Public License v3.0. Contributions to core are under AGPLv3 with CLA rights (see below).
+- **Enterprise (Proprietary)**: All code inside the `enterprise/` directory is licensed under the Moneat Enterprise License (see `enterprise/LICENSE`). Contributions to enterprise code are under the proprietary license.
 
-```
-Signed-off-by: Your Name <your.email@example.com>
-```
+## Contributor License Agreement (CLA)
 
-Git has a `-s` flag that can sign a commit for you automatically:
+All contributions to Moneat require signing our [Contributor License Agreement](CLA.md). The CLA grants Moneat the right to sublicense your contributions, which enables us to include community code in both the open-source core and the proprietary enterprise edition.
 
-```bash
-git commit -s -m "Your commit message"
-```
+**How it works:**
+1. Submit a pull request
+2. The CLA-assistant bot will comment asking you to sign
+3. Reply with: `I have read the CLA Document and I hereby sign the CLA`
+4. This is a one-time requirement — you won't be asked again
 
-The full text of the DCO is available at [developercertificate.org](https://developercertificate.org/).
+The CLA does **not** change your copyright ownership. You retain full rights to your contributions and can use them in other projects.
 
 ## How to Contribute
 
@@ -34,8 +35,8 @@ The full text of the DCO is available at [developercertificate.org](https://deve
 2. Create a feature branch from `main`
 3. Make your changes following the coding conventions below
 4. Ensure tests pass: `cd backend && ./gradlew test` and `cd dashboard && npm test`
-5. Sign your commits with DCO (`git commit -s`)
-6. Open a pull request against `main`
+5. Open a pull request against `main`
+6. Sign the CLA when prompted by the bot
 
 ### Coding Conventions
 
@@ -71,7 +72,9 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
 
 ## License
 
-By contributing to Moneat, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](LICENSE).
+- Contributions to files **outside** `enterprise/` are licensed under the [GNU Affero General Public License v3.0](LICENSE).
+- Contributions to files **inside** `enterprise/` are licensed under the [Moneat Enterprise License](enterprise/LICENSE).
+- All contributors must sign the [Contributor License Agreement](CLA.md).
 
 ## Code of Conduct
 

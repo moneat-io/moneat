@@ -19,29 +19,23 @@ package com.moneat.plugins
 import com.moneat.ai.aiChatRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.routes.accountDeletionRoutes
 import com.moneat.routes.adminRoutes
 import com.moneat.routes.apiRoutes
 import com.moneat.routes.authRoutes
 import com.moneat.routes.authTokenRoutes
-import com.moneat.routes.deviceRoutes
-import com.moneat.routes.escalationRoutes
-import com.moneat.routes.incidentProviderRoutes
-import com.moneat.routes.incidentRoutes
 import com.moneat.routes.ingestRoutes
+import com.moneat.routes.incidentProviderRoutes
 import com.moneat.routes.integrationRoutes
 import com.moneat.routes.llmIngestRoutes
 import com.moneat.routes.llmRoutes
 import com.moneat.routes.logRoutes
 import com.moneat.routes.monitorRoutes
-import com.moneat.routes.onCallRoutes
 import com.moneat.routes.orgManagementRoutes
-import com.moneat.routes.priorityRoutes
 import com.moneat.routes.releaseRoutes
-import com.moneat.routes.ssoRoutes
 import com.moneat.routes.statusPageRoutes
 import com.moneat.routes.stripeWebhookRoutes
-import com.moneat.routes.twilioWebhookRoutes
 import com.moneat.routes.uptimeRoutes
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -64,10 +58,23 @@ data class HealthResponse(
     val ingestQueueDepth: Long = 0
 )
 
+@Serializable
+data class FeaturesResponse(
+    val enterprise: Boolean,
+    val modules: List<String>
+)
+
 fun Application.configureRouting() {
     routing {
         get("/") {
             call.respondText("Moneat API v0.0.1")
+        }
+
+        get("/features") {
+            call.respond(FeaturesResponse(
+                enterprise = FeatureRegistry.isEnterpriseAvailable,
+                modules = FeatureRegistry.registeredModules.map { it.name }
+            ))
         }
 
         get("/health") {
@@ -116,9 +123,6 @@ fun Application.configureRouting() {
         // Stripe webhooks
         stripeWebhookRoutes()
         
-        // Twilio webhooks (SMS/call status callbacks and DTMF gather)
-        twilioWebhookRoutes()
-        
         // Dashboard API endpoints
         apiRoutes()
         
@@ -127,9 +131,6 @@ fun Application.configureRouting() {
         
         // Authentication endpoints
         authRoutes()
-        
-        // SSO endpoints
-        ssoRoutes()
         
         // Auth token management endpoints
         authTokenRoutes()
@@ -158,12 +159,8 @@ fun Application.configureRouting() {
         // Organization team management endpoints
         orgManagementRoutes()
         
-        // On-call management endpoints
-        onCallRoutes(::getSlackUserGroupSyncService, ::getPushNotificationService)
-        escalationRoutes()
-        priorityRoutes()
-        deviceRoutes()
-        incidentRoutes(::getIncidentManagementService)
+        // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
+        FeatureRegistry.registerRoutes(this)
         
         // AI chat assistant endpoints
         aiChatRoutes()

@@ -20,6 +20,7 @@ import {useQuery} from '@tanstack/react-query'
 import {useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
+import {useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -253,7 +254,7 @@ function DashboardSection({
         </div>
         <div className="flex items-center gap-2">
           {headerRight}
-          <Link to={to}>
+          <Link to={to as "/"}>
             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1 px-2">
               View <ArrowUpRight className="h-3 w-3" />
             </Button>
@@ -390,15 +391,20 @@ function DashboardPage() {
     queryFn: () => api.getMonitorSystems(),
   })
 
+  const {data: enterpriseFeatures} = useEnterpriseFeatures()
+  const hasOnCall = enterpriseFeatures?.modules?.includes('oncall') ?? false
+
   const {data: incidents = [], isLoading: isLoadingIncidents} = useQuery({
     queryKey: ['incidents-overview'],
     queryFn: () => api.getIncidents(),
     refetchInterval: 30_000,
+    enabled: hasOnCall,
   })
 
   const {data: onCallSchedules = [], isLoading: isLoadingSchedules} = useQuery({
     queryKey: ['oncall-schedules'],
     queryFn: () => api.getOnCallSchedules(),
+    enabled: hasOnCall,
   })
 
   const {data: statusPages = [], isLoading: isLoadingStatusPages} = useQuery({
@@ -545,11 +551,12 @@ function DashboardPage() {
         {/* ── Two-column grid for feature sections ─────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
-          {/* ── On-Call / Incidents ─────────────────────────────────── */}
+          {/* ── On-Call / Incidents (Enterprise) ───────────────────── */}
+          {hasOnCall && (
           <DashboardSection
             title="On-Call"
             icon={Bell}
-            to="/on-call"
+            to={"/on-call" as string}
             iconClassName="text-amber-600 dark:text-amber-400"
             iconBgClassName="bg-amber-100 dark:bg-amber-900/20"
             headerRight={
@@ -599,9 +606,9 @@ function DashboardPage() {
                 {(activeIncidents.length > 0 ? activeIncidents : incidents)
                   .slice(0, 5)
                   .map(incident => (
-                    <Link
+                    <a
                       key={incident.id}
-                      to="/on-call"
+                      href="/on-call"
                       className="grid grid-cols-[7.75rem_auto_minmax(0,1fr)_auto] items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
                     >
                       <Badge variant="outline" className={`${getIncidentStatusBadge(incident.status)} w-full justify-center text-[10px] px-1.5 py-0 shrink-0`}>
@@ -614,11 +621,12 @@ function DashboardPage() {
                       <span className="text-[11px] text-muted-foreground shrink-0">
                         {formatRelativeTime(incident.triggeredAt)}
                       </span>
-                    </Link>
+                    </a>
                   ))}
               </div>
             )}
           </DashboardSection>
+          )}
 
           {/* ── Issues ─────────────────────────────────────────────── */}
           <DashboardSection

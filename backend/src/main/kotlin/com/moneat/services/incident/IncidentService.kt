@@ -18,9 +18,7 @@ package com.moneat.services.incident
 
 import com.moneat.config.EnvConfig
 import com.moneat.models.*
-import com.moneat.plugins.getEscalationEngine
-import com.moneat.services.oncall.BusinessHoursService
-import com.moneat.services.oncall.PriorityService
+import com.moneat.enterprise.FeatureRegistry
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -37,8 +35,6 @@ import kotlinx.datetime.Clock
 class IncidentService {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
-    private val priorityService = PriorityService()
-    private val businessHoursService = BusinessHoursService()
     
     /**
      * Fire an alert to all enabled incident providers for the organization.
@@ -263,7 +259,12 @@ class IncidentService {
     /**
      * Trigger native on-call escalation engine if configured.
      */
-    private fun triggerNativeEscalation(event: IncidentEvent) {
+    private suspend fun triggerNativeEscalation(event: IncidentEvent) {
+        val bridge = FeatureRegistry.getOnCallBridge()
+        if (bridge == null) {
+            logger.debug("On-call enterprise module not loaded — skipping native escalation")
+            return
+        }
         try {
             // Check if organization has an escalation policy for this alert source
             val escalationPolicyId = getEscalationPolicyForSource(event.organizationId, event.source)
@@ -274,24 +275,22 @@ class IncidentService {
             }
             
             // Resolve priority level from severity
-            val priority = priorityService.resolvePriority(event.organizationId, event.severity.name)
+            val priority = bridge.resolvePriority(event.organizationId, event.severity.name)
             if (priority == null) {
                 logger.warn("Could not resolve priority for severity ${event.severity}")
                 return
             }
             
             // Check if we should escalate based on business hours
-            val shouldEscalate = businessHoursService.shouldEscalate(event.organizationId, priority.priorityLevel)
+            val shouldEscalate = bridge.shouldEscalate(event.organizationId, priority.priorityLevel)
             
             if (!shouldEscalate) {
                 logger.debug("Alert deferred: outside business hours for priority ${priority.priorityLevel}")
-                // TODO: Queue for later escalation when business hours start
                 return
             }
             
             // Trigger escalation
-            val escalationEngine = getEscalationEngine()
-            val incident = escalationEngine.triggerEscalation(
+            val incidentId = bridge.triggerEscalation(
                 organizationId = event.organizationId,
                 escalationPolicyId = escalationPolicyId,
                 title = event.title,
@@ -299,11 +298,18 @@ class IncidentService {
                 priorityLevel = priority.priorityLevel,
                 alertSource = event.source.name,
                 deduplicationKey = event.deduplicationKey,
-                metadata = event.metadata
+                metadata = if (event.metadata.isNotEmpty()) {
+                    kotlinx.serialization.json.Json.encodeToString(
+                        kotlinx.serialization.serializer(),
+                        event.metadata
+                    )
+                } else {
+                    null
+                }
             )
             
-            if (incident != null) {
-                logger.info("Native escalation triggered for incident ${incident.id}")
+            if (incidentId != null) {
+                logger.info("Native escalation triggered for incident $incidentId")
             }
         } catch (e: Exception) {
             logger.error("Error triggering native escalation", e)

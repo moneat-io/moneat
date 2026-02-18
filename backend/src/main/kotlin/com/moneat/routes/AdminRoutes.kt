@@ -529,9 +529,19 @@ fun Route.adminRoutes() {
 
                 try {
                     val request = call.receive<TestSmsCallRequest>()
-                    val twilioService = com.moneat.services.oncall.TwilioService.instance
+                    
+                    // TwilioService is in the enterprise module — access via reflection
+                    val twilioServiceClass = try {
+                        Class.forName("com.moneat.enterprise.services.oncall.TwilioService")
+                    } catch (_: ClassNotFoundException) {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("On-call features require the enterprise module"))
+                        return@post
+                    }
+                    val instanceField = twilioServiceClass.getDeclaredField("instance")
+                    val twilioService = instanceField.get(null)
+                    val isEnabled = twilioServiceClass.getMethod("isEnabled").invoke(twilioService) as Boolean
 
-                    if (!twilioService.isEnabled()) {
+                    if (!isEnabled) {
                         call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)"))
                         return@post
                     }
@@ -551,8 +561,8 @@ fun Route.adminRoutes() {
                     }
 
                     when (request.channel) {
-                        "sms" -> twilioService.sendTestSms(phoneNumber)
-                        "call" -> twilioService.makeTestCall(phoneNumber)
+                        "sms" -> twilioServiceClass.getMethod("sendTestSms", String::class.java).invoke(twilioService, phoneNumber)
+                        "call" -> twilioServiceClass.getMethod("makeTestCall", String::class.java).invoke(twilioService, phoneNumber)
                         else -> {
                             call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("channel must be 'sms' or 'call'"))
                             return@post

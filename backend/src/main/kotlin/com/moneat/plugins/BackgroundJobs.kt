@@ -16,7 +16,7 @@
 
 package com.moneat.plugins
 
-import com.moneat.config.RedisClient
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.services.BillingBackgroundService
 import com.moneat.services.IngestionWorker
 import com.moneat.services.LlmIngestionWorker
@@ -25,14 +25,6 @@ import com.moneat.services.MonitorAlertService
 import com.moneat.services.RefreshTokenCleanupService
 import com.moneat.services.RetentionBackgroundService
 import com.moneat.services.UptimeScheduler
-import com.moneat.services.SlackService
-import com.moneat.services.oncall.EscalationEngine
-import com.moneat.services.oncall.EscalationPolicyService
-import com.moneat.services.oncall.IncidentManagementService
-import com.moneat.services.oncall.OnCallHandoffService
-import com.moneat.services.oncall.OnCallScheduleService
-import com.moneat.services.oncall.PushNotificationService
-import com.moneat.services.oncall.SlackUserGroupSyncService
 import io.ktor.server.application.*
 import io.ktor.events.*
 import kotlinx.coroutines.CoroutineScope
@@ -41,18 +33,6 @@ import kotlinx.coroutines.SupervisorJob
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-
-// Global service instances
-private lateinit var escalationEngineInstance: EscalationEngine
-private lateinit var incidentManagementServiceInstance: IncidentManagementService
-private var slackUserGroupSyncServiceInstance: SlackUserGroupSyncService? = null
-private lateinit var pushNotificationServiceInstance: PushNotificationService
-private var onCallHandoffServiceInstance: OnCallHandoffService? = null
-
-fun getEscalationEngine(): EscalationEngine = escalationEngineInstance
-fun getIncidentManagementService(): IncidentManagementService = incidentManagementServiceInstance
-fun getSlackUserGroupSyncService(): SlackUserGroupSyncService? = slackUserGroupSyncServiceInstance
-fun getPushNotificationService(): PushNotificationService = pushNotificationServiceInstance
 
 fun Application.configureBackgroundJobs() {
     val monitorAlertService = MonitorAlertService()
@@ -72,44 +52,11 @@ fun Application.configureBackgroundJobs() {
     val llmDlqKey = environment.config.propertyOrNull("llm.dlqKey")?.getString() ?: "moneat:llm:dlq"
     val llmWorkerCount = environment.config.propertyOrNull("llm.workerCount")?.getString()?.toIntOrNull() ?: 2
     val llmIngestionWorker = LlmIngestionWorker(llmQueueKey, llmDlqKey, llmWorkerCount)
-    
-    // Initialize on-call services
-    val escalationPolicyService = EscalationPolicyService()
-    val onCallScheduleService = OnCallScheduleService()
-    val pushNotificationService = PushNotificationService()
-    val slackService = SlackService()
-    val redisClient = RedisClient()
-
-    pushNotificationServiceInstance = pushNotificationService
-    
-    escalationEngineInstance = EscalationEngine(
-        escalationPolicyService = escalationPolicyService,
-        onCallScheduleService = onCallScheduleService,
-        pushNotificationService = pushNotificationService,
-        slackService = slackService,
-        redisClient = redisClient
-    )
-    
-    incidentManagementServiceInstance = IncidentManagementService(
-        escalationEngine = escalationEngineInstance
-    )
-    
-    slackUserGroupSyncServiceInstance = SlackUserGroupSyncService(
-        onCallScheduleService = onCallScheduleService,
-        slackService = slackService,
-        redisClient = redisClient
-    )
-    
-    onCallHandoffServiceInstance = OnCallHandoffService(
-        onCallScheduleService = onCallScheduleService,
-        pushNotificationService = pushNotificationService,
-        redisClient = redisClient
-    )
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    // Start the monitor alert service, billing service, retention service, refresh token cleanup, uptime scheduler, ingestion workers, escalation engine, and Slack usergroup sync
+    // Start core background jobs
     logger.info { "Starting background jobs" }
     monitorAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
@@ -119,9 +66,9 @@ fun Application.configureBackgroundJobs() {
     ingestionWorker.start()
     logIngestionWorker.start()
     llmIngestionWorker.start()
-    escalationEngineInstance.start()
-    slackUserGroupSyncServiceInstance?.start()
-    onCallHandoffServiceInstance?.start()
+
+    // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
+    FeatureRegistry.startBackgroundJobs(this)
 
     // Register shutdown hook
     environment.monitor.subscribe(ApplicationStopping) {
@@ -134,8 +81,6 @@ fun Application.configureBackgroundJobs() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
         llmIngestionWorker.stop()
-        escalationEngineInstance.stop()
-        slackUserGroupSyncServiceInstance?.stop()
-        onCallHandoffServiceInstance?.stop()
+        FeatureRegistry.stopBackgroundJobs()
     }
 }

@@ -47,7 +47,6 @@ class AuthService {
     private val legalPrivacyVersion = config.property("legal.privacyVersion").getString()
     private val emailService = EmailService()
     private val secureRandom = SecureRandom()
-    private val ssoService by lazy { SsoService() }
     private val refreshTokenService = RefreshTokenService()
     
     fun signup(request: SignupRequest, context: SignupRequestContext = SignupRequestContext(), inviteToken: String? = null): AuthResponse {
@@ -302,7 +301,7 @@ class AuthService {
         val normalizedEmail = request.email.lowercase().trim()
         
         // Check if SSO is required for this email domain
-        if (ssoService.checkSsoRequired(normalizedEmail)) {
+        if (checkSsoRequired(normalizedEmail)) {
             throw IllegalArgumentException("SSO is required for your organization. Please use the 'Login with SSO' option.")
         }
         
@@ -584,5 +583,24 @@ class AuthService {
             expiresIn = tokenPair.expiresIn,
             user = user
         )
+    }
+
+    /**
+     * Check if SSO is required for an email domain.
+     * Queries the SsoConfigurations table (schema in core) to see if the
+     * organization matching this email domain enforces SSO login.
+     */
+    private fun checkSsoRequired(email: String): Boolean {
+        val domain = email.substringAfter("@")
+        return transaction {
+            SsoConfigurations
+                .selectAll()
+                .where {
+                    (SsoConfigurations.emailDomain eq domain) and
+                        (SsoConfigurations.isEnabled eq true) and
+                        (SsoConfigurations.requireSso eq true)
+                }
+                .firstOrNull() != null
+        }
     }
 }

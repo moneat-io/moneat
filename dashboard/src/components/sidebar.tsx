@@ -55,6 +55,7 @@ import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {Logo} from '@/components/logo'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
+import {useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
@@ -81,6 +82,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   const queryClient = useQueryClient()
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
+  const { data: features } = useEnterpriseFeatures()
 
   // Create project dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -237,7 +239,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
     { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
-    { key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false },
+    ...(features?.modules?.includes('On-Call') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false }] : []),
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { key: 'settings', icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]

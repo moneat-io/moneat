@@ -919,10 +919,17 @@ fun Route.integrationCallbackRoutes() {
                                 if (slackUserId != null && slackTeamId != null) {
                                     val userId = getUserIdFromSlackUserId(slackUserId, slackTeamId)
                                     if (userId != null) {
-                                        val incidentService = com.moneat.plugins.getIncidentManagementService()
+                                        val bridge = com.moneat.enterprise.FeatureRegistry.getOnCallBridge()
+                                        if (bridge == null) {
+                                            call.respond(mapOf(
+                                                "response_type" to "ephemeral",
+                                                "text" to "❌ On-call features not available"
+                                            ))
+                                            return@post
+                                        }
                                         
                                         // Verify user's organization matches incident's organization
-                                        val incident = incidentService.getIncident(incidentId, userId)
+                                        val incident = bridge.getIncident(incidentId, userId)
                                         val userOrgId = transaction {
                                             Memberships.selectAll()
                                                 .where { Memberships.user_id eq userId }
@@ -938,7 +945,7 @@ fun Route.integrationCallbackRoutes() {
                                             return@post
                                         }
                                         
-                                        val acknowledged = incidentService.acknowledge(incidentId, userId)
+                                        val acknowledged = bridge.acknowledgeIncident(incidentId, userId)
                                         
                                         if (acknowledged) {
                                             // Send success response

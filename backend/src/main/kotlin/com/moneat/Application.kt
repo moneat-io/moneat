@@ -20,6 +20,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.EnvironmentValidator
 import com.moneat.config.configureClickHouse
 import com.moneat.config.configureRedis
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.configureBackgroundJobs
 import com.moneat.plugins.configureDatabases
 import com.moneat.plugins.configureDemoModeRestrictions
@@ -38,6 +39,9 @@ fun main(args: Array<String>) {
     
     // Validate critical environment variables and fail fast if missing
     EnvironmentValidator().validateAndFailFast()
+    
+    // Discover and register enterprise modules (if on classpath)
+    FeatureRegistry.initialize()
     
     // Initialize Sentry for error monitoring (points to Moneat via SENTRY_DSN)
     com.moneat.config.SentryConfig.initialize()
