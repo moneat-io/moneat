@@ -83,7 +83,11 @@ fun Application.configureRouting() {
         get("/health") {
             val postgresStatus =
                 try {
-                    transaction { }
+                    transaction {
+                        // Validate critical schema columns used by core auth/billing paths.
+                        exec("SELECT phone_number FROM users LIMIT 1")
+                        exec("SELECT pending_meter_batch_id, pending_meter_batch_units FROM subscriptions LIMIT 1")
+                    }
                     "ok"
                 } catch (_: Exception) {
                     "error"
