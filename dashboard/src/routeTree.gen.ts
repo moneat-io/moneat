@@ -25,7 +25,6 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
-import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
@@ -35,7 +34,6 @@ import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.inde
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
-import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
@@ -51,18 +49,6 @@ import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
-import { Route as DocsUptimeMonitoringRouteImport } from './routes/docs.uptime-monitoring'
-import { Route as DocsStatusPagesRouteImport } from './routes/docs.status-pages'
-import { Route as DocsSdkSetupRouteImport } from './routes/docs.sdk-setup'
-import { Route as DocsReleasesRouteImport } from './routes/docs.releases'
-import { Route as DocsLoggingRouteImport } from './routes/docs.logging'
-import { Route as DocsIssueTrackingRouteImport } from './routes/docs.issue-tracking'
-import { Route as DocsIntegrationsRouteImport } from './routes/docs.integrations'
-import { Route as DocsGettingStartedRouteImport } from './routes/docs.getting-started'
-import { Route as DocsErrorMonitoringRouteImport } from './routes/docs.error-monitoring'
-import { Route as DocsBillingRouteImport } from './routes/docs.billing'
-import { Route as DocsApiTokensRouteImport } from './routes/docs.api-tokens'
-import { Route as DocsAiObservabilityRouteImport } from './routes/docs.ai-observability'
 import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
@@ -161,11 +147,6 @@ const FeedbackRoute = FeedbackRouteImport.update({
   path: '/feedback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DocsRoute = DocsRouteImport.update({
-  id: '/docs',
-  path: '/docs',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
@@ -210,11 +191,6 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/issues/',
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const DocsIndexRoute = DocsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DocsRoute,
 } as any)
 const AiIndexRoute = AiIndexRouteImport.update({
   id: '/ai/',
@@ -291,66 +267,6 @@ const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
   id: '/$feedbackId',
   path: '/$feedbackId',
   getParentRoute: () => FeedbackRoute,
-} as any)
-const DocsUptimeMonitoringRoute = DocsUptimeMonitoringRouteImport.update({
-  id: '/uptime-monitoring',
-  path: '/uptime-monitoring',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsStatusPagesRoute = DocsStatusPagesRouteImport.update({
-  id: '/status-pages',
-  path: '/status-pages',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsSdkSetupRoute = DocsSdkSetupRouteImport.update({
-  id: '/sdk-setup',
-  path: '/sdk-setup',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsReleasesRoute = DocsReleasesRouteImport.update({
-  id: '/releases',
-  path: '/releases',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsLoggingRoute = DocsLoggingRouteImport.update({
-  id: '/logging',
-  path: '/logging',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsIssueTrackingRoute = DocsIssueTrackingRouteImport.update({
-  id: '/issue-tracking',
-  path: '/issue-tracking',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsIntegrationsRoute = DocsIntegrationsRouteImport.update({
-  id: '/integrations',
-  path: '/integrations',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsGettingStartedRoute = DocsGettingStartedRouteImport.update({
-  id: '/getting-started',
-  path: '/getting-started',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsErrorMonitoringRoute = DocsErrorMonitoringRouteImport.update({
-  id: '/error-monitoring',
-  path: '/error-monitoring',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsBillingRoute = DocsBillingRouteImport.update({
-  id: '/billing',
-  path: '/billing',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsApiTokensRoute = DocsApiTokensRouteImport.update({
-  id: '/api-tokens',
-  path: '/api-tokens',
-  getParentRoute: () => DocsRoute,
-} as any)
-const DocsAiObservabilityRoute = DocsAiObservabilityRouteImport.update({
-  id: '/ai-observability',
-  path: '/ai-observability',
-  getParentRoute: () => DocsRoute,
 } as any)
 const AiGenerationsRoute = AiGenerationsRouteImport.update({
   id: '/ai/generations',
@@ -446,7 +362,6 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
   '/demo': typeof DemoRoute
-  '/docs': typeof DocsRouteWithChildren
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
@@ -474,18 +389,6 @@ export interface FileRoutesByFullPath {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
-  '/docs/ai-observability': typeof DocsAiObservabilityRoute
-  '/docs/api-tokens': typeof DocsApiTokensRoute
-  '/docs/billing': typeof DocsBillingRoute
-  '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
-  '/docs/getting-started': typeof DocsGettingStartedRoute
-  '/docs/integrations': typeof DocsIntegrationsRoute
-  '/docs/issue-tracking': typeof DocsIssueTrackingRoute
-  '/docs/logging': typeof DocsLoggingRoute
-  '/docs/releases': typeof DocsReleasesRoute
-  '/docs/sdk-setup': typeof DocsSdkSetupRoute
-  '/docs/status-pages': typeof DocsStatusPagesRoute
-  '/docs/uptime-monitoring': typeof DocsUptimeMonitoringRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -501,7 +404,6 @@ export interface FileRoutesByFullPath {
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
-  '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -544,18 +446,6 @@ export interface FileRoutesByTo {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
-  '/docs/ai-observability': typeof DocsAiObservabilityRoute
-  '/docs/api-tokens': typeof DocsApiTokensRoute
-  '/docs/billing': typeof DocsBillingRoute
-  '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
-  '/docs/getting-started': typeof DocsGettingStartedRoute
-  '/docs/integrations': typeof DocsIntegrationsRoute
-  '/docs/issue-tracking': typeof DocsIssueTrackingRoute
-  '/docs/logging': typeof DocsLoggingRoute
-  '/docs/releases': typeof DocsReleasesRoute
-  '/docs/sdk-setup': typeof DocsSdkSetupRoute
-  '/docs/status-pages': typeof DocsStatusPagesRoute
-  '/docs/uptime-monitoring': typeof DocsUptimeMonitoringRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -571,7 +461,6 @@ export interface FileRoutesByTo {
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin': typeof AdminIndexRoute
   '/ai': typeof AiIndexRoute
-  '/docs': typeof DocsIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/performance': typeof PerformanceIndexRoute
@@ -590,7 +479,6 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
   '/demo': typeof DemoRoute
-  '/docs': typeof DocsRouteWithChildren
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
@@ -618,18 +506,6 @@ export interface FileRoutesById {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
-  '/docs/ai-observability': typeof DocsAiObservabilityRoute
-  '/docs/api-tokens': typeof DocsApiTokensRoute
-  '/docs/billing': typeof DocsBillingRoute
-  '/docs/error-monitoring': typeof DocsErrorMonitoringRoute
-  '/docs/getting-started': typeof DocsGettingStartedRoute
-  '/docs/integrations': typeof DocsIntegrationsRoute
-  '/docs/issue-tracking': typeof DocsIssueTrackingRoute
-  '/docs/logging': typeof DocsLoggingRoute
-  '/docs/releases': typeof DocsReleasesRoute
-  '/docs/sdk-setup': typeof DocsSdkSetupRoute
-  '/docs/status-pages': typeof DocsStatusPagesRoute
-  '/docs/uptime-monitoring': typeof DocsUptimeMonitoringRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -645,7 +521,6 @@ export interface FileRoutesById {
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
-  '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -665,7 +540,6 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/admin'
     | '/demo'
-    | '/docs'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
@@ -693,18 +567,6 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
-    | '/docs/ai-observability'
-    | '/docs/api-tokens'
-    | '/docs/billing'
-    | '/docs/error-monitoring'
-    | '/docs/getting-started'
-    | '/docs/integrations'
-    | '/docs/issue-tracking'
-    | '/docs/logging'
-    | '/docs/releases'
-    | '/docs/sdk-setup'
-    | '/docs/status-pages'
-    | '/docs/uptime-monitoring'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -720,7 +582,6 @@ export interface FileRouteTypes {
     | '/uptime/$monitorId'
     | '/admin/'
     | '/ai/'
-    | '/docs/'
     | '/issues/'
     | '/monitoring/'
     | '/performance/'
@@ -763,18 +624,6 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
-    | '/docs/ai-observability'
-    | '/docs/api-tokens'
-    | '/docs/billing'
-    | '/docs/error-monitoring'
-    | '/docs/getting-started'
-    | '/docs/integrations'
-    | '/docs/issue-tracking'
-    | '/docs/logging'
-    | '/docs/releases'
-    | '/docs/sdk-setup'
-    | '/docs/status-pages'
-    | '/docs/uptime-monitoring'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -790,7 +639,6 @@ export interface FileRouteTypes {
     | '/uptime/$monitorId'
     | '/admin'
     | '/ai'
-    | '/docs'
     | '/issues'
     | '/monitoring'
     | '/performance'
@@ -808,7 +656,6 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/admin'
     | '/demo'
-    | '/docs'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
@@ -836,18 +683,6 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
-    | '/docs/ai-observability'
-    | '/docs/api-tokens'
-    | '/docs/billing'
-    | '/docs/error-monitoring'
-    | '/docs/getting-started'
-    | '/docs/integrations'
-    | '/docs/issue-tracking'
-    | '/docs/logging'
-    | '/docs/releases'
-    | '/docs/sdk-setup'
-    | '/docs/status-pages'
-    | '/docs/uptime-monitoring'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -863,7 +698,6 @@ export interface FileRouteTypes {
     | '/uptime/$monitorId'
     | '/admin/'
     | '/ai/'
-    | '/docs/'
     | '/issues/'
     | '/monitoring/'
     | '/performance/'
@@ -882,7 +716,6 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   AdminRoute: typeof AdminRouteWithChildren
   DemoRoute: typeof DemoRoute
-  DocsRoute: typeof DocsRouteWithChildren
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
@@ -1030,13 +863,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/docs': {
-      id: '/docs'
-      path: '/docs'
-      fullPath: '/docs'
-      preLoaderRoute: typeof DocsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/demo': {
       id: '/demo'
       path: '/demo'
@@ -1099,13 +925,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/issues/'
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/docs/': {
-      id: '/docs/'
-      path: '/'
-      fullPath: '/docs/'
-      preLoaderRoute: typeof DocsIndexRouteImport
-      parentRoute: typeof DocsRoute
     }
     '/ai/': {
       id: '/ai/'
@@ -1211,90 +1030,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback/$feedbackId'
       preLoaderRoute: typeof FeedbackFeedbackIdRouteImport
       parentRoute: typeof FeedbackRoute
-    }
-    '/docs/uptime-monitoring': {
-      id: '/docs/uptime-monitoring'
-      path: '/uptime-monitoring'
-      fullPath: '/docs/uptime-monitoring'
-      preLoaderRoute: typeof DocsUptimeMonitoringRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/status-pages': {
-      id: '/docs/status-pages'
-      path: '/status-pages'
-      fullPath: '/docs/status-pages'
-      preLoaderRoute: typeof DocsStatusPagesRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/sdk-setup': {
-      id: '/docs/sdk-setup'
-      path: '/sdk-setup'
-      fullPath: '/docs/sdk-setup'
-      preLoaderRoute: typeof DocsSdkSetupRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/releases': {
-      id: '/docs/releases'
-      path: '/releases'
-      fullPath: '/docs/releases'
-      preLoaderRoute: typeof DocsReleasesRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/logging': {
-      id: '/docs/logging'
-      path: '/logging'
-      fullPath: '/docs/logging'
-      preLoaderRoute: typeof DocsLoggingRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/issue-tracking': {
-      id: '/docs/issue-tracking'
-      path: '/issue-tracking'
-      fullPath: '/docs/issue-tracking'
-      preLoaderRoute: typeof DocsIssueTrackingRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/integrations': {
-      id: '/docs/integrations'
-      path: '/integrations'
-      fullPath: '/docs/integrations'
-      preLoaderRoute: typeof DocsIntegrationsRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/getting-started': {
-      id: '/docs/getting-started'
-      path: '/getting-started'
-      fullPath: '/docs/getting-started'
-      preLoaderRoute: typeof DocsGettingStartedRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/error-monitoring': {
-      id: '/docs/error-monitoring'
-      path: '/error-monitoring'
-      fullPath: '/docs/error-monitoring'
-      preLoaderRoute: typeof DocsErrorMonitoringRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/billing': {
-      id: '/docs/billing'
-      path: '/billing'
-      fullPath: '/docs/billing'
-      preLoaderRoute: typeof DocsBillingRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/api-tokens': {
-      id: '/docs/api-tokens'
-      path: '/api-tokens'
-      fullPath: '/docs/api-tokens'
-      preLoaderRoute: typeof DocsApiTokensRouteImport
-      parentRoute: typeof DocsRoute
-    }
-    '/docs/ai-observability': {
-      id: '/docs/ai-observability'
-      path: '/ai-observability'
-      fullPath: '/docs/ai-observability'
-      preLoaderRoute: typeof DocsAiObservabilityRouteImport
-      parentRoute: typeof DocsRoute
     }
     '/ai/generations': {
       id: '/ai/generations'
@@ -1459,40 +1194,6 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
-interface DocsRouteChildren {
-  DocsAiObservabilityRoute: typeof DocsAiObservabilityRoute
-  DocsApiTokensRoute: typeof DocsApiTokensRoute
-  DocsBillingRoute: typeof DocsBillingRoute
-  DocsErrorMonitoringRoute: typeof DocsErrorMonitoringRoute
-  DocsGettingStartedRoute: typeof DocsGettingStartedRoute
-  DocsIntegrationsRoute: typeof DocsIntegrationsRoute
-  DocsIssueTrackingRoute: typeof DocsIssueTrackingRoute
-  DocsLoggingRoute: typeof DocsLoggingRoute
-  DocsReleasesRoute: typeof DocsReleasesRoute
-  DocsSdkSetupRoute: typeof DocsSdkSetupRoute
-  DocsStatusPagesRoute: typeof DocsStatusPagesRoute
-  DocsUptimeMonitoringRoute: typeof DocsUptimeMonitoringRoute
-  DocsIndexRoute: typeof DocsIndexRoute
-}
-
-const DocsRouteChildren: DocsRouteChildren = {
-  DocsAiObservabilityRoute: DocsAiObservabilityRoute,
-  DocsApiTokensRoute: DocsApiTokensRoute,
-  DocsBillingRoute: DocsBillingRoute,
-  DocsErrorMonitoringRoute: DocsErrorMonitoringRoute,
-  DocsGettingStartedRoute: DocsGettingStartedRoute,
-  DocsIntegrationsRoute: DocsIntegrationsRoute,
-  DocsIssueTrackingRoute: DocsIssueTrackingRoute,
-  DocsLoggingRoute: DocsLoggingRoute,
-  DocsReleasesRoute: DocsReleasesRoute,
-  DocsSdkSetupRoute: DocsSdkSetupRoute,
-  DocsStatusPagesRoute: DocsStatusPagesRoute,
-  DocsUptimeMonitoringRoute: DocsUptimeMonitoringRoute,
-  DocsIndexRoute: DocsIndexRoute,
-}
-
-const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
-
 interface FeedbackRouteChildren {
   FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
 }
@@ -1576,7 +1277,6 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   AdminRoute: AdminRouteWithChildren,
   DemoRoute: DemoRoute,
-  DocsRoute: DocsRouteWithChildren,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,

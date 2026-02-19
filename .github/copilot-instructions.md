@@ -33,6 +33,17 @@ npm run lint             # ESLint
 npm run preview          # Preview production build
 ```
 
+### Documentation (Docusaurus)
+```bash
+cd docs
+npm install
+npm run start            # Dev server (port 3000)
+npm run build            # Production build (output in docs/build/)
+npm run serve            # Serve built docs locally
+```
+
+The docs are built alongside the dashboard in the Docker image and served at `/docs/` by nginx.
+
 ### Email Templates (Maizzle)
 ```bash
 cd emails

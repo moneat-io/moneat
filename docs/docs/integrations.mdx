@@ -1,0 +1,61 @@
+---
+sidebar_position: 2
+title: Integrations
+description: Connect Slack, Discord, and webhooks to receive notifications where your team works.
+---
+
+# Integrations
+
+## Overview
+
+Moneat integrates with your team's communication tools so you're notified about errors, incidents, and uptime issues in real-time. Integrations are configured at the organization level under **Settings**.
+
+## Slack
+
+### Setting Up Slack
+
+import StepList from '@site/src/components/StepList';
+
+<StepList
+  steps={[
+    {
+      title: 'Connect your workspace',
+      content: "Go to Settings → Integrations → Slack and click \"Connect Slack\". You'll be redirected to Slack to authorize the Moneat app.",
+    },
+    {
+      title: 'Select a notification channel',
+      content: 'Choose which Slack channel should receive error and incident notifications. You can change this at any time.',
+    },
+    {
+      title: 'Test the connection',
+      content: 'Click "Test" to send a test notification to your selected channel and verify everything is working.',
+    },
+  ]}
+/>
+
+### Slack Features
+
+- **Error notifications** — New and reopened issues are posted to your channel
+- **Incident alerts** — On-call incidents are sent as DMs with interactive acknowledge/resolve buttons
+- **Usergroup sync** — Link on-call schedules to Slack usergroups so @mentions always reach the current responder
+
+:::tip Interactive buttons
+Slack notifications for on-call incidents include interactive buttons. Responders can acknowledge and resolve incidents directly from Slack without opening the dashboard.
+:::
+
+## Discord
+
+Connect Discord to receive error and incident notifications in your server channels. The setup process is similar to Slack — authorize the Moneat bot, select a channel, and you're ready to go.
+
+## Webhooks
+
+For custom integrations, you can configure webhook endpoints. Moneat will send HTTP POST requests with event data to your webhook URL when errors or incidents occur. This lets you integrate with any service that accepts webhooks.
+
+## Managing Integrations
+
+All integrations can be managed from **Settings → Integrations**. From there you can:
+
+- View connected integrations and their status
+- Update notification channel preferences
+- Test integration connectivity
+- Disconnect integrations you no longer need

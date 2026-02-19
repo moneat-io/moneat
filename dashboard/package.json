@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "npm run lint && tsc && vite build",
+    "predev": "test -d public/docs || npm run build:docs",
+    "build": "npm run build:docs && npm run lint && tsc && vite build",
+    "build:docs": "cd ../docs && npm run build && rm -rf ../dashboard/public/docs && cp -r build ../dashboard/public/docs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest run",

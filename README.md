@@ -254,6 +254,7 @@ Any SDK that sends to the standard Sentry envelope endpoint should work out of t
 moneat/
 ├── backend/                 # Kotlin/Ktor backend (AGPLv3)
 ├── dashboard/               # React frontend (AGPLv3)
+├── docs/                    # Docusaurus documentation (served at /docs/)
 ├── enterprise/              # Enterprise features (proprietary license)
 │   ├── backend/             #   SSO, on-call, escalation, incidents
 │   └── dashboard/           #   Enterprise UI components

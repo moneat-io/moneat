@@ -1,0 +1,61 @@
+---
+sidebar_position: 3
+title: Status Pages
+description: Create public status pages to communicate service health and incidents to your users.
+---
+
+# Status Pages
+
+## Overview
+
+Status pages give your users a public view of your service health. When things go wrong, you can publish incidents to your status page so customers know what's happening and when to expect a resolution.
+
+Each status page gets a unique URL like `moneat.io/s/your-company` that you can share with your users or link from your website.
+
+## Creating a Status Page
+
+Navigate to **Status Pages** in the sidebar to create a new status page. You'll need to provide:
+
+- **Name** — Your company or service name
+- **Slug** — The URL-friendly identifier (e.g., "your-company")
+- **Description** — A brief description shown on the page
+
+## Components
+
+### Adding Components
+
+Components represent the individual services or systems you want to display (e.g., "API", "Web App", "Database", "Payment Processing"). Each component shows its current status independently.
+
+### Component Status
+
+Each component can have one of these statuses:
+
+| Status | Description |
+|--------|-------------|
+| **Operational** | Working normally |
+| **Degraded Performance** | Slower than usual but functional |
+| **Partial Outage** | Some functionality affected |
+| **Major Outage** | Service is unavailable |
+
+:::tip Auto-update with monitors
+Link uptime monitors to status page components. When a monitor detects downtime, the component status is automatically updated — no manual intervention needed.
+:::
+
+## Publishing Incidents
+
+When an issue affects your users, you can publish an incident to your status page. Incidents include:
+
+- **Title** — A brief summary of the issue
+- **Status** — Investigating, Identified, Monitoring, or Resolved
+- **Affected components** — Which services are impacted
+- **Updates** — Post updates as the situation evolves
+
+Published incidents are visible to anyone who visits your status page. Resolved incidents are kept in the history for transparency.
+
+## Public Access
+
+Status pages are fully public and don't require authentication. You can share the URL directly with your customers, add it to your website footer, or link it in your support documentation.
+
+:::info
+Status pages are accessible at `moneat.io/s/your-slug`. The page is designed to be clean and professional, matching your organization's brand.
+:::

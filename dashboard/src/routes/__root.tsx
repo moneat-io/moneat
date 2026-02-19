@@ -200,8 +200,7 @@ function RootComponent() {
   const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password'].includes(currentPath)
   const isLandingPage = currentPath === '/' && !isAuthenticated
   const isPublicStatusPage = currentPath.startsWith('/s/')
-  const isDocsPage = currentPath.startsWith('/docs')
-  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isDocsPage
+  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   // Show loading state while checking auth and onboarding

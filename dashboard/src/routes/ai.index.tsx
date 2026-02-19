@@ -94,14 +94,14 @@ function AiOverviewPage() {
           <p className="text-muted-foreground text-sm mt-1">
             Monitor your LLM applications, trace agent executions, and track costs.
           </p>
-          <Link
-            to="/docs/ai-observability"
+          <a
+            href="/docs/ai-observability"
             className="inline-flex items-center gap-2 mt-3 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             <BookOpen className="h-4 w-4" />
             Get Started
             <ArrowRight className="h-4 w-4" />
-          </Link>
+          </a>
         </div>
         <div className="w-full sm:w-auto">
           <Select value={range} onValueChange={setRange}>
@@ -211,9 +211,9 @@ function AiOverviewPage() {
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     No LLM data yet.{' '}
-                    <Link to="/docs/ai-observability" className="text-primary hover:underline">
+                    <a href="/docs/ai-observability" className="text-primary hover:underline">
                       Read the docs
-                    </Link>{' '}
+                    </a>{' '}
                     to get started.
                   </TableCell>
                 </TableRow>
@@ -228,9 +228,9 @@ function AiOverviewPage() {
         <Link to="/ai/generations" className="text-sm text-primary hover:underline">
           View All Generations →
         </Link>
-        <Link to="/docs/ai-observability" className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors">
+        <a href="/docs/ai-observability" className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors">
           Documentation →
-        </Link>
+        </a>
       </div>
     </div>
   )
