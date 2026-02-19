@@ -111,7 +111,7 @@ ENTERPRISE_PATH=/path/to/enterprise npm run dev
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | On-Call voice alerts |
 | `SAML_CERT` / `SAML_KEY` / `SAML_ENTITY_ID` | SSO (SAML) |
 
-**Enterprise routes:** Files in `moneat-enterprise/dashboard/src/routes/` are the source of truth. They are copied into `dashboard/src/routes/` automatically by `scripts/sync-enterprise-routes.sh` (run via the `predev` npm hook). Never edit the copies in `dashboard/src/routes/` directly.
+**Enterprise routes:** Files in `moneat-enterprise/dashboard/src/routes/` are the source of truth. They are copied into `dashboard/src/routes/` automatically by the dashboard pre-hooks (`predev`/`prebuild`) when enterprise sources are present, or by running `scripts/sync-enterprise-routes.sh` manually. Never edit the copies in `dashboard/src/routes/` directly.
 
 #### Docker with enterprise features
 
