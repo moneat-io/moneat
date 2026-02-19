@@ -257,10 +257,11 @@ class StripeServiceWebhookTest {
             assertEquals("failed", record[StripeWebhookEvents.status])
             assertEquals(errorMsg, record[StripeWebhookEvents.error_message])
         }
+        assertFalse(stripeService.wasEventProcessed(eventId), "Failed events should remain retryable")
     }
 
     @Test
-    fun `duplicate event ID is idempotent - insertIgnore prevents duplicates`() {
+    fun `duplicate event ID is idempotent and keeps one row`() {
         val eventId = "evt_duplicate_001"
         val event = mockEvent(eventId, "customer.subscription.created")
         
@@ -280,7 +281,25 @@ class StripeServiceWebhookTest {
                 .where { StripeWebhookEvents.event_id eq eventId }
                 .count()
             
-            assertEquals(1, count, "Should have exactly 1 record for duplicate event (due to unique constraint)")
+            assertEquals(1, count, "Should have exactly 1 record for duplicate event")
+        }
+    }
+
+    @Test
+    fun `failed webhook event becomes terminal only after success transition`() {
+        val eventId = "evt_retryable_001"
+        val event = mockEvent(eventId, "customer.subscription.updated")
+
+        stripeService.markEventProcessed(event, "failed", "Temporary DB outage")
+        assertFalse(stripeService.wasEventProcessed(eventId), "Failed status should not block retries")
+
+        stripeService.markEventProcessed(event, "processed")
+        assertTrue(stripeService.wasEventProcessed(eventId), "Processed status should block duplicates")
+
+        transaction {
+            val rows = StripeWebhookEvents.selectAll().where { StripeWebhookEvents.event_id eq eventId }.toList()
+            assertEquals(1, rows.size, "Status transitions should update existing row, not create new rows")
+            assertEquals("processed", rows.first()[StripeWebhookEvents.status])
         }
     }
 
@@ -466,6 +485,43 @@ class StripeServiceWebhookTest {
     }
 
     @Test
+    fun `syncSubscriptionFromStripe prefers current period fields over trial fields`() {
+        val periodStart = 1_700_000_000L
+        val periodEnd = 1_700_259_200L
+        val trialEnd = periodEnd + 86_400L
+        val subId = "sub_period_priority_001"
+
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.stripe_subscription_id] = subId
+                it[Subscriptions.stripe_customer_id] = mockCustomerId
+            }
+        }
+
+        val subscription = mockSubscription(
+            subscriptionId = subId,
+            customerId = mockCustomerId,
+            status = "active",
+            organizationId = testOrgId,
+            startDate = periodStart - 86_400L,
+            trialEnd = trialEnd,
+            itemPeriodStart = periodStart,
+            itemPeriodEnd = periodEnd
+        )
+
+        stripeService.syncSubscriptionFromStripe(subscription)
+
+        transaction {
+            val record = Subscriptions.selectAll()
+                .where { Subscriptions.id eq testSubId }
+                .firstOrNull()
+            assertNotNull(record)
+            assertEquals(periodStart, record[Subscriptions.current_period_start]?.epochSeconds)
+            assertEquals(periodEnd, record[Subscriptions.current_period_end]?.epochSeconds)
+        }
+    }
+
+    @Test
     fun `handleSubscriptionDeleted moves subscription to canceled and creates free tier`() {
         transaction {
             Subscriptions.update({ Subscriptions.id eq testSubId }) {
@@ -556,6 +612,87 @@ class StripeServiceWebhookTest {
             assertNotNull(record)
             assertEquals("past_due", record[Subscriptions.status])
             assertNotNull(record[Subscriptions.billing_grace_until], "Should have grace period set")
+        }
+    }
+
+    @Test
+    fun `flushPendingMeteredUsage reuses existing batch id and decrements pending units`() {
+        val identifiers = mutableListOf<String>()
+        val values = mutableListOf<String>()
+        val meteringService = StripeService(
+            meterEventSender = { params ->
+                identifiers += params.identifier
+                values += params.payload["value"] ?: ""
+            },
+            allowMeteringWhenStripeDisabled = true
+        )
+        val batchId = "batch-existing-001"
+
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.stripe_customer_id] = mockCustomerId
+                it[Subscriptions.pending_meter_units] = 15
+                it[Subscriptions.pending_meter_batch_id] = batchId
+                it[Subscriptions.pending_meter_batch_units] = 10
+            }
+        }
+
+        val flushed = meteringService.flushPendingMeteredUsage(limit = 1)
+
+        assertEquals(1, flushed)
+        assertEquals(listOf(batchId), identifiers)
+        assertEquals(listOf("10"), values)
+        transaction {
+            val row = Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
+            assertEquals(5L, row[Subscriptions.pending_meter_units], "Only batch units should be deducted")
+            assertEquals(null, row[Subscriptions.pending_meter_batch_id], "Batch id should clear after success")
+            assertEquals(0L, row[Subscriptions.pending_meter_batch_units], "Batch units should clear after success")
+        }
+    }
+
+    @Test
+    fun `flushPendingMeteredUsage preserves batch id on failure and reuses on retry`() {
+        val identifiers = mutableListOf<String>()
+        var shouldFail = true
+        val meteringService = StripeService(
+            meterEventSender = { params ->
+                identifiers += params.identifier
+                if (shouldFail) {
+                    shouldFail = false
+                    throw IllegalStateException("Transient Stripe failure")
+                }
+            },
+            allowMeteringWhenStripeDisabled = true
+        )
+
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.stripe_customer_id] = mockCustomerId
+                it[Subscriptions.pending_meter_units] = 10
+                it[Subscriptions.pending_meter_batch_id] = null
+                it[Subscriptions.pending_meter_batch_units] = 0
+            }
+        }
+
+        val firstFlushed = meteringService.flushPendingMeteredUsage(limit = 1)
+        assertEquals(0, firstFlushed)
+
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.pending_meter_units] = 15
+            }
+        }
+
+        val secondFlushed = meteringService.flushPendingMeteredUsage(limit = 1)
+        assertEquals(1, secondFlushed)
+        assertEquals(2, identifiers.size)
+        assertEquals(identifiers[0], identifiers[1], "Retries must reuse the original batch identifier")
+
+        transaction {
+            val row = Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
+            assertEquals(5L, row[Subscriptions.pending_meter_units], "Newly accrued units should remain pending")
+            assertEquals(null, row[Subscriptions.pending_meter_batch_id], "Batch id should clear after eventual success")
+            assertEquals(0L, row[Subscriptions.pending_meter_batch_units], "Batch units should clear after eventual success")
         }
     }
 
@@ -724,18 +861,34 @@ class StripeServiceWebhookTest {
         status: String,
         organizationId: Int,
         withOrgMetadata: Boolean = true,
-        tierNameMetadata: String? = null
+        tierNameMetadata: String? = null,
+        startDate: Long? = null,
+        trialEnd: Long? = null,
+        itemPeriodStart: Long? = null,
+        itemPeriodEnd: Long? = null
     ): Subscription {
+        val nowEpoch = System.currentTimeMillis() / 1000
         val subscription = Subscription()
         subscription.id = subscriptionId
         subscription.customer = customerId
         subscription.status = status
-        subscription.startDate = System.currentTimeMillis() / 1000
-        subscription.trialEnd = (System.currentTimeMillis() / 1000) + 1296000 // 15 days
+        subscription.startDate = startDate ?: nowEpoch
+        subscription.trialEnd = trialEnd ?: (nowEpoch + 1296000) // 15 days
         
-        // Mock empty items collection
+        // Mock items collection (with optional billing period hints)
         val itemsCollection = com.stripe.model.SubscriptionItemCollection()
-        itemsCollection.setData(emptyList())
+        if (itemPeriodStart != null || itemPeriodEnd != null) {
+            val item = com.stripe.model.SubscriptionItem()
+            if (itemPeriodStart != null) {
+                item.currentPeriodStart = itemPeriodStart
+            }
+            if (itemPeriodEnd != null) {
+                item.currentPeriodEnd = itemPeriodEnd
+            }
+            itemsCollection.setData(listOf(item))
+        } else {
+            itemsCollection.setData(emptyList())
+        }
         subscription.setItems(itemsCollection)
         
         val metadata = mutableMapOf<String, String>()
@@ -791,6 +944,8 @@ class StripeServiceWebhookTest {
             it[Subscriptions.payg_used_units] = 0
             it[Subscriptions.payg_used_micros] = 0
             it[Subscriptions.pending_meter_units] = 0
+            it[Subscriptions.pending_meter_batch_id] = null
+            it[Subscriptions.pending_meter_batch_units] = 0
         }[Subscriptions.id]
     }
 

@@ -25,8 +25,10 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Duration.Companion.days
@@ -436,9 +438,105 @@ class BillingQuotaServiceTest {
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        assertFalse(usage.withinQuota, "Should be over quota when used bytes exceed monthly + PAYG GB limit")
+        assertFalse(usage.withinQuota, "Should be over quota when used bytes exceed monthly GB limit")
         assertEquals(bytesOverBaseAndPayg, usage.usedBytes)
         assertEquals(10, usage.bytesLimit)
+    }
+
+    @Test
+    fun `bytes usage does not receive PAYG headroom`() {
+        val bytesWithinOldPaygHeadroom = 50L * 1024L * 1024L * 1024L
+        transaction {
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedErrors = 10,
+                usedTransactions = 0,
+                usedReplays = 0,
+                usedFeedback = 0,
+                usedBytes = bytesWithinOldPaygHeadroom
+            )
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertFalse(usage.withinQuota, "Bytes should be limited by base bytes + bonus only")
+        assertEquals(bytesWithinOldPaygHeadroom, usage.usedBytes)
+        assertEquals(10, usage.bytesLimit)
+    }
+
+    @Test
+    fun `llm usage does not receive PAYG unit headroom`() {
+        transaction {
+            val usageCounterId = insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedErrors = 0,
+                usedTransactions = 0,
+                usedReplays = 0,
+                usedFeedback = 0
+            )
+            OrgUsageCounters.update({ OrgUsageCounters.id eq usageCounterId }) {
+                it[used_llm_events] = 120
+            }
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_llm_event_limit] = 100
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertFalse(usage.withinQuota, "LLM usage should not be expanded by unit PAYG headroom")
+        assertEquals(120, usage.usedLlmEvents)
+        assertEquals(100, usage.llmEventLimit)
+    }
+
+    @Test
+    fun `replay overage estimate uses bytes proportionally to overage sessions`() {
+        val replayBytes = 150L * 1024L * 1024L * 1024L
+        transaction {
+            val usageCounterId = insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedErrors = 0,
+                usedTransactions = 0,
+                usedReplays = 150,
+                usedFeedback = 0,
+                usedBytes = replayBytes
+            )
+            OrgUsageCounters.update({ OrgUsageCounters.id eq usageCounterId }) {
+                it[used_replay_bytes] = replayBytes
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(100, usage.replayLimit)
+        assertEquals(40, usage.replayOverageRateCentsPerGb)
+        assertEquals(2_000, usage.replayOverageCentsEstimate, "50 overage sessions should estimate as 50GB at $0.40/GB")
+    }
+
+    @Test
+    fun `replay unlimited sentinel disables replay overage estimate`() {
+        val replayBytes = 500L * 1024L * 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_replay_limit] = -1
+            }
+            val usageCounterId = insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedErrors = 0,
+                usedTransactions = 0,
+                usedReplays = 10_000,
+                usedFeedback = 0,
+                usedBytes = replayBytes
+            )
+            OrgUsageCounters.update({ OrgUsageCounters.id eq usageCounterId }) {
+                it[used_replay_bytes] = replayBytes
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(-1, usage.replayLimit)
+        assertEquals(0, usage.replayOverageCentsEstimate, "Unlimited replay limit should not show replay overage")
     }
 
     // ============ Subscription Status Tests ============
@@ -690,6 +788,8 @@ class BillingQuotaServiceTest {
             it[Subscriptions.payg_used_units] = 0
             it[Subscriptions.payg_used_micros] = 0
             it[Subscriptions.pending_meter_units] = 0
+            it[Subscriptions.pending_meter_batch_id] = null
+            it[Subscriptions.pending_meter_batch_units] = 0
         }[Subscriptions.id]
     }
 
@@ -735,6 +835,9 @@ class BillingQuotaServiceTest {
             it[PricingTierConfigs.payg_enabled] = paygEnabled
             it[PricingTierConfigs.payg_rate_micros_per_unit] = paygRateMicrosPerUnit
             it[PricingTierConfigs.overage_rate_cents_per_gb] = 40
+            it[PricingTierConfigs.error_overage_rate_cents_per_1k] = 10
+            it[PricingTierConfigs.replay_overage_rate_cents_per_gb] = 40
+            it[PricingTierConfigs.llm_overage_rate_cents_per_1k] = 100
             it[PricingTierConfigs.stripe_base_price_id] = null
             it[PricingTierConfigs.stripe_overage_price_id] = null
             it[PricingTierConfigs.stripe_yearly_base_price_id] = null

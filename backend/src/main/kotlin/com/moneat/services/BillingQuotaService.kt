@@ -120,7 +120,8 @@ class BillingQuotaService(
                 val usedForType = usedUnitsForType(state, eventType)
                 val typeLimit = baseLimitForType(state, eventType)
                 val typeAfter = usedForType + requestedUnits
-                val effectiveTypeLimit = if (typeLimit >= 0) typeLimit + state.paygLimitUnits + state.bonusUnits else Long.MAX_VALUE
+                val paygHeadroomForType = if (isStripeMeteredUnitType(eventType)) state.paygLimitUnits else 0L
+                val effectiveTypeLimit = if (typeLimit >= 0) typeLimit + paygHeadroomForType + state.bonusUnits else Long.MAX_VALUE
 
                 if (typeLimit >= 0 && typeAfter > effectiveTypeLimit) {
                     SentryUtils.breadcrumb("billing", "Per-type quota exceeded", mapOf(
@@ -162,19 +163,18 @@ class BillingQuotaService(
 
             // GB/byte limit check
             val effectiveBytesLimit = if (state.bytesLimit > 0) {
-                state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes
+                state.bytesLimit + state.bonusGbBytes
             } else {
                 Long.MAX_VALUE
             }
             if (state.bytesLimit > 0 && bytesAfter > effectiveBytesLimit) {
                 SentryUtils.breadcrumb("billing", "GB quota exceeded", mapOf(
                     "organization_id" to organizationId,
-                    "requested_bytes" to requestedTotalBytes,
-                    "used_bytes" to state.usedBytes,
-                    "bytes_limit" to state.bytesLimit,
-                    "payg_limit_bytes" to state.paygLimitBytes,
-                    "bonus_gb_bytes" to state.bonusGbBytes
-                ))
+                        "requested_bytes" to requestedTotalBytes,
+                        "used_bytes" to state.usedBytes,
+                        "bytes_limit" to state.bytesLimit,
+                        "bonus_gb_bytes" to state.bonusGbBytes
+                    ))
 
                 return@transaction QuotaReservationResult(
                     allowed = false,
@@ -472,27 +472,36 @@ class BillingQuotaService(
     }
 
     private fun toUsageResponse(state: QuotaState): BillingUsageResponse {
-        val effectivePaygHeadroom = state.paygLimitUnits + state.bonusUnits
-        val eventLimitsWithinBudget = listOf(
+        val meteredEventLimitsWithinBudget = listOf(
             state.usedErrors to state.errorLimit,
             state.usedTransactions to state.transactionLimit,
             state.usedReplays to state.replayLimit,
             state.usedFeedback to state.feedbackLimit
         ).all { (used, limit) ->
-            limit < 0 || used <= (limit + effectivePaygHeadroom)
+            limit < 0 || used <= (limit + state.paygLimitUnits + state.bonusUnits)
         }
-        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + effectivePaygHeadroom)
-        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes)
+        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + state.bonusUnits)
+        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.bonusGbBytes)
 
         // Per-type overage cost estimates
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
         val errorOverageCents = if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0)
             ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt() else 0
 
-        val replayOverageCents = if (state.replayOverageRateCentsPerGb > 0 && state.usedReplayBytes > 0) {
-            val overageReplays = max(0, state.usedReplays - state.replayLimit)
-            ((overageReplays * state.replayOverageRateCentsPerGb) / 100).toInt()
-        } else 0
+        val replayOverageCents = when {
+            state.replayLimit < 0 -> 0
+            state.replayOverageRateCentsPerGb <= 0 -> 0
+            state.usedReplayBytes <= 0 || state.usedReplays <= 0 -> 0
+            else -> {
+                val overageReplays = max(0, state.usedReplays - state.replayLimit)
+                if (overageReplays <= 0) {
+                    0
+                } else {
+                    val replayOverageBytes = (state.usedReplayBytes * overageReplays) / state.usedReplays
+                    ((replayOverageBytes * state.replayOverageRateCentsPerGb) / BYTES_PER_GB).toInt()
+                }
+            }
+        }
 
         val logOverageBytes = max(0, state.usedLogBytes - state.bytesLimit)
         val logOverageCents = if (state.logOverageRateCentsPerGb > 0 && logOverageBytes > 0)
@@ -551,7 +560,7 @@ class BillingQuotaService(
             oncallEnabled = state.oncallEnabled,
             plan = state.plan,
             status = state.status,
-            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
+            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && meteredEventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
             bonusGbBytes = state.bonusGbBytes,
             bonusUnits = state.bonusUnits,
             bonusReason = state.bonusReason
@@ -683,6 +692,10 @@ class BillingQuotaService(
             "log", "logs" -> "log"
             else -> "error"
         }
+    }
+
+    private fun isStripeMeteredUnitType(eventType: String): Boolean {
+        return eventType == "error" || eventType == "transaction" || eventType == "replay" || eventType == "feedback"
     }
 
     private fun usedUnitsForType(state: QuotaState, eventType: String): Long {

@@ -703,8 +703,8 @@ function AdminBillingPage() {
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-muted-foreground">
-                  <strong>Event limits are for internal abuse prevention only.</strong> Public billing is based on GB only. 
-                  Set generous values (e.g., 100K-500K for Free, very high for paid tiers). These are not advertised to customers.
+                  <strong>Event limits are for internal abuse prevention only.</strong> Stripe metering currently bills non-LLM/non-log overage in unit-based streams.
+                  Keep these limits aligned with your Stripe overage policy (use -1 for unlimited replay sessions).
                 </div>
               </div>
             </div>
@@ -760,7 +760,7 @@ function AdminBillingPage() {
                 <Input
                   id="monthlyReplayLimit"
                   type="number"
-                  min={0}
+                  min={-1}
                   max={100_000_000}
                   value={createForm.monthlyReplayLimit}
                   onChange={(e) =>

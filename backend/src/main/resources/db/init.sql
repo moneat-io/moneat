@@ -167,6 +167,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     payg_used_units BIGINT NOT NULL DEFAULT 0,
     payg_used_micros BIGINT NOT NULL DEFAULT 0,
     pending_meter_units BIGINT NOT NULL DEFAULT 0,
+    pending_meter_batch_id VARCHAR(255),
+    pending_meter_batch_units BIGINT NOT NULL DEFAULT 0,
     stripe_base_item_id VARCHAR(255),
     stripe_overage_item_id VARCHAR(255),
     billing_grace_until TIMESTAMP,
