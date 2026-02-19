@@ -102,7 +102,7 @@ class TwilioService {
             return
         }
 
-        val acknowledgeUrl = "$frontendUrl/incidents/$incidentId"
+        val acknowledgeUrl = "$frontendUrl/on-call/incidents/$incidentId"
         val body = "[$priorityLevel] $incidentTitle - Acknowledge: $acknowledgeUrl"
         val statusCallback = "$backendUrl/v1/webhooks/twilio/sms-status"
 
