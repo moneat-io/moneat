@@ -28,7 +28,8 @@ interface AnalyticsChartProps {
 }
 
 export function AnalyticsChart({data, isLoading, height = 350}: AnalyticsChartProps) {
-  const chartData = (data || []).map((point) => ({
+  const safeData = Array.isArray(data) ? data : []
+  const chartData = safeData.map((point) => ({
     timestamp: new Date(point.timestamp).getTime(),
     time: formatTime(point.timestamp),
     visitors: point.visitors,

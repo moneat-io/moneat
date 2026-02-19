@@ -79,6 +79,11 @@ export default defineConfig({
           })
         }
       } as ProxyOptions,
+      '/features': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      } as ProxyOptions,
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,

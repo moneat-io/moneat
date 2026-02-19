@@ -12,12 +12,14 @@ import {Filter, Plus, X} from 'lucide-react'
 import type {AnalyticsFilter} from '@/lib/api'
 
 const FILTER_PROPERTIES = [
-  {value: 'page', label: 'Page'},
-  {value: 'source', label: 'Source'},
-  {value: 'country', label: 'Country'},
+  {value: 'pathname', label: 'Page'},
+  {value: 'entry_page', label: 'Entry Page'},
+  {value: 'exit_page', label: 'Exit Page'},
+  {value: 'referrer_source', label: 'Source'},
+  {value: 'country_code', label: 'Country'},
   {value: 'browser', label: 'Browser'},
   {value: 'os', label: 'OS'},
-  {value: 'device', label: 'Device'},
+  {value: 'device_type', label: 'Device'},
   {value: 'utm_source', label: 'UTM Source'},
   {value: 'utm_medium', label: 'UTM Medium'},
   {value: 'utm_campaign', label: 'UTM Campaign'},

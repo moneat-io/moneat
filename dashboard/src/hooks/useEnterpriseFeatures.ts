@@ -5,13 +5,23 @@ interface FeaturesResponse {
   modules: string[]
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
+const API_BASE = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || ''
+const FEATURES_URL = API_BASE ? `${API_BASE.replace(/\/$/, '')}/features` : '/features'
+
+function normalizeModuleName(value: string): string {
+  return value.toLowerCase().replace(/[\s_-]/g, '')
+}
+
+export function hasEnterpriseModule(features: FeaturesResponse | undefined, moduleName: string): boolean {
+  const target = normalizeModuleName(moduleName)
+  return features?.modules?.some((module) => normalizeModuleName(module) === target) ?? false
+}
 
 export function useEnterpriseFeatures() {
   return useQuery<FeaturesResponse>({
     queryKey: ['features'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/features`)
+      const res = await fetch(FEATURES_URL)
       if (!res.ok) return { enterprise: false, modules: [] }
       return res.json()
     },
@@ -22,5 +32,5 @@ export function useEnterpriseFeatures() {
 
 export function useHasModule(moduleName: string): boolean {
   const { data } = useEnterpriseFeatures()
-  return data?.modules?.includes(moduleName) ?? false
+  return hasEnterpriseModule(data, moduleName)
 }

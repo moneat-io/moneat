@@ -227,8 +227,8 @@ private fun parseDateRange(call: io.ktor.server.application.ApplicationCall): Pa
         "6mo" -> now.minusMonths(6) to now
         "12mo" -> now.minusMonths(12) to now
         "custom" -> {
-            val from = call.request.queryParameters["date_from"]
-            val to = call.request.queryParameters["date_to"]
+            val from = call.request.queryParameters["from"] ?: call.request.queryParameters["date_from"]
+            val to = call.request.queryParameters["to"] ?: call.request.queryParameters["date_to"]
             if (from == null || to == null) return null
             try {
                 LocalDate.parse(from) to LocalDate.parse(to)
@@ -263,12 +263,15 @@ private fun parseComparison(
 }
 
 private fun parseFilters(call: io.ktor.server.application.ApplicationCall): List<AnalyticsFilter> {
-    return call.request.queryParameters.getAll("filters")?.mapNotNull { filterStr ->
+    val rawFilters = call.request.queryParameters.getAll("filters")
+        ?: call.request.queryParameters.getAll("filters[]")
+        ?: emptyList()
+    return rawFilters.mapNotNull { filterStr ->
         val parts = filterStr.split(":", limit = 3)
         if (parts.size == 3) {
             AnalyticsFilter(parts[0], parts[1], parts[2])
         } else {
             null
         }
-    } ?: emptyList()
+    }
 }

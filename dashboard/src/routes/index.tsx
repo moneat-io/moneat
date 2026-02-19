@@ -20,7 +20,7 @@ import {useQuery} from '@tanstack/react-query'
 import {useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
-import {useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
+import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -392,7 +392,7 @@ function DashboardPage() {
   })
 
   const {data: enterpriseFeatures} = useEnterpriseFeatures()
-  const hasOnCall = enterpriseFeatures?.modules?.includes('oncall') ?? false
+  const hasOnCall = hasEnterpriseModule(enterpriseFeatures, 'oncall')
 
   const {data: incidents = [], isLoading: isLoadingIncidents} = useQuery({
     queryKey: ['incidents-overview'],

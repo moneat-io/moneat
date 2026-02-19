@@ -96,11 +96,14 @@ docker-compose up -d
 # 2. Start the backend (API at localhost:8080)
 cd backend && ./gradlew run
 
+# Optional: Start backend with enterprise modules enabled (required for enterprise API/features)
+cd backend && ./gradlew run -Penterprise
+
 # 3. Start the dashboard (UI at localhost:5173)
 cd dashboard && npm install && npm run dev
 
 # Optional: Start dashboard with enterprise routes/components
-cd dashboard && npm run dev --enterprise
+cd dashboard && npm run dev:enterprise
 ```
 
 ### Enterprise

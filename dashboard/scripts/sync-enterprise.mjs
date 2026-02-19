@@ -8,10 +8,19 @@ const dashboardDir = path.resolve(scriptsDir, '..')
 const repoRoot = path.resolve(dashboardDir, '..')
 
 const enterpriseRoutesDir = path.join(repoRoot, 'enterprise', 'dashboard', 'src', 'routes')
+const enterpriseAnalyticsComponentsDir = path.join(
+  repoRoot,
+  'enterprise',
+  'dashboard',
+  'src',
+  'components',
+  'analytics'
+)
 const enterpriseOnCallComponentsDir = path.join(repoRoot, 'enterprise', 'dashboard', 'src', 'components', 'on-call')
 const enterpriseSsoComponentFile = path.join(repoRoot, 'enterprise', 'dashboard', 'src', 'components', 'sso-settings.tsx')
 
 const dashboardRoutesDir = path.join(dashboardDir, 'src', 'routes')
+const dashboardAnalyticsComponentsDir = path.join(dashboardDir, 'src', 'components', 'analytics')
 const dashboardOnCallComponentsDir = path.join(dashboardDir, 'src', 'components', 'on-call')
 const dashboardSsoComponentFile = path.join(dashboardDir, 'src', 'components', 'sso-settings.tsx')
 
@@ -48,6 +57,7 @@ async function countFiles(dirPath) {
 async function validateEnterpriseSources() {
   const requiredPaths = [
     enterpriseRoutesDir,
+    enterpriseAnalyticsComponentsDir,
     enterpriseOnCallComponentsDir,
     enterpriseSsoComponentFile,
   ]
@@ -63,10 +73,12 @@ export async function syncEnterpriseDashboard({dryRun = false} = {}) {
   await validateEnterpriseSources()
 
   const routesCount = await countFiles(enterpriseRoutesDir)
+  const analyticsComponentsCount = await countFiles(enterpriseAnalyticsComponentsDir)
   const onCallComponentsCount = await countFiles(enterpriseOnCallComponentsDir)
 
   if (!dryRun) {
     await cp(enterpriseRoutesDir, dashboardRoutesDir, {recursive: true, force: true})
+    await cp(enterpriseAnalyticsComponentsDir, dashboardAnalyticsComponentsDir, {recursive: true, force: true})
     await cp(enterpriseOnCallComponentsDir, dashboardOnCallComponentsDir, {recursive: true, force: true})
     await mkdir(path.dirname(dashboardSsoComponentFile), {recursive: true})
     await cp(enterpriseSsoComponentFile, dashboardSsoComponentFile, {force: true})
@@ -75,8 +87,9 @@ export async function syncEnterpriseDashboard({dryRun = false} = {}) {
   return {
     dryRun,
     routesCount,
+    analyticsComponentsCount,
     onCallComponentsCount,
-    filesTouched: routesCount + onCallComponentsCount + 1,
+    filesTouched: routesCount + analyticsComponentsCount + onCallComponentsCount + 1,
   }
 }
 
@@ -88,7 +101,8 @@ if (isMain) {
     const mode = result.dryRun ? 'Dry run' : 'Synced'
     console.log(
       `${mode} enterprise dashboard files: ${result.routesCount} route files, ` +
-      `${result.onCallComponentsCount + 1} component files (${result.filesTouched} total).`
+      `${result.analyticsComponentsCount + result.onCallComponentsCount + 1} component files ` +
+      `(${result.filesTouched} total).`
     )
   } catch (error) {
     console.error('Failed to sync enterprise dashboard files.')

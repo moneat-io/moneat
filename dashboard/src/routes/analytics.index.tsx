@@ -198,7 +198,7 @@ function AnalyticsOverview() {
             isLoading={pagesLoading}
             showBounceRate
             showDuration
-            onRowClick={addFilterFromRow('page')}
+            onRowClick={addFilterFromRow('pathname')}
           />
         </TabsContent>
 
@@ -210,7 +210,7 @@ function AnalyticsOverview() {
             data={entryPages}
             isLoading={entryPagesLoading}
             showBounceRate
-            onRowClick={addFilterFromRow('page')}
+            onRowClick={addFilterFromRow('entry_page')}
           />
         </TabsContent>
 
@@ -221,7 +221,7 @@ function AnalyticsOverview() {
             iconColor="text-rose-500"
             data={exitPages}
             isLoading={exitPagesLoading}
-            onRowClick={addFilterFromRow('page')}
+            onRowClick={addFilterFromRow('exit_page')}
           />
         </TabsContent>
 
@@ -232,7 +232,7 @@ function AnalyticsOverview() {
             iconColor="text-violet-500"
             data={sources}
             isLoading={sourcesLoading}
-            onRowClick={addFilterFromRow('source')}
+            onRowClick={addFilterFromRow('referrer_source')}
           />
         </TabsContent>
 
@@ -243,7 +243,7 @@ function AnalyticsOverview() {
             iconColor="text-amber-500"
             data={locations}
             isLoading={locationsLoading}
-            onRowClick={addFilterFromRow('country')}
+            onRowClick={addFilterFromRow('country_code')}
           />
         </TabsContent>
 
@@ -271,7 +271,7 @@ function AnalyticsOverview() {
               iconColor="text-violet-500"
               data={deviceTypes}
               isLoading={deviceTypesLoading}
-              onRowClick={addFilterFromRow('device')}
+              onRowClick={addFilterFromRow('device_type')}
             />
           </div>
         </TabsContent>

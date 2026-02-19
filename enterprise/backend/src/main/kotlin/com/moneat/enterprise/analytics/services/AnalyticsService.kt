@@ -15,10 +15,9 @@ import com.moneat.enterprise.analytics.models.FunnelStep
 import com.moneat.enterprise.analytics.models.RealtimeResponse
 import com.moneat.enterprise.analytics.models.TimeseriesPoint
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.double
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import mu.KotlinLogging
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -70,14 +69,14 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
     ): OverviewMetrics {
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, "s")
+        val where = buildWhere(projectId, dateFrom, dateTo, filters, "s", "hour")
         val sql = """
             SELECT
                 uniq(s.session_id) AS visitors,
-                sum(s.pageviews) AS pageviews,
-                avg(s.is_bounce) * 100 AS bounce_rate,
-                avg(dateDiff('second', s.started, s.ended)) AS avg_visit_duration,
-                if(uniq(s.session_id) > 0, sum(s.pageviews) / uniq(s.session_id), 0) AS views_per_visit
+                ifNull(sum(s.pageviews), 0) AS pageviews,
+                ifNull(avg(s.is_bounce) * 100, 0) AS bounce_rate,
+                ifNull(avg(dateDiff('second', s.started, s.ended)), 0) AS avg_visit_duration,
+                if(uniq(s.session_id) > 0, ifNull(sum(s.pageviews), 0) / uniq(s.session_id), 0) AS views_per_visit
             FROM analytics_sessions_hourly AS s
             WHERE $where
             FORMAT JSONEachRow
@@ -88,11 +87,11 @@ class AnalyticsService {
 
         val row = jsonParser.parseToJsonElement(body.trim().lines().first()).jsonObject
         return OverviewMetrics(
-            visitors = row["visitors"]?.jsonPrimitive?.long ?: 0,
-            pageviews = row["pageviews"]?.jsonPrimitive?.long ?: 0,
-            bounceRate = row["bounce_rate"]?.jsonPrimitive?.double ?: 0.0,
-            avgVisitDuration = row["avg_visit_duration"]?.jsonPrimitive?.double ?: 0.0,
-            viewsPerVisit = row["views_per_visit"]?.jsonPrimitive?.double ?: 0.0,
+            visitors = row.longValue("visitors"),
+            pageviews = row.longValue("pageviews"),
+            bounceRate = row.doubleValue("bounce_rate"),
+            avgVisitDuration = row.doubleValue("avg_visit_duration"),
+            viewsPerVisit = row.doubleValue("views_per_visit"),
         )
     }
 
@@ -104,7 +103,7 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
     ): List<TimeseriesPoint> {
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, "s")
+        val where = buildWhere(projectId, dateFrom, dateTo, filters, "s", "hour")
         val interval = if (dateTo.toEpochDay() - dateFrom.toEpochDay() <= 2) "toStartOfHour" else "toDate"
 
         val sql = """
@@ -121,9 +120,9 @@ class AnalyticsService {
 
         return parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
             TimeseriesPoint(
-                date = row["date"]?.jsonPrimitive?.content ?: "",
-                visitors = row["visitors"]?.jsonPrimitive?.long ?: 0,
-                pageviews = row["pageviews"]?.jsonPrimitive?.long ?: 0,
+                date = row.stringValue("date"),
+                visitors = row.longValue("visitors"),
+                pageviews = row.longValue("pageviews"),
             )
         }
     }
@@ -139,7 +138,8 @@ class AnalyticsService {
         limit: Int = 100,
     ): BreakdownResponse {
         val (column, table, alias) = resolveDimension(dimension)
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, alias)
+        val timeColumn = if (alias == "s") "hour" else "timestamp"
+        val where = buildWhere(projectId, dateFrom, dateTo, filters, alias, timeColumn)
 
         val sql = """
             SELECT
@@ -156,9 +156,9 @@ class AnalyticsService {
 
         val rows = parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
             BreakdownRow(
-                name = row["name"]?.jsonPrimitive?.content ?: "",
-                visitors = row["visitors"]?.jsonPrimitive?.long ?: 0,
-                pageviews = row["pageviews"]?.jsonPrimitive?.long ?: 0,
+                name = row.stringValue("name"),
+                visitors = row.longValue("visitors"),
+                pageviews = row.longValue("pageviews"),
             )
         }
         return BreakdownResponse(rows)
@@ -225,7 +225,7 @@ class AnalyticsService {
                     session_id,
                     windowFunnel(86400)(timestamp, $events) AS level
                 FROM analytics_events
-                WHERE project_id = $projectId AND $dateWhere
+                WHERE project_id = ${asClickHouseProjectId(projectId)} AND $dateWhere
                 GROUP BY session_id
             )
             WHERE level > 0
@@ -236,8 +236,8 @@ class AnalyticsService {
 
         val levelCounts = mutableMapOf<Int, Long>()
         parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
-            val level = row["level"]?.jsonPrimitive?.long?.toInt() ?: 0
-            val cnt = row["cnt"]?.jsonPrimitive?.long ?: 0
+            val level = row.longValue("level").toInt()
+            val cnt = row.longValue("cnt")
             levelCounts[level] = cnt
             level to cnt
         }
@@ -275,7 +275,7 @@ class AnalyticsService {
         filters: List<AnalyticsFilter>,
         limit: Int = 100,
     ): BreakdownResponse {
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, "e")
+        val where = buildWhere(projectId, dateFrom, dateTo, filters, "e", "timestamp")
         val sql = """
             SELECT
                 e.event_name AS name,
@@ -291,9 +291,9 @@ class AnalyticsService {
 
         val rows = parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
             BreakdownRow(
-                name = row["name"]?.jsonPrimitive?.content ?: "",
-                visitors = row["visitors"]?.jsonPrimitive?.long ?: 0,
-                pageviews = row["pageviews"]?.jsonPrimitive?.long ?: 0,
+                name = row.stringValue("name"),
+                visitors = row.longValue("visitors"),
+                pageviews = row.longValue("pageviews"),
             )
         }
         return BreakdownResponse(rows)
@@ -307,13 +307,15 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
         alias: String,
+        timeColumn: String,
     ): String {
         val parts = mutableListOf<String>()
-        parts.add("$alias.project_id = $projectId")
-        parts.add(dateRange(dateFrom, dateTo, alias))
+        parts.add("$alias.project_id = ${asClickHouseProjectId(projectId)}")
+        parts.add(dateRange(dateFrom, dateTo, alias, timeColumn))
 
         for (filter in filters) {
-            val col = "$alias.${AnalyticsIngestionWorker.escapeCH(filter.property)}"
+            val resolvedProperty = resolveFilterColumn(filter.property, alias) ?: continue
+            val col = "$alias.${AnalyticsIngestionWorker.escapeCH(resolvedProperty)}"
             val value = AnalyticsIngestionWorker.escapeCH(filter.value)
             when (filter.operator) {
                 "is" -> parts.add("$col = '$value'")
@@ -325,11 +327,41 @@ class AnalyticsService {
         return parts.joinToString(" AND ")
     }
 
-    private fun dateRange(dateFrom: LocalDate, dateTo: LocalDate, alias: String = ""): String {
+    private fun resolveFilterColumn(property: String, alias: String): String? {
+        return when (property) {
+            "page", "pathname" -> if (alias == "e") "pathname" else null
+            "entry_page" -> if (alias == "s") "entry_page" else null
+            "exit_page" -> if (alias == "s") "exit_page" else null
+            "source", "referrer_source" -> "referrer_source"
+            "country", "country_code" -> "country_code"
+            "browser" -> "browser"
+            "os" -> "os"
+            "device", "device_type" -> "device_type"
+            "utm_source" -> "utm_source"
+            "utm_medium" -> "utm_medium"
+            "utm_campaign" -> "utm_campaign"
+            "utm_term" -> if (alias == "e") "utm_term" else null
+            "utm_content" -> if (alias == "e") "utm_content" else null
+            "event", "event_name" -> if (alias == "e") "event_name" else null
+            else -> null
+        }
+    }
+
+    private fun asClickHouseProjectId(projectId: Long): String {
+        return "toUInt64($projectId)"
+    }
+
+    private fun dateRange(
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        alias: String = "",
+        timeColumn: String = "timestamp",
+    ): String {
         val prefix = if (alias.isNotEmpty()) "$alias." else ""
+        val escapedTimeColumn = AnalyticsIngestionWorker.escapeCH(timeColumn)
         val from = dateFrom.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val to = dateTo.plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
-        return "${prefix}timestamp >= '$from' AND ${prefix}timestamp < '$to'"
+        return "${prefix}$escapedTimeColumn >= '$from' AND ${prefix}$escapedTimeColumn < '$to'"
     }
 
     private data class DimensionInfo(val column: String, val table: String, val alias: String)
@@ -367,6 +399,18 @@ class AnalyticsService {
                 null
             }
         }
+    }
+
+    private fun kotlinx.serialization.json.JsonObject.longValue(key: String): Long {
+        return this[key]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0
+    }
+
+    private fun kotlinx.serialization.json.JsonObject.doubleValue(key: String): Double {
+        return this[key]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+    }
+
+    private fun kotlinx.serialization.json.JsonObject.stringValue(key: String): String {
+        return this[key]?.jsonPrimitive?.contentOrNull ?: ""
     }
 
     private data class OverviewMetrics(

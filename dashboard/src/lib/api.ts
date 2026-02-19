@@ -1834,7 +1834,7 @@ interface AnalyticsBreakdownItem {
   pageviews: number
   bounceRate?: number
   avgDuration?: number
-  percentage: number
+  percentage?: number
 }
 
 interface AnalyticsRealtimeResponse {
@@ -1851,6 +1851,37 @@ interface AnalyticsFunnelStep {
 interface AnalyticsFunnelResponse {
   steps: AnalyticsFunnelStep[]
   overallConversion: number
+}
+
+interface AnalyticsOverviewApiResponse {
+  uniqueVisitors?: number
+  totalPageviews?: number
+  bounceRate?: number
+  avgVisitDuration?: number
+  viewsPerVisit?: number
+  visitors?: number
+  pageviews?: number
+  compVisitors?: number
+  compPageviews?: number
+  compBounceRate?: number
+  compAvgVisitDuration?: number
+  compViewsPerVisit?: number
+}
+
+interface AnalyticsTimeseriesApiPoint {
+  timestamp?: string
+  date?: string
+  visitors?: number
+  pageviews?: number
+}
+
+interface AnalyticsBreakdownApiResponse {
+  results?: AnalyticsBreakdownItem[]
+}
+
+interface AnalyticsRealtimeApiResponse {
+  currentVisitors?: number
+  visitors?: number
 }
 
 class ApiClient {
@@ -3989,8 +4020,8 @@ class ApiClient {
   private buildAnalyticsQuery(params?: AnalyticsParams): string {
     const qs = new URLSearchParams()
     if (params?.period) qs.append('period', params.period)
-    if (params?.from) qs.append('from', params.from)
-    if (params?.to) qs.append('to', params.to)
+    if (params?.from) qs.append('date_from', params.from)
+    if (params?.to) qs.append('date_to', params.to)
     if (params?.comparison && params.comparison !== 'none') qs.append('comparison', params.comparison)
     if (params?.filters) {
       for (const f of params.filters) {
@@ -4001,49 +4032,114 @@ class ApiClient {
     return s ? `?${s}` : ''
   }
 
+  private normalizeAnalyticsOverview(data: AnalyticsOverviewApiResponse): AnalyticsOverview {
+    const uniqueVisitors = data.uniqueVisitors ?? data.visitors ?? 0
+    const totalPageviews = data.totalPageviews ?? data.pageviews ?? 0
+    const bounceRate = data.bounceRate ?? 0
+    const avgVisitDuration = data.avgVisitDuration ?? 0
+    const viewsPerVisit = data.viewsPerVisit ?? 0
+    const hasComparison = data.compVisitors != null
+      || data.compPageviews != null
+      || data.compBounceRate != null
+      || data.compAvgVisitDuration != null
+      || data.compViewsPerVisit != null
+
+    return {
+      uniqueVisitors,
+      totalPageviews,
+      bounceRate,
+      avgVisitDuration,
+      viewsPerVisit,
+      comparison: hasComparison ? {
+        uniqueVisitors: data.compVisitors ?? 0,
+        totalPageviews: data.compPageviews ?? 0,
+        bounceRate: data.compBounceRate ?? 0,
+        avgVisitDuration: data.compAvgVisitDuration ?? 0,
+        viewsPerVisit: data.compViewsPerVisit ?? 0,
+      } : undefined,
+    }
+  }
+
+  private normalizeAnalyticsTimeseries(data: AnalyticsTimeseriesApiPoint[]): AnalyticsTimeseriesPoint[] {
+    return data.map(point => ({
+      timestamp: point.timestamp ?? point.date ?? '',
+      visitors: point.visitors ?? 0,
+      pageviews: point.pageviews ?? 0,
+    }))
+  }
+
+  private normalizeAnalyticsBreakdown(
+    data: AnalyticsBreakdownItem[] | AnalyticsBreakdownApiResponse,
+  ): AnalyticsBreakdownItem[] {
+    if (Array.isArray(data)) return data
+    return Array.isArray(data?.results) ? data.results : []
+  }
+
+  private async fetchAnalyticsBreakdown(endpoint: string): Promise<AnalyticsBreakdownItem[]> {
+    const response = await this.request<AnalyticsBreakdownItem[] | AnalyticsBreakdownApiResponse>(endpoint)
+    return this.normalizeAnalyticsBreakdown(response)
+  }
+
   async getAnalyticsOverview(projectId: number, params?: AnalyticsParams): Promise<AnalyticsOverview> {
-    return this.request<AnalyticsOverview>(`${API_BASE}/analytics/${projectId}/overview${this.buildAnalyticsQuery(params)}`)
+    const response = await this.request<AnalyticsOverviewApiResponse>(
+      `${API_BASE}/analytics/${projectId}/overview${this.buildAnalyticsQuery(params)}`
+    )
+    return this.normalizeAnalyticsOverview(response)
   }
 
   async getAnalyticsTimeseries(projectId: number, params?: AnalyticsParams): Promise<AnalyticsTimeseriesPoint[]> {
-    return this.request<AnalyticsTimeseriesPoint[]>(`${API_BASE}/analytics/${projectId}/timeseries${this.buildAnalyticsQuery(params)}`)
+    const response = await this.request<AnalyticsTimeseriesApiPoint[]>(
+      `${API_BASE}/analytics/${projectId}/timeseries${this.buildAnalyticsQuery(params)}`
+    )
+    return this.normalizeAnalyticsTimeseries(response)
   }
 
   async getAnalyticsPages(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/pages${this.buildAnalyticsQuery(params)}`)
+    return this.fetchAnalyticsBreakdown(`${API_BASE}/analytics/${projectId}/pages${this.buildAnalyticsQuery(params)}`)
   }
 
   async getAnalyticsEntryPages(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/entry-pages${this.buildAnalyticsQuery(params)}`)
+    return this.fetchAnalyticsBreakdown(
+      `${API_BASE}/analytics/${projectId}/entry-pages${this.buildAnalyticsQuery(params)}`
+    )
   }
 
   async getAnalyticsExitPages(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/exit-pages${this.buildAnalyticsQuery(params)}`)
+    return this.fetchAnalyticsBreakdown(
+      `${API_BASE}/analytics/${projectId}/exit-pages${this.buildAnalyticsQuery(params)}`
+    )
   }
 
   async getAnalyticsSources(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/sources${this.buildAnalyticsQuery(params)}`)
+    return this.fetchAnalyticsBreakdown(
+      `${API_BASE}/analytics/${projectId}/sources${this.buildAnalyticsQuery(params)}`
+    )
   }
 
   async getAnalyticsUtm(projectId: number, utmParam: string, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/utm/${utmParam}${this.buildAnalyticsQuery(params)}`)
+    return this.fetchAnalyticsBreakdown(
+      `${API_BASE}/analytics/${projectId}/utm/${utmParam}${this.buildAnalyticsQuery(params)}`
+    )
   }
 
   async getAnalyticsLocations(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/locations${this.buildAnalyticsQuery(params)}`)
+    return this.fetchAnalyticsBreakdown(
+      `${API_BASE}/analytics/${projectId}/locations${this.buildAnalyticsQuery(params)}`
+    )
   }
 
   async getAnalyticsDevices(projectId: number, type: 'browser' | 'os' | 'device', params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
     const qs = this.buildAnalyticsQuery(params)
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/devices${qs}${qs ? '&' : '?'}type=${type}`)
+    return this.fetchAnalyticsBreakdown(`${API_BASE}/analytics/${projectId}/devices${qs}${qs ? '&' : '?'}type=${type}`)
   }
 
   async getAnalyticsEvents(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
-    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/events${this.buildAnalyticsQuery(params)}`)
+    return this.fetchAnalyticsBreakdown(`${API_BASE}/analytics/${projectId}/events${this.buildAnalyticsQuery(params)}`)
   }
 
   async getAnalyticsRealtime(projectId: number): Promise<AnalyticsRealtimeResponse> {
-    return this.request<AnalyticsRealtimeResponse>(`${API_BASE}/analytics/${projectId}/realtime`)
+    const response = await this.request<AnalyticsRealtimeApiResponse>(`${API_BASE}/analytics/${projectId}/realtime`)
+    return { currentVisitors: response.currentVisitors ?? response.visitors ?? 0 }
   }
 
   async getAnalyticsFunnel(projectId: number, steps: string[], params?: AnalyticsParams): Promise<AnalyticsFunnelResponse> {

@@ -45,6 +45,7 @@ export function AnalyticsBreakdownTable({
   const [sortField, setSortField] = useState<SortField>('visitors')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [expanded, setExpanded] = useState(false)
+  const safeData = Array.isArray(data) ? data : []
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -62,14 +63,14 @@ export function AnalyticsBreakdownTable({
       : <ChevronUp className="h-3 w-3" />
   }
 
-  const sortedData = [...(data || [])].sort((a, b) => {
+  const sortedData = [...safeData].sort((a, b) => {
     const aVal = a[sortField] ?? 0
     const bVal = b[sortField] ?? 0
     return sortDir === 'desc' ? bVal - aVal : aVal - bVal
   })
 
   const displayedData = expanded ? sortedData : sortedData.slice(0, maxRows)
-  const maxVisitors = Math.max(...(data || []).map(d => d.visitors), 1)
+  const maxVisitors = Math.max(...safeData.map(d => d.visitors), 1)
 
   return (
     <Card>
@@ -89,7 +90,7 @@ export function AnalyticsBreakdownTable({
               </div>
             ))}
           </div>
-        ) : !data || data.length === 0 ? (
+        ) : safeData.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             No data for this period
           </div>
