@@ -1,0 +1,179 @@
+package com.moneat.services
+
+import com.moneat.models.AlertNotificationPreferences
+import com.moneat.models.Memberships
+import com.moneat.models.Organizations
+import com.moneat.models.Users
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class AlertNotificationPreferencesServiceTest {
+    private val service = AlertNotificationPreferencesService()
+
+    companion object {
+        private var dbInitialized = false
+    }
+
+    @BeforeTest
+    fun setupDatabase() {
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_alert_prefs_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            transaction {
+                SchemaUtils.create(
+                    Organizations,
+                    Users,
+                    Memberships,
+                    AlertNotificationPreferences
+                )
+            }
+            dbInitialized = true
+        }
+
+        transaction {
+            AlertNotificationPreferences.deleteAll()
+            Memberships.deleteAll()
+            Users.deleteAll()
+            Organizations.deleteAll()
+        }
+    }
+
+    private fun seedOrg(name: String = "Test Org"): Int = transaction {
+        Organizations.insert {
+            it[Organizations.name] = name
+            it[slug] = name.lowercase().replace(" ", "-")
+        } get Organizations.id
+    }
+
+    private fun seedUser(email: String, verified: Boolean = true): Int = transaction {
+        Users.insert {
+            it[Users.email] = email
+            it[password_hash] = "hash"
+            it[Users.name] = email.substringBefore("@")
+            it[email_verified] = verified
+        } get Users.id
+    }
+
+    private fun addMembership(userId: Int, orgId: Int) = transaction {
+        Memberships.insert {
+            it[user_id] = userId
+            it[organization_id] = orgId
+            it[role] = "member"
+        }
+    }
+
+    @Test
+    fun `getPreferences returns defaults for all alert sources`() {
+        val orgId = seedOrg()
+        val userId = seedUser("defaults@moneat.io")
+
+        val prefs = service.getPreferences(userId, orgId)
+
+        assertEquals(AlertNotificationPreferencesService.AlertSource.values().size, prefs.size)
+        assertTrue(prefs.all { it.emailEnabled })
+        assertTrue(prefs.all { it.slackEnabled })
+        assertTrue(prefs.all { it.discordEnabled })
+    }
+
+    @Test
+    fun `updatePreference upserts and isChannelEnabled reflects values`() {
+        val orgId = seedOrg()
+        val userId = seedUser("update@moneat.io")
+
+        service.updatePreference(
+            userId = userId,
+            organizationId = orgId,
+            alertSource = "SYSTEM_ALERT",
+            emailEnabled = false,
+            slackEnabled = true,
+            discordEnabled = false
+        )
+
+        assertFalse(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "email"))
+        assertTrue(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "slack"))
+        assertFalse(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "discord"))
+
+        // Update same row to verify upsert path.
+        service.updatePreference(
+            userId = userId,
+            organizationId = orgId,
+            alertSource = "SYSTEM_ALERT",
+            emailEnabled = true,
+            slackEnabled = false,
+            discordEnabled = true
+        )
+
+        assertTrue(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "email"))
+        assertFalse(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "slack"))
+        assertTrue(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "discord"))
+    }
+
+    @Test
+    fun `updatePreference rejects unknown alert source`() {
+        val orgId = seedOrg()
+        val userId = seedUser("invalid@moneat.io")
+
+        assertFailsWith<IllegalArgumentException> {
+            service.updatePreference(
+                userId = userId,
+                organizationId = orgId,
+                alertSource = "UNKNOWN_ALERT",
+                emailEnabled = true,
+                slackEnabled = true,
+                discordEnabled = true
+            )
+        }
+    }
+
+    @Test
+    fun `getUsersWithChannelEnabled enforces channel preferences and verification`() {
+        val orgId = seedOrg()
+        val enabledUser = seedUser("enabled@moneat.io", verified = true)
+        val disabledUser = seedUser("disabled@moneat.io", verified = true)
+        val unverifiedUser = seedUser("unverified@moneat.io", verified = false)
+
+        addMembership(enabledUser, orgId)
+        addMembership(disabledUser, orgId)
+        addMembership(unverifiedUser, orgId)
+
+        service.updatePreference(
+            userId = disabledUser,
+            organizationId = orgId,
+            alertSource = "SYSTEM_DOWN",
+            emailEnabled = false,
+            slackEnabled = true,
+            discordEnabled = true
+        )
+
+        val recipients = service.getUsersWithChannelEnabled(
+            organizationId = orgId,
+            alertSource = "SYSTEM_DOWN",
+            channel = "email"
+        )
+
+        assertEquals(1, recipients.size)
+        assertEquals(enabledUser, recipients.first().first)
+        assertEquals("enabled@moneat.io", recipients.first().second)
+    }
+
+    @Test
+    fun `isChannelEnabled defaults to true when no preference row exists`() {
+        val orgId = seedOrg()
+        val userId = seedUser("fallback@moneat.io")
+
+        assertTrue(service.isChannelEnabled(userId, orgId, "ERROR_ALERT", "email"))
+        assertTrue(service.isChannelEnabled(userId, orgId, "ERROR_ALERT", "slack"))
+        assertTrue(service.isChannelEnabled(userId, orgId, "ERROR_ALERT", "discord"))
+    }
+}

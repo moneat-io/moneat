@@ -100,6 +100,9 @@ object QuotaNotificationsSent : Table("quota_notifications_sent") {
     val period_start = date("period_start")
     val notification_type = varchar("notification_type", 50)
     val sent_at = timestamp("sent_at")
+    init {
+        uniqueIndex(organization_id, period_start, notification_type)
+    }
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -413,4 +416,3 @@ data class PromotionalCreditHistoryItem(
     val reason: String?,
     val grantedAt: String
 )
-

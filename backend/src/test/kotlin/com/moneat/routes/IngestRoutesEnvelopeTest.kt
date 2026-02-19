@@ -1,0 +1,248 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.routes
+
+import com.moneat.models.BillingUsageResponse
+import com.moneat.models.Organizations
+import com.moneat.models.ProjectKeys
+import com.moneat.models.Projects
+import com.moneat.services.QuotaReservationResult
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.server.config.MapApplicationConfig
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class IngestRoutesEnvelopeTest {
+    private var testOrgId: Int = 0
+    private var testProjectId: Long = 0
+    private val testPublicKey = "ingestroutekey123"
+
+    companion object {
+        private var dbInitialized = false
+    }
+
+    @BeforeTest
+    fun setupDatabase() {
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_ingest_routes;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            transaction {
+                SchemaUtils.create(Organizations, Projects, ProjectKeys)
+            }
+            dbInitialized = true
+        }
+
+        transaction {
+            ProjectKeys.deleteAll()
+            Projects.deleteAll()
+            Organizations.deleteAll()
+        }
+
+        transaction {
+            testOrgId = Organizations.insert {
+                it[name] = "Ingest Test Org"
+                it[slug] = "ingest-test-org"
+            }[Organizations.id]
+
+            testProjectId = Projects.insert {
+                it[organization_id] = testOrgId
+                it[name] = "ingest-project"
+                it[slug] = "ingest-project"
+                it[framework] = "kotlin"
+            }[Projects.id]
+
+            ProjectKeys.insert {
+                it[project_id] = testProjectId
+                it[public_key] = testPublicKey
+                it[secret_key] = "secret-$testPublicKey"
+                it[platform_target] = "jvm"
+                it[is_active] = true
+            }
+        }
+    }
+
+    @Test
+    fun `envelope endpoint groups multi-item envelope by quota type and accepts`() = testApplication {
+        val reservations = mutableListOf<Map<String, Int>>()
+
+        environment {
+            config = MapApplicationConfig(
+                "ingest.queueKey" to "test:ingest:q",
+                "logs.queueKey" to "test:logs:q"
+            )
+        }
+        application {
+            routing {
+                ingestRoutes(
+                    enqueueEnvelope = { _, _ -> },
+                    isQuotaEnforcementEnabled = { true },
+                    reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
+                        reservations.add(requestedUnitsByType)
+                        QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                    }
+                )
+            }
+        }
+
+        val response = client.post("/api/$testProjectId/envelope/") {
+            contentType(ContentType.Application.OctetStream)
+            header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+            setBody(
+                buildEnvelope(
+                    eventId = "evt-multi-1",
+                    items = listOf(
+                        "transaction" to """{"event_id":"txn-1","type":"transaction"}""".toByteArray(),
+                        "session" to """{"sid":"session-1","status":"ok"}""".toByteArray(),
+                        "check_in" to """{"check_in_id":"check-1","status":"ok"}""".toByteArray()
+                    )
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertEquals(1, reservations.size)
+        assertEquals(1, reservations[0]["transaction"])
+        assertEquals(2, reservations[0]["error"])
+    }
+
+    @Test
+    fun `envelope endpoint returns 429 when quota reservation rejects`() = testApplication {
+        environment {
+            config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+        }
+        application {
+            routing {
+                ingestRoutes(
+                    enqueueEnvelope = { _, _ -> },
+                    isQuotaEnforcementEnabled = { true },
+                    reserveEnvelopeQuota = { orgId, _, _ ->
+                        QuotaReservationResult(
+                            allowed = false,
+                            reason = "quota_exceeded",
+                            usage = emptyUsage(orgId)
+                        )
+                    }
+                )
+            }
+        }
+
+        val response = client.post("/api/$testProjectId/envelope/") {
+            contentType(ContentType.Application.OctetStream)
+            header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+            setBody(
+                buildEnvelope(
+                    eventId = "evt-over-quota",
+                    items = listOf("transaction" to """{"event_id":"txn-2","type":"transaction"}""".toByteArray())
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        assertTrue(response.bodyAsText().contains("Quota exceeded"))
+    }
+
+    @Test
+    fun `envelope endpoint returns bad request for malformed envelope payload`() = testApplication {
+        environment {
+            config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+        }
+        application {
+            routing {
+                ingestRoutes(enqueueEnvelope = { _, _ -> })
+            }
+        }
+
+        val response = client.post("/api/$testProjectId/envelope/") {
+            contentType(ContentType.Application.OctetStream)
+            header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+            setBody("not-a-valid-envelope".toByteArray())
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid envelope format"))
+    }
+
+    @Test
+    fun `envelope item type mapping covers transaction and fallback types`() {
+        assertEquals("transaction", mapEnvelopeItemTypeToQuotaType("transaction"))
+        assertEquals("replay", mapEnvelopeItemTypeToQuotaType("replay_video"))
+        assertEquals("feedback", mapEnvelopeItemTypeToQuotaType("feedback"))
+        assertEquals("llm", mapEnvelopeItemTypeToQuotaType("llm_generation"))
+        assertEquals("error", mapEnvelopeItemTypeToQuotaType("session"))
+        assertEquals("error", mapEnvelopeItemTypeToQuotaType("check_in"))
+        assertEquals("error", mapEnvelopeItemTypeToQuotaType("unknown_type"))
+    }
+
+    private fun buildEnvelope(eventId: String, items: List<Pair<String, ByteArray>>): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        out.write("""{"event_id":"$eventId"}""".toByteArray())
+        out.write('\n'.code)
+        for ((type, payload) in items) {
+            out.write("""{"type":"$type","length":${payload.size}}""".toByteArray())
+            out.write('\n'.code)
+            out.write(payload)
+            out.write('\n'.code)
+        }
+        return out.toByteArray()
+    }
+
+    private fun emptyUsage(organizationId: Int): BillingUsageResponse {
+        return BillingUsageResponse(
+            organizationId = organizationId,
+            periodStart = "2026-01-01",
+            periodEnd = "2026-01-31",
+            retentionDays = 30,
+            usedUnits = 0,
+            usedErrors = 0,
+            errorLimit = 1000,
+            usedTransactions = 0,
+            transactionLimit = 1000,
+            usedReplays = 0,
+            replayLimit = 1000,
+            usedFeedback = 0,
+            feedbackLimit = 1000,
+            usedBytes = 0,
+            bytesLimit = 1_073_741_824,
+            baseLimitUnits = 1000,
+            paygLimitUnits = 0,
+            totalLimitUnits = 1000,
+            paygBudgetCents = 0,
+            paygUsedUnits = 0,
+            paygUsedCentsEstimate = 0,
+            plan = "pro",
+            status = "active",
+            withinQuota = true
+        )
+    }
+}

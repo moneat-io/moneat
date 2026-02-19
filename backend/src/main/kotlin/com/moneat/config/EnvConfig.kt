@@ -61,8 +61,8 @@ object EnvConfig {
     }
 
     fun get(key: String): String? {
-        // First try system environment variables, then fall back to .env file
-        return System.getenv(key) ?: dotenv?.get(key)
+        // First try environment variables, then JVM properties, then .env file
+        return System.getenv(key) ?: System.getProperty(key) ?: dotenv?.get(key)
     }
 
     fun get(key: String, default: String): String {

@@ -1,0 +1,144 @@
+package com.moneat.services
+
+import com.moneat.models.EmailsSent
+import com.moneat.models.Memberships
+import com.moneat.models.NotificationPreferences
+import com.moneat.models.Organizations
+import com.moneat.models.Projects
+import com.moneat.models.SentryEvent
+import com.moneat.models.Users
+import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.time.Clock
+
+class NotificationServiceTest {
+    companion object {
+        private var dbInitialized = false
+    }
+
+    @BeforeTest
+    fun setupDatabase() {
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_notification_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            transaction {
+                SchemaUtils.create(
+                    Organizations,
+                    Users,
+                    Memberships,
+                    Projects,
+                    NotificationPreferences,
+                    EmailsSent
+                )
+            }
+            dbInitialized = true
+        }
+
+        transaction {
+            EmailsSent.deleteAll()
+            NotificationPreferences.deleteAll()
+            Memberships.deleteAll()
+            Projects.deleteAll()
+            Users.deleteAll()
+            Organizations.deleteAll()
+        }
+    }
+
+    @Test
+    fun `onNewIssue respects alert frequency deduplication`() = runBlocking {
+        val organizationId = transaction {
+            Organizations.insert {
+                it[name] = "Dedup Org"
+                it[slug] = "dedup-org"
+            } get Organizations.id
+        }
+
+        val userId = transaction {
+            Users.insert {
+                it[Users.email] = "alerts@moneat.io"
+                it[password_hash] = "hash"
+                it[Users.name] = "Alert User"
+                it[email_verified] = true
+            } get Users.id
+        }
+
+        transaction {
+            Memberships.insert {
+                it[user_id] = userId
+                it[Memberships.organization_id] = organizationId
+                it[role] = "owner"
+            }
+        }
+
+        val projectId = transaction {
+            Projects.insert {
+                it[organization_id] = organizationId
+                it[name] = "Backend API"
+                it[slug] = "backend-api"
+            } get Projects.id
+        }
+
+        transaction {
+            NotificationPreferences.insert {
+                it[NotificationPreferences.user_id] = userId
+                it[NotificationPreferences.project_id] = null
+                it[issue_alerts] = true
+                it[error_alerts] = true
+                it[weekly_summary] = true
+                it[alert_frequency_minutes] = 60
+                it[created_at] = Clock.System.now()
+                it[updated_at] = Clock.System.now()
+            }
+        }
+
+        val notificationService = NotificationService(EmailService())
+        try {
+            val event = SentryEvent(
+                event_id = "evt-1",
+                timestamp = Clock.System.now().toEpochMilliseconds() / 1000.0,
+                level = "error",
+                message = "NullPointerException in checkout flow",
+                environment = "production"
+            )
+
+            notificationService.onNewIssue(projectId, "1001", event)
+            waitForEmailRows(expectedCount = 1)
+
+            // Second issue alert for the same project/user should be throttled by alert frequency.
+            notificationService.onNewIssue(projectId, "1002", event.copy(event_id = "evt-2"))
+            waitForEmailRows(expectedCount = 1)
+
+            val sentRows = transaction {
+                EmailsSent.selectAll().toList().count { it[EmailsSent.email_type] == "error_alert" }.toLong()
+            }
+            assertEquals(1L, sentRows)
+        } finally {
+            notificationService.shutdown()
+        }
+    }
+
+    private fun waitForEmailRows(expectedCount: Long, timeoutMs: Long = 3000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val count = transaction {
+                EmailsSent.selectAll().toList().count { it[EmailsSent.email_type] == "error_alert" }.toLong()
+            }
+            if (count >= expectedCount) return
+            Thread.sleep(50)
+        }
+        val finalCount = transaction {
+            EmailsSent.selectAll().toList().count { it[EmailsSent.email_type] == "error_alert" }.toLong()
+        }
+        assertEquals(expectedCount, finalCount)
+    }
+}

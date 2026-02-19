@@ -246,14 +246,7 @@ class MonitorAlertService {
         val currentValue = getCurrentMetricValue(alert.systemId, alert.metric) ?: return
         
         // Check if alert condition is met
-        val triggered = when (alert.condition) {
-            ">" -> currentValue > alert.threshold
-            "<" -> currentValue < alert.threshold
-            ">=" -> currentValue >= alert.threshold
-            "<=" -> currentValue <= alert.threshold
-            "==" -> currentValue == alert.threshold
-            else -> false
-        }
+        val triggered = isThresholdTriggered(alert.condition, currentValue, alert.threshold)
         
         // Handle Recovery
         if (!triggered) {
@@ -295,17 +288,16 @@ class MonitorAlertService {
 
         // Check throttling
         val now = Clock.System.now()
-        if (alert.lastTriggeredAt != null) {
-            val timeSinceLastTrigger = now - alert.lastTriggeredAt
-            if (timeSinceLastTrigger < MIN_ALERT_INTERVAL_MINUTES.minutes) {
-                // Update Redis state even if throttled to ensure consistency
-                 try {
-                    if (RedisConfig.isConnected()) {
-                        RedisConfig.sync().set(alertKey, "TRIGGERED")
-                    }
-                } catch (e: Exception) {}
-                return // Don't spam alerts
+        if (isThrottledByInterval(alert.lastTriggeredAt, now)) {
+            // Update Redis state even if throttled to ensure consistency
+            try {
+                if (RedisConfig.isConnected()) {
+                    RedisConfig.sync().set(alertKey, "TRIGGERED")
+                }
+            } catch (e: Exception) {
+                logger.debug(e) { "Failed to update throttled alert state in Redis" }
             }
+            return // Don't spam alerts
         }
         
         // Check if alerts are silenced for this organization
@@ -886,6 +878,26 @@ class MonitorAlertService {
             "==" -> "is exactly"
             else -> condition
         }
+    }
+
+    internal fun isThresholdTriggered(condition: String, currentValue: Double, threshold: Double): Boolean {
+        return when (condition) {
+            ">" -> currentValue > threshold
+            "<" -> currentValue < threshold
+            ">=" -> currentValue >= threshold
+            "<=" -> currentValue <= threshold
+            "==" -> currentValue == threshold
+            else -> false
+        }
+    }
+
+    internal fun isThrottledByInterval(
+        lastTriggeredAt: Instant?,
+        now: Instant = Clock.System.now()
+    ): Boolean {
+        if (lastTriggeredAt == null) return false
+        val timeSinceLastTrigger = now - lastTriggeredAt
+        return timeSinceLastTrigger < MIN_ALERT_INTERVAL_MINUTES.minutes
     }
 
     private fun loadSystemAlertTemplate(

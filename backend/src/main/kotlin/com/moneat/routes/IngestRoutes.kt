@@ -25,6 +25,7 @@ import com.moneat.services.LogService
 import com.moneat.services.EmailService
 import com.moneat.services.NotificationService
 import com.moneat.services.BillingQuotaService
+import com.moneat.services.QuotaReservationResult
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
@@ -49,12 +50,27 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
-fun Route.ingestRoutes() {
-    val emailService = EmailService()
-    val notificationService = NotificationService(emailService)
-    val eventService = EventService(notificationService)
-    val quotaService = BillingQuotaService()
-    val logService = LogService()
+fun Route.ingestRoutes(
+    eventService: EventService = EventService(NotificationService(EmailService())),
+    quotaService: BillingQuotaService = BillingQuotaService(),
+    logService: LogService = LogService(),
+    enqueueEnvelope: (queueKey: String, message: String) -> Unit = { queueKey, message ->
+        RedisConfig.sync().lpush(queueKey, message)
+    },
+    isQuotaEnforcementEnabled: () -> Boolean = { quotaService.isEnforcementEnabled() },
+    reserveEnvelopeQuota: (organizationId: Int, requestedUnitsByType: Map<String, Int>, requestedBytesByType: Map<String, Long>) -> QuotaReservationResult =
+        { orgId, requestedUnitsByType, requestedBytesByType ->
+            quotaService.reserveUnitsBatch(orgId, requestedUnitsByType, requestedBytesByType)
+        },
+    reserveLogQuota: (organizationId: Int, requestedUnits: Int, requestedBytes: Long) -> QuotaReservationResult =
+        { orgId, requestedUnits, requestedBytes ->
+            quotaService.reserveUnits(orgId, requestedUnits, "log", requestedBytes)
+        },
+    reserveSingleQuota: (organizationId: Int, requestedUnits: Int, eventType: String, requestedBytes: Long) -> QuotaReservationResult =
+        { orgId, requestedUnits, eventType, requestedBytes ->
+            quotaService.reserveUnits(orgId, requestedUnits, eventType, requestedBytes)
+        }
+) {
 
     route("/api/{projectId}") {
         // Sentry envelope endpoint (primary) - enqueue for async processing, respond 202
@@ -101,7 +117,7 @@ fun Route.ingestRoutes() {
                 val envelope = SentryEnvelope.parse(decompressedBytes)
                 logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }
 
-                if (quotaService.isEnforcementEnabled()) {
+                if (isQuotaEnforcementEnabled()) {
                     val orgId = eventService.getOrganizationIdForProject(projectId)
                     if (orgId == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
@@ -120,7 +136,7 @@ fun Route.ingestRoutes() {
                             }
                         }
 
-                    val reservation = quotaService.reserveUnitsBatch(orgId, groupedReservations, groupedBytes)
+                    val reservation = reserveEnvelopeQuota(orgId, groupedReservations, groupedBytes)
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
@@ -131,7 +147,7 @@ fun Route.ingestRoutes() {
                 }
 
                 val message = IngestionWorker.encodeMessage(projectId, decompressedBytes)
-                RedisConfig.sync().lpush(queueKey, message)
+                enqueueEnvelope(queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("id" to envelope.eventId))
             } catch (e: Exception) {
@@ -193,14 +209,9 @@ fun Route.ingestRoutes() {
                 return@post
             }
 
-            if (quotaService.isEnforcementEnabled()) {
+            if (isQuotaEnforcementEnabled()) {
                 val billableBytes = logService.estimateBillableBytes(entries)
-                val reservation = quotaService.reserveUnits(
-                    organizationId = organizationId,
-                    requestedUnits = entries.size,
-                    eventType = "log",
-                    requestedBytes = billableBytes
-                )
+                val reservation = reserveLogQuota(organizationId, entries.size, billableBytes)
                 if (!reservation.allowed) {
                     call.respond(
                         HttpStatusCode.TooManyRequests,
@@ -242,14 +253,14 @@ fun Route.ingestRoutes() {
             logger.debug { "Received store event for project $projectId" }
             
             try {
-                if (quotaService.isEnforcementEnabled()) {
+                if (isQuotaEnforcementEnabled()) {
                     val orgId = eventService.getOrganizationIdForProject(projectId)
                     if (orgId == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
                         return@post
                     }
                     val bodyBytes = body.toByteArray(Charsets.UTF_8).size.toLong()
-                    val reservation = quotaService.reserveUnits(orgId, 1, "error", bodyBytes)
+                    val reservation = reserveSingleQuota(orgId, 1, "error", bodyBytes)
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
@@ -295,7 +306,7 @@ internal fun extractPublicKeyFromDsn(dsnLikeHeader: String?): String? {
     return regex.find(cleaned)?.groupValues?.getOrNull(1)
 }
 
-private fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
+internal fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
     return when (itemType) {
         "transaction" -> "transaction"
         "replay_event", "replay_recording", "replay_video" -> "replay"

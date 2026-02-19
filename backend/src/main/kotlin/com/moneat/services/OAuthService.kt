@@ -103,11 +103,14 @@ class OAuthService {
     
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
     private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")
+    private val githubOauthBaseUrl = EnvConfig.get("GITHUB_OAUTH_BASE_URL", "https://github.com").trimEnd('/')
+    private val githubApiBaseUrl = EnvConfig.get("GITHUB_API_BASE_URL", "https://api.github.com").trimEnd('/')
     
     private val appleClientId = EnvConfig.get("APPLE_CLIENT_ID")
     private val appleTeamId = EnvConfig.get("APPLE_TEAM_ID")
     private val appleKeyId = EnvConfig.get("APPLE_KEY_ID")
     private val applePrivateKey = EnvConfig.get("APPLE_PRIVATE_KEY")
+    private val appleKeysUrl = EnvConfig.get("APPLE_KEYS_URL", "https://appleid.apple.com/auth/keys")
     
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
@@ -127,7 +130,7 @@ class OAuthService {
         }
         
         val redirectUri = "$backendUrl/auth/github/callback"
-        return "https://github.com/login/oauth/authorize?" +
+        return "$githubOauthBaseUrl/login/oauth/authorize?" +
                 "client_id=$githubClientId&" +
                 "redirect_uri=${redirectUri.encodeURLParameter()}&" +
                 "scope=user:email&" +
@@ -140,7 +143,7 @@ class OAuthService {
         }
         
         // Exchange code for access token
-        val tokenResponse: HttpResponse = httpClient.post("https://github.com/login/oauth/access_token") {
+        val tokenResponse: HttpResponse = httpClient.post("$githubOauthBaseUrl/login/oauth/access_token") {
             headers {
                 append(HttpHeaders.Accept, "application/json")
             }
@@ -158,7 +161,7 @@ class OAuthService {
         val accessToken = tokenData.access_token
         
         // Fetch user info
-        val userResponse: HttpResponse = httpClient.get("https://api.github.com/user") {
+        val userResponse: HttpResponse = httpClient.get("$githubApiBaseUrl/user") {
             headers {
                 append(HttpHeaders.Authorization, "Bearer $accessToken")
                 append(HttpHeaders.Accept, "application/json")
@@ -177,7 +180,7 @@ class OAuthService {
         var emailVerified = false
         
         if (email.isNullOrBlank()) {
-            val emailsResponse: HttpResponse = httpClient.get("https://api.github.com/user/emails") {
+            val emailsResponse: HttpResponse = httpClient.get("$githubApiBaseUrl/user/emails") {
                 headers {
                     append(HttpHeaders.Authorization, "Bearer $accessToken")
                     append(HttpHeaders.Accept, "application/json")
@@ -273,7 +276,7 @@ class OAuthService {
     private suspend fun verifyAppleIdToken(idToken: String): com.auth0.jwt.interfaces.DecodedJWT {
         val decoded = JWT.decode(idToken)
         val keyId = decoded.keyId ?: throw IllegalArgumentException("Missing key ID in Apple ID token")
-        val keysResponse: ApplePublicKeys = httpClient.get("https://appleid.apple.com/auth/keys").body()
+        val keysResponse: ApplePublicKeys = httpClient.get(appleKeysUrl).body()
         val key = keysResponse.keys.firstOrNull { it.kid == keyId && it.kty == "RSA" }
             ?: throw IllegalArgumentException("Unable to find Apple signing key")
 

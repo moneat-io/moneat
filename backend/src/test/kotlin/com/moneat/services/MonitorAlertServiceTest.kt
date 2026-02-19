@@ -1,0 +1,113 @@
+package com.moneat.services
+
+import com.moneat.models.AlertSilencePeriods
+import com.moneat.models.CreateSilencePeriodRequest
+import com.moneat.models.Organizations
+import com.moneat.models.Users
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+
+class MonitorAlertServiceTest {
+    private val service = MonitorAlertService()
+
+    companion object {
+        private var dbInitialized = false
+    }
+
+    @BeforeTest
+    fun setupDatabase() {
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_monitor_alert_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            transaction {
+                SchemaUtils.create(
+                    Organizations,
+                    Users,
+                    AlertSilencePeriods
+                )
+            }
+            dbInitialized = true
+        }
+
+        transaction {
+            AlertSilencePeriods.deleteAll()
+            Users.deleteAll()
+            Organizations.deleteAll()
+        }
+    }
+
+    private fun seedOrg(name: String = "Alert Org"): Int = transaction {
+        Organizations.insert {
+            it[Organizations.name] = name
+            it[slug] = name.lowercase().replace(" ", "-")
+        } get Organizations.id
+    }
+
+    private fun seedUser(email: String = "alert-user@moneat.io"): Int = transaction {
+        Users.insert {
+            it[Users.email] = email
+            it[password_hash] = "hash"
+            it[Users.name] = "Alert User"
+            it[email_verified] = true
+        } get Users.id
+    }
+
+    @Test
+    fun `isThresholdTriggered evaluates all supported operators`() {
+        assertTrue(service.isThresholdTriggered(">", 90.0, 80.0))
+        assertTrue(service.isThresholdTriggered("<", 10.0, 20.0))
+        assertTrue(service.isThresholdTriggered(">=", 10.0, 10.0))
+        assertTrue(service.isThresholdTriggered("<=", 10.0, 10.0))
+        assertTrue(service.isThresholdTriggered("==", 42.0, 42.0))
+
+        assertFalse(service.isThresholdTriggered(">", 5.0, 10.0))
+        assertFalse(service.isThresholdTriggered("invalid", 5.0, 10.0))
+    }
+
+    @Test
+    fun `isThrottledByInterval enforces minimum alert interval`() {
+        val now = Clock.System.now()
+
+        assertFalse(service.isThrottledByInterval(lastTriggeredAt = null, now = now))
+        assertTrue(service.isThrottledByInterval(lastTriggeredAt = now - 5.minutes, now = now))
+        assertFalse(service.isThrottledByInterval(lastTriggeredAt = now - 20.minutes, now = now))
+    }
+
+    @Test
+    fun `silence period lifecycle create list delete`() {
+        val orgId = seedOrg()
+        val userId = seedUser()
+        val nowMs = Clock.System.now().toEpochMilliseconds()
+
+        val created = service.createSilencePeriod(
+            organizationId = orgId,
+            userId = userId,
+            request = CreateSilencePeriodRequest(
+                reason = "Maintenance window",
+                startsAt = nowMs - 60_000,
+                endsAt = nowMs + 60_000
+            )
+        )
+
+        assertTrue(service.isAnySilenceActive(orgId))
+        val listed = service.listSilencePeriods(orgId)
+        assertEquals(1, listed.size)
+        assertEquals(created.id, listed.first().id)
+        assertEquals("Maintenance window", listed.first().reason)
+
+        assertTrue(service.deleteSilencePeriod(created.id, orgId))
+        assertFalse(service.isAnySilenceActive(orgId))
+    }
+}

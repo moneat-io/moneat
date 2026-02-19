@@ -59,4 +59,16 @@ class IngestRoutesAuthParsingTest {
 
         assertNull(key)
     }
+
+    @Test
+    fun `extractPublicKeyFromDsn parses DSN auth header`() {
+        val key = extractPublicKeyFromDsn("DSN https://abc123def@o1.ingest.sentry.io/42")
+        assertEquals("abc123def", key)
+    }
+
+    @Test
+    fun `extractPublicKeyFromDsn returns null for invalid DSN format`() {
+        val key = extractPublicKeyFromDsn("Bearer token")
+        assertNull(key)
+    }
 }

@@ -69,32 +69,41 @@ class IngestionWorker(
                 // BRPOP block with 5s timeout so we can check isActive periodically
                 val result = RedisConfig.syncBlocking().brpop(5, queueKey)
                 val value = result?.value ?: continue
-
-                try {
-                    val (projectId, envelopeBytes) = decodeMessage(value)
-
-                    SentryUtils.breadcrumb("ingestion", "Processing envelope", mapOf(
-                        "project_id" to projectId,
-                        "size_bytes" to envelopeBytes.size
-                    ))
-
-                    val envelope = SentryEnvelope.parse(envelopeBytes)
-                    eventService.processEnvelope(projectId, envelope)
-                } catch (e: Exception) {
-                    logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
-                    RedisConfig.syncBlocking().rpush(dlqKey, value)
-
-                    Sentry.captureException(e) { scope ->
-                        scope.setTag("worker.operation", "process_message")
-                        scope.setTag("worker.id", workerId.toString())
-                        scope.setExtra("queue", queueKey)
-                    }
+                processMessageForTest(workerId, value) { message ->
+                    RedisConfig.syncBlocking().rpush(dlqKey, message)
                 }
             } catch (e: CancellationException) {
                 break
             } catch (e: Exception) {
                 logger.error(e) { "Worker $workerId error in BRPOP loop" }
                 delay(1000)
+            }
+        }
+    }
+
+    internal suspend fun processMessageForTest(
+        workerId: Int,
+        value: String,
+        onDlq: (String) -> Unit = { message -> RedisConfig.syncBlocking().rpush(dlqKey, message) }
+    ) {
+        try {
+            val (projectId, envelopeBytes) = decodeMessage(value)
+
+            SentryUtils.breadcrumb("ingestion", "Processing envelope", mapOf(
+                "project_id" to projectId,
+                "size_bytes" to envelopeBytes.size
+            ))
+
+            val envelope = SentryEnvelope.parse(envelopeBytes)
+            eventService.processEnvelope(projectId, envelope)
+        } catch (e: Exception) {
+            logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
+            onDlq(value)
+
+            Sentry.captureException(e) { scope ->
+                scope.setTag("worker.operation", "process_message")
+                scope.setTag("worker.id", workerId.toString())
+                scope.setExtra("queue", queueKey)
             }
         }
     }

@@ -510,6 +510,7 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.payg_used_units] = 500
                 it[Subscriptions.payg_used_micros] = 200000000
                 it[Subscriptions.status] = "past_due"
+                it[Subscriptions.billing_grace_until] = Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
             }
         }
         
@@ -530,6 +531,7 @@ class StripeServiceWebhookTest {
             assertEquals(0L, record[Subscriptions.payg_used_units])
             assertEquals(0L, record[Subscriptions.payg_used_micros])
             assertEquals(0L, record[Subscriptions.pending_meter_units])
+            assertEquals(null, record[Subscriptions.billing_grace_until])
         }
     }
 
@@ -603,6 +605,41 @@ class StripeServiceWebhookTest {
                 .firstOrNull()
             assertEquals("canceled", canceled?.get(Subscriptions.status))
         }
+    }
+
+    @Test
+    fun `applyDunningDowngrade cancels expired past due subscription and creates free replacement`() {
+        val expiredGrace = Instant.fromEpochSeconds(Clock.System.now().epochSeconds - 86_400)
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.status] = "past_due"
+                it[Subscriptions.billing_grace_until] = expiredGrace
+            }
+        }
+
+        val downgradedCount = stripeService.applyDunningDowngrade()
+
+        assertEquals(1, downgradedCount)
+        transaction {
+            val original = Subscriptions.selectAll()
+                .where { Subscriptions.id eq testSubId }
+                .firstOrNull()
+            assertNotNull(original)
+            assertEquals("canceled", original[Subscriptions.status])
+
+            val replacement = Subscriptions.selectAll().where {
+                (Subscriptions.organization_id eq testOrgId) and
+                    (Subscriptions.plan eq "free") and
+                    (Subscriptions.status eq "active")
+            }.toList()
+            assertTrue(replacement.isNotEmpty(), "Expected an active free replacement subscription")
+        }
+    }
+
+    @Test
+    fun `flushPendingMeteredUsage returns zero when Stripe integration is disabled`() {
+        val flushed = stripeService.flushPendingMeteredUsage()
+        assertEquals(0, flushed)
     }
 
     @Test
