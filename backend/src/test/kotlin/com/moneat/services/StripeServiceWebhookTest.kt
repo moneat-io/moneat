@@ -293,18 +293,11 @@ class StripeServiceWebhookTest {
 
         // Count records - should only be 1
         transaction {
-            <<<<<<< HEAD
             val count =
                 StripeWebhookEvents
                     .selectAll()
                     .where { StripeWebhookEvents.event_id eq eventId }
                     .count()
-
-            assertEquals(1, count, "Should have exactly 1 record for duplicate event (due to unique constraint)")
-            === === =
-            val count = StripeWebhookEvents.selectAll()
-                .where { StripeWebhookEvents.event_id eq eventId }
-                .count()
 
             assertEquals(1, count, "Should have exactly 1 record for duplicate event")
         }
@@ -325,7 +318,6 @@ class StripeServiceWebhookTest {
             val rows = StripeWebhookEvents.selectAll().where { StripeWebhookEvents.event_id eq eventId }.toList()
             assertEquals(1, rows.size, "Status transitions should update existing row, not create new rows")
             assertEquals("processed", rows.first()[StripeWebhookEvents.status])
-            >>>>>>> billing - fixes
         }
     }
 
@@ -993,17 +985,9 @@ class StripeServiceWebhookTest {
         subscription.id = subscriptionId
         subscription.customer = customerId
         subscription.status = status
-        <<<<<<< HEAD
-        subscription.startDate = System.currentTimeMillis() / 1000
-        subscription.trialEnd = (System.currentTimeMillis() / 1000) + 1296000 // 15 days
-
-        // Mock empty items collection
-        === === =
         subscription.startDate = startDate ?: nowEpoch
         subscription.trialEnd = trialEnd ?: (nowEpoch + 1296000) // 15 days
 
-        // Mock items collection (with optional billing period hints)
-        >>>>>>> billing - fixes
         val itemsCollection = com.stripe.model.SubscriptionItemCollection()
         if (itemPeriodStart != null || itemPeriodEnd != null) {
             val item = com.stripe.model.SubscriptionItem()
