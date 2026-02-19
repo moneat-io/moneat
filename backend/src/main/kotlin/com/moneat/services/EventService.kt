@@ -48,6 +48,7 @@ class EventService(private val notificationService: NotificationService? = null)
 
     // In-memory caches for hot-path lookups (project keys & org IDs rarely change)
     private data class CachedEntry<T>(val value: T, val expiresAt: Long)
+
     private val projectKeyCache = ConcurrentHashMap<String, CachedEntry<ProjectKeyVerification>>()
     private val orgIdCache = ConcurrentHashMap<Long, CachedEntry<Int?>>()
     private val knownIssueIds = ConcurrentHashMap.newKeySet<String>()
@@ -60,20 +61,27 @@ class EventService(private val notificationService: NotificationService? = null)
 
     data class ProjectKeyVerification(val isValid: Boolean, val platformTarget: String?)
 
-    fun verifyProjectKey(projectId: Long, publicKey: String): ProjectKeyVerification {
+    fun verifyProjectKey(
+        projectId: Long,
+        publicKey: String
+    ): ProjectKeyVerification {
         val cacheKey = "$projectId:$publicKey"
         val now = System.currentTimeMillis()
         projectKeyCache[cacheKey]?.let { if (it.expiresAt > now) return it.value }
 
-        val result = transaction {
-            ProjectKeys.selectAll().where {
-                (ProjectKeys.project_id eq projectId) and
-                    (ProjectKeys.public_key eq publicKey) and
-                    (ProjectKeys.is_active eq true)
-            }.firstOrNull()?.let { row ->
-                ProjectKeyVerification(true, row[ProjectKeys.platform_target])
-            } ?: ProjectKeyVerification(false, null)
-        }
+        val result =
+            transaction {
+                ProjectKeys
+                    .selectAll()
+                    .where {
+                        (ProjectKeys.project_id eq projectId) and
+                            (ProjectKeys.public_key eq publicKey) and
+                            (ProjectKeys.is_active eq true)
+                    }.firstOrNull()
+                    ?.let { row ->
+                        ProjectKeyVerification(true, row[ProjectKeys.platform_target])
+                    } ?: ProjectKeyVerification(false, null)
+            }
         projectKeyCache[cacheKey] = CachedEntry(result, now + CACHE_TTL_MS)
         return result
     }
@@ -82,16 +90,22 @@ class EventService(private val notificationService: NotificationService? = null)
         val now = System.currentTimeMillis()
         orgIdCache[projectId]?.let { if (it.expiresAt > now) return it.value }
 
-        val result = transaction {
-            Projects.selectAll().where { Projects.id eq projectId }
-                .firstOrNull()
-                ?.get(Projects.organization_id)
-        }
+        val result =
+            transaction {
+                Projects
+                    .selectAll()
+                    .where { Projects.id eq projectId }
+                    .firstOrNull()
+                    ?.get(Projects.organization_id)
+            }
         orgIdCache[projectId] = CachedEntry(result, now + CACHE_TTL_MS)
         return result
     }
 
-    suspend fun processEnvelope(projectId: Long, envelope: SentryEnvelope) {
+    suspend fun processEnvelope(
+        projectId: Long,
+        envelope: SentryEnvelope
+    ) {
         var lastReplayId: String? = null
         var lastSegmentId: Int = 0
         for (item in envelope.items) {
@@ -103,16 +117,19 @@ class EventService(private val notificationService: NotificationService? = null)
                     storeEvent(projectId, event)
                     recordUsage(projectId, "error", item)
                 }
+
                 "transaction" -> {
                     logger.debug { "Transaction payload: ${item.payload.take(500)}" }
                     val transaction = parseTransactionPayload(item.payload)
                     storeTransaction(projectId, transaction)
                     recordUsage(projectId, "transaction", item)
                 }
+
                 "session" -> {
                     // TODO: Handle sessions
                     logger.debug { "Received session (not yet implemented)" }
                 }
+
                 "replay_event" -> {
                     val replayEvent = parseReplayEventPayload(item.payload)
                     lastReplayId = replayEvent.replay_id
@@ -120,6 +137,7 @@ class EventService(private val notificationService: NotificationService? = null)
                     storeReplayEvent(projectId, replayEvent)
                     recordUsage(projectId, "replay", item)
                 }
+
                 "replay_recording" -> {
                     val rid = lastReplayId ?: envelope.eventId
                     storeReplayRecording(projectId, rid, lastSegmentId, item.payload)
@@ -127,25 +145,27 @@ class EventService(private val notificationService: NotificationService? = null)
                     lastReplayId = null
                     lastSegmentId = 0
                 }
+
                 "replay_video" -> {
                     // Mobile replay uses replay_video instead of replay_recording.
                     // The SDK may send a preceding replay_event item (with replay_id & segment_id)
                     // or just a standalone replay_video. Handle both cases.
                     val rid = lastReplayId ?: envelope.eventId
 
-                    val segmentId = if (lastReplayId != null) {
-                        // A replay_event was parsed in this envelope - use its segment_id
-                        lastSegmentId
-                    } else {
-                        // No replay_event - derive segment_id from an in-memory counter.
-                        // Evict stale entries if the map grows too large.
-                        if (replaySegmentCounters.size > 10_000) {
-                            replaySegmentCounters.clear()
+                    val segmentId =
+                        if (lastReplayId != null) {
+                            // A replay_event was parsed in this envelope - use its segment_id
+                            lastSegmentId
+                        } else {
+                            // No replay_event - derive segment_id from an in-memory counter.
+                            // Evict stale entries if the map grows too large.
+                            if (replaySegmentCounters.size > 10_000) {
+                                replaySegmentCounters.clear()
+                            }
+                            replaySegmentCounters
+                                .computeIfAbsent(rid) { AtomicInteger(0) }
+                                .getAndIncrement()
                         }
-                        replaySegmentCounters
-                            .computeIfAbsent(rid) { AtomicInteger(0) }
-                            .getAndIncrement()
-                    }
 
                     // Only create a synthetic replay event for the first segment of a session
                     if (lastReplayId == null && segmentId == 0) {
@@ -157,12 +177,14 @@ class EventService(private val notificationService: NotificationService? = null)
                     lastReplayId = null
                     lastSegmentId = 0
                 }
+
                 "feedback" -> {
                     logger.debug { "Feedback payload: ${item.payload.take(500)}" }
                     val feedback = json.decodeFromString<SentryFeedback>(item.payload)
                     storeFeedback(projectId, feedback)
                     recordUsage(projectId, "feedback", item)
                 }
+
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
                 }
@@ -170,18 +192,28 @@ class EventService(private val notificationService: NotificationService? = null)
         }
     }
 
-    suspend fun processStoreEvent(projectId: Long, body: String) {
+    suspend fun processStoreEvent(
+        projectId: Long,
+        body: String
+    ) {
         val event = json.decodeFromString<SentryEvent>(body)
         storeEvent(projectId, event)
         usageTracker.recordUsage(projectId, "error", body.toByteArray(StandardCharsets.UTF_8).size)
     }
 
-    private fun recordUsage(projectId: Long, eventType: String, item: EnvelopeItem) {
+    private fun recordUsage(
+        projectId: Long,
+        eventType: String,
+        item: EnvelopeItem
+    ) {
         val byteSize = item.payloadBytes?.size ?: item.payload.toByteArray(StandardCharsets.UTF_8).size
         usageTracker.recordUsage(projectId, eventType, byteSize)
     }
 
-    private suspend fun storeTransaction(projectId: Long, transaction: SentryTransaction) {
+    private suspend fun storeTransaction(
+        projectId: Long,
+        transaction: SentryTransaction
+    ) {
         val rawEventId = transaction.event_id ?: UUID.randomUUID().toString()
         val eventId = normalizeUuid(rawEventId)
         val traceContext = transaction.contexts?.get("trace") as? JsonObject
@@ -198,7 +230,8 @@ class EventService(private val notificationService: NotificationService? = null)
         val request = transaction.request?.toString() ?: "{}"
         val message = transaction.transaction ?: transactionOp.ifBlank { "transaction" }
 
-        val transactionInsert = """
+        val transactionInsert =
+            """
             INSERT INTO $clickhouseDb.events (
                 event_id, project_id, timestamp, event_type, level,
                 message, platform, environment, release, dist, server_name,
@@ -238,7 +271,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 '${escapeSql(transaction.sdk?.name ?: "")}',
                 '${escapeSql(transaction.sdk?.version ?: "")}'
             )
-        """.trimIndent()
+            """.trimIndent()
 
         try {
             val transactionResponse = ClickHouseClient.execute(transactionInsert)
@@ -251,20 +284,21 @@ class EventService(private val notificationService: NotificationService? = null)
 
             val spans = transaction.spans.orEmpty()
             if (spans.isNotEmpty()) {
-                val spanRows = spans.mapNotNull { span ->
-                    val spanStart = span.start_timestamp ?: transaction.start_timestamp
-                    val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
-                    if (spanStart == null || spanEnd == null) return@mapNotNull null
+                val spanRows =
+                    spans.mapNotNull { span ->
+                        val spanStart = span.start_timestamp ?: transaction.start_timestamp
+                        val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
+                        if (spanStart == null || spanEnd == null) return@mapNotNull null
 
-                    val spanStartMs = unixSecondsToMillis(spanStart)
-                    val spanEndMs = unixSecondsToMillis(spanEnd)
-                    val spanDurationMs = durationMs(spanStart, spanEnd)
-                    val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
-                    val parentSpanId = span.parent_span_id ?: ""
-                    val spanTraceId = span.trace_id ?: traceId
-                    val spanData = span.data?.toString() ?: "{}"
+                        val spanStartMs = unixSecondsToMillis(spanStart)
+                        val spanEndMs = unixSecondsToMillis(spanEnd)
+                        val spanDurationMs = durationMs(spanStart, spanEnd)
+                        val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
+                        val parentSpanId = span.parent_span_id ?: ""
+                        val spanTraceId = span.trace_id ?: traceId
+                        val spanData = span.data?.toString() ?: "{}"
 
-                    """
+                        """
                         (
                             '${escapeSql(spanId)}',
                             '${escapeSql(parentSpanId)}',
@@ -280,17 +314,18 @@ class EventService(private val notificationService: NotificationService? = null)
                             ${tagsToMap(span.tags)},
                             '${escapeSql(spanData)}'
                         )
-                    """.trimIndent()
-                }
+                        """.trimIndent()
+                    }
 
                 if (spanRows.isNotEmpty()) {
-                    val spansInsert = """
+                    val spansInsert =
+                        """
                         INSERT INTO $clickhouseDb.spans (
                             span_id, parent_span_id, trace_id, transaction_id, project_id,
                             op, description, start_timestamp, end_timestamp, duration_ms, status, tags, data
                         ) VALUES
                         ${spanRows.joinToString(",\n")}
-                    """.trimIndent()
+                        """.trimIndent()
 
                     val spansResponse = ClickHouseClient.execute(spansInsert)
 
@@ -304,10 +339,11 @@ class EventService(private val notificationService: NotificationService? = null)
             logger.info { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
 
             // Detect ai.* spans and cross-insert into llm_generations
-            val aiSpans = spans.filter { span ->
-                val op = span.op ?: ""
-                op.startsWith("ai.")
-            }
+            val aiSpans =
+                spans.filter { span ->
+                    val op = span.op ?: ""
+                    op.startsWith("ai.")
+                }
             if (aiSpans.isNotEmpty()) {
                 insertAiSpansAsLlmGenerations(projectId, traceId, transaction, aiSpans)
             }
@@ -324,7 +360,10 @@ class EventService(private val notificationService: NotificationService? = null)
         }
     }
 
-    private suspend fun storeEvent(projectId: Long, event: SentryEvent) {
+    private suspend fun storeEvent(
+        projectId: Long,
+        event: SentryEvent
+    ) {
         val eventId = event.event_id ?: UUID.randomUUID().toString()
 
         logger.debug {
@@ -335,11 +374,12 @@ class EventService(private val notificationService: NotificationService? = null)
         val timestamp = event.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
 
         // Generate issue ID from fingerprint
-        val fingerprint = if (event.fingerprint.isNullOrEmpty()) {
-            generateFingerprint(event)
-        } else {
-            event.fingerprint
-        }
+        val fingerprint =
+            if (event.fingerprint.isNullOrEmpty()) {
+                generateFingerprint(event)
+            } else {
+                event.fingerprint
+            }
         logger.debug { "Generated fingerprint: $fingerprint" }
         val issueId = generateIssueId(fingerprint)
         logger.debug { "Generated issue ID: $issueId" }
@@ -359,9 +399,10 @@ class EventService(private val notificationService: NotificationService? = null)
         val eventLevel = if (isCrash && event.level == null) "fatal" else (event.level ?: "error")
 
         // Encode full exception with stack trace
-        val stackTrace = event.exception?.let {
-            Json.encodeToString(ExceptionInfo.serializer(), it)
-        } ?: ""
+        val stackTrace =
+            event.exception?.let {
+                Json.encodeToString(ExceptionInfo.serializer(), it)
+            } ?: ""
 
         // Extract contexts
         val contexts = event.contexts?.toString() ?: "{}"
@@ -369,7 +410,8 @@ class EventService(private val notificationService: NotificationService? = null)
         val request = event.request?.toString() ?: "{}"
 
         // Build ClickHouse insert query
-        val query = """
+        val query =
+            """
             INSERT INTO $clickhouseDb.events (
                 event_id, project_id, timestamp, event_type, level,
                 message, platform, environment, release, dist, server_name,
@@ -405,7 +447,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 '${escapeSql(event.sdk?.name ?: "")}',
                 '${escapeSql(event.sdk?.version ?: "")}'
             )
-        """.trimIndent()
+            """.trimIndent()
 
         try {
             val response = ClickHouseClient.execute(query)
@@ -439,7 +481,10 @@ class EventService(private val notificationService: NotificationService? = null)
         }
     }
 
-    private suspend fun storeFeedback(projectId: Long, feedback: SentryFeedback) {
+    private suspend fun storeFeedback(
+        projectId: Long,
+        feedback: SentryFeedback
+    ) {
         // Validate project ID — allow negative demo project IDs (-1, -2, -3)
         if (projectId == 0L) {
             logger.error { "Invalid projectId $projectId for feedback, skipping insert" }
@@ -447,14 +492,17 @@ class EventService(private val notificationService: NotificationService? = null)
         }
 
         val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
-        val timestamp = feedback.timestamp?.let {
-            try {
-                java.time.Instant.parse(it).toEpochMilli()
-            } catch (e: Exception) {
-                logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
-                System.currentTimeMillis()
-            }
-        } ?: System.currentTimeMillis()
+        val timestamp =
+            feedback.timestamp?.let {
+                try {
+                    java.time.Instant
+                        .parse(it)
+                        .toEpochMilli()
+                } catch (e: Exception) {
+                    logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
+                    System.currentTimeMillis()
+                }
+            } ?: System.currentTimeMillis()
 
         val feedbackContext = feedback.contexts?.get("feedback") as? JsonObject
         val message = feedbackContext?.get("message")?.jsonPrimitive?.contentOrNull ?: ""
@@ -469,7 +517,8 @@ class EventService(private val notificationService: NotificationService? = null)
         val userUsername = feedback.user?.username ?: ""
         val userIpAddress = feedback.user?.ip_address ?: ""
 
-        val insertQuery = """
+        val insertQuery =
+            """
             INSERT INTO $clickhouseDb.user_feedback (
                 feedback_id, project_id, timestamp, message, contact_email, name, url,
                 associated_event_id, replay_id, environment, release, platform,
@@ -497,7 +546,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 ${tagsToMap(feedback.tags)},
                 'unresolved'
             )
-        """.trimIndent()
+            """.trimIndent()
 
         try {
             val response = ClickHouseClient.execute(insertQuery)
@@ -512,7 +561,10 @@ class EventService(private val notificationService: NotificationService? = null)
         }
     }
 
-    private suspend fun storeReplayEvent(projectId: Long, replayEvent: SentryReplayEvent) {
+    private suspend fun storeReplayEvent(
+        projectId: Long,
+        replayEvent: SentryReplayEvent
+    ) {
         // Validate project ID — allow negative demo project IDs (-1, -2, -3)
         if (projectId == 0L) {
             logger.error { "Invalid projectId $projectId for replay event, skipping insert" }
@@ -539,13 +591,20 @@ class EventService(private val notificationService: NotificationService? = null)
         val osVersion = os?.get("version")?.jsonPrimitive?.contentOrNull ?: ""
         val deviceName = device?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
         val deviceFamily = device?.get("family")?.jsonPrimitive?.contentOrNull ?: ""
-        val activity = contexts?.get("replay")?.jsonObject?.get("activity")?.jsonPrimitive?.intOrNull ?: 0
+        val activity =
+            contexts
+                ?.get("replay")
+                ?.jsonObject
+                ?.get("activity")
+                ?.jsonPrimitive
+                ?.intOrNull ?: 0
 
         val urlsArray = "[${urls.joinToString(",") { "'${escapeSql(it)}'" }}]"
         val errorIdsArray = "[${errorIds.joinToString(",") { "'${escapeSql(it)}'" }}]"
         val traceIdsArray = "[${traceIds.joinToString(",") { "'${escapeSql(it)}'" }}]"
 
-        val replayEventInsert = """
+        val replayEventInsert =
+            """
             INSERT INTO $clickhouseDb.replay_events (
                 replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
                 urls, error_ids, trace_ids, environment, release, platform,
@@ -579,7 +638,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 $activity,
                 '${escapeSql(tags)}'
             )
-        """.trimIndent()
+            """.trimIndent()
 
         try {
             val response = ClickHouseClient.execute(replayEventInsert)
@@ -594,12 +653,18 @@ class EventService(private val notificationService: NotificationService? = null)
         }
     }
 
-    private suspend fun storeReplayRecording(projectId: Long, replayId: String, segmentId: Int, payload: String) {
+    private suspend fun storeReplayRecording(
+        projectId: Long,
+        replayId: String,
+        segmentId: Int,
+        payload: String
+    ) {
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
         val escapedPayload = escapeSql(payload)
 
-        val recordingInsert = """
+        val recordingInsert =
+            """
             INSERT INTO $clickhouseDb.replay_segments (
                 replay_id, project_id, segment_id, timestamp, recording_data
             ) VALUES (
@@ -609,7 +674,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 fromUnixTimestamp64Milli($timestamp),
                 '$escapedPayload'
             )
-        """.trimIndent()
+            """.trimIndent()
 
         try {
             val response = ClickHouseClient.execute(recordingInsert)
@@ -644,7 +709,8 @@ class EventService(private val notificationService: NotificationService? = null)
         val sdkVersion = ""
         val platform = "android"
 
-        val replayEventInsert = """
+        val replayEventInsert =
+            """
             INSERT INTO $clickhouseDb.replay_events (
                 replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
                 urls, error_ids, trace_ids, environment, release, platform,
@@ -678,7 +744,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 0,
                 '{}'
             )
-        """.trimIndent()
+            """.trimIndent()
 
         try {
             val response = ClickHouseClient.execute(replayEventInsert)
@@ -697,10 +763,11 @@ class EventService(private val notificationService: NotificationService? = null)
         return try {
             json.decodeFromString(payload)
         } catch (original: SerializationException) {
-            val normalizedPayload = normalizeTimestampJsonPayload(
-                payload = payload,
-                timestampKeys = setOf("start_timestamp", "timestamp")
-            ) ?: throw original
+            val normalizedPayload =
+                normalizeTimestampJsonPayload(
+                    payload = payload,
+                    timestampKeys = setOf("start_timestamp", "timestamp")
+                ) ?: throw original
             logger.warn { "Retrying transaction decode after normalizing timestamp fields" }
             try {
                 json.decodeFromString(normalizedPayload)
@@ -714,10 +781,11 @@ class EventService(private val notificationService: NotificationService? = null)
         return try {
             json.decodeFromString(payload)
         } catch (original: SerializationException) {
-            val normalizedPayload = normalizeTimestampJsonPayload(
-                payload = payload,
-                timestampKeys = setOf("timestamp", "replay_start_timestamp")
-            ) ?: throw original
+            val normalizedPayload =
+                normalizeTimestampJsonPayload(
+                    payload = payload,
+                    timestampKeys = setOf("timestamp", "replay_start_timestamp")
+                ) ?: throw original
             logger.warn { "Retrying replay_event decode after normalizing timestamp fields" }
             try {
                 json.decodeFromString(normalizedPayload)
@@ -727,38 +795,51 @@ class EventService(private val notificationService: NotificationService? = null)
         }
     }
 
-    private fun normalizeTimestampJsonPayload(payload: String, timestampKeys: Set<String>): String? {
+    private fun normalizeTimestampJsonPayload(
+        payload: String,
+        timestampKeys: Set<String>
+    ): String? {
         val parsed = runCatching { json.parseToJsonElement(payload) }.getOrNull() ?: return null
         val normalized = normalizeTimestampElement(parsed, timestampKeys)
         if (normalized == parsed) return null
         return normalized.toString()
     }
 
-    private fun normalizeTimestampElement(element: JsonElement, timestampKeys: Set<String>): JsonElement {
+    private fun normalizeTimestampElement(
+        element: JsonElement,
+        timestampKeys: Set<String>
+    ): JsonElement {
         return when (element) {
             is JsonObject -> {
                 var changed = false
-                val normalizedEntries = element.mapValues { (key, value) ->
-                    val normalizedValue = if (key in timestampKeys) {
-                        normalizeTimestampValue(value)
-                    } else {
-                        normalizeTimestampElement(value, timestampKeys)
+                val normalizedEntries =
+                    element.mapValues { (key, value) ->
+                        val normalizedValue =
+                            if (key in timestampKeys) {
+                                normalizeTimestampValue(value)
+                            } else {
+                                normalizeTimestampElement(value, timestampKeys)
+                            }
+                        if (normalizedValue != value) changed = true
+                        normalizedValue
                     }
-                    if (normalizedValue != value) changed = true
-                    normalizedValue
-                }
                 if (!changed) element else JsonObject(normalizedEntries)
             }
+
             is JsonArray -> {
                 var changed = false
-                val normalizedArray = element.map { value ->
-                    val normalizedValue = normalizeTimestampElement(value, timestampKeys)
-                    if (normalizedValue != value) changed = true
-                    normalizedValue
-                }
+                val normalizedArray =
+                    element.map { value ->
+                        val normalizedValue = normalizeTimestampElement(value, timestampKeys)
+                        if (normalizedValue != value) changed = true
+                        normalizedValue
+                    }
                 if (!changed) element else JsonArray(normalizedArray)
             }
-            else -> element
+
+            else -> {
+                element
+            }
         }
     }
 
@@ -786,19 +867,21 @@ class EventService(private val notificationService: NotificationService? = null)
         logger.info { "Total frames: ${firstException?.stacktrace?.frames?.size}" }
 
         // Find the last in_app frame (innermost/actual error location), or fall back to the last frame
-        val relevantFrame = firstException?.stacktrace?.frames?.findLast { it.in_app == true }
-            ?: firstException?.stacktrace?.frames?.lastOrNull()
+        val relevantFrame =
+            firstException?.stacktrace?.frames?.findLast { it.in_app == true }
+                ?: firstException?.stacktrace?.frames?.lastOrNull()
 
         val function = relevantFrame?.function
         val filename = relevantFrame?.filename
 
         logger.info { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.in_app}" }
 
-        val fingerprint = buildList {
-            type?.let { add(it) }
-            function?.let { add(it) }
-            filename?.let { add(it) }
-        }
+        val fingerprint =
+            buildList {
+                type?.let { add(it) }
+                function?.let { add(it) }
+                filename?.let { add(it) }
+            }
 
         logger.info { "Final fingerprint: $fingerprint" }
 
@@ -838,42 +921,48 @@ class EventService(private val notificationService: NotificationService? = null)
         aiSpans: List<SentrySpan>
     ) {
         try {
-            val rows = aiSpans.mapNotNull { span ->
-                val spanStart = span.start_timestamp ?: return@mapNotNull null
-                val spanEnd = span.timestamp ?: return@mapNotNull null
-                val spanDurationMs = durationMs(spanStart, spanEnd)
-                val spanTimestampMs = unixSecondsToMillis(spanEnd)
-                val generationId = UUID.randomUUID().toString()
-                val spanId = span.span_id ?: ""
-                val parentSpanId = span.parent_span_id ?: ""
-                val op = span.op ?: ""
-                val data = span.data
+            val rows =
+                aiSpans.mapNotNull { span ->
+                    val spanStart = span.start_timestamp ?: return@mapNotNull null
+                    val spanEnd = span.timestamp ?: return@mapNotNull null
+                    val spanDurationMs = durationMs(spanStart, spanEnd)
+                    val spanTimestampMs = unixSecondsToMillis(spanEnd)
+                    val generationId = UUID.randomUUID().toString()
+                    val spanId = span.span_id ?: ""
+                    val parentSpanId = span.parent_span_id ?: ""
+                    val op = span.op ?: ""
+                    val data = span.data
 
-                val model = data?.get("ai.model_id")?.jsonPrimitive?.contentOrNull
-                    ?: data?.get("model")?.jsonPrimitive?.contentOrNull ?: ""
-                val provider = data?.get("ai.provider")?.jsonPrimitive?.contentOrNull ?: ""
-                val inputTokens = data?.get("ai.input_tokens")?.jsonPrimitive?.intOrNull
-                    ?: data?.get("ai.prompt_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
-                val outputTokens = data?.get("ai.output_tokens")?.jsonPrimitive?.intOrNull
-                    ?: data?.get("ai.completion_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
-                val totalTokens = data?.get("ai.total_tokens_used")?.jsonPrimitive?.intOrNull
-                    ?: (inputTokens + outputTokens)
-                val input = data?.get("ai.input_messages")?.toString() ?: ""
-                val output = data?.get("ai.responses")?.toString() ?: ""
+                    val model =
+                        data?.get("ai.model_id")?.jsonPrimitive?.contentOrNull
+                            ?: data?.get("model")?.jsonPrimitive?.contentOrNull ?: ""
+                    val provider = data?.get("ai.provider")?.jsonPrimitive?.contentOrNull ?: ""
+                    val inputTokens =
+                        data?.get("ai.input_tokens")?.jsonPrimitive?.intOrNull
+                            ?: data?.get("ai.prompt_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
+                    val outputTokens =
+                        data?.get("ai.output_tokens")?.jsonPrimitive?.intOrNull
+                            ?: data?.get("ai.completion_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
+                    val totalTokens =
+                        data?.get("ai.total_tokens_used")?.jsonPrimitive?.intOrNull
+                            ?: (inputTokens + outputTokens)
+                    val input = data?.get("ai.input_messages")?.toString() ?: ""
+                    val output = data?.get("ai.responses")?.toString() ?: ""
 
-                val type = when {
-                    op.contains("chat_completion") -> "chat"
-                    op.contains("embedding") -> "embedding"
-                    op.contains("tool_call") || op.contains("tool") -> "tool_call"
-                    op.contains("agent") -> "agent"
-                    op.contains("chain") || op.contains("pipeline") -> "chain"
-                    op.contains("retriever") -> "retriever"
-                    else -> "completion"
-                }
+                    val type =
+                        when {
+                            op.contains("chat_completion") -> "chat"
+                            op.contains("embedding") -> "embedding"
+                            op.contains("tool_call") || op.contains("tool") -> "tool_call"
+                            op.contains("agent") -> "agent"
+                            op.contains("chain") || op.contains("pipeline") -> "chain"
+                            op.contains("retriever") -> "retriever"
+                            else -> "completion"
+                        }
 
-                val status = if (span.status == "ok" || span.status == null) "success" else "error"
+                    val status = if (span.status == "ok" || span.status == null) "success" else "error"
 
-                """(
+                    """(
                     toUUID('$generationId'),
                     $projectId,
                     '${escapeSql(traceId)}',
@@ -901,12 +990,13 @@ class EventService(private val notificationService: NotificationService? = null)
                     ${tagsToMap(span.tags)},
                     '{}'
                 )
-                """.trimIndent()
-            }
+                    """.trimIndent()
+                }
 
             if (rows.isEmpty()) return
 
-            val query = """
+            val query =
+                """
                 INSERT INTO $clickhouseDb.llm_generations (
                     generation_id, project_id, trace_id, span_id, parent_span_id,
                     timestamp, duration_ms, name, model, provider, type,
@@ -916,7 +1006,7 @@ class EventService(private val notificationService: NotificationService? = null)
                     user_id, session_id, environment, release, tags, metadata
                 ) VALUES
                 ${rows.joinToString(",\n")}
-            """.trimIndent()
+                """.trimIndent()
 
             val response = ClickHouseClient.execute(query)
             if (!response.status.isSuccess()) {
@@ -938,7 +1028,10 @@ class EventService(private val notificationService: NotificationService? = null)
         return value?.let { unixSecondsToMillis(it) }
     }
 
-    private fun durationMs(start: Double?, end: Double?): Double {
+    private fun durationMs(
+        start: Double?,
+        end: Double?
+    ): Double {
         if (start == null || end == null) return 0.0
         return ((end - start) * 1000.0).coerceAtLeast(0.0)
     }
@@ -956,23 +1049,33 @@ class EventService(private val notificationService: NotificationService? = null)
         return "{${tags.entries.joinToString(",") { "'${escapeSql(it.key)}':'${escapeSql(it.value)}'" }}}"
     }
 
-    private suspend fun isNewIssue(projectId: Long, issueId: String): Boolean {
+    private suspend fun isNewIssue(
+        projectId: Long,
+        issueId: String
+    ): Boolean {
         val cacheKey = "$projectId:$issueId"
         if (cacheKey in knownIssueIds) return false
 
-        val query = """
+        val query =
+            """
             SELECT count() as cnt
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
               AND issue_id = '$issueId'
             FORMAT JSON
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
             val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-            val count = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
-                ?.get("cnt")?.jsonPrimitive?.longOrNull ?: 0
+            val count =
+                jsonResponse["data"]
+                    ?.jsonArray
+                    ?.firstOrNull()
+                    ?.jsonObject
+                    ?.get("cnt")
+                    ?.jsonPrimitive
+                    ?.longOrNull ?: 0
 
             if (count > 1) {
                 // Evict oldest entries if cache grows too large

@@ -53,11 +53,12 @@ class IngestionWorker(
                 "queue" to queueKey
             )
         )
-        jobs = (1..workerCount).map { id ->
-            scope.launch {
-                runWorker(id)
+        jobs =
+            (1..workerCount).map { id ->
+                scope.launch {
+                    runWorker(id)
+                }
             }
-        }
     }
 
     fun stop() {
@@ -127,14 +128,15 @@ class IngestionWorker(
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
             if (bytes.size < 8) throw IllegalArgumentException("Message too short")
-            val projectId = ((bytes[0].toLong() and 0xFF) shl 56) or
-                ((bytes[1].toLong() and 0xFF) shl 48) or
-                ((bytes[2].toLong() and 0xFF) shl 40) or
-                ((bytes[3].toLong() and 0xFF) shl 32) or
-                ((bytes[4].toLong() and 0xFF) shl 24) or
-                ((bytes[5].toLong() and 0xFF) shl 16) or
-                ((bytes[6].toLong() and 0xFF) shl 8) or
-                (bytes[7].toLong() and 0xFF)
+            val projectId =
+                ((bytes[0].toLong() and 0xFF) shl 56) or
+                    ((bytes[1].toLong() and 0xFF) shl 48) or
+                    ((bytes[2].toLong() and 0xFF) shl 40) or
+                    ((bytes[3].toLong() and 0xFF) shl 32) or
+                    ((bytes[4].toLong() and 0xFF) shl 24) or
+                    ((bytes[5].toLong() and 0xFF) shl 16) or
+                    ((bytes[6].toLong() and 0xFF) shl 8) or
+                    (bytes[7].toLong() and 0xFF)
             val envelopeBytes = bytes.copyOfRange(8, bytes.size)
             return projectId to envelopeBytes
         }
@@ -142,7 +144,10 @@ class IngestionWorker(
         /**
          * Encode projectId and envelope bytes for the queue.
          */
-        fun encodeMessage(projectId: Long, envelopeBytes: ByteArray): String {
+        fun encodeMessage(
+            projectId: Long,
+            envelopeBytes: ByteArray
+        ): String {
             val bytes = ByteArray(8 + envelopeBytes.size)
             bytes[0] = (projectId shr 56).toByte()
             bytes[1] = (projectId shr 48).toByte()

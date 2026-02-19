@@ -74,10 +74,11 @@ class StatusPageServiceTest {
             UptimeMonitors.deleteAll()
             Organizations.deleteAll()
 
-            orgId = Organizations.insert {
-                it[name] = "Status Org"
-                it[slug] = "status-org"
-            }[Organizations.id]
+            orgId =
+                Organizations.insert {
+                    it[name] = "Status Org"
+                    it[slug] = "status-org"
+                }[Organizations.id]
         }
     }
 
@@ -111,30 +112,32 @@ class StatusPageServiceTest {
     }
 
     @Test
-    fun `getPublicStatusPage returns null for private pages`() = runBlocking {
-        val service = StatusPageService()
-        service.createStatusPage(
-            organizationId = orgId,
-            request = CreateStatusPageRequest(name = "Private", slug = "private-page", isPublic = false)
-        )
+    fun `getPublicStatusPage returns null for private pages`() =
+        runBlocking {
+            val service = StatusPageService()
+            service.createStatusPage(
+                organizationId = orgId,
+                request = CreateStatusPageRequest(name = "Private", slug = "private-page", isPublic = false)
+            )
 
-        val result = service.getPublicStatusPage("private-page")
-        assertNull(result)
-    }
+            val result = service.getPublicStatusPage("private-page")
+            assertNull(result)
+        }
 
     @Test
-    fun `getPublicStatusPage returns public page with empty monitors and incidents`() = runBlocking {
-        val service = StatusPageService()
-        service.createStatusPage(
-            organizationId = orgId,
-            request = CreateStatusPageRequest(name = "Public", slug = "public-page", isPublic = true)
-        )
+    fun `getPublicStatusPage returns public page with empty monitors and incidents`() =
+        runBlocking {
+            val service = StatusPageService()
+            service.createStatusPage(
+                organizationId = orgId,
+                request = CreateStatusPageRequest(name = "Public", slug = "public-page", isPublic = true)
+            )
 
-        val result = service.getPublicStatusPage("public-page")
-        assertNotNull(result)
-        assertEquals("Public", result.name)
-        assertEquals(0, result.monitors.size)
-        assertEquals(0, result.activeIncidents.size)
-        assertEquals(0, result.scheduledMaintenance.size)
-    }
+            val result = service.getPublicStatusPage("public-page")
+            assertNotNull(result)
+            assertEquals("Public", result.name)
+            assertEquals(0, result.monitors.size)
+            assertEquals(0, result.activeIncidents.size)
+            assertEquals(0, result.scheduledMaintenance.size)
+        }
 }

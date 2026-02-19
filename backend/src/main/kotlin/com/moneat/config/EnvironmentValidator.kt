@@ -47,7 +47,10 @@ class EnvironmentValidator {
         return ValidationResult(errors.isEmpty(), errors, warnings)
     }
 
-    private fun validateCriticalSecret(envVar: String, errors: MutableList<String>) {
+    private fun validateCriticalSecret(
+        envVar: String,
+        errors: MutableList<String>
+    ) {
         val value = getConfigValue(envVar)
 
         if (value.isNullOrBlank()) {
@@ -55,7 +58,11 @@ class EnvironmentValidator {
         }
     }
 
-    private fun validateProductionUrl(envVar: String, errors: MutableList<String>, warnings: MutableList<String>) {
+    private fun validateProductionUrl(
+        envVar: String,
+        errors: MutableList<String>,
+        warnings: MutableList<String>
+    ) {
         val value = getConfigValue(envVar)
 
         if (value.isNullOrBlank()) {
@@ -105,7 +112,11 @@ class EnvironmentValidator {
         }
     }
 
-    private fun validateRequired(envVar: String, reason: String, errors: MutableList<String>) {
+    private fun validateRequired(
+        envVar: String,
+        reason: String,
+        errors: MutableList<String>
+    ) {
         val value = getConfigValue(envVar)
         if (value.isNullOrBlank()) {
             errors.add("REQUIRED: $envVar is not set, but it's required because $reason.")

@@ -88,35 +88,39 @@ class AiChatRoutesTest {
     }
 
     @Test
-    fun `chat endpoint rejects non-admin user before org lookup`() = testApplication {
-        application {
-            install(ContentNegotiation) { json() }
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256(jwtSecret))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+    fun `chat endpoint rejects non-admin user before org lookup`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
+                routing { aiChatRoutes() }
             }
-            routing { aiChatRoutes() }
-        }
 
-        val response = client.post("/v1/ai/chat") {
-            header(HttpHeaders.Authorization, "Bearer ${tokenForUser(101)}")
-            contentType(ContentType.Application.Json)
-            setBody("""{"message":"hello"}""")
-        }
+            val response =
+                client.post("/v1/ai/chat") {
+                    header(HttpHeaders.Authorization, "Bearer ${tokenForUser(101)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"message":"hello"}""")
+                }
 
-        assertEquals(HttpStatusCode.Forbidden, response.status)
-        assertTrue(response.bodyAsText().contains("admin users"))
-    }
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("admin users"))
+        }
 
     private fun tokenForUser(userId: Int): String {
-        return JWT.create()
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)

@@ -72,12 +72,13 @@ class RefreshTokenServiceTest {
     fun `generateRefreshToken persists hashed token and access token claims`() {
         val (userId, orgId) = createUserWithMembership()
 
-        val response = refreshTokenService.generateRefreshToken(
-            userId = userId,
-            email = "user@test.com",
-            orgId = orgId,
-            orgRole = "owner"
-        )
+        val response =
+            refreshTokenService.generateRefreshToken(
+                userId = userId,
+                email = "user@test.com",
+                orgId = orgId,
+                orgRole = "owner"
+            )
 
         assertTrue(response.refreshToken.isNotBlank())
         assertTrue(response.accessToken.isNotBlank())
@@ -181,27 +182,30 @@ class RefreshTokenServiceTest {
         }
     }
 
-    private fun createUserWithMembership(email: String = "user@test.com"): Pair<Int, Int> = transaction {
-        val userId = Users.insert {
-            it[Users.email] = email
-            it[Users.password_hash] = "hash"
-            it[Users.name] = "Test User"
-            it[Users.email_verified] = true
-        } get Users.id
+    private fun createUserWithMembership(email: String = "user@test.com"): Pair<Int, Int> =
+        transaction {
+            val userId =
+                Users.insert {
+                    it[Users.email] = email
+                    it[Users.password_hash] = "hash"
+                    it[Users.name] = "Test User"
+                    it[Users.email_verified] = true
+                } get Users.id
 
-        val orgId = Organizations.insert {
-            it[Organizations.name] = "Test Org"
-            it[Organizations.slug] = "test-org-$userId"
-        } get Organizations.id
+            val orgId =
+                Organizations.insert {
+                    it[Organizations.name] = "Test Org"
+                    it[Organizations.slug] = "test-org-$userId"
+                } get Organizations.id
 
-        Memberships.insert {
-            it[user_id] = userId
-            it[organization_id] = orgId
-            it[role] = "owner"
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+
+            userId to orgId
         }
-
-        userId to orgId
-    }
 
     private fun sha256(value: String): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256")

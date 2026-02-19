@@ -83,16 +83,18 @@ class BillingBackgroundServiceTest {
         }
 
         transaction {
-            testOrgId = Organizations.insert {
-                it[name] = "Billing Org"
-                it[slug] = "billing-org"
-            }[Organizations.id]
+            testOrgId =
+                Organizations.insert {
+                    it[name] = "Billing Org"
+                    it[slug] = "billing-org"
+                }[Organizations.id]
 
-            val ownerId = Users.insert {
-                it[email] = "owner@moneat.test"
-                it[password_hash] = "hash"
-                it[name] = "Owner"
-            }[Users.id]
+            val ownerId =
+                Users.insert {
+                    it[email] = "owner@moneat.test"
+                    it[password_hash] = "hash"
+                    it[name] = "Owner"
+                }[Users.id]
 
             Memberships.insert {
                 it[user_id] = ownerId
@@ -100,54 +102,55 @@ class BillingBackgroundServiceTest {
                 it[role] = "owner"
             }
 
-            val tierId = PricingTierConfigs.insert {
-                it[tier_name] = "PRO"
-                it[version] = 1
-                it[monthly_unit_limit] = 1000
-                it[monthly_error_limit] = 1000
-                it[monthly_transaction_limit] = 0
-                it[monthly_replay_limit] = 0
-                it[monthly_feedback_limit] = 0
-                it[monthly_llm_event_limit] = 0
-                it[monthly_gb_limit] = 10
-                it[retention_days] = 30
-                it[log_retention_days] = 30
-                it[replay_retention_days] = 30
-                it[llm_retention_days] = 30
-                it[status_pages_enabled] = true
-                it[status_page_custom_domain_enabled] = true
-                it[session_replay_enabled] = true
-                it[slack_enabled] = false
-                it[discord_enabled] = false
-                it[incident_io_enabled] = false
-                it[saml_enabled] = false
-                it[oidc_enabled] = false
-                it[priority_support_enabled] = false
-                it[sla_enabled] = false
-                it[custom_retention_enabled] = false
-                it[max_projects] = 10
-                it[max_systems] = 10
-                it[monitor_interval_seconds] = 60
-                it[monthly_price_cents] = 2900
-                it[yearly_price_cents] = 28800
-                it[trial_days] = 14
-                it[payg_enabled] = true
-                it[payg_rate_micros_per_unit] = 400_000
-                it[overage_rate_cents_per_gb] = 40
-                it[error_overage_rate_cents_per_1k] = 10
-                it[replay_overage_rate_cents_per_gb] = 40
-                it[llm_overage_rate_cents_per_1k] = 100
-                it[oncall_per_user_monthly_cents] = 500
-                it[oncall_per_user_yearly_cents] = 5000
-                it[oncall_enabled] = true
-                it[stripe_base_price_id] = null
-                it[stripe_overage_price_id] = null
-                it[stripe_yearly_base_price_id] = null
-                it[stripe_yearly_overage_price_id] = null
-                it[stripe_oncall_price_id] = null
-                it[stripe_oncall_yearly_price_id] = null
-                it[is_current] = true
-            }[PricingTierConfigs.id]
+            val tierId =
+                PricingTierConfigs.insert {
+                    it[tier_name] = "PRO"
+                    it[version] = 1
+                    it[monthly_unit_limit] = 1000
+                    it[monthly_error_limit] = 1000
+                    it[monthly_transaction_limit] = 0
+                    it[monthly_replay_limit] = 0
+                    it[monthly_feedback_limit] = 0
+                    it[monthly_llm_event_limit] = 0
+                    it[monthly_gb_limit] = 10
+                    it[retention_days] = 30
+                    it[log_retention_days] = 30
+                    it[replay_retention_days] = 30
+                    it[llm_retention_days] = 30
+                    it[status_pages_enabled] = true
+                    it[status_page_custom_domain_enabled] = true
+                    it[session_replay_enabled] = true
+                    it[slack_enabled] = false
+                    it[discord_enabled] = false
+                    it[incident_io_enabled] = false
+                    it[saml_enabled] = false
+                    it[oidc_enabled] = false
+                    it[priority_support_enabled] = false
+                    it[sla_enabled] = false
+                    it[custom_retention_enabled] = false
+                    it[max_projects] = 10
+                    it[max_systems] = 10
+                    it[monitor_interval_seconds] = 60
+                    it[monthly_price_cents] = 2900
+                    it[yearly_price_cents] = 28800
+                    it[trial_days] = 14
+                    it[payg_enabled] = true
+                    it[payg_rate_micros_per_unit] = 400_000
+                    it[overage_rate_cents_per_gb] = 40
+                    it[error_overage_rate_cents_per_1k] = 10
+                    it[replay_overage_rate_cents_per_gb] = 40
+                    it[llm_overage_rate_cents_per_1k] = 100
+                    it[oncall_per_user_monthly_cents] = 500
+                    it[oncall_per_user_yearly_cents] = 5000
+                    it[oncall_enabled] = true
+                    it[stripe_base_price_id] = null
+                    it[stripe_overage_price_id] = null
+                    it[stripe_yearly_base_price_id] = null
+                    it[stripe_yearly_overage_price_id] = null
+                    it[stripe_oncall_price_id] = null
+                    it[stripe_oncall_yearly_price_id] = null
+                    it[is_current] = true
+                }[PricingTierConfigs.id]
 
             val now = Clock.System.now()
             val periodStart = now.toLocalDateTime(TimeZone.UTC).date
@@ -196,10 +199,12 @@ class BillingBackgroundServiceTest {
         invokeQuotaNotificationPass(service)
 
         transaction {
-            val types = QuotaNotificationsSent.selectAll()
-                .where { QuotaNotificationsSent.organization_id eq testOrgId }
-                .map { it[QuotaNotificationsSent.notification_type] }
-                .toSet()
+            val types =
+                QuotaNotificationsSent
+                    .selectAll()
+                    .where { QuotaNotificationsSent.organization_id eq testOrgId }
+                    .map { it[QuotaNotificationsSent.notification_type] }
+                    .toSet()
 
             assertEquals(3, types.size)
             assertTrue("base_80" in types)

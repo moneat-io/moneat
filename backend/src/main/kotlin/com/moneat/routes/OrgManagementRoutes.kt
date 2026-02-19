@@ -62,8 +62,9 @@ fun Route.orgManagementRoutes() {
                 val principal = call.principal<JWTPrincipal>()!!
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.payload.getClaim("orgId").asInt()
-                val targetUserId = call.parameters["userId"]?.toIntOrNull()
-                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
+                val targetUserId =
+                    call.parameters["userId"]?.toIntOrNull()
+                        ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
 
                 val request = call.receive<UpdateMemberRoleRequest>()
 
@@ -76,8 +77,9 @@ fun Route.orgManagementRoutes() {
                 val principal = call.principal<JWTPrincipal>()!!
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.payload.getClaim("orgId").asInt()
-                val targetUserId = call.parameters["userId"]?.toIntOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
+                val targetUserId =
+                    call.parameters["userId"]?.toIntOrNull()
+                        ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
 
                 membershipService.removeMember(orgId, targetUserId, requestingUserId)
                 call.respond(HttpStatusCode.OK, BooleanResponse(true))
@@ -123,8 +125,9 @@ fun Route.orgManagementRoutes() {
             delete("/invitations/{invitationId}") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
-                val invitationId = call.parameters["invitationId"]?.toIntOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
+                val invitationId =
+                    call.parameters["invitationId"]?.toIntOrNull()
+                        ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
 
                 invitationService.revokeInvitation(invitationId, userId)
                 call.respond(HttpStatusCode.OK, BooleanResponse(true))
@@ -134,8 +137,9 @@ fun Route.orgManagementRoutes() {
             post("/invitations/{invitationId}/resend") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
-                val invitationId = call.parameters["invitationId"]?.toIntOrNull()
-                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
+                val invitationId =
+                    call.parameters["invitationId"]?.toIntOrNull()
+                        ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
 
                 invitationService.resendInvitation(invitationId, userId)
                 call.respond(HttpStatusCode.OK, BooleanResponse(true))
@@ -155,8 +159,9 @@ fun Route.orgManagementRoutes() {
 
         // Get invitation details (no auth required)
         get("/invitations/details") {
-            val token = call.request.queryParameters["token"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Token required"))
+            val token =
+                call.request.queryParameters["token"]
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Token required"))
 
             val details = invitationService.getInvitationDetails(token)
             call.respond(details)

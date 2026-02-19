@@ -155,9 +155,10 @@ class AuthServiceEmailVerificationTest {
             )
         }
 
-        val error = assertFailsWith<IllegalArgumentException> {
-            authService.resendVerificationEmail("verified@example.com")
-        }
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                authService.resendVerificationEmail("verified@example.com")
+            }
 
         assertTrue(error.message?.contains("already verified", ignoreCase = true) == true)
     }

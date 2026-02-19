@@ -27,26 +27,28 @@ import kotlin.test.assertTrue
 
 class LlmIngestRoutesTest {
     @Test
-    fun `llm ingest returns bad request for invalid project id`() = testApplication {
-        application {
-            routing { llmIngestRoutes() }
+    fun `llm ingest returns bad request for invalid project id`() =
+        testApplication {
+            application {
+                routing { llmIngestRoutes() }
+            }
+
+            val response = client.post("/api/not-a-project/llm/")
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid project ID"))
         }
-
-        val response = client.post("/api/not-a-project/llm/")
-
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("Invalid project ID"))
-    }
 
     @Test
-    fun `llm ingest returns unauthorized when authentication is missing`() = testApplication {
-        application {
-            routing { llmIngestRoutes() }
+    fun `llm ingest returns unauthorized when authentication is missing`() =
+        testApplication {
+            application {
+                routing { llmIngestRoutes() }
+            }
+
+            val response = client.post("/api/123/llm/")
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertTrue(response.bodyAsText().contains("Missing or invalid authentication"))
         }
-
-        val response = client.post("/api/123/llm/")
-
-        assertEquals(HttpStatusCode.Unauthorized, response.status)
-        assertTrue(response.bodyAsText().contains("Missing or invalid authentication"))
-    }
 }

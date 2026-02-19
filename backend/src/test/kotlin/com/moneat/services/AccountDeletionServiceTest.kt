@@ -46,23 +46,32 @@ class AccountDeletionServiceTest {
         }
     }
 
-    private fun seedUser(email: String = "test@example.com", name: String = "Test User"): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[Users.name] = name
-            it[Users.password_hash] = "hashed"
-            it[Users.email_verified] = true
-        } get Users.id
-    }
+    private fun seedUser(
+        email: String = "test@example.com",
+        name: String = "Test User"
+    ): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[Users.name] = name
+                it[Users.password_hash] = "hashed"
+                it[Users.email_verified] = true
+            } get Users.id
+        }
 
-    private fun seedOrg(name: String = "Test Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Test Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun seedMembership(userId: Int, orgId: Int, role: String = "owner") = transaction {
+    private fun seedMembership(
+        userId: Int,
+        orgId: Int,
+        role: String = "owner"
+    ) = transaction {
         Memberships.insert {
             it[user_id] = userId
             it[organization_id] = orgId
@@ -70,7 +79,10 @@ class AccountDeletionServiceTest {
         }
     }
 
-    private fun seedSubscription(orgId: Int, status: String = "active") = transaction {
+    private fun seedSubscription(
+        orgId: Int,
+        status: String = "active"
+    ) = transaction {
         Subscriptions.insert {
             it[organization_id] = orgId
             it[Subscriptions.status] = status

@@ -59,7 +59,9 @@ class PricingTierService {
 
     fun getPrimaryOrganizationIdForUser(userId: Int): Int? {
         return transaction {
-            Memberships.selectAll().where { Memberships.user_id eq userId }
+            Memberships
+                .selectAll()
+                .where { Memberships.user_id eq userId }
                 .orderBy(Memberships.id to SortOrder.ASC)
                 .firstOrNull()
                 ?.get(Memberships.organization_id)
@@ -68,7 +70,9 @@ class PricingTierService {
 
     fun getCurrentPlans(): List<BillingPlanResponse> {
         return transaction {
-            PricingTierConfigs.selectAll().where { PricingTierConfigs.is_current eq true }
+            PricingTierConfigs
+                .selectAll()
+                .where { PricingTierConfigs.is_current eq true }
                 .orderBy(PricingTierConfigs.monthly_price_cents to SortOrder.ASC)
                 .map { row ->
                     val tier = rowToResponse(row)
@@ -79,7 +83,9 @@ class PricingTierService {
 
     fun getTierVersions(tierName: String): List<PricingTierConfigResponse> {
         return transaction {
-            PricingTierConfigs.selectAll().where { PricingTierConfigs.tier_name eq tierName.uppercase() }
+            PricingTierConfigs
+                .selectAll()
+                .where { PricingTierConfigs.tier_name eq tierName.uppercase() }
                 .orderBy(PricingTierConfigs.version to SortOrder.DESC)
                 .map { rowToResponse(it) }
         }
@@ -87,18 +93,21 @@ class PricingTierService {
 
     fun getCurrentTier(tierName: String): PricingTierConfigResponse? {
         return transaction {
-            PricingTierConfigs.selectAll().where {
-                (PricingTierConfigs.tier_name eq tierName.uppercase()) and
-                    (PricingTierConfigs.is_current eq true)
-            }
-                .firstOrNull()
+            PricingTierConfigs
+                .selectAll()
+                .where {
+                    (PricingTierConfigs.tier_name eq tierName.uppercase()) and
+                        (PricingTierConfigs.is_current eq true)
+                }.firstOrNull()
                 ?.let { rowToResponse(it) }
         }
     }
 
     fun getTierById(id: Int): PricingTierConfigResponse? {
         return transaction {
-            PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }
+            PricingTierConfigs
+                .selectAll()
+                .where { PricingTierConfigs.id eq id }
                 .firstOrNull()
                 ?.let { rowToResponse(it) }
         }
@@ -106,13 +115,14 @@ class PricingTierService {
 
     fun getEffectiveTierForOrganization(organizationId: Int): EffectiveTierContext {
         return transaction {
-            val subscription = Subscriptions
-                .selectAll().where {
-                    (Subscriptions.organization_id eq organizationId) and
-                        (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
+            val subscription =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        (Subscriptions.organization_id eq organizationId) and
+                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+                    }.orderBy(Subscriptions.id to SortOrder.DESC)
+                    .firstOrNull()
 
             if (subscription == null) {
                 val free = currentFallbackTier("FREE")
@@ -129,25 +139,32 @@ class PricingTierService {
                 )
             }
 
-            val byId = subscription[Subscriptions.pricing_tier_config_id]?.let { id ->
-                PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }.firstOrNull()
-            }
+            val byId =
+                subscription[Subscriptions.pricing_tier_config_id]?.let { id ->
+                    PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }.firstOrNull()
+                }
 
-            val tierRow = byId
-                ?: PricingTierConfigs.selectAll().where {
-                    (PricingTierConfigs.is_current eq true) and
-                        (PricingTierConfigs.tier_name eq subscription[Subscriptions.plan].uppercase())
-                }.firstOrNull()
-                ?: PricingTierConfigs.selectAll().where {
-                    (PricingTierConfigs.is_current eq true) and
-                        (PricingTierConfigs.tier_name eq "FREE")
-                }.firstOrNull()
+            val tierRow =
+                byId
+                    ?: PricingTierConfigs
+                        .selectAll()
+                        .where {
+                            (PricingTierConfigs.is_current eq true) and
+                                (PricingTierConfigs.tier_name eq subscription[Subscriptions.plan].uppercase())
+                        }.firstOrNull()
+                    ?: PricingTierConfigs
+                        .selectAll()
+                        .where {
+                            (PricingTierConfigs.is_current eq true) and
+                                (PricingTierConfigs.tier_name eq "FREE")
+                        }.firstOrNull()
 
-            val tier = if (tierRow != null) {
-                rowToResponse(tierRow)
-            } else {
-                enumFallbackToResponse(subscription[Subscriptions.plan])
-            }
+            val tier =
+                if (tierRow != null) {
+                    rowToResponse(tierRow)
+                } else {
+                    enumFallbackToResponse(subscription[Subscriptions.plan])
+                }
 
             EffectiveTierContext(
                 tier = tier,
@@ -163,7 +180,10 @@ class PricingTierService {
         }
     }
 
-    fun createTierVersion(tierName: String, request: CreateTierVersionRequest): PricingTierConfigResponse {
+    fun createTierVersion(
+        tierName: String,
+        request: CreateTierVersionRequest
+    ): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
         validateCreateTierRequest(request)
         val monthlyErrorLimit = if (request.monthlyErrorLimit > 0) request.monthlyErrorLimit else request.monthlyUnitLimit
@@ -172,9 +192,12 @@ class PricingTierService {
         val monthlyFeedbackLimit = request.monthlyFeedbackLimit
         val monthlyUnitLimit = monthlyErrorLimit + monthlyTransactionLimit + monthlyReplayLimit + monthlyFeedbackLimit
         return transaction {
-            val current = PricingTierConfigs.selectAll().where { PricingTierConfigs.tier_name eq canonicalName }
-                .orderBy(PricingTierConfigs.version to SortOrder.DESC)
-                .firstOrNull()
+            val current =
+                PricingTierConfigs
+                    .selectAll()
+                    .where { PricingTierConfigs.tier_name eq canonicalName }
+                    .orderBy(PricingTierConfigs.version to SortOrder.DESC)
+                    .firstOrNull()
             val currentConfig = current?.let { rowToResponse(it) }
             val defaults = defaultFeatureFlagsForTier(canonicalName)
             val nextVersion = (current?.get(PricingTierConfigs.version) ?: 0) + 1
@@ -193,92 +216,104 @@ class PricingTierService {
             val resolvedOncallPerUserYearlyCents = request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
             val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
 
-            val resolvedStatusPagesEnabled = request.statusPagesEnabled
-                ?: currentConfig?.statusPagesEnabled
-                ?: defaults.statusPagesEnabled
-            val resolvedStatusPageCustomDomainEnabled = request.statusPageCustomDomainEnabled
-                ?: currentConfig?.statusPageCustomDomainEnabled
-                ?: defaults.statusPageCustomDomainEnabled
-            val resolvedSessionReplayEnabled = request.sessionReplayEnabled
-                ?: currentConfig?.sessionReplayEnabled
-                ?: defaults.sessionReplayEnabled
-            val resolvedSlackEnabled = request.slackEnabled
-                ?: currentConfig?.slackEnabled
-                ?: defaults.slackEnabled
-            val resolvedDiscordEnabled = request.discordEnabled
-                ?: currentConfig?.discordEnabled
-                ?: defaults.discordEnabled
-            val resolvedIncidentIoEnabled = request.incidentIoEnabled
-                ?: currentConfig?.incidentIoEnabled
-                ?: defaults.incidentIoEnabled
-            val resolvedSamlEnabled = request.samlEnabled
-                ?: currentConfig?.samlEnabled
-                ?: defaults.samlEnabled
-            val resolvedOidcEnabled = request.oidcEnabled
-                ?: currentConfig?.oidcEnabled
-                ?: defaults.oidcEnabled
-            val resolvedPrioritySupportEnabled = request.prioritySupportEnabled
-                ?: currentConfig?.prioritySupportEnabled
-                ?: defaults.prioritySupportEnabled
-            val resolvedSlaEnabled = request.slaEnabled
-                ?: currentConfig?.slaEnabled
-                ?: defaults.slaEnabled
-            val resolvedCustomRetentionEnabled = request.customRetentionEnabled
-                ?: currentConfig?.customRetentionEnabled
-                ?: defaults.customRetentionEnabled
+            val resolvedStatusPagesEnabled =
+                request.statusPagesEnabled
+                    ?: currentConfig?.statusPagesEnabled
+                    ?: defaults.statusPagesEnabled
+            val resolvedStatusPageCustomDomainEnabled =
+                request.statusPageCustomDomainEnabled
+                    ?: currentConfig?.statusPageCustomDomainEnabled
+                    ?: defaults.statusPageCustomDomainEnabled
+            val resolvedSessionReplayEnabled =
+                request.sessionReplayEnabled
+                    ?: currentConfig?.sessionReplayEnabled
+                    ?: defaults.sessionReplayEnabled
+            val resolvedSlackEnabled =
+                request.slackEnabled
+                    ?: currentConfig?.slackEnabled
+                    ?: defaults.slackEnabled
+            val resolvedDiscordEnabled =
+                request.discordEnabled
+                    ?: currentConfig?.discordEnabled
+                    ?: defaults.discordEnabled
+            val resolvedIncidentIoEnabled =
+                request.incidentIoEnabled
+                    ?: currentConfig?.incidentIoEnabled
+                    ?: defaults.incidentIoEnabled
+            val resolvedSamlEnabled =
+                request.samlEnabled
+                    ?: currentConfig?.samlEnabled
+                    ?: defaults.samlEnabled
+            val resolvedOidcEnabled =
+                request.oidcEnabled
+                    ?: currentConfig?.oidcEnabled
+                    ?: defaults.oidcEnabled
+            val resolvedPrioritySupportEnabled =
+                request.prioritySupportEnabled
+                    ?: currentConfig?.prioritySupportEnabled
+                    ?: defaults.prioritySupportEnabled
+            val resolvedSlaEnabled =
+                request.slaEnabled
+                    ?: currentConfig?.slaEnabled
+                    ?: defaults.slaEnabled
+            val resolvedCustomRetentionEnabled =
+                request.customRetentionEnabled
+                    ?: currentConfig?.customRetentionEnabled
+                    ?: defaults.customRetentionEnabled
 
             PricingTierConfigs.update({ PricingTierConfigs.tier_name eq canonicalName }) {
                 it[is_current] = false
             }
 
-            val id = PricingTierConfigs.insert {
-                it[PricingTierConfigs.tier_name] = canonicalName
-                it[version] = nextVersion
-                it[monthly_unit_limit] = monthlyUnitLimit
-                it[monthly_error_limit] = monthlyErrorLimit
-                it[monthly_transaction_limit] = monthlyTransactionLimit
-                it[monthly_replay_limit] = monthlyReplayLimit
-                it[monthly_feedback_limit] = monthlyFeedbackLimit
-                it[monthly_llm_event_limit] = request.monthlyLlmEventLimit
-                it[monthly_gb_limit] = resolvedMonthlyGbLimit
-                it[retention_days] = request.retentionDays
-                it[log_retention_days] = resolvedLogRetentionDays
-                it[replay_retention_days] = resolvedReplayRetentionDays
-                it[llm_retention_days] = resolvedLlmRetentionDays
-                it[status_pages_enabled] = resolvedStatusPagesEnabled
-                it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
-                it[session_replay_enabled] = resolvedSessionReplayEnabled
-                it[slack_enabled] = resolvedSlackEnabled
-                it[discord_enabled] = resolvedDiscordEnabled
-                it[incident_io_enabled] = resolvedIncidentIoEnabled
-                it[saml_enabled] = resolvedSamlEnabled
-                it[oidc_enabled] = resolvedOidcEnabled
-                it[priority_support_enabled] = resolvedPrioritySupportEnabled
-                it[sla_enabled] = resolvedSlaEnabled
-                it[custom_retention_enabled] = resolvedCustomRetentionEnabled
-                it[max_projects] = request.maxProjects
-                it[max_systems] = request.maxSystems
-                it[monitor_interval_seconds] = request.monitorIntervalSeconds
-                it[monthly_price_cents] = request.monthlyPriceCents
-                it[yearly_price_cents] = resolvedYearlyPriceCents
-                it[trial_days] = resolvedTrialDays
-                it[payg_enabled] = request.paygEnabled
-                it[payg_rate_micros_per_unit] = request.paygRateMicrosPerUnit
-                it[overage_rate_cents_per_gb] = resolvedOverageRateCentsPerGb
-                it[error_overage_rate_cents_per_1k] = resolvedErrorOverageRateCentsPer1k
-                it[replay_overage_rate_cents_per_gb] = resolvedReplayOverageRateCentsPerGb
-                it[llm_overage_rate_cents_per_1k] = resolvedLlmOverageRateCentsPer1k
-                it[oncall_per_user_monthly_cents] = resolvedOncallPerUserMonthlyCents
-                it[oncall_per_user_yearly_cents] = resolvedOncallPerUserYearlyCents
-                it[oncall_enabled] = resolvedOncallEnabled
-                it[stripe_base_price_id] = request.stripeBasePriceId
-                it[stripe_overage_price_id] = request.stripeOveragePriceId
-                it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
-                it[stripe_yearly_overage_price_id] = request.stripeYearlyOveragePriceId
-                it[stripe_oncall_price_id] = request.stripeOncallPriceId
-                it[stripe_oncall_yearly_price_id] = request.stripeOncallYearlyPriceId
-                it[is_current] = true
-            } get PricingTierConfigs.id
+            val id =
+                PricingTierConfigs.insert {
+                    it[PricingTierConfigs.tier_name] = canonicalName
+                    it[version] = nextVersion
+                    it[monthly_unit_limit] = monthlyUnitLimit
+                    it[monthly_error_limit] = monthlyErrorLimit
+                    it[monthly_transaction_limit] = monthlyTransactionLimit
+                    it[monthly_replay_limit] = monthlyReplayLimit
+                    it[monthly_feedback_limit] = monthlyFeedbackLimit
+                    it[monthly_llm_event_limit] = request.monthlyLlmEventLimit
+                    it[monthly_gb_limit] = resolvedMonthlyGbLimit
+                    it[retention_days] = request.retentionDays
+                    it[log_retention_days] = resolvedLogRetentionDays
+                    it[replay_retention_days] = resolvedReplayRetentionDays
+                    it[llm_retention_days] = resolvedLlmRetentionDays
+                    it[status_pages_enabled] = resolvedStatusPagesEnabled
+                    it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
+                    it[session_replay_enabled] = resolvedSessionReplayEnabled
+                    it[slack_enabled] = resolvedSlackEnabled
+                    it[discord_enabled] = resolvedDiscordEnabled
+                    it[incident_io_enabled] = resolvedIncidentIoEnabled
+                    it[saml_enabled] = resolvedSamlEnabled
+                    it[oidc_enabled] = resolvedOidcEnabled
+                    it[priority_support_enabled] = resolvedPrioritySupportEnabled
+                    it[sla_enabled] = resolvedSlaEnabled
+                    it[custom_retention_enabled] = resolvedCustomRetentionEnabled
+                    it[max_projects] = request.maxProjects
+                    it[max_systems] = request.maxSystems
+                    it[monitor_interval_seconds] = request.monitorIntervalSeconds
+                    it[monthly_price_cents] = request.monthlyPriceCents
+                    it[yearly_price_cents] = resolvedYearlyPriceCents
+                    it[trial_days] = resolvedTrialDays
+                    it[payg_enabled] = request.paygEnabled
+                    it[payg_rate_micros_per_unit] = request.paygRateMicrosPerUnit
+                    it[overage_rate_cents_per_gb] = resolvedOverageRateCentsPerGb
+                    it[error_overage_rate_cents_per_1k] = resolvedErrorOverageRateCentsPer1k
+                    it[replay_overage_rate_cents_per_gb] = resolvedReplayOverageRateCentsPerGb
+                    it[llm_overage_rate_cents_per_1k] = resolvedLlmOverageRateCentsPer1k
+                    it[oncall_per_user_monthly_cents] = resolvedOncallPerUserMonthlyCents
+                    it[oncall_per_user_yearly_cents] = resolvedOncallPerUserYearlyCents
+                    it[oncall_enabled] = resolvedOncallEnabled
+                    it[stripe_base_price_id] = request.stripeBasePriceId
+                    it[stripe_overage_price_id] = request.stripeOveragePriceId
+                    it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
+                    it[stripe_yearly_overage_price_id] = request.stripeYearlyOveragePriceId
+                    it[stripe_oncall_price_id] = request.stripeOncallPriceId
+                    it[stripe_oncall_yearly_price_id] = request.stripeOncallYearlyPriceId
+                    it[is_current] = true
+                } get PricingTierConfigs.id
 
             rowToResponse(PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }.first())
         }
@@ -324,30 +359,40 @@ class PricingTierService {
         }
     }
 
-    fun migrateSubscribers(tierName: String, request: TierMigrationRequest): TierMigrationResponse {
+    fun migrateSubscribers(
+        tierName: String,
+        request: TierMigrationRequest
+    ): TierMigrationResponse {
         val canonicalName = tierName.uppercase()
         return transaction {
-            val targetTierId = PricingTierConfigs.selectAll().where {
-                (PricingTierConfigs.tier_name eq canonicalName) and
-                    (PricingTierConfigs.version eq request.targetVersion)
-            }.firstOrNull()?.get(PricingTierConfigs.id)
-                ?: throw IllegalArgumentException("Target tier version not found")
+            val targetTierId =
+                PricingTierConfigs
+                    .selectAll()
+                    .where {
+                        (PricingTierConfigs.tier_name eq canonicalName) and
+                            (PricingTierConfigs.version eq request.targetVersion)
+                    }.firstOrNull()
+                    ?.get(PricingTierConfigs.id)
+                    ?: throw IllegalArgumentException("Target tier version not found")
 
-            val candidateIds = Subscriptions.selectAll().where {
-                Subscriptions.status inList listOf("active", "trialing", "past_due")
-            }
-                .filter { row ->
-                    val configId = row[Subscriptions.pricing_tier_config_id]
-                    if (configId == null) {
-                        row[Subscriptions.plan].equals(canonicalName, ignoreCase = true)
-                    } else {
-                        PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq configId }
-                            .firstOrNull()
-                            ?.get(PricingTierConfigs.tier_name)
-                            ?.equals(canonicalName, ignoreCase = true) == true
-                    }
-                }
-                .map { it[Subscriptions.id] }
+            val candidateIds =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        Subscriptions.status inList listOf("active", "trialing", "past_due")
+                    }.filter { row ->
+                        val configId = row[Subscriptions.pricing_tier_config_id]
+                        if (configId == null) {
+                            row[Subscriptions.plan].equals(canonicalName, ignoreCase = true)
+                        } else {
+                            PricingTierConfigs
+                                .selectAll()
+                                .where { PricingTierConfigs.id eq configId }
+                                .firstOrNull()
+                                ?.get(PricingTierConfigs.tier_name)
+                                ?.equals(canonicalName, ignoreCase = true) == true
+                        }
+                    }.map { it[Subscriptions.id] }
 
             if (!request.dryRun && candidateIds.isNotEmpty()) {
                 Subscriptions.update({ Subscriptions.id inList candidateIds }) {
@@ -365,14 +410,21 @@ class PricingTierService {
         }
     }
 
-    fun updateStripePriceIds(tierName: String, version: Int, request: UpdateStripePriceIdsRequest): PricingTierConfigResponse {
+    fun updateStripePriceIds(
+        tierName: String,
+        version: Int,
+        request: UpdateStripePriceIdsRequest
+    ): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
         return transaction {
-            val tier = PricingTierConfigs.selectAll().where {
-                (PricingTierConfigs.tier_name eq canonicalName) and
-                    (PricingTierConfigs.version eq version)
-            }.firstOrNull()
-                ?: throw IllegalArgumentException("Tier version not found: $canonicalName v$version")
+            val tier =
+                PricingTierConfigs
+                    .selectAll()
+                    .where {
+                        (PricingTierConfigs.tier_name eq canonicalName) and
+                            (PricingTierConfigs.version eq version)
+                    }.firstOrNull()
+                    ?: throw IllegalArgumentException("Tier version not found: $canonicalName v$version")
 
             val tierId = tier[PricingTierConfigs.id]
 
@@ -417,28 +469,38 @@ class PricingTierService {
     }
 
     private fun currentFallbackTier(tierName: String): PricingTierConfigResponse {
-        val row = PricingTierConfigs.selectAll().where {
-            (PricingTierConfigs.tier_name eq tierName.uppercase()) and
-                (PricingTierConfigs.is_current eq true)
-        }.firstOrNull()
+        val row =
+            PricingTierConfigs
+                .selectAll()
+                .where {
+                    (PricingTierConfigs.tier_name eq tierName.uppercase()) and
+                        (PricingTierConfigs.is_current eq true)
+                }.firstOrNull()
         if (row != null) return rowToResponse(row)
         return enumFallbackToResponse(tierName)
     }
 
     private fun enumFallbackToResponse(tierName: String): PricingTierConfigResponse {
         val tier = PricingTier.entries.find { it.name.equals(tierName, ignoreCase = true) } ?: PricingTier.FREE
-        val monthlyPrice = when (tier) {
-            PricingTier.FREE -> 0
-            PricingTier.PRO -> 2900
-            PricingTier.TEAM -> 7900
-            PricingTier.BUSINESS -> 19900
-        }
-        val yearlyPrice = when (tier) {
-            PricingTier.FREE -> 0
-            PricingTier.PRO -> 28800 // $288/yr
-            PricingTier.TEAM -> 79200 // $792/yr
-            PricingTier.BUSINESS -> 199200 // $1992/yr
-        }
+        val monthlyPrice =
+            when (tier) {
+                PricingTier.FREE -> 0
+                PricingTier.PRO -> 2900
+                PricingTier.TEAM -> 7900
+                PricingTier.BUSINESS -> 19900
+            }
+        val yearlyPrice =
+            when (tier) {
+                PricingTier.FREE -> 0
+
+                PricingTier.PRO -> 28800
+
+                // $288/yr
+                PricingTier.TEAM -> 79200
+
+                // $792/yr
+                PricingTier.BUSINESS -> 199200 // $1992/yr
+            }
         return PricingTierConfigResponse(
             id = 0,
             tierName = tier.name,

@@ -84,10 +84,14 @@ fun Route.adminRoutes() {
                             return@onCall
                         }
                         val userId = principal.payload.getClaim("userId").asInt()
-                        val isAdmin = transaction {
-                            Users.selectAll().where { Users.id eq userId }
-                                .firstOrNull()?.get(Users.is_admin) ?: false
-                        }
+                        val isAdmin =
+                            transaction {
+                                Users
+                                    .selectAll()
+                                    .where { Users.id eq userId }
+                                    .firstOrNull()
+                                    ?.get(Users.is_admin) ?: false
+                            }
                         if (!isAdmin) {
                             call.respond(
                                 HttpStatusCode.Forbidden,
@@ -132,14 +136,15 @@ fun Route.adminRoutes() {
                 }
                 val period = call.request.queryParameters["period"] ?: "7d"
                 val usage = adminService.getOrgUsage(orgId, period)
-                val response = usage.map { u ->
-                    AdminOrgUsagePoint(
-                        date = u.date.toString(),
-                        eventType = u.eventType,
-                        eventCount = u.eventCount,
-                        bytesIngested = u.bytesIngested
-                    )
-                }
+                val response =
+                    usage.map { u ->
+                        AdminOrgUsagePoint(
+                            date = u.date.toString(),
+                            eventType = u.eventType,
+                            eventCount = u.eventCount,
+                            bytesIngested = u.bytesIngested
+                        )
+                    }
                 call.respond(response)
             }
 
@@ -172,62 +177,73 @@ fun Route.adminRoutes() {
             }
 
             post("/impersonate/{userId}") {
-                val targetUserId = call.parameters["userId"]?.toIntOrNull()
-                    ?: return@post call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid user ID"))
+                val targetUserId =
+                    call.parameters["userId"]?.toIntOrNull()
+                        ?: return@post call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid user ID"))
 
-                val targetUser = transaction {
-                    Users.selectAll().where { Users.id eq targetUserId }.firstOrNull()
-                } ?: return@post call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("User not found"))
+                val targetUser =
+                    transaction {
+                        Users.selectAll().where { Users.id eq targetUserId }.firstOrNull()
+                    } ?: return@post call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("User not found"))
 
-                val token = authService.generateImpersonationToken(
-                    targetUser[Users.id],
-                    targetUser[Users.email]
-                )
+                val token =
+                    authService.generateImpersonationToken(
+                        targetUser[Users.id],
+                        targetUser[Users.email]
+                    )
                 call.respond(AdminImpersonationTokenResponse(token = token))
             }
 
             post("/incidents/trigger") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
-                    return@post
-                }
+                val userId =
+                    principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                        return@post
+                    }
 
                 // Get user's organization
-                val orgId = transaction {
-                    com.moneat.models.Memberships.selectAll()
-                        .where { com.moneat.models.Memberships.user_id eq userId }
-                        .firstOrNull()?.get(com.moneat.models.Memberships.organization_id)
-                } ?: run {
-                    call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("User has no organization"))
-                    return@post
-                }
+                val orgId =
+                    transaction {
+                        com.moneat.models.Memberships
+                            .selectAll()
+                            .where { com.moneat.models.Memberships.user_id eq userId }
+                            .firstOrNull()
+                            ?.get(com.moneat.models.Memberships.organization_id)
+                    } ?: run {
+                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("User has no organization"))
+                        return@post
+                    }
 
                 try {
                     val request = call.receive<TriggerIncidentRequest>()
 
-                    val incidentService = com.moneat.services.incident.IncidentService()
+                    val incidentService =
+                        com.moneat.services.incident
+                            .IncidentService()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
                     val severityEnum = IncidentSeverity.fromString(request.severity) ?: IncidentSeverity.MEDIUM
-                    val sourceEnum = try {
-                        AlertSource.valueOf(request.source)
-                    } catch (e: Exception) {
-                        AlertSource.SYSTEM_ALERT
-                    }
+                    val sourceEnum =
+                        try {
+                            AlertSource.valueOf(request.source)
+                        } catch (e: Exception) {
+                            AlertSource.SYSTEM_ALERT
+                        }
 
-                    val event = IncidentEvent(
-                        title = request.title,
-                        description = request.description,
-                        severity = severityEnum,
-                        status = IncidentStatus.FIRING,
-                        source = sourceEnum,
-                        deduplicationKey = "manual-trigger-${java.util.UUID.randomUUID()}",
-                        organizationId = orgId,
-                        moneatUrl = frontendUrl,
-                        metadata = mapOf("triggered_by" to JsonPrimitive(userId.toString()))
-                    )
+                    val event =
+                        IncidentEvent(
+                            title = request.title,
+                            description = request.description,
+                            severity = severityEnum,
+                            status = IncidentStatus.FIRING,
+                            source = sourceEnum,
+                            deduplicationKey = "manual-trigger-${java.util.UUID.randomUUID()}",
+                            organizationId = orgId,
+                            moneatUrl = frontendUrl,
+                            metadata = mapOf("triggered_by" to JsonPrimitive(userId.toString()))
+                        )
 
                     incidentService.fireAlert(event)
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
@@ -241,33 +257,41 @@ fun Route.adminRoutes() {
 
             post("/test-notification") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
-                    return@post
-                }
+                val userId =
+                    principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                        return@post
+                    }
 
                 try {
                     val request = call.receive<com.moneat.models.TestNotificationRequest>()
 
                     // Get user email for testing - use testEmail from request if provided
-                    val userEmail = if (!request.testEmail.isNullOrBlank()) {
-                        request.testEmail
-                    } else {
-                        transaction {
-                            Users.selectAll().where { Users.id eq userId }
-                                .firstOrNull()?.get(Users.email)
+                    val userEmail =
+                        if (!request.testEmail.isNullOrBlank()) {
+                            request.testEmail
+                        } else {
+                            transaction {
+                                Users
+                                    .selectAll()
+                                    .where { Users.id eq userId }
+                                    .firstOrNull()
+                                    ?.get(Users.email)
+                            }
+                        } ?: run {
+                            call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("User not found"))
+                            return@post
                         }
-                    } ?: run {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("User not found"))
-                        return@post
-                    }
 
                     // Get user's organization for Slack testing
-                    val orgId = transaction {
-                        com.moneat.models.Memberships.selectAll()
-                            .where { com.moneat.models.Memberships.user_id eq userId }
-                            .firstOrNull()?.get(com.moneat.models.Memberships.organization_id)
-                    }
+                    val orgId =
+                        transaction {
+                            com.moneat.models.Memberships
+                                .selectAll()
+                                .where { com.moneat.models.Memberships.user_id eq userId }
+                                .firstOrNull()
+                                ?.get(com.moneat.models.Memberships.organization_id)
+                        }
 
                     val emailService = com.moneat.services.EmailService()
                     val slackService = com.moneat.services.SlackService()
@@ -289,66 +313,76 @@ fun Route.adminRoutes() {
                         try {
                             when (request.type) {
                                 "error_alert" -> {
-                                    val testData = com.moneat.services.EmailService.ErrorAlertData(
-                                        issueTitle = "[TEST] NullPointerException in UserService",
-                                        issueLevel = "error",
-                                        issueCulprit = "com.example.UserService.getUser",
-                                        issueMessage = "Cannot read property 'id' of null",
-                                        issueCount = "42",
-                                        issueUrl = "$frontendUrl/issues/12345",
-                                        projectName = "Test Project",
-                                        environment = "production",
-                                        timestamp = java.time.Instant.now().toString(),
-                                        stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)",
-                                        settingsUrl = "$frontendUrl/settings/notifications",
-                                        unsubscribeUrl = "$frontendUrl/settings/notifications"
-                                    )
+                                    val testData =
+                                        com.moneat.services.EmailService.ErrorAlertData(
+                                            issueTitle = "[TEST] NullPointerException in UserService",
+                                            issueLevel = "error",
+                                            issueCulprit = "com.example.UserService.getUser",
+                                            issueMessage = "Cannot read property 'id' of null",
+                                            issueCount = "42",
+                                            issueUrl = "$frontendUrl/issues/12345",
+                                            projectName = "Test Project",
+                                            environment = "production",
+                                            timestamp =
+                                                java.time.Instant
+                                                    .now()
+                                                    .toString(),
+                                            stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)",
+                                            settingsUrl = "$frontendUrl/settings/notifications",
+                                            unsubscribeUrl = "$frontendUrl/settings/notifications"
+                                        )
                                     emailService.sendErrorAlertEmail(userEmail, testData)
                                     emailSent = true
                                 }
+
                                 "weekly_summary" -> {
-                                    val testData = com.moneat.services.EmailService.WeeklySummaryData(
-                                        startDate = "Jan 1, 2026",
-                                        endDate = "Jan 7, 2026",
-                                        totalEvents = "12.5K",
-                                        eventsTrend = 15,
-                                        newIssues = "23",
-                                        issuesTrend = -8,
-                                        affectedUsers = "1.2K",
-                                        usersTrend = 5,
-                                        topIssues = listOf(
-                                            com.moneat.services.EmailService.TopIssue(
-                                                title = "[TEST] Database timeout",
-                                                culprit = "DatabaseConnection.query",
-                                                project = "Test API",
-                                                count = "156"
-                                            ),
-                                            com.moneat.services.EmailService.TopIssue(
-                                                title = "[TEST] Invalid token",
-                                                culprit = "AuthMiddleware.validate",
-                                                project = "Test Mobile",
-                                                count = "89"
-                                            )
-                                        ),
-                                        projects = listOf(
-                                            com.moneat.services.EmailService.ProjectSummary(
-                                                name = "Test API",
-                                                events = "8.2K",
-                                                issues = "15",
-                                                crashFree = "99.8"
-                                            )
-                                        ),
-                                        dashboardUrl = frontendUrl,
-                                        settingsUrl = "$frontendUrl/settings/notifications",
-                                        unsubscribeUrl = "$frontendUrl/settings/notifications"
-                                    )
+                                    val testData =
+                                        com.moneat.services.EmailService.WeeklySummaryData(
+                                            startDate = "Jan 1, 2026",
+                                            endDate = "Jan 7, 2026",
+                                            totalEvents = "12.5K",
+                                            eventsTrend = 15,
+                                            newIssues = "23",
+                                            issuesTrend = -8,
+                                            affectedUsers = "1.2K",
+                                            usersTrend = 5,
+                                            topIssues =
+                                                listOf(
+                                                    com.moneat.services.EmailService.TopIssue(
+                                                        title = "[TEST] Database timeout",
+                                                        culprit = "DatabaseConnection.query",
+                                                        project = "Test API",
+                                                        count = "156"
+                                                    ),
+                                                    com.moneat.services.EmailService.TopIssue(
+                                                        title = "[TEST] Invalid token",
+                                                        culprit = "AuthMiddleware.validate",
+                                                        project = "Test Mobile",
+                                                        count = "89"
+                                                    )
+                                                ),
+                                            projects =
+                                                listOf(
+                                                    com.moneat.services.EmailService.ProjectSummary(
+                                                        name = "Test API",
+                                                        events = "8.2K",
+                                                        issues = "15",
+                                                        crashFree = "99.8"
+                                                    )
+                                                ),
+                                            dashboardUrl = frontendUrl,
+                                            settingsUrl = "$frontendUrl/settings/notifications",
+                                            unsubscribeUrl = "$frontendUrl/settings/notifications"
+                                        )
                                     emailService.sendWeeklySummaryEmail(userEmail, testData)
                                     emailSent = true
                                 }
+
                                 "verification" -> {
                                     emailService.sendVerificationEmail(userEmail, "test-token-12345", "Test User")
                                     emailSent = true
                                 }
+
                                 "password_reset" -> {
                                     emailService.sendPasswordResetEmail(
                                         userEmail,
@@ -357,6 +391,7 @@ fun Route.adminRoutes() {
                                     )
                                     emailSent = true
                                 }
+
                                 "system_up" -> {
                                     emailService.sendSystemUpEmail(
                                         userEmail,
@@ -365,6 +400,7 @@ fun Route.adminRoutes() {
                                     )
                                     emailSent = true
                                 }
+
                                 "system_down" -> {
                                     emailService.sendSystemDownEmail(
                                         userEmail,
@@ -374,6 +410,7 @@ fun Route.adminRoutes() {
                                     )
                                     emailSent = true
                                 }
+
                                 else -> {
                                     errors.add("Email type '${request.type}' not supported for email channel")
                                 }
@@ -391,49 +428,60 @@ fun Route.adminRoutes() {
                             try {
                                 when (request.type) {
                                     "error_alert" -> {
-                                        slackSent = slackService.sendErrorAlert(
-                                            organizationId = orgId,
-                                            projectName = "[TEST] Test Project",
-                                            issueTitle = "NullPointerException in UserService",
-                                            level = "error",
-                                            culprit = "com.example.UserService.getUser",
-                                            issueId = 12345L,
-                                            projectId = 1L,
-                                            baseUrl = frontendUrl,
-                                            occurrenceCount = 42,
-                                            environment = "production",
-                                            timestamp = java.time.Instant.now().toString(),
-                                            stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)"
-                                        )
+                                        slackSent =
+                                            slackService.sendErrorAlert(
+                                                organizationId = orgId,
+                                                projectName = "[TEST] Test Project",
+                                                issueTitle = "NullPointerException in UserService",
+                                                level = "error",
+                                                culprit = "com.example.UserService.getUser",
+                                                issueId = 12345L,
+                                                projectId = 1L,
+                                                baseUrl = frontendUrl,
+                                                occurrenceCount = 42,
+                                                environment = "production",
+                                                timestamp =
+                                                    java.time.Instant
+                                                        .now()
+                                                        .toString(),
+                                                stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)"
+                                            )
                                     }
+
                                     "system_up" -> {
-                                        slackSent = slackService.sendSystemUp(
-                                            organizationId = orgId,
-                                            systemName = "[TEST] Production API",
-                                            systemId = java.util.UUID.randomUUID(),
-                                            baseUrl = frontendUrl
-                                        )
+                                        slackSent =
+                                            slackService.sendSystemUp(
+                                                organizationId = orgId,
+                                                systemName = "[TEST] Production API",
+                                                systemId = java.util.UUID.randomUUID(),
+                                                baseUrl = frontendUrl
+                                            )
                                     }
+
                                     "system_down" -> {
-                                        slackSent = slackService.sendSystemDown(
-                                            organizationId = orgId,
-                                            systemName = "[TEST] Production API",
-                                            lastSeen = "2 minutes ago",
-                                            systemId = java.util.UUID.randomUUID(),
-                                            baseUrl = frontendUrl
-                                        )
+                                        slackSent =
+                                            slackService.sendSystemDown(
+                                                organizationId = orgId,
+                                                systemName = "[TEST] Production API",
+                                                lastSeen = "2 minutes ago",
+                                                systemId = java.util.UUID.randomUUID(),
+                                                baseUrl = frontendUrl
+                                            )
                                     }
+
                                     "uptime_alert" -> {
-                                        slackSent = slackService.sendUptimeAlert(
-                                            organizationId = orgId,
-                                            monitorName = "[TEST] API Health Check",
-                                            oldStatus = "up",
-                                            newStatus = "down",
-                                            message = "HTTP 500 - Internal Server Error",
-                                            monitorId = java.util.UUID.randomUUID(),
-                                            baseUrl = frontendUrl
-                                        )
+                                        slackSent =
+                                            slackService.sendUptimeAlert(
+                                                organizationId = orgId,
+                                                monitorName = "[TEST] API Health Check",
+                                                oldStatus = "up",
+                                                newStatus = "down",
+                                                message = "HTTP 500 - Internal Server Error",
+                                                monitorId = java.util.UUID.randomUUID(),
+                                                baseUrl = frontendUrl
+                                            )
                                     }
+
                                     else -> {
                                         errors.add(
                                             "Notification type '${request.type}' not supported for Slack channel"
@@ -459,46 +507,54 @@ fun Route.adminRoutes() {
                             try {
                                 when (request.type) {
                                     "error_alert" -> {
-                                        discordSent = discordService.sendErrorAlert(
-                                            organizationId = orgId,
-                                            projectName = "[TEST] Test Project",
-                                            issueTitle = "NullPointerException in UserService",
-                                            level = "error",
-                                            firstSeen = "Just now",
-                                            eventCount = 42,
-                                            userCount = 12,
-                                            issueUrl = "$frontendUrl/issues/12345"
-                                        )
+                                        discordSent =
+                                            discordService.sendErrorAlert(
+                                                organizationId = orgId,
+                                                projectName = "[TEST] Test Project",
+                                                issueTitle = "NullPointerException in UserService",
+                                                level = "error",
+                                                firstSeen = "Just now",
+                                                eventCount = 42,
+                                                userCount = 12,
+                                                issueUrl = "$frontendUrl/issues/12345"
+                                            )
                                     }
+
                                     "system_up" -> {
-                                        discordSent = discordService.sendSystemUp(
-                                            organizationId = orgId,
-                                            systemName = "[TEST] Production API",
-                                            systemId = java.util.UUID.randomUUID(),
-                                            baseUrl = frontendUrl
-                                        )
+                                        discordSent =
+                                            discordService.sendSystemUp(
+                                                organizationId = orgId,
+                                                systemName = "[TEST] Production API",
+                                                systemId = java.util.UUID.randomUUID(),
+                                                baseUrl = frontendUrl
+                                            )
                                     }
+
                                     "system_down" -> {
-                                        discordSent = discordService.sendSystemDown(
-                                            organizationId = orgId,
-                                            systemName = "[TEST] Production API",
-                                            lastSeen = "2 minutes ago",
-                                            systemId = java.util.UUID.randomUUID(),
-                                            baseUrl = frontendUrl
-                                        )
+                                        discordSent =
+                                            discordService.sendSystemDown(
+                                                organizationId = orgId,
+                                                systemName = "[TEST] Production API",
+                                                lastSeen = "2 minutes ago",
+                                                systemId = java.util.UUID.randomUUID(),
+                                                baseUrl = frontendUrl
+                                            )
                                     }
+
                                     "uptime_alert" -> {
-                                        discordSent = discordService.sendUptimeAlert(
-                                            organizationId = orgId,
-                                            monitorUrl = "https://api.example.com/health",
-                                            isDown = true,
-                                            statusCode = 500,
-                                            responseTime = 1245,
-                                            errorMessage = "Internal Server Error",
-                                            monitorId = java.util.UUID.randomUUID(),
-                                            baseUrl = frontendUrl
-                                        )
+                                        discordSent =
+                                            discordService.sendUptimeAlert(
+                                                organizationId = orgId,
+                                                monitorUrl = "https://api.example.com/health",
+                                                isDown = true,
+                                                statusCode = 500,
+                                                responseTime = 1245,
+                                                errorMessage = "Internal Server Error",
+                                                monitorId = java.util.UUID.randomUUID(),
+                                                baseUrl = frontendUrl
+                                            )
                                     }
+
                                     else -> {
                                         errors.add(
                                             "Notification type '${request.type}' not supported for Discord channel"
@@ -516,13 +572,14 @@ fun Route.adminRoutes() {
                         }
                     }
 
-                    val response = com.moneat.models.TestNotificationResponse(
-                        success = emailSent || slackSent || discordSent,
-                        emailSent = emailSent,
-                        slackSent = slackSent,
-                        discordSent = discordSent,
-                        errors = errors
-                    )
+                    val response =
+                        com.moneat.models.TestNotificationResponse(
+                            success = emailSent || slackSent || discordSent,
+                            emailSent = emailSent,
+                            slackSent = slackSent,
+                            discordSent = discordSent,
+                            errors = errors
+                        )
 
                     call.respond(
                         if (emailSent || slackSent || discordSent) HttpStatusCode.OK else HttpStatusCode.BadRequest,
@@ -543,10 +600,11 @@ fun Route.adminRoutes() {
 
             post("/test-sms-call") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
-                    return@post
-                }
+                val userId =
+                    principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                        return@post
+                    }
 
                 @kotlinx.serialization.Serializable
                 data class TestSmsCallRequest(val channel: String)
@@ -555,15 +613,16 @@ fun Route.adminRoutes() {
                     val request = call.receive<TestSmsCallRequest>()
 
                     // TwilioService is in the enterprise module — access via reflection
-                    val twilioServiceClass = try {
-                        Class.forName("com.moneat.enterprise.services.oncall.TwilioService")
-                    } catch (_: ClassNotFoundException) {
-                        call.respond(
-                            HttpStatusCode.BadRequest,
-                            com.moneat.models.ErrorResponse("On-call features require the enterprise module")
-                        )
-                        return@post
-                    }
+                    val twilioServiceClass =
+                        try {
+                            Class.forName("com.moneat.enterprise.services.oncall.TwilioService")
+                        } catch (_: ClassNotFoundException) {
+                            call.respond(
+                                HttpStatusCode.BadRequest,
+                                com.moneat.models.ErrorResponse("On-call features require the enterprise module")
+                            )
+                            return@post
+                        }
                     val instanceField = twilioServiceClass.getDeclaredField("instance")
                     val twilioService = instanceField.get(null)
                     val isEnabled = twilioServiceClass.getMethod("isEnabled").invoke(twilioService) as Boolean
@@ -579,9 +638,10 @@ fun Route.adminRoutes() {
                     }
 
                     // Use the authenticated admin's own saved, consented on-call number
-                    val user = transaction {
-                        Users.selectAll().where { Users.id eq userId }.singleOrNull()
-                    }
+                    val user =
+                        transaction {
+                            Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                        }
                     val phoneNumber = user?.get(Users.phone_number)
                     val consented = user?.get(Users.oncall_phone_opt_in) ?: false
 
@@ -596,14 +656,22 @@ fun Route.adminRoutes() {
                     }
 
                     when (request.channel) {
-                        "sms" -> twilioServiceClass.getMethod(
-                            "sendTestSms",
-                            String::class.java
-                        ).invoke(twilioService, phoneNumber)
-                        "call" -> twilioServiceClass.getMethod(
-                            "makeTestCall",
-                            String::class.java
-                        ).invoke(twilioService, phoneNumber)
+                        "sms" -> {
+                            twilioServiceClass
+                                .getMethod(
+                                    "sendTestSms",
+                                    String::class.java
+                                ).invoke(twilioService, phoneNumber)
+                        }
+
+                        "call" -> {
+                            twilioServiceClass
+                                .getMethod(
+                                    "makeTestCall",
+                                    String::class.java
+                                ).invoke(twilioService, phoneNumber)
+                        }
+
                         else -> {
                             call.respond(
                                 HttpStatusCode.BadRequest,
@@ -753,10 +821,11 @@ fun Route.adminRoutes() {
 
                 post("/organizations/{orgId}/promotional-credits") {
                     val principal = call.principal<JWTPrincipal>()
-                    val adminUserId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
-                        return@post
-                    }
+                    val adminUserId =
+                        principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                            call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                            return@post
+                        }
 
                     val orgId = call.parameters["orgId"]?.toIntOrNull()
                     if (orgId == null) {
@@ -769,13 +838,14 @@ fun Route.adminRoutes() {
 
                     try {
                         val request = call.receive<com.moneat.models.GrantPromotionalCreditRequest>()
-                        val response = adminBillingService.grantPromotionalCredit(
-                            organizationId = orgId,
-                            grantedByUserId = adminUserId,
-                            bonusGb = request.bonusGb,
-                            bonusUnits = request.bonusUnits,
-                            reason = request.reason
-                        )
+                        val response =
+                            adminBillingService.grantPromotionalCredit(
+                                organizationId = orgId,
+                                grantedByUserId = adminUserId,
+                                bonusGb = request.bonusGb,
+                                bonusUnits = request.bonusUnits,
+                                reason = request.reason
+                            )
                         call.respond(HttpStatusCode.Created, response)
                     } catch (e: IllegalArgumentException) {
                         call.respond(
@@ -812,10 +882,11 @@ fun Route.adminRoutes() {
 
                 delete("/organizations/{orgId}/promotional-credits") {
                     val principal = call.principal<JWTPrincipal>()
-                    val adminUserId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
-                        return@delete
-                    }
+                    val adminUserId =
+                        principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                            call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
+                            return@delete
+                        }
 
                     val orgId = call.parameters["orgId"]?.toIntOrNull()
                     if (orgId == null) {

@@ -40,57 +40,67 @@ class IncidentIoProvider : IncidentProvider {
     override val providerType = "incident_io"
 
     private val logger = LoggerFactory.getLogger(IncidentIoProvider::class.java)
-    private val client = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(
-                Json {
-                    ignoreUnknownKeys = true
-                    prettyPrint = false
-                }
-            )
+    private val client =
+        HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(
+                    Json {
+                        ignoreUnknownKeys = true
+                        prettyPrint = false
+                    }
+                )
+            }
         }
-    }
 
     init {
         // Register this provider with the registry
         IncidentProviderRegistry.register(this)
     }
 
-    override suspend fun sendAlert(event: IncidentEvent, config: ProviderConfig): Result<String> {
+    override suspend fun sendAlert(
+        event: IncidentEvent,
+        config: ProviderConfig
+    ): Result<String> {
         return try {
-            val alertSourceConfigId = config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
-                ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
+            val alertSourceConfigId =
+                config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
+                    ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
 
             // Convert metadata JsonElement values to strings for incident.io API
-            val baseMetadata = mapOf(
-                "severity" to event.severity.name.lowercase(),
-                "source" to event.source.name,
-                "moneat_url" to event.moneatUrl
-            )
-            val convertedMetadata = event.metadata.mapValues { (_, value) ->
-                when (value) {
-                    is JsonPrimitive -> value.content
-                    is JsonArray -> value.toString()
-                    is JsonObject -> value.toString()
+            val baseMetadata =
+                mapOf(
+                    "severity" to event.severity.name.lowercase(),
+                    "source" to event.source.name,
+                    "moneat_url" to event.moneatUrl
+                )
+            val convertedMetadata =
+                event.metadata.mapValues { (_, value) ->
+                    when (value) {
+                        is JsonPrimitive -> value.content
+                        is JsonArray -> value.toString()
+                        is JsonObject -> value.toString()
+                    }
                 }
-            }
 
-            val payload = AlertEventPayload(
-                deduplication_key = event.deduplicationKey,
-                status = when (event.status) {
-                    IncidentStatus.FIRING -> "firing"
-                    IncidentStatus.RESOLVED -> "resolved"
-                },
-                title = event.title,
-                description = event.description,
-                metadata = baseMetadata + convertedMetadata
-            )
+            val payload =
+                AlertEventPayload(
+                    deduplication_key = event.deduplicationKey,
+                    status =
+                        when (event.status) {
+                            IncidentStatus.FIRING -> "firing"
+                            IncidentStatus.RESOLVED -> "resolved"
+                        },
+                    title = event.title,
+                    description = event.description,
+                    metadata = baseMetadata + convertedMetadata
+                )
 
-            val response = client.post("https://api.incident.io/v2/alert_events/http/$alertSourceConfigId") {
-                header("Authorization", "Bearer ${config.apiKey}")
-                contentType(ContentType.Application.Json)
-                setBody(payload)
-            }
+            val response =
+                client.post("https://api.incident.io/v2/alert_events/http/$alertSourceConfigId") {
+                    header("Authorization", "Bearer ${config.apiKey}")
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }
 
             if (response.status.value in 200..299) {
                 val responseBody = response.body<AlertEventResponse>()
@@ -105,24 +115,30 @@ class IncidentIoProvider : IncidentProvider {
         }
     }
 
-    override suspend fun resolveAlert(deduplicationKey: String, config: ProviderConfig): Result<String> {
+    override suspend fun resolveAlert(
+        deduplicationKey: String,
+        config: ProviderConfig
+    ): Result<String> {
         return try {
-            val alertSourceConfigId = config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
-                ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
+            val alertSourceConfigId =
+                config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
+                    ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
 
-            val payload = AlertEventPayload(
-                deduplication_key = deduplicationKey,
-                status = "resolved",
-                title = "Alert Resolved",
-                description = "This alert has been automatically resolved by Moneat",
-                metadata = emptyMap()
-            )
+            val payload =
+                AlertEventPayload(
+                    deduplication_key = deduplicationKey,
+                    status = "resolved",
+                    title = "Alert Resolved",
+                    description = "This alert has been automatically resolved by Moneat",
+                    metadata = emptyMap()
+                )
 
-            val response = client.post("https://api.incident.io/v2/alert_events/http/$alertSourceConfigId") {
-                header("Authorization", "Bearer ${config.apiKey}")
-                contentType(ContentType.Application.Json)
-                setBody(payload)
-            }
+            val response =
+                client.post("https://api.incident.io/v2/alert_events/http/$alertSourceConfigId") {
+                    header("Authorization", "Bearer ${config.apiKey}")
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }
 
             if (response.status.value in 200..299) {
                 val responseBody = response.body<AlertEventResponse>()
@@ -139,24 +155,27 @@ class IncidentIoProvider : IncidentProvider {
 
     override suspend fun testConnection(config: ProviderConfig): Result<Boolean> {
         return try {
-            val alertSourceConfigId = config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
-                ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
+            val alertSourceConfigId =
+                config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
+                    ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
 
             // Send a test alert and immediately resolve it
             val testDedup = "moneat-test-${System.currentTimeMillis()}"
-            val payload = AlertEventPayload(
-                deduplication_key = testDedup,
-                status = "firing",
-                title = "Moneat Test Alert",
-                description = "This is a test alert from Moneat to verify the integration",
-                metadata = mapOf("test" to "true")
-            )
+            val payload =
+                AlertEventPayload(
+                    deduplication_key = testDedup,
+                    status = "firing",
+                    title = "Moneat Test Alert",
+                    description = "This is a test alert from Moneat to verify the integration",
+                    metadata = mapOf("test" to "true")
+                )
 
-            val response = client.post("https://api.incident.io/v2/alert_events/http/$alertSourceConfigId") {
-                header("Authorization", "Bearer ${config.apiKey}")
-                contentType(ContentType.Application.Json)
-                setBody(payload)
-            }
+            val response =
+                client.post("https://api.incident.io/v2/alert_events/http/$alertSourceConfigId") {
+                    header("Authorization", "Bearer ${config.apiKey}")
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }
 
             if (response.status.value in 200..299) {
                 // Immediately resolve the test alert

@@ -25,7 +25,11 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 
 class TextArrayColumnType : ColumnType<List<String>>() {
     private fun isH2(): Boolean =
-        TransactionManager.currentOrNull()?.db?.url?.contains("h2", ignoreCase = true) == true
+        TransactionManager
+            .currentOrNull()
+            ?.db
+            ?.url
+            ?.contains("h2", ignoreCase = true) == true
 
     override fun sqlType(): String = if (isH2()) "VARCHAR ARRAY" else "TEXT[]"
 
@@ -50,7 +54,11 @@ class TextArrayColumnType : ColumnType<List<String>>() {
         return value.toTypedArray()
     }
 
-    override fun setParameter(stmt: org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi, index: Int, value: Any?) {
+    override fun setParameter(
+        stmt: org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi,
+        index: Int,
+        value: Any?
+    ) {
         if (value == null) {
             stmt.setNull(index, this)
         } else {
@@ -134,10 +142,11 @@ object Memberships : Table("memberships") {
     val user_id = integer("user_id").references(Users.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val role = varchar("role", 50)
-    val sidebar_hidden_items = registerColumn<List<String>>(
-        "sidebar_hidden_items",
-        TextArrayColumnType()
-    ).default(emptyList())
+    val sidebar_hidden_items =
+        registerColumn<List<String>>(
+            "sidebar_hidden_items",
+            TextArrayColumnType()
+        ).default(emptyList())
     override val primaryKey = PrimaryKey(id)
 }
 

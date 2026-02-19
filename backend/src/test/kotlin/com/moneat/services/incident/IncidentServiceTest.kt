@@ -57,21 +57,25 @@ class IncidentServiceTest {
             IncidentProviderConfigs.deleteAll()
             Organizations.deleteAll()
 
-            val orgId = Organizations.insert {
-                it[name] = "Incident Org"
-                it[slug] = "incident-org"
-            }[Organizations.id]
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Incident Org"
+                    it[slug] = "incident-org"
+                }[Organizations.id]
 
-            providerConfigId = IncidentProviderConfigs.insert {
-                it[organizationId] = orgId
-                it[providerType] = "incident_io"
-                it[name] = "Incident.io"
-                it[apiKey] = "key"
-                it[configJson] = "{}"
-                it[enabled] = true
-                it[createdAt] = Clock.System.now()
-                it[updatedAt] = Clock.System.now()
-            }[IncidentProviderConfigs.id].value
+            providerConfigId =
+                IncidentProviderConfigs
+                    .insert {
+                        it[organizationId] = orgId
+                        it[providerType] = "incident_io"
+                        it[name] = "Incident.io"
+                        it[apiKey] = "key"
+                        it[configJson] = "{}"
+                        it[enabled] = true
+                        it[createdAt] = Clock.System.now()
+                        it[updatedAt] = Clock.System.now()
+                    }[IncidentProviderConfigs.id]
+                    .value
 
             IncidentRoutingRules.insert {
                 it[IncidentRoutingRules.providerConfigId] = this@IncidentServiceTest.providerConfigId
@@ -88,11 +92,12 @@ class IncidentServiceTest {
     fun `resolveIncidentSeverity prefers monitor override over routing rule`() {
         val service = IncidentService()
 
-        val severity = service.resolveIncidentSeverity(
-            providerConfigId = providerConfigId,
-            alertSource = AlertSource.SYSTEM_ALERT,
-            monitorSeverityOverride = "critical"
-        )
+        val severity =
+            service.resolveIncidentSeverity(
+                providerConfigId = providerConfigId,
+                alertSource = AlertSource.SYSTEM_ALERT,
+                monitorSeverityOverride = "critical"
+            )
 
         assertEquals(IncidentSeverity.CRITICAL, severity)
     }
@@ -101,11 +106,12 @@ class IncidentServiceTest {
     fun `resolveIncidentSeverity falls back to routing rule when override is absent`() {
         val service = IncidentService()
 
-        val severity = service.resolveIncidentSeverity(
-            providerConfigId = providerConfigId,
-            alertSource = AlertSource.SYSTEM_ALERT,
-            monitorSeverityOverride = null
-        )
+        val severity =
+            service.resolveIncidentSeverity(
+                providerConfigId = providerConfigId,
+                alertSource = AlertSource.SYSTEM_ALERT,
+                monitorSeverityOverride = null
+            )
 
         assertEquals(IncidentSeverity.MEDIUM, severity)
     }
@@ -114,11 +120,12 @@ class IncidentServiceTest {
     fun `resolveIncidentSeverity returns null for invalid override string`() {
         val service = IncidentService()
 
-        val severity = service.resolveIncidentSeverity(
-            providerConfigId = providerConfigId,
-            alertSource = AlertSource.SYSTEM_ALERT,
-            monitorSeverityOverride = "not-a-severity"
-        )
+        val severity =
+            service.resolveIncidentSeverity(
+                providerConfigId = providerConfigId,
+                alertSource = AlertSource.SYSTEM_ALERT,
+                monitorSeverityOverride = "not-a-severity"
+            )
 
         assertNull(severity)
     }

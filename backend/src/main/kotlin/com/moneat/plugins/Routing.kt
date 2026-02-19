@@ -78,37 +78,44 @@ fun Application.configureRouting() {
         }
 
         get("/health") {
-            val postgresStatus = try {
-                transaction { }
-                "ok"
-            } catch (_: Exception) {
-                "error"
-            }
-            val clickhouseStatus = try {
-                if (ClickHouseClient.ping()) "ok" else "error"
-            } catch (_: Exception) {
-                "error"
-            }
-            val redisStatus = try {
-                if (RedisConfig.isConnected()) {
-                    RedisConfig.sync().ping()
+            val postgresStatus =
+                try {
+                    transaction { }
                     "ok"
-                } else {
+                } catch (_: Exception) {
                     "error"
                 }
-            } catch (_: Exception) {
-                "error"
-            }
-            val ingestQueueDepth = try {
-                if (RedisConfig.isConnected()) {
-                    val queueKey = call.application.environment.config.property("ingest.queueKey").getString()
-                    RedisConfig.sync().llen(queueKey)
-                } else {
+            val clickhouseStatus =
+                try {
+                    if (ClickHouseClient.ping()) "ok" else "error"
+                } catch (_: Exception) {
+                    "error"
+                }
+            val redisStatus =
+                try {
+                    if (RedisConfig.isConnected()) {
+                        RedisConfig.sync().ping()
+                        "ok"
+                    } else {
+                        "error"
+                    }
+                } catch (_: Exception) {
+                    "error"
+                }
+            val ingestQueueDepth =
+                try {
+                    if (RedisConfig.isConnected()) {
+                        val queueKey =
+                            call.application.environment.config
+                                .property("ingest.queueKey")
+                                .getString()
+                        RedisConfig.sync().llen(queueKey)
+                    } else {
+                        0L
+                    }
+                } catch (_: Exception) {
                     0L
                 }
-            } catch (_: Exception) {
-                0L
-            }
             val status = if (postgresStatus == "ok" && clickhouseStatus == "ok" && redisStatus == "ok") "ok" else "degraded"
             val response = HealthResponse(status, postgresStatus, clickhouseStatus, redisStatus, ingestQueueDepth)
             if (status == "ok") {

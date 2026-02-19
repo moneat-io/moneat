@@ -39,33 +39,37 @@ class StatusPageRoutesTest {
     private val jwtSecret = "status-routes-secret"
 
     @Test
-    fun `status page detail endpoint validates UUID format`() = testApplication {
-        application {
-            install(ContentNegotiation) { json() }
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256(jwtSecret))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+    fun `status page detail endpoint validates UUID format`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
+                routing { statusPageRoutes() }
             }
-            routing { statusPageRoutes() }
-        }
 
-        val response = client.get("/v1/status-pages/not-a-uuid") {
-            header(HttpHeaders.Authorization, "Bearer ${tokenForUser(100)}")
-        }
+            val response =
+                client.get("/v1/status-pages/not-a-uuid") {
+                    header(HttpHeaders.Authorization, "Bearer ${tokenForUser(100)}")
+                }
 
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("Invalid page ID format"))
-    }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid page ID format"))
+        }
 
     private fun tokenForUser(userId: Int): String {
-        return JWT.create()
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)

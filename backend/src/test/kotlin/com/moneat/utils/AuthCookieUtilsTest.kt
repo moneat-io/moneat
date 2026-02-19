@@ -34,7 +34,9 @@ class AuthCookieUtilsTest {
     ) = testApplication {
         // Disable auto-loading of application.conf module
         environment {
-            config = io.ktor.server.config.MapApplicationConfig()
+            config =
+                io.ktor.server.config
+                    .MapApplicationConfig()
         }
         routing {
             get("/test") {
@@ -50,79 +52,89 @@ class AuthCookieUtilsTest {
     }
 
     @Test
-    fun `setAuthCookie sets cookie with correct name and value`() = cookieTest(
-        handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-jwt-token") },
-        assertions = { cookie -> assertTrue(cookie.contains("auth_token=test-jwt-token")) }
-    )
-
-    @Test
-    fun `setAuthCookie sets httpOnly flag`() = cookieTest(
-        handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
-        assertions = { cookie -> assertTrue(cookie.lowercase().contains("httponly"), "Cookie should be httpOnly") }
-    )
-
-    @Test
-    fun `setAuthCookie sets path to root`() = cookieTest(
-        handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
-        assertions = { cookie -> assertTrue(cookie.contains("Path=/"), "Cookie path should be /") }
-    )
-
-    @Test
-    fun `setAuthCookie sets 1 hour max age`() = cookieTest(
-        handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
-        assertions = { cookie -> assertTrue(cookie.contains("Max-Age=3600"), "Cookie should have 1 hour max age") }
-    )
-
-    @Test
-    fun `setDemoCookie sets 24 hour max age`() = cookieTest(
-        handler = { call -> AuthCookieUtils.setDemoCookie(call, "demo-token") },
-        assertions = { cookie ->
-            assertTrue(
-                cookie.contains("Max-Age=86400"),
-                "Demo cookie should have 24 hour max age"
-            )
-        }
-    )
-
-    @Test
-    fun `clearAuthCookie expires the cookie`() = testApplication {
-        environment {
-            config = io.ktor.server.config.MapApplicationConfig()
-        }
-        routing {
-            get("/test") {
-                AuthCookieUtils.clearAuthCookie(call)
-                call.respondText("ok")
-            }
-        }
-        val response = client.get("/test")
-        val cookies = response.headers.getAll(HttpHeaders.SetCookie)
-        assertNotNull(cookies, "Expected Set-Cookie header")
-        val cookie = cookies.first { it.contains("auth_token") }
-        // Cookie with maxAge=0 should have an expiration in the past
-        // Ktor renders maxAge=0 as an Expires header with epoch date
-        assertTrue(
-            cookie.contains("Max-Age=0") ||
-                cookie.lowercase().contains("expires=") ||
-                cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
-            "Cleared cookie should be expired but got: $cookie"
+    fun `setAuthCookie sets cookie with correct name and value`() =
+        cookieTest(
+            handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-jwt-token") },
+            assertions = { cookie -> assertTrue(cookie.contains("auth_token=test-jwt-token")) }
         )
-    }
 
     @Test
-    fun `clearAuthCookie sets empty value`() = cookieTest(
-        handler = { call -> AuthCookieUtils.clearAuthCookie(call) },
-        assertions = { cookie ->
+    fun `setAuthCookie sets httpOnly flag`() =
+        cookieTest(
+            handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
+            assertions = { cookie -> assertTrue(cookie.lowercase().contains("httponly"), "Cookie should be httpOnly") }
+        )
+
+    @Test
+    fun `setAuthCookie sets path to root`() =
+        cookieTest(
+            handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
+            assertions = { cookie -> assertTrue(cookie.contains("Path=/"), "Cookie path should be /") }
+        )
+
+    @Test
+    fun `setAuthCookie sets 1 hour max age`() =
+        cookieTest(
+            handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
+            assertions = { cookie -> assertTrue(cookie.contains("Max-Age=3600"), "Cookie should have 1 hour max age") }
+        )
+
+    @Test
+    fun `setDemoCookie sets 24 hour max age`() =
+        cookieTest(
+            handler = { call -> AuthCookieUtils.setDemoCookie(call, "demo-token") },
+            assertions = { cookie ->
+                assertTrue(
+                    cookie.contains("Max-Age=86400"),
+                    "Demo cookie should have 24 hour max age"
+                )
+            }
+        )
+
+    @Test
+    fun `clearAuthCookie expires the cookie`() =
+        testApplication {
+            environment {
+                config =
+                    io.ktor.server.config
+                        .MapApplicationConfig()
+            }
+            routing {
+                get("/test") {
+                    AuthCookieUtils.clearAuthCookie(call)
+                    call.respondText("ok")
+                }
+            }
+            val response = client.get("/test")
+            val cookies = response.headers.getAll(HttpHeaders.SetCookie)
+            assertNotNull(cookies, "Expected Set-Cookie header")
+            val cookie = cookies.first { it.contains("auth_token") }
+            // Cookie with maxAge=0 should have an expiration in the past
+            // Ktor renders maxAge=0 as an Expires header with epoch date
             assertTrue(
-                cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
-                "Cleared cookie should have empty value"
+                cookie.contains("Max-Age=0") ||
+                    cookie.lowercase().contains("expires=") ||
+                    cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
+                "Cleared cookie should be expired but got: $cookie"
             )
         }
-    )
 
     @Test
-    fun `setAuthCookie uses Lax SameSite for HTTP`() = cookieTest(
-        handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
-        assertions = { cookie -> assertTrue(cookie.contains("SameSite=Lax"), "HTTP should use Lax SameSite") }
-    )
+    fun `clearAuthCookie sets empty value`() =
+        cookieTest(
+            handler = { call -> AuthCookieUtils.clearAuthCookie(call) },
+            assertions = { cookie ->
+                assertTrue(
+                    cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
+                    "Cleared cookie should have empty value"
+                )
+            }
+        )
+
+    @Test
+    fun `setAuthCookie uses Lax SameSite for HTTP`() =
+        cookieTest(
+            handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
+            assertions = { cookie -> assertTrue(cookie.contains("SameSite=Lax"), "HTTP should use Lax SameSite") }
+        )
 }

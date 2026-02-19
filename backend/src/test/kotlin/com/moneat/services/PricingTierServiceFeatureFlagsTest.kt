@@ -95,23 +95,24 @@ class PricingTierServiceFeatureFlagsTest {
         }
 
         val service = PricingTierService()
-        val created = service.createTierVersion(
-            "PRO",
-            CreateTierVersionRequest(
-                monthlyUnitLimit = 500_000,
-                monthlyErrorLimit = 500_000,
-                monthlyTransactionLimit = 0,
-                monthlyReplayLimit = 0,
-                monthlyFeedbackLimit = 0,
-                retentionDays = 30,
-                maxProjects = null,
-                maxSystems = 10,
-                monitorIntervalSeconds = 30,
-                monthlyPriceCents = 2900,
-                paygEnabled = true,
-                paygRateMicrosPerUnit = 400_000
+        val created =
+            service.createTierVersion(
+                "PRO",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = 500_000,
+                    monthlyErrorLimit = 500_000,
+                    monthlyTransactionLimit = 0,
+                    monthlyReplayLimit = 0,
+                    monthlyFeedbackLimit = 0,
+                    retentionDays = 30,
+                    maxProjects = null,
+                    maxSystems = 10,
+                    monitorIntervalSeconds = 30,
+                    monthlyPriceCents = 2900,
+                    paygEnabled = true,
+                    paygRateMicrosPerUnit = 400_000
+                )
             )
-        )
 
         assertEquals(2, created.version)
         assertEquals(53_687_091_200, created.monthlyGbLimit)
@@ -128,12 +129,13 @@ class PricingTierServiceFeatureFlagsTest {
 
     @Test
     fun `getCurrentPlans returns retention and feature flag matrix`() {
-        val tiers = listOf(
-            SeedTier("FREE", 0, 3, 3, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
-            SeedTier("PRO", 2900, 30, 30, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
-            SeedTier("TEAM", 7900, 30, 30, saml = true, oidc = true, priority = false, sla = false, customRetention = false),
-            SeedTier("BUSINESS", 19900, 90, 90, saml = true, oidc = true, priority = true, sla = true, customRetention = true)
-        )
+        val tiers =
+            listOf(
+                SeedTier("FREE", 0, 3, 3, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
+                SeedTier("PRO", 2900, 30, 30, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
+                SeedTier("TEAM", 7900, 30, 30, saml = true, oidc = true, priority = false, sla = false, customRetention = false),
+                SeedTier("BUSINESS", 19900, 90, 90, saml = true, oidc = true, priority = true, sla = true, customRetention = true)
+            )
 
         transaction {
             tiers.forEachIndexed { idx, tier ->
@@ -194,12 +196,14 @@ class PricingTierServiceFeatureFlagsTest {
         assertTrue(business.slaEnabled)
         assertTrue(business.customRetentionEnabled)
 
-        val currentVersions = transaction {
-            PricingTierConfigs.selectAll()
-                .where { PricingTierConfigs.tier_name eq "PRO" }
-                .orderBy(PricingTierConfigs.version to SortOrder.DESC)
-                .toList()
-        }
+        val currentVersions =
+            transaction {
+                PricingTierConfigs
+                    .selectAll()
+                    .where { PricingTierConfigs.tier_name eq "PRO" }
+                    .orderBy(PricingTierConfigs.version to SortOrder.DESC)
+                    .toList()
+            }
         assertTrue(currentVersions.isNotEmpty())
     }
 

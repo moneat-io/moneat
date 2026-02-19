@@ -104,17 +104,18 @@ class LogQueryParserSqlTest {
 
     @Test
     fun `SQL does not have syntax errors`() {
-        val queries = listOf(
-            "error",
-            "error AND timeout",
-            "service:web",
-            "@http.status_code:500",
-            "status:error AND service:api",
-            "(error OR warning) AND service:web",
-            "@custom:value",
-            "*:search",
-            "service:web*"
-        )
+        val queries =
+            listOf(
+                "error",
+                "error AND timeout",
+                "service:web",
+                "@http.status_code:500",
+                "status:error AND service:api",
+                "(error OR warning) AND service:web",
+                "@custom:value",
+                "*:search",
+                "service:web*"
+            )
 
         queries.forEach { query ->
             val result = parser.parse(query)
@@ -159,12 +160,13 @@ class LogQueryParserSqlTest {
 
     @Test
     fun `comparison operator generates valid SQL`() {
-        val queries = listOf(
-            "@http.response_time:>100",
-            "@http.response_time:>=100",
-            "@http.response_time:<500",
-            "@http.response_time:<=500"
-        )
+        val queries =
+            listOf(
+                "@http.response_time:>100",
+                "@http.response_time:>=100",
+                "@http.response_time:<500",
+                "@http.response_time:<=500"
+            )
 
         queries.forEach { query ->
             val result = parser.parse(query)
@@ -241,15 +243,16 @@ class LogQueryParserSqlTest {
 
     @Test
     fun `all new features generate balanced parentheses`() {
-        val queries = listOf(
-            "@http.response_time:>100",
-            "@http.status_code:*",
-            "-@http.status_code:*",
-            "tags:urgent",
-            "env:(prod OR staging)",
-            "\"connection refused\"",
-            "service:api AND @http.response_time:>=500 AND -@custom:*"
-        )
+        val queries =
+            listOf(
+                "@http.response_time:>100",
+                "@http.status_code:*",
+                "-@http.status_code:*",
+                "tags:urgent",
+                "env:(prod OR staging)",
+                "\"connection refused\"",
+                "service:api AND @http.response_time:>=500 AND -@custom:*"
+            )
 
         queries.forEach { query ->
             val result = parser.parse(query)

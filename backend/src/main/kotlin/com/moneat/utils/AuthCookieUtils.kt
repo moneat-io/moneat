@@ -22,7 +22,10 @@ import io.ktor.server.application.call
 import io.ktor.server.plugins.*
 
 object AuthCookieUtils {
-    fun setAuthCookie(call: ApplicationCall, token: String) {
+    fun setAuthCookie(
+        call: ApplicationCall,
+        token: String
+    ) {
         val isSecure = call.request.origin.scheme == "https"
         call.response.cookies.append(
             Cookie(
@@ -37,7 +40,10 @@ object AuthCookieUtils {
         )
     }
 
-    fun setDemoCookie(call: ApplicationCall, token: String) {
+    fun setDemoCookie(
+        call: ApplicationCall,
+        token: String
+    ) {
         val isSecure = call.request.origin.scheme == "https"
         call.response.cookies.append(
             Cookie(

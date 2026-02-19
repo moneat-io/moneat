@@ -52,8 +52,9 @@ object DataSeeder {
         EnvConfig.initialize()
 
         // Connect to database
-        val dbUrl = EnvConfig.get("POSTGRES_URL")
-            ?: "jdbc:postgresql://localhost:5499/moneat"
+        val dbUrl =
+            EnvConfig.get("POSTGRES_URL")
+                ?: "jdbc:postgresql://localhost:5499/moneat"
         val dbUser = EnvConfig.get("POSTGRES_USER") ?: "moneat"
         val dbPassword = EnvConfig.get("POSTGRES_PASSWORD") ?: "moneat_dev_password"
 
@@ -78,39 +79,43 @@ object DataSeeder {
             val passwordHash = hashPassword("e2e-test-password")
 
             // Create test users
-            val user1Id = Users.insert {
-                it[email] = "e2e-test@moneat.dev"
-                it[password_hash] = passwordHash
-                it[name] = "E2E Test User"
-                it[email_verified] = true
-                it[onboarding_completed] = true
-            } get Users.id
+            val user1Id =
+                Users.insert {
+                    it[email] = "e2e-test@moneat.dev"
+                    it[password_hash] = passwordHash
+                    it[name] = "E2E Test User"
+                    it[email_verified] = true
+                    it[onboarding_completed] = true
+                } get Users.id
 
-            val user2Id = Users.insert {
-                it[email] = "e2e-user2@moneat.dev"
-                it[password_hash] = passwordHash
-                it[name] = "E2E User 2"
-                it[email_verified] = true
-                it[onboarding_completed] = true
-            } get Users.id
+            val user2Id =
+                Users.insert {
+                    it[email] = "e2e-user2@moneat.dev"
+                    it[password_hash] = passwordHash
+                    it[name] = "E2E User 2"
+                    it[email_verified] = true
+                    it[onboarding_completed] = true
+                } get Users.id
 
-            val user3Id = Users.insert {
-                it[email] = "e2e-user3@moneat.dev"
-                it[password_hash] = passwordHash
-                it[name] = "E2E User 3"
-                it[email_verified] = true
-                it[onboarding_completed] = true
-            } get Users.id
+            val user3Id =
+                Users.insert {
+                    it[email] = "e2e-user3@moneat.dev"
+                    it[password_hash] = passwordHash
+                    it[name] = "E2E User 3"
+                    it[email_verified] = true
+                    it[onboarding_completed] = true
+                } get Users.id
 
             println("Created users: $user1Id, $user2Id, $user3Id")
 
             // Create organization
             println("Creating organization...")
-            val orgId = Organizations.insert {
-                it[name] = "E2E Testing Organization"
-                it[slug] = "e2e-testing"
-                it[company_size] = "1-10"
-            } get Organizations.id
+            val orgId =
+                Organizations.insert {
+                    it[name] = "E2E Testing Organization"
+                    it[slug] = "e2e-testing"
+                    it[company_size] = "1-10"
+                } get Organizations.id
 
             println("Created organization: $orgId")
 
@@ -136,19 +141,21 @@ object DataSeeder {
 
             // Create projects
             println("Creating projects...")
-            val androidProjectId = Projects.insert {
-                it[organization_id] = orgId
-                it[name] = "Android E2E App"
-                it[slug] = "android-e2e"
-                it[framework] = "android"
-            } get Projects.id
+            val androidProjectId =
+                Projects.insert {
+                    it[organization_id] = orgId
+                    it[name] = "Android E2E App"
+                    it[slug] = "android-e2e"
+                    it[framework] = "android"
+                } get Projects.id
 
-            val kmpProjectId = Projects.insert {
-                it[organization_id] = orgId
-                it[name] = "KMP E2E App"
-                it[slug] = "kmp-e2e"
-                it[framework] = "kotlin-multiplatform"
-            } get Projects.id
+            val kmpProjectId =
+                Projects.insert {
+                    it[organization_id] = orgId
+                    it[name] = "KMP E2E App"
+                    it[slug] = "kmp-e2e"
+                    it[framework] = "kotlin-multiplatform"
+                } get Projects.id
 
             println("Created projects: Android=$androidProjectId, KMP=$kmpProjectId")
 

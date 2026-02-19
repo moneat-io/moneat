@@ -55,7 +55,8 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     }
 
     private fun sendLog(event: ILoggingEvent) {
-        val payload = """
+        val payload =
+            """
 {
   "resourceLogs": [{
     "resource": {
@@ -73,9 +74,13 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     }]
   }]
 }
-        """.trimIndent()
+            """.trimIndent()
 
-        val connection = java.net.URI(endpoint).toURL().openConnection() as HttpURLConnection
+        val connection =
+            java.net
+                .URI(endpoint)
+                .toURL()
+                .openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")
@@ -92,12 +97,13 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     }
 
     private fun escapeJson(str: String): String {
-        return "\"" + str
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t") + "\""
+        return "\"" +
+            str
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t") + "\""
     }
 
     override fun stop() {

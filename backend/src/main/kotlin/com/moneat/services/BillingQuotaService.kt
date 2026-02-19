@@ -171,11 +171,12 @@ class BillingQuotaService(
             }
 
             // GB/byte limit check
-            val effectiveBytesLimit = if (state.bytesLimit > 0) {
-                state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes
-            } else {
-                Long.MAX_VALUE
-            }
+            val effectiveBytesLimit =
+                if (state.bytesLimit > 0) {
+                    state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes
+                } else {
+                    Long.MAX_VALUE
+                }
             if (state.bytesLimit > 0 && bytesAfter > effectiveBytesLimit) {
                 SentryUtils.breadcrumb(
                     "billing",
@@ -308,14 +309,19 @@ class BillingQuotaService(
         val llmOverageRateCentsPer1k: Int
     )
 
-    private fun loadQuotaState(organizationId: Int, lockRows: Boolean): QuotaState {
+    private fun loadQuotaState(
+        organizationId: Int,
+        lockRows: Boolean
+    ): QuotaState {
         val now = Clock.System.todayIn(TimeZone.UTC)
-        val sub = Subscriptions.selectAll().where {
-            (Subscriptions.organization_id eq organizationId) and
-                (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-        }
-            .orderBy(Subscriptions.id to SortOrder.DESC)
-            .firstOrNull()
+        val sub =
+            Subscriptions
+                .selectAll()
+                .where {
+                    (Subscriptions.organization_id eq organizationId) and
+                        (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+                }.orderBy(Subscriptions.id to SortOrder.DESC)
+                .firstOrNull()
 
         if (lockRows && sub != null) {
             val subId = sub[Subscriptions.id]
@@ -325,45 +331,58 @@ class BillingQuotaService(
             )
         }
 
-        val tier = run {
-            val byId = sub?.get(Subscriptions.pricing_tier_config_id)?.let { tierId ->
-                PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq tierId }.firstOrNull()
-            }
+        val tier =
+            run {
+                val byId =
+                    sub?.get(Subscriptions.pricing_tier_config_id)?.let { tierId ->
+                        PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq tierId }.firstOrNull()
+                    }
 
-            val byPlan = if (byId == null && sub != null) {
-                PricingTierConfigs.selectAll().where {
-                    (PricingTierConfigs.tier_name eq sub[Subscriptions.plan].uppercase()) and
-                        (PricingTierConfigs.is_current eq true)
+                val byPlan =
+                    if (byId == null && sub != null) {
+                        PricingTierConfigs
+                            .selectAll()
+                            .where {
+                                (PricingTierConfigs.tier_name eq sub[Subscriptions.plan].uppercase()) and
+                                    (PricingTierConfigs.is_current eq true)
+                            }.firstOrNull()
+                    } else {
+                        null
+                    }
+
+                val free =
+                    if (byId == null && byPlan == null) {
+                        PricingTierConfigs
+                            .selectAll()
+                            .where {
+                                (PricingTierConfigs.tier_name eq "FREE") and
+                                    (PricingTierConfigs.is_current eq true)
+                            }.firstOrNull()
+                    } else {
+                        null
+                    }
+
+                when {
+                    byId != null -> tierFromRow(byId)
+                    byPlan != null -> tierFromRow(byPlan)
+                    free != null -> tierFromRow(free)
+                    else -> tierFromEnum(sub?.get(Subscriptions.plan) ?: "FREE")
+                }
+            }
+        val periodStart =
+            sub?.get(Subscriptions.current_period_start)?.toLocalDateTime(TimeZone.UTC)?.date
+                ?: LocalDate(now.year, now.month, 1)
+        val periodEnd =
+            sub?.get(Subscriptions.current_period_end)?.toLocalDateTime(TimeZone.UTC)?.date
+                ?: periodStart.plus(DatePeriod(months = 1, days = -1))
+
+        val existingCounter =
+            OrgUsageCounters
+                .selectAll()
+                .where {
+                    (OrgUsageCounters.organization_id eq organizationId) and
+                        (OrgUsageCounters.period_start eq periodStart)
                 }.firstOrNull()
-            } else {
-                null
-            }
-
-            val free = if (byId == null && byPlan == null) {
-                PricingTierConfigs.selectAll().where {
-                    (PricingTierConfigs.tier_name eq "FREE") and
-                        (PricingTierConfigs.is_current eq true)
-                }.firstOrNull()
-            } else {
-                null
-            }
-
-            when {
-                byId != null -> tierFromRow(byId)
-                byPlan != null -> tierFromRow(byPlan)
-                free != null -> tierFromRow(free)
-                else -> tierFromEnum(sub?.get(Subscriptions.plan) ?: "FREE")
-            }
-        }
-        val periodStart = sub?.get(Subscriptions.current_period_start)?.toLocalDateTime(TimeZone.UTC)?.date
-            ?: LocalDate(now.year, now.month, 1)
-        val periodEnd = sub?.get(Subscriptions.current_period_end)?.toLocalDateTime(TimeZone.UTC)?.date
-            ?: periodStart.plus(DatePeriod(months = 1, days = -1))
-
-        val existingCounter = OrgUsageCounters.selectAll().where {
-            (OrgUsageCounters.organization_id eq organizationId) and
-                (OrgUsageCounters.period_start eq periodStart)
-        }.firstOrNull()
 
         if (existingCounter == null) {
             OrgUsageCounters.insert {
@@ -390,10 +409,13 @@ class BillingQuotaService(
             )
         }
 
-        val usageRow = OrgUsageCounters.selectAll().where {
-            (OrgUsageCounters.organization_id eq organizationId) and
-                (OrgUsageCounters.period_start eq periodStart)
-        }.first()
+        val usageRow =
+            OrgUsageCounters
+                .selectAll()
+                .where {
+                    (OrgUsageCounters.organization_id eq organizationId) and
+                        (OrgUsageCounters.period_start eq periodStart)
+                }.first()
 
         val usedUnits = usageRow[OrgUsageCounters.used_units]
         val usedErrors = usageRow[OrgUsageCounters.used_errors]
@@ -413,23 +435,26 @@ class BillingQuotaService(
         val replayLimit = tier.monthlyReplayLimit
         val feedbackLimit = tier.monthlyFeedbackLimit
         val bytesLimit = tier.monthlyGbLimit
-        val aggregateBaseFromTypes = listOf(errorLimit, transactionLimit, replayLimit, feedbackLimit)
-            .filter { it >= 0 }
-            .sum()
+        val aggregateBaseFromTypes =
+            listOf(errorLimit, transactionLimit, replayLimit, feedbackLimit)
+                .filter { it >= 0 }
+                .sum()
         val paygBudgetCents = sub?.get(Subscriptions.payg_budget_cents) ?: 0
         val paygRateMicros = tier.paygRateMicrosPerUnit
         val overageRateCentsPerGb = tier.overageRateCentsPerGb
         val paygEnabled = tier.paygEnabled
-        val paygLimitUnits = if (paygEnabled && paygBudgetCents > 0 && paygRateMicros > 0) {
-            (paygBudgetCents.toLong() * 10_000L) / paygRateMicros
-        } else {
-            0
-        }
-        val paygLimitBytes = if (paygEnabled && paygBudgetCents > 0 && overageRateCentsPerGb > 0) {
-            (paygBudgetCents.toLong() * BYTES_PER_GB) / overageRateCentsPerGb.toLong()
-        } else {
-            0
-        }
+        val paygLimitUnits =
+            if (paygEnabled && paygBudgetCents > 0 && paygRateMicros > 0) {
+                (paygBudgetCents.toLong() * 10_000L) / paygRateMicros
+            } else {
+                0
+            }
+        val paygLimitBytes =
+            if (paygEnabled && paygBudgetCents > 0 && overageRateCentsPerGb > 0) {
+                (paygBudgetCents.toLong() * BYTES_PER_GB) / overageRateCentsPerGb.toLong()
+            } else {
+                0
+            }
         val baseLimit = if (tier.monthlyUnitLimit > 0) tier.monthlyUnitLimit else aggregateBaseFromTypes
         val totalLimit = baseLimit + paygLimitUnits
 
@@ -491,45 +516,50 @@ class BillingQuotaService(
 
     private fun toUsageResponse(state: QuotaState): BillingUsageResponse {
         val effectivePaygHeadroom = state.paygLimitUnits + state.bonusUnits
-        val eventLimitsWithinBudget = listOf(
-            state.usedErrors to state.errorLimit,
-            state.usedTransactions to state.transactionLimit,
-            state.usedReplays to state.replayLimit,
-            state.usedFeedback to state.feedbackLimit
-        ).all { (used, limit) ->
-            limit < 0 || used <= (limit + effectivePaygHeadroom)
-        }
+        val eventLimitsWithinBudget =
+            listOf(
+                state.usedErrors to state.errorLimit,
+                state.usedTransactions to state.transactionLimit,
+                state.usedReplays to state.replayLimit,
+                state.usedFeedback to state.feedbackLimit
+            ).all { (used, limit) ->
+                limit < 0 || used <= (limit + effectivePaygHeadroom)
+            }
         val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + effectivePaygHeadroom)
         val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes)
 
         // Per-type overage cost estimates
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
-        val errorOverageCents = if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0) {
-            ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt()
-        } else {
-            0
-        }
+        val errorOverageCents =
+            if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0) {
+                ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt()
+            } else {
+                0
+            }
 
-        val replayOverageCents = if (state.replayOverageRateCentsPerGb > 0 && state.usedReplayBytes > 0) {
-            val overageReplays = max(0, state.usedReplays - state.replayLimit)
-            ((overageReplays * state.replayOverageRateCentsPerGb) / 100).toInt()
-        } else {
-            0
-        }
+        val replayOverageCents =
+            if (state.replayOverageRateCentsPerGb > 0 && state.usedReplayBytes > 0) {
+                val overageReplays = max(0, state.usedReplays - state.replayLimit)
+                ((overageReplays * state.replayOverageRateCentsPerGb) / 100).toInt()
+            } else {
+                0
+            }
 
         val logOverageBytes = max(0, state.usedLogBytes - state.bytesLimit)
-        val logOverageCents = if (state.logOverageRateCentsPerGb > 0 && logOverageBytes > 0) {
-            ((logOverageBytes * state.logOverageRateCentsPerGb) / BYTES_PER_GB).toInt()
-        } else {
-            0
-        }
+        val logOverageCents =
+            if (state.logOverageRateCentsPerGb > 0 && logOverageBytes > 0) {
+                ((logOverageBytes * state.logOverageRateCentsPerGb) / BYTES_PER_GB).toInt()
+            } else {
+                0
+            }
 
         val llmOverageUnits = max(0, state.usedLlmEvents - state.llmEventLimit)
-        val llmOverageCents = if (state.llmOverageRateCentsPer1k > 0 && llmOverageUnits > 0) {
-            ((llmOverageUnits * state.llmOverageRateCentsPer1k) / 1000).toInt()
-        } else {
-            0
-        }
+        val llmOverageCents =
+            if (state.llmOverageRateCentsPer1k > 0 && llmOverageUnits > 0) {
+                ((llmOverageUnits * state.llmOverageRateCentsPer1k) / 1000).toInt()
+            } else {
+                0
+            }
 
         val totalOverageCents = errorOverageCents + replayOverageCents + logOverageCents + llmOverageCents
 
@@ -670,18 +700,20 @@ class BillingQuotaService(
             maxProjects = tier.maxProjects,
             maxSystems = tier.maxSystems,
             monitorIntervalSeconds = tier.monitorIntervalSeconds,
-            monthlyPriceCents = when (tier) {
-                PricingTier.FREE -> 0
-                PricingTier.PRO -> 2900
-                PricingTier.TEAM -> 7900
-                PricingTier.BUSINESS -> 19900
-            },
-            yearlyPriceCents = when (tier) {
-                PricingTier.FREE -> 0
-                PricingTier.PRO -> 28800
-                PricingTier.TEAM -> 79200
-                PricingTier.BUSINESS -> 199200
-            },
+            monthlyPriceCents =
+                when (tier) {
+                    PricingTier.FREE -> 0
+                    PricingTier.PRO -> 2900
+                    PricingTier.TEAM -> 7900
+                    PricingTier.BUSINESS -> 19900
+                },
+            yearlyPriceCents =
+                when (tier) {
+                    PricingTier.FREE -> 0
+                    PricingTier.PRO -> 28800
+                    PricingTier.TEAM -> 79200
+                    PricingTier.BUSINESS -> 199200
+                },
             trialDays = if (tier == PricingTier.FREE) 0 else 14,
             paygEnabled = tier != PricingTier.FREE,
             paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,
@@ -714,7 +746,10 @@ class BillingQuotaService(
         }
     }
 
-    private fun usedUnitsForType(state: QuotaState, eventType: String): Long {
+    private fun usedUnitsForType(
+        state: QuotaState,
+        eventType: String
+    ): Long {
         return when (eventType) {
             "error" -> state.usedErrors
             "transaction" -> state.usedTransactions
@@ -726,14 +761,24 @@ class BillingQuotaService(
         }
     }
 
-    private fun baseLimitForType(state: QuotaState, eventType: String): Long {
+    private fun baseLimitForType(
+        state: QuotaState,
+        eventType: String
+    ): Long {
         return when (eventType) {
             "error" -> state.errorLimit
+
             "transaction" -> state.transactionLimit
+
             "replay" -> state.replayLimit
+
             "feedback" -> state.feedbackLimit
+
             "llm" -> state.llmEventLimit
-            "log" -> -1L // Logs are byte-limited, not unit-limited
+
+            "log" -> -1L
+
+            // Logs are byte-limited, not unit-limited
             else -> state.errorLimit
         }
     }

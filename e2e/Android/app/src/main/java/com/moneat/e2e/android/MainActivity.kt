@@ -94,42 +94,77 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showUserFeedbackDialog() {
-        val messageInput = EditText(this).apply {
-            hint = "What happened? What did you expect?"
-            minLines = 3
-            setPadding(48, 32, 48, 32)
-        }
-        val nameInput = EditText(this).apply {
-            hint = "Your name"
-            setPadding(48, 16, 48, 16)
-        }
-        val emailInput = EditText(this).apply {
-            hint = "your.email@example.com"
-            setPadding(48, 16, 48, 16)
-        }
-        val container = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-            addView(messageInput, android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16 })
-            addView(nameInput, android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16 })
-            addView(emailInput, android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT))
-        }
-        AlertDialog.Builder(this)
+        val messageInput =
+            EditText(this).apply {
+                hint = "What happened? What did you expect?"
+                minLines = 3
+                setPadding(48, 32, 48, 32)
+            }
+        val nameInput =
+            EditText(this).apply {
+                hint = "Your name"
+                setPadding(48, 16, 48, 16)
+            }
+        val emailInput =
+            EditText(this).apply {
+                hint = "your.email@example.com"
+                setPadding(48, 16, 48, 16)
+            }
+        val container =
+            android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(24, 24, 24, 24)
+                addView(
+                    messageInput,
+                    android.widget.LinearLayout
+                        .LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ).apply {
+                            bottomMargin =
+                                16
+                        },
+                )
+                addView(
+                    nameInput,
+                    android.widget.LinearLayout
+                        .LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ).apply {
+                            bottomMargin =
+                                16
+                        },
+                )
+                addView(
+                    emailInput,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+        AlertDialog
+            .Builder(this)
             .setTitle("Send User Feedback")
             .setView(container)
             .setPositiveButton("Send") { _, _ ->
-                val message = messageInput.text.toString().trim().ifEmpty { "E2E feedback from Android" }
+                val message =
+                    messageInput.text
+                        .toString()
+                        .trim()
+                        .ifEmpty { "E2E feedback from Android" }
                 val name = nameInput.text.toString().trim()
                 val email = emailInput.text.toString().trim()
-                val feedback = Feedback(message).apply {
-                    if (name.isNotBlank()) this.name = name
-                    if (email.isNotBlank()) this.contactEmail = email
-                }
+                val feedback =
+                    Feedback(message).apply {
+                        if (name.isNotBlank()) this.name = name
+                        if (email.isNotBlank()) this.contactEmail = email
+                    }
                 Sentry.captureFeedback(feedback)
                 log("User feedback sent to Sentry")
                 showToast("Feedback sent to Sentry")
-            }
-            .setNegativeButton("Cancel", null)
+            }.setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -157,11 +192,14 @@ class MainActivity : AppCompatActivity() {
             throw SocketTimeoutException("API request timed out after 30s")
         } catch (e: Exception) {
             Sentry.captureException(e) { scope ->
-                scope.setContexts("network", mapOf(
-                    "url" to "https://api.example.com/users",
-                    "method" to "GET",
-                    "timeout" to 30000
-                ))
+                scope.setContexts(
+                    "network",
+                    mapOf(
+                        "url" to "https://api.example.com/users",
+                        "method" to "GET",
+                        "timeout" to 30000,
+                    ),
+                )
             }
             log("Network error sent to Sentry")
             showToast("Network error sent to Sentry")
@@ -190,14 +228,18 @@ class MainActivity : AppCompatActivity() {
         try {
             Sentry.setTag("error_type", "npe")
             val nullString: String? = null
+
             @Suppress("UNNECESSARY_NOT_NULL_ASSERTION")
             val length = nullString!!.length // Force NPE
         } catch (e: Exception) {
             Sentry.captureException(e) { scope ->
-                scope.setContexts("error_context", mapOf(
-                    "component" to "data_processor",
-                    "operation" to "string_length"
-                ))
+                scope.setContexts(
+                    "error_context",
+                    mapOf(
+                        "component" to "data_processor",
+                        "operation" to "string_length",
+                    ),
+                )
             }
             log("NullPointerException sent to Sentry")
             showToast("NPE sent to Sentry")
@@ -298,11 +340,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addBreadcrumb(message: String) {
-        val breadcrumb = Breadcrumb().apply {
-            this.message = message
-            level = SentryLevel.INFO
-            category = "user_action"
-        }
+        val breadcrumb =
+            Breadcrumb().apply {
+                this.message = message
+                level = SentryLevel.INFO
+                category = "user_action"
+            }
         Sentry.addBreadcrumb(breadcrumb)
     }
 

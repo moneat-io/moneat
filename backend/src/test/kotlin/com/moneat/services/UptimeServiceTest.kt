@@ -72,12 +72,13 @@ class UptimeServiceTest {
         }
     }
 
-    private fun seedOrg(name: String = "Uptime Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Uptime Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
     private fun seedMonitor(
         organizationId: Int,
@@ -117,23 +118,26 @@ class UptimeServiceTest {
     }
 
     @Test
-    fun `createMonitor generates push token for push monitors`() = runBlocking {
-        val orgId = seedOrg()
+    fun `createMonitor generates push token for push monitors`() =
+        runBlocking {
+            val orgId = seedOrg()
 
-        val monitor = service.createMonitor(
-            organizationId = orgId,
-            request = com.moneat.models.CreateUptimeMonitorRequest(
-                name = "Push Health",
-                type = "push",
-                intervalSeconds = 60,
-                timeoutSeconds = 10
-            )
-        )
+            val monitor =
+                service.createMonitor(
+                    organizationId = orgId,
+                    request =
+                        com.moneat.models.CreateUptimeMonitorRequest(
+                            name = "Push Health",
+                            type = "push",
+                            intervalSeconds = 60,
+                            timeoutSeconds = 10
+                        )
+                )
 
-        assertEquals("push", monitor.type)
-        assertNotNull(monitor.pushToken)
-        assertEquals(64, monitor.pushToken.length)
-    }
+            assertEquals("push", monitor.type)
+            assertNotNull(monitor.pushToken)
+            assertEquals(64, monitor.pushToken.length)
+        }
 
     @Test
     fun `getMonitorsDueForCheck returns only due active monitors`() {
@@ -158,25 +162,28 @@ class UptimeServiceTest {
         val monitorId = seedMonitor(orgId, status = "up")
 
         service.updateMonitorStatus(monitorId, CheckResult(status = 0, responseTimeMs = 100, message = "down"))
-        var row = transaction {
-            UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }
-        }
+        var row =
+            transaction {
+                UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }
+            }
         assertEquals("down", row[UptimeMonitors.status])
         assertEquals(1, row[UptimeMonitors.consecutiveFailures])
         val downTransitionAt = row[UptimeMonitors.lastStatusChangeAt]
 
         service.updateMonitorStatus(monitorId, CheckResult(status = 0, responseTimeMs = 90, message = "still down"))
-        row = transaction {
-            UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }
-        }
+        row =
+            transaction {
+                UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }
+            }
         assertEquals("down", row[UptimeMonitors.status])
         assertEquals(2, row[UptimeMonitors.consecutiveFailures])
         assertEquals(downTransitionAt, row[UptimeMonitors.lastStatusChangeAt])
 
         service.updateMonitorStatus(monitorId, CheckResult(status = 1, responseTimeMs = 40, message = "recovered"))
-        row = transaction {
-            UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }
-        }
+        row =
+            transaction {
+                UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }
+            }
         assertEquals("up", row[UptimeMonitors.status])
         assertEquals(0, row[UptimeMonitors.consecutiveFailures])
     }

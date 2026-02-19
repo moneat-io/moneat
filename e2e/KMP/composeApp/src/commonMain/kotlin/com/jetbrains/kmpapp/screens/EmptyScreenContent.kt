@@ -12,9 +12,7 @@ import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalResourceApi::class)
 @Composable
-fun EmptyScreenContent(
-    modifier: Modifier = Modifier,
-) {
+fun EmptyScreenContent(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,

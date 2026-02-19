@@ -99,7 +99,11 @@ class IncidentService {
     /**
      * Resolve an alert with all enabled incident providers.
      */
-    suspend fun resolveAlert(organizationId: Int, source: AlertSource, deduplicationKey: String) {
+    suspend fun resolveAlert(
+        organizationId: Int,
+        source: AlertSource,
+        deduplicationKey: String
+    ) {
         try {
             val configs = getEnabledProviderConfigs(organizationId)
             if (configs.isEmpty()) {
@@ -180,43 +184,53 @@ class IncidentService {
 
         // Fall back to routing rule
         return transaction {
-            IncidentRoutingRules.selectAll().where {
-                (IncidentRoutingRules.providerConfigId eq providerConfigId) and
-                    (IncidentRoutingRules.alertSource eq alertSource.name) and
-                    IncidentRoutingRules.alertType.isNull()
-            }.firstOrNull()?.let { row ->
-                IncidentSeverity.fromString(row[IncidentRoutingRules.incidentSeverity])
-            }
+            IncidentRoutingRules
+                .selectAll()
+                .where {
+                    (IncidentRoutingRules.providerConfigId eq providerConfigId) and
+                        (IncidentRoutingRules.alertSource eq alertSource.name) and
+                        IncidentRoutingRules.alertType.isNull()
+                }.firstOrNull()
+                ?.let { row ->
+                    IncidentSeverity.fromString(row[IncidentRoutingRules.incidentSeverity])
+                }
         }
     }
 
     private fun getEnabledProviderConfigs(organizationId: Int): List<ProviderConfig> {
         return transaction {
-            IncidentProviderConfigs.selectAll().where {
-                (IncidentProviderConfigs.organizationId eq organizationId) and
-                    (IncidentProviderConfigs.enabled eq true)
-            }.map { row ->
-                ProviderConfig(
-                    id = row[IncidentProviderConfigs.id].value,
-                    organizationId = row[IncidentProviderConfigs.organizationId],
-                    providerType = row[IncidentProviderConfigs.providerType],
-                    name = row[IncidentProviderConfigs.name],
-                    apiKey = row[IncidentProviderConfigs.apiKey],
-                    configJson = try {
-                        val jsonStr = row[IncidentProviderConfigs.configJson]
-                        json.parseToJsonElement(jsonStr).jsonObject
-                    } catch (e: Exception) {
-                        buildJsonObject {}
-                    },
-                    enabled = row[IncidentProviderConfigs.enabled]
-                )
-            }
+            IncidentProviderConfigs
+                .selectAll()
+                .where {
+                    (IncidentProviderConfigs.organizationId eq organizationId) and
+                        (IncidentProviderConfigs.enabled eq true)
+                }.map { row ->
+                    ProviderConfig(
+                        id = row[IncidentProviderConfigs.id].value,
+                        organizationId = row[IncidentProviderConfigs.organizationId],
+                        providerType = row[IncidentProviderConfigs.providerType],
+                        name = row[IncidentProviderConfigs.name],
+                        apiKey = row[IncidentProviderConfigs.apiKey],
+                        configJson =
+                            try {
+                                val jsonStr = row[IncidentProviderConfigs.configJson]
+                                json.parseToJsonElement(jsonStr).jsonObject
+                            } catch (e: Exception) {
+                                buildJsonObject {}
+                            },
+                        enabled = row[IncidentProviderConfigs.enabled]
+                    )
+                }
         }
     }
 
-    private fun shouldRouteAlert(providerConfigId: Int, source: AlertSource): Boolean {
+    private fun shouldRouteAlert(
+        providerConfigId: Int,
+        source: AlertSource
+    ): Boolean {
         return transaction {
-            IncidentRoutingRules.selectAll()
+            IncidentRoutingRules
+                .selectAll()
                 .where {
                     (IncidentRoutingRules.providerConfigId eq providerConfigId) and
                         (IncidentRoutingRules.alertSource eq source.name)
@@ -312,23 +326,25 @@ class IncidentService {
             }
 
             // Trigger escalation
-            val incidentId = bridge.triggerEscalation(
-                organizationId = event.organizationId,
-                escalationPolicyId = escalationPolicyId,
-                title = event.title,
-                description = event.description,
-                priorityLevel = priority.priorityLevel,
-                alertSource = event.source.name,
-                deduplicationKey = event.deduplicationKey,
-                metadata = if (event.metadata.isNotEmpty()) {
-                    kotlinx.serialization.json.Json.encodeToString(
-                        kotlinx.serialization.serializer(),
-                        event.metadata
-                    )
-                } else {
-                    null
-                }
-            )
+            val incidentId =
+                bridge.triggerEscalation(
+                    organizationId = event.organizationId,
+                    escalationPolicyId = escalationPolicyId,
+                    title = event.title,
+                    description = event.description,
+                    priorityLevel = priority.priorityLevel,
+                    alertSource = event.source.name,
+                    deduplicationKey = event.deduplicationKey,
+                    metadata =
+                        if (event.metadata.isNotEmpty()) {
+                            kotlinx.serialization.json.Json.encodeToString(
+                                kotlinx.serialization.serializer(),
+                                event.metadata
+                            )
+                        } else {
+                            null
+                        }
+                )
 
             if (incidentId != null) {
                 logger.info("Native escalation triggered for incident $incidentId")
@@ -343,7 +359,10 @@ class IncidentService {
      * This could be extended to support per-source routing rules.
      * For now, we use a single default policy per organization.
      */
-    private fun getEscalationPolicyForSource(organizationId: Int, source: AlertSource): Int? {
+    private fun getEscalationPolicyForSource(
+        organizationId: Int,
+        source: AlertSource
+    ): Int? {
         return transaction {
             logger.debug("Resolving escalation policy for org {} source {}", organizationId, source.name)
             // Get the first enabled escalation policy for this org
@@ -353,7 +372,8 @@ class IncidentService {
                 .where { EscalationPolicies.organizationId eq organizationId }
                 .limit(1)
                 .singleOrNull()
-                ?.get(EscalationPolicies.id)?.value
+                ?.get(EscalationPolicies.id)
+                ?.value
         }
     }
 }

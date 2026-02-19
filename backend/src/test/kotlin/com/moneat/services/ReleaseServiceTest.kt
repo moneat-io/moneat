@@ -50,36 +50,41 @@ class ReleaseServiceTest {
     private fun seedOrgAndProject(
         orgSlug: String = "test-org",
         projectSlug: String = "test-project"
-    ): Pair<Int, Long> = transaction {
-        val orgId = Organizations.insert {
-            it[name] = "Test Org"
-            it[slug] = orgSlug
-        } get Organizations.id
+    ): Pair<Int, Long> =
+        transaction {
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Test Org"
+                    it[slug] = orgSlug
+                } get Organizations.id
 
-        val projectId = Projects.insert {
-            it[organization_id] = orgId
-            it[name] = "Test Project"
-            it[slug] = projectSlug
-        } get Projects.id
+            val projectId =
+                Projects.insert {
+                    it[organization_id] = orgId
+                    it[name] = "Test Project"
+                    it[slug] = projectSlug
+                } get Projects.id
 
-        orgId to projectId
-    }
-
-    private fun seedUser(orgId: Int): Int = transaction {
-        val userId = Users.insert {
-            it[email] = "user@test.com"
-            it[password_hash] = "hashed"
-            it[email_verified] = true
-        } get Users.id
-
-        Memberships.insert {
-            it[user_id] = userId
-            it[organization_id] = orgId
-            it[role] = "owner"
+            orgId to projectId
         }
 
-        userId
-    }
+    private fun seedUser(orgId: Int): Int =
+        transaction {
+            val userId =
+                Users.insert {
+                    it[email] = "user@test.com"
+                    it[password_hash] = "hashed"
+                    it[email_verified] = true
+                } get Users.id
+
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+
+            userId
+        }
 
     // --- createRelease ---
 
@@ -120,9 +125,10 @@ class ReleaseServiceTest {
 
         service.upsertReleaseFromEvent(projectId, "2.0.0", now)
 
-        val release = transaction {
-            Releases.selectAll().where { Releases.version eq "2.0.0" }.first()
-        }
+        val release =
+            transaction {
+                Releases.selectAll().where { Releases.version eq "2.0.0" }.first()
+            }
 
         assertEquals(1L, release[Releases.event_count])
         assertTrue(release[Releases.is_auto_detected])
@@ -139,9 +145,10 @@ class ReleaseServiceTest {
         service.upsertReleaseFromEvent(projectId, "2.0.0", t1)
         service.upsertReleaseFromEvent(projectId, "2.0.0", t2)
 
-        val release = transaction {
-            Releases.selectAll().where { Releases.version eq "2.0.0" }.first()
-        }
+        val release =
+            transaction {
+                Releases.selectAll().where { Releases.version eq "2.0.0" }.first()
+            }
 
         assertEquals(2L, release[Releases.event_count])
         assertEquals(t2, release[Releases.last_seen])
@@ -210,13 +217,14 @@ class ReleaseServiceTest {
     @Test
     fun `hasProjectAccess returns false for non-member`() {
         val (_, projectId) = seedOrgAndProject()
-        val nonMemberId = transaction {
-            Users.insert {
-                it[email] = "outsider@test.com"
-                it[password_hash] = "hashed"
-                it[email_verified] = true
-            } get Users.id
-        }
+        val nonMemberId =
+            transaction {
+                Users.insert {
+                    it[email] = "outsider@test.com"
+                    it[password_hash] = "hashed"
+                    it[email_verified] = true
+                } get Users.id
+            }
 
         assertFalse(service.hasProjectAccess(nonMemberId, projectId))
     }
@@ -261,13 +269,14 @@ class ReleaseServiceTest {
     @Test
     fun `hasOrgAccess returns false for non-member`() {
         seedOrgAndProject("access-org", "proj")
-        val outsider = transaction {
-            Users.insert {
-                it[email] = "outsider2@test.com"
-                it[password_hash] = "h"
-                it[email_verified] = true
-            } get Users.id
-        }
+        val outsider =
+            transaction {
+                Users.insert {
+                    it[email] = "outsider2@test.com"
+                    it[password_hash] = "h"
+                    it[email_verified] = true
+                } get Users.id
+            }
 
         assertFalse(service.hasOrgAccess(outsider, "access-org"))
     }

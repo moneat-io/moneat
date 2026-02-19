@@ -61,13 +61,15 @@ class AdminBillingService {
 
         return transaction {
             // Get active subscription for the organization
-            val subscription = Subscriptions.selectAll().where {
-                (Subscriptions.organization_id eq organizationId) and
-                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-            }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
-                ?: throw IllegalStateException("No active subscription found for organization $organizationId")
+            val subscription =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        (Subscriptions.organization_id eq organizationId) and
+                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+                    }.orderBy(Subscriptions.id to SortOrder.DESC)
+                    .firstOrNull()
+                    ?: throw IllegalStateException("No active subscription found for organization $organizationId")
 
             val subscriptionId = subscription[Subscriptions.id]
 
@@ -80,10 +82,11 @@ class AdminBillingService {
                 it[bonus_reason] = reason
             }
 
-            val updatedSubscription = Subscriptions
-                .select(Subscriptions.bonus_gb_bytes, Subscriptions.bonus_units)
-                .where { Subscriptions.id eq subscriptionId }
-                .first()
+            val updatedSubscription =
+                Subscriptions
+                    .select(Subscriptions.bonus_gb_bytes, Subscriptions.bonus_units)
+                    .where { Subscriptions.id eq subscriptionId }
+                    .first()
             val updatedBonusGbBytes = updatedSubscription[Subscriptions.bonus_gb_bytes]
             val updatedBonusUnits = updatedSubscription[Subscriptions.bonus_units]
 
@@ -131,12 +134,10 @@ class AdminBillingService {
                     PromotionalCreditGrants.bonus_units,
                     PromotionalCreditGrants.reason,
                     PromotionalCreditGrants.granted_at
-                )
-                .where {
+                ).where {
                     (PromotionalCreditGrants.organization_id eq organizationId) and
                         (PromotionalCreditGrants.granted_by eq Users.id)
-                }
-                .orderBy(PromotionalCreditGrants.granted_at to SortOrder.DESC)
+                }.orderBy(PromotionalCreditGrants.granted_at to SortOrder.DESC)
                 .map { row ->
                     PromotionalCreditHistoryItem(
                         id = row[PromotionalCreditGrants.id],
@@ -147,9 +148,10 @@ class AdminBillingService {
                         bonusGb = row[PromotionalCreditGrants.bonus_gb_bytes] / BYTES_PER_GB.toDouble(),
                         bonusUnits = row[PromotionalCreditGrants.bonus_units],
                         reason = row[PromotionalCreditGrants.reason],
-                        grantedAt = row[PromotionalCreditGrants.granted_at]
-                            .toLocalDateTime(TimeZone.UTC)
-                            .toString()
+                        grantedAt =
+                            row[PromotionalCreditGrants.granted_at]
+                                .toLocalDateTime(TimeZone.UTC)
+                                .toString()
                     )
                 }
         }
@@ -171,8 +173,7 @@ class AdminBillingService {
                     PromotionalCreditGrants.bonus_units,
                     PromotionalCreditGrants.reason,
                     PromotionalCreditGrants.granted_at
-                )
-                .where { PromotionalCreditGrants.granted_by eq Users.id }
+                ).where { PromotionalCreditGrants.granted_by eq Users.id }
                 .orderBy(PromotionalCreditGrants.granted_at to SortOrder.DESC)
                 .limit(limit)
                 .map { row ->
@@ -185,9 +186,10 @@ class AdminBillingService {
                         bonusGb = row[PromotionalCreditGrants.bonus_gb_bytes] / BYTES_PER_GB.toDouble(),
                         bonusUnits = row[PromotionalCreditGrants.bonus_units],
                         reason = row[PromotionalCreditGrants.reason],
-                        grantedAt = row[PromotionalCreditGrants.granted_at]
-                            .toLocalDateTime(TimeZone.UTC)
-                            .toString()
+                        grantedAt =
+                            row[PromotionalCreditGrants.granted_at]
+                                .toLocalDateTime(TimeZone.UTC)
+                                .toString()
                     )
                 }
         }
@@ -196,15 +198,20 @@ class AdminBillingService {
     /**
      * Reset promotional credits for an organization (set to zero)
      */
-    fun resetPromotionalCredits(organizationId: Int, adminUserId: Int): Boolean {
+    fun resetPromotionalCredits(
+        organizationId: Int,
+        adminUserId: Int
+    ): Boolean {
         return transaction {
-            val subscription = Subscriptions.selectAll().where {
-                (Subscriptions.organization_id eq organizationId) and
-                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-            }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
-                ?: return@transaction false
+            val subscription =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        (Subscriptions.organization_id eq organizationId) and
+                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+                    }.orderBy(Subscriptions.id to SortOrder.DESC)
+                    .firstOrNull()
+                    ?: return@transaction false
 
             val subscriptionId = subscription[Subscriptions.id]
 

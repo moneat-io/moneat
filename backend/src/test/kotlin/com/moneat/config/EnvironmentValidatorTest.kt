@@ -93,20 +93,22 @@ class EnvironmentValidatorTest {
         val result = validator.validate()
 
         if (!result.isValid) {
-            val exception = assertFailsWith<IllegalStateException> {
-                validator.validateAndFailFast()
-            }
+            val exception =
+                assertFailsWith<IllegalStateException> {
+                    validator.validateAndFailFast()
+                }
             assertTrue(exception.message!!.contains("environment variables"))
         }
     }
 
     @Test
     fun `ValidationResult data class works correctly`() {
-        val result = EnvironmentValidator.ValidationResult(
-            isValid = true,
-            errors = emptyList(),
-            warnings = listOf("test warning")
-        )
+        val result =
+            EnvironmentValidator.ValidationResult(
+                isValid = true,
+                errors = emptyList(),
+                warnings = listOf("test warning")
+            )
         assertTrue(result.isValid)
         assertTrue(result.errors.isEmpty())
         assertEquals(1, result.warnings.size)
@@ -115,22 +117,24 @@ class EnvironmentValidatorTest {
 
     @Test
     fun `ValidationResult with errors is not valid`() {
-        val result = EnvironmentValidator.ValidationResult(
-            isValid = false,
-            errors = listOf("CRITICAL: something missing"),
-            warnings = emptyList()
-        )
+        val result =
+            EnvironmentValidator.ValidationResult(
+                isValid = false,
+                errors = listOf("CRITICAL: something missing"),
+                warnings = emptyList()
+            )
         assertFalse(result.isValid)
         assertEquals(1, result.errors.size)
     }
 
     @Test
     fun `ValidationResult supports multiple errors and warnings`() {
-        val result = EnvironmentValidator.ValidationResult(
-            isValid = false,
-            errors = listOf("error1", "error2"),
-            warnings = listOf("warn1", "warn2", "warn3")
-        )
+        val result =
+            EnvironmentValidator.ValidationResult(
+                isValid = false,
+                errors = listOf("error1", "error2"),
+                warnings = listOf("warn1", "warn2", "warn3")
+            )
         assertEquals(2, result.errors.size)
         assertEquals(3, result.warnings.size)
     }

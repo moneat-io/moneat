@@ -39,21 +39,22 @@ class RefreshTokenCleanupService(
     fun start(scope: CoroutineScope) {
         logger.info { "Starting refresh token cleanup service" }
 
-        cleanupJob = scope.launch {
-            while (isActive) {
-                try {
-                    val deletedCount = refreshTokenCleaner.cleanupExpiredTokens()
-                    if (deletedCount > 0) {
-                        logger.info { "Cleaned up $deletedCount expired/revoked refresh tokens" }
+        cleanupJob =
+            scope.launch {
+                while (isActive) {
+                    try {
+                        val deletedCount = refreshTokenCleaner.cleanupExpiredTokens()
+                        if (deletedCount > 0) {
+                            logger.info { "Cleaned up $deletedCount expired/revoked refresh tokens" }
+                        }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error during refresh token cleanup" }
                     }
-                } catch (e: Exception) {
-                    logger.error(e) { "Error during refresh token cleanup" }
-                }
 
-                // Run cleanup periodically
-                delay(cleanupInterval)
+                    // Run cleanup periodically
+                    delay(cleanupInterval)
+                }
             }
-        }
     }
 
     fun stop() {

@@ -51,7 +51,10 @@ class UptimeService(
     /**
      * Create a new uptime monitor.
      */
-    fun createMonitor(organizationId: Int, request: CreateUptimeMonitorRequest): UptimeMonitorResponse {
+    fun createMonitor(
+        organizationId: Int,
+        request: CreateUptimeMonitorRequest
+    ): UptimeMonitorResponse {
         // Check quota
         checkUptimeMonitorQuota(organizationId)
 
@@ -59,11 +62,12 @@ class UptimeService(
         val now = Clock.System.now()
 
         // Generate push token for push monitors
-        val pushToken = if (request.type.lowercase() == "push") {
-            generatePushToken()
-        } else {
-            null
-        }
+        val pushToken =
+            if (request.type.lowercase() == "push") {
+                generatePushToken()
+            } else {
+                null
+            }
 
         transaction {
             UptimeMonitors.insert {
@@ -142,55 +146,57 @@ class UptimeService(
         organizationId: Int,
         request: UpdateUptimeMonitorRequest
     ): UptimeMonitorResponse? {
-        val updated = transaction {
-            UptimeMonitors.selectAll()
-                .where { (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }
-                .firstOrNull() ?: return@transaction false
+        val updated =
+            transaction {
+                UptimeMonitors
+                    .selectAll()
+                    .where { (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }
+                    .firstOrNull() ?: return@transaction false
 
-            UptimeMonitors.update({ (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }) {
-                request.name?.let { v -> it[name] = v }
-                request.active?.let { v -> it[active] = v }
+                UptimeMonitors.update({ (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }) {
+                    request.name?.let { v -> it[name] = v }
+                    request.active?.let { v -> it[active] = v }
 
-                request.url?.let { v -> it[url] = v }
-                request.hostname?.let { v -> it[hostname] = v }
-                request.port?.let { v -> it[port] = v }
+                    request.url?.let { v -> it[url] = v }
+                    request.hostname?.let { v -> it[hostname] = v }
+                    request.port?.let { v -> it[port] = v }
 
-                request.method?.let { v -> it[method] = v }
-                request.headers?.let { v -> it[headers] = Json.encodeToString(v) }
-                request.body?.let { v -> it[body] = v }
-                request.authMethod?.let { v -> it[authMethod] = v }
-                request.authUser?.let { v -> it[authUser] = v }
-                request.authPass?.let { v -> it[authPass] = v }
-                request.expectedStatusCodes?.let { v -> it[expectedStatusCodes] = v }
-                request.maxRedirects?.let { v -> it[maxRedirects] = v }
-                request.ignoreTls?.let { v -> it[ignoreTls] = v }
+                    request.method?.let { v -> it[method] = v }
+                    request.headers?.let { v -> it[headers] = Json.encodeToString(v) }
+                    request.body?.let { v -> it[body] = v }
+                    request.authMethod?.let { v -> it[authMethod] = v }
+                    request.authUser?.let { v -> it[authUser] = v }
+                    request.authPass?.let { v -> it[authPass] = v }
+                    request.expectedStatusCodes?.let { v -> it[expectedStatusCodes] = v }
+                    request.maxRedirects?.let { v -> it[maxRedirects] = v }
+                    request.ignoreTls?.let { v -> it[ignoreTls] = v }
 
-                request.keyword?.let { v -> it[keyword] = v }
-                request.keywordInverse?.let { v -> it[keywordInverse] = v }
+                    request.keyword?.let { v -> it[keyword] = v }
+                    request.keywordInverse?.let { v -> it[keywordInverse] = v }
 
-                request.jsonPath?.let { v -> it[jsonPath] = v }
-                request.jsonExpectedValue?.let { v -> it[jsonExpectedValue] = v }
+                    request.jsonPath?.let { v -> it[jsonPath] = v }
+                    request.jsonExpectedValue?.let { v -> it[jsonExpectedValue] = v }
 
-                request.dnsRecordType?.let { v -> it[dnsRecordType] = v }
-                request.dnsExpectedValue?.let { v -> it[dnsExpectedValue] = v }
-                request.dnsServer?.let { v -> it[dnsServer] = v }
+                    request.dnsRecordType?.let { v -> it[dnsRecordType] = v }
+                    request.dnsExpectedValue?.let { v -> it[dnsExpectedValue] = v }
+                    request.dnsServer?.let { v -> it[dnsServer] = v }
 
-                request.sslExpiryWarnDays?.let { v -> it[sslExpiryWarnDays] = v }
+                    request.sslExpiryWarnDays?.let { v -> it[sslExpiryWarnDays] = v }
 
-                request.dbConnectionString?.let { v -> it[dbConnectionString] = v }
-                request.dbQuery?.let { v -> it[dbQuery] = v }
+                    request.dbConnectionString?.let { v -> it[dbConnectionString] = v }
+                    request.dbQuery?.let { v -> it[dbQuery] = v }
 
-                request.dockerContainerName?.let { v -> it[dockerContainerName] = v }
-                request.dockerHost?.let { v -> it[dockerHost] = v }
+                    request.dockerContainerName?.let { v -> it[dockerContainerName] = v }
+                    request.dockerHost?.let { v -> it[dockerHost] = v }
 
-                request.intervalSeconds?.let { v -> it[intervalSeconds] = v }
-                request.timeoutSeconds?.let { v -> it[timeoutSeconds] = v }
-                request.retries?.let { v -> it[retries] = v }
-                request.retryIntervalSeconds?.let { v -> it[retryIntervalSeconds] = v }
+                    request.intervalSeconds?.let { v -> it[intervalSeconds] = v }
+                    request.timeoutSeconds?.let { v -> it[timeoutSeconds] = v }
+                    request.retries?.let { v -> it[retries] = v }
+                    request.retryIntervalSeconds?.let { v -> it[retryIntervalSeconds] = v }
 
-                it[updatedAt] = Clock.System.now()
-            } > 0
-        }
+                    it[updatedAt] = Clock.System.now()
+                } > 0
+            }
 
         return if (updated) getMonitor(monitorId, organizationId) else null
     }
@@ -198,7 +204,10 @@ class UptimeService(
     /**
      * Delete a monitor.
      */
-    fun deleteMonitor(monitorId: UUID, organizationId: Int): Boolean {
+    fun deleteMonitor(
+        monitorId: UUID,
+        organizationId: Int
+    ): Boolean {
         return transaction {
             UptimeMonitors.deleteWhere {
                 (id eq monitorId) and (UptimeMonitors.organizationId eq organizationId)
@@ -210,11 +219,13 @@ class UptimeService(
      * List all monitors for an organization.
      */
     fun listMonitors(organizationId: Int): List<UptimeMonitorResponse> {
-        val monitors = transaction {
-            UptimeMonitors.selectAll()
-                .where { UptimeMonitors.organizationId eq organizationId }
-                .map { rowToMonitorData(it) }
-        }
+        val monitors =
+            transaction {
+                UptimeMonitors
+                    .selectAll()
+                    .where { UptimeMonitors.organizationId eq organizationId }
+                    .map { rowToMonitorData(it) }
+            }
 
         return monitors.map { monitor ->
             toMonitorResponse(monitor, includeStats = false)
@@ -224,13 +235,18 @@ class UptimeService(
     /**
      * Get a single monitor with stats.
      */
-    fun getMonitor(monitorId: UUID, organizationId: Int): UptimeMonitorResponse? {
-        val monitor = transaction {
-            UptimeMonitors.selectAll()
-                .where { (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }
-                .firstOrNull()
-                ?.let { rowToMonitorData(it) }
-        } ?: return null
+    fun getMonitor(
+        monitorId: UUID,
+        organizationId: Int
+    ): UptimeMonitorResponse? {
+        val monitor =
+            transaction {
+                UptimeMonitors
+                    .selectAll()
+                    .where { (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }
+                    .firstOrNull()
+                    ?.let { rowToMonitorData(it) }
+            } ?: return null
 
         return toMonitorResponse(monitor, includeStats = true)
     }
@@ -238,7 +254,10 @@ class UptimeService(
     /**
      * Pause a monitor.
      */
-    fun pauseMonitor(monitorId: UUID, organizationId: Int): Boolean {
+    fun pauseMonitor(
+        monitorId: UUID,
+        organizationId: Int
+    ): Boolean {
         return transaction {
             UptimeMonitors.update({ (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }) {
                 it[status] = "paused"
@@ -251,7 +270,10 @@ class UptimeService(
     /**
      * Resume a monitor.
      */
-    fun resumeMonitor(monitorId: UUID, organizationId: Int): Boolean {
+    fun resumeMonitor(
+        monitorId: UUID,
+        organizationId: Int
+    ): Boolean {
         return transaction {
             UptimeMonitors.update({ (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq organizationId) }) {
                 it[active] = true
@@ -267,7 +289,8 @@ class UptimeService(
         return transaction {
             val now = Clock.System.now()
 
-            UptimeMonitors.selectAll()
+            UptimeMonitors
+                .selectAll()
                 .where { UptimeMonitors.active eq true }
                 .filter { row ->
                     val lastCheck = row[UptimeMonitors.lastCheckAt]
@@ -279,18 +302,21 @@ class UptimeService(
                         val nextCheck = lastCheck.plus(interval.toLong().seconds)
                         nextCheck <= now
                     }
-                }
-                .map { rowToMonitorData(it) }
+                }.map { rowToMonitorData(it) }
         }
     }
 
     /**
      * Record a heartbeat result.
      */
-    suspend fun recordHeartbeat(monitorId: UUID, result: CheckResult) {
+    suspend fun recordHeartbeat(
+        monitorId: UUID,
+        result: CheckResult
+    ) {
         val timestamp = Clock.System.now().toEpochMilliseconds() / 1000.0
 
-        val sql = """
+        val sql =
+            """
             INSERT INTO $clickhouseDb.uptime_heartbeats 
             (monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
             VALUES (
@@ -302,7 +328,7 @@ class UptimeService(
                 '${escapeSql(result.message)}',
                 ${result.pingMs}
             )
-        """.trimIndent()
+            """.trimIndent()
 
         try {
             ClickHouseClient.execute(sql)
@@ -314,27 +340,34 @@ class UptimeService(
     /**
      * Update monitor status after a check.
      */
-    fun updateMonitorStatus(monitorId: UUID, result: CheckResult) {
+    fun updateMonitorStatus(
+        monitorId: UUID,
+        result: CheckResult
+    ) {
         transaction {
-            val monitor = UptimeMonitors.selectAll()
-                .where { UptimeMonitors.id eq monitorId }
-                .firstOrNull() ?: return@transaction
+            val monitor =
+                UptimeMonitors
+                    .selectAll()
+                    .where { UptimeMonitors.id eq monitorId }
+                    .firstOrNull() ?: return@transaction
 
             val oldStatus = monitor[UptimeMonitors.status]
-            val newStatus = when (result.status) {
-                1 -> "up"
-                0 -> "down"
-                else -> "pending"
-            }
+            val newStatus =
+                when (result.status) {
+                    1 -> "up"
+                    0 -> "down"
+                    else -> "pending"
+                }
 
             val statusChanged = oldStatus != newStatus
             val now = Clock.System.now()
 
-            val consecutiveFailures = if (result.status == 0) {
-                monitor[UptimeMonitors.consecutiveFailures] + 1
-            } else {
-                0
-            }
+            val consecutiveFailures =
+                if (result.status == 0) {
+                    monitor[UptimeMonitors.consecutiveFailures] + 1
+                } else {
+                    0
+                }
 
             UptimeMonitors.update({ UptimeMonitors.id eq monitorId }) {
                 it[status] = newStatus
@@ -351,8 +384,13 @@ class UptimeService(
     /**
      * Get heartbeats for a monitor.
      */
-    suspend fun getHeartbeats(monitorId: UUID, from: Instant, to: Instant): List<UptimeHeartbeatResponse> {
-        val query = """
+    suspend fun getHeartbeats(
+        monitorId: UUID,
+        from: Instant,
+        to: Instant
+    ): List<UptimeHeartbeatResponse> {
+        val query =
+            """
             SELECT 
                 toUnixTimestamp64Milli(timestamp) as ts,
                 status,
@@ -367,7 +405,7 @@ class UptimeService(
             ORDER BY timestamp DESC
             LIMIT 1000
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -400,11 +438,15 @@ class UptimeService(
     /**
      * Calculate uptime percentage for a period.
      */
-    suspend fun getUptimePercentage(monitorId: UUID, hours: Int): Float {
+    suspend fun getUptimePercentage(
+        monitorId: UUID,
+        hours: Int
+    ): Float {
         val now = Clock.System.now()
         val from = now.minus(hours.hours)
 
-        val query = """
+        val query =
+            """
             SELECT 
                 countIf(status = 1) as up_count,
                 countIf(status = 0) as down_count,
@@ -413,7 +455,7 @@ class UptimeService(
             WHERE monitor_id = '$monitorId'
               AND timestamp >= fromUnixTimestamp64Milli(${from.toEpochMilliseconds()})
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -435,18 +477,22 @@ class UptimeService(
     /**
      * Get average response time for a period.
      */
-    suspend fun getAverageResponseTime(monitorId: UUID, hours: Int): Int {
+    suspend fun getAverageResponseTime(
+        monitorId: UUID,
+        hours: Int
+    ): Int {
         val now = Clock.System.now()
         val from = now.minus(hours.hours)
 
-        val query = """
+        val query =
+            """
             SELECT avg(response_time_ms) as avg_time
             FROM $clickhouseDb.uptime_heartbeats
             WHERE monitor_id = '$monitorId'
               AND timestamp >= fromUnixTimestamp64Milli(${from.toEpochMilliseconds()})
               AND response_time_ms >= 0
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -455,7 +501,11 @@ class UptimeService(
             if (body.isBlank()) return 0
 
             val json = Json.parseToJsonElement(body.trim().lines().first()).jsonObject
-            json["avg_time"]?.jsonPrimitive?.content?.toDoubleOrNull()?.roundToInt() ?: 0
+            json["avg_time"]
+                ?.jsonPrimitive
+                ?.content
+                ?.toDoubleOrNull()
+                ?.roundToInt() ?: 0
         } catch (e: Exception) {
             logger.error(e) { "Failed to calculate avg response time for monitor $monitorId" }
             0
@@ -466,34 +516,42 @@ class UptimeService(
      * Check uptime monitor quota for organization.
      */
     fun checkUptimeMonitorQuota(organizationId: Int) {
-        val currentCount = transaction {
-            UptimeMonitors.selectAll()
-                .where { UptimeMonitors.organizationId eq organizationId }
-                .count()
-        }
+        val currentCount =
+            transaction {
+                UptimeMonitors
+                    .selectAll()
+                    .where { UptimeMonitors.organizationId eq organizationId }
+                    .count()
+            }
 
-        val tier = transaction {
-            val org = Organizations.selectAll()
-                .where { Organizations.id eq organizationId }
-                .firstOrNull()
+        val tier =
+            transaction {
+                val org =
+                    Organizations
+                        .selectAll()
+                        .where { Organizations.id eq organizationId }
+                        .firstOrNull()
 
-            org?.let {
-                val subQuery = Subscriptions.selectAll()
-                    .where { Subscriptions.organization_id eq organizationId }
-                    .limit(1)
-                    .firstOrNull()
+                org?.let {
+                    val subQuery =
+                        Subscriptions
+                            .selectAll()
+                            .where { Subscriptions.organization_id eq organizationId }
+                            .limit(1)
+                            .firstOrNull()
 
-                subQuery?.get(Subscriptions.plan) ?: "FREE"
-            } ?: "FREE"
-        }
+                    subQuery?.get(Subscriptions.plan) ?: "FREE"
+                } ?: "FREE"
+            }
 
-        val limit = when (tier) {
-            "FREE" -> 5
-            "PRO" -> 20
-            "TEAM" -> 50
-            "BUSINESS" -> Int.MAX_VALUE
-            else -> 5
-        }
+        val limit =
+            when (tier) {
+                "FREE" -> 5
+                "PRO" -> 20
+                "TEAM" -> 50
+                "BUSINESS" -> Int.MAX_VALUE
+                else -> 5
+            }
 
         if (currentCount >= limit) {
             throw IllegalStateException("Uptime monitor limit reached ($limit for $tier tier)")
@@ -505,7 +563,8 @@ class UptimeService(
      */
     fun getMonitorByPushToken(token: String): UptimeMonitorData? {
         return transaction {
-            UptimeMonitors.selectAll()
+            UptimeMonitors
+                .selectAll()
                 .where { UptimeMonitors.pushToken eq token }
                 .firstOrNull()
                 ?.let { rowToMonitorData(it) }
@@ -559,27 +618,32 @@ class UptimeService(
         )
     }
 
-    private fun toMonitorResponse(monitor: UptimeMonitorData, includeStats: Boolean): UptimeMonitorResponse {
-        val stats = if (includeStats) {
-            // Run async calls synchronously (in real impl, could be suspended)
-            kotlinx.coroutines.runBlocking {
-                Triple(
-                    getUptimePercentage(monitor.id, 24),
-                    getUptimePercentage(monitor.id, 168),
-                    getUptimePercentage(monitor.id, 720)
-                )
+    private fun toMonitorResponse(
+        monitor: UptimeMonitorData,
+        includeStats: Boolean
+    ): UptimeMonitorResponse {
+        val stats =
+            if (includeStats) {
+                // Run async calls synchronously (in real impl, could be suspended)
+                kotlinx.coroutines.runBlocking {
+                    Triple(
+                        getUptimePercentage(monitor.id, 24),
+                        getUptimePercentage(monitor.id, 168),
+                        getUptimePercentage(monitor.id, 720)
+                    )
+                }
+            } else {
+                Triple(null, null, null)
             }
-        } else {
-            Triple(null, null, null)
-        }
 
-        val avgResponseTime = if (includeStats) {
-            kotlinx.coroutines.runBlocking {
-                getAverageResponseTime(monitor.id, 24)
+        val avgResponseTime =
+            if (includeStats) {
+                kotlinx.coroutines.runBlocking {
+                    getAverageResponseTime(monitor.id, 24)
+                }
+            } else {
+                null
             }
-        } else {
-            null
-        }
 
         return UptimeMonitorResponse(
             id = monitor.id.toString(),
@@ -591,9 +655,10 @@ class UptimeService(
             hostname = monitor.hostname,
             port = monitor.port,
             method = monitor.method,
-            headers = monitor.headers?.let {
-                try { Json.decodeFromString<Map<String, String>>(it) } catch (e: Exception) { null }
-            },
+            headers =
+                monitor.headers?.let {
+                    try { Json.decodeFromString<Map<String, String>>(it) } catch (e: Exception) { null }
+                },
             body = monitor.body,
             authMethod = monitor.authMethod,
             authUser = monitor.authUser,

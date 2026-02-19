@@ -31,7 +31,10 @@ object ClickHouseQueryUtils {
      * @param columnName The column name (default: "project_id")
      * @return A WHERE clause fragment like "project_id = 123" or "toInt64(project_id) = -1"
      */
-    fun projectIdClause(projectId: Long, columnName: String = "project_id"): String {
+    fun projectIdClause(
+        projectId: Long,
+        columnName: String = "project_id"
+    ): String {
         return if (projectId < 0) {
             "toInt64($columnName) = $projectId"
         } else {
@@ -47,12 +50,17 @@ object ClickHouseQueryUtils {
      * @param demoEpochMs Optional demo epoch in milliseconds (for frozen demo time)
      * @return A WHERE clause fragment like "timestamp >= now() - INTERVAL 90 DAY"
      */
-    fun timestampRetentionClause(column: String, retentionDays: Int, demoEpochMs: Long? = null): String {
-        val nowClause = if (demoEpochMs != null) {
-            "toDateTime64(${demoEpochMs / 1000.0}, 3)"
-        } else {
-            "now()"
-        }
+    fun timestampRetentionClause(
+        column: String,
+        retentionDays: Int,
+        demoEpochMs: Long? = null
+    ): String {
+        val nowClause =
+            if (demoEpochMs != null) {
+                "toDateTime64(${demoEpochMs / 1000.0}, 3)"
+            } else {
+                "now()"
+            }
         return "$column >= $nowClause - INTERVAL $retentionDays DAY"
     }
 }

@@ -79,18 +79,26 @@ class LlmDashboardService {
         }
     }
 
-    private fun rangeClause(range: String, demoEpochMs: Long?): String {
+    private fun rangeClause(
+        range: String,
+        demoEpochMs: Long?
+    ): String {
         val interval = intervalFromRange(range)
         return "timestamp >= ${nowClause(demoEpochMs)} - INTERVAL $interval"
     }
 
-    suspend fun getOverview(projectId: Long, range: String, demoEpochMs: Long? = null): LlmOverviewResponse {
+    suspend fun getOverview(
+        projectId: Long,
+        range: String,
+        demoEpochMs: Long? = null
+    ): LlmOverviewResponse {
         val bucket = bucketFromRange(range)
         val projectFilter = projectIdClause(projectId)
         val timeFilter = rangeClause(range, demoEpochMs)
 
         // Stats query
-        val statsQuery = """
+        val statsQuery =
+            """
             SELECT
                 count() as total_generations,
                 sum(total_tokens) as total_tokens,
@@ -101,10 +109,11 @@ class LlmDashboardService {
             WHERE $projectFilter
               AND $timeFilter
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         // Timeline query
-        val timelineQuery = """
+        val timelineQuery =
+            """
             SELECT
                 formatDateTime($bucket(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts,
                 count() as cnt,
@@ -117,10 +126,11 @@ class LlmDashboardService {
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         // Top models query
-        val modelsQuery = """
+        val modelsQuery =
+            """
             SELECT
                 model,
                 provider,
@@ -136,7 +146,7 @@ class LlmDashboardService {
             ORDER BY call_count DESC
             LIMIT 20
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val statsResponse = ClickHouseClient.execute(statsQuery)
         val timelineResponse = ClickHouseClient.execute(timelineQuery)
@@ -146,29 +156,31 @@ class LlmDashboardService {
         val statsLine = statsBody.trim().lines().firstOrNull()
         val statsObj = statsLine?.let { json.parseToJsonElement(it).jsonObject }
 
-        val timeline = (extractBody(timelineResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
-            val obj = json.parseToJsonElement(line).jsonObject
-            LlmTimelinePoint(
-                timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
-                count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0,
-                tokens = obj["tokens"]?.jsonPrimitive?.longOrNull ?: 0,
-                cost = obj["cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                errors = obj["errors"]?.jsonPrimitive?.longOrNull ?: 0
-            )
-        }
+        val timeline =
+            (extractBody(timelineResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                LlmTimelinePoint(
+                    timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
+                    count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0,
+                    tokens = obj["tokens"]?.jsonPrimitive?.longOrNull ?: 0,
+                    cost = obj["cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    errors = obj["errors"]?.jsonPrimitive?.longOrNull ?: 0
+                )
+            }
 
-        val topModels = (extractBody(modelsResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
-            val obj = json.parseToJsonElement(line).jsonObject
-            LlmModelStats(
-                model = obj["model"]?.jsonPrimitive?.content ?: "",
-                provider = obj["provider"]?.jsonPrimitive?.content ?: "",
-                callCount = obj["call_count"]?.jsonPrimitive?.longOrNull ?: 0,
-                totalTokens = obj["total_tokens"]?.jsonPrimitive?.longOrNull ?: 0,
-                totalCost = obj["total_cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                avgDurationMs = obj["avg_duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                errorRate = obj["error_rate"]?.jsonPrimitive?.doubleOrNull ?: 0.0
-            )
-        }
+        val topModels =
+            (extractBody(modelsResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                LlmModelStats(
+                    model = obj["model"]?.jsonPrimitive?.content ?: "",
+                    provider = obj["provider"]?.jsonPrimitive?.content ?: "",
+                    callCount = obj["call_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    totalTokens = obj["total_tokens"]?.jsonPrimitive?.longOrNull ?: 0,
+                    totalCost = obj["total_cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    avgDurationMs = obj["avg_duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    errorRate = obj["error_rate"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+                )
+            }
 
         return LlmOverviewResponse(
             totalGenerations = statsObj?.get("total_generations")?.jsonPrimitive?.longOrNull ?: 0,
@@ -196,21 +208,24 @@ class LlmDashboardService {
         val projectFilter = projectIdClause(projectId)
         val timeFilter = rangeClause(range, demoEpochMs)
 
-        val filters = buildList {
-            add(projectFilter)
-            add(timeFilter)
-            model?.let { add("model = '${ClickHouseSqlUtils.escapeSql(it)}'") }
-            provider?.let { add("provider = '${ClickHouseSqlUtils.escapeSql(it)}'") }
-            type?.let { add("type = '${ClickHouseSqlUtils.escapeSql(it)}'") }
-            status?.let { add("status = '${ClickHouseSqlUtils.escapeSql(it)}'") }
-        }
+        val filters =
+            buildList {
+                add(projectFilter)
+                add(timeFilter)
+                model?.let { add("model = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+                provider?.let { add("provider = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+                type?.let { add("type = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+                status?.let { add("status = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+            }
         val where = filters.joinToString(" AND ")
 
-        val countQuery = """
+        val countQuery =
+            """
             SELECT count() as total FROM $clickhouseDb.llm_generations WHERE $where FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
-        val dataQuery = """
+        val dataQuery =
+            """
             SELECT
                 toString(generation_id) as generation_id,
                 trace_id, span_id, parent_span_id,
@@ -225,40 +240,46 @@ class LlmDashboardService {
             ORDER BY timestamp DESC
             LIMIT $pageSize OFFSET $offset
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val countResponse = ClickHouseClient.execute(countQuery)
         val dataResponse = ClickHouseClient.execute(dataQuery)
 
         val countBody = extractBody(countResponse) ?: ""
-        val total = countBody.trim().lines().firstOrNull()?.let {
-            json.parseToJsonElement(it).jsonObject["total"]?.jsonPrimitive?.longOrNull
-        } ?: 0
+        val total =
+            countBody.trim().lines().firstOrNull()?.let {
+                json
+                    .parseToJsonElement(it)
+                    .jsonObject["total"]
+                    ?.jsonPrimitive
+                    ?.longOrNull
+            } ?: 0
 
-        val generations = (extractBody(dataResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
-            val obj = json.parseToJsonElement(line).jsonObject
-            LlmGenerationResponse(
-                generationId = obj["generation_id"]?.jsonPrimitive?.content ?: "",
-                traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
-                spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
-                parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.content ?: "",
-                timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
-                durationMs = obj["duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                name = obj["name"]?.jsonPrimitive?.content ?: "",
-                model = obj["model"]?.jsonPrimitive?.content ?: "",
-                provider = obj["provider"]?.jsonPrimitive?.content ?: "",
-                type = obj["type"]?.jsonPrimitive?.content ?: "",
-                inputTokens = obj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                outputTokens = obj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                totalTokens = obj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                costUsd = obj["cost_usd"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                status = obj["status"]?.jsonPrimitive?.content ?: "",
-                errorMessage = obj["error_message"]?.jsonPrimitive?.content ?: "",
-                userId = obj["user_id"]?.jsonPrimitive?.content ?: "",
-                environment = obj["environment"]?.jsonPrimitive?.content ?: "",
-                release = obj["release"]?.jsonPrimitive?.content ?: ""
-            )
-        }
+        val generations =
+            (extractBody(dataResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                LlmGenerationResponse(
+                    generationId = obj["generation_id"]?.jsonPrimitive?.content ?: "",
+                    traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
+                    spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+                    parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.content ?: "",
+                    timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
+                    durationMs = obj["duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    name = obj["name"]?.jsonPrimitive?.content ?: "",
+                    model = obj["model"]?.jsonPrimitive?.content ?: "",
+                    provider = obj["provider"]?.jsonPrimitive?.content ?: "",
+                    type = obj["type"]?.jsonPrimitive?.content ?: "",
+                    inputTokens = obj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                    outputTokens = obj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                    totalTokens = obj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                    costUsd = obj["cost_usd"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    status = obj["status"]?.jsonPrimitive?.content ?: "",
+                    errorMessage = obj["error_message"]?.jsonPrimitive?.content ?: "",
+                    userId = obj["user_id"]?.jsonPrimitive?.content ?: "",
+                    environment = obj["environment"]?.jsonPrimitive?.content ?: "",
+                    release = obj["release"]?.jsonPrimitive?.content ?: ""
+                )
+            }
 
         return LlmGenerationsListResponse(
             generations = generations,
@@ -268,10 +289,14 @@ class LlmDashboardService {
         )
     }
 
-    suspend fun getGenerationDetail(projectId: Long, generationId: String): LlmGenerationDetailResponse? {
+    suspend fun getGenerationDetail(
+        projectId: Long,
+        generationId: String
+    ): LlmGenerationDetailResponse? {
         val escapedId = ClickHouseSqlUtils.escapeSql(generationId)
         val projectFilter = projectIdClause(projectId)
-        val query = """
+        val query =
+            """
             SELECT
                 toString(generation_id) as generation_id,
                 trace_id, span_id, parent_span_id,
@@ -288,7 +313,7 @@ class LlmDashboardService {
             WHERE $projectFilter AND toString(generation_id) = '$escapedId'
             LIMIT 1
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         val body = extractBody(response) ?: return null
@@ -330,10 +355,14 @@ class LlmDashboardService {
         )
     }
 
-    suspend fun getTrace(projectId: Long, traceId: String): LlmTraceResponse? {
+    suspend fun getTrace(
+        projectId: Long,
+        traceId: String
+    ): LlmTraceResponse? {
         val escapedTraceId = ClickHouseSqlUtils.escapeSql(traceId)
         val projectFilter = projectIdClause(projectId)
-        val query = """
+        val query =
+            """
             SELECT
                 toString(generation_id) as generation_id,
                 trace_id, span_id, parent_span_id,
@@ -350,49 +379,50 @@ class LlmDashboardService {
             WHERE $projectFilter AND trace_id = '$escapedTraceId'
             ORDER BY timestamp ASC
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         val body = extractBody(response) ?: return null
         val lines = body.trim().lines().filter { it.isNotBlank() }
         if (lines.isEmpty()) return null
 
-        val generations = lines.map { line ->
-            val obj = json.parseToJsonElement(line).jsonObject
-            val tagsObj = obj["tags"]?.jsonObject
-            val tagsMap = tagsObj?.entries?.associate { (k, v) -> k to (v.jsonPrimitive.contentOrNull ?: "") } ?: emptyMap()
+        val generations =
+            lines.map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                val tagsObj = obj["tags"]?.jsonObject
+                val tagsMap = tagsObj?.entries?.associate { (k, v) -> k to (v.jsonPrimitive.contentOrNull ?: "") } ?: emptyMap()
 
-            LlmGenerationDetailResponse(
-                generationId = obj["generation_id"]?.jsonPrimitive?.content ?: "",
-                traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
-                spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
-                parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.content ?: "",
-                timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
-                durationMs = obj["duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                name = obj["name"]?.jsonPrimitive?.content ?: "",
-                model = obj["model"]?.jsonPrimitive?.content ?: "",
-                provider = obj["provider"]?.jsonPrimitive?.content ?: "",
-                type = obj["type"]?.jsonPrimitive?.content ?: "",
-                input = obj["input"]?.jsonPrimitive?.content ?: "",
-                output = obj["output"]?.jsonPrimitive?.content ?: "",
-                inputTokens = obj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                outputTokens = obj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                totalTokens = obj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                costUsd = obj["cost_usd"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                temperature = obj["temperature"]?.jsonPrimitive?.floatOrNull ?: 0f,
-                maxTokens = obj["max_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                topP = obj["top_p"]?.jsonPrimitive?.floatOrNull ?: 0f,
-                status = obj["status"]?.jsonPrimitive?.content ?: "",
-                errorMessage = obj["error_message"]?.jsonPrimitive?.content ?: "",
-                statusCode = obj["status_code"]?.jsonPrimitive?.intOrNull ?: 0,
-                userId = obj["user_id"]?.jsonPrimitive?.content ?: "",
-                sessionId = obj["session_id"]?.jsonPrimitive?.content ?: "",
-                environment = obj["environment"]?.jsonPrimitive?.content ?: "",
-                release = obj["release"]?.jsonPrimitive?.content ?: "",
-                tags = tagsMap,
-                metadata = obj["metadata"]?.jsonPrimitive?.content ?: "{}"
-            )
-        }
+                LlmGenerationDetailResponse(
+                    generationId = obj["generation_id"]?.jsonPrimitive?.content ?: "",
+                    traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
+                    spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+                    parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.content ?: "",
+                    timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
+                    durationMs = obj["duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    name = obj["name"]?.jsonPrimitive?.content ?: "",
+                    model = obj["model"]?.jsonPrimitive?.content ?: "",
+                    provider = obj["provider"]?.jsonPrimitive?.content ?: "",
+                    type = obj["type"]?.jsonPrimitive?.content ?: "",
+                    input = obj["input"]?.jsonPrimitive?.content ?: "",
+                    output = obj["output"]?.jsonPrimitive?.content ?: "",
+                    inputTokens = obj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                    outputTokens = obj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                    totalTokens = obj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                    costUsd = obj["cost_usd"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    temperature = obj["temperature"]?.jsonPrimitive?.floatOrNull ?: 0f,
+                    maxTokens = obj["max_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                    topP = obj["top_p"]?.jsonPrimitive?.floatOrNull ?: 0f,
+                    status = obj["status"]?.jsonPrimitive?.content ?: "",
+                    errorMessage = obj["error_message"]?.jsonPrimitive?.content ?: "",
+                    statusCode = obj["status_code"]?.jsonPrimitive?.intOrNull ?: 0,
+                    userId = obj["user_id"]?.jsonPrimitive?.content ?: "",
+                    sessionId = obj["session_id"]?.jsonPrimitive?.content ?: "",
+                    environment = obj["environment"]?.jsonPrimitive?.content ?: "",
+                    release = obj["release"]?.jsonPrimitive?.content ?: "",
+                    tags = tagsMap,
+                    metadata = obj["metadata"]?.jsonPrimitive?.content ?: "{}"
+                )
+            }
 
         return LlmTraceResponse(
             traceId = traceId,
@@ -403,12 +433,17 @@ class LlmDashboardService {
         )
     }
 
-    suspend fun getCosts(projectId: Long, range: String, demoEpochMs: Long? = null): LlmCostsResponse {
+    suspend fun getCosts(
+        projectId: Long,
+        range: String,
+        demoEpochMs: Long? = null
+    ): LlmCostsResponse {
         val bucket = bucketFromRange(range)
         val projectFilter = projectIdClause(projectId)
         val timeFilter = rangeClause(range, demoEpochMs)
 
-        val breakdownQuery = """
+        val breakdownQuery =
+            """
             SELECT
                 model, provider,
                 sum(cost_usd) as total_cost,
@@ -419,9 +454,10 @@ class LlmDashboardService {
             GROUP BY model, provider
             ORDER BY total_cost DESC
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
-        val timelineQuery = """
+        val timelineQuery =
+            """
             SELECT
                 formatDateTime($bucket(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts,
                 count() as cnt,
@@ -433,32 +469,34 @@ class LlmDashboardService {
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val breakdownResponse = ClickHouseClient.execute(breakdownQuery)
         val timelineResponse = ClickHouseClient.execute(timelineQuery)
 
-        val breakdown = (extractBody(breakdownResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
-            val obj = json.parseToJsonElement(line).jsonObject
-            LlmCostBreakdown(
-                model = obj["model"]?.jsonPrimitive?.content ?: "",
-                provider = obj["provider"]?.jsonPrimitive?.content ?: "",
-                totalCost = obj["total_cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                totalTokens = obj["total_tokens"]?.jsonPrimitive?.longOrNull ?: 0,
-                callCount = obj["call_count"]?.jsonPrimitive?.longOrNull ?: 0
-            )
-        }
+        val breakdown =
+            (extractBody(breakdownResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                LlmCostBreakdown(
+                    model = obj["model"]?.jsonPrimitive?.content ?: "",
+                    provider = obj["provider"]?.jsonPrimitive?.content ?: "",
+                    totalCost = obj["total_cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    totalTokens = obj["total_tokens"]?.jsonPrimitive?.longOrNull ?: 0,
+                    callCount = obj["call_count"]?.jsonPrimitive?.longOrNull ?: 0
+                )
+            }
 
-        val timeline = (extractBody(timelineResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
-            val obj = json.parseToJsonElement(line).jsonObject
-            LlmTimelinePoint(
-                timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
-                count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0,
-                tokens = obj["tokens"]?.jsonPrimitive?.longOrNull ?: 0,
-                cost = obj["cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                errors = obj["errors"]?.jsonPrimitive?.longOrNull ?: 0
-            )
-        }
+        val timeline =
+            (extractBody(timelineResponse) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                LlmTimelinePoint(
+                    timestamp = obj["ts"]?.jsonPrimitive?.content ?: "",
+                    count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0,
+                    tokens = obj["tokens"]?.jsonPrimitive?.longOrNull ?: 0,
+                    cost = obj["cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    errors = obj["errors"]?.jsonPrimitive?.longOrNull ?: 0
+                )
+            }
 
         return LlmCostsResponse(
             totalCost = breakdown.sumOf { it.totalCost },
@@ -467,10 +505,15 @@ class LlmDashboardService {
         )
     }
 
-    suspend fun getModels(projectId: Long, range: String, demoEpochMs: Long? = null): List<LlmModelStats> {
+    suspend fun getModels(
+        projectId: Long,
+        range: String,
+        demoEpochMs: Long? = null
+    ): List<LlmModelStats> {
         val projectFilter = projectIdClause(projectId)
         val timeFilter = rangeClause(range, demoEpochMs)
-        val query = """
+        val query =
+            """
             SELECT
                 model, provider,
                 count() as call_count,
@@ -483,7 +526,7 @@ class LlmDashboardService {
             GROUP BY model, provider
             ORDER BY call_count DESC
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         return (extractBody(response) ?: "").trim().lines().filter { it.isNotBlank() }.map { line ->

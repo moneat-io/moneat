@@ -32,27 +32,31 @@ class SidebarPreferenceServiceTest {
         }
     }
 
-    private fun seedMembership(): Triple<Int, Int, Int> = transaction {
-        val orgId = Organizations.insert {
-            it[name] = "Test Org"
-            it[slug] = "test-org"
-        } get Organizations.id
+    private fun seedMembership(): Triple<Int, Int, Int> =
+        transaction {
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Test Org"
+                    it[slug] = "test-org"
+                } get Organizations.id
 
-        val userId = Users.insert {
-            it[email] = "test@example.com"
-            it[name] = "Test"
-            it[password_hash] = "hash"
-            it[email_verified] = true
-        } get Users.id
+            val userId =
+                Users.insert {
+                    it[email] = "test@example.com"
+                    it[name] = "Test"
+                    it[password_hash] = "hash"
+                    it[email_verified] = true
+                } get Users.id
 
-        val memId = Memberships.insert {
-            it[user_id] = userId
-            it[organization_id] = orgId
-            it[role] = "owner"
-        } get Memberships.id
+            val memId =
+                Memberships.insert {
+                    it[user_id] = userId
+                    it[organization_id] = orgId
+                    it[role] = "owner"
+                } get Memberships.id
 
-        Triple(memId, userId, orgId)
-    }
+            Triple(memId, userId, orgId)
+        }
 
     // --- normalizeHiddenItems ---
 
@@ -82,10 +86,11 @@ class SidebarPreferenceServiceTest {
 
     @Test
     fun `normalizeHiddenItems accepts all configurable items`() {
-        val all = listOf(
-            "dashboard", "performance", "issues", "logs", "replays",
-            "feedback", "releases", "ai", "uptime", "status-pages", "monitoring", "on-call"
-        )
+        val all =
+            listOf(
+                "dashboard", "performance", "issues", "logs", "replays",
+                "feedback", "releases", "ai", "uptime", "status-pages", "monitoring", "on-call"
+            )
         val result = SidebarPreferenceService.normalizeHiddenItems(all)
         assertEquals(all.sorted(), result)
     }
@@ -105,15 +110,16 @@ class SidebarPreferenceServiceTest {
     fun `updatePreferences stores normalized items`() {
         val (memId, userId, orgId) = seedMembership()
 
-        val result = transaction {
-            SidebarPreferenceService.updatePreferences(
-                memId,
-                userId,
-                orgId,
-                listOf("replays", "unknown", "issues"),
-                "test"
-            )
-        }
+        val result =
+            transaction {
+                SidebarPreferenceService.updatePreferences(
+                    memId,
+                    userId,
+                    orgId,
+                    listOf("replays", "unknown", "issues"),
+                    "test"
+                )
+            }
         assertEquals(listOf("issues", "replays"), result)
 
         val stored = transaction { SidebarPreferenceService.getPreferences(memId) }
@@ -126,11 +132,13 @@ class SidebarPreferenceServiceTest {
 
         transaction { SidebarPreferenceService.updatePreferences(memId, userId, orgId, listOf("issues"), "test") }
 
-        val events = transaction {
-            SidebarPreferenceEvents.selectAll()
-                .where { SidebarPreferenceEvents.membership_id eq memId }
-                .toList()
-        }
+        val events =
+            transaction {
+                SidebarPreferenceEvents
+                    .selectAll()
+                    .where { SidebarPreferenceEvents.membership_id eq memId }
+                    .toList()
+            }
         assertEquals(1, events.size)
         assertEquals("test", events[0][SidebarPreferenceEvents.event_source])
     }
@@ -142,11 +150,13 @@ class SidebarPreferenceServiceTest {
         transaction { SidebarPreferenceService.updatePreferences(memId, userId, orgId, listOf("issues"), "first") }
         transaction { SidebarPreferenceService.updatePreferences(memId, userId, orgId, listOf("issues"), "second") }
 
-        val events = transaction {
-            SidebarPreferenceEvents.selectAll()
-                .where { SidebarPreferenceEvents.membership_id eq memId }
-                .toList()
-        }
+        val events =
+            transaction {
+                SidebarPreferenceEvents
+                    .selectAll()
+                    .where { SidebarPreferenceEvents.membership_id eq memId }
+                    .toList()
+            }
         assertEquals(1, events.size) // Only one event logged
     }
 
@@ -157,9 +167,10 @@ class SidebarPreferenceServiceTest {
         transaction {
             SidebarPreferenceService.updatePreferences(memId, userId, orgId, listOf("issues", "logs"), "setup")
         }
-        val result = transaction {
-            SidebarPreferenceService.updatePreferences(memId, userId, orgId, emptyList(), "clear")
-        }
+        val result =
+            transaction {
+                SidebarPreferenceService.updatePreferences(memId, userId, orgId, emptyList(), "clear")
+            }
         assertTrue(result.isEmpty())
         assertTrue(transaction { SidebarPreferenceService.getPreferences(memId) }.isEmpty())
     }

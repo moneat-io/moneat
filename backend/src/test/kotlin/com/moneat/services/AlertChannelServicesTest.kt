@@ -42,8 +42,9 @@ class AlertChannelServicesTest {
     fun setupDatabase() {
         if (!dbInitialized) {
             Database.connect(
-                url = "jdbc:h2:mem:moneat_alert_channel_services;MODE=PostgreSQL;" +
-                    "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url =
+                    "jdbc:h2:mem:moneat_alert_channel_services;MODE=PostgreSQL;" +
+                        "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
             transaction {
@@ -65,12 +66,13 @@ class AlertChannelServicesTest {
         }
     }
 
-    private fun seedOrg(name: String = "Channel Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Channel Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
     @Test
     fun `EmailService tracks uptime alert email even when smtp is disabled`() {
@@ -83,48 +85,53 @@ class AlertChannelServicesTest {
             monitorUrl = "https://app.moneat.io/uptime/abc"
         )
 
-        val sent = transaction {
-            EmailsSent.selectAll().first { it[EmailsSent.email_type] == "uptime_alert" }
-        }
+        val sent =
+            transaction {
+                EmailsSent.selectAll().first { it[EmailsSent.email_type] == "uptime_alert" }
+            }
         assertEquals("recipient@moneat.io", sent[EmailsSent.recipient])
         assertFalse(sent[EmailsSent.success])
     }
 
     @Test
-    fun `SlackService returns false when integration is not configured`() = runBlocking {
-        val orgId = seedOrg()
-        val slackService = SlackService()
+    fun `SlackService returns false when integration is not configured`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val slackService = SlackService()
 
-        val sent = slackService.sendSystemAlert(
-            organizationId = orgId,
-            systemName = "api-prod",
-            metric = "CPU Usage",
-            condition = ">",
-            threshold = "80%",
-            currentValue = "95%",
-            systemId = UUID.randomUUID(),
-            baseUrl = "https://app.moneat.io"
-        )
+            val sent =
+                slackService.sendSystemAlert(
+                    organizationId = orgId,
+                    systemName = "api-prod",
+                    metric = "CPU Usage",
+                    condition = ">",
+                    threshold = "80%",
+                    currentValue = "95%",
+                    systemId = UUID.randomUUID(),
+                    baseUrl = "https://app.moneat.io"
+                )
 
-        assertFalse(sent)
-    }
+            assertFalse(sent)
+        }
 
     @Test
-    fun `DiscordService returns false when integration is not configured`() = runBlocking {
-        val orgId = seedOrg()
-        val discordService = DiscordService()
+    fun `DiscordService returns false when integration is not configured`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val discordService = DiscordService()
 
-        val sent = discordService.sendSystemAlert(
-            organizationId = orgId,
-            systemName = "api-prod",
-            metric = "CPU Usage",
-            condition = ">",
-            threshold = "80%",
-            currentValue = "95%",
-            systemId = UUID.randomUUID(),
-            baseUrl = "https://app.moneat.io"
-        )
+            val sent =
+                discordService.sendSystemAlert(
+                    organizationId = orgId,
+                    systemName = "api-prod",
+                    metric = "CPU Usage",
+                    condition = ">",
+                    threshold = "80%",
+                    currentValue = "95%",
+                    systemId = UUID.randomUUID(),
+                    baseUrl = "https://app.moneat.io"
+                )
 
-        assertFalse(sent)
-    }
+            assertFalse(sent)
+        }
 }

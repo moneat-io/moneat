@@ -45,17 +45,19 @@ data class SentryEnvelope(
             if (headerLineEnd == -1) throw IllegalArgumentException("Invalid envelope: missing header newline")
             val headerLine = bodyBytes.copyOfRange(bytePos, headerLineEnd).toString(Charsets.UTF_8)
             val headerJson = Json.parseToJsonElement(headerLine).jsonObject
-            val eventId = headerJson["event_id"]?.jsonPrimitive?.content
-                ?: UUID.randomUUID().toString()
+            val eventId =
+                headerJson["event_id"]?.jsonPrimitive?.content
+                    ?: UUID.randomUUID().toString()
             bytePos = headerLineEnd + 1
 
             // Known Sentry item types that indicate an item header line
-            val knownItemTypes = setOf(
-                "event", "transaction", "session", "attachment",
-                "replay_event", "replay_recording", "replay_video",
-                "feedback", "check_in", "statsd", "metric_buckets",
-                "profile", "client_report", "user_report"
-            )
+            val knownItemTypes =
+                setOf(
+                    "event", "transaction", "session", "attachment",
+                    "replay_event", "replay_recording", "replay_video",
+                    "feedback", "check_in", "statsd", "metric_buckets",
+                    "profile", "client_report", "user_report"
+                )
 
             val items = mutableListOf<EnvelopeItem>()
             while (bytePos < bodyBytes.size) {
@@ -69,25 +71,30 @@ data class SentryEnvelope(
                 val itemHeaderEnd = (bytePos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() } ?: -1
                 if (itemHeaderEnd == -1) break
                 val itemHeaderLine = bodyBytes.copyOfRange(bytePos, itemHeaderEnd).toString(Charsets.UTF_8)
-                val itemHeader = try {
-                    Json.parseToJsonElement(itemHeaderLine).jsonObject
-                } catch (e: Exception) {
-                    bytePos = itemHeaderEnd + 1
-                    continue
-                }
+                val itemHeader =
+                    try {
+                        Json.parseToJsonElement(itemHeaderLine).jsonObject
+                    } catch (e: Exception) {
+                        bytePos = itemHeaderEnd + 1
+                        continue
+                    }
                 val itemType = itemHeader["type"]?.jsonPrimitive?.content ?: "unknown"
-                val explicitLength = try {
-                    itemHeader["length"]?.jsonPrimitive?.long?.toInt()
-                } catch (e: Exception) {
-                    null
-                }
+                val explicitLength =
+                    try {
+                        itemHeader["length"]?.jsonPrimitive?.long?.toInt()
+                    } catch (e: Exception) {
+                        null
+                    }
                 bytePos = itemHeaderEnd + 1
 
                 if (explicitLength != null && explicitLength > 0 && bytePos + explicitLength <= bodyBytes.size) {
                     // Explicit length provided - read exact bytes
                     val payloadBytes = bodyBytes.copyOfRange(bytePos, bytePos + explicitLength)
                     if (itemType == "replay_video" || itemType == "replay_recording") {
-                        val payload = java.util.Base64.getEncoder().encodeToString(payloadBytes)
+                        val payload =
+                            java.util.Base64
+                                .getEncoder()
+                                .encodeToString(payloadBytes)
                         items.add(EnvelopeItem(itemType, payload, payloadBytes, itemHeader))
                     } else {
                         val payload = payloadBytes.toString(Charsets.UTF_8)
@@ -187,19 +194,31 @@ object SentryMessageSerializer : KSerializer<String?> {
     override fun deserialize(decoder: Decoder): String? {
         val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeString()
         return when (val element = jsonDecoder.decodeJsonElement()) {
-            JsonNull -> null
-            is JsonPrimitive -> element.contentOrNull ?: element.toString()
+            JsonNull -> {
+                null
+            }
+
+            is JsonPrimitive -> {
+                element.contentOrNull ?: element.toString()
+            }
+
             is JsonObject -> {
                 element["formatted"]?.jsonPrimitive?.contentOrNull
                     ?: element["message"]?.jsonPrimitive?.contentOrNull
                     ?: element["text"]?.jsonPrimitive?.contentOrNull
                     ?: element.toString()
             }
-            else -> element.toString()
+
+            else -> {
+                element.toString()
+            }
         }
     }
 
-    override fun serialize(encoder: Encoder, value: String?) {
+    override fun serialize(
+        encoder: Encoder,
+        value: String?
+    ) {
         encoder.encodeString(value ?: "")
     }
 }
@@ -217,7 +236,10 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
 
     private fun parseFlexibleTimestamp(element: JsonElement): Double? {
         return when (element) {
-            JsonNull -> null
+            JsonNull -> {
+                null
+            }
+
             is JsonPrimitive -> {
                 element.doubleOrNull ?: run {
                     val isoString = element.contentOrNull ?: return null
@@ -229,11 +251,17 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
                     }
                 }
             }
-            else -> null
+
+            else -> {
+                null
+            }
         }
     }
 
-    override fun serialize(encoder: Encoder, value: Double?) {
+    override fun serialize(
+        encoder: Encoder,
+        value: Double?
+    ) {
         value?.let { encoder.encodeDouble(it) }
     }
 }

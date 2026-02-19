@@ -46,7 +46,9 @@ class NotificationService(private val emailService: EmailService) {
     private val json = Json { ignoreUnknownKeys = true }
     private val slackService = SlackService()
     private val discordService = DiscordService()
-    private val incidentService = com.moneat.services.incident.IncidentService()
+    private val incidentService =
+        com.moneat.services.incident
+            .IncidentService()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Rate limiting: track last alert time per (user, project)
@@ -59,53 +61,61 @@ class NotificationService(private val emailService: EmailService) {
         scheduleWeeklySummary()
     }
 
-    suspend fun onNewIssue(projectId: Long, issueId: String, event: SentryEvent) {
+    suspend fun onNewIssue(
+        projectId: Long,
+        issueId: String,
+        event: SentryEvent
+    ) {
         try {
             logger.info { "Processing new issue alert for issue=$issueId project=$projectId" }
 
             // Get project details
-            val project = transaction {
-                Projects.selectAll().where { Projects.id eq projectId }.firstOrNull()
-            } ?: run {
-                logger.warn { "Project $projectId not found" }
-                return
-            }
+            val project =
+                transaction {
+                    Projects.selectAll().where { Projects.id eq projectId }.firstOrNull()
+                } ?: run {
+                    logger.warn { "Project $projectId not found" }
+                    return
+                }
 
             val projectName = project[Projects.name]
             val orgId = project[Projects.organization_id]
 
             // Get users with ERROR_ALERT email enabled
             val prefsService = AlertNotificationPreferencesService()
-            val usersToNotify = prefsService.getUsersWithChannelEnabled(
-                organizationId = orgId,
-                alertSource = "ERROR_ALERT",
-                channel = "email"
-            ).mapNotNull { (userId, email) ->
-                val user = transaction {
-                    Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                }
-                if (user == null || !user[Users.email_verified]) {
-                    return@mapNotNull null
-                }
+            val usersToNotify =
+                prefsService
+                    .getUsersWithChannelEnabled(
+                        organizationId = orgId,
+                        alertSource = "ERROR_ALERT",
+                        channel = "email"
+                    ).mapNotNull { (userId, email) ->
+                        val user =
+                            transaction {
+                                Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                            }
+                        if (user == null || !user[Users.email_verified]) {
+                            return@mapNotNull null
+                        }
 
-                // Check rate limiting
-                val prefs = getPreferences(userId, projectId)
-                val key = Pair(userId, projectId)
-                val lastAlert = lastAlertTimes[key]
-                val now = Instant.now()
-                if (lastAlert != null) {
-                    val minutesSince = Duration.between(lastAlert, now).toMinutes()
-                    if (minutesSince < prefs.alertFrequencyMinutes) {
-                        logger.debug { "Rate limiting alert for user=$userId project=$projectId" }
-                        return@mapNotNull null
+                        // Check rate limiting
+                        val prefs = getPreferences(userId, projectId)
+                        val key = Pair(userId, projectId)
+                        val lastAlert = lastAlertTimes[key]
+                        val now = Instant.now()
+                        if (lastAlert != null) {
+                            val minutesSince = Duration.between(lastAlert, now).toMinutes()
+                            if (minutesSince < prefs.alertFrequencyMinutes) {
+                                logger.debug { "Rate limiting alert for user=$userId project=$projectId" }
+                                return@mapNotNull null
+                            }
+                        }
+
+                        // Update last alert time
+                        lastAlertTimes[key] = now
+
+                        Pair(email, user[Users.name])
                     }
-                }
-
-                // Update last alert time
-                lastAlertTimes[key] = now
-
-                Pair(email, user[Users.name])
-            }
 
             if (usersToNotify.isEmpty()) {
                 logger.debug { "No users to notify for issue $issueId" }
@@ -117,31 +127,57 @@ class NotificationService(private val emailService: EmailService) {
             val settingsUrl = "$frontendUrl/settings/notifications"
 
             // Derive culprit from exception or use first frame
-            val culprit = event.exception?.values?.firstOrNull()?.stacktrace?.frames?.firstOrNull()
-                ?.let { frame -> "${frame.filename}:${frame.function ?: "unknown"}" }
-                ?: "unknown"
+            val culprit =
+                event.exception
+                    ?.values
+                    ?.firstOrNull()
+                    ?.stacktrace
+                    ?.frames
+                    ?.firstOrNull()
+                    ?.let { frame -> "${frame.filename}:${frame.function ?: "unknown"}" }
+                    ?: "unknown"
 
-            val stackTrace = event.exception?.values?.firstOrNull()?.stacktrace?.frames?.takeLast(5)
-                ?.joinToString("\n") { frame ->
-                    "  at ${frame.function ?: "unknown"} (${frame.filename}:${frame.lineno})"
-                } ?: "No stack trace available"
+            val stackTrace =
+                event.exception
+                    ?.values
+                    ?.firstOrNull()
+                    ?.stacktrace
+                    ?.frames
+                    ?.takeLast(5)
+                    ?.joinToString("\n") { frame ->
+                        "  at ${frame.function ?: "unknown"} (${frame.filename}:${frame.lineno})"
+                    } ?: "No stack trace available"
 
-            val emailData = EmailService.ErrorAlertData(
-                issueTitle = event.message ?: event.exception?.values?.firstOrNull()?.value ?: "Unknown error",
-                issueLevel = event.level ?: "error",
-                issueCulprit = culprit,
-                issueMessage = event.message ?: event.exception?.values?.firstOrNull()?.value ?: "",
-                issueCount = "1",
-                issueUrl = issueUrl,
-                projectName = projectName,
-                environment = event.environment ?: "production",
-                timestamp = event.timestamp?.let {
-                    java.time.Instant.ofEpochMilli((it * 1000).toLong()).toString()
-                } ?: java.time.Instant.now().toString(),
-                stackTrace = stackTrace,
-                settingsUrl = settingsUrl,
-                unsubscribeUrl = "$settingsUrl?project=$projectId"
-            )
+            val emailData =
+                EmailService.ErrorAlertData(
+                    issueTitle =
+                        event.message ?: event.exception
+                            ?.values
+                            ?.firstOrNull()
+                            ?.value ?: "Unknown error",
+                    issueLevel = event.level ?: "error",
+                    issueCulprit = culprit,
+                    issueMessage =
+                        event.message ?: event.exception
+                            ?.values
+                            ?.firstOrNull()
+                            ?.value ?: "",
+                    issueCount = "1",
+                    issueUrl = issueUrl,
+                    projectName = projectName,
+                    environment = event.environment ?: "production",
+                    timestamp =
+                        event.timestamp?.let {
+                            java.time.Instant
+                                .ofEpochMilli((it * 1000).toLong())
+                                .toString()
+                        } ?: java.time.Instant
+                            .now()
+                            .toString(),
+                    stackTrace = stackTrace,
+                    settingsUrl = settingsUrl,
+                    unsubscribeUrl = "$settingsUrl?project=$projectId"
+                )
 
             // Send emails asynchronously
             usersToNotify.forEach { (email, _) ->
@@ -156,11 +192,13 @@ class NotificationService(private val emailService: EmailService) {
             }
 
             // Check if Slack is enabled for any user in the org
-            val slackEnabled = prefsService.getUsersWithChannelEnabled(
-                organizationId = orgId,
-                alertSource = "ERROR_ALERT",
-                channel = "slack"
-            ).isNotEmpty()
+            val slackEnabled =
+                prefsService
+                    .getUsersWithChannelEnabled(
+                        organizationId = orgId,
+                        alertSource = "ERROR_ALERT",
+                        channel = "slack"
+                    ).isNotEmpty()
 
             if (slackEnabled) {
                 try {
@@ -184,11 +222,13 @@ class NotificationService(private val emailService: EmailService) {
             }
 
             // Check if Discord is enabled for any user in the org
-            val discordEnabled = prefsService.getUsersWithChannelEnabled(
-                organizationId = orgId,
-                alertSource = "ERROR_ALERT",
-                channel = "discord"
-            ).isNotEmpty()
+            val discordEnabled =
+                prefsService
+                    .getUsersWithChannelEnabled(
+                        organizationId = orgId,
+                        alertSource = "ERROR_ALERT",
+                        channel = "discord"
+                    ).isNotEmpty()
 
             if (discordEnabled) {
                 try {
@@ -210,31 +250,34 @@ class NotificationService(private val emailService: EmailService) {
 
             // Fire incident alert for error
             try {
-                val severityFromLevel = when (emailData.issueLevel.lowercase()) {
-                    "fatal", "critical" -> com.moneat.models.IncidentSeverity.CRITICAL
-                    "error" -> com.moneat.models.IncidentSeverity.HIGH
-                    "warning" -> com.moneat.models.IncidentSeverity.MEDIUM
-                    else -> com.moneat.models.IncidentSeverity.LOW
-                }
+                val severityFromLevel =
+                    when (emailData.issueLevel.lowercase()) {
+                        "fatal", "critical" -> com.moneat.models.IncidentSeverity.CRITICAL
+                        "error" -> com.moneat.models.IncidentSeverity.HIGH
+                        "warning" -> com.moneat.models.IncidentSeverity.MEDIUM
+                        else -> com.moneat.models.IncidentSeverity.LOW
+                    }
 
-                val incidentEvent = com.moneat.models.IncidentEvent(
-                    title = "[$projectName] ${emailData.issueTitle}",
-                    description = "Level: ${emailData.issueLevel}\nEnvironment: ${emailData.environment}\nCulprit: $culprit\n\nStack trace:\n$stackTrace",
-                    severity = severityFromLevel,
-                    status = com.moneat.models.IncidentStatus.FIRING,
-                    source = com.moneat.models.AlertSource.ERROR_ALERT,
-                    deduplicationKey = "moneat-error-$projectId-$issueId",
-                    organizationId = orgId,
-                    metadata = mapOf(
-                        "project_id" to JsonPrimitive(projectId.toString()),
-                        "project_name" to JsonPrimitive(projectName),
-                        "issue_id" to JsonPrimitive(issueId),
-                        "level" to JsonPrimitive(emailData.issueLevel),
-                        "environment" to JsonPrimitive(emailData.environment),
-                        "culprit" to JsonPrimitive(culprit)
-                    ),
-                    moneatUrl = issueUrl
-                )
+                val incidentEvent =
+                    com.moneat.models.IncidentEvent(
+                        title = "[$projectName] ${emailData.issueTitle}",
+                        description = "Level: ${emailData.issueLevel}\nEnvironment: ${emailData.environment}\nCulprit: $culprit\n\nStack trace:\n$stackTrace",
+                        severity = severityFromLevel,
+                        status = com.moneat.models.IncidentStatus.FIRING,
+                        source = com.moneat.models.AlertSource.ERROR_ALERT,
+                        deduplicationKey = "moneat-error-$projectId-$issueId",
+                        organizationId = orgId,
+                        metadata =
+                            mapOf(
+                                "project_id" to JsonPrimitive(projectId.toString()),
+                                "project_name" to JsonPrimitive(projectName),
+                                "issue_id" to JsonPrimitive(issueId),
+                                "level" to JsonPrimitive(emailData.issueLevel),
+                                "environment" to JsonPrimitive(emailData.environment),
+                                "culprit" to JsonPrimitive(culprit)
+                            ),
+                        moneatUrl = issueUrl
+                    )
                 incidentService.fireAlert(incidentEvent)
             } catch (e: Exception) {
                 logger.error(e) { "Failed to fire incident alert for error" }
@@ -254,17 +297,19 @@ class NotificationService(private val emailService: EmailService) {
             val priorStartDate = startDate.minus(Duration.ofDays(7))
 
             // Get all users with weekly summary enabled
-            val usersToNotify = transaction {
-                Users.selectAll()
-                    .where { Users.email_verified eq true }
-                    .mapNotNull { user ->
-                        val userId = user[Users.id]
-                        val prefs = getPreferences(userId, null)
-                        if (!prefs.weeklySummary) return@mapNotNull null
+            val usersToNotify =
+                transaction {
+                    Users
+                        .selectAll()
+                        .where { Users.email_verified eq true }
+                        .mapNotNull { user ->
+                            val userId = user[Users.id]
+                            val prefs = getPreferences(userId, null)
+                            if (!prefs.weeklySummary) return@mapNotNull null
 
-                        Triple(userId, user[Users.email], user[Users.name])
-                    }
-            }
+                            Triple(userId, user[Users.email], user[Users.name])
+                        }
+                }
 
             logger.info { "Sending weekly summaries to ${usersToNotify.size} users" }
 
@@ -291,15 +336,19 @@ class NotificationService(private val emailService: EmailService) {
         priorStartDate: Instant
     ) {
         // Get user's projects
-        val projects = transaction {
-            val orgIds = Memberships.selectAll()
-                .where { Memberships.user_id eq userId }
-                .map { it[Memberships.organization_id] }
+        val projects =
+            transaction {
+                val orgIds =
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .map { it[Memberships.organization_id] }
 
-            Projects.selectAll()
-                .where { Projects.organization_id inList orgIds }
-                .map { Pair(it[Projects.id], it[Projects.name]) }
-        }
+                Projects
+                    .selectAll()
+                    .where { Projects.organization_id inList orgIds }
+                    .map { Pair(it[Projects.id], it[Projects.name]) }
+            }
 
         if (projects.isEmpty()) {
             logger.debug { "User $userId has no projects, skipping summary" }
@@ -323,31 +372,33 @@ class NotificationService(private val emailService: EmailService) {
         val topIssues = getTopIssues(projectIds, startDate, endDate, limit = 5)
 
         // Get per-project breakdown
-        val projectSummaries = projects.map { (projectId, projectName) ->
-            val stats = getStatsForPeriod(listOf(projectId), startDate, endDate)
-            EmailService.ProjectSummary(
-                name = projectName,
-                events = formatNumber(stats.totalEvents),
-                issues = formatNumber(stats.uniqueIssues),
-                crashFree = "99.5" // TODO: Calculate actual crash-free rate
-            )
-        }
+        val projectSummaries =
+            projects.map { (projectId, projectName) ->
+                val stats = getStatsForPeriod(listOf(projectId), startDate, endDate)
+                EmailService.ProjectSummary(
+                    name = projectName,
+                    events = formatNumber(stats.totalEvents),
+                    issues = formatNumber(stats.uniqueIssues),
+                    crashFree = "99.5" // TODO: Calculate actual crash-free rate
+                )
+            }
 
-        val emailData = EmailService.WeeklySummaryData(
-            startDate = formatDate(startDate),
-            endDate = formatDate(endDate),
-            totalEvents = formatNumber(totalEvents),
-            eventsTrend = eventsTrend,
-            newIssues = formatNumber(newIssues),
-            issuesTrend = issuesTrend,
-            affectedUsers = formatNumber(affectedUsers),
-            usersTrend = usersTrend,
-            topIssues = topIssues,
-            projects = projectSummaries,
-            dashboardUrl = frontendUrl,
-            settingsUrl = "$frontendUrl/settings/notifications",
-            unsubscribeUrl = "$frontendUrl/settings/notifications"
-        )
+        val emailData =
+            EmailService.WeeklySummaryData(
+                startDate = formatDate(startDate),
+                endDate = formatDate(endDate),
+                totalEvents = formatNumber(totalEvents),
+                eventsTrend = eventsTrend,
+                newIssues = formatNumber(newIssues),
+                issuesTrend = issuesTrend,
+                affectedUsers = formatNumber(affectedUsers),
+                usersTrend = usersTrend,
+                topIssues = topIssues,
+                projects = projectSummaries,
+                dashboardUrl = frontendUrl,
+                settingsUrl = "$frontendUrl/settings/notifications",
+                unsubscribeUrl = "$frontendUrl/settings/notifications"
+            )
 
         emailService.sendWeeklySummaryEmail(email, emailData)
         logger.info { "Sent weekly summary to $email" }
@@ -359,11 +410,16 @@ class NotificationService(private val emailService: EmailService) {
         val uniqueUsers: Long
     )
 
-    private suspend fun getStatsForPeriod(projectIds: List<Long>, startDate: Instant, endDate: Instant): PeriodStats {
+    private suspend fun getStatsForPeriod(
+        projectIds: List<Long>,
+        startDate: Instant,
+        endDate: Instant
+    ): PeriodStats {
         val startMs = startDate.toEpochMilli()
         val endMs = endDate.toEpochMilli()
 
-        val query = """
+        val query =
+            """
             SELECT 
                 count() as total_events,
                 uniq(issue_id) as unique_issues,
@@ -373,7 +429,7 @@ class NotificationService(private val emailService: EmailService) {
               AND timestamp >= $startMs
               AND timestamp < $endMs
             FORMAT JSON
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
@@ -395,7 +451,8 @@ class NotificationService(private val emailService: EmailService) {
         val startMs = startDate.toEpochMilli()
         val endMs = endDate.toEpochMilli()
 
-        val query = """
+        val query =
+            """
             SELECT 
                 issue_id,
                 any(message) as title,
@@ -411,18 +468,20 @@ class NotificationService(private val emailService: EmailService) {
             ORDER BY event_count DESC
             LIMIT $limit
             FORMAT JSON
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         val rows = jsonResponse["data"]?.jsonArray ?: return emptyList()
 
         // Get project names
-        val projectMap = transaction {
-            Projects.selectAll()
-                .where { Projects.id inList projectIds }
-                .associate { it[Projects.id] to it[Projects.name] }
-        }
+        val projectMap =
+            transaction {
+                Projects
+                    .selectAll()
+                    .where { Projects.id inList projectIds }
+                    .associate { it[Projects.id] to it[Projects.name] }
+            }
 
         return rows.mapNotNull { row ->
             val obj = row.jsonObject
@@ -443,27 +502,32 @@ class NotificationService(private val emailService: EmailService) {
         val alertFrequencyMinutes: Int
     )
 
-    private fun getPreferences(userId: Int, projectId: Long?): NotificationPrefs {
+    private fun getPreferences(
+        userId: Int,
+        projectId: Long?
+    ): NotificationPrefs {
         return transaction {
             // First check for project-specific override
-            val projectPrefs = if (projectId != null) {
-                NotificationPreferences.selectAll()
-                    .where {
-                        (NotificationPreferences.user_id eq userId) and
-                            (NotificationPreferences.project_id eq projectId)
-                    }
-                    .firstOrNull()
-            } else {
-                null
-            }
+            val projectPrefs =
+                if (projectId != null) {
+                    NotificationPreferences
+                        .selectAll()
+                        .where {
+                            (NotificationPreferences.user_id eq userId) and
+                                (NotificationPreferences.project_id eq projectId)
+                        }.firstOrNull()
+                } else {
+                    null
+                }
 
             // Fall back to global preferences
-            val prefs = projectPrefs ?: NotificationPreferences.selectAll()
-                .where {
-                    (NotificationPreferences.user_id eq userId) and
-                        (NotificationPreferences.project_id.isNull())
-                }
-                .firstOrNull()
+            val prefs =
+                projectPrefs ?: NotificationPreferences
+                    .selectAll()
+                    .where {
+                        (NotificationPreferences.user_id eq userId) and
+                            (NotificationPreferences.project_id.isNull())
+                    }.firstOrNull()
 
             if (prefs != null) {
                 NotificationPrefs(
@@ -487,7 +551,13 @@ class NotificationService(private val emailService: EmailService) {
     private fun scheduleWeeklySummary() {
         // Schedule to run every Monday at 9:00 AM UTC
         val now = ZonedDateTime.now(ZoneId.of("UTC"))
-        var nextRun = now.with(DayOfWeek.MONDAY).withHour(9).withMinute(0).withSecond(0).withNano(0)
+        var nextRun =
+            now
+                .with(DayOfWeek.MONDAY)
+                .withHour(9)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
 
         // If we've already passed Monday 9am this week, schedule for next week
         if (nextRun.isBefore(now)) {
@@ -515,7 +585,10 @@ class NotificationService(private val emailService: EmailService) {
         )
     }
 
-    private fun calculateTrend(current: Long, previous: Long): Int {
+    private fun calculateTrend(
+        current: Long,
+        previous: Long
+    ): Int {
         if (previous == 0L) return if (current > 0) 100 else 0
         return ((current - previous) * 100 / previous).toInt()
     }

@@ -82,7 +82,7 @@ private fun ObjectDetails(
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(Res.string.back))
                     }
-                }
+                },
             )
         },
         modifier = modifier.windowInsetsPadding(WindowInsets.systemBars),
@@ -90,15 +90,16 @@ private fun ObjectDetails(
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
+                .padding(paddingValues),
         ) {
             AsyncImage(
                 model = obj.primaryImageSmall,
                 contentDescription = obj.title,
                 contentScale = ContentScale.FillWidth,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.LightGray)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Color.LightGray),
             )
 
             SelectionContainer {
@@ -133,7 +134,7 @@ private fun LabeledInfo(
                     append("$label: ")
                 }
                 append(data)
-            }
+            },
         )
     }
 }

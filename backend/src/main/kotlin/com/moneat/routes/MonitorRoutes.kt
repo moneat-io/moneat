@@ -50,12 +50,13 @@ import java.util.*
 private val logger = KotlinLogging.logger {}
 
 @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-private val json = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-    encodeDefaults = true
-    explicitNulls = false
-}
+private val json =
+    Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        encodeDefaults = true
+        explicitNulls = false
+    }
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -63,24 +64,31 @@ private val json = Json {
  */
 private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     return transaction {
-        Memberships.selectAll().where { Memberships.user_id eq userId }
+        Memberships
+            .selectAll()
+            .where { Memberships.user_id eq userId }
             .map { it[Memberships.organization_id] }
     }
 }
 
-private fun resolveProjectForOrganization(organizationId: Int, requestedProjectId: Long?): Long? {
+private fun resolveProjectForOrganization(
+    organizationId: Int,
+    requestedProjectId: Long?
+): Long? {
     return transaction {
         if (requestedProjectId != null) {
-            val exists = Projects
-                .selectAll()
-                .where { (Projects.id eq requestedProjectId) and (Projects.organization_id eq organizationId) }
-                .count() > 0
+            val exists =
+                Projects
+                    .selectAll()
+                    .where { (Projects.id eq requestedProjectId) and (Projects.organization_id eq organizationId) }
+                    .count() > 0
             if (exists) {
                 return@transaction requestedProjectId
             }
         }
 
-        Projects.selectAll()
+        Projects
+            .selectAll()
             .where { Projects.organization_id eq organizationId }
             .orderBy(Projects.id to SortOrder.ASC)
             .firstOrNull()
@@ -109,24 +117,29 @@ fun Route.monitorRoutes() {
                 }
 
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
-                val (systemId, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid agent key"))
-                    return@post
-                }
+                val (systemId, organizationId) =
+                    monitorService.validateAgentKey(agentKey) ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid agent key"))
+                        return@post
+                    }
 
                 // Parse payload
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
 
-                val decompressedBytes = if (contentEncoding == "gzip") {
-                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-                } else {
-                    bodyBytes
-                }
+                val decompressedBytes =
+                    if (contentEncoding == "gzip") {
+                        java.util.zip
+                            .GZIPInputStream(bodyBytes.inputStream())
+                            .readBytes()
+                    } else {
+                        bodyBytes
+                    }
 
-                val payload = json.decodeFromString<SystemMetricsPayload>(
-                    decompressedBytes.decodeToString()
-                )
+                val payload =
+                    json.decodeFromString<SystemMetricsPayload>(
+                        decompressedBytes.decodeToString()
+                    )
 
                 logger.debug { "Received metrics from system $systemId (org $organizationId)" }
 
@@ -176,22 +189,26 @@ fun Route.monitorRoutes() {
                 }
 
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
-                val (systemId, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
-                    call.respond(
-                        HttpStatusCode.Unauthorized,
-                        AgentLogIngestResponse(error = "Invalid agent key")
-                    )
-                    return@post
-                }
+                val (systemId, organizationId) =
+                    monitorService.validateAgentKey(agentKey) ?: run {
+                        call.respond(
+                            HttpStatusCode.Unauthorized,
+                            AgentLogIngestResponse(error = "Invalid agent key")
+                        )
+                        return@post
+                    }
 
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
 
-                val decompressedBytes = if (contentEncoding == "gzip") {
-                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-                } else {
-                    bodyBytes
-                }
+                val decompressedBytes =
+                    if (contentEncoding == "gzip") {
+                        java.util.zip
+                            .GZIPInputStream(bodyBytes.inputStream())
+                            .readBytes()
+                    } else {
+                        bodyBytes
+                    }
 
                 val jsonString = decompressedBytes.decodeToString()
                 logger.debug { "Received log payload: ${jsonString.take(500)}" }
@@ -207,12 +224,13 @@ fun Route.monitorRoutes() {
 
                 if (quotaService.isEnforcementEnabled()) {
                     val billableBytes = logService.estimateBillableBytes(payload.logs, systemId.toString())
-                    val reservation = quotaService.reserveUnits(
-                        organizationId = organizationId,
-                        requestedUnits = payload.logs.size,
-                        eventType = "log",
-                        requestedBytes = billableBytes
-                    )
+                    val reservation =
+                        quotaService.reserveUnits(
+                            organizationId = organizationId,
+                            requestedUnits = payload.logs.size,
+                            eventType = "log",
+                            requestedBytes = billableBytes
+                        )
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
@@ -226,8 +244,11 @@ fun Route.monitorRoutes() {
                     }
                 }
 
-                val queueKey = call.application.environment.config.propertyOrNull("logs.queueKey")?.getString()
-                    ?: "moneat:logs:queue"
+                val queueKey =
+                    call.application.environment.config
+                        .propertyOrNull("logs.queueKey")
+                        ?.getString()
+                        ?: "moneat:logs:queue"
                 val accepted = logService.enqueueAgentLogs(projectId, systemId.toString(), payload.logs, queueKey)
                 call.respond(
                     HttpStatusCode.Accepted,
@@ -261,25 +282,27 @@ fun Route.monitorRoutes() {
                 }
 
                 // Get systems from all user's organizations
-                val allSystems = organizationIds.flatMap { orgId ->
-                    monitorService.listSystems(orgId)
-                }
+                val allSystems =
+                    organizationIds.flatMap { orgId ->
+                        monitorService.listSystems(orgId)
+                    }
 
-                val response = allSystems.map { system ->
-                    SystemResponse(
-                        id = system.id.toString(),
-                        projectId = 0L, // Not used - logs are now scoped by system_id
-                        name = system.name,
-                        host = system.host,
-                        status = system.status,
-                        last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
-                        agent_version = system.agentVersion,
-                        os = system.os,
-                        arch = system.arch,
-                        created_at = system.createdAt.toEpochMilliseconds(),
-                        latest_metrics = monitorService.getLatestMetrics(system.id)
-                    )
-                }
+                val response =
+                    allSystems.map { system ->
+                        SystemResponse(
+                            id = system.id.toString(),
+                            projectId = 0L, // Not used - logs are now scoped by system_id
+                            name = system.name,
+                            host = system.host,
+                            status = system.status,
+                            last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
+                            agent_version = system.agentVersion,
+                            os = system.os,
+                            arch = system.arch,
+                            created_at = system.createdAt.toEpochMilliseconds(),
+                            latest_metrics = monitorService.getLatestMetrics(system.id)
+                        )
+                    }
 
                 call.respond(HttpStatusCode.OK, response)
             }
@@ -311,31 +334,33 @@ fun Route.monitorRoutes() {
                 val (system, agentKey) = monitorService.createSystem(organizationId, request.name)
 
                 // Generate docker run command
-                val dockerCommand = """
+                val dockerCommand =
+                    """
                     docker run -d --name moneat-agent \
                       --restart always \
                       --network host \
                       -v /var/run/docker.sock:/var/run/docker.sock:ro \
                       -e MONEAT_KEY="$agentKey" \
                       adrianelder/moneat-agent:latest
-                """.trimIndent()
+                    """.trimIndent()
 
                 call.respond(
                     HttpStatusCode.Created,
                     CreateSystemResponse(
-                        system = SystemResponse(
-                            id = system.id.toString(),
-                            projectId = 0L, // Not used - logs are now scoped by system_id
-                            name = system.name,
-                            host = system.host,
-                            status = system.status,
-                            last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
-                            agent_version = system.agentVersion,
-                            os = system.os,
-                            arch = system.arch,
-                            created_at = system.createdAt.toEpochMilliseconds(),
-                            latest_metrics = null
-                        ),
+                        system =
+                            SystemResponse(
+                                id = system.id.toString(),
+                                projectId = 0L, // Not used - logs are now scoped by system_id
+                                name = system.name,
+                                host = system.host,
+                                status = system.status,
+                                last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
+                                agent_version = system.agentVersion,
+                                os = system.os,
+                                arch = system.arch,
+                                created_at = system.createdAt.toEpochMilliseconds(),
+                                latest_metrics = null
+                            ),
                         agent_key = agentKey,
                         docker_command = dockerCommand
                     )
@@ -354,12 +379,13 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@get
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@get
+                    }
 
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
@@ -397,12 +423,13 @@ fun Route.monitorRoutes() {
                     return@delete
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@delete
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@delete
+                    }
 
                 // Check if system belongs to any of user's organizations
                 val system = monitorService.getSystemById(systemId)
@@ -432,12 +459,13 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@get
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@get
+                    }
 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
@@ -471,12 +499,13 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@get
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@get
+                    }
 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
@@ -507,12 +536,13 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@get
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@get
+                    }
 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
@@ -530,13 +560,14 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val response = monitorService.getContainerHistoricalMetrics(
-                    systemId,
-                    containerName,
-                    fromParam,
-                    toParam,
-                    intervalParam
-                )
+                val response =
+                    monitorService.getContainerHistoricalMetrics(
+                        systemId,
+                        containerName,
+                        fromParam,
+                        toParam,
+                        intervalParam
+                    )
                 call.respond(HttpStatusCode.OK, response)
             }
 
@@ -552,12 +583,13 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@get
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@get
+                    }
 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
@@ -577,18 +609,19 @@ fun Route.monitorRoutes() {
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
 
-                val logRequest = LogQueryRequest(
-                    limit = limit,
-                    cursor = cursor,
-                    query = query,
-                    levels = levels,
-                    service = service,
-                    environment = environment,
-                    from = from,
-                    to = to,
-                    systemId = systemIdStr,
-                    containerName = containerName
-                )
+                val logRequest =
+                    LogQueryRequest(
+                        limit = limit,
+                        cursor = cursor,
+                        query = query,
+                        levels = levels,
+                        service = service,
+                        environment = environment,
+                        from = from,
+                        to = to,
+                        systemId = systemIdStr,
+                        containerName = containerName
+                    )
 
                 // Use a dummy projectId (0) since we're querying by systemId
                 val response = logService.queryLogs(0L, logRequest)
@@ -607,12 +640,13 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@get
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@get
+                    }
 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
@@ -637,12 +671,13 @@ fun Route.monitorRoutes() {
                     return@get
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@get
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@get
+                    }
 
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
@@ -666,12 +701,13 @@ fun Route.monitorRoutes() {
                     return@put
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@put
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@put
+                    }
 
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
@@ -702,12 +738,13 @@ fun Route.monitorRoutes() {
                     return@post
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@post
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@post
+                    }
 
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
@@ -740,12 +777,13 @@ fun Route.monitorRoutes() {
                     return@put
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@put
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@put
+                    }
 
                 val alertId = alertIdStr?.toIntOrNull()
                 if (alertId == null) {
@@ -789,12 +827,13 @@ fun Route.monitorRoutes() {
                     return@delete
                 }
 
-                val systemId = try {
-                    UUID.fromString(systemIdStr)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
-                    return@delete
-                }
+                val systemId =
+                    try {
+                        UUID.fromString(systemIdStr)
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                        return@delete
+                    }
 
                 val alertId = alertIdStr?.toIntOrNull()
                 if (alertId == null) {

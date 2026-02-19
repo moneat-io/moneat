@@ -25,21 +25,22 @@ object AiContextResolver {
 
     private val docCache = ConcurrentHashMap<String, String>()
 
-    private val pageToDocMapping = listOf(
-        Regex("^/uptime") to listOf("monitors"),
-        Regex("^/status-pages") to listOf("status-pages"),
-        Regex("^/projects/[^/]+/logs") to listOf("logs"),
-        Regex("^/projects/[^/]+/settings") to listOf("settings"),
-        Regex("^/projects") to listOf("projects"),
-        Regex("^/issues") to listOf("issues", "performance"),
-        Regex("^/performance") to listOf("performance"),
-        Regex("^/on-call") to listOf("on-call"),
-        Regex("^/monitoring") to listOf("monitoring"),
-        Regex("^/settings") to listOf("settings"),
-        Regex("^/releases") to listOf("projects"),
-        Regex("^/replays") to listOf("projects"),
-        Regex("^/$") to listOf("projects", "issues")
-    )
+    private val pageToDocMapping =
+        listOf(
+            Regex("^/uptime") to listOf("monitors"),
+            Regex("^/status-pages") to listOf("status-pages"),
+            Regex("^/projects/[^/]+/logs") to listOf("logs"),
+            Regex("^/projects/[^/]+/settings") to listOf("settings"),
+            Regex("^/projects") to listOf("projects"),
+            Regex("^/issues") to listOf("issues", "performance"),
+            Regex("^/performance") to listOf("performance"),
+            Regex("^/on-call") to listOf("on-call"),
+            Regex("^/monitoring") to listOf("monitoring"),
+            Regex("^/settings") to listOf("settings"),
+            Regex("^/releases") to listOf("projects"),
+            Regex("^/replays") to listOf("projects"),
+            Regex("^/$") to listOf("projects", "issues")
+        )
 
     fun resolveDocsForPage(currentPage: String?): List<String> {
         if (currentPage.isNullOrBlank()) return emptyList()
@@ -55,8 +56,11 @@ object AiContextResolver {
         return docCache.getOrPut(name) {
             val path = "docs/api/$name.md"
             try {
-                val content = javaClass.classLoader.getResourceAsStream(path)
-                    ?.bufferedReader()?.readText()
+                val content =
+                    javaClass.classLoader
+                        .getResourceAsStream(path)
+                        ?.bufferedReader()
+                        ?.readText()
                 if (content != null) {
                     logger.debug { "Loaded AI context doc: $path" }
                     content
@@ -76,8 +80,10 @@ object AiContextResolver {
     }
 
     fun loadSystemPrompt(): String {
-        return javaClass.classLoader.getResourceAsStream("ai_system_prompt.txt")
-            ?.bufferedReader()?.readText()
+        return javaClass.classLoader
+            .getResourceAsStream("ai_system_prompt.txt")
+            ?.bufferedReader()
+            ?.readText()
             ?: throw RuntimeException("ai_system_prompt.txt not found in resources")
     }
 }

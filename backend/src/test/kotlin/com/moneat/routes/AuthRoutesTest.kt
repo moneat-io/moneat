@@ -60,7 +60,8 @@ class AuthRoutesTest {
             install(Authentication) {
                 jwt("auth-jwt") {
                     verifier(
-                        JWT.require(Algorithm.HMAC256(jwtSecret))
+                        JWT
+                            .require(Algorithm.HMAC256(jwtSecret))
                             .withIssuer("moneat")
                             .withAudience("moneat-users")
                             .build()
@@ -71,8 +72,7 @@ class AuthRoutesTest {
         }
     }
 
-    private fun io.ktor.server.testing.ApplicationTestBuilder.noRedirectClient() =
-        createClient { followRedirects = false }
+    private fun io.ktor.server.testing.ApplicationTestBuilder.noRedirectClient() = createClient { followRedirects = false }
 
     @BeforeTest
     fun setupDatabase() {
@@ -119,8 +119,10 @@ class AuthRoutesTest {
                     assertNotNull(location)
                     assertTrue(location.startsWith("${server.baseUrl}/login/oauth/authorize?"))
 
-                    val cookie = response.headers.getAll(HttpHeaders.SetCookie)
-                        ?.firstOrNull { it.startsWith("oauth_state=") }
+                    val cookie =
+                        response.headers
+                            .getAll(HttpHeaders.SetCookie)
+                            ?.firstOrNull { it.startsWith("oauth_state=") }
                     assertNotNull(cookie)
                     assertTrue(cookie.contains("HttpOnly", ignoreCase = true))
                     assertTrue(cookie.contains("Path=/auth"))
@@ -159,9 +161,10 @@ class AuthRoutesTest {
                 installPlugins()
                 routing { authRoutes() }
 
-                val response = noRedirectClient().get("/auth/github/callback?code=test-code&state=expected") {
-                    cookie("oauth_state", "different")
-                }
+                val response =
+                    noRedirectClient().get("/auth/github/callback?code=test-code&state=expected") {
+                        cookie("oauth_state", "different")
+                    }
                 assertEquals(HttpStatusCode.Found, response.status)
 
                 val location = response.headers[HttpHeaders.Location]
@@ -176,16 +179,27 @@ class AuthRoutesTest {
     fun `github callback success clears state cookie sets auth cookie and redirects`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(
-                    200,
-                    """{"access_token":"token-ok","token_type":"bearer","scope":"user:email"}"""
-                )
-                "/user" -> exchange.respond(
-                    200,
-                    """{"id":111,"login":"tester","email":"oauth@test.com","name":"OAuth Tester"}"""
-                )
-                "/user/emails" -> exchange.respond(200, """[]""")
-                else -> exchange.respond(404, """{"error":"not found"}""")
+                "/login/oauth/access_token" -> {
+                    exchange.respond(
+                        200,
+                        """{"access_token":"token-ok","token_type":"bearer","scope":"user:email"}"""
+                    )
+                }
+
+                "/user" -> {
+                    exchange.respond(
+                        200,
+                        """{"id":111,"login":"tester","email":"oauth@test.com","name":"OAuth Tester"}"""
+                    )
+                }
+
+                "/user/emails" -> {
+                    exchange.respond(200, """[]""")
+                }
+
+                else -> {
+                    exchange.respond(404, """{"error":"not found"}""")
+                }
             }
         }.use { server ->
             withProperties(
@@ -201,9 +215,10 @@ class AuthRoutesTest {
                     installPlugins()
                     routing { authRoutes() }
 
-                    val response = noRedirectClient().get("/auth/github/callback?code=test-code&state=good-state") {
-                        cookie("oauth_state", "good-state")
-                    }
+                    val response =
+                        noRedirectClient().get("/auth/github/callback?code=test-code&state=good-state") {
+                            cookie("oauth_state", "good-state")
+                        }
                     assertEquals(HttpStatusCode.Found, response.status)
                     assertEquals(
                         "https://dashboard.test.local/auth/oauth/callback",
@@ -212,9 +227,10 @@ class AuthRoutesTest {
 
                     val setCookies = response.headers.getAll(HttpHeaders.SetCookie).orEmpty()
                     assertTrue(setCookies.any { it.startsWith("auth_token=") }, "Expected auth_token cookie")
-                    val oauthStateCleared = setCookies.any {
-                        it.startsWith("oauth_state=") && (it.contains("Max-Age=0") || it.contains("Expires="))
-                    }
+                    val oauthStateCleared =
+                        setCookies.any {
+                            it.startsWith("oauth_state=") && (it.contains("Max-Age=0") || it.contains("Expires="))
+                        }
                     assertTrue(oauthStateCleared, "Expected oauth_state clear cookie")
                 }
 
@@ -228,7 +244,10 @@ class AuthRoutesTest {
         }
     }
 
-    private fun <T> withProperties(properties: Map<String, String>, block: () -> T): T {
+    private fun <T> withProperties(
+        properties: Map<String, String>,
+        block: () -> T
+    ): T {
         val previous = properties.keys.associateWith { System.getProperty(it) }
         properties.forEach { (k, v) -> System.setProperty(k, v) }
         return try {

@@ -67,11 +67,14 @@ fun Route.logRoutes() {
         post("/logs/otlp") {
             val bodyBytes = call.receive<ByteArray>()
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes = if (encoding == "gzip") {
-                java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-            } else {
-                bodyBytes
-            }
+            val payloadBytes =
+                if (encoding == "gzip") {
+                    java.util.zip
+                        .GZIPInputStream(bodyBytes.inputStream())
+                        .readBytes()
+                } else {
+                    bodyBytes
+                }
 
             val payload = payloadBytes.decodeToString()
             val parsedEntries = logService.parseOtlpJson(payload)
@@ -80,20 +83,23 @@ fun Route.logRoutes() {
                 return@post
             }
 
-            val dsnLikeHeader = call.request.header("x-moneat-dsn")
-                ?: call.request.header("X-Moneat-Dsn")
-                ?: call.request.header(HttpHeaders.Authorization)
+            val dsnLikeHeader =
+                call.request.header("x-moneat-dsn")
+                    ?: call.request.header("X-Moneat-Dsn")
+                    ?: call.request.header(HttpHeaders.Authorization)
 
-            val projectId = extractProjectIdFromDsn(dsnLikeHeader)
-                ?: call.request.queryParameters["projectId"]?.toLongOrNull()
+            val projectId =
+                extractProjectIdFromDsn(dsnLikeHeader)
+                    ?: call.request.queryParameters["projectId"]?.toLongOrNull()
 
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing project ID in DSN or query parameter"))
                 return@post
             }
 
-            val publicKey = extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
-                ?: extractPublicKeyFromDsn(dsnLikeHeader)
+            val publicKey =
+                extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
+                    ?: extractPublicKeyFromDsn(dsnLikeHeader)
 
             if (publicKey == null) {
                 call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing DSN authentication"))
@@ -114,12 +120,13 @@ fun Route.logRoutes() {
 
             if (quotaService.isEnforcementEnabled()) {
                 val billableBytes = logService.estimateBillableBytes(parsedEntries)
-                val reservation = quotaService.reserveUnits(
-                    organizationId = organizationId,
-                    requestedUnits = parsedEntries.size,
-                    eventType = "log",
-                    requestedBytes = billableBytes
-                )
+                val reservation =
+                    quotaService.reserveUnits(
+                        organizationId = organizationId,
+                        requestedUnits = parsedEntries.size,
+                        eventType = "log",
+                        requestedBytes = billableBytes
+                    )
                 if (!reservation.allowed) {
                     call.respond(
                         HttpStatusCode.TooManyRequests,
@@ -133,8 +140,11 @@ fun Route.logRoutes() {
                 }
             }
 
-            val queueKey = call.application.environment.config.propertyOrNull("logs.queueKey")?.getString()
-                ?: "moneat:logs:queue"
+            val queueKey =
+                call.application.environment.config
+                    .propertyOrNull("logs.queueKey")
+                    ?.getString()
+                    ?: "moneat:logs:queue"
             val accepted = logService.enqueueSdkLogs(projectId, parsedEntries, queueKey)
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
@@ -158,34 +168,37 @@ fun Route.logRoutes() {
                 }
 
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
-                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                } else {
-                    call.request.queryParameters["from"]
-                }
+                val defaultFrom =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
+                    } else {
+                        call.request.queryParameters["from"]
+                    }
 
-                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                    Instant.ofEpochMilli(demoEpochMs).toString()
-                } else {
-                    call.request.queryParameters["to"]
-                }
+                val defaultTo =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                        Instant.ofEpochMilli(demoEpochMs).toString()
+                    } else {
+                        call.request.queryParameters["to"]
+                    }
 
-                val request = LogQueryRequest(
-                    limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100,
-                    cursor = call.request.queryParameters["cursor"],
-                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                    levels = parseLevelQueryParams(call),
-                    service = call.request.queryParameters["service"],
-                    environment = call.request.queryParameters["environment"],
-                    from = defaultFrom,
-                    to = defaultTo,
-                    tags = parseTagQueryParams(call),
-                    excludeService = call.request.queryParameters["excludeService"],
-                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                    excludeTags = parseExcludeTagQueryParams(call)
-                )
+                val request =
+                    LogQueryRequest(
+                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100,
+                        cursor = call.request.queryParameters["cursor"],
+                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                        levels = parseLevelQueryParams(call),
+                        service = call.request.queryParameters["service"],
+                        environment = call.request.queryParameters["environment"],
+                        from = defaultFrom,
+                        to = defaultTo,
+                        tags = parseTagQueryParams(call),
+                        excludeService = call.request.queryParameters["excludeService"],
+                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                        excludeTags = parseExcludeTagQueryParams(call)
+                    )
 
                 val result = logService.queryLogs(projectId, request)
                 call.respond(HttpStatusCode.OK, result)
@@ -212,13 +225,14 @@ fun Route.logRoutes() {
                     return@get
                 }
 
-                val result = logService.getTagValues(
-                    projectId = projectId,
-                    key = key,
-                    from = call.request.queryParameters["from"],
-                    to = call.request.queryParameters["to"],
-                    limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
-                )
+                val result =
+                    logService.getTagValues(
+                        projectId = projectId,
+                        key = key,
+                        from = call.request.queryParameters["from"],
+                        to = call.request.queryParameters["to"],
+                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                    )
                 call.respond(HttpStatusCode.OK, result)
             }
 
@@ -240,24 +254,27 @@ fun Route.logRoutes() {
                 }
 
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
-                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                } else {
-                    call.request.queryParameters["from"]
-                }
+                val defaultFrom =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
+                    } else {
+                        call.request.queryParameters["from"]
+                    }
 
-                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                    Instant.ofEpochMilli(demoEpochMs).toString()
-                } else {
-                    call.request.queryParameters["to"]
-                }
+                val defaultTo =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                        Instant.ofEpochMilli(demoEpochMs).toString()
+                    } else {
+                        call.request.queryParameters["to"]
+                    }
 
-                val result = logService.getFilterOptionsWithCounts(
-                    projectId = projectId,
-                    from = defaultFrom,
-                    to = defaultTo
-                )
+                val result =
+                    logService.getFilterOptionsWithCounts(
+                        projectId = projectId,
+                        from = defaultFrom,
+                        to = defaultTo
+                    )
                 call.respond(HttpStatusCode.OK, result)
             }
 
@@ -279,35 +296,38 @@ fun Route.logRoutes() {
                 }
 
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
-                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                } else {
-                    call.request.queryParameters["from"]
-                }
+                val defaultFrom =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
+                    } else {
+                        call.request.queryParameters["from"]
+                    }
 
-                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                    Instant.ofEpochMilli(demoEpochMs).toString()
-                } else {
-                    call.request.queryParameters["to"]
-                }
+                val defaultTo =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                        Instant.ofEpochMilli(demoEpochMs).toString()
+                    } else {
+                        call.request.queryParameters["to"]
+                    }
 
-                val result = logService.aggregateLogs(
-                    projectId = projectId,
-                    from = defaultFrom,
-                    to = defaultTo,
-                    interval = call.request.queryParameters["interval"],
-                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                    levels = parseLevelQueryParams(call),
-                    service = call.request.queryParameters["service"],
-                    environment = call.request.queryParameters["environment"],
-                    tags = parseTagQueryParams(call),
-                    excludeService = call.request.queryParameters["excludeService"],
-                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                    excludeTags = parseExcludeTagQueryParams(call),
-                    groupBy = call.request.queryParameters["groupBy"]
-                )
+                val result =
+                    logService.aggregateLogs(
+                        projectId = projectId,
+                        from = defaultFrom,
+                        to = defaultTo,
+                        interval = call.request.queryParameters["interval"],
+                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                        levels = parseLevelQueryParams(call),
+                        service = call.request.queryParameters["service"],
+                        environment = call.request.queryParameters["environment"],
+                        tags = parseTagQueryParams(call),
+                        excludeService = call.request.queryParameters["excludeService"],
+                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                        excludeTags = parseExcludeTagQueryParams(call),
+                        groupBy = call.request.queryParameters["groupBy"]
+                    )
                 logger.debug {
                     "Aggregate logs response for project $projectId: ${result.buckets.size} buckets, totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, to=$defaultTo, isDemo=$isDemo"
                 }
@@ -338,35 +358,38 @@ fun Route.logRoutes() {
                 }
 
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom = if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                    val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
-                    Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                } else {
-                    call.request.queryParameters["from"]
-                }
+                val defaultFrom =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
+                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
+                    } else {
+                        call.request.queryParameters["from"]
+                    }
 
-                val defaultTo = if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                    Instant.ofEpochMilli(demoEpochMs).toString()
-                } else {
-                    call.request.queryParameters["to"]
-                }
+                val defaultTo =
+                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
+                        Instant.ofEpochMilli(demoEpochMs).toString()
+                    } else {
+                        call.request.queryParameters["to"]
+                    }
 
-                val result = logService.topValues(
-                    projectId = projectId,
-                    field = field,
-                    limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10,
-                    from = defaultFrom,
-                    to = defaultTo,
-                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                    levels = parseLevelQueryParams(call),
-                    service = call.request.queryParameters["service"],
-                    environment = call.request.queryParameters["environment"],
-                    tags = parseTagQueryParams(call),
-                    excludeService = call.request.queryParameters["excludeService"],
-                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                    excludeTags = parseExcludeTagQueryParams(call)
-                )
+                val result =
+                    logService.topValues(
+                        projectId = projectId,
+                        field = field,
+                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10,
+                        from = defaultFrom,
+                        to = defaultTo,
+                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                        levels = parseLevelQueryParams(call),
+                        service = call.request.queryParameters["service"],
+                        environment = call.request.queryParameters["environment"],
+                        tags = parseTagQueryParams(call),
+                        excludeService = call.request.queryParameters["excludeService"],
+                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                        excludeTags = parseExcludeTagQueryParams(call)
+                    )
                 call.respond(HttpStatusCode.OK, result)
             }
 
@@ -385,21 +408,22 @@ fun Route.logRoutes() {
                     return@get
                 }
 
-                val csv = logService.exportCsv(
-                    projectId = projectId,
-                    from = call.request.queryParameters["from"],
-                    to = call.request.queryParameters["to"],
-                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                    levels = parseLevelQueryParams(call),
-                    service = call.request.queryParameters["service"],
-                    environment = call.request.queryParameters["environment"],
-                    tags = parseTagQueryParams(call),
-                    excludeService = call.request.queryParameters["excludeService"],
-                    excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                    excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                    excludeTags = parseExcludeTagQueryParams(call),
-                    limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 5000
-                )
+                val csv =
+                    logService.exportCsv(
+                        projectId = projectId,
+                        from = call.request.queryParameters["from"],
+                        to = call.request.queryParameters["to"],
+                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                        levels = parseLevelQueryParams(call),
+                        service = call.request.queryParameters["service"],
+                        environment = call.request.queryParameters["environment"],
+                        tags = parseTagQueryParams(call),
+                        excludeService = call.request.queryParameters["excludeService"],
+                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
+                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
+                        excludeTags = parseExcludeTagQueryParams(call),
+                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 5000
+                    )
 
                 call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"logs-export.csv\"")
                 call.respondText(csv, ContentType.Text.CSV)
@@ -424,26 +448,34 @@ fun Route.logRoutes() {
                 return@get
             }
 
-            val filters = LogTailFilters(
-                query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                levels = parseLevelQueryParams(call).map { it.lowercase() }.toSet(),
-                service = call.request.queryParameters["service"],
-                environment = call.request.queryParameters["environment"]
-            )
+            val filters =
+                LogTailFilters(
+                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
+                    levels = parseLevelQueryParams(call).map { it.lowercase() }.toSet(),
+                    service = call.request.queryParameters["service"],
+                    environment = call.request.queryParameters["environment"]
+                )
 
-            val redisUrl = call.application.environment.config.property("redis.url").getString()
+            val redisUrl =
+                call.application.environment.config
+                    .property("redis.url")
+                    .getString()
             val channel = logService.liveChannel(projectId)
             val queue = LinkedBlockingQueue<String>()
 
             val client = RedisClient.create(RedisURI.create(redisUrl))
             val connection = client.connectPubSub()
-            val listener = object : RedisPubSubAdapter<String, String>() {
-                override fun message(ch: String, message: String) {
-                    if (ch == channel) {
-                        queue.offer(message)
+            val listener =
+                object : RedisPubSubAdapter<String, String>() {
+                    override fun message(
+                        ch: String,
+                        message: String
+                    ) {
+                        if (ch == channel) {
+                            queue.offer(message)
+                        }
                     }
                 }
-            }
 
             connection.addListener(listener)
             connection.sync().subscribe(channel)
@@ -507,8 +539,7 @@ private fun parseTagQueryParams(call: ApplicationCall): Map<String, String> {
             val value = token.substring(idx + 1).trim()
             if (key.isBlank()) return@mapNotNull null
             key to value
-        }
-        .toMap()
+        }.toMap()
 }
 
 private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, String> {
@@ -522,27 +553,32 @@ private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, Strin
             val value = token.substring(idx + 1).trim()
             if (key.isBlank()) return@mapNotNull null
             key to value
-        }
-        .toMap()
+        }.toMap()
 }
 
 private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
     if (dsnLike.isNullOrBlank()) return null
     val cleaned = dsnLike.removePrefix("DSN ").trim()
     val regex = "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
-    return regex.find(cleaned)?.groupValues?.getOrNull(1)?.toLongOrNull()
+    return regex
+        .find(cleaned)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toLongOrNull()
 }
 
 private fun authenticateTailRequest(call: ApplicationCall): Int? {
     val authHeader = call.request.header(HttpHeaders.Authorization)
-    val bearerToken = authHeader
-        ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-        ?.removePrefix("Bearer ")
-        ?.trim()
+    val bearerToken =
+        authHeader
+            ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+            ?.removePrefix("Bearer ")
+            ?.trim()
     // Try: Authorization header → cookie → query param (legacy fallback)
-    val token = bearerToken
-        ?: call.request.cookies["auth_token"]
-        ?: call.request.queryParameters["token"]
+    val token =
+        bearerToken
+            ?: call.request.cookies["auth_token"]
+            ?: call.request.queryParameters["token"]
 
     if (token.isNullOrBlank()) return null
 
@@ -552,11 +588,12 @@ private fun authenticateTailRequest(call: ApplicationCall): Int? {
         val issuer = config.property("jwt.issuer").getString()
         val audience = config.property("jwt.audience").getString()
 
-        val verifier = JWT
-            .require(Algorithm.HMAC256(secret))
-            .withIssuer(issuer)
-            .withAudience(audience)
-            .build()
+        val verifier =
+            JWT
+                .require(Algorithm.HMAC256(secret))
+                .withIssuer(issuer)
+                .withAudience(audience)
+                .build()
 
         verifier.verify(token).getClaim("userId").asInt()
     } catch (_: Exception) {

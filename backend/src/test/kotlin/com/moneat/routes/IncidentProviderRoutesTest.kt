@@ -35,31 +35,35 @@ class IncidentProviderRoutesTest {
     private val jwtSecret = "incident-provider-routes-secret"
 
     @Test
-    fun `test connection route returns 400 for non numeric config id`() = testApplication {
-        application {
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256(jwtSecret))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+    fun `test connection route returns 400 for non numeric config id`() =
+        testApplication {
+            application {
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
+                routing { incidentProviderRoutes() }
             }
-            routing { incidentProviderRoutes() }
-        }
 
-        val response = client.post("/api/incident-providers/not-an-int/test") {
-            header(HttpHeaders.Authorization, "Bearer ${tokenForUser(7)}")
-        }
+            val response =
+                client.post("/api/incident-providers/not-an-int/test") {
+                    header(HttpHeaders.Authorization, "Bearer ${tokenForUser(7)}")
+                }
 
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-    }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+        }
 
     private fun tokenForUser(userId: Int): String {
-        return JWT.create()
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)

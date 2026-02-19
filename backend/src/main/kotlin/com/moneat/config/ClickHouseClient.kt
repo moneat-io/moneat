@@ -34,25 +34,34 @@ object ClickHouseClient {
     private var user: String = ""
     private var password: String = ""
 
-    fun init(baseUrl: String, database: String, user: String, password: String) {
+    fun init(
+        baseUrl: String,
+        database: String,
+        user: String,
+        password: String
+    ) {
         if (this.httpClient != null) return
         this.baseUrl = baseUrl
         this.database = database
         this.user = user
         this.password = password
-        this.httpClient = HttpClient(CIO) {
-            engine {
-                maxConnectionsCount = 100
-                endpoint {
-                    keepAliveTime = 5000
-                    connectTimeout = 10_000
-                    socketTimeout = 30_000
+        this.httpClient =
+            HttpClient(CIO) {
+                engine {
+                    maxConnectionsCount = 100
+                    endpoint {
+                        keepAliveTime = 5000
+                        connectTimeout = 10_000
+                        socketTimeout = 30_000
+                    }
                 }
             }
-        }
     }
 
-    suspend fun execute(query: String, span: ISpan? = null): HttpResponse {
+    suspend fun execute(
+        query: String,
+        span: ISpan? = null
+    ): HttpResponse {
         return if (span != null && Sentry.isEnabled()) {
             SentryUtils.withSpan(span, "db.clickhouse", "ClickHouse query") { childSpan ->
                 childSpan?.setData("db.system", "clickhouse")
@@ -78,7 +87,11 @@ object ClickHouseClient {
         }
     }
 
-    suspend fun executeWithFormat(query: String, format: String, span: ISpan? = null): String {
+    suspend fun executeWithFormat(
+        query: String,
+        format: String,
+        span: ISpan? = null
+    ): String {
         val queryWithFormat = if (query.trimEnd().uppercase().contains("FORMAT")) query else "$query FORMAT $format"
         val response = execute(queryWithFormat, span)
         return response.bodyAsText()
@@ -103,12 +116,13 @@ object ClickHouseClient {
 
 fun Application.configureClickHouse() {
     // Skip ClickHouse in test environment if not configured
-    val url = try {
-        environment.config.property("database.clickhouse.url").getString()
-    } catch (e: Exception) {
-        log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
-        return
-    }
+    val url =
+        try {
+            environment.config.property("database.clickhouse.url").getString()
+        } catch (e: Exception) {
+            log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
+            return
+        }
 
     try {
         val config = environment.config

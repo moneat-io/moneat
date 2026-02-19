@@ -133,122 +133,196 @@ class EventServiceTest {
 
     @Test
     fun `same error with identical exception generates same fingerprint for deduplication`() {
-        val event1 = createSentryEvent(
-            eventId = "event-1",
-            exceptionType = "NullPointerException",
-            exceptionMessage = "Cannot invoke method on null object",
-            stackTrace = listOf(
-                createStackFrame("MyClass.kt", "processData", 42, inApp = true),
-                createStackFrame("Utils.kt", "helper", 10, inApp = true)
+        val event1 =
+            createSentryEvent(
+                eventId = "event-1",
+                exceptionType = "NullPointerException",
+                exceptionMessage = "Cannot invoke method on null object",
+                stackTrace =
+                    listOf(
+                        createStackFrame("MyClass.kt", "processData", 42, inApp = true),
+                        createStackFrame("Utils.kt", "helper", 10, inApp = true)
+                    )
             )
-        )
 
-        val event2 = createSentryEvent(
-            eventId = "event-2",
-            exceptionType = "NullPointerException",
-            exceptionMessage = "Cannot invoke method on null object",
-            stackTrace = listOf(
-                createStackFrame("MyClass.kt", "processData", 42, inApp = true),
-                createStackFrame("Utils.kt", "helper", 10, inApp = true)
+        val event2 =
+            createSentryEvent(
+                eventId = "event-2",
+                exceptionType = "NullPointerException",
+                exceptionMessage = "Cannot invoke method on null object",
+                stackTrace =
+                    listOf(
+                        createStackFrame("MyClass.kt", "processData", 42, inApp = true),
+                        createStackFrame("Utils.kt", "helper", 10, inApp = true)
+                    )
             )
-        )
 
-        val fingerprint1 = event1.let {
-            it.exception?.let { exc ->
-                val firstException = exc.values.firstOrNull()
-                listOf(firstException?.type, firstException?.stacktrace?.frames?.lastOrNull()?.function, firstException?.stacktrace?.frames?.lastOrNull()?.filename)
-                    .filterNotNull()
-            } ?: emptyList()
-        }
+        val fingerprint1 =
+            event1.let {
+                it.exception?.let { exc ->
+                    val firstException = exc.values.firstOrNull()
+                    listOf(firstException?.type,
+                        firstException
+                            ?.stacktrace
+                            ?.frames
+                            ?.lastOrNull()
+                            ?.function,
+                        firstException
+                            ?.stacktrace
+                            ?.frames
+                            ?.lastOrNull()
+                            ?.filename)
+                        .filterNotNull()
+                } ?: emptyList()
+            }
 
-        val fingerprint2 = event2.let {
-            it.exception?.let { exc ->
-                val firstException = exc.values.firstOrNull()
-                listOf(firstException?.type, firstException?.stacktrace?.frames?.lastOrNull()?.function, firstException?.stacktrace?.frames?.lastOrNull()?.filename)
-                    .filterNotNull()
-            } ?: emptyList()
-        }
+        val fingerprint2 =
+            event2.let {
+                it.exception?.let { exc ->
+                    val firstException = exc.values.firstOrNull()
+                    listOf(firstException?.type,
+                        firstException
+                            ?.stacktrace
+                            ?.frames
+                            ?.lastOrNull()
+                            ?.function,
+                        firstException
+                            ?.stacktrace
+                            ?.frames
+                            ?.lastOrNull()
+                            ?.filename)
+                        .filterNotNull()
+                } ?: emptyList()
+            }
 
         assertEquals(fingerprint1, fingerprint2, "Same errors should generate identical fingerprints for deduplication")
     }
 
     @Test
     fun `different exception types generate different fingerprints`() {
-        val event1 = createSentryEvent(
-            exceptionType = "NullPointerException",
-            stackTrace = listOf(createStackFrame("MyClass.kt", "processData", 42, inApp = true))
-        )
+        val event1 =
+            createSentryEvent(
+                exceptionType = "NullPointerException",
+                stackTrace = listOf(createStackFrame("MyClass.kt", "processData", 42, inApp = true))
+            )
 
-        val event2 = createSentryEvent(
-            exceptionType = "IllegalArgumentException",
-            stackTrace = listOf(createStackFrame("MyClass.kt", "processData", 42, inApp = true))
-        )
+        val event2 =
+            createSentryEvent(
+                exceptionType = "IllegalArgumentException",
+                stackTrace = listOf(createStackFrame("MyClass.kt", "processData", 42, inApp = true))
+            )
 
-        val fingerprint1 = event1.exception?.values?.firstOrNull()?.type
-        val fingerprint2 = event2.exception?.values?.firstOrNull()?.type
+        val fingerprint1 =
+            event1.exception
+                ?.values
+                ?.firstOrNull()
+                ?.type
+        val fingerprint2 =
+            event2.exception
+                ?.values
+                ?.firstOrNull()
+                ?.type
 
         assertNotEquals(fingerprint1, fingerprint2, "Different exception types should generate different fingerprints")
     }
 
     @Test
     fun `different function names in stack trace generate different fingerprints`() {
-        val event1 = createSentryEvent(
-            exceptionType = "ValueError",
-            stackTrace = listOf(createStackFrame("script.py", "process", 15, inApp = true))
-        )
+        val event1 =
+            createSentryEvent(
+                exceptionType = "ValueError",
+                stackTrace = listOf(createStackFrame("script.py", "process", 15, inApp = true))
+            )
 
-        val event2 = createSentryEvent(
-            exceptionType = "ValueError",
-            stackTrace = listOf(createStackFrame("script.py", "validate", 20, inApp = true))
-        )
+        val event2 =
+            createSentryEvent(
+                exceptionType = "ValueError",
+                stackTrace = listOf(createStackFrame("script.py", "validate", 20, inApp = true))
+            )
 
-        val func1 = event1.exception?.values?.firstOrNull()?.stacktrace?.frames?.lastOrNull()?.function
-        val func2 = event2.exception?.values?.firstOrNull()?.stacktrace?.frames?.lastOrNull()?.function
+        val func1 =
+            event1.exception
+                ?.values
+                ?.firstOrNull()
+                ?.stacktrace
+                ?.frames
+                ?.lastOrNull()
+                ?.function
+        val func2 =
+            event2.exception
+                ?.values
+                ?.firstOrNull()
+                ?.stacktrace
+                ?.frames
+                ?.lastOrNull()
+                ?.function
 
         assertNotEquals(func1, func2, "Different function names should generate different fingerprints")
     }
 
     @Test
     fun `stack trace is included in fingerprint calculation`() {
-        val baseEvent = createSentryEvent(
-            exceptionType = "RuntimeException",
-            exceptionMessage = "Something failed",
-            stackTrace = listOf(
-                createStackFrame("App.java", "main", 5, inApp = true),
-                createStackFrame("Service.java", "execute", 100, inApp = true)
+        val baseEvent =
+            createSentryEvent(
+                exceptionType = "RuntimeException",
+                exceptionMessage = "Something failed",
+                stackTrace =
+                    listOf(
+                        createStackFrame("App.java", "main", 5, inApp = true),
+                        createStackFrame("Service.java", "execute", 100, inApp = true)
+                    )
             )
-        )
 
-        val eventWithDifferentStack = createSentryEvent(
-            exceptionType = "RuntimeException",
-            exceptionMessage = "Something failed",
-            stackTrace = listOf(
-                createStackFrame("App.java", "main", 5, inApp = true),
-                createStackFrame("Different.java", "execute", 100, inApp = true)
+        val eventWithDifferentStack =
+            createSentryEvent(
+                exceptionType = "RuntimeException",
+                exceptionMessage = "Something failed",
+                stackTrace =
+                    listOf(
+                        createStackFrame("App.java", "main", 5, inApp = true),
+                        createStackFrame("Different.java", "execute", 100, inApp = true)
+                    )
             )
-        )
 
-        val stack1 = baseEvent.exception?.values?.firstOrNull()?.stacktrace?.frames?.lastOrNull()?.filename
-        val stack2 = eventWithDifferentStack.exception?.values?.firstOrNull()?.stacktrace?.frames?.lastOrNull()?.filename
+        val stack1 =
+            baseEvent.exception
+                ?.values
+                ?.firstOrNull()
+                ?.stacktrace
+                ?.frames
+                ?.lastOrNull()
+                ?.filename
+        val stack2 =
+            eventWithDifferentStack.exception
+                ?.values
+                ?.firstOrNull()
+                ?.stacktrace
+                ?.frames
+                ?.lastOrNull()
+                ?.filename
 
         assertNotEquals(stack1, stack2, "Stack trace differences should affect fingerprint")
     }
 
     @Test
     fun `platform context affects event processing`() {
-        val androidEvent = createSentryEvent(
-            platform = "android",
-            contexts = buildJsonObject {
-                put("os", buildJsonObject { put("name", "Android") })
-            }
-        )
+        val androidEvent =
+            createSentryEvent(
+                platform = "android",
+                contexts =
+                    buildJsonObject {
+                        put("os", buildJsonObject { put("name", "Android") })
+                    }
+            )
 
-        val iosEvent = createSentryEvent(
-            platform = "ios",
-            contexts = buildJsonObject {
-                put("os", buildJsonObject { put("name", "iOS") })
-            }
-        )
+        val iosEvent =
+            createSentryEvent(
+                platform = "ios",
+                contexts =
+                    buildJsonObject {
+                        put("os", buildJsonObject { put("name", "iOS") })
+                    }
+            )
 
         assertNotEquals(androidEvent.platform, iosEvent.platform, "Different platforms should be distinguishable")
         assertEquals("android", androidEvent.platform)
@@ -259,13 +333,14 @@ class EventServiceTest {
 
     @Test
     fun `valid Sentry event with all required fields is accepted`() {
-        val event = createSentryEvent(
-            eventId = UUID.randomUUID().toString(),
-            exceptionType = "TestError",
-            exceptionMessage = "Test error message",
-            level = "error",
-            platform = "javascript"
-        )
+        val event =
+            createSentryEvent(
+                eventId = UUID.randomUUID().toString(),
+                exceptionType = "TestError",
+                exceptionMessage = "Test error message",
+                level = "error",
+                platform = "javascript"
+            )
 
         assertNotNull(event.event_id, "Event ID should be present")
         assertNotNull(event.exception, "Exception should be present")
@@ -275,12 +350,13 @@ class EventServiceTest {
 
     @Test
     fun `event without exception type uses message field instead`() {
-        val event = createSentryEvent(
-            eventId = UUID.randomUUID().toString(),
-            exceptionType = null,
-            message = "Fallback message error",
-            level = "error"
-        )
+        val event =
+            createSentryEvent(
+                eventId = UUID.randomUUID().toString(),
+                exceptionType = null,
+                message = "Fallback message error",
+                level = "error"
+            )
 
         assertNotNull(event.message, "Message field should be used when exception type missing")
         assertEquals("Fallback message error", event.message)
@@ -288,30 +364,33 @@ class EventServiceTest {
 
     @Test
     fun `event with all optional fields is processed correctly`() {
-        val userInfo = UserInfo(
-            id = "user-123",
-            email = "test@example.com",
-            username = "testuser",
-            ip_address = "192.168.1.1"
-        )
+        val userInfo =
+            UserInfo(
+                id = "user-123",
+                email = "test@example.com",
+                username = "testuser",
+                ip_address = "192.168.1.1"
+            )
 
-        val tags = mapOf(
-            "environment" to "production",
-            "version" to "1.0.0",
-            "component" to "auth-service"
-        )
+        val tags =
+            mapOf(
+                "environment" to "production",
+                "version" to "1.0.0",
+                "component" to "auth-service"
+            )
 
         val sdkInfo = SdkInfo(name = "sentry-java", version = "5.0.0")
 
-        val event = createSentryEvent(
-            eventId = UUID.randomUUID().toString(),
-            user = userInfo,
-            tags = tags,
-            sdk = sdkInfo,
-            environment = "production",
-            release = "1.0.0",
-            platform = "jvm"
-        )
+        val event =
+            createSentryEvent(
+                eventId = UUID.randomUUID().toString(),
+                user = userInfo,
+                tags = tags,
+                sdk = sdkInfo,
+                environment = "production",
+                release = "1.0.0",
+                platform = "jvm"
+            )
 
         assertEquals(userInfo, event.user, "User context should be preserved")
         assertEquals(tags, event.tags, "Tags should be preserved")
@@ -323,9 +402,10 @@ class EventServiceTest {
     @Test
     fun `event with Unix timestamp is parsed correctly`() {
         val unixTimestamp = 1705316445.0 // 2024-01-15T10:30:45Z
-        val event = createSentryEvent(
-            timestamp = unixTimestamp
-        )
+        val event =
+            createSentryEvent(
+                timestamp = unixTimestamp
+            )
 
         assertEquals(unixTimestamp, event.timestamp, "Unix timestamp should be preserved")
     }
@@ -341,20 +421,22 @@ class EventServiceTest {
     @Test
     fun `event with custom fingerprint is respected`() {
         val customFingerprint = listOf("custom", "fingerprint", "value")
-        val event = createSentryEvent(
-            fingerprint = customFingerprint
-        )
+        val event =
+            createSentryEvent(
+                fingerprint = customFingerprint
+            )
 
         assertEquals(customFingerprint, event.fingerprint, "Custom fingerprint should be respected")
     }
 
     @Test
     fun `event with null fingerprint uses generated fingerprint`() {
-        val event = createSentryEvent(
-            fingerprint = null,
-            exceptionType = "GeneratedException",
-            stackTrace = listOf(createStackFrame("test.js", "test", 1, inApp = true))
-        )
+        val event =
+            createSentryEvent(
+                fingerprint = null,
+                exceptionType = "GeneratedException",
+                stackTrace = listOf(createStackFrame("test.js", "test", 1, inApp = true))
+            )
 
         assertNull(event.fingerprint, "Fingerprint can be null in event")
         assertNotNull(event.exception, "Exception should be present for fingerprint generation")
@@ -376,17 +458,18 @@ class EventServiceTest {
 
     @Test
     fun `device context is extracted from contexts object`() {
-        val contexts = buildJsonObject {
-            put(
-                "device",
-                buildJsonObject {
-                    put("name", "iPhone 13")
-                    put("model", "iPhone13,2")
-                    put("model_id", "A2223")
-                    put("os_version", "16.0")
-                }
-            )
-        }
+        val contexts =
+            buildJsonObject {
+                put(
+                    "device",
+                    buildJsonObject {
+                        put("name", "iPhone 13")
+                        put("model", "iPhone13,2")
+                        put("model_id", "A2223")
+                        put("os_version", "16.0")
+                    }
+                )
+            }
 
         val event = createSentryEvent(contexts = contexts)
 
@@ -402,12 +485,13 @@ class EventServiceTest {
         val username = "johndoe"
         val ipAddress = "203.0.113.42"
 
-        val userInfo = UserInfo(
-            id = userId,
-            email = userEmail,
-            username = username,
-            ip_address = ipAddress
-        )
+        val userInfo =
+            UserInfo(
+                id = userId,
+                email = userEmail,
+                username = username,
+                ip_address = ipAddress
+            )
 
         val event = createSentryEvent(user = userInfo)
 
@@ -419,12 +503,13 @@ class EventServiceTest {
 
     @Test
     fun `tags are extracted as key-value map`() {
-        val tags = mapOf(
-            "service" to "api-gateway",
-            "instance" to "prod-us-east-1",
-            "build_version" to "2024.1.15.001",
-            "region" to "us-east-1"
-        )
+        val tags =
+            mapOf(
+                "service" to "api-gateway",
+                "instance" to "prod-us-east-1",
+                "build_version" to "2024.1.15.001",
+                "region" to "us-east-1"
+            )
 
         val event = createSentryEvent(tags = tags)
 
@@ -435,12 +520,14 @@ class EventServiceTest {
 
     @Test
     fun `extra context data is preserved in event`() {
-        val breadcrumbs = Json.parseToJsonElement(
-            """[
+        val breadcrumbs =
+            Json
+                .parseToJsonElement(
+                    """[
             {"message": "User logged in", "level": "info"},
             {"message": "API call initiated", "level": "debug"}
         ]"""
-        ).jsonArray
+                ).jsonArray
 
         val event = createSentryEvent(breadcrumbs = breadcrumbs)
 
@@ -450,23 +537,34 @@ class EventServiceTest {
 
     @Test
     fun `request context includes HTTP details`() {
-        val request = buildJsonObject {
-            put("method", "POST")
-            put("url", "https://api.example.com/events")
-            put(
-                "headers",
-                buildJsonObject {
-                    put("Content-Type", "application/json")
-                    put("User-Agent", "sentry-java/5.0.0")
-                }
-            )
-        }
+        val request =
+            buildJsonObject {
+                put("method", "POST")
+                put("url", "https://api.example.com/events")
+                put(
+                    "headers",
+                    buildJsonObject {
+                        put("Content-Type", "application/json")
+                        put("User-Agent", "sentry-java/5.0.0")
+                    }
+                )
+            }
 
         val event = createSentryEvent(request = request)
 
         assertNotNull(event.request, "Request object should be present")
-        assertEquals("POST", event.request?.get("method")?.jsonPrimitive?.content)
-        assertEquals("https://api.example.com/events", event.request?.get("url")?.jsonPrimitive?.content)
+        assertEquals("POST",
+            event.request
+                ?.get("method")
+                ?.jsonPrimitive
+                ?.content
+        )
+        assertEquals("https://api.example.com/events",
+            event.request
+                ?.get("url")
+                ?.jsonPrimitive
+                ?.content
+        )
     }
 
     // ============ ORGANIZATION RESOLUTION TESTS (P0) ============
@@ -532,18 +630,20 @@ class EventServiceTest {
 
     @Test
     fun `SentryEnvelope with event item can be created and accessed`() {
-        val eventJson = """
+        val eventJson =
+            """
             {
                 "event_id": "test-event-123",
                 "level": "error",
                 "message": "Test error"
             }
-        """.trimIndent()
+            """.trimIndent()
 
-        val envelope = SentryEnvelope(
-            eventId = "test-event-123",
-            items = listOf(EnvelopeItem("event", eventJson))
-        )
+        val envelope =
+            SentryEnvelope(
+                eventId = "test-event-123",
+                items = listOf(EnvelopeItem("event", eventJson))
+            )
 
         assertEquals(1, envelope.items.size, "Should have one item")
         assertEquals("event", envelope.items[0].type, "Item type should be event")
@@ -555,14 +655,16 @@ class EventServiceTest {
         val transactionJson = """{"event_id": "txn-1"}"""
         val feedbackJson = """{"event_id": "fb-1"}"""
 
-        val envelope = SentryEnvelope(
-            eventId = "multi-123",
-            items = listOf(
-                EnvelopeItem("event", eventJson),
-                EnvelopeItem("transaction", transactionJson),
-                EnvelopeItem("feedback", feedbackJson)
+        val envelope =
+            SentryEnvelope(
+                eventId = "multi-123",
+                items =
+                    listOf(
+                        EnvelopeItem("event", eventJson),
+                        EnvelopeItem("transaction", transactionJson),
+                        EnvelopeItem("feedback", feedbackJson)
+                    )
             )
-        )
 
         assertEquals(3, envelope.items.size)
         assertEquals("event", envelope.items[0].type)
@@ -572,32 +674,63 @@ class EventServiceTest {
 
     @Test
     fun `exception with multiple stack frames is parsed correctly`() {
-        val frames = listOf(
-            createStackFrame("main.js", "main", 1, inApp = true),
-            createStackFrame("app.js", "initialize", 10, inApp = true),
-            createStackFrame("lib.js", "helper", 50, inApp = false)
-        )
+        val frames =
+            listOf(
+                createStackFrame("main.js", "main", 1, inApp = true),
+                createStackFrame("app.js", "initialize", 10, inApp = true),
+                createStackFrame("lib.js", "helper", 50, inApp = false)
+            )
 
         val stackTrace = StackTrace(frames = frames)
         val exception = ExceptionValue(type = "Error", value = "Test error", stacktrace = stackTrace)
         val exceptionInfo = ExceptionInfo(values = listOf(exception))
 
-        assertEquals(3, exceptionInfo.values[0].stacktrace?.frames?.size, "Should have 3 frames")
-        assertEquals("main.js", exceptionInfo.values[0].stacktrace?.frames?.get(0)?.filename)
-        assertEquals(true, exceptionInfo.values[0].stacktrace?.frames?.get(0)?.in_app)
-        assertEquals(false, exceptionInfo.values[0].stacktrace?.frames?.get(2)?.in_app)
+        assertEquals(3,
+            exceptionInfo.values[0]
+                .stacktrace
+                ?.frames
+                ?.size,
+            "Should have 3 frames")
+        assertEquals("main.js",
+            exceptionInfo.values[0]
+                .stacktrace
+                ?.frames
+                ?.get(0)
+                ?.filename
+        )
+        assertEquals(true,
+            exceptionInfo.values[0]
+                .stacktrace
+                ?.frames
+                ?.get(0)
+                ?.in_app
+        )
+        assertEquals(false,
+            exceptionInfo.values[0]
+                .stacktrace
+                ?.frames
+                ?.get(2)
+                ?.in_app
+        )
     }
 
     // ============ HELPER METHODS ============
 
-    private fun insertTestOrganization(name: String, slug: String): Int {
+    private fun insertTestOrganization(
+        name: String,
+        slug: String
+    ): Int {
         return Organizations.insert {
             it[Organizations.name] = name
             it[Organizations.slug] = slug
         }[Organizations.id]
     }
 
-    private fun insertTestProject(organizationId: Int, name: String, slug: String): Long {
+    private fun insertTestProject(
+        organizationId: Int,
+        name: String,
+        slug: String
+    ): Long {
         return Projects.insert {
             it[Projects.organization_id] = organizationId
             it[Projects.name] = name
@@ -605,7 +738,11 @@ class EventServiceTest {
         }[Projects.id]
     }
 
-    private fun insertTestProjectKey(projectId: Long, publicKey: String, isActive: Boolean): Int {
+    private fun insertTestProjectKey(
+        projectId: Long,
+        publicKey: String,
+        isActive: Boolean
+    ): Int {
         return ProjectKeys.insert {
             it[ProjectKeys.project_id] = projectId
             it[ProjectKeys.public_key] = publicKey
@@ -634,19 +771,21 @@ class EventServiceTest {
         request: JsonObject? = null,
         fingerprint: List<String>? = null
     ): SentryEvent {
-        val exception = if (exceptionType != null) {
-            ExceptionInfo(
-                values = listOf(
-                    ExceptionValue(
-                        type = exceptionType,
-                        value = exceptionMessage ?: exceptionType,
-                        stacktrace = stackTrace?.let { StackTrace(frames = it) }
-                    )
+        val exception =
+            if (exceptionType != null) {
+                ExceptionInfo(
+                    values =
+                        listOf(
+                            ExceptionValue(
+                                type = exceptionType,
+                                value = exceptionMessage ?: exceptionType,
+                                stacktrace = stackTrace?.let { StackTrace(frames = it) }
+                            )
+                        )
                 )
-            )
-        } else {
-            null
-        }
+            } else {
+                null
+            }
 
         return SentryEvent(
             event_id = eventId ?: UUID.randomUUID().toString(),

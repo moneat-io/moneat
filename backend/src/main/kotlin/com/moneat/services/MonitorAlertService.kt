@@ -49,7 +49,9 @@ class MonitorAlertService {
     private val emailService = EmailService()
     private val slackService = SlackService()
     private val discordService = DiscordService()
-    private val incidentService = com.moneat.services.incident.IncidentService()
+    private val incidentService =
+        com.moneat.services.incident
+            .IncidentService()
 
     private var evaluationJob: Job? = null
     private var statusCheckJob: Job? = null
@@ -69,40 +71,43 @@ class MonitorAlertService {
         logger.info { "Starting MonitorAlertService background jobs" }
 
         // Alert evaluation job
-        evaluationJob = scope.launch {
-            while (isActive) {
-                try {
-                    evaluateAlerts()
-                } catch (e: Exception) {
-                    logger.error(e) { "Error evaluating alerts" }
+        evaluationJob =
+            scope.launch {
+                while (isActive) {
+                    try {
+                        evaluateAlerts()
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error evaluating alerts" }
+                    }
+                    delay(EVALUATION_INTERVAL_SECONDS.seconds)
                 }
-                delay(EVALUATION_INTERVAL_SECONDS.seconds)
             }
-        }
 
         // System status check job
-        statusCheckJob = scope.launch {
-            while (isActive) {
-                try {
-                    checkSystemStatuses()
-                } catch (e: Exception) {
-                    logger.error(e) { "Error checking system statuses" }
+        statusCheckJob =
+            scope.launch {
+                while (isActive) {
+                    try {
+                        checkSystemStatuses()
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error checking system statuses" }
+                    }
+                    delay(STATUS_CHECK_INTERVAL_SECONDS.seconds)
                 }
-                delay(STATUS_CHECK_INTERVAL_SECONDS.seconds)
             }
-        }
 
         // Expired silence period cleanup job (runs every 5 minutes)
-        cleanupJob = scope.launch {
-            while (isActive) {
-                try {
-                    cleanupExpiredSilencePeriods()
-                } catch (e: Exception) {
-                    logger.error(e) { "Error cleaning up expired silence periods" }
+        cleanupJob =
+            scope.launch {
+                while (isActive) {
+                    try {
+                        cleanupExpiredSilencePeriods()
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error cleaning up expired silence periods" }
+                    }
+                    delay(5.minutes)
                 }
-                delay(5.minutes)
             }
-        }
 
         logger.info { "MonitorAlertService background jobs started" }
     }
@@ -121,109 +126,127 @@ class MonitorAlertService {
      * Evaluate all active alerts.
      */
     private suspend fun evaluateAlerts() {
-        val alerts = transaction {
-            val results = mutableListOf<Triple<AlertData, String, Int>>()
+        val alerts =
+            transaction {
+                val results = mutableListOf<Triple<AlertData, String, Int>>()
 
-            val globalScopeSystemIds = SystemAlertSettings.selectAll().where {
-                SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL
-            }.map { it[SystemAlertSettings.system_id] }
+                val globalScopeSystemIds =
+                    SystemAlertSettings
+                        .selectAll()
+                        .where {
+                            SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL
+                        }.map { it[SystemAlertSettings.system_id] }
 
-            val systemScopedAlerts = if (globalScopeSystemIds.isEmpty()) {
-                SystemAlerts.innerJoin(Systems)
-                    .selectAll().where { SystemAlerts.enabled eq true }
-                    .toList()
-            } else {
-                SystemAlerts.innerJoin(Systems)
-                    .selectAll().where {
-                        (SystemAlerts.enabled eq true) and
-                            (SystemAlerts.system_id notInList globalScopeSystemIds)
-                    }
-                    .toList()
-            }
-
-            systemScopedAlerts.forEach { row ->
-                results += Triple(
-                    AlertData(
-                        id = row[SystemAlerts.id],
-                        systemId = row[SystemAlerts.system_id],
-                        organizationId = row[SystemAlerts.organization_id],
-                        metric = row[SystemAlerts.metric],
-                        condition = row[SystemAlerts.condition],
-                        threshold = row[SystemAlerts.threshold],
-                        durationSeconds = row[SystemAlerts.duration_seconds],
-                        enabled = row[SystemAlerts.enabled],
-                        lastTriggeredAt = row[SystemAlerts.last_triggered_at],
-                        createdAt = row[SystemAlerts.created_at],
-                        scope = MonitorService.ALERT_SCOPE_SYSTEM,
-                        templateAlertId = null
-                    ),
-                    row[Systems.name],
-                    row[Systems.organization_id]
-                )
-            }
-
-            if (globalScopeSystemIds.isNotEmpty()) {
-                val globalTemplates = OrganizationAlertTemplates.selectAll().where {
-                    OrganizationAlertTemplates.enabled eq true
-                }.toList()
-
-                if (globalTemplates.isNotEmpty()) {
-                    val globalSystems = Systems.innerJoin(SystemAlertSettings)
-                        .selectAll().where {
-                            (SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL) and
-                                (SystemAlertSettings.system_id inList globalScopeSystemIds)
-                        }
-                        .toList()
-
-                    val templateIds = globalTemplates.map { it[OrganizationAlertTemplates.id] }
-                    val stateMap = if (templateIds.isEmpty()) {
-                        emptyMap()
+                val systemScopedAlerts =
+                    if (globalScopeSystemIds.isEmpty()) {
+                        SystemAlerts
+                            .innerJoin(Systems)
+                            .selectAll()
+                            .where { SystemAlerts.enabled eq true }
+                            .toList()
                     } else {
-                        SystemAlertTemplateStates.selectAll().where {
-                            (SystemAlertTemplateStates.template_alert_id inList templateIds) and
-                                (SystemAlertTemplateStates.system_id inList globalScopeSystemIds)
-                        }.associate {
-                            Pair(
-                                it[SystemAlertTemplateStates.template_alert_id],
-                                it[SystemAlertTemplateStates.system_id]
-                            ) to it[SystemAlertTemplateStates.last_triggered_at]
-                        }
+                        SystemAlerts
+                            .innerJoin(Systems)
+                            .selectAll()
+                            .where {
+                                (SystemAlerts.enabled eq true) and
+                                    (SystemAlerts.system_id notInList globalScopeSystemIds)
+                            }.toList()
                     }
 
-                    globalSystems.forEach { systemRow ->
-                        val systemId = systemRow[Systems.id]
-                        val systemName = systemRow[Systems.name]
-                        val orgId = systemRow[Systems.organization_id]
+                systemScopedAlerts.forEach { row ->
+                    results +=
+                        Triple(
+                            AlertData(
+                                id = row[SystemAlerts.id],
+                                systemId = row[SystemAlerts.system_id],
+                                organizationId = row[SystemAlerts.organization_id],
+                                metric = row[SystemAlerts.metric],
+                                condition = row[SystemAlerts.condition],
+                                threshold = row[SystemAlerts.threshold],
+                                durationSeconds = row[SystemAlerts.duration_seconds],
+                                enabled = row[SystemAlerts.enabled],
+                                lastTriggeredAt = row[SystemAlerts.last_triggered_at],
+                                createdAt = row[SystemAlerts.created_at],
+                                scope = MonitorService.ALERT_SCOPE_SYSTEM,
+                                templateAlertId = null
+                            ),
+                            row[Systems.name],
+                            row[Systems.organization_id]
+                        )
+                }
 
-                        globalTemplates
-                            .filter { template -> template[OrganizationAlertTemplates.organization_id] == orgId }
-                            .forEach { template ->
-                                val templateId = template[OrganizationAlertTemplates.id]
-                                results += Triple(
-                                    AlertData(
-                                        id = templateId,
-                                        systemId = systemId,
-                                        organizationId = orgId,
-                                        metric = template[OrganizationAlertTemplates.metric],
-                                        condition = template[OrganizationAlertTemplates.condition],
-                                        threshold = template[OrganizationAlertTemplates.threshold],
-                                        durationSeconds = template[OrganizationAlertTemplates.duration_seconds],
-                                        enabled = template[OrganizationAlertTemplates.enabled],
-                                        lastTriggeredAt = stateMap[Pair(templateId, systemId)],
-                                        createdAt = template[OrganizationAlertTemplates.created_at],
-                                        scope = MonitorService.ALERT_SCOPE_GLOBAL,
-                                        templateAlertId = templateId
-                                    ),
-                                    systemName,
-                                    orgId
-                                )
+                if (globalScopeSystemIds.isNotEmpty()) {
+                    val globalTemplates =
+                        OrganizationAlertTemplates
+                            .selectAll()
+                            .where {
+                                OrganizationAlertTemplates.enabled eq true
+                            }.toList()
+
+                    if (globalTemplates.isNotEmpty()) {
+                        val globalSystems =
+                            Systems
+                                .innerJoin(SystemAlertSettings)
+                                .selectAll()
+                                .where {
+                                    (SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL) and
+                                        (SystemAlertSettings.system_id inList globalScopeSystemIds)
+                                }.toList()
+
+                        val templateIds = globalTemplates.map { it[OrganizationAlertTemplates.id] }
+                        val stateMap =
+                            if (templateIds.isEmpty()) {
+                                emptyMap()
+                            } else {
+                                SystemAlertTemplateStates
+                                    .selectAll()
+                                    .where {
+                                        (SystemAlertTemplateStates.template_alert_id inList templateIds) and
+                                            (SystemAlertTemplateStates.system_id inList globalScopeSystemIds)
+                                    }.associate {
+                                        Pair(
+                                            it[SystemAlertTemplateStates.template_alert_id],
+                                            it[SystemAlertTemplateStates.system_id]
+                                        ) to it[SystemAlertTemplateStates.last_triggered_at]
+                                    }
                             }
+
+                        globalSystems.forEach { systemRow ->
+                            val systemId = systemRow[Systems.id]
+                            val systemName = systemRow[Systems.name]
+                            val orgId = systemRow[Systems.organization_id]
+
+                            globalTemplates
+                                .filter { template -> template[OrganizationAlertTemplates.organization_id] == orgId }
+                                .forEach { template ->
+                                    val templateId = template[OrganizationAlertTemplates.id]
+                                    results +=
+                                        Triple(
+                                            AlertData(
+                                                id = templateId,
+                                                systemId = systemId,
+                                                organizationId = orgId,
+                                                metric = template[OrganizationAlertTemplates.metric],
+                                                condition = template[OrganizationAlertTemplates.condition],
+                                                threshold = template[OrganizationAlertTemplates.threshold],
+                                                durationSeconds = template[OrganizationAlertTemplates.duration_seconds],
+                                                enabled = template[OrganizationAlertTemplates.enabled],
+                                                lastTriggeredAt = stateMap[Pair(templateId, systemId)],
+                                                createdAt = template[OrganizationAlertTemplates.created_at],
+                                                scope = MonitorService.ALERT_SCOPE_GLOBAL,
+                                                templateAlertId = templateId
+                                            ),
+                                            systemName,
+                                            orgId
+                                        )
+                                }
+                        }
                     }
                 }
-            }
 
-            results
-        }
+                results
+            }
 
         logger.debug { "Evaluating ${alerts.size} alerts" }
 
@@ -239,7 +262,11 @@ class MonitorAlertService {
     /**
      * Evaluate a single alert.
      */
-    private suspend fun evaluateAlert(alert: AlertData, systemName: String, organizationId: Int) {
+    private suspend fun evaluateAlert(
+        alert: AlertData,
+        systemName: String,
+        organizationId: Int
+    ) {
         val alertKey = "alert_state:${alert.systemId}:${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
 
         // Get recent metrics for the system
@@ -251,15 +278,16 @@ class MonitorAlertService {
         // Handle Recovery
         if (!triggered) {
             // Check if it was previously triggered
-            val wasTriggered = try {
-                if (RedisConfig.isConnected()) {
-                    RedisConfig.sync().get(alertKey) == "TRIGGERED"
-                } else {
-                    false // Fallback if Redis is down
+            val wasTriggered =
+                try {
+                    if (RedisConfig.isConnected()) {
+                        RedisConfig.sync().get(alertKey) == "TRIGGERED"
+                    } else {
+                        false // Fallback if Redis is down
+                    }
+                } catch (e: Exception) {
+                    false
                 }
-            } catch (e: Exception) {
-                false
-            }
 
             if (wasTriggered) {
                 // Clear state
@@ -322,10 +350,13 @@ class MonitorAlertService {
         // Update last triggered timestamp
         if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
             transaction {
-                val existing = SystemAlertTemplateStates.selectAll().where {
-                    (SystemAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
-                        (SystemAlertTemplateStates.system_id eq alert.systemId)
-                }.firstOrNull()
+                val existing =
+                    SystemAlertTemplateStates
+                        .selectAll()
+                        .where {
+                            (SystemAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
+                                (SystemAlertTemplateStates.system_id eq alert.systemId)
+                        }.firstOrNull()
 
                 if (existing != null) {
                     SystemAlertTemplateStates.update({
@@ -357,28 +388,33 @@ class MonitorAlertService {
     /**
      * Get the current value of a metric for a system.
      */
-    private suspend fun getCurrentMetricValue(systemId: UUID, metric: String): Double? {
-        val metricColumn = when (metric) {
-            "cpu_percent" -> "cpu_percent"
-            "mem_percent" -> "(mem_used / mem_total * 100)"
-            "disk_percent" -> "(disk_used / disk_total * 100)"
-            "load_1" -> "load_1"
-            "load_5" -> "load_5"
-            "load_15" -> "load_15"
-            "temp_max" -> "temp_max"
-            "gpu_percent" -> "gpu_percent"
-            "battery_percent" -> "battery_percent"
-            else -> return null
-        }
+    private suspend fun getCurrentMetricValue(
+        systemId: UUID,
+        metric: String
+    ): Double? {
+        val metricColumn =
+            when (metric) {
+                "cpu_percent" -> "cpu_percent"
+                "mem_percent" -> "(mem_used / mem_total * 100)"
+                "disk_percent" -> "(disk_used / disk_total * 100)"
+                "load_1" -> "load_1"
+                "load_5" -> "load_5"
+                "load_15" -> "load_15"
+                "temp_max" -> "temp_max"
+                "gpu_percent" -> "gpu_percent"
+                "battery_percent" -> "battery_percent"
+                else -> return null
+            }
 
-        val query = """
+        val query =
+            """
             SELECT $metricColumn as value
             FROM $clickhouseDb.system_metrics
             WHERE system_id = toUUID('$systemId')
             ORDER BY timestamp DESC
             LIMIT 1
             FORMAT JSONCompact
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -406,36 +442,39 @@ class MonitorAlertService {
      * Check if the alert condition has been sustained for the required duration.
      */
     private suspend fun checkSustainedCondition(alert: AlertData): Boolean {
-        val metricColumn = when (alert.metric) {
-            "cpu_percent" -> "cpu_percent"
-            "mem_percent" -> "(mem_used / mem_total * 100)"
-            "disk_percent" -> "(disk_used / disk_total * 100)"
-            "load_1" -> "load_1"
-            "load_5" -> "load_5"
-            "load_15" -> "load_15"
-            "temp_max" -> "temp_max"
-            "gpu_percent" -> "gpu_percent"
-            "battery_percent" -> "battery_percent"
-            else -> return false
-        }
+        val metricColumn =
+            when (alert.metric) {
+                "cpu_percent" -> "cpu_percent"
+                "mem_percent" -> "(mem_used / mem_total * 100)"
+                "disk_percent" -> "(disk_used / disk_total * 100)"
+                "load_1" -> "load_1"
+                "load_5" -> "load_5"
+                "load_15" -> "load_15"
+                "temp_max" -> "temp_max"
+                "gpu_percent" -> "gpu_percent"
+                "battery_percent" -> "battery_percent"
+                else -> return false
+            }
 
-        val conditionSql = when (alert.condition) {
-            ">" -> "$metricColumn > ${alert.threshold}"
-            "<" -> "$metricColumn < ${alert.threshold}"
-            ">=" -> "$metricColumn >= ${alert.threshold}"
-            "<=" -> "$metricColumn <= ${alert.threshold}"
-            "==" -> "$metricColumn == ${alert.threshold}"
-            else -> return false
-        }
+        val conditionSql =
+            when (alert.condition) {
+                ">" -> "$metricColumn > ${alert.threshold}"
+                "<" -> "$metricColumn < ${alert.threshold}"
+                ">=" -> "$metricColumn >= ${alert.threshold}"
+                "<=" -> "$metricColumn <= ${alert.threshold}"
+                "==" -> "$metricColumn == ${alert.threshold}"
+                else -> return false
+            }
 
-        val query = """
+        val query =
+            """
             SELECT count(*) as cnt
             FROM $clickhouseDb.system_metrics
             WHERE system_id = toUUID('${alert.systemId}')
               AND timestamp >= now() - INTERVAL ${alert.durationSeconds} SECOND
               AND $conditionSql
             FORMAT JSONCompact
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -475,11 +514,12 @@ class MonitorAlertService {
         val prefsService = AlertNotificationPreferencesService()
 
         // Get users with email enabled for SYSTEM_ALERT
-        val emailRecipients = prefsService.getUsersWithChannelEnabled(
-            organizationId = organizationId,
-            alertSource = "SYSTEM_ALERT",
-            channel = "email"
-        )
+        val emailRecipients =
+            prefsService.getUsersWithChannelEnabled(
+                organizationId = organizationId,
+                alertSource = "SYSTEM_ALERT",
+                channel = "email"
+            )
 
         val metricLabel = getMetricLabel(alert.metric)
         val conditionText = getConditionText(alert.condition)
@@ -492,16 +532,18 @@ class MonitorAlertService {
         // Send email notifications
         for ((_, email) in emailRecipients) {
             try {
-                val htmlBody = loadSystemAlertTemplate(
-                    systemName = systemName,
-                    metric = metricLabel,
-                    condition = conditionText,
-                    value = formattedValue,
-                    threshold = formattedThreshold,
-                    dashboardUrl = dashboardUrl
-                )
+                val htmlBody =
+                    loadSystemAlertTemplate(
+                        systemName = systemName,
+                        metric = metricLabel,
+                        condition = conditionText,
+                        value = formattedValue,
+                        threshold = formattedThreshold,
+                        dashboardUrl = dashboardUrl
+                    )
 
-                val textBody = """
+                val textBody =
+                    """
                     ⚠️ System Alert
                     
                     Heads up, something needs attention.
@@ -515,7 +557,7 @@ class MonitorAlertService {
                     
                     ---
                     Moneat Server Monitoring
-                """.trimIndent()
+                    """.trimIndent()
 
                 emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_alert")
             } catch (e: Exception) {
@@ -524,11 +566,13 @@ class MonitorAlertService {
         }
 
         // Check if Slack is enabled for any user in the org
-        val slackEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = organizationId,
-            alertSource = "SYSTEM_ALERT",
-            channel = "slack"
-        ).isNotEmpty()
+        val slackEnabled =
+            prefsService
+                .getUsersWithChannelEnabled(
+                    organizationId = organizationId,
+                    alertSource = "SYSTEM_ALERT",
+                    channel = "slack"
+                ).isNotEmpty()
 
         if (slackEnabled) {
             try {
@@ -549,11 +593,13 @@ class MonitorAlertService {
         }
 
         // Check if Discord is enabled for any user in the org
-        val discordEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = organizationId,
-            alertSource = "SYSTEM_ALERT",
-            channel = "discord"
-        ).isNotEmpty()
+        val discordEnabled =
+            prefsService
+                .getUsersWithChannelEnabled(
+                    organizationId = organizationId,
+                    alertSource = "SYSTEM_ALERT",
+                    channel = "discord"
+                ).isNotEmpty()
 
         if (discordEnabled) {
             try {
@@ -575,32 +621,40 @@ class MonitorAlertService {
 
         // Fire incident alert
         try {
-            val incidentSeverity = transaction {
-                SystemAlerts.selectAll()
-                    .where { SystemAlerts.id eq alert.id }
-                    .firstOrNull()?.get(SystemAlerts.incident_severity)
-                    ?.let { com.moneat.models.IncidentSeverity.fromString(it) }
-            }
+            val incidentSeverity =
+                transaction {
+                    SystemAlerts
+                        .selectAll()
+                        .where { SystemAlerts.id eq alert.id }
+                        .firstOrNull()
+                        ?.get(SystemAlerts.incident_severity)
+                        ?.let {
+                            com.moneat.models.IncidentSeverity
+                                .fromString(it)
+                        }
+                }
 
             if (incidentSeverity != null) {
                 val frontendUrl = config.property("email.frontendUrl").getString()
-                val incidentEvent = com.moneat.models.IncidentEvent(
-                    title = "$systemName - $metricLabel ${alert.condition} ${alert.threshold}",
-                    description = "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold\nCurrent Value: $formattedValue",
-                    severity = incidentSeverity,
-                    status = com.moneat.models.IncidentStatus.FIRING,
-                    source = com.moneat.models.AlertSource.SYSTEM_ALERT,
-                    deduplicationKey = "moneat-system-alert-${alert.id}",
-                    organizationId = organizationId,
-                    metadata = mapOf(
-                        "system_id" to JsonPrimitive(alert.systemId.toString()),
-                        "system_name" to JsonPrimitive(systemName),
-                        "metric" to JsonPrimitive(alert.metric),
-                        "current_value" to JsonPrimitive(formattedValue),
-                        "threshold" to JsonPrimitive(formattedThreshold)
-                    ),
-                    moneatUrl = "$frontendUrl/monitoring/${alert.systemId}"
-                )
+                val incidentEvent =
+                    com.moneat.models.IncidentEvent(
+                        title = "$systemName - $metricLabel ${alert.condition} ${alert.threshold}",
+                        description = "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold\nCurrent Value: $formattedValue",
+                        severity = incidentSeverity,
+                        status = com.moneat.models.IncidentStatus.FIRING,
+                        source = com.moneat.models.AlertSource.SYSTEM_ALERT,
+                        deduplicationKey = "moneat-system-alert-${alert.id}",
+                        organizationId = organizationId,
+                        metadata =
+                            mapOf(
+                                "system_id" to JsonPrimitive(alert.systemId.toString()),
+                                "system_name" to JsonPrimitive(systemName),
+                                "metric" to JsonPrimitive(alert.metric),
+                                "current_value" to JsonPrimitive(formattedValue),
+                                "threshold" to JsonPrimitive(formattedThreshold)
+                            ),
+                        moneatUrl = "$frontendUrl/monitoring/${alert.systemId}"
+                    )
                 incidentService.fireAlert(incidentEvent)
             }
         } catch (e: Exception) {
@@ -616,18 +670,20 @@ class MonitorAlertService {
         val downThreshold = now - SYSTEM_DOWN_THRESHOLD_SECONDS.seconds
 
         // Get all systems and check their last_seen_at
-        val systems = transaction {
-            Systems.selectAll().map { row ->
-                Triple(
-                    row[Systems.id],
-                    row[Systems.name],
-                    row[Systems.organization_id]
-                ) to Pair(
-                    row[Systems.status],
-                    row[Systems.last_seen_at]
-                )
+        val systems =
+            transaction {
+                Systems.selectAll().map { row ->
+                    Triple(
+                        row[Systems.id],
+                        row[Systems.name],
+                        row[Systems.organization_id]
+                    ) to
+                        Pair(
+                            row[Systems.status],
+                            row[Systems.last_seen_at]
+                        )
+                }
             }
-        }
 
         for ((systemInfo, statusInfo) in systems) {
             val (systemId, systemName, organizationId) = systemInfo
@@ -681,18 +737,20 @@ class MonitorAlertService {
         val prefsService = AlertNotificationPreferencesService()
 
         // Get users with email enabled for SYSTEM_DOWN
-        val emailRecipients = prefsService.getUsersWithChannelEnabled(
-            organizationId = organizationId,
-            alertSource = "SYSTEM_DOWN",
-            channel = "email"
-        )
+        val emailRecipients =
+            prefsService.getUsersWithChannelEnabled(
+                organizationId = organizationId,
+                alertSource = "SYSTEM_DOWN",
+                channel = "email"
+            )
 
-        val lastSeenText = if (lastSeenAt != null) {
-            val minutesAgo = ((Clock.System.now() - lastSeenAt).inWholeSeconds / 60).toInt()
-            "Last seen $minutesAgo minutes ago"
-        } else {
-            "Never reported metrics"
-        }
+        val lastSeenText =
+            if (lastSeenAt != null) {
+                val minutesAgo = ((Clock.System.now() - lastSeenAt).inWholeSeconds / 60).toInt()
+                "Last seen $minutesAgo minutes ago"
+            } else {
+                "Never reported metrics"
+            }
 
         val systemUrl = "${config.property("email.frontendUrl").getString()}/monitoring/$systemId"
 
@@ -706,11 +764,13 @@ class MonitorAlertService {
         }
 
         // Check if Slack is enabled for any user in the org
-        val slackEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = organizationId,
-            alertSource = "SYSTEM_DOWN",
-            channel = "slack"
-        ).isNotEmpty()
+        val slackEnabled =
+            prefsService
+                .getUsersWithChannelEnabled(
+                    organizationId = organizationId,
+                    alertSource = "SYSTEM_DOWN",
+                    channel = "slack"
+                ).isNotEmpty()
 
         if (slackEnabled) {
             try {
@@ -728,11 +788,13 @@ class MonitorAlertService {
         }
 
         // Check if Discord is enabled for any user in the org
-        val discordEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = organizationId,
-            alertSource = "SYSTEM_DOWN",
-            channel = "discord"
-        ).isNotEmpty()
+        val discordEnabled =
+            prefsService
+                .getUsersWithChannelEnabled(
+                    organizationId = organizationId,
+                    alertSource = "SYSTEM_DOWN",
+                    channel = "discord"
+                ).isNotEmpty()
 
         if (discordEnabled) {
             try {
@@ -752,21 +814,23 @@ class MonitorAlertService {
         // Fire incident alert for system down
         try {
             val frontendUrl = config.property("email.frontendUrl").getString()
-            val incidentEvent = com.moneat.models.IncidentEvent(
-                title = "System Down: $systemName",
-                description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
-                severity = com.moneat.models.IncidentSeverity.CRITICAL,
-                status = com.moneat.models.IncidentStatus.FIRING,
-                source = com.moneat.models.AlertSource.SYSTEM_DOWN,
-                deduplicationKey = "moneat-system-down-$systemId",
-                organizationId = organizationId,
-                metadata = mapOf(
-                    "system_id" to JsonPrimitive(systemId.toString()),
-                    "system_name" to JsonPrimitive(systemName),
-                    "last_seen" to JsonPrimitive(lastSeenText)
-                ),
-                moneatUrl = "$frontendUrl/monitoring/$systemId"
-            )
+            val incidentEvent =
+                com.moneat.models.IncidentEvent(
+                    title = "System Down: $systemName",
+                    description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
+                    severity = com.moneat.models.IncidentSeverity.CRITICAL,
+                    status = com.moneat.models.IncidentStatus.FIRING,
+                    source = com.moneat.models.AlertSource.SYSTEM_DOWN,
+                    deduplicationKey = "moneat-system-down-$systemId",
+                    organizationId = organizationId,
+                    metadata =
+                        mapOf(
+                            "system_id" to JsonPrimitive(systemId.toString()),
+                            "system_name" to JsonPrimitive(systemName),
+                            "last_seen" to JsonPrimitive(lastSeenText)
+                        ),
+                    moneatUrl = "$frontendUrl/monitoring/$systemId"
+                )
             incidentService.fireAlert(incidentEvent)
         } catch (e: Exception) {
             logger.error(e) { "Failed to fire incident alert for system down" }
@@ -781,18 +845,22 @@ class MonitorAlertService {
         systemName: String,
         organizationId: Int
     ) {
-        val recipients = transaction {
-            Users.innerJoin(Memberships)
-                .selectAll().where { Memberships.organization_id eq organizationId }
-                .map { it[Users.email] }
-        }
+        val recipients =
+            transaction {
+                Users
+                    .innerJoin(Memberships)
+                    .selectAll()
+                    .where { Memberships.organization_id eq organizationId }
+                    .map { it[Users.email] }
+            }
 
         val subject = "✅ System Recovered: $systemName"
 
         // Send email notifications
         for (recipient in recipients) {
             try {
-                val htmlBody = """
+                val htmlBody =
+                    """
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -806,17 +874,18 @@ class MonitorAlertService {
                             <p>The system is now reporting metrics again.</p>
                             <div style="margin: 30px 0;">
                                 <a href="${config.property(
-                    "email.frontendUrl"
-                ).getString()}/monitoring/$systemId" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
+                        "email.frontendUrl"
+                    ).getString()}/monitoring/$systemId" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
                             </div>
                             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                             <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
                         </div>
                     </body>
                     </html>
-                """.trimIndent()
+                    """.trimIndent()
 
-                val textBody = """
+                val textBody =
+                    """
                     ✅ System Recovered
                     
                     System: $systemName
@@ -827,7 +896,7 @@ class MonitorAlertService {
                     
                     ---
                     Moneat Server Monitoring
-                """.trimIndent()
+                    """.trimIndent()
 
                 emailService.sendEmail(recipient, subject, htmlBody, textBody, "system_up")
             } catch (e: Exception) {
@@ -884,7 +953,11 @@ class MonitorAlertService {
         }
     }
 
-    internal fun isThresholdTriggered(condition: String, currentValue: Double, threshold: Double): Boolean {
+    internal fun isThresholdTriggered(
+        condition: String,
+        currentValue: Double,
+        threshold: Double
+    ): Boolean {
         return when (condition) {
             ">" -> currentValue > threshold
             "<" -> currentValue < threshold
@@ -915,7 +988,9 @@ class MonitorAlertService {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/system-alert-v1.html")
 
         return if (templateResource != null) {
-            templateResource.bufferedReader().use { it.readText() }
+            templateResource
+                .bufferedReader()
+                .use { it.readText() }
                 .replace("{{ systemName }}", systemName)
                 .replace("{{ metric }}", metric)
                 .replace("{{ condition }}", condition)
@@ -944,7 +1019,9 @@ class MonitorAlertService {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/system-recovered.html")
 
         return if (templateResource != null) {
-            templateResource.bufferedReader().use { it.readText() }
+            templateResource
+                .bufferedReader()
+                .use { it.readText() }
                 .replace("{{ systemName }}", systemName)
                 .replace("{{ metric }}", metric)
                 .replace("{{ duration }}", duration)
@@ -970,11 +1047,12 @@ class MonitorAlertService {
         val prefsService = AlertNotificationPreferencesService()
 
         // Get users with email enabled for SYSTEM_ALERT
-        val emailRecipients = prefsService.getUsersWithChannelEnabled(
-            organizationId = organizationId,
-            alertSource = "SYSTEM_ALERT",
-            channel = "email"
-        )
+        val emailRecipients =
+            prefsService.getUsersWithChannelEnabled(
+                organizationId = organizationId,
+                alertSource = "SYSTEM_ALERT",
+                channel = "email"
+            )
 
         val metricLabel = getMetricLabel(alert.metric)
         val subject = "✅ Recovered: $systemName - $metricLabel"
@@ -983,14 +1061,16 @@ class MonitorAlertService {
 
         for ((_, email) in emailRecipients) {
             try {
-                val htmlBody = loadSystemRecoveredTemplate(
-                    systemName = systemName,
-                    metric = metricLabel,
-                    duration = durationText,
-                    dashboardUrl = dashboardUrl
-                )
+                val htmlBody =
+                    loadSystemRecoveredTemplate(
+                        systemName = systemName,
+                        metric = metricLabel,
+                        duration = durationText,
+                        dashboardUrl = dashboardUrl
+                    )
 
-                val textBody = """
+                val textBody =
+                    """
                     ✅ Issue Resolved
                     
                     $systemName has recovered.
@@ -998,7 +1078,7 @@ class MonitorAlertService {
                     The alert for $metricLabel is no longer active. The metric has returned to normal levels.
                     
                     View Dashboard: $dashboardUrl
-                """.trimIndent()
+                    """.trimIndent()
 
                 emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_recovery")
             } catch (e: Exception) {
@@ -1022,15 +1102,26 @@ class MonitorAlertService {
         }
     }
 
-    private fun formatMetricValue(metric: String, value: Double): String {
+    private fun formatMetricValue(
+        metric: String,
+        value: Double
+    ): String {
         return when (metric) {
-            "cpu_percent", "mem_percent", "disk_percent", "gpu_percent", "battery_percent" ->
+            "cpu_percent", "mem_percent", "disk_percent", "gpu_percent", "battery_percent" -> {
                 String.format("%.1f%%", value)
-            "temp_max" ->
+            }
+
+            "temp_max" -> {
                 String.format("%.1f°C", value)
-            "load_1", "load_5", "load_15" ->
+            }
+
+            "load_1", "load_5", "load_15" -> {
                 String.format("%.2f", value)
-            else -> value.toString()
+            }
+
+            else -> {
+                value.toString()
+            }
         }
     }
 
@@ -1039,46 +1130,55 @@ class MonitorAlertService {
     fun isAnySilenceActive(organizationId: Int): Boolean {
         val now = Clock.System.now()
         return transaction {
-            AlertSilencePeriods.selectAll().where {
-                (AlertSilencePeriods.organization_id eq organizationId) and
-                    (AlertSilencePeriods.starts_at lessEq now) and
-                    (AlertSilencePeriods.ends_at greaterEq now)
-            }.count() > 0
+            AlertSilencePeriods
+                .selectAll()
+                .where {
+                    (AlertSilencePeriods.organization_id eq organizationId) and
+                        (AlertSilencePeriods.starts_at lessEq now) and
+                        (AlertSilencePeriods.ends_at greaterEq now)
+                }.count() > 0
         }
     }
 
     fun listSilencePeriods(organizationId: Int): List<SilencePeriodResponse> {
         return transaction {
-            AlertSilencePeriods.selectAll().where {
-                AlertSilencePeriods.organization_id eq organizationId
-            }.map { row ->
-                SilencePeriodResponse(
-                    id = row[AlertSilencePeriods.id],
-                    organizationId = row[AlertSilencePeriods.organization_id],
-                    reason = row[AlertSilencePeriods.reason],
-                    startsAt = row[AlertSilencePeriods.starts_at].toEpochMilliseconds(),
-                    endsAt = row[AlertSilencePeriods.ends_at].toEpochMilliseconds(),
-                    createdBy = row[AlertSilencePeriods.created_by],
-                    createdAt = row[AlertSilencePeriods.created_at].toEpochMilliseconds()
-                )
-            }
+            AlertSilencePeriods
+                .selectAll()
+                .where {
+                    AlertSilencePeriods.organization_id eq organizationId
+                }.map { row ->
+                    SilencePeriodResponse(
+                        id = row[AlertSilencePeriods.id],
+                        organizationId = row[AlertSilencePeriods.organization_id],
+                        reason = row[AlertSilencePeriods.reason],
+                        startsAt = row[AlertSilencePeriods.starts_at].toEpochMilliseconds(),
+                        endsAt = row[AlertSilencePeriods.ends_at].toEpochMilliseconds(),
+                        createdBy = row[AlertSilencePeriods.created_by],
+                        createdAt = row[AlertSilencePeriods.created_at].toEpochMilliseconds()
+                    )
+                }
         }
     }
 
-    fun createSilencePeriod(organizationId: Int, userId: Int, request: CreateSilencePeriodRequest): SilencePeriodResponse {
+    fun createSilencePeriod(
+        organizationId: Int,
+        userId: Int,
+        request: CreateSilencePeriodRequest
+    ): SilencePeriodResponse {
         val startsAt = Instant.fromEpochMilliseconds(request.startsAt)
         val endsAt = Instant.fromEpochMilliseconds(request.endsAt)
         val now = Clock.System.now()
 
         return transaction {
-            val id = AlertSilencePeriods.insert {
-                it[AlertSilencePeriods.organization_id] = organizationId
-                it[AlertSilencePeriods.reason] = request.reason
-                it[AlertSilencePeriods.starts_at] = startsAt
-                it[AlertSilencePeriods.ends_at] = endsAt
-                it[AlertSilencePeriods.created_by] = userId
-                it[AlertSilencePeriods.created_at] = now
-            } get AlertSilencePeriods.id
+            val id =
+                AlertSilencePeriods.insert {
+                    it[AlertSilencePeriods.organization_id] = organizationId
+                    it[AlertSilencePeriods.reason] = request.reason
+                    it[AlertSilencePeriods.starts_at] = startsAt
+                    it[AlertSilencePeriods.ends_at] = endsAt
+                    it[AlertSilencePeriods.created_by] = userId
+                    it[AlertSilencePeriods.created_at] = now
+                } get AlertSilencePeriods.id
 
             SilencePeriodResponse(
                 id = id,
@@ -1092,7 +1192,10 @@ class MonitorAlertService {
         }
     }
 
-    fun deleteSilencePeriod(id: Int, organizationId: Int): Boolean {
+    fun deleteSilencePeriod(
+        id: Int,
+        organizationId: Int
+    ): Boolean {
         return transaction {
             AlertSilencePeriods.deleteWhere {
                 (AlertSilencePeriods.id eq id) and
@@ -1103,11 +1206,12 @@ class MonitorAlertService {
 
     private fun cleanupExpiredSilencePeriods() {
         val now = Clock.System.now()
-        val deleted = transaction {
-            AlertSilencePeriods.deleteWhere {
-                AlertSilencePeriods.ends_at lessEq now
+        val deleted =
+            transaction {
+                AlertSilencePeriods.deleteWhere {
+                    AlertSilencePeriods.ends_at lessEq now
+                }
             }
-        }
         if (deleted > 0) {
             logger.info { "Cleaned up $deleted expired silence periods" }
         }

@@ -33,29 +33,39 @@ class OrgMembershipServiceTest {
         }
     }
 
-    private fun insertOrg(name: String = "Test Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun insertOrg(name: String = "Test Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun insertUser(email: String, name: String? = null): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[password_hash] = "hashed"
-            it[Users.name] = name
-            it[email_verified] = true
-        } get Users.id
-    }
+    private fun insertUser(
+        email: String,
+        name: String? = null
+    ): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[password_hash] = "hashed"
+                it[Users.name] = name
+                it[email_verified] = true
+            } get Users.id
+        }
 
-    private fun insertMembership(orgId: Int, userId: Int, role: String): Int = transaction {
-        Memberships.insert {
-            it[organization_id] = orgId
-            it[user_id] = userId
-            it[Memberships.role] = role
-        } get Memberships.id
-    }
+    private fun insertMembership(
+        orgId: Int,
+        userId: Int,
+        role: String
+    ): Int =
+        transaction {
+            Memberships.insert {
+                it[organization_id] = orgId
+                it[user_id] = userId
+                it[Memberships.role] = role
+            } get Memberships.id
+        }
 
     @Test
     fun `getMembers returns all members of org`() {

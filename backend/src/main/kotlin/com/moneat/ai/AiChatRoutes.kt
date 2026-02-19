@@ -178,7 +178,8 @@ fun Route.aiChatRoutes() {
 
 private fun getOrgIdForUser(userId: Int): Int? {
     return transaction {
-        Memberships.selectAll()
+        Memberships
+            .selectAll()
             .where { Memberships.user_id eq userId }
             .firstOrNull()
             ?.get(Memberships.organization_id)
@@ -187,7 +188,8 @@ private fun getOrgIdForUser(userId: Int): Int? {
 
 private fun isUserAdmin(userId: Int): Boolean {
     return transaction {
-        Users.selectAll()
+        Users
+            .selectAll()
             .where { Users.id eq userId }
             .firstOrNull()
             ?.get(Users.is_admin) ?: false

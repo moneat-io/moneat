@@ -51,11 +51,12 @@ class LogQueryParserClickHouseCompatTest {
 
     @Test
     fun `verify exact has() syntax for multiple fields`() {
-        val queries = mapOf(
-            "@http.status_code:500" to "http.status_code",
-            "@user.id:123" to "user.id",
-            "@custom:value" to "custom"
-        )
+        val queries =
+            mapOf(
+                "@http.status_code:500" to "http.status_code",
+                "@user.id:123" to "user.id",
+                "@custom:value" to "custom"
+            )
 
         queries.forEach { (query, expectedKey) ->
             val result = parser.parse(query)
@@ -77,12 +78,13 @@ class LogQueryParserClickHouseCompatTest {
 
     @Test
     fun `column references should never be in quotes in has() calls`() {
-        val testQueries = listOf(
-            "@env:prod",
-            "@region:us-east",
-            "@http.status_code:[200 TO 299]",
-            "service:web AND @custom:value"
-        )
+        val testQueries =
+            listOf(
+                "@env:prod",
+                "@region:us-east",
+                "@http.status_code:[200 TO 299]",
+                "service:web AND @custom:value"
+            )
 
         testQueries.forEach { query ->
             val result = parser.parse(query)

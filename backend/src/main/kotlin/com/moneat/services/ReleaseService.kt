@@ -36,35 +36,44 @@ class ReleaseService {
     /**
      * Create a new release for a project
      */
-    fun createRelease(projectId: Long, version: String, ref: String?): ReleaseResponse {
+    fun createRelease(
+        projectId: Long,
+        version: String,
+        ref: String?
+    ): ReleaseResponse {
         val createdAt = System.currentTimeMillis()
 
-        val projectSlug = transaction {
-            // Check if release already exists
-            val existing = Releases.selectAll()
-                .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
-                .firstOrNull()
+        val projectSlug =
+            transaction {
+                // Check if release already exists
+                val existing =
+                    Releases
+                        .selectAll()
+                        .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
+                        .firstOrNull()
 
-            if (existing != null) {
-                throw IllegalArgumentException("Release $version already exists for this project")
+                if (existing != null) {
+                    throw IllegalArgumentException("Release $version already exists for this project")
+                }
+
+                // Get project slug for response
+                val project =
+                    Projects
+                        .selectAll()
+                        .where { Projects.id eq projectId }
+                        .firstOrNull()
+                        ?: throw IllegalArgumentException("Project not found")
+
+                // Create release
+                Releases.insert {
+                    it[project_id] = projectId
+                    it[Releases.version] = version
+                    it[Releases.ref] = ref
+                    it[created_at] = createdAt
+                }
+
+                project[Projects.slug]
             }
-
-            // Get project slug for response
-            val project = Projects.selectAll()
-                .where { Projects.id eq projectId }
-                .firstOrNull()
-                ?: throw IllegalArgumentException("Project not found")
-
-            // Create release
-            Releases.insert {
-                it[project_id] = projectId
-                it[Releases.version] = version
-                it[Releases.ref] = ref
-                it[created_at] = createdAt
-            }
-
-            project[Projects.slug]
-        }
 
         return ReleaseResponse(
             version = version,
@@ -87,10 +96,12 @@ class ReleaseService {
 
         return transaction {
             // Find the release
-            val release = Releases.selectAll()
-                .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
-                .firstOrNull()
-                ?: throw IllegalArgumentException("Release $version not found")
+            val release =
+                Releases
+                    .selectAll()
+                    .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
+                    .firstOrNull()
+                    ?: throw IllegalArgumentException("Release $version not found")
 
             val releaseId = release[Releases.id]
 
@@ -106,14 +117,15 @@ class ReleaseService {
             File(storagePath).writeBytes(fileContent)
 
             // Save file metadata to database
-            val fileId = ReleaseFiles.insert {
-                it[release_id] = releaseId
-                it[name] = fileName
-                it[file_path] = fileName
-                it[storage_path] = storagePath
-                it[file_type] = if (fileName.endsWith(".map")) "source_map" else "source_file"
-                it[ReleaseFiles.created_at] = createdAt
-            }[ReleaseFiles.id]
+            val fileId =
+                ReleaseFiles.insert {
+                    it[release_id] = releaseId
+                    it[name] = fileName
+                    it[file_path] = fileName
+                    it[storage_path] = storagePath
+                    it[file_type] = if (fileName.endsWith(".map")) "source_map" else "source_file"
+                    it[ReleaseFiles.created_at] = createdAt
+                }[ReleaseFiles.id]
 
             SourceMapFileResponse(
                 id = fileId,
@@ -127,13 +139,19 @@ class ReleaseService {
      * Auto-detect and upsert release from an incoming event.
      * Creates the release if it doesn't exist, or updates last_seen and event_count.
      */
-    fun upsertReleaseFromEvent(projectId: Long, version: String, eventTimestampMs: Long) {
+    fun upsertReleaseFromEvent(
+        projectId: Long,
+        version: String,
+        eventTimestampMs: Long
+    ) {
         if (version.isBlank()) return
 
         transaction {
-            val existing = Releases.selectAll()
-                .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
-                .firstOrNull()
+            val existing =
+                Releases
+                    .selectAll()
+                    .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
+                    .firstOrNull()
 
             if (existing != null) {
                 val currentFirstSeen = existing[Releases.first_seen]
@@ -164,17 +182,24 @@ class ReleaseService {
     /**
      * Get a release by version
      */
-    fun getRelease(projectId: Long, version: String): ReleaseResponse? {
+    fun getRelease(
+        projectId: Long,
+        version: String
+    ): ReleaseResponse? {
         return transaction {
-            val release = Releases.selectAll()
-                .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
-                .firstOrNull()
-                ?: return@transaction null
+            val release =
+                Releases
+                    .selectAll()
+                    .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
+                    .firstOrNull()
+                    ?: return@transaction null
 
-            val project = Projects.selectAll()
-                .where { Projects.id eq projectId }
-                .firstOrNull()
-                ?: return@transaction null
+            val project =
+                Projects
+                    .selectAll()
+                    .where { Projects.id eq projectId }
+                    .firstOrNull()
+                    ?: return@transaction null
 
             ReleaseResponse(
                 version = release[Releases.version],
@@ -190,12 +215,15 @@ class ReleaseService {
      */
     fun listReleases(projectId: Long): List<ReleaseResponse> {
         return transaction {
-            val project = Projects.selectAll()
-                .where { Projects.id eq projectId }
-                .firstOrNull()
-                ?: return@transaction emptyList()
+            val project =
+                Projects
+                    .selectAll()
+                    .where { Projects.id eq projectId }
+                    .firstOrNull()
+                    ?: return@transaction emptyList()
 
-            Releases.selectAll()
+            Releases
+                .selectAll()
                 .where { Releases.project_id eq projectId }
                 .orderBy(Releases.created_at, SortOrder.DESC)
                 .map { row ->
@@ -212,16 +240,22 @@ class ReleaseService {
     /**
      * List source map files for a release
      */
-    fun listReleaseFiles(projectId: Long, version: String): List<SourceMapFileResponse> {
+    fun listReleaseFiles(
+        projectId: Long,
+        version: String
+    ): List<SourceMapFileResponse> {
         return transaction {
-            val release = Releases.selectAll()
-                .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
-                .firstOrNull()
-                ?: return@transaction emptyList()
+            val release =
+                Releases
+                    .selectAll()
+                    .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
+                    .firstOrNull()
+                    ?: return@transaction emptyList()
 
             val releaseId = release[Releases.id]
 
-            ReleaseFiles.selectAll()
+            ReleaseFiles
+                .selectAll()
                 .where { ReleaseFiles.release_id eq releaseId }
                 .orderBy(ReleaseFiles.created_at, SortOrder.DESC)
                 .map { row ->
@@ -237,16 +271,22 @@ class ReleaseService {
     /**
      * Check if user has access to a project
      */
-    fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
+    fun hasProjectAccess(
+        userId: Int,
+        projectId: Long
+    ): Boolean {
         return transaction {
-            val project = Projects.selectAll()
-                .where { Projects.id eq projectId }
-                .firstOrNull()
-                ?: return@transaction false
+            val project =
+                Projects
+                    .selectAll()
+                    .where { Projects.id eq projectId }
+                    .firstOrNull()
+                    ?: return@transaction false
 
             val orgId = project[Projects.organization_id]
 
-            Memberships.selectAll()
+            Memberships
+                .selectAll()
                 .where { (Memberships.user_id eq userId) and (Memberships.organization_id eq orgId) }
                 .count() > 0
         }
@@ -255,16 +295,22 @@ class ReleaseService {
     /**
      * Get project ID by organization slug and project slug
      */
-    fun getProjectBySlug(orgSlug: String, projectSlug: String): Long? {
+    fun getProjectBySlug(
+        orgSlug: String,
+        projectSlug: String
+    ): Long? {
         return transaction {
-            val org = Organizations.selectAll()
-                .where { Organizations.slug eq orgSlug }
-                .firstOrNull()
-                ?: return@transaction null
+            val org =
+                Organizations
+                    .selectAll()
+                    .where { Organizations.slug eq orgSlug }
+                    .firstOrNull()
+                    ?: return@transaction null
 
             val orgId = org[Organizations.id]
 
-            Projects.selectAll()
+            Projects
+                .selectAll()
                 .where { (Projects.organization_id eq orgId) and (Projects.slug eq projectSlug) }
                 .firstOrNull()
                 ?.get(Projects.id)
@@ -275,7 +321,8 @@ class ReleaseService {
      * Format timestamp to ISO-8601 string
      */
     private fun formatTimestamp(timestamp: Long): String {
-        return Instant.ofEpochMilli(timestamp)
+        return Instant
+            .ofEpochMilli(timestamp)
             .atOffset(ZoneOffset.UTC)
             .format(dateFormatter)
     }
@@ -283,7 +330,10 @@ class ReleaseService {
     /**
      * Store a file chunk by its SHA1 checksum.
      */
-    fun storeChunk(checksum: String, data: ByteArray) {
+    fun storeChunk(
+        checksum: String,
+        data: ByteArray
+    ) {
         val storageDir = File("./storage/chunks")
         storageDir.mkdirs()
 
@@ -291,9 +341,11 @@ class ReleaseService {
         File(storagePath).writeBytes(data)
 
         transaction {
-            val existing = FileBlobs.selectAll()
-                .where { FileBlobs.checksum eq checksum }
-                .firstOrNull()
+            val existing =
+                FileBlobs
+                    .selectAll()
+                    .where { FileBlobs.checksum eq checksum }
+                    .firstOrNull()
 
             if (existing == null) {
                 FileBlobs.insert {
@@ -312,10 +364,12 @@ class ReleaseService {
     fun findMissingChunks(checksums: Set<String>): List<String> {
         if (checksums.isEmpty()) return emptyList()
         return transaction {
-            val existing = FileBlobs.selectAll()
-                .where { FileBlobs.checksum inList checksums }
-                .map { it[FileBlobs.checksum] }
-                .toSet()
+            val existing =
+                FileBlobs
+                    .selectAll()
+                    .where { FileBlobs.checksum inList checksums }
+                    .map { it[FileBlobs.checksum] }
+                    .toSet()
             checksums.filter { it !in existing }
         }
     }
@@ -325,7 +379,8 @@ class ReleaseService {
      */
     fun getOrganizationIdBySlug(orgSlug: String): Int? {
         return transaction {
-            Organizations.selectAll()
+            Organizations
+                .selectAll()
                 .where { Organizations.slug eq orgSlug }
                 .firstOrNull()
                 ?.get(Organizations.id)
@@ -335,13 +390,19 @@ class ReleaseService {
     /**
      * Check if a user is a member of the organization.
      */
-    fun hasOrgAccess(userId: Int, orgSlug: String): Boolean {
+    fun hasOrgAccess(
+        userId: Int,
+        orgSlug: String
+    ): Boolean {
         return transaction {
-            val org = Organizations.selectAll()
-                .where { Organizations.slug eq orgSlug }
-                .firstOrNull() ?: return@transaction false
+            val org =
+                Organizations
+                    .selectAll()
+                    .where { Organizations.slug eq orgSlug }
+                    .firstOrNull() ?: return@transaction false
 
-            Memberships.selectAll()
+            Memberships
+                .selectAll()
                 .where { (Memberships.user_id eq userId) and (Memberships.organization_id eq org[Organizations.id]) }
                 .count() > 0
         }
@@ -350,9 +411,13 @@ class ReleaseService {
     /**
      * Get the assembly status for a checksum, or null if not started.
      */
-    fun getAssembleStatus(orgId: Int, checksum: String): Pair<String, String?>? {
+    fun getAssembleStatus(
+        orgId: Int,
+        checksum: String
+    ): Pair<String, String?>? {
         return transaction {
-            ArtifactBundles.selectAll()
+            ArtifactBundles
+                .selectAll()
                 .where { (ArtifactBundles.organization_id eq orgId) and (ArtifactBundles.checksum eq checksum) }
                 .firstOrNull()
                 ?.let { Pair(it[ArtifactBundles.state], it[ArtifactBundles.detail]) }
@@ -401,9 +466,11 @@ class ReleaseService {
         val detail = if (state == "error") "Checksum mismatch" else null
 
         transaction {
-            val existing = ArtifactBundles.selectAll()
-                .where { (ArtifactBundles.organization_id eq orgId) and (ArtifactBundles.checksum eq checksum) }
-                .firstOrNull()
+            val existing =
+                ArtifactBundles
+                    .selectAll()
+                    .where { (ArtifactBundles.organization_id eq orgId) and (ArtifactBundles.checksum eq checksum) }
+                    .firstOrNull()
 
             if (existing != null) {
                 ArtifactBundles.update(

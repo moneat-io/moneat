@@ -33,14 +33,15 @@ private val logger = KotlinLogging.logger {}
 object OpenAiClient {
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val client = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(json)
+    private val client =
+        HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(json)
+            }
+            engine {
+                requestTimeout = 60_000
+            }
         }
-        engine {
-            requestTimeout = 60_000
-        }
-    }
 
     private val apiKey: String
         get() = EnvConfig.get("OPENAI_API_KEY", "")
@@ -55,19 +56,21 @@ object OpenAiClient {
         get() = apiKey.isNotBlank()
 
     suspend fun chatCompletion(messages: List<OpenAiMessage>): OpenAiChatResponse {
-        val request = OpenAiChatRequest(
-            model = model,
-            messages = messages,
-            max_tokens = maxTokens,
-            temperature = 0.3,
-            response_format = OpenAiResponseFormat(type = "json_object")
-        )
+        val request =
+            OpenAiChatRequest(
+                model = model,
+                messages = messages,
+                max_tokens = maxTokens,
+                temperature = 0.3,
+                response_format = OpenAiResponseFormat(type = "json_object")
+            )
 
-        val response = client.post("https://api.openai.com/v1/chat/completions") {
-            contentType(ContentType.Application.Json)
-            header("Authorization", "Bearer $apiKey")
-            setBody(request)
-        }
+        val response =
+            client.post("https://api.openai.com/v1/chat/completions") {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer $apiKey")
+                setBody(request)
+            }
 
         val body = response.bodyAsText()
         if (response.status != HttpStatusCode.OK) {

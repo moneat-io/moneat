@@ -94,12 +94,13 @@ object SentryUtils {
                 data?.forEach { (key, value) ->
                     // Convert to string to avoid serialization issues with complex objects
                     // This ensures we never try to serialize Stripe SDK objects or LinkedHashMaps
-                    val stringValue = when (value) {
-                        is String -> value
-                        is Number -> value.toString()
-                        is Boolean -> value.toString()
-                        else -> value.toString() // Safe fallback for any complex object
-                    }
+                    val stringValue =
+                        when (value) {
+                            is String -> value
+                            is Number -> value.toString()
+                            is Boolean -> value.toString()
+                            else -> value.toString() // Safe fallback for any complex object
+                        }
                     this.setData(key, stringValue)
                 }
             }
@@ -109,14 +110,22 @@ object SentryUtils {
     /**
      * Add a simple breadcrumb for a state change or event
      */
-    fun breadcrumb(category: String, message: String, data: Map<String, Any>? = null) {
+    fun breadcrumb(
+        category: String,
+        message: String,
+        data: Map<String, Any>? = null
+    ) {
         addBreadcrumb(message, category, SentryLevel.INFO, data)
     }
 
     /**
      * Set user context in Sentry
      */
-    fun setUser(userId: Int, email: String? = null, username: String? = null) {
+    fun setUser(
+        userId: Int,
+        email: String? = null,
+        username: String? = null
+    ) {
         if (!Sentry.isEnabled()) return
 
         Sentry.setUser(
@@ -139,7 +148,10 @@ object SentryUtils {
     /**
      * Set a tag in the current scope
      */
-    fun setTag(key: String, value: String) {
+    fun setTag(
+        key: String,
+        value: String
+    ) {
         if (!Sentry.isEnabled()) return
         Sentry.setTag(key, value)
     }
@@ -147,7 +159,10 @@ object SentryUtils {
     /**
      * Set extra context data
      */
-    fun setExtra(key: String, value: Any) {
+    fun setExtra(
+        key: String,
+        value: Any
+    ) {
         if (!Sentry.isEnabled()) return
         Sentry.setExtra(key, value.toString())
     }

@@ -43,13 +43,14 @@ class DiscordService {
     private val json = Json { ignoreUnknownKeys = true }
     private val botToken = EnvConfig.get("DISCORD_BOT_TOKEN") ?: ""
 
-    private val httpClient = HttpClient(CIO) {
-        install(HttpTimeout) {
-            socketTimeoutMillis = 10_000
-            connectTimeoutMillis = 10_000
-            requestTimeoutMillis = 10_000
+    private val httpClient =
+        HttpClient(CIO) {
+            install(HttpTimeout) {
+                socketTimeoutMillis = 10_000
+                connectTimeoutMillis = 10_000
+                requestTimeoutMillis = 10_000
+            }
         }
-    }
 
     @Serializable
     data class DiscordEmbed(
@@ -115,8 +116,7 @@ class DiscordService {
                     (OrganizationIntegrations.organization_id eq organizationId) and
                         (OrganizationIntegrations.integration_type eq "discord") and
                         (OrganizationIntegrations.enabled eq true)
-                }
-                .singleOrNull()
+                }.singleOrNull()
                 ?.let { row ->
                     val guildId = row[OrganizationIntegrations.team_id]
                     val channel = row[OrganizationIntegrations.channel_id]
@@ -140,19 +140,21 @@ class DiscordService {
         }
 
         return try {
-            val message = DiscordMessage(
-                content = fallbackText,
-                embeds = listOf(embed)
-            )
+            val message =
+                DiscordMessage(
+                    content = fallbackText,
+                    embeds = listOf(embed)
+                )
 
             val messageJson = json.encodeToString(message)
             logger.debug("Sending Discord message: $messageJson")
 
-            val response: HttpResponse = httpClient.post("https://discord.com/api/v10/channels/$channelId/messages") {
-                contentType(ContentType.Application.Json)
-                header("Authorization", "Bot $botToken")
-                setBody(messageJson)
-            }
+            val response: HttpResponse =
+                httpClient.post("https://discord.com/api/v10/channels/$channelId/messages") {
+                    contentType(ContentType.Application.Json)
+                    header("Authorization", "Bot $botToken")
+                    setBody(messageJson)
+                }
 
             if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
                 logger.debug("Successfully sent message to Discord")
@@ -180,26 +182,29 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed = DiscordEmbed(
-            title = "⚠️ System Alert",
-            description = "**$systemName** triggered an alert",
-            url = "$baseUrl/monitoring?system=$systemId",
-            color = 0xECB22E, // Warning yellow
-            fields = listOf(
-                DiscordField("System", systemName, true),
-                DiscordField("Metric", metric, true),
-                DiscordField("Condition", "$condition $threshold", true),
-                DiscordField("Current Value", currentValue, true)
-            ),
-            footer = DiscordFooter("Moneat Alert"),
-            timestamp = Clock.System.now().toString()
-        )
+        val embed =
+            DiscordEmbed(
+                title = "⚠️ System Alert",
+                description = "**$systemName** triggered an alert",
+                url = "$baseUrl/monitoring?system=$systemId",
+                color = 0xECB22E, // Warning yellow
+                fields =
+                    listOf(
+                        DiscordField("System", systemName, true),
+                        DiscordField("Metric", metric, true),
+                        DiscordField("Condition", "$condition $threshold", true),
+                        DiscordField("Current Value", currentValue, true)
+                    ),
+                footer = DiscordFooter("Moneat Alert"),
+                timestamp = Clock.System.now().toString()
+            )
 
-        val (success, _) = sendMessage(
-            channelId = config.channelId,
-            embed = embed,
-            fallbackText = "⚠️ System Alert: $systemName - $metric $condition $threshold (current: $currentValue)"
-        )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = "⚠️ System Alert: $systemName - $metric $condition $threshold (current: $currentValue)"
+            )
         return success
     }
 
@@ -212,24 +217,27 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed = DiscordEmbed(
-            title = "🔴 System Down",
-            description = "**$systemName** is not responding",
-            url = "$baseUrl/monitoring?system=$systemId",
-            color = 0xE01E5A, // Error red
-            fields = listOf(
-                DiscordField("System", systemName, true),
-                DiscordField("Last Seen", lastSeen, true)
-            ),
-            footer = DiscordFooter("Moneat Alert"),
-            timestamp = Clock.System.now().toString()
-        )
+        val embed =
+            DiscordEmbed(
+                title = "🔴 System Down",
+                description = "**$systemName** is not responding",
+                url = "$baseUrl/monitoring?system=$systemId",
+                color = 0xE01E5A, // Error red
+                fields =
+                    listOf(
+                        DiscordField("System", systemName, true),
+                        DiscordField("Last Seen", lastSeen, true)
+                    ),
+                footer = DiscordFooter("Moneat Alert"),
+                timestamp = Clock.System.now().toString()
+            )
 
-        val (success, _) = sendMessage(
-            channelId = config.channelId,
-            embed = embed,
-            fallbackText = "🔴 System Down: $systemName - Last seen $lastSeen"
-        )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = "🔴 System Down: $systemName - Last seen $lastSeen"
+            )
         return success
     }
 
@@ -241,24 +249,27 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed = DiscordEmbed(
-            title = "✅ System Recovered",
-            description = "**$systemName** is back online",
-            url = "$baseUrl/monitoring?system=$systemId",
-            color = 0x2EB67D, // Success green
-            fields = listOf(
-                DiscordField("System", systemName, true),
-                DiscordField("Status", "Online", true)
-            ),
-            footer = DiscordFooter("Moneat Alert"),
-            timestamp = Clock.System.now().toString()
-        )
+        val embed =
+            DiscordEmbed(
+                title = "✅ System Recovered",
+                description = "**$systemName** is back online",
+                url = "$baseUrl/monitoring?system=$systemId",
+                color = 0x2EB67D, // Success green
+                fields =
+                    listOf(
+                        DiscordField("System", systemName, true),
+                        DiscordField("Status", "Online", true)
+                    ),
+                footer = DiscordFooter("Moneat Alert"),
+                timestamp = Clock.System.now().toString()
+            )
 
-        val (success, _) = sendMessage(
-            channelId = config.channelId,
-            embed = embed,
-            fallbackText = "✅ System Recovered: $systemName"
-        )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = "✅ System Recovered: $systemName"
+            )
         return success
     }
 
@@ -276,36 +287,40 @@ class DiscordService {
 
         val title = if (isDown) "🔴 Uptime Monitor Down" else "✅ Uptime Monitor Recovered"
         val color = if (isDown) 0xE01E5A else 0x2EB67D
-        val statusText = when {
-            errorMessage != null -> errorMessage
-            statusCode != null -> "HTTP $statusCode"
-            else -> "Unknown"
-        }
+        val statusText =
+            when {
+                errorMessage != null -> errorMessage
+                statusCode != null -> "HTTP $statusCode"
+                else -> "Unknown"
+            }
 
-        val fields = mutableListOf(
-            DiscordField("URL", monitorUrl, false),
-            DiscordField("Status", statusText, true)
-        )
+        val fields =
+            mutableListOf(
+                DiscordField("URL", monitorUrl, false),
+                DiscordField("Status", statusText, true)
+            )
 
         if (responseTime != null) {
             fields.add(DiscordField("Response Time", "${responseTime}ms", true))
         }
 
-        val embed = DiscordEmbed(
-            title = title,
-            description = if (isDown) "Monitor detected a failure" else "Monitor has recovered",
-            url = "$baseUrl/monitoring?monitor=$monitorId",
-            color = color,
-            fields = fields,
-            footer = DiscordFooter("Moneat Uptime Monitor"),
-            timestamp = Clock.System.now().toString()
-        )
+        val embed =
+            DiscordEmbed(
+                title = title,
+                description = if (isDown) "Monitor detected a failure" else "Monitor has recovered",
+                url = "$baseUrl/monitoring?monitor=$monitorId",
+                color = color,
+                fields = fields,
+                footer = DiscordFooter("Moneat Uptime Monitor"),
+                timestamp = Clock.System.now().toString()
+            )
 
-        val (success, _) = sendMessage(
-            channelId = config.channelId,
-            embed = embed,
-            fallbackText = "$title: $monitorUrl"
-        )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = "$title: $monitorUrl"
+            )
         return success
     }
 
@@ -321,51 +336,60 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val color = when (level.lowercase()) {
-            "fatal", "error" -> 0xE01E5A
-            "warning" -> 0xECB22E
-            else -> 0x2EB67D
-        }
+        val color =
+            when (level.lowercase()) {
+                "fatal", "error" -> 0xE01E5A
+                "warning" -> 0xECB22E
+                else -> 0x2EB67D
+            }
 
-        val embed = DiscordEmbed(
-            title = "🐛 New Issue Detected",
-            description = "**$issueTitle**",
-            url = issueUrl,
-            color = color,
-            fields = listOf(
-                DiscordField("Project", projectName, true),
-                DiscordField("Level", level.uppercase(), true),
-                DiscordField("First Seen", firstSeen, true),
-                DiscordField("Events", "$eventCount", true),
-                DiscordField("Users", "$userCount", true)
-            ),
-            footer = DiscordFooter("Moneat Error Tracking"),
-            timestamp = Clock.System.now().toString()
-        )
+        val embed =
+            DiscordEmbed(
+                title = "🐛 New Issue Detected",
+                description = "**$issueTitle**",
+                url = issueUrl,
+                color = color,
+                fields =
+                    listOf(
+                        DiscordField("Project", projectName, true),
+                        DiscordField("Level", level.uppercase(), true),
+                        DiscordField("First Seen", firstSeen, true),
+                        DiscordField("Events", "$eventCount", true),
+                        DiscordField("Users", "$userCount", true)
+                    ),
+                footer = DiscordFooter("Moneat Error Tracking"),
+                timestamp = Clock.System.now().toString()
+            )
 
-        val (success, _) = sendMessage(
-            channelId = config.channelId,
-            embed = embed,
-            fallbackText = "🐛 New Issue: $issueTitle in $projectName"
-        )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = "🐛 New Issue: $issueTitle in $projectName"
+            )
         return success
     }
 
-    suspend fun testConnection(organizationId: Int, baseUrl: String): Pair<Boolean, String?> {
+    suspend fun testConnection(
+        organizationId: Int,
+        baseUrl: String
+    ): Pair<Boolean, String?> {
         val config = getDiscordConfig(organizationId) ?: return false to "Discord not configured"
 
-        val embed = DiscordEmbed(
-            title = "✅ Discord Integration Test",
-            description = "Your Discord integration is working correctly!",
-            url = baseUrl,
-            color = 0x2EB67D,
-            fields = listOf(
-                DiscordField("Status", "Connected", true),
-                DiscordField("Guild ID", config.guildId, true)
-            ),
-            footer = DiscordFooter("Moneat"),
-            timestamp = Clock.System.now().toString()
-        )
+        val embed =
+            DiscordEmbed(
+                title = "✅ Discord Integration Test",
+                description = "Your Discord integration is working correctly!",
+                url = baseUrl,
+                color = 0x2EB67D,
+                fields =
+                    listOf(
+                        DiscordField("Status", "Connected", true),
+                        DiscordField("Guild ID", config.guildId, true)
+                    ),
+                footer = DiscordFooter("Moneat"),
+                timestamp = Clock.System.now().toString()
+            )
 
         return sendMessage(
             channelId = config.channelId,
@@ -374,14 +398,20 @@ class DiscordService {
         )
     }
 
-    suspend fun exchangeOAuthCode(code: String, clientId: String, clientSecret: String, redirectUri: String): DiscordOAuthResponse {
+    suspend fun exchangeOAuthCode(
+        code: String,
+        clientId: String,
+        clientSecret: String,
+        redirectUri: String
+    ): DiscordOAuthResponse {
         return try {
-            val response: HttpResponse = httpClient.post("https://discord.com/api/v10/oauth2/token") {
-                contentType(ContentType.Application.FormUrlEncoded)
-                setBody(
-                    "grant_type=authorization_code&code=$code&client_id=$clientId&client_secret=$clientSecret&redirect_uri=$redirectUri"
-                )
-            }
+            val response: HttpResponse =
+                httpClient.post("https://discord.com/api/v10/oauth2/token") {
+                    contentType(ContentType.Application.FormUrlEncoded)
+                    setBody(
+                        "grant_type=authorization_code&code=$code&client_id=$clientId&client_secret=$clientSecret&redirect_uri=$redirectUri"
+                    )
+                }
 
             json.decodeFromString<DiscordOAuthResponse>(response.bodyAsText())
         } catch (e: Exception) {
@@ -397,9 +427,10 @@ class DiscordService {
         }
 
         return try {
-            val response: HttpResponse = httpClient.get("https://discord.com/api/v10/guilds/$guildId/channels") {
-                header(HttpHeaders.Authorization, "Bot $botToken")
-            }
+            val response: HttpResponse =
+                httpClient.get("https://discord.com/api/v10/guilds/$guildId/channels") {
+                    header(HttpHeaders.Authorization, "Bot $botToken")
+                }
 
             if (response.status == HttpStatusCode.OK) {
                 val allChannels = json.decodeFromString<List<DiscordChannel>>(response.bodyAsText())

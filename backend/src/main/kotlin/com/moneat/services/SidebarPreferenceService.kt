@@ -24,20 +24,21 @@ import kotlin.time.Clock
 
 object SidebarPreferenceService {
     // Configurable sidebar items (admin is NOT hideable per user requirement)
-    private val CONFIGURABLE_ITEMS = setOf(
-        "dashboard",
-        "performance",
-        "issues",
-        "logs",
-        "replays",
-        "feedback",
-        "releases",
-        "ai",
-        "uptime",
-        "status-pages",
-        "monitoring",
-        "on-call"
-    )
+    private val CONFIGURABLE_ITEMS =
+        setOf(
+            "dashboard",
+            "performance",
+            "issues",
+            "logs",
+            "replays",
+            "feedback",
+            "releases",
+            "ai",
+            "uptime",
+            "status-pages",
+            "monitoring",
+            "on-call"
+        )
 
     /**
      * Normalize and validate sidebar hidden items list:
@@ -65,10 +66,12 @@ object SidebarPreferenceService {
         val normalized = normalizeHiddenItems(hiddenItems)
 
         // Get current preferences
-        val currentItems = Memberships.selectAll()
-            .where { Memberships.id eq membershipId }
-            .map { it[Memberships.sidebar_hidden_items] }
-            .firstOrNull() ?: emptyList()
+        val currentItems =
+            Memberships
+                .selectAll()
+                .where { Memberships.id eq membershipId }
+                .map { it[Memberships.sidebar_hidden_items] }
+                .firstOrNull() ?: emptyList()
 
         // Update membership
         Memberships.update({ Memberships.id eq membershipId }) {
@@ -94,7 +97,8 @@ object SidebarPreferenceService {
      * Get sidebar preferences for a membership
      */
     fun getPreferences(membershipId: Int): List<String> {
-        return Memberships.selectAll()
+        return Memberships
+            .selectAll()
             .where { Memberships.id eq membershipId }
             .map { it[Memberships.sidebar_hidden_items] }
             .firstOrNull() ?: emptyList()

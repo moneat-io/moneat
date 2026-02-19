@@ -44,8 +44,9 @@ class MonitorAlertServiceTest {
     fun setupDatabase() {
         if (!dbInitialized) {
             Database.connect(
-                url = "jdbc:h2:mem:moneat_monitor_alert_service;MODE=PostgreSQL;" +
-                    "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url =
+                    "jdbc:h2:mem:moneat_monitor_alert_service;MODE=PostgreSQL;" +
+                        "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
             transaction {
@@ -65,21 +66,23 @@ class MonitorAlertServiceTest {
         }
     }
 
-    private fun seedOrg(name: String = "Alert Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Alert Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun seedUser(email: String = "alert-user@moneat.io"): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[password_hash] = "hash"
-            it[Users.name] = "Alert User"
-            it[email_verified] = true
-        } get Users.id
-    }
+    private fun seedUser(email: String = "alert-user@moneat.io"): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[password_hash] = "hash"
+                it[Users.name] = "Alert User"
+                it[email_verified] = true
+            } get Users.id
+        }
 
     @Test
     fun `isThresholdTriggered evaluates all supported operators`() {
@@ -108,15 +111,17 @@ class MonitorAlertServiceTest {
         val userId = seedUser()
         val nowMs = Clock.System.now().toEpochMilliseconds()
 
-        val created = service.createSilencePeriod(
-            organizationId = orgId,
-            userId = userId,
-            request = CreateSilencePeriodRequest(
-                reason = "Maintenance window",
-                startsAt = nowMs - 60_000,
-                endsAt = nowMs + 60_000
+        val created =
+            service.createSilencePeriod(
+                organizationId = orgId,
+                userId = userId,
+                request =
+                    CreateSilencePeriodRequest(
+                        reason = "Maintenance window",
+                        startsAt = nowMs - 60_000,
+                        endsAt = nowMs + 60_000
+                    )
             )
-        )
 
         assertTrue(service.isAnySilenceActive(orgId))
         val listed = service.listSilencePeriods(orgId)

@@ -74,12 +74,13 @@ object DemoDataReseeder {
     }
 
     private suspend fun checkFreshDataCount(): Long {
-        val query = """
+        val query =
+            """
             SELECT count() as cnt
             FROM events
             WHERE project_id IN ($P1, $P2, $P3)
                 AND timestamp >= now() - INTERVAL 7 DAY
-        """.trimIndent()
+            """.trimIndent()
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) return 0
@@ -87,12 +88,13 @@ object DemoDataReseeder {
     }
 
     private suspend fun checkFreshLlmDataCount(): Long {
-        val query = """
+        val query =
+            """
             SELECT count() as cnt
             FROM llm_generations
             WHERE project_id IN ($P1, $P2, $P3)
                 AND timestamp >= now() - INTERVAL 12 HOUR
-        """.trimIndent()
+            """.trimIndent()
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) return 0
@@ -100,13 +102,14 @@ object DemoDataReseeder {
     }
 
     private suspend fun purgeOldDemoData() {
-        val tables = listOf(
-            "events" to "project_id",
-            "sessions" to "project_id",
-            "spans" to "project_id",
-            "replay_events" to "project_id",
-            "replay_segments" to "project_id"
-        )
+        val tables =
+            listOf(
+                "events" to "project_id",
+                "sessions" to "project_id",
+                "spans" to "project_id",
+                "replay_events" to "project_id",
+                "replay_segments" to "project_id"
+            )
         for ((table, col) in tables) {
             val query = "ALTER TABLE $table DELETE WHERE $col IN ($P1, $P2, $P3)"
             runCatching { ClickHouseClient.execute(query) }
@@ -131,9 +134,10 @@ object DemoDataReseeder {
 
     private suspend fun reseedEvents() {
         // Re-run the core patterns from V6 seed migration
-        val statements = listOf(
-            // Android NullPointerException events (project -1)
-            """
+        val statements =
+            listOf(
+                // Android NullPointerException events (project -1)
+                """
             INSERT INTO events (
                 event_id, project_id, issue_id, timestamp, received_at, event_type,
                 platform, level, message, exception_type, exception_value,
@@ -157,8 +161,8 @@ object DemoDataReseeder {
                 ['NullPointerException', 'ProductDetailFragment', 'updateUI']
             FROM numbers(50)
             """,
-            // iOS NSInvalidArgumentException events (project -2)
-            """
+                // iOS NSInvalidArgumentException events (project -2)
+                """
             INSERT INTO events (
                 event_id, project_id, issue_id, timestamp, received_at, event_type,
                 platform, level, message, exception_type, exception_value,
@@ -182,8 +186,8 @@ object DemoDataReseeder {
                 ['NSInvalidArgumentException', 'UIViewController', 'presentViewController']
             FROM numbers(40)
             """,
-            // React Native TypeError events (project -3)
-            """
+                // React Native TypeError events (project -3)
+                """
             INSERT INTO events (
                 event_id, project_id, issue_id, timestamp, received_at, event_type,
                 platform, level, message, exception_type, exception_value,
@@ -207,8 +211,8 @@ object DemoDataReseeder {
                 ['TypeError', 'HomeScreen', 'render']
             FROM numbers(30)
             """,
-            // Transaction events (across all 3 projects)
-            """
+                // Transaction events (across all 3 projects)
+                """
             INSERT INTO events (
                 event_id, project_id, issue_id, timestamp, received_at, event_type,
                 platform, level, transaction_name, transaction_op, duration_ms,
@@ -231,7 +235,7 @@ object DemoDataReseeder {
                 concat('{"trace":{"trace_id":"', toString(generateUUIDv4()), '","status":"ok"}}')
             FROM numbers(100)
             """
-        )
+            )
 
         for (sql in statements) {
             runCatching { ClickHouseClient.execute(sql.trimIndent()) }
@@ -240,7 +244,8 @@ object DemoDataReseeder {
     }
 
     private suspend fun reseedSessions() {
-        val sql = """
+        val sql =
+            """
             INSERT INTO sessions (session_id, project_id, started, duration_ms, status, errors, release, environment, user_id, received_at)
             SELECT
                 generateUUIDv4(),
@@ -254,13 +259,14 @@ object DemoDataReseeder {
                 toString(1000 + (number % 100)),
                 now() - INTERVAL (number * 2) HOUR
             FROM numbers(80)
-        """.trimIndent()
+            """.trimIndent()
         runCatching { ClickHouseClient.execute(sql) }
             .onFailure { logger.warn { "Reseed sessions failed (non-fatal): ${it.message}" } }
     }
 
     private suspend fun reseedReplays() {
-        val replayEventsSql = """
+        val replayEventsSql =
+            """
             INSERT INTO replay_events (
                 replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
                 urls, error_ids, trace_ids, environment, release, platform,
@@ -291,13 +297,14 @@ object DemoDataReseeder {
                 50 + (number % 50),
                 '{}'
             FROM numbers(20)
-        """.trimIndent()
+            """.trimIndent()
         runCatching { ClickHouseClient.execute(replayEventsSql) }
             .onFailure { logger.warn { "Reseed replay_events failed (non-fatal): ${it.message}" } }
 
         // Seed replay_segments with valid rrweb recording data so the replay viewer can render them.
         // Each replay gets one segment containing a Meta event (type 4) and a FullSnapshot (type 2).
-        val segmentsSql = """
+        val segmentsSql =
+            """
             INSERT INTO replay_segments (
                 replay_id, project_id, segment_id, timestamp, recording_data
             )
@@ -378,13 +385,14 @@ object DemoDataReseeder {
                     ']'
                 ) as recording_data
             FROM numbers(20)
-        """.trimIndent()
+            """.trimIndent()
         runCatching { ClickHouseClient.execute(segmentsSql) }
             .onFailure { logger.warn { "Reseed replay_segments failed (non-fatal): ${it.message}" } }
     }
 
     private suspend fun reseedLlmGenerations() {
-        val sql = """
+        val sql =
+            """
             INSERT INTO llm_generations (
                 generation_id,
                 project_id,
@@ -586,7 +594,7 @@ object DemoDataReseeder {
                 ) AS metadata,
                 timestamp AS received_at
             FROM numbers(800)
-        """.trimIndent()
+            """.trimIndent()
         runCatching { ClickHouseClient.execute(sql) }
             .onFailure { logger.warn { "Reseed llm_generations failed (non-fatal): ${it.message}" } }
     }

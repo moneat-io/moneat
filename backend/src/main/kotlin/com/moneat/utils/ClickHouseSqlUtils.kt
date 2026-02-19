@@ -82,12 +82,13 @@ object ClickHouseSqlUtils {
      * Throws IllegalArgumentException if validation fails.
      */
     fun validateOperator(operator: String) {
-        val allowedOperators = setOf(
-            "=", "!=", "<>", "<", ">", "<=", ">=",
-            "LIKE", "NOT LIKE", "ILIKE", "NOT ILIKE",
-            "IN", "NOT IN",
-            "IS NULL", "IS NOT NULL"
-        )
+        val allowedOperators =
+            setOf(
+                "=", "!=", "<>", "<", ">", "<=", ">=",
+                "LIKE", "NOT LIKE", "ILIKE", "NOT ILIKE",
+                "IN", "NOT IN",
+                "IS NULL", "IS NOT NULL"
+            )
 
         require(operator.uppercase() in allowedOperators) {
             "Invalid operator: $operator. Must be one of: ${allowedOperators.joinToString()}"

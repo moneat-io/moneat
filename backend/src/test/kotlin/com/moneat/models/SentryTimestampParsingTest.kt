@@ -28,7 +28,8 @@ class SentryTimestampParsingTest {
 
     @Test
     fun `transaction timestamps decode from ISO-8601 strings`() {
-        val payload = """
+        val payload =
+            """
             {
               "event_id": "abc3035cf03042628ee6514d915711b8",
               "type": "transaction",
@@ -44,7 +45,7 @@ class SentryTimestampParsingTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val transaction = json.decodeFromString<SentryTransaction>(payload)
 
@@ -59,14 +60,15 @@ class SentryTimestampParsingTest {
 
     @Test
     fun `replay timestamps decode from ISO-8601 strings`() {
-        val payload = """
+        val payload =
+            """
             {
               "replay_id": "7f0f9f17-97b8-4fe3-9b8d-f4db94f4f687",
               "segment_id": 1,
               "timestamp": "2026-02-13T22:06:38.84660646Z",
               "replay_start_timestamp": "2026-02-13T22:06:00.000000000Z"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val replayEvent = json.decodeFromString<SentryReplayEvent>(payload)
 

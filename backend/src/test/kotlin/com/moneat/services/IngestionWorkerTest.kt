@@ -37,31 +37,36 @@ class IngestionWorkerTest {
 
     @Test
     fun `decode message throws for too-short payload`() {
-        val tooShort = java.util.Base64.getEncoder().encodeToString(byteArrayOf(1, 2, 3, 4, 5, 6, 7))
+        val tooShort =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(byteArrayOf(1, 2, 3, 4, 5, 6, 7))
         assertFailsWith<IllegalArgumentException> {
             IngestionWorker.decodeMessage(tooShort)
         }
     }
 
     @Test
-    fun `worker sends message to DLQ when base64 decode fails`() = runBlocking {
-        val worker = IngestionWorker("q:test", "q:test:dlq", 1)
-        val dlq = mutableListOf<String>()
-        val badMessage = "!!!not-base64!!!"
+    fun `worker sends message to DLQ when base64 decode fails`() =
+        runBlocking {
+            val worker = IngestionWorker("q:test", "q:test:dlq", 1)
+            val dlq = mutableListOf<String>()
+            val badMessage = "!!!not-base64!!!"
 
-        worker.processMessageForTest(workerId = 1, value = badMessage) { dlq.add(it) }
+            worker.processMessageForTest(workerId = 1, value = badMessage) { dlq.add(it) }
 
-        assertEquals(listOf(badMessage), dlq)
-    }
+            assertEquals(listOf(badMessage), dlq)
+        }
 
     @Test
-    fun `worker sends message to DLQ when envelope parse fails`() = runBlocking {
-        val worker = IngestionWorker("q:test", "q:test:dlq", 1)
-        val dlq = mutableListOf<String>()
-        val badEnvelopeMessage = IngestionWorker.encodeMessage(42L, "invalid-envelope".toByteArray())
+    fun `worker sends message to DLQ when envelope parse fails`() =
+        runBlocking {
+            val worker = IngestionWorker("q:test", "q:test:dlq", 1)
+            val dlq = mutableListOf<String>()
+            val badEnvelopeMessage = IngestionWorker.encodeMessage(42L, "invalid-envelope".toByteArray())
 
-        worker.processMessageForTest(workerId = 2, value = badEnvelopeMessage) { dlq.add(it) }
+            worker.processMessageForTest(workerId = 2, value = badEnvelopeMessage) { dlq.add(it) }
 
-        assertEquals(listOf(badEnvelopeMessage), dlq)
-    }
+            assertEquals(listOf(badEnvelopeMessage), dlq)
+        }
 }

@@ -38,50 +38,56 @@ class LogRoutesTest {
     private val jwtSecret = "log-routes-secret"
 
     @Test
-    fun `otlp endpoint accepts empty payload without auth`() = testApplication {
-        application {
-            install(ContentNegotiation) { json() }
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256(jwtSecret))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+    fun `otlp endpoint accepts empty payload without auth`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
+                routing { logRoutes() }
             }
-            routing { logRoutes() }
-        }
 
-        val response = client.post("/v1/logs/otlp") {
-            setBody("""{"resourceLogs":[]}""")
-        }
+            val response =
+                client.post("/v1/logs/otlp") {
+                    setBody("""{"resourceLogs":[]}""")
+                }
 
-        assertEquals(HttpStatusCode.Accepted, response.status)
-        assertTrue(response.bodyAsText().contains("accepted"))
-    }
+            assertEquals(HttpStatusCode.Accepted, response.status)
+            assertTrue(response.bodyAsText().contains("accepted"))
+        }
 
     @Test
-    fun `otlp endpoint returns bad request when project id is missing`() = testApplication {
-        application {
-            install(ContentNegotiation) { json() }
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256(jwtSecret))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+    fun `otlp endpoint returns bad request when project id is missing`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
+                routing { logRoutes() }
             }
-            routing { logRoutes() }
-        }
 
-        val payload = """
+            val payload =
+                """
             {
               "resourceLogs": [
                 {
@@ -104,13 +110,14 @@ class LogRoutesTest {
                 }
               ]
             }
-        """.trimIndent()
+                """.trimIndent()
 
-        val response = client.post("/v1/logs/otlp") {
-            setBody(payload)
+            val response =
+                client.post("/v1/logs/otlp") {
+                    setBody(payload)
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Missing project ID"))
         }
-
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("Missing project ID"))
-    }
 }

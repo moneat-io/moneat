@@ -72,46 +72,52 @@ class AuthServiceLegalConsentTest {
 
     @Test
     fun `signup fails when terms are not accepted`() {
-        val error = assertFailsWith<IllegalArgumentException> {
-            authService.signup(validSignupRequest(acceptTerms = false))
-        }
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                authService.signup(validSignupRequest(acceptTerms = false))
+            }
 
         assertTrue(error.message?.contains("must accept", ignoreCase = true) == true)
     }
 
     @Test
     fun `signup fails when privacy policy is not accepted`() {
-        val error = assertFailsWith<IllegalArgumentException> {
-            authService.signup(validSignupRequest(acceptPrivacy = false))
-        }
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                authService.signup(validSignupRequest(acceptPrivacy = false))
+            }
 
         assertTrue(error.message?.contains("must accept", ignoreCase = true) == true)
     }
 
     @Test
     fun `signup fails when legal versions mismatch`() {
-        val error = assertFailsWith<IllegalArgumentException> {
-            authService.signup(validSignupRequest(termsVersion = "2026-01-01"))
-        }
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                authService.signup(validSignupRequest(termsVersion = "2026-01-01"))
+            }
 
         assertTrue(error.message?.contains("latest", ignoreCase = true) == true)
     }
 
     @Test
     fun `signup stores terms and privacy acceptance with request metadata`() {
-        val response = authService.signup(
-            validSignupRequest(),
-            SignupRequestContext(
-                ipAddress = "203.0.113.11",
-                userAgent = "moneat-test-agent/1.0"
+        val response =
+            authService.signup(
+                validSignupRequest(),
+                SignupRequestContext(
+                    ipAddress = "203.0.113.11",
+                    userAgent = "moneat-test-agent/1.0"
+                )
             )
-        )
 
-        val acceptances = transaction {
-            UserLegalAcceptances.selectAll()
-                .where { UserLegalAcceptances.user_id eq response.user.id }
-                .toList()
-        }
+        val acceptances =
+            transaction {
+                UserLegalAcceptances
+                    .selectAll()
+                    .where { UserLegalAcceptances.user_id eq response.user.id }
+                    .toList()
+            }
 
         assertEquals(2, acceptances.size)
         assertEquals(setOf("terms", "privacy"), acceptances.map { it[UserLegalAcceptances.document_type] }.toSet())

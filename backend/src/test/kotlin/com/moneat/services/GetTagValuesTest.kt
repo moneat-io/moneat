@@ -32,10 +32,11 @@ class GetTagValuesTest {
 
         val key = "service"
         val actualField = if (key == "status") "level" else key
-        val topLevelFields = setOf(
-            "service", "environment", "host", "source", "level", "message", "body",
-            "container_name", "container_id", "container_image", "trace_id", "span_id"
-        )
+        val topLevelFields =
+            setOf(
+                "service", "environment", "host", "source", "level", "message", "body",
+                "container_name", "container_id", "container_image", "trace_id", "span_id"
+            )
 
         assertTrue(actualField in topLevelFields, "service should be a top-level field")
     }
@@ -61,10 +62,11 @@ class GetTagValuesTest {
     @Test
     fun `getTagValues should identify custom tags correctly`() {
         val customTag = "http.status_code"
-        val topLevelFields = setOf(
-            "service", "environment", "host", "source", "level", "message", "body",
-            "container_name", "container_id", "container_image", "trace_id", "span_id"
-        )
+        val topLevelFields =
+            setOf(
+                "service", "environment", "host", "source", "level", "message", "body",
+                "container_name", "container_id", "container_image", "trace_id", "span_id"
+            )
 
         assertFalse(customTag in topLevelFields, "http.status_code should not be a top-level field")
     }

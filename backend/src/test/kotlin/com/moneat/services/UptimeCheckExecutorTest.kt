@@ -56,37 +56,42 @@ class UptimeCheckExecutorTest {
     }
 
     @Test
-    fun `executeCheck returns pending for push monitors`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "push"))
-        assertEquals(2, result.status)
-        assertTrue(result.message.contains("don't perform active checks"))
-    }
+    fun `executeCheck returns pending for push monitors`() =
+        runBlocking {
+            val result = executor.executeCheck(monitor(type = "push"))
+            assertEquals(2, result.status)
+            assertTrue(result.message.contains("don't perform active checks"))
+        }
 
     @Test
-    fun `executeCheck returns unknown type error for unsupported monitor types`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "unsupported"))
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("Unknown monitor type"))
-    }
+    fun `executeCheck returns unknown type error for unsupported monitor types`() =
+        runBlocking {
+            val result = executor.executeCheck(monitor(type = "unsupported"))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("Unknown monitor type"))
+        }
 
     @Test
-    fun `executeCheck fails http monitor without url`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "http", url = null))
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("No URL configured"))
-    }
+    fun `executeCheck fails http monitor without url`() =
+        runBlocking {
+            val result = executor.executeCheck(monitor(type = "http", url = null))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No URL configured"))
+        }
 
     @Test
-    fun `executeCheck fails tcp monitor without hostname`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "tcp", hostname = null, port = 443))
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("No hostname configured"))
-    }
+    fun `executeCheck fails tcp monitor without hostname`() =
+        runBlocking {
+            val result = executor.executeCheck(monitor(type = "tcp", hostname = null, port = 443))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No hostname configured"))
+        }
 
     @Test
-    fun `executeCheck fails database monitor without connection string`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "database", dbConnectionString = null))
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("No connection string configured"))
-    }
+    fun `executeCheck fails database monitor without connection string`() =
+        runBlocking {
+            val result = executor.executeCheck(monitor(type = "database", dbConnectionString = null))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No connection string configured"))
+        }
 }

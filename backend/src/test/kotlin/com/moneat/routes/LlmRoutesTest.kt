@@ -42,39 +42,43 @@ class LlmRoutesTest {
     private val jwtSecret = "llm-routes-secret"
 
     @Test
-    fun `overview endpoint returns 400 when projectId is missing`() = testApplication {
-        application {
-            install(ContentNegotiation) { json() }
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256(jwtSecret))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+    fun `overview endpoint returns 400 when projectId is missing`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
-            }
-            install(RateLimit) {
-                register(RateLimitName("api")) {
-                    requestKey { "test-user" }
-                    rateLimiter(limit = 100, refillPeriod = 1.seconds)
+                install(RateLimit) {
+                    register(RateLimitName("api")) {
+                        requestKey { "test-user" }
+                        rateLimiter(limit = 100, refillPeriod = 1.seconds)
+                    }
                 }
+                routing { llmRoutes() }
             }
-            routing { llmRoutes() }
-        }
 
-        val response = client.get("/v1/llm/overview") {
-            header(HttpHeaders.Authorization, "Bearer ${tokenForUser(12)}")
-        }
+            val response =
+                client.get("/v1/llm/overview") {
+                    header(HttpHeaders.Authorization, "Bearer ${tokenForUser(12)}")
+                }
 
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("projectId is required"))
-    }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("projectId is required"))
+        }
 
     private fun tokenForUser(userId: Int): String {
-        return JWT.create()
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)

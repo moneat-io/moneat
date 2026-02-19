@@ -77,12 +77,13 @@ class UptimeRoutesTest {
     }
 
     private fun seedPushMonitor(token: String = "token-1234"): UUID {
-        val orgId = transaction {
-            Organizations.insert {
-                it[name] = "Uptime Routes Org"
-                it[slug] = "uptime-routes-org"
-            } get Organizations.id
-        }
+        val orgId =
+            transaction {
+                Organizations.insert {
+                    it[name] = "Uptime Routes Org"
+                    it[slug] = "uptime-routes-org"
+                } get Organizations.id
+            }
 
         val monitorId = UUID.randomUUID()
         val now = Clock.System.now()
@@ -115,59 +116,65 @@ class UptimeRoutesTest {
     }
 
     @Test
-    fun `push endpoint returns not found for invalid token`() = testApplication {
-        application {
-            install(ContentNegotiation) { json() }
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256("test-secret"))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+    fun `push endpoint returns not found for invalid token`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256("test-secret"))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
+                routing { uptimeRoutes() }
             }
-            routing { uptimeRoutes() }
-        }
 
-        val response = client.post("/v1/uptime/push/does-not-exist")
-        assertEquals(HttpStatusCode.NotFound, response.status)
-    }
+            val response = client.post("/v1/uptime/push/does-not-exist")
+            assertEquals(HttpStatusCode.NotFound, response.status)
+        }
 
     @Test
-    fun `push endpoint records heartbeat and updates monitor status`() = testApplication {
-        val monitorId = seedPushMonitor(token = "ok-token")
+    fun `push endpoint records heartbeat and updates monitor status`() =
+        testApplication {
+            val monitorId = seedPushMonitor(token = "ok-token")
 
-        application {
-            install(ContentNegotiation) { json() }
-            install(Authentication) {
-                jwt("auth-jwt") {
-                    verifier(
-                        JWT.require(Algorithm.HMAC256("test-secret"))
-                            .withIssuer("moneat")
-                            .withAudience("moneat-users")
-                            .build()
-                    )
-                    validate { JWTPrincipal(it.payload) }
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256("test-secret"))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
                 }
+                routing { uptimeRoutes() }
             }
-            routing { uptimeRoutes() }
-        }
 
-        val response = client.post("/v1/uptime/push/ok-token") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"status":"0","msg":"probe failed","ping":45}""")
-        }
+            val response =
+                client.post("/v1/uptime/push/ok-token") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"status":"0","msg":"probe failed","ping":45}""")
+                }
 
-        assertEquals(HttpStatusCode.OK, response.status)
-        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        assertEquals("true", body["ok"]?.jsonPrimitive?.content)
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            assertEquals("true", body["ok"]?.jsonPrimitive?.content)
 
-        val status = transaction {
-            UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }[UptimeMonitors.status]
+            val status =
+                transaction {
+                    UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == monitorId }[UptimeMonitors.status]
+                }
+            assertEquals("down", status)
         }
-        assertEquals("down", status)
-    }
 }

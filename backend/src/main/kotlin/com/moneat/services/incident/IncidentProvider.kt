@@ -33,7 +33,10 @@ interface IncidentProvider {
      * @param config Provider-specific configuration
      * @return Result containing the provider's incident ID on success, or error message on failure
      */
-    suspend fun sendAlert(event: IncidentEvent, config: ProviderConfig): Result<String>
+    suspend fun sendAlert(
+        event: IncidentEvent,
+        config: ProviderConfig
+    ): Result<String>
 
     /**
      * Resolve an alert with the incident provider.
@@ -41,7 +44,10 @@ interface IncidentProvider {
      * @param config Provider-specific configuration
      * @return Result containing success status or error message
      */
-    suspend fun resolveAlert(deduplicationKey: String, config: ProviderConfig): Result<String>
+    suspend fun resolveAlert(
+        deduplicationKey: String,
+        config: ProviderConfig
+    ): Result<String>
 
     /**
      * Test the connection to the incident provider.

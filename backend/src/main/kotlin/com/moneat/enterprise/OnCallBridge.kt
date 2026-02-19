@@ -23,10 +23,16 @@ package com.moneat.enterprise
  */
 interface OnCallBridge {
     /** Resolve priority for a severity level in the given organization. */
-    fun resolvePriority(organizationId: Int, severity: String): PriorityInfo?
+    fun resolvePriority(
+        organizationId: Int,
+        severity: String
+    ): PriorityInfo?
 
     /** Check if escalation should proceed based on business hours. */
-    fun shouldEscalate(organizationId: Int, priorityLevel: String): Boolean
+    fun shouldEscalate(
+        organizationId: Int,
+        priorityLevel: String
+    ): Boolean
 
     /** Trigger the escalation engine and return the incident ID (or null). */
     suspend fun triggerEscalation(
@@ -41,10 +47,16 @@ interface OnCallBridge {
     ): Int?
 
     /** Get an incident by ID for a user. Returns a map of incident fields or null. */
-    fun getIncident(incidentId: Int, userId: Int): IncidentInfo?
+    fun getIncident(
+        incidentId: Int,
+        userId: Int
+    ): IncidentInfo?
 
     /** Acknowledge an incident. */
-    fun acknowledgeIncident(incidentId: Int, userId: Int): Boolean
+    fun acknowledgeIncident(
+        incidentId: Int,
+        userId: Int
+    ): Boolean
 }
 
 /** Lightweight data carrier for priority info, avoiding enterprise model dependency. */

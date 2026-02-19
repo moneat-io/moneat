@@ -97,25 +97,31 @@ fun Route.apiRoutes() {
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val (user, orgSlug, sidebarHiddenItems) = transaction {
-                        val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                            ?: return@transaction Triple(null, null, emptyList())
+                    val (user, orgSlug, sidebarHiddenItems) =
+                        transaction {
+                            val userRow =
+                                Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                                    ?: return@transaction Triple(null, null, emptyList())
 
-                        val membership = Memberships.selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
+                            val membership =
+                                Memberships
+                                    .selectAll()
+                                    .where { Memberships.user_id eq userId }
+                                    .firstOrNull()
 
-                        val slug = membership?.let { m ->
-                            Organizations.selectAll()
-                                .where { Organizations.id eq m[Memberships.organization_id] }
-                                .firstOrNull()
-                                ?.get(Organizations.slug)
+                            val slug =
+                                membership?.let { m ->
+                                    Organizations
+                                        .selectAll()
+                                        .where { Organizations.id eq m[Memberships.organization_id] }
+                                        .firstOrNull()
+                                        ?.get(Organizations.slug)
+                                }
+
+                            val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
+
+                            Triple(userRow, slug, hiddenItems)
                         }
-
-                        val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
-
-                        Triple(userRow, slug, hiddenItems)
-                    }
 
                     if (user == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
@@ -187,9 +193,10 @@ fun Route.apiRoutes() {
                 get("/user/on-call-contact") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
-                    val user = transaction {
-                        Users.selectAll().where { Users.id eq userId }.singleOrNull()
-                    }
+                    val user =
+                        transaction {
+                            Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                        }
                     if (user == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
                         return@get
@@ -223,8 +230,12 @@ fun Route.apiRoutes() {
                         return@put
                     }
 
-                    val ip = call.request.headers["X-Forwarded-For"]?.split(",")?.first()?.trim()
-                        ?: call.request.local.remoteHost
+                    val ip =
+                        call.request.headers["X-Forwarded-For"]
+                            ?.split(",")
+                            ?.first()
+                            ?.trim()
+                            ?: call.request.local.remoteHost
                     val ua = call.request.headers["User-Agent"]
 
                     transaction {
@@ -303,51 +314,57 @@ fun Route.apiRoutes() {
                     val organizationIdClaim = principal.payload.getClaim("orgId").asInt()
                     val request = call.receive<UpdateSidebarPreferencesRequest>()
 
-                    val (hiddenItems, errorStatus, errorMessage) = transaction {
-                        val membership = if (organizationIdClaim != null) {
-                            Memberships.selectAll()
-                                .where {
-                                    (Memberships.user_id eq userId) and
-                                        (Memberships.organization_id eq organizationIdClaim)
+                    val (hiddenItems, errorStatus, errorMessage) =
+                        transaction {
+                            val membership =
+                                if (organizationIdClaim != null) {
+                                    Memberships
+                                        .selectAll()
+                                        .where {
+                                            (Memberships.user_id eq userId) and
+                                                (Memberships.organization_id eq organizationIdClaim)
+                                        }.firstOrNull()
+                                } else {
+                                    // Avoid cross-org writes when token is missing org context.
+                                    val memberships =
+                                        Memberships
+                                            .selectAll()
+                                            .where { Memberships.user_id eq userId }
+                                            .limit(2)
+                                            .toList()
+                                    when {
+                                        memberships.isEmpty() -> null
+
+                                        memberships.size == 1 -> memberships.first()
+
+                                        else -> return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
+                                            null,
+                                            HttpStatusCode.BadRequest,
+                                            "Organization context required for users in multiple organizations"
+                                        )
+                                    }
                                 }
-                                .firstOrNull()
-                        } else {
-                            // Avoid cross-org writes when token is missing org context.
-                            val memberships = Memberships.selectAll()
-                                .where { Memberships.user_id eq userId }
-                                .limit(2)
-                                .toList()
-                            when {
-                                memberships.isEmpty() -> null
-                                memberships.size == 1 -> memberships.first()
-                                else -> return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
-                                    null,
-                                    HttpStatusCode.BadRequest,
-                                    "Organization context required for users in multiple organizations"
-                                )
-                            }
-                        }
-                            ?: return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
+                                    ?: return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
+                                        null,
+                                        HttpStatusCode.NotFound,
+                                        "User membership not found"
+                                    )
+
+                            val membershipId = membership[Memberships.id]
+                            val organizationId = membership[Memberships.organization_id]
+
+                            Triple(
+                                SidebarPreferenceService.updatePreferences(
+                                    membershipId = membershipId,
+                                    userId = userId,
+                                    organizationId = organizationId,
+                                    hiddenItems = request.hiddenItems,
+                                    source = "settings"
+                                ),
                                 null,
-                                HttpStatusCode.NotFound,
-                                "User membership not found"
+                                null
                             )
-
-                        val membershipId = membership[Memberships.id]
-                        val organizationId = membership[Memberships.organization_id]
-
-                        Triple(
-                            SidebarPreferenceService.updatePreferences(
-                                membershipId = membershipId,
-                                userId = userId,
-                                organizationId = organizationId,
-                                hiddenItems = request.hiddenItems,
-                                source = "settings"
-                            ),
-                            null,
-                            null
-                        )
-                    }
+                        }
 
                     if (errorStatus != null) {
                         call.respond(errorStatus, ErrorResponse(errorMessage ?: "Unable to update sidebar preferences"))
@@ -618,12 +635,13 @@ fun Route.apiRoutes() {
                     }
 
                     val period = call.request.queryParameters["period"] ?: "7d"
-                    val stats = dashboardService.getProjectStats(
-                        projectId,
-                        period,
-                        call.getSentryTransaction(),
-                        demoEpochMs
-                    )
+                    val stats =
+                        dashboardService.getProjectStats(
+                            projectId,
+                            period,
+                            call.getSentryTransaction(),
+                            demoEpochMs
+                        )
                     call.respond(stats)
                 }
 
@@ -647,13 +665,14 @@ fun Route.apiRoutes() {
                     val period = call.request.queryParameters["period"] ?: "7d"
                     val environment = call.request.queryParameters["environment"]
                     val operation = call.request.queryParameters["operation"]
-                    val transactions = dashboardService.getTransactions(
-                        projectId,
-                        period,
-                        environment,
-                        operation,
-                        demoEpochMs
-                    )
+                    val transactions =
+                        dashboardService.getTransactions(
+                            projectId,
+                            period,
+                            environment,
+                            operation,
+                            demoEpochMs
+                        )
                     call.respond(transactions)
                 }
 
@@ -677,13 +696,14 @@ fun Route.apiRoutes() {
                     val period = call.request.queryParameters["period"] ?: "7d"
                     val environment = call.request.queryParameters["environment"]
                     val operation = call.request.queryParameters["operation"]
-                    val stats = dashboardService.getPerformanceStats(
-                        projectId,
-                        period,
-                        environment,
-                        operation,
-                        demoEpochMs
-                    )
+                    val stats =
+                        dashboardService.getPerformanceStats(
+                            projectId,
+                            period,
+                            environment,
+                            operation,
+                            demoEpochMs
+                        )
                     call.respond(stats)
                 }
 
@@ -1065,58 +1085,65 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val preferences = transaction {
-                        // Get global preferences
-                        val global = NotificationPreferences.selectAll()
-                            .where {
-                                (NotificationPreferences.user_id eq userId) and
-                                    (NotificationPreferences.project_id.isNull())
-                            }
-                            .firstOrNull()
+                    val preferences =
+                        transaction {
+                            // Get global preferences
+                            val global =
+                                NotificationPreferences
+                                    .selectAll()
+                                    .where {
+                                        (NotificationPreferences.user_id eq userId) and
+                                            (NotificationPreferences.project_id.isNull())
+                                    }.firstOrNull()
 
-                        val globalPrefs = if (global != null) {
-                            NotificationPreferencesData(
-                                issueAlerts = global[NotificationPreferences.issue_alerts],
-                                errorAlerts = global[NotificationPreferences.error_alerts],
-                                weeklySummary = global[NotificationPreferences.weekly_summary],
-                                alertFrequencyMinutes = global[NotificationPreferences.alert_frequency_minutes]
-                            )
-                        } else {
-                            NotificationPreferencesData(
-                                issueAlerts = true,
-                                errorAlerts = true,
-                                weeklySummary = true,
-                                alertFrequencyMinutes = 30
+                            val globalPrefs =
+                                if (global != null) {
+                                    NotificationPreferencesData(
+                                        issueAlerts = global[NotificationPreferences.issue_alerts],
+                                        errorAlerts = global[NotificationPreferences.error_alerts],
+                                        weeklySummary = global[NotificationPreferences.weekly_summary],
+                                        alertFrequencyMinutes = global[NotificationPreferences.alert_frequency_minutes]
+                                    )
+                                } else {
+                                    NotificationPreferencesData(
+                                        issueAlerts = true,
+                                        errorAlerts = true,
+                                        weeklySummary = true,
+                                        alertFrequencyMinutes = 30
+                                    )
+                                }
+
+                            // Get per-project overrides
+                            val projects =
+                                NotificationPreferences
+                                    .selectAll()
+                                    .where {
+                                        (NotificationPreferences.user_id eq userId) and
+                                            (NotificationPreferences.project_id.isNotNull())
+                                    }.map { pref ->
+                                        val projectId = pref[NotificationPreferences.project_id]!!
+                                        val projectName =
+                                            Projects
+                                                .selectAll()
+                                                .where { Projects.id eq projectId }
+                                                .firstOrNull()
+                                                ?.get(Projects.name) ?: "Unknown"
+
+                                        ProjectNotificationPreferences(
+                                            projectId = projectId,
+                                            projectName = projectName,
+                                            issueAlerts = pref[NotificationPreferences.issue_alerts],
+                                            errorAlerts = pref[NotificationPreferences.error_alerts],
+                                            weeklySummary = pref[NotificationPreferences.weekly_summary],
+                                            alertFrequencyMinutes = pref[NotificationPreferences.alert_frequency_minutes]
+                                        )
+                                    }
+
+                            NotificationPreferencesResponse(
+                                global = globalPrefs,
+                                projects = projects
                             )
                         }
-
-                        // Get per-project overrides
-                        val projects = NotificationPreferences.selectAll()
-                            .where {
-                                (NotificationPreferences.user_id eq userId) and
-                                    (NotificationPreferences.project_id.isNotNull())
-                            }
-                            .map { pref ->
-                                val projectId = pref[NotificationPreferences.project_id]!!
-                                val projectName = Projects.selectAll()
-                                    .where { Projects.id eq projectId }
-                                    .firstOrNull()?.get(Projects.name) ?: "Unknown"
-
-                                ProjectNotificationPreferences(
-                                    projectId = projectId,
-                                    projectName = projectName,
-                                    issueAlerts = pref[NotificationPreferences.issue_alerts],
-                                    errorAlerts = pref[NotificationPreferences.error_alerts],
-                                    weeklySummary = pref[NotificationPreferences.weekly_summary],
-                                    alertFrequencyMinutes = pref[NotificationPreferences.alert_frequency_minutes]
-                                )
-                            }
-
-                        NotificationPreferencesResponse(
-                            global = globalPrefs,
-                            projects = projects
-                        )
-                    }
 
                     call.respond(preferences)
                 }
@@ -1128,12 +1155,13 @@ fun Route.apiRoutes() {
                     val request = call.receive<Map<String, Any>>()
 
                     transaction {
-                        val existing = NotificationPreferences.selectAll()
-                            .where {
-                                (NotificationPreferences.user_id eq userId) and
-                                    (NotificationPreferences.project_id.isNull())
-                            }
-                            .firstOrNull()
+                        val existing =
+                            NotificationPreferences
+                                .selectAll()
+                                .where {
+                                    (NotificationPreferences.user_id eq userId) and
+                                        (NotificationPreferences.project_id.isNull())
+                                }.firstOrNull()
 
                         val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
                         val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
@@ -1186,12 +1214,13 @@ fun Route.apiRoutes() {
                     val request = call.receive<Map<String, Any>>()
 
                     transaction {
-                        val existing = NotificationPreferences.selectAll()
-                            .where {
-                                (NotificationPreferences.user_id eq userId) and
-                                    (NotificationPreferences.project_id eq projectId)
-                            }
-                            .firstOrNull()
+                        val existing =
+                            NotificationPreferences
+                                .selectAll()
+                                .where {
+                                    (NotificationPreferences.user_id eq userId) and
+                                        (NotificationPreferences.project_id eq projectId)
+                                }.firstOrNull()
 
                         val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
                         val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
@@ -1232,12 +1261,14 @@ fun Route.apiRoutes() {
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
                     // Get user's primary organization
-                    val organizationId = transaction {
-                        Memberships.selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
+                    val organizationId =
+                        transaction {
+                            Memberships
+                                .selectAll()
+                                .where { Memberships.user_id eq userId }
+                                .firstOrNull()
+                                ?.get(Memberships.organization_id)
+                        }
 
                     if (organizationId == null) {
                         call.respond(HttpStatusCode.NotFound, "User not in any organization")
@@ -1261,35 +1292,39 @@ fun Route.apiRoutes() {
                     }
 
                     // Get user's primary organization
-                    val organizationId = transaction {
-                        Memberships.selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
+                    val organizationId =
+                        transaction {
+                            Memberships
+                                .selectAll()
+                                .where { Memberships.user_id eq userId }
+                                .firstOrNull()
+                                ?.get(Memberships.organization_id)
+                        }
 
                     if (organizationId == null) {
                         call.respond(HttpStatusCode.NotFound, "User not in any organization")
                         return@put
                     }
 
-                    val request = try {
-                        call.receive<UpdateAlertNotificationPreferenceRequest>()
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, "Invalid request body")
-                        return@put
-                    }
+                    val request =
+                        try {
+                            call.receive<UpdateAlertNotificationPreferenceRequest>()
+                        } catch (e: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, "Invalid request body")
+                            return@put
+                        }
 
                     val prefsService = AlertNotificationPreferencesService()
                     try {
-                        val updated = prefsService.updatePreference(
-                            userId = userId,
-                            organizationId = organizationId,
-                            alertSource = alertSource,
-                            emailEnabled = request.emailEnabled,
-                            slackEnabled = request.slackEnabled,
-                            discordEnabled = request.discordEnabled
-                        )
+                        val updated =
+                            prefsService.updatePreference(
+                                userId = userId,
+                                organizationId = organizationId,
+                                alertSource = alertSource,
+                                emailEnabled = request.emailEnabled,
+                                slackEnabled = request.slackEnabled,
+                                discordEnabled = request.discordEnabled
+                            )
                         call.respond(updated)
                     } catch (e: IllegalArgumentException) {
                         call.respond(HttpStatusCode.BadRequest, e.message ?: "Invalid alert source")

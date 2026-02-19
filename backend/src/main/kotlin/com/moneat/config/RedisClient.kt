@@ -22,24 +22,43 @@ package com.moneat.config
  */
 class RedisClient {
 
-    fun zadd(key: String, score: Double, member: String) {
+    fun zadd(
+        key: String,
+        score: Double,
+        member: String
+    ) {
         RedisConfig.sync().zadd(key, score, member)
     }
 
-    fun zrem(key: String, member: String) {
+    fun zrem(
+        key: String,
+        member: String
+    ) {
         RedisConfig.sync().zrem(key, member)
     }
 
-    fun zrange(key: String, start: Long, stop: Long): List<String> {
+    fun zrange(
+        key: String,
+        start: Long,
+        stop: Long
+    ): List<String> {
         return RedisConfig.sync().zrange(key, start, stop).toList()
     }
 
     @Suppress("DEPRECATION")
-    fun zrangebyscore(key: String, min: Double, max: Double): List<String> {
+    fun zrangebyscore(
+        key: String,
+        min: Double,
+        max: Double
+    ): List<String> {
         return RedisConfig.sync().zrangebyscore(key, min, max).toList()
     }
 
-    fun zrangeWithScores(key: String, start: Long, stop: Long): List<Pair<String, Double>> {
+    fun zrangeWithScores(
+        key: String,
+        start: Long,
+        stop: Long
+    ): List<Pair<String, Double>> {
         return RedisConfig.sync().zrangeWithScores(key, start, stop).map {
             it.value to it.score
         }
@@ -49,7 +68,10 @@ class RedisClient {
         return RedisConfig.sync().get(key)
     }
 
-    fun set(key: String, value: String) {
+    fun set(
+        key: String,
+        value: String
+    ) {
         RedisConfig.sync().set(key, value)
     }
 
@@ -57,7 +79,10 @@ class RedisClient {
         RedisConfig.sync().del(key)
     }
 
-    fun expire(key: String, seconds: Long) {
+    fun expire(
+        key: String,
+        seconds: Long
+    ) {
         RedisConfig.sync().expire(key, seconds)
     }
 }

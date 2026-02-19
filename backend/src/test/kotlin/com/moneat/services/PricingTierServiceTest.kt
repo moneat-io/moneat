@@ -42,40 +42,41 @@ class PricingTierServiceTest {
         retentionDays: Int = 3,
         isCurrent: Boolean = true,
         monthlyPriceCents: Int = 0
-    ): Int = transaction {
-        PricingTierConfigs.insert {
-            it[tier_name] = tierName
-            it[PricingTierConfigs.version] = version
-            it[monthly_unit_limit] = monthlyUnitLimit
-            it[monthly_error_limit] = monthlyUnitLimit
-            it[monthly_transaction_limit] = 0
-            it[monthly_replay_limit] = 0
-            it[monthly_feedback_limit] = 0
-            it[monthly_gb_limit] = 1_073_741_824
-            it[retention_days] = retentionDays
-            it[log_retention_days] = retentionDays
-            it[status_pages_enabled] = true
-            it[status_page_custom_domain_enabled] = false
-            it[session_replay_enabled] = false
-            it[slack_enabled] = false
-            it[incident_io_enabled] = false
-            it[saml_enabled] = false
-            it[oidc_enabled] = false
-            it[priority_support_enabled] = false
-            it[sla_enabled] = false
-            it[custom_retention_enabled] = false
-            it[max_projects] = 3
-            it[max_systems] = 3
-            it[monitor_interval_seconds] = 60
-            it[PricingTierConfigs.monthly_price_cents] = monthlyPriceCents
-            it[yearly_price_cents] = 0
-            it[trial_days] = 0
-            it[payg_enabled] = false
-            it[payg_rate_micros_per_unit] = 0
-            it[overage_rate_cents_per_gb] = 0
-            it[is_current] = isCurrent
-        } get PricingTierConfigs.id
-    }
+    ): Int =
+        transaction {
+            PricingTierConfigs.insert {
+                it[tier_name] = tierName
+                it[PricingTierConfigs.version] = version
+                it[monthly_unit_limit] = monthlyUnitLimit
+                it[monthly_error_limit] = monthlyUnitLimit
+                it[monthly_transaction_limit] = 0
+                it[monthly_replay_limit] = 0
+                it[monthly_feedback_limit] = 0
+                it[monthly_gb_limit] = 1_073_741_824
+                it[retention_days] = retentionDays
+                it[log_retention_days] = retentionDays
+                it[status_pages_enabled] = true
+                it[status_page_custom_domain_enabled] = false
+                it[session_replay_enabled] = false
+                it[slack_enabled] = false
+                it[incident_io_enabled] = false
+                it[saml_enabled] = false
+                it[oidc_enabled] = false
+                it[priority_support_enabled] = false
+                it[sla_enabled] = false
+                it[custom_retention_enabled] = false
+                it[max_projects] = 3
+                it[max_systems] = 3
+                it[monitor_interval_seconds] = 60
+                it[PricingTierConfigs.monthly_price_cents] = monthlyPriceCents
+                it[yearly_price_cents] = 0
+                it[trial_days] = 0
+                it[payg_enabled] = false
+                it[payg_rate_micros_per_unit] = 0
+                it[overage_rate_cents_per_gb] = 0
+                it[is_current] = isCurrent
+            } get PricingTierConfigs.id
+        }
 
     @Test
     fun `getCurrentPlans returns only current tiers`() {
@@ -133,27 +134,28 @@ class PricingTierServiceTest {
     fun `createTierVersion increments version`() {
         seedTier("PRO", version = 1)
 
-        val created = service.createTierVersion(
-            "PRO",
-            CreateTierVersionRequest(
-                monthlyUnitLimit = 50_000,
-                monthlyErrorLimit = 50_000,
-                monthlyTransactionLimit = 0,
-                monthlyReplayLimit = 0,
-                monthlyFeedbackLimit = 0,
-                monthlyGbLimit = 1_073_741_824,
-                retentionDays = 7,
-                logRetentionDays = 7,
-                maxProjects = 5,
-                maxSystems = 5,
-                monitorIntervalSeconds = 60,
-                monthlyPriceCents = 2900,
-                yearlyPriceCents = 24900,
-                trialDays = 14,
-                paygEnabled = false,
-                paygRateMicrosPerUnit = 0
+        val created =
+            service.createTierVersion(
+                "PRO",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = 50_000,
+                    monthlyErrorLimit = 50_000,
+                    monthlyTransactionLimit = 0,
+                    monthlyReplayLimit = 0,
+                    monthlyFeedbackLimit = 0,
+                    monthlyGbLimit = 1_073_741_824,
+                    retentionDays = 7,
+                    logRetentionDays = 7,
+                    maxProjects = 5,
+                    maxSystems = 5,
+                    monitorIntervalSeconds = 60,
+                    monthlyPriceCents = 2900,
+                    yearlyPriceCents = 24900,
+                    trialDays = 14,
+                    paygEnabled = false,
+                    paygRateMicrosPerUnit = 0
+                )
             )
-        )
 
         assertEquals(2, created.version)
         assertEquals("PRO", created.tierName)
@@ -163,12 +165,13 @@ class PricingTierServiceTest {
     @Test
     fun `getEffectiveTierForOrganization returns free tier for org without subscription`() {
         seedTier("FREE", version = 1)
-        val orgId = transaction {
-            Organizations.insert {
-                it[name] = "Test Org"
-                it[slug] = "test-org"
-            } get Organizations.id
-        }
+        val orgId =
+            transaction {
+                Organizations.insert {
+                    it[name] = "Test Org"
+                    it[slug] = "test-org"
+                } get Organizations.id
+            }
 
         val context = service.getEffectiveTierForOrganization(orgId)
         assertNotNull(context)

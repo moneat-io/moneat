@@ -44,12 +44,13 @@ class DateFormatTest {
 
     @Test
     fun `valid ISO 8601 dates should parse correctly`() {
-        val validDates = listOf(
-            "2026-02-12T20:58:30.000Z",
-            "2024-01-15T09:58:31.000Z",
-            "2023-12-31T23:59:59.999Z",
-            "2024-01-01T00:00:00.000Z"
-        )
+        val validDates =
+            listOf(
+                "2026-02-12T20:58:30.000Z",
+                "2024-01-15T09:58:31.000Z",
+                "2023-12-31T23:59:59.999Z",
+                "2024-01-01T00:00:00.000Z"
+            )
 
         validDates.forEach { dateStr ->
             try {
@@ -63,11 +64,12 @@ class DateFormatTest {
 
     @Test
     fun `ClickHouse default format should NOT be accepted`() {
-        val clickhouseDates = listOf(
-            "2026-02-12 20:58:30.000", // Missing T separator and Z
-            "2026-02-12 20:58:30", // Space instead of T
-            "2026-02-12T20:58:30", // Missing .000Z
-        )
+        val clickhouseDates =
+            listOf(
+                "2026-02-12 20:58:30.000", // Missing T separator and Z
+                "2026-02-12 20:58:30", // Space instead of T
+                "2026-02-12T20:58:30", // Missing .000Z
+            )
 
         clickhouseDates.forEach { dateStr ->
             assertFailsWith<DateTimeParseException>(
@@ -81,13 +83,14 @@ class DateFormatTest {
     @Test
     fun `API response JSON dates should be ISO 8601 compliant`() {
         // Simulate API responses that should contain properly formatted dates
-        val issueResponse = """
+        val issueResponse =
+            """
             {
                 "id": "test-issue-id",
                 "firstSeen": "2026-02-12T20:58:30.000Z",
                 "lastSeen": "2026-02-13T15:30:00.000Z"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val json = Json.parseToJsonElement(issueResponse).jsonObject
         val firstSeen = json["firstSeen"]?.jsonPrimitive?.content
@@ -171,10 +174,11 @@ class DateFormatTest {
     @Test
     fun `JavaScript Date constructor compatibility check`() {
         // These dates should work with: new Date(dateString) in JavaScript
-        val javaScriptCompatibleDates = listOf(
-            "2026-02-12T20:58:30.000Z",
-            "2024-01-15T09:58:31.000Z"
-        )
+        val javaScriptCompatibleDates =
+            listOf(
+                "2026-02-12T20:58:30.000Z",
+                "2024-01-15T09:58:31.000Z"
+            )
 
         javaScriptCompatibleDates.forEach { dateStr ->
             // Verify format matches what JavaScript Date expects

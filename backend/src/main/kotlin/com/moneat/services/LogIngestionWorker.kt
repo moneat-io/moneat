@@ -41,11 +41,12 @@ class LogIngestionWorker(
 
     fun start() {
         logger.info { "Starting LogIngestionWorker with $workerCount workers, queue=$queueKey" }
-        jobs = (1..workerCount).map { workerId ->
-            scope.launch {
-                runWorker(workerId)
+        jobs =
+            (1..workerCount).map { workerId ->
+                scope.launch {
+                    runWorker(workerId)
+                }
             }
-        }
     }
 
     fun stop() {

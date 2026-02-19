@@ -65,54 +65,55 @@ object SdkVersionService {
     private const val MAX_CACHE_TTL_SECONDS = 86_400
     private const val GITHUB_API_BASE = "https://api.github.com"
 
-    private val versionTargets = listOf(
-        VersionTarget("@sentry/browser", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/react", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/vue", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/node", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/angular", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/svelte", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/nextjs", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/nuxt", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/remix", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/astro", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/solidstart", "getsentry/sentry-javascript"),
-        VersionTarget("@sentry/electron", "getsentry/sentry-electron"),
-        VersionTarget("@sentry/react-native", "getsentry/sentry-react-native"),
-        VersionTarget("io.sentry:sentry-android", "getsentry/sentry-java", fallbackVersion = "7.0.0"),
-        VersionTarget("io.sentry:sentry", "getsentry/sentry-java", fallbackVersion = "7.0.0"),
-        VersionTarget("io.sentry:sentry-spring-boot-starter", "getsentry/sentry-java"),
-        VersionTarget(
-            "io.sentry:sentry-kotlin-multiplatform",
-            "getsentry/sentry-kotlin-multiplatform",
-            fallbackVersion = "4.0.0"
-        ),
-        VersionTarget("pod:Sentry", "getsentry/sentry-cocoa", fallbackVersion = "8.0"),
-        VersionTarget("pub:sentry_flutter", "getsentry/sentry-dart", fallbackVersion = "8.0.0"),
-        VersionTarget("sentry-sdk", "getsentry/sentry-python"),
-        VersionTarget("sentry-ruby", "getsentry/sentry-ruby"),
-        VersionTarget("sentry-rails", "getsentry/sentry-ruby"),
-        VersionTarget("sentry/sentry", "getsentry/sentry-php"),
-        VersionTarget("sentry/sentry-laravel", "getsentry/sentry-laravel"),
-        VersionTarget("github.com/getsentry/sentry-go", "getsentry/sentry-go"),
-        VersionTarget("nuget:Sentry", "getsentry/sentry-dotnet"),
-        VersionTarget("cargo:sentry", "getsentry/sentry-rust"),
-        VersionTarget("hex:sentry", "getsentry/sentry-elixir", fallbackVersion = "10.0"),
-        VersionTarget("sentry-unity", "getsentry/sentry-unity"),
-        VersionTarget("sentry-unreal", "getsentry/sentry-unreal"),
-        VersionTarget("sentry-godot", "getsentry/sentry-godot"),
-        VersionTarget("sentry-native", "getsentry/sentry-native"),
-        VersionTarget(
-            "io.opentelemetry:opentelemetry-sdk-logs",
-            "open-telemetry/opentelemetry-java",
-            fallbackVersion = "1.34.0"
-        ),
-        VersionTarget(
-            "io.opentelemetry:opentelemetry-exporter-otlp",
-            "open-telemetry/opentelemetry-java",
-            fallbackVersion = "1.34.0"
-        ),
-    )
+    private val versionTargets =
+        listOf(
+            VersionTarget("@sentry/browser", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/react", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/vue", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/node", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/angular", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/svelte", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/nextjs", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/nuxt", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/remix", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/astro", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/solidstart", "getsentry/sentry-javascript"),
+            VersionTarget("@sentry/electron", "getsentry/sentry-electron"),
+            VersionTarget("@sentry/react-native", "getsentry/sentry-react-native"),
+            VersionTarget("io.sentry:sentry-android", "getsentry/sentry-java", fallbackVersion = "7.0.0"),
+            VersionTarget("io.sentry:sentry", "getsentry/sentry-java", fallbackVersion = "7.0.0"),
+            VersionTarget("io.sentry:sentry-spring-boot-starter", "getsentry/sentry-java"),
+            VersionTarget(
+                "io.sentry:sentry-kotlin-multiplatform",
+                "getsentry/sentry-kotlin-multiplatform",
+                fallbackVersion = "4.0.0"
+            ),
+            VersionTarget("pod:Sentry", "getsentry/sentry-cocoa", fallbackVersion = "8.0"),
+            VersionTarget("pub:sentry_flutter", "getsentry/sentry-dart", fallbackVersion = "8.0.0"),
+            VersionTarget("sentry-sdk", "getsentry/sentry-python"),
+            VersionTarget("sentry-ruby", "getsentry/sentry-ruby"),
+            VersionTarget("sentry-rails", "getsentry/sentry-ruby"),
+            VersionTarget("sentry/sentry", "getsentry/sentry-php"),
+            VersionTarget("sentry/sentry-laravel", "getsentry/sentry-laravel"),
+            VersionTarget("github.com/getsentry/sentry-go", "getsentry/sentry-go"),
+            VersionTarget("nuget:Sentry", "getsentry/sentry-dotnet"),
+            VersionTarget("cargo:sentry", "getsentry/sentry-rust"),
+            VersionTarget("hex:sentry", "getsentry/sentry-elixir", fallbackVersion = "10.0"),
+            VersionTarget("sentry-unity", "getsentry/sentry-unity"),
+            VersionTarget("sentry-unreal", "getsentry/sentry-unreal"),
+            VersionTarget("sentry-godot", "getsentry/sentry-godot"),
+            VersionTarget("sentry-native", "getsentry/sentry-native"),
+            VersionTarget(
+                "io.opentelemetry:opentelemetry-sdk-logs",
+                "open-telemetry/opentelemetry-java",
+                fallbackVersion = "1.34.0"
+            ),
+            VersionTarget(
+                "io.opentelemetry:opentelemetry-exporter-otlp",
+                "open-telemetry/opentelemetry-java",
+                fallbackVersion = "1.34.0"
+            ),
+        )
 
     private val repositories = versionTargets.map { it.repository }.distinct()
 
@@ -137,14 +138,15 @@ object SdkVersionService {
     private suspend fun fetchSdkVersions(cacheTtlSeconds: Int): SdkVersionsResponse {
         val repositoryVersions = fetchRepositoryVersions()
 
-        val versions = buildMap {
-            for (target in versionTargets) {
-                val version = repositoryVersions[target.repository] ?: target.fallbackVersion
-                if (!version.isNullOrBlank()) {
-                    put(target.packageKey, version)
+        val versions =
+            buildMap {
+                for (target in versionTargets) {
+                    val version = repositoryVersions[target.repository] ?: target.fallbackVersion
+                    if (!version.isNullOrBlank()) {
+                        put(target.packageKey, version)
+                    }
                 }
-            }
-        }.toSortedMap()
+            }.toSortedMap()
 
         return SdkVersionsResponse(
             fetchedAt = Clock.System.now().toString(),
@@ -153,17 +155,20 @@ object SdkVersionService {
         )
     }
 
-    private suspend fun fetchRepositoryVersions(): Map<String, String> = coroutineScope {
-        val deferred = repositories.associateWith { repository ->
-            async {
-                fetchLatestRepositoryVersion(repository)
-            }
-        }
+    private suspend fun fetchRepositoryVersions(): Map<String, String> =
+        coroutineScope {
+            val deferred =
+                repositories.associateWith { repository ->
+                    async {
+                        fetchLatestRepositoryVersion(repository)
+                    }
+                }
 
-        deferred.entries.mapNotNull { (repository, value) ->
-            value.await()?.let { repository to it }
-        }.toMap()
-    }
+            deferred.entries
+                .mapNotNull { (repository, value) ->
+                    value.await()?.let { repository to it }
+                }.toMap()
+        }
 
     private suspend fun fetchLatestRepositoryVersion(repository: String): String? {
         fetchFromLatestRelease(repository)?.let { return it }
@@ -171,14 +176,15 @@ object SdkVersionService {
     }
 
     private suspend fun fetchFromLatestRelease(repository: String): String? {
-        val response = try {
-            httpClient.get("$GITHUB_API_BASE/repos/$repository/releases/latest") {
-                applyGitHubHeaders()
+        val response =
+            try {
+                httpClient.get("$GITHUB_API_BASE/repos/$repository/releases/latest") {
+                    applyGitHubHeaders()
+                }
+            } catch (e: Exception) {
+                sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
+                return null
             }
-        } catch (e: Exception) {
-            sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
-            return null
-        }
 
         if (response.status == HttpStatusCode.NotFound) {
             return null
@@ -190,12 +196,13 @@ object SdkVersionService {
         }
 
         val payload = response.bodyAsText()
-        val release = try {
-            sdkVersionJson.decodeFromString(GitHubLatestReleaseResponse.serializer(), payload)
-        } catch (e: Exception) {
-            sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
-            return null
-        }
+        val release =
+            try {
+                sdkVersionJson.decodeFromString(GitHubLatestReleaseResponse.serializer(), payload)
+            } catch (e: Exception) {
+                sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
+                return null
+            }
 
         if (release.draft || release.prerelease) {
             return null
@@ -205,15 +212,16 @@ object SdkVersionService {
     }
 
     private suspend fun fetchFromTags(repository: String): String? {
-        val response = try {
-            httpClient.get("$GITHUB_API_BASE/repos/$repository/tags") {
-                applyGitHubHeaders()
-                parameter("per_page", 20)
+        val response =
+            try {
+                httpClient.get("$GITHUB_API_BASE/repos/$repository/tags") {
+                    applyGitHubHeaders()
+                    parameter("per_page", 20)
+                }
+            } catch (e: Exception) {
+                sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
+                return null
             }
-        } catch (e: Exception) {
-            sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
-            return null
-        }
 
         if (response.status != HttpStatusCode.OK) {
             logUnexpectedStatus("tags", repository, response)
@@ -221,12 +229,13 @@ object SdkVersionService {
         }
 
         val payload = response.bodyAsText()
-        val tags = try {
-            sdkVersionJson.decodeFromString(ListSerializer(GitHubTagResponse.serializer()), payload)
-        } catch (e: Exception) {
-            sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
-            return null
-        }
+        val tags =
+            try {
+                sdkVersionJson.decodeFromString(ListSerializer(GitHubTagResponse.serializer()), payload)
+            } catch (e: Exception) {
+                sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
+                return null
+            }
 
         var prereleaseCandidate: String? = null
         for (tag in tags) {
@@ -248,13 +257,18 @@ object SdkVersionService {
     }
 
     private fun cacheTtlSeconds(): Int {
-        return EnvConfig.get("GITHUB_VERSIONS_CACHE_TTL_SECONDS")
+        return EnvConfig
+            .get("GITHUB_VERSIONS_CACHE_TTL_SECONDS")
             ?.toIntOrNull()
             ?.coerceIn(MIN_CACHE_TTL_SECONDS, MAX_CACHE_TTL_SECONDS)
             ?: DEFAULT_CACHE_TTL_SECONDS
     }
 
-    private fun logUnexpectedStatus(endpoint: String, repository: String, response: HttpResponse) {
+    private fun logUnexpectedStatus(
+        endpoint: String,
+        repository: String,
+        response: HttpResponse
+    ) {
         val remaining = response.headers["X-RateLimit-Remaining"]
         val reset = response.headers["X-RateLimit-Reset"]
 

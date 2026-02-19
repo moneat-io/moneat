@@ -47,12 +47,13 @@ fun Route.authTokenRoutes() {
                 val request = call.receive<CreateAuthTokenRequest>()
 
                 try {
-                    val tokenResponse = authTokenService.generateToken(
-                        userId = userId,
-                        name = request.name,
-                        scopes = request.scopes,
-                        expiresInDays = request.expiresInDays
-                    )
+                    val tokenResponse =
+                        authTokenService.generateToken(
+                            userId = userId,
+                            name = request.name,
+                            scopes = request.scopes,
+                            expiresInDays = request.expiresInDays
+                        )
                     call.respond(HttpStatusCode.Created, tokenResponse)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -101,12 +102,13 @@ fun Route.authTokenRoutes() {
                 val request = call.receive<UpdateAuthTokenRequest>()
 
                 try {
-                    val success = authTokenService.updateToken(
-                        userId = userId,
-                        tokenId = tokenId,
-                        name = request.name,
-                        scopes = request.scopes
-                    )
+                    val success =
+                        authTokenService.updateToken(
+                            userId = userId,
+                            tokenId = tokenId,
+                            name = request.name,
+                            scopes = request.scopes
+                        )
 
                     if (success) {
                         call.respond(HttpStatusCode.OK)

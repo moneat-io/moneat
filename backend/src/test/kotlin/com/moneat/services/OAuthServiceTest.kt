@@ -53,16 +53,27 @@ class OAuthServiceTest {
     fun `handleGitHubCallback prefers user email when present`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(
-                    200,
-                    """{"access_token":"token-1","token_type":"bearer","scope":"user:email"}"""
-                )
-                "/user" -> exchange.respond(
-                    200,
-                    """{"id":42,"login":"octocat","email":"User@Test.com","name":"Octo Cat"}"""
-                )
-                "/user/emails" -> exchange.respond(200, """[]""")
-                else -> exchange.respond(404, """{"error":"not found"}""")
+                "/login/oauth/access_token" -> {
+                    exchange.respond(
+                        200,
+                        """{"access_token":"token-1","token_type":"bearer","scope":"user:email"}"""
+                    )
+                }
+
+                "/user" -> {
+                    exchange.respond(
+                        200,
+                        """{"id":42,"login":"octocat","email":"User@Test.com","name":"Octo Cat"}"""
+                    )
+                }
+
+                "/user/emails" -> {
+                    exchange.respond(200, """[]""")
+                }
+
+                else -> {
+                    exchange.respond(404, """{"error":"not found"}""")
+                }
             }
         }.use { server ->
             withProperties(
@@ -88,21 +99,32 @@ class OAuthServiceTest {
     fun `handleGitHubCallback falls back to primary verified email`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(
-                    200,
-                    """{"access_token":"token-2","token_type":"bearer","scope":"user:email"}"""
-                )
-                "/user" -> exchange.respond(200, """{"id":77,"login":"fallback","email":null,"name":null}""")
-                "/user/emails" -> exchange.respond(
-                    200,
-                    """
+                "/login/oauth/access_token" -> {
+                    exchange.respond(
+                        200,
+                        """{"access_token":"token-2","token_type":"bearer","scope":"user:email"}"""
+                    )
+                }
+
+                "/user" -> {
+                    exchange.respond(200, """{"id":77,"login":"fallback","email":null,"name":null}""")
+                }
+
+                "/user/emails" -> {
+                    exchange.respond(
+                        200,
+                        """
                     [
                       {"email":"secondary@test.com","primary":false,"verified":true,"visibility":null},
                       {"email":"primary@test.com","primary":true,"verified":true,"visibility":"public"}
                     ]
-                    """.trimIndent()
-                )
-                else -> exchange.respond(404, """{"error":"not found"}""")
+                        """.trimIndent()
+                    )
+                }
+
+                else -> {
+                    exchange.respond(404, """{"error":"not found"}""")
+                }
             }
         }.use { server ->
             withProperties(
@@ -126,20 +148,31 @@ class OAuthServiceTest {
     fun `handleGitHubCallback fails when no verified email exists`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(
-                    200,
-                    """{"access_token":"token-3","token_type":"bearer","scope":"user:email"}"""
-                )
-                "/user" -> exchange.respond(200, """{"id":88,"login":"noemail","email":null,"name":"No Email"}""")
-                "/user/emails" -> exchange.respond(
-                    200,
-                    """
+                "/login/oauth/access_token" -> {
+                    exchange.respond(
+                        200,
+                        """{"access_token":"token-3","token_type":"bearer","scope":"user:email"}"""
+                    )
+                }
+
+                "/user" -> {
+                    exchange.respond(200, """{"id":88,"login":"noemail","email":null,"name":"No Email"}""")
+                }
+
+                "/user/emails" -> {
+                    exchange.respond(
+                        200,
+                        """
                     [
                       {"email":"not-verified@test.com","primary":true,"verified":false,"visibility":null}
                     ]
-                    """.trimIndent()
-                )
-                else -> exchange.respond(404, """{"error":"not found"}""")
+                        """.trimIndent()
+                    )
+                }
+
+                else -> {
+                    exchange.respond(404, """{"error":"not found"}""")
+                }
             }
         }.use { server ->
             withProperties(
@@ -158,7 +191,10 @@ class OAuthServiceTest {
         }
     }
 
-    private fun <T> withProperties(properties: Map<String, String>, block: () -> T): T {
+    private fun <T> withProperties(
+        properties: Map<String, String>,
+        block: () -> T
+    ): T {
         val previous = properties.keys.associateWith { System.getProperty(it) }
         properties.forEach { (k, v) -> System.setProperty(k, v) }
         return try {

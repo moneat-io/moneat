@@ -30,22 +30,24 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 private val demoUserId = EnvConfig.Demo.USER_ID
 private val demoUserEmail = EnvConfig.Demo.USER_EMAIL
-private val demoSafeWritePaths = setOf(
-    "/auth/demo-login",
-    "/auth/demo-refresh",
-    "/auth/refresh",
-    "/auth/logout"
-)
+private val demoSafeWritePaths =
+    setOf(
+        "/auth/demo-login",
+        "/auth/demo-refresh",
+        "/auth/refresh",
+        "/auth/logout"
+    )
 
 private fun String.removeBearerPrefix(): String {
     return removePrefix("Bearer ").removePrefix("bearer ").trim()
 }
 
 private fun ApplicationCall.extractAuthToken(): String? {
-    val headerToken = request.headers["Authorization"]
-        ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-        ?.removeBearerPrefix()
-        ?.takeIf { it.isNotBlank() }
+    val headerToken =
+        request.headers["Authorization"]
+            ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+            ?.removeBearerPrefix()
+            ?.takeIf { it.isNotBlank() }
     if (headerToken != null) return headerToken
 
     return request.cookies["auth_token"]?.trim()?.takeIf { it.isNotBlank() }
@@ -58,8 +60,9 @@ private fun isDemoToken(token: String?): Boolean {
         val decoded = JWT.decode(token)
         if (decoded.getClaim("isDemo")?.asBoolean() == true) return true
 
-        val userId = decoded.getClaim("userId")?.asLong()
-            ?: decoded.getClaim("userId")?.asInt()?.toLong()
+        val userId =
+            decoded.getClaim("userId")?.asLong()
+                ?: decoded.getClaim("userId")?.asInt()?.toLong()
         if (userId == demoUserId) return true
 
         val email = decoded.getClaim("email")?.asString()
@@ -108,8 +111,12 @@ fun ApplicationCall.isDemoUser(): Boolean {
     if (jwtPrincipal != null) {
         try {
             if (jwtPrincipal.payload.getClaim("isDemo")?.asBoolean() == true) return true
-            val userId = jwtPrincipal.payload.getClaim("userId")?.asLong()
-                ?: jwtPrincipal.payload.getClaim("userId")?.asInt()?.toLong()
+            val userId =
+                jwtPrincipal.payload.getClaim("userId")?.asLong()
+                    ?: jwtPrincipal.payload
+                        .getClaim("userId")
+                        ?.asInt()
+                        ?.toLong()
             if (userId == demoUserId) return true
             val email = jwtPrincipal.payload.getClaim("email")?.asString()
             if (email != null && email.equals(demoUserEmail, ignoreCase = true)) return true

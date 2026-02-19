@@ -43,8 +43,11 @@ fun Route.llmIngestRoutes() {
 
     route("/api/{projectId}") {
         post("/llm/") {
-            val queueKey = call.application.environment.config.propertyOrNull("llm.queueKey")?.getString()
-                ?: "moneat:llm:queue"
+            val queueKey =
+                call.application.environment.config
+                    .propertyOrNull("llm.queueKey")
+                    ?.getString()
+                    ?: "moneat:llm:queue"
             val projectId = call.parameters["projectId"]?.toLongOrNull()
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
@@ -69,11 +72,14 @@ fun Route.llmIngestRoutes() {
             try {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
-                val decompressedBytes = if (contentEncoding == "gzip") {
-                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-                } else {
-                    bodyBytes
-                }
+                val decompressedBytes =
+                    if (contentEncoding == "gzip") {
+                        java.util.zip
+                            .GZIPInputStream(bodyBytes.inputStream())
+                            .readBytes()
+                    } else {
+                        bodyBytes
+                    }
 
                 val payload = json.decodeFromString<LlmIngestPayload>(decompressedBytes.decodeToString())
 
@@ -89,12 +95,13 @@ fun Route.llmIngestRoutes() {
                         return@post
                     }
                     val billableBytes = decompressedBytes.size.toLong()
-                    val reservation = quotaService.reserveUnits(
-                        organizationId = orgId,
-                        requestedUnits = payload.generations.size,
-                        eventType = "llm",
-                        requestedBytes = billableBytes
-                    )
+                    val reservation =
+                        quotaService.reserveUnits(
+                            organizationId = orgId,
+                            requestedUnits = payload.generations.size,
+                            eventType = "llm",
+                            requestedBytes = billableBytes
+                        )
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,

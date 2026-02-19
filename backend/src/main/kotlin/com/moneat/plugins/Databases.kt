@@ -33,19 +33,20 @@ fun Application.configureDatabases() {
 
     try {
         // PostgreSQL connection pool
-        val hikariConfig = HikariConfig().apply {
-            jdbcUrl = config.property("database.postgres.url").getString()
-            driverClassName = config.property("database.postgres.driver").getString()
-            username = config.property("database.postgres.user").getString()
-            password = config.property("database.postgres.password").getString()
-            maximumPoolSize = config.property("database.postgres.maxPoolSize").getString().toInt()
-            minimumIdle = 5
-            connectionTimeout = 10000
-            leakDetectionThreshold = 30000
-            isAutoCommit = false
-            transactionIsolation = "TRANSACTION_READ_COMMITTED"
-            validate()
-        }
+        val hikariConfig =
+            HikariConfig().apply {
+                jdbcUrl = config.property("database.postgres.url").getString()
+                driverClassName = config.property("database.postgres.driver").getString()
+                username = config.property("database.postgres.user").getString()
+                password = config.property("database.postgres.password").getString()
+                maximumPoolSize = config.property("database.postgres.maxPoolSize").getString().toInt()
+                minimumIdle = 5
+                connectionTimeout = 10000
+                leakDetectionThreshold = 30000
+                isAutoCommit = false
+                transactionIsolation = "TRANSACTION_READ_COMMITTED"
+                validate()
+            }
 
         val dataSource = HikariDataSource(hikariConfig)
 
@@ -55,11 +56,13 @@ fun Application.configureDatabases() {
         if (!isTestDatabase) {
             // Run Flyway migrations for PostgreSQL
             log.info("Running PostgreSQL migrations...")
-            val flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .locations("classpath:db/migration")
-                .baselineOnMigrate(true)
-                .load()
+            val flyway =
+                Flyway
+                    .configure()
+                    .dataSource(dataSource)
+                    .locations("classpath:db/migration")
+                    .baselineOnMigrate(true)
+                    .load()
 
             val migrationsApplied = flyway.migrate()
             log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
@@ -83,7 +86,8 @@ fun Application.configureDatabases() {
                 }
                 // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)
                 try {
-                    com.moneat.config.DemoDataReseeder.reseedIfNeeded()
+                    com.moneat.config.DemoDataReseeder
+                        .reseedIfNeeded()
                 } catch (e: Exception) {
                     log.warn("Demo data reseed failed (non-fatal)", e)
                 }

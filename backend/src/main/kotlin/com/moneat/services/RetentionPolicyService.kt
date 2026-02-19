@@ -36,22 +36,28 @@ class RetentionPolicyService(
 
     suspend fun getRetentionDaysForProject(projectId: Long): Int? {
         return CacheService.cached("cache:retention:project:$projectId", 300) {
-            val organizationId = transaction {
-                Projects.selectAll().where { Projects.id eq projectId }
-                    .firstOrNull()
-                    ?.get(Projects.organization_id)
-            }
+            val organizationId =
+                transaction {
+                    Projects
+                        .selectAll()
+                        .where { Projects.id eq projectId }
+                        .firstOrNull()
+                        ?.get(Projects.organization_id)
+                }
             organizationId?.let { getRetentionDaysForOrganization(it) }
         }
     }
 
     suspend fun getRetentionDaysForSystem(systemId: UUID): Int? {
         return CacheService.cached("cache:retention:system:$systemId", 300) {
-            val organizationId = transaction {
-                Systems.selectAll().where { Systems.id eq systemId }
-                    .firstOrNull()
-                    ?.get(Systems.organization_id)
-            }
+            val organizationId =
+                transaction {
+                    Systems
+                        .selectAll()
+                        .where { Systems.id eq systemId }
+                        .firstOrNull()
+                        ?.get(Systems.organization_id)
+                }
             organizationId?.let { getRetentionDaysForOrganization(it) }
         }
     }
@@ -62,9 +68,10 @@ class RetentionPolicyService(
 
         val retentionByOrg = LinkedHashMap<Int, Int>(orgIds.size)
         for (orgId in orgIds) {
-            retentionByOrg[orgId] = runCatching {
-                getRetentionDaysForOrganization(orgId)
-            }.getOrDefault(PricingTier.FREE.retentionDays)
+            retentionByOrg[orgId] =
+                runCatching {
+                    getRetentionDaysForOrganization(orgId)
+                }.getOrDefault(PricingTier.FREE.retentionDays)
         }
         return retentionByOrg
     }
@@ -77,11 +84,14 @@ class RetentionPolicyService(
 
     suspend fun getLogRetentionDaysForProject(projectId: Long): Int? {
         return CacheService.cached("cache:log_retention:project:$projectId", 300) {
-            val organizationId = transaction {
-                Projects.selectAll().where { Projects.id eq projectId }
-                    .firstOrNull()
-                    ?.get(Projects.organization_id)
-            }
+            val organizationId =
+                transaction {
+                    Projects
+                        .selectAll()
+                        .where { Projects.id eq projectId }
+                        .firstOrNull()
+                        ?.get(Projects.organization_id)
+                }
             organizationId?.let { getLogRetentionDaysForOrganization(it) }
         }
     }
@@ -92,9 +102,10 @@ class RetentionPolicyService(
 
         val logRetentionByOrg = LinkedHashMap<Int, Int>(orgIds.size)
         for (orgId in orgIds) {
-            logRetentionByOrg[orgId] = runCatching {
-                getLogRetentionDaysForOrganization(orgId)
-            }.getOrDefault(3) // Default to FREE tier log retention (3 days)
+            logRetentionByOrg[orgId] =
+                runCatching {
+                    getLogRetentionDaysForOrganization(orgId)
+                }.getOrDefault(3) // Default to FREE tier log retention (3 days)
         }
         return logRetentionByOrg
     }

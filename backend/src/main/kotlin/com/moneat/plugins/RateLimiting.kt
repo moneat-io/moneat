@@ -38,12 +38,24 @@ fun Application.configureRateLimiting() {
         }
         register(RateLimitName("api")) {
             requestKey { call ->
-                val principal = call.principal<JWTPrincipal>()
-                    ?: call.principal<AuthTokenPrincipal>()
+                val principal =
+                    call.principal<JWTPrincipal>()
+                        ?: call.principal<AuthTokenPrincipal>()
                 when (principal) {
-                    is JWTPrincipal -> principal.payload.getClaim("userId").asInt().toString()
-                    is AuthTokenPrincipal -> principal.userId.toString()
-                    else -> "anon"
+                    is JWTPrincipal -> {
+                        principal.payload
+                            .getClaim("userId")
+                            .asInt()
+                            .toString()
+                    }
+
+                    is AuthTokenPrincipal -> {
+                        principal.userId.toString()
+                    }
+
+                    else -> {
+                        "anon"
+                    }
                 }
             }
             rateLimiter(limit = 30, refillPeriod = 1.seconds)

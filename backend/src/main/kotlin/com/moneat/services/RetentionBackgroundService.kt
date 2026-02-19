@@ -31,15 +31,21 @@ class RetentionBackgroundService(
 ) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val config = ApplicationConfig("application.conf")
-    private val enabled = config.propertyOrNull("retention.backgroundJobsEnabled")
-        ?.getString()
-        ?.toBooleanStrictOrNull() ?: true
-    private val sweepIntervalSeconds = config.propertyOrNull("retention.sweepIntervalSeconds")
-        ?.getString()
-        ?.toLongOrNull() ?: 3600L
-    private val idChunkSize = config.propertyOrNull("retention.idChunkSize")
-        ?.getString()
-        ?.toIntOrNull() ?: 500
+    private val enabled =
+        config
+            .propertyOrNull("retention.backgroundJobsEnabled")
+            ?.getString()
+            ?.toBooleanStrictOrNull() ?: true
+    private val sweepIntervalSeconds =
+        config
+            .propertyOrNull("retention.sweepIntervalSeconds")
+            ?.getString()
+            ?.toLongOrNull() ?: 3600L
+    private val idChunkSize =
+        config
+            .propertyOrNull("retention.idChunkSize")
+            ?.getString()
+            ?.toIntOrNull() ?: 500
 
     private var sweepJob: Job? = null
 
@@ -49,16 +55,17 @@ class RetentionBackgroundService(
             return
         }
 
-        sweepJob = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                try {
-                    runSweep()
-                } catch (e: Exception) {
-                    logger.error(e) { "Retention sweep failed" }
+        sweepJob =
+            scope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    try {
+                        runSweep()
+                    } catch (e: Exception) {
+                        logger.error(e) { "Retention sweep failed" }
+                    }
+                    delay(sweepIntervalSeconds * 1000L)
                 }
-                delay(sweepIntervalSeconds * 1000L)
             }
-        }
     }
 
     fun stop() {
@@ -74,11 +81,13 @@ class RetentionBackgroundService(
             return
         }
 
-        val projectsByOrg = transaction {
-            Projects.selectAll()
-                .groupBy { it[Projects.organization_id] }
-                .mapValues { (_, rows) -> rows.map { it[Projects.id] } }
-        }
+        val projectsByOrg =
+            transaction {
+                Projects
+                    .selectAll()
+                    .groupBy { it[Projects.organization_id] }
+                    .mapValues { (_, rows) -> rows.map { it[Projects.id] } }
+            }
 
         var tableMutationCount = 0
         var orgGroupCount = 0
@@ -106,28 +115,33 @@ class RetentionBackgroundService(
         }
     }
 
-    private suspend fun submitProjectScopedDeletes(projectIds: List<Long>, retentionDays: Int): Int {
+    private suspend fun submitProjectScopedDeletes(
+        projectIds: List<Long>,
+        retentionDays: Int
+    ): Int {
         if (projectIds.isEmpty()) return 0
 
-        val tables = listOf(
-            "events" to "timestamp",
-            "spans" to "start_timestamp",
-            "sessions" to "started",
-            "replay_events" to "timestamp",
-            "replay_segments" to "timestamp",
-            "user_feedback" to "timestamp",
-            "issues" to "last_seen"
-        )
+        val tables =
+            listOf(
+                "events" to "timestamp",
+                "spans" to "start_timestamp",
+                "sessions" to "started",
+                "replay_events" to "timestamp",
+                "replay_segments" to "timestamp",
+                "user_feedback" to "timestamp",
+                "issues" to "last_seen"
+            )
 
         var mutations = 0
         for (chunk in projectIds.chunked(idChunkSize)) {
             val projectList = chunk.joinToString(",")
             for ((table, timeColumn) in tables) {
-                val query = """
+                val query =
+                    """
                     ALTER TABLE $clickhouseDb.$table
                     DELETE WHERE project_id IN ($projectList)
                         AND $timeColumn < now() - INTERVAL $retentionDays DAY
-                """.trimIndent()
+                    """.trimIndent()
                 if (submitMutation(query, "$table(project)")) {
                     mutations++
                 }
@@ -136,23 +150,28 @@ class RetentionBackgroundService(
         return mutations
     }
 
-    private suspend fun submitOrgScopedDeletes(orgIds: List<Int>, retentionDays: Int): Int {
+    private suspend fun submitOrgScopedDeletes(
+        orgIds: List<Int>,
+        retentionDays: Int
+    ): Int {
         if (orgIds.isEmpty()) return 0
 
-        val tables = listOf(
-            "system_metrics" to "timestamp",
-            "container_metrics" to "timestamp"
-        )
+        val tables =
+            listOf(
+                "system_metrics" to "timestamp",
+                "container_metrics" to "timestamp"
+            )
 
         var mutations = 0
         for (chunk in orgIds.chunked(idChunkSize)) {
             val orgList = chunk.joinToString(",")
             for ((table, timeColumn) in tables) {
-                val query = """
+                val query =
+                    """
                     ALTER TABLE $clickhouseDb.$table
                     DELETE WHERE org_id IN ($orgList)
                         AND $timeColumn < now() - INTERVAL $retentionDays DAY
-                """.trimIndent()
+                    """.trimIndent()
                 if (submitMutation(query, "$table(org)")) {
                     mutations++
                 }
@@ -161,17 +180,21 @@ class RetentionBackgroundService(
         return mutations
     }
 
-    private suspend fun submitLogDeletes(projectIds: List<Long>, logRetentionDays: Int): Int {
+    private suspend fun submitLogDeletes(
+        projectIds: List<Long>,
+        logRetentionDays: Int
+    ): Int {
         if (projectIds.isEmpty()) return 0
 
         var mutations = 0
         for (chunk in projectIds.chunked(idChunkSize)) {
             val projectList = chunk.joinToString(",")
-            val query = """
+            val query =
+                """
                 ALTER TABLE $clickhouseDb.logs
                 DELETE WHERE project_id IN ($projectList)
                     AND timestamp < now() - INTERVAL $logRetentionDays DAY
-            """.trimIndent()
+                """.trimIndent()
             if (submitMutation(query, "logs(project)")) {
                 mutations++
             }
@@ -179,7 +202,10 @@ class RetentionBackgroundService(
         return mutations
     }
 
-    private suspend fun submitMutation(query: String, label: String): Boolean {
+    private suspend fun submitMutation(
+        query: String,
+        label: String
+    ): Boolean {
         return try {
             val response = ClickHouseClient.execute(query)
             if (response.status.value !in 200..299) {

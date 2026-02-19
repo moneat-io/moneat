@@ -44,9 +44,10 @@ class LlmIngestionWorker(
 
     fun start() {
         logger.info { "Starting LlmIngestionWorker with $workerCount workers, queue=$queueKey" }
-        jobs = (1..workerCount).map { id ->
-            scope.launch { runWorker(id) }
-        }
+        jobs =
+            (1..workerCount).map { id ->
+                scope.launch { runWorker(id) }
+            }
     }
 
     fun stop() {
@@ -86,22 +87,26 @@ class LlmIngestionWorker(
         }
     }
 
-    suspend fun insertGenerations(projectId: Long, generations: List<LlmGenerationIngest>) {
+    suspend fun insertGenerations(
+        projectId: Long,
+        generations: List<LlmGenerationIngest>
+    ) {
         if (generations.isEmpty()) return
 
-        val rows = generations.mapNotNull { gen ->
-            try {
-                val generationId = UUID.randomUUID().toString()
-                val timestampMs = parseTimestampMs(gen.timestamp)
-                val totalTokens = gen.inputTokens + gen.outputTokens
-                val typeValue = mapType(gen.type)
-                val statusValue = if (gen.status == "error") "error" else "success"
-                val inputStr = gen.input?.toString() ?: ""
-                val outputStr = gen.output?.toString() ?: ""
-                val metadataStr = gen.metadata?.toString() ?: "{}"
-                val tags = tagsToMap(gen.tags)
+        val rows =
+            generations.mapNotNull { gen ->
+                try {
+                    val generationId = UUID.randomUUID().toString()
+                    val timestampMs = parseTimestampMs(gen.timestamp)
+                    val totalTokens = gen.inputTokens + gen.outputTokens
+                    val typeValue = mapType(gen.type)
+                    val statusValue = if (gen.status == "error") "error" else "success"
+                    val inputStr = gen.input?.toString() ?: ""
+                    val outputStr = gen.output?.toString() ?: ""
+                    val metadataStr = gen.metadata?.toString() ?: "{}"
+                    val tags = tagsToMap(gen.tags)
 
-                """(
+                    """(
                     toUUID('$generationId'),
                     $projectId,
                     '${esc(gen.traceId)}',
@@ -132,16 +137,17 @@ class LlmIngestionWorker(
                     $tags,
                     '${esc(metadataStr)}'
                 )
-                """.trimIndent()
-            } catch (e: Exception) {
-                logger.warn(e) { "Failed to build row for LLM generation" }
-                null
+                    """.trimIndent()
+                } catch (e: Exception) {
+                    logger.warn(e) { "Failed to build row for LLM generation" }
+                    null
+                }
             }
-        }
 
         if (rows.isEmpty()) return
 
-        val query = """
+        val query =
+            """
             INSERT INTO $clickhouseDb.llm_generations (
                 generation_id, project_id, trace_id, span_id, parent_span_id,
                 timestamp, duration_ms, name, model, provider, type,
@@ -151,7 +157,7 @@ class LlmIngestionWorker(
                 user_id, session_id, environment, release, tags, metadata
             ) VALUES
             ${rows.joinToString(",\n")}
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         if (!response.status.isSuccess()) {
@@ -198,19 +204,23 @@ class LlmIngestionWorker(
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
             if (bytes.size < 8) throw IllegalArgumentException("Message too short")
-            val projectId = ((bytes[0].toLong() and 0xFF) shl 56) or
-                ((bytes[1].toLong() and 0xFF) shl 48) or
-                ((bytes[2].toLong() and 0xFF) shl 40) or
-                ((bytes[3].toLong() and 0xFF) shl 32) or
-                ((bytes[4].toLong() and 0xFF) shl 24) or
-                ((bytes[5].toLong() and 0xFF) shl 16) or
-                ((bytes[6].toLong() and 0xFF) shl 8) or
-                (bytes[7].toLong() and 0xFF)
+            val projectId =
+                ((bytes[0].toLong() and 0xFF) shl 56) or
+                    ((bytes[1].toLong() and 0xFF) shl 48) or
+                    ((bytes[2].toLong() and 0xFF) shl 40) or
+                    ((bytes[3].toLong() and 0xFF) shl 32) or
+                    ((bytes[4].toLong() and 0xFF) shl 24) or
+                    ((bytes[5].toLong() and 0xFF) shl 16) or
+                    ((bytes[6].toLong() and 0xFF) shl 8) or
+                    (bytes[7].toLong() and 0xFF)
             val payloadBytes = bytes.copyOfRange(8, bytes.size)
             return projectId to payloadBytes
         }
 
-        fun encodeMessage(projectId: Long, payloadBytes: ByteArray): String {
+        fun encodeMessage(
+            projectId: Long,
+            payloadBytes: ByteArray
+        ): String {
             val bytes = ByteArray(8 + payloadBytes.size)
             bytes[0] = (projectId shr 56).toByte()
             bytes[1] = (projectId shr 48).toByte()

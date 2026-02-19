@@ -211,7 +211,10 @@ class AdminService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val usageTracker = UsageTrackingService.instance
 
-    private fun applyUserSearchFilter(query: Query, search: String?): Query {
+    private fun applyUserSearchFilter(
+        query: Query,
+        search: String?
+    ): Query {
         if (search.isNullOrBlank()) return query
         val searchPattern = "%${search.trim().lowercase()}%"
         return query.where {
@@ -219,6 +222,7 @@ class AdminService {
                 ((Users.name.isNotNull()) and (Users.name.lowerCase() like searchPattern))
         }
     }
+
     private val pricingTierService = PricingTierService()
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -226,34 +230,45 @@ class AdminService {
 
     suspend fun getOverviewStats(): AdminOverviewStats {
         usageTracker.flushBuffer()
-        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
+        val today =
+            Clock.System
+                .now()
+                .toLocalDateTime(TimeZone.UTC)
+                .date
 
-        val (totalOrgs, totalUsers, subsByPlan) = transaction {
-            val orgs = Organizations.selectAll().count().toInt()
-            val users = Users.selectAll().count().toInt()
-            val subs = Subscriptions.selectAll().where { Subscriptions.status eq "active" }
-                .map { it[Subscriptions.plan].lowercase() }
-                .groupingBy { it }
-                .eachCount()
-            Triple(orgs, users, subs)
-        }
+        val (totalOrgs, totalUsers, subsByPlan) =
+            transaction {
+                val orgs = Organizations.selectAll().count().toInt()
+                val users = Users.selectAll().count().toInt()
+                val subs =
+                    Subscriptions
+                        .selectAll()
+                        .where { Subscriptions.status eq "active" }
+                        .map { it[Subscriptions.plan].lowercase() }
+                        .groupingBy { it }
+                        .eachCount()
+                Triple(orgs, users, subs)
+            }
 
-        val (allTimeEvents, last30Events, eventsTimeline) = queryClickHouseEvents(
-            today.minus(365, DateTimeUnit.DAY),
-            today
-        )
+        val (allTimeEvents, last30Events, eventsTimeline) =
+            queryClickHouseEvents(
+                today.minus(365, DateTimeUnit.DAY),
+                today
+            )
 
-        val mrr = transaction {
-            Subscriptions.selectAll().where { Subscriptions.status eq "active" }
-                .mapNotNull { row ->
-                    when (row[Subscriptions.plan].lowercase()) {
-                        "pro" -> 19.0
-                        "team" -> 49.0
-                        else -> null
-                    }
-                }
-                .sum()
-        }
+        val mrr =
+            transaction {
+                Subscriptions
+                    .selectAll()
+                    .where { Subscriptions.status eq "active" }
+                    .mapNotNull { row ->
+                        when (row[Subscriptions.plan].lowercase()) {
+                            "pro" -> 19.0
+                            "team" -> 49.0
+                            else -> null
+                        }
+                    }.sum()
+            }
 
         return AdminOverviewStats(
             totalOrganizations = totalOrgs,
@@ -266,40 +281,65 @@ class AdminService {
         )
     }
 
-    fun getAllOrganizations(page: Int, limit: Int): List<AdminOrgSummary> {
+    fun getAllOrganizations(
+        page: Int,
+        limit: Int
+    ): List<AdminOrgSummary> {
         usageTracker.flushBuffer()
-        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
+        val today =
+            Clock.System
+                .now()
+                .toLocalDateTime(TimeZone.UTC)
+                .date
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
-            val orgs = Organizations
-                .selectAll()
-                .limit(limit).offset((page - 1) * limit.toLong())
-                .toList()
+            val orgs =
+                Organizations
+                    .selectAll()
+                    .limit(limit)
+                    .offset((page - 1) * limit.toLong())
+                    .toList()
 
             orgs.map { row ->
                 val orgId = row[Organizations.id]
-                val plan = Subscriptions.selectAll()
-                    .where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
-                    .orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-                    ?.get(Subscriptions.plan)
-                    ?.lowercase() ?: "free"
-                val projectCount = Projects.selectAll().where { Projects.organization_id eq orgId }.count().toInt()
-                val memberCount = Memberships.selectAll().where { Memberships.organization_id eq orgId }.count().toInt()
-                val usageRows = UsageRecords.selectAll().where {
-                    (UsageRecords.organization_id eq orgId) and
-                        (UsageRecords.recordDate greaterEq monthStart) and
-                        (UsageRecords.recordDate lessEq today)
-                }.toList()
+                val plan =
+                    Subscriptions
+                        .selectAll()
+                        .where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+                        .orderBy(Subscriptions.id to SortOrder.DESC)
+                        .firstOrNull()
+                        ?.get(Subscriptions.plan)
+                        ?.lowercase() ?: "free"
+                val projectCount =
+                    Projects
+                        .selectAll()
+                        .where { Projects.organization_id eq orgId }
+                        .count()
+                        .toInt()
+                val memberCount =
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.organization_id eq orgId }
+                        .count()
+                        .toInt()
+                val usageRows =
+                    UsageRecords
+                        .selectAll()
+                        .where {
+                            (UsageRecords.organization_id eq orgId) and
+                                (UsageRecords.recordDate greaterEq monthStart) and
+                                (UsageRecords.recordDate lessEq today)
+                        }.toList()
                 val usage = usageRows.sumOf { it[UsageRecords.event_count].toLong() }
                 val bytesCount = usageRows.sumOf { it[UsageRecords.bytes_ingested] }
                 val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
-                val quotaPct = when {
-                    tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
-                    tier.monthlyUnitLimit > 0 -> (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
-                    else -> null
-                }
+                val quotaPct =
+                    when {
+                        tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
+                        tier.monthlyUnitLimit > 0 -> (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
+                        else -> null
+                    }
 
                 AdminOrgSummary(
                     id = orgId,
@@ -318,54 +358,73 @@ class AdminService {
 
     fun getOrgDetail(orgId: Int): AdminOrgDetail? {
         usageTracker.flushBuffer()
-        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
+        val today =
+            Clock.System
+                .now()
+                .toLocalDateTime(TimeZone.UTC)
+                .date
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
             val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@transaction null
-            val sub = Subscriptions.selectAll().where {
-                (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
-            }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
+            val sub =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
+                    }.orderBy(Subscriptions.id to SortOrder.DESC)
+                    .firstOrNull()
             val plan = sub?.get(Subscriptions.plan)?.lowercase() ?: "free"
             val subStatus = sub?.get(Subscriptions.status)
-            val memberCount = Memberships.selectAll().where { Memberships.organization_id eq orgId }.count().toInt()
+            val memberCount =
+                Memberships
+                    .selectAll()
+                    .where { Memberships.organization_id eq orgId }
+                    .count()
+                    .toInt()
             val projects = Projects.selectAll().where { Projects.organization_id eq orgId }.toList()
-            val usageRows = UsageRecords.selectAll().where {
-                (UsageRecords.organization_id eq orgId) and
-                    (UsageRecords.recordDate greaterEq monthStart) and
-                    (UsageRecords.recordDate lessEq today)
-            }.toList()
+            val usageRows =
+                UsageRecords
+                    .selectAll()
+                    .where {
+                        (UsageRecords.organization_id eq orgId) and
+                            (UsageRecords.recordDate greaterEq monthStart) and
+                            (UsageRecords.recordDate lessEq today)
+                    }.toList()
             val eventCount = usageRows.sumOf { it[UsageRecords.event_count].toLong() }
             val bytesCount = usageRows.sumOf { it[UsageRecords.bytes_ingested] }
             val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
-            val quotaPct = when {
-                tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
-                tier.monthlyUnitLimit > 0 -> (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
-                else -> null
-            }
-
-            val membersList = Memberships.selectAll().where { Memberships.organization_id eq orgId }
-                .mapNotNull { mRow ->
-                    val u = Users.selectAll().where { Users.id eq mRow[Memberships.user_id] }.firstOrNull() ?: return@mapNotNull null
-                    AdminOrgMember(
-                        userId = u[Users.id],
-                        email = u[Users.email],
-                        name = u[Users.name],
-                        role = mRow[Memberships.role]
-                    )
+            val quotaPct =
+                when {
+                    tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
+                    tier.monthlyUnitLimit > 0 -> (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
+                    else -> null
                 }
-                .let { listOf(*it.toTypedArray()) }
 
-            val projectsList = projects.map { p ->
-                AdminOrgProject(
-                    id = p[Projects.id],
-                    name = p[Projects.name],
-                    slug = p[Projects.slug],
-                    framework = p[Projects.framework]
-                )
-            }.let { listOf(*it.toTypedArray()) }
+            val membersList =
+                Memberships
+                    .selectAll()
+                    .where { Memberships.organization_id eq orgId }
+                    .mapNotNull { mRow ->
+                        val u = Users.selectAll().where { Users.id eq mRow[Memberships.user_id] }.firstOrNull() ?: return@mapNotNull null
+                        AdminOrgMember(
+                            userId = u[Users.id],
+                            email = u[Users.email],
+                            name = u[Users.name],
+                            role = mRow[Memberships.role]
+                        )
+                    }.let { listOf(*it.toTypedArray()) }
+
+            val projectsList =
+                projects
+                    .map { p ->
+                        AdminOrgProject(
+                            id = p[Projects.id],
+                            name = p[Projects.name],
+                            slug = p[Projects.slug],
+                            framework = p[Projects.framework]
+                        )
+                    }.let { listOf(*it.toTypedArray()) }
 
             AdminOrgDetail(
                 id = orgId,
@@ -387,36 +446,46 @@ class AdminService {
 
     fun getUsageBreakdown(period: String): AdminUsageBreakdown {
         usageTracker.flushBuffer()
-        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
-        val daysBack = when (period) {
-            "24h" -> 0
-            "7d" -> 6
-            "30d" -> 29
-            else -> 6
-        }
+        val today =
+            Clock.System
+                .now()
+                .toLocalDateTime(TimeZone.UTC)
+                .date
+        val daysBack =
+            when (period) {
+                "24h" -> 0
+                "7d" -> 6
+                "30d" -> 29
+                else -> 6
+            }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
 
         return transaction {
-            val rows = UsageRecords.selectAll().where {
-                (UsageRecords.recordDate greaterEq startDate) and
-                    (UsageRecords.recordDate lessEq today)
-            }.toList()
+            val rows =
+                UsageRecords
+                    .selectAll()
+                    .where {
+                        (UsageRecords.recordDate greaterEq startDate) and
+                            (UsageRecords.recordDate lessEq today)
+                    }.toList()
 
-            val byDate = rows.groupBy { it[UsageRecords.recordDate].toString() }
-                .mapValues { (dateStr, recs) ->
-                    val byType = recs.groupBy { it[UsageRecords.event_type] }
-                    DailyUsageByType(
-                        date = dateStr,
-                        error = byType["error"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
-                        transaction = byType["transaction"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
-                        replay = byType["replay"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
-                        feedback = byType["feedback"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
-                        log = (byType["log"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L) +
-                            (byType["logs"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L),
-                        total = recs.sumOf { it[UsageRecords.event_count].toLong() }
-                    )
-                }
-                .toSortedMap()
+            val byDate =
+                rows
+                    .groupBy { it[UsageRecords.recordDate].toString() }
+                    .mapValues { (dateStr, recs) ->
+                        val byType = recs.groupBy { it[UsageRecords.event_type] }
+                        DailyUsageByType(
+                            date = dateStr,
+                            error = byType["error"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
+                            transaction = byType["transaction"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
+                            replay = byType["replay"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
+                            feedback = byType["feedback"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
+                            log =
+                                (byType["log"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L) +
+                                    (byType["logs"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L),
+                            total = recs.sumOf { it[UsageRecords.event_count].toLong() }
+                        )
+                    }.toSortedMap()
 
             val totalBytes = rows.sumOf { it[UsageRecords.bytes_ingested] }
             AdminUsageBreakdown(
@@ -428,27 +497,37 @@ class AdminService {
 
     fun getRevenueMetrics(): AdminRevenueMetrics {
         usageTracker.flushBuffer()
-        val subsByPlan = transaction {
-            Subscriptions.selectAll().where { Subscriptions.status eq "active" }
-                .map { it[Subscriptions.plan].lowercase() }
-                .groupingBy { it }
-                .eachCount()
-        }
-        val mrr = subsByPlan.entries.sumOf { (plan, count) ->
-            when (plan) {
-                "pro" -> count * 19.0
-                "team" -> count * 49.0
-                else -> 0.0
+        val subsByPlan =
+            transaction {
+                Subscriptions
+                    .selectAll()
+                    .where { Subscriptions.status eq "active" }
+                    .map { it[Subscriptions.plan].lowercase() }
+                    .groupingBy { it }
+                    .eachCount()
             }
-        }
-        val churn = transaction {
-            Subscriptions.selectAll().where { Subscriptions.status inList listOf("canceled", "past_due") }.count().toInt()
-        }
-        val costPerPlan = mapOf(
-            "free" to 0.0,
-            "pro" to 2.0,
-            "team" to 6.0
-        )
+        val mrr =
+            subsByPlan.entries.sumOf { (plan, count) ->
+                when (plan) {
+                    "pro" -> count * 19.0
+                    "team" -> count * 49.0
+                    else -> 0.0
+                }
+            }
+        val churn =
+            transaction {
+                Subscriptions
+                    .selectAll()
+                    .where { Subscriptions.status inList listOf("canceled", "past_due") }
+                    .count()
+                    .toInt()
+            }
+        val costPerPlan =
+            mapOf(
+                "free" to 0.0,
+                "pro" to 2.0,
+                "team" to 6.0
+            )
         return AdminRevenueMetrics(
             mrr = mrr,
             subscriptionsByPlan = subsByPlan,
@@ -463,12 +542,13 @@ class AdminService {
         var totalRows = 0L
 
         try {
-            val query = """
+            val query =
+                """
                 SELECT table, sum(rows) as rows, sum(bytes_on_disk) as bytes
                 FROM system.parts
                 WHERE database = '$clickhouseDb' AND active
                 GROUP BY table
-            """.trimIndent()
+                """.trimIndent()
             val response = ClickHouseClient.execute(query)
             if (response.status.isSuccess()) {
                 val text = response.bodyAsText()
@@ -512,18 +592,25 @@ class AdminService {
 
     fun getTopConsumers(limit: Int): List<AdminTopConsumer> {
         usageTracker.flushBuffer()
-        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
+        val today =
+            Clock.System
+                .now()
+                .toLocalDateTime(TimeZone.UTC)
+                .date
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
-            val usageByOrg = UsageRecords.selectAll().where {
-                (UsageRecords.recordDate greaterEq monthStart) and
-                    (UsageRecords.recordDate lessEq today)
-            }.toList()
-                .groupBy { it[UsageRecords.organization_id] }
-                .mapValues { (_, recs) ->
-                    recs.sumOf { it[UsageRecords.event_count].toLong() } to recs.sumOf { it[UsageRecords.bytes_ingested] }
-                }
+            val usageByOrg =
+                UsageRecords
+                    .selectAll()
+                    .where {
+                        (UsageRecords.recordDate greaterEq monthStart) and
+                            (UsageRecords.recordDate lessEq today)
+                    }.toList()
+                    .groupBy { it[UsageRecords.organization_id] }
+                    .mapValues { (_, recs) ->
+                        recs.sumOf { it[UsageRecords.event_count].toLong() } to recs.sumOf { it[UsageRecords.bytes_ingested] }
+                    }
 
             usageByOrg.entries
                 .sortedByDescending { it.value.first }
@@ -531,13 +618,15 @@ class AdminService {
                 .mapNotNull { (orgId, pair) ->
                     val (events, bytes) = pair
                     val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@mapNotNull null
-                    val plan = Subscriptions.selectAll().where {
-                        (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
-                    }
-                        .orderBy(Subscriptions.id to SortOrder.DESC)
-                        .firstOrNull()
-                        ?.get(Subscriptions.plan)
-                        ?.lowercase() ?: "free"
+                    val plan =
+                        Subscriptions
+                            .selectAll()
+                            .where {
+                                (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
+                            }.orderBy(Subscriptions.id to SortOrder.DESC)
+                            .firstOrNull()
+                            ?.get(Subscriptions.plan)
+                            ?.lowercase() ?: "free"
                     AdminTopConsumer(
                         orgId = orgId,
                         orgName = org[Organizations.name],
@@ -550,71 +639,86 @@ class AdminService {
         }
     }
 
-    fun getOrgUsage(orgId: Int, period: String): List<OrgUsageSummary> {
-        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
-        val daysBack = when (period) {
-            "24h" -> 1
-            "7d" -> 7
-            "30d" -> 30
-            else -> 7
-        }
+    fun getOrgUsage(
+        orgId: Int,
+        period: String
+    ): List<OrgUsageSummary> {
+        val today =
+            Clock.System
+                .now()
+                .toLocalDateTime(TimeZone.UTC)
+                .date
+        val daysBack =
+            when (period) {
+                "24h" -> 1
+                "7d" -> 7
+                "30d" -> 30
+                else -> 7
+            }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
         return usageTracker.getUsageForOrg(orgId, startDate, today)
     }
 
     fun getEmailStats(period: String = "30d"): AdminEmailStats {
-        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
-        val daysBack = when (period) {
-            "7d" -> 7
-            "30d" -> 30
-            else -> 30
-        }
+        val today =
+            Clock.System
+                .now()
+                .toLocalDateTime(TimeZone.UTC)
+                .date
+        val daysBack =
+            when (period) {
+                "7d" -> 7
+                "30d" -> 30
+                else -> 30
+            }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
 
         return transaction {
             // Total sent all time (only successful)
-            val totalSent = EmailsSent.selectAll()
-                .where { EmailsSent.success eq true }
-                .count()
+            val totalSent =
+                EmailsSent
+                    .selectAll()
+                    .where { EmailsSent.success eq true }
+                    .count()
 
             // By type
-            val byType = EmailsSent.selectAll()
-                .where { EmailsSent.success eq true }
-                .toList()
-                .groupBy { it[EmailsSent.email_type] }
-                .mapValues { it.value.size.toLong() }
+            val byType =
+                EmailsSent
+                    .selectAll()
+                    .where { EmailsSent.success eq true }
+                    .toList()
+                    .groupBy { it[EmailsSent.email_type] }
+                    .mapValues { it.value.size.toLong() }
 
             // Timeline for last 7 days
             val last7DaysStart = today.minus(7, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
-            val last7Days = EmailsSent.selectAll()
-                .where {
-                    (EmailsSent.success eq true) and
-                        (EmailsSent.sent_at greaterEq last7DaysStart)
-                }
-                .toList()
-                .groupBy { row ->
-                    row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
-                }
-                .map { (date, emails) ->
-                    EmailTimelinePoint(date = date, count = emails.size.toLong())
-                }
-                .sortedBy { it.date }
+            val last7Days =
+                EmailsSent
+                    .selectAll()
+                    .where {
+                        (EmailsSent.success eq true) and
+                            (EmailsSent.sent_at greaterEq last7DaysStart)
+                    }.toList()
+                    .groupBy { row ->
+                        row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
+                    }.map { (date, emails) ->
+                        EmailTimelinePoint(date = date, count = emails.size.toLong())
+                    }.sortedBy { it.date }
 
             // Timeline for last 30 days
             val last30DaysStart = startDate.atStartOfDayIn(TimeZone.UTC)
-            val last30Days = EmailsSent.selectAll()
-                .where {
-                    (EmailsSent.success eq true) and
-                        (EmailsSent.sent_at greaterEq last30DaysStart)
-                }
-                .toList()
-                .groupBy { row ->
-                    row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
-                }
-                .map { (date, emails) ->
-                    EmailTimelinePoint(date = date, count = emails.size.toLong())
-                }
-                .sortedBy { it.date }
+            val last30Days =
+                EmailsSent
+                    .selectAll()
+                    .where {
+                        (EmailsSent.success eq true) and
+                            (EmailsSent.sent_at greaterEq last30DaysStart)
+                    }.toList()
+                    .groupBy { row ->
+                        row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
+                    }.map { (date, emails) ->
+                        EmailTimelinePoint(date = date, count = emails.size.toLong())
+                    }.sortedBy { it.date }
 
             // Estimate cost - AWS SES costs $0.10 per 1,000 emails
             val estimatedCost = totalSent * 0.0001
@@ -642,27 +746,33 @@ class AdminService {
             val last30Resp = ClickHouseClient.execute(last30Query)
             val last30Count = last30Resp.bodyAsText().trim().toLongOrNull() ?: 0L
 
-            val timelineQuery = """
+            val timelineQuery =
+                """
                 SELECT toDate(timestamp) as d, count() as cnt
                 FROM $clickhouseDb.events
                 WHERE timestamp >= now() - INTERVAL 30 DAY
                 GROUP BY d
                 ORDER BY d
-            """.trimIndent()
+                """.trimIndent()
             val timelineResp = ClickHouseClient.execute(timelineQuery)
-            val timeline = if (timelineResp.status.isSuccess()) {
-                timelineResp.bodyAsText().trim().split("\n").filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        val parts = line.split("\t")
-                        if (parts.size >= 2) {
-                            AdminTimelinePoint(parts[0], parts[1].toLongOrNull() ?: 0L)
-                        } else {
-                            null
+            val timeline =
+                if (timelineResp.status.isSuccess()) {
+                    timelineResp
+                        .bodyAsText()
+                        .trim()
+                        .split("\n")
+                        .filter { it.isNotBlank() }
+                        .mapNotNull { line ->
+                            val parts = line.split("\t")
+                            if (parts.size >= 2) {
+                                AdminTimelinePoint(parts[0], parts[1].toLongOrNull() ?: 0L)
+                            } else {
+                                null
+                            }
                         }
-                    }
-            } else {
-                emptyList()
-            }
+                } else {
+                    emptyList()
+                }
 
             Triple(allTime, last30Count, timeline)
         } catch (e: Exception) {
@@ -680,24 +790,31 @@ class AdminService {
         }
     }
 
-    fun getAllUsers(page: Int, limit: Int, search: String? = null): List<AdminUserSummary> {
+    fun getAllUsers(
+        page: Int,
+        limit: Int,
+        search: String? = null
+    ): List<AdminUserSummary> {
         return transaction {
-            val userRows = applyUserSearchFilter(Users.selectAll(), search)
-                .orderBy(Users.id to SortOrder.DESC)
-                .limit(limit).offset((page - 1) * limit.toLong())
-                .toList()
+            val userRows =
+                applyUserSearchFilter(Users.selectAll(), search)
+                    .orderBy(Users.id to SortOrder.DESC)
+                    .limit(limit)
+                    .offset((page - 1) * limit.toLong())
+                    .toList()
 
             val userIds = userRows.map { row -> row[Users.id] }
-            val organizationCountsByUser = if (userIds.isEmpty()) {
-                emptyMap()
-            } else {
-                Memberships
-                    .select(Memberships.user_id)
-                    .where { Memberships.user_id inList userIds }
-                    .map { row -> row[Memberships.user_id] }
-                    .groupingBy { userId -> userId }
-                    .eachCount()
-            }
+            val organizationCountsByUser =
+                if (userIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    Memberships
+                        .select(Memberships.user_id)
+                        .where { Memberships.user_id inList userIds }
+                        .map { row -> row[Memberships.user_id] }
+                        .groupingBy { userId -> userId }
+                        .eachCount()
+                }
 
             userRows.map { row ->
                 val userId = row[Users.id]
@@ -722,7 +839,10 @@ class AdminService {
         }
     }
 
-    fun updateUser(userId: Int, updates: UpdateUserRequest): Boolean {
+    fun updateUser(
+        userId: Int,
+        updates: UpdateUserRequest
+    ): Boolean {
         return transaction {
             Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 ?: return@transaction false
@@ -754,14 +874,19 @@ class AdminService {
                     }
 
                     // Find all organizations owned by this user (where they are the only member)
-                    val userOrgs = Memberships.selectAll().where { Memberships.user_id eq userId }
-                        .map { it[Memberships.organization_id] }
-                        .toSet()
+                    val userOrgs =
+                        Memberships
+                            .selectAll()
+                            .where { Memberships.user_id eq userId }
+                            .map { it[Memberships.organization_id] }
+                            .toSet()
 
                     userOrgs.forEach { orgId ->
-                        val memberCount = Memberships.selectAll()
-                            .where { Memberships.organization_id eq orgId }
-                            .count()
+                        val memberCount =
+                            Memberships
+                                .selectAll()
+                                .where { Memberships.organization_id eq orgId }
+                                .count()
 
                         // If user is the only member, delete the entire organization and related data
                         if (memberCount.toInt() == 1) {
@@ -805,8 +930,11 @@ class AdminService {
     private fun deleteOrganizationData(orgId: Int) {
         try {
             // Get all projects for this organization
-            val projectIds = Projects.selectAll().where { Projects.organization_id eq orgId }
-                .map { it[Projects.id] }
+            val projectIds =
+                Projects
+                    .selectAll()
+                    .where { Projects.organization_id eq orgId }
+                    .map { it[Projects.id] }
 
             // Delete project keys
             projectIds.forEach { projectId ->
@@ -814,8 +942,11 @@ class AdminService {
             }
 
             // Get all release IDs for these projects
-            val releaseIds = Releases.selectAll().where { Releases.project_id inList projectIds }
-                .map { it[Releases.id] }
+            val releaseIds =
+                Releases
+                    .selectAll()
+                    .where { Releases.project_id inList projectIds }
+                    .map { it[Releases.id] }
 
             // Delete release files
             releaseIds.forEach { releaseId ->
@@ -861,8 +992,11 @@ class AdminService {
             OrganizationAlertTemplates.deleteWhere { OrganizationAlertTemplates.organization_id eq orgId }
 
             // Delete systems
-            val systemIds = Systems.selectAll().where { Systems.organization_id eq orgId }
-                .map { it[Systems.id] }
+            val systemIds =
+                Systems
+                    .selectAll()
+                    .where { Systems.organization_id eq orgId }
+                    .map { it[Systems.id] }
 
             // Delete system alerts (through system relationship)
             systemIds.forEach { systemId ->

@@ -68,9 +68,10 @@ class UsageTrackingService {
     private val buffer = ConcurrentHashMap<String, Pair<AtomicInteger, java.util.concurrent.atomic.AtomicLong>>()
     private val flushThreshold = 100
     private val flushIntervalMs = 10_000L
-    private val scheduler = Executors.newSingleThreadScheduledExecutor { r ->
-        Thread(r, "usage-tracking-flush").apply { isDaemon = true }
-    }
+    private val scheduler =
+        Executors.newSingleThreadScheduledExecutor { r ->
+            Thread(r, "usage-tracking-flush").apply { isDaemon = true }
+        }
     private val billingQuotaService = BillingQuotaService()
     private val orgIdCache = ConcurrentHashMap<Long, Int?>()
 
@@ -87,14 +88,21 @@ class UsageTrackingService {
      * Record usage. Buffered and flushed periodically or when threshold is reached.
      * projectId must be the project that received the event.
      */
-    fun recordUsage(projectId: Long, eventType: String, byteSize: Int = 0) {
+    fun recordUsage(
+        projectId: Long,
+        eventType: String,
+        byteSize: Int = 0
+    ) {
         val orgId = getOrganizationId(projectId) ?: return
         val today = Clock.System.todayIn(TimeZone.UTC)
         val key = "$orgId|$projectId|$eventType|$today"
 
         buffer.compute(key) { _, pair ->
             if (pair == null) {
-                Pair(AtomicInteger(1), java.util.concurrent.atomic.AtomicLong(byteSize.toLong()))
+                Pair(AtomicInteger(1),
+                    java.util.concurrent.atomic
+                        .AtomicLong(byteSize.toLong())
+                )
             } else {
                 pair.first.incrementAndGet()
                 pair.second.addAndGet(byteSize.toLong())
@@ -110,7 +118,8 @@ class UsageTrackingService {
     private fun getOrganizationId(projectId: Long): Int? {
         return orgIdCache.getOrPut(projectId) {
             transaction {
-                Projects.select(Projects.organization_id)
+                Projects
+                    .select(Projects.organization_id)
                     .where { Projects.id eq projectId }
                     .firstOrNull()
                     ?.get(Projects.organization_id)
@@ -122,20 +131,21 @@ class UsageTrackingService {
         if (buffer.isEmpty()) return
 
         val toFlush = buffer.keys.toList()
-        val records = toFlush.mapNotNull { key ->
-            val pair = buffer.remove(key) ?: return@mapNotNull null
-            val parts = key.split("|")
-            if (parts.size != 4) return@mapNotNull null
-            val (orgId, projectId, eventType, dateStr) = parts
-            UsageRecord(
-                organizationId = orgId.toIntOrNull() ?: return@mapNotNull null,
-                projectId = projectId.toLongOrNull() ?: return@mapNotNull null,
-                eventType = eventType,
-                recordDate = kotlinx.datetime.LocalDate.parse(dateStr),
-                eventCount = pair.first.get(),
-                bytesIngested = pair.second.get()
-            )
-        }
+        val records =
+            toFlush.mapNotNull { key ->
+                val pair = buffer.remove(key) ?: return@mapNotNull null
+                val parts = key.split("|")
+                if (parts.size != 4) return@mapNotNull null
+                val (orgId, projectId, eventType, dateStr) = parts
+                UsageRecord(
+                    organizationId = orgId.toIntOrNull() ?: return@mapNotNull null,
+                    projectId = projectId.toLongOrNull() ?: return@mapNotNull null,
+                    eventType = eventType,
+                    recordDate = kotlinx.datetime.LocalDate.parse(dateStr),
+                    eventCount = pair.first.get(),
+                    bytesIngested = pair.second.get()
+                )
+            }
 
         if (records.isEmpty()) return
 
@@ -150,12 +160,15 @@ class UsageTrackingService {
 
     private fun upsertUsage(rec: UsageRecord) {
         val projectIdInt = rec.projectId.toInt()
-        val existing = UsageRecords.selectAll().where {
-            (UsageRecords.organization_id eq rec.organizationId) and
-                (UsageRecords.project_id eq projectIdInt) and
-                (UsageRecords.recordDate eq rec.recordDate) and
-                (UsageRecords.event_type eq rec.eventType)
-        }.firstOrNull()
+        val existing =
+            UsageRecords
+                .selectAll()
+                .where {
+                    (UsageRecords.organization_id eq rec.organizationId) and
+                        (UsageRecords.project_id eq projectIdInt) and
+                        (UsageRecords.recordDate eq rec.recordDate) and
+                        (UsageRecords.event_type eq rec.eventType)
+                }.firstOrNull()
 
         if (existing != null) {
             UsageRecords.update({
@@ -179,14 +192,20 @@ class UsageTrackingService {
         }
     }
 
-    fun getUsageForOrg(orgId: Int, startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): List<OrgUsageSummary> {
+    fun getUsageForOrg(
+        orgId: Int,
+        startDate: kotlinx.datetime.LocalDate,
+        endDate: kotlinx.datetime.LocalDate
+    ): List<OrgUsageSummary> {
         flushBuffer()
         return transaction {
-            UsageRecords.selectAll().where {
-                (UsageRecords.organization_id eq orgId) and
-                    (UsageRecords.recordDate greaterEq startDate) and
-                    (UsageRecords.recordDate lessEq endDate)
-            }.groupBy { it[UsageRecords.recordDate] to it[UsageRecords.event_type] }
+            UsageRecords
+                .selectAll()
+                .where {
+                    (UsageRecords.organization_id eq orgId) and
+                        (UsageRecords.recordDate greaterEq startDate) and
+                        (UsageRecords.recordDate lessEq endDate)
+                }.groupBy { it[UsageRecords.recordDate] to it[UsageRecords.event_type] }
                 .map { (key, rows) ->
                     OrgUsageSummary(
                         date = key.first,
@@ -194,19 +213,24 @@ class UsageTrackingService {
                         eventCount = rows.sumOf { it[UsageRecords.event_count] },
                         bytesIngested = rows.sumOf { it[UsageRecords.bytes_ingested] }
                     )
-                }
-                .sortedWith(compareBy<OrgUsageSummary> { it.date }.thenBy { it.eventType })
+                }.sortedWith(compareBy<OrgUsageSummary> { it.date }.thenBy { it.eventType })
         }
     }
 
-    fun getTotalBytesForOrg(orgId: Int, startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): Long {
+    fun getTotalBytesForOrg(
+        orgId: Int,
+        startDate: kotlinx.datetime.LocalDate,
+        endDate: kotlinx.datetime.LocalDate
+    ): Long {
         flushBuffer()
         return transaction {
-            UsageRecords.selectAll().where {
-                (UsageRecords.organization_id eq orgId) and
-                    (UsageRecords.recordDate greaterEq startDate) and
-                    (UsageRecords.recordDate lessEq endDate)
-            }.sumOf { it[UsageRecords.bytes_ingested] }
+            UsageRecords
+                .selectAll()
+                .where {
+                    (UsageRecords.organization_id eq orgId) and
+                        (UsageRecords.recordDate greaterEq startDate) and
+                        (UsageRecords.recordDate lessEq endDate)
+                }.sumOf { it[UsageRecords.bytes_ingested] }
         }
     }
 
@@ -218,16 +242,19 @@ class UsageTrackingService {
     ): Long {
         flushBuffer()
         return transaction {
-            UsageRecords.selectAll().where {
-                val baseFilter = (UsageRecords.organization_id eq orgId) and
-                    (UsageRecords.recordDate greaterEq startDate) and
-                    (UsageRecords.recordDate lessEq endDate)
-                if (eventTypes.isNotEmpty()) {
-                    baseFilter and (UsageRecords.event_type inList eventTypes)
-                } else {
-                    baseFilter
-                }
-            }.sumOf { it[UsageRecords.event_count].toLong() }
+            UsageRecords
+                .selectAll()
+                .where {
+                    val baseFilter =
+                        (UsageRecords.organization_id eq orgId) and
+                            (UsageRecords.recordDate greaterEq startDate) and
+                            (UsageRecords.recordDate lessEq endDate)
+                    if (eventTypes.isNotEmpty()) {
+                        baseFilter and (UsageRecords.event_type inList eventTypes)
+                    } else {
+                        baseFilter
+                    }
+                }.sumOf { it[UsageRecords.event_count].toLong() }
         }
     }
 
@@ -243,7 +270,9 @@ class UsageTrackingService {
 
     private fun getPlanForOrg(orgId: Int): String {
         return transaction {
-            Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+            Subscriptions
+                .selectAll()
+                .where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
                 ?.get(Subscriptions.plan)
@@ -253,11 +282,13 @@ class UsageTrackingService {
 
     private fun getBillingPeriod(orgId: Int): Pair<kotlinx.datetime.LocalDate, kotlinx.datetime.LocalDate> {
         return transaction {
-            val sub = Subscriptions.selectAll().where {
-                (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
-            }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
+            val sub =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
+                    }.orderBy(Subscriptions.id to SortOrder.DESC)
+                    .firstOrNull()
             val startTs = sub?.get(Subscriptions.current_period_start)
             val endTs = sub?.get(Subscriptions.current_period_end)
             if (startTs != null && endTs != null) {

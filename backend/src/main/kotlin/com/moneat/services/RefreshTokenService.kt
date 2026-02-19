@@ -38,7 +38,9 @@ data class RefreshTokenResponse(
 )
 
 class RefreshTokenService {
-    private val config = io.ktor.server.config.ApplicationConfig("application.conf")
+    private val config =
+        io.ktor.server.config
+            .ApplicationConfig("application.conf")
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
@@ -65,7 +67,12 @@ class RefreshTokenService {
     /**
      * Generate a new refresh token for a user
      */
-    fun generateRefreshToken(userId: Int, email: String, orgId: Int, orgRole: String): RefreshTokenResponse {
+    fun generateRefreshToken(
+        userId: Int,
+        email: String,
+        orgId: Int,
+        orgRole: String
+    ): RefreshTokenResponse {
         val refreshToken = generateRandomToken()
         val tokenHash = hashToken(refreshToken)
         val now = System.currentTimeMillis()
@@ -99,11 +106,12 @@ class RefreshTokenService {
 
         return transaction {
             // Find the refresh token
-            val tokenRow = RefreshTokens
-                .selectAll()
-                .where { (RefreshTokens.token_hash eq tokenHash) and (RefreshTokens.revoked eq false) }
-                .firstOrNull()
-                ?: return@transaction null
+            val tokenRow =
+                RefreshTokens
+                    .selectAll()
+                    .where { (RefreshTokens.token_hash eq tokenHash) and (RefreshTokens.revoked eq false) }
+                    .firstOrNull()
+                    ?: return@transaction null
 
             val expiresAt = tokenRow[RefreshTokens.expires_at]
             val userId = tokenRow[RefreshTokens.user_id]
@@ -114,15 +122,18 @@ class RefreshTokenService {
             }
 
             // Get user email and membership (SECURITY: Never trust client-supplied orgId/orgRole)
-            val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                ?: return@transaction null
+            val user =
+                Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                    ?: return@transaction null
             val email = user[Users.email]
 
             // Get user's actual organization membership from database
-            val membership = com.moneat.models.Memberships.selectAll()
-                .where { com.moneat.models.Memberships.user_id eq userId }
-                .firstOrNull()
-                ?: return@transaction null
+            val membership =
+                com.moneat.models.Memberships
+                    .selectAll()
+                    .where { com.moneat.models.Memberships.user_id eq userId }
+                    .firstOrNull()
+                    ?: return@transaction null
 
             val orgId = membership[com.moneat.models.Memberships.organization_id]
             val orgRole = membership[com.moneat.models.Memberships.role]
@@ -164,19 +175,27 @@ class RefreshTokenService {
     /**
      * Generate a JWT access token
      */
-    private fun generateAccessToken(userId: Int, email: String, orgId: Int, orgRole: String): String {
-        val isDemoIdentity = userId.toLong() == EnvConfig.Demo.USER_ID ||
-            email.equals(EnvConfig.Demo.USER_EMAIL, ignoreCase = true)
+    private fun generateAccessToken(
+        userId: Int,
+        email: String,
+        orgId: Int,
+        orgRole: String
+    ): String {
+        val isDemoIdentity =
+            userId.toLong() == EnvConfig.Demo.USER_ID ||
+                email.equals(EnvConfig.Demo.USER_EMAIL, ignoreCase = true)
         val effectiveRole = if (isDemoIdentity) "viewer" else orgRole
 
-        val jwtBuilder = JWT.create()
-            .withAudience(jwtAudience)
-            .withIssuer(jwtIssuer)
-            .withClaim("userId", userId)
-            .withClaim("email", email)
-            .withClaim("orgId", orgId)
-            .withClaim("orgRole", effectiveRole)
-            .withExpiresAt(Date(System.currentTimeMillis() + (ACCESS_TOKEN_EXPIRY_HOURS * 3600000)))
+        val jwtBuilder =
+            JWT
+                .create()
+                .withAudience(jwtAudience)
+                .withIssuer(jwtIssuer)
+                .withClaim("userId", userId)
+                .withClaim("email", email)
+                .withClaim("orgId", orgId)
+                .withClaim("orgRole", effectiveRole)
+                .withExpiresAt(Date(System.currentTimeMillis() + (ACCESS_TOKEN_EXPIRY_HOURS * 3600000)))
 
         if (isDemoIdentity) {
             jwtBuilder

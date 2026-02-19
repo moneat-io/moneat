@@ -44,7 +44,8 @@ fun main(args: Array<String>) {
     FeatureRegistry.initialize()
 
     // Initialize Sentry for error monitoring (points to Moneat via SENTRY_DSN)
-    com.moneat.config.SentryConfig.initialize()
+    com.moneat.config.SentryConfig
+        .initialize()
 
     EngineMain.main(args)
 }

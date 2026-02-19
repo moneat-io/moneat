@@ -65,23 +65,31 @@ class AlertNotificationPreferencesServiceTest {
         }
     }
 
-    private fun seedOrg(name: String = "Test Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Test Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun seedUser(email: String, verified: Boolean = true): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[password_hash] = "hash"
-            it[Users.name] = email.substringBefore("@")
-            it[email_verified] = verified
-        } get Users.id
-    }
+    private fun seedUser(
+        email: String,
+        verified: Boolean = true
+    ): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[password_hash] = "hash"
+                it[Users.name] = email.substringBefore("@")
+                it[email_verified] = verified
+            } get Users.id
+        }
 
-    private fun addMembership(userId: Int, orgId: Int) = transaction {
+    private fun addMembership(
+        userId: Int,
+        orgId: Int
+    ) = transaction {
         Memberships.insert {
             it[user_id] = userId
             it[organization_id] = orgId
@@ -172,11 +180,12 @@ class AlertNotificationPreferencesServiceTest {
             discordEnabled = true
         )
 
-        val recipients = service.getUsersWithChannelEnabled(
-            organizationId = orgId,
-            alertSource = "SYSTEM_DOWN",
-            channel = "email"
-        )
+        val recipients =
+            service.getUsersWithChannelEnabled(
+                organizationId = orgId,
+                alertSource = "SYSTEM_DOWN",
+                channel = "email"
+            )
 
         assertEquals(1, recipients.size)
         assertEquals(enabledUser, recipients.first().first)

@@ -51,14 +51,20 @@ data class DemoLoginResponse(
  * Create a JsonObject instead of Map for dynamic responses.
  * This is serializable by default and avoids LinkedHashMap issues.
  */
-fun messageJson(message: String): JsonObject = buildJsonObject {
-    put("message", message)
-}
+fun messageJson(message: String): JsonObject =
+    buildJsonObject {
+        put("message", message)
+    }
 
-fun errorJson(error: String): JsonObject = buildJsonObject {
-    put("error", error)
-}
+fun errorJson(error: String): JsonObject =
+    buildJsonObject {
+        put("error", error)
+    }
 
-fun booleanJson(key: String, value: Boolean): JsonObject = buildJsonObject {
-    put(key, value)
-}
+fun booleanJson(
+    key: String,
+    value: Boolean
+): JsonObject =
+    buildJsonObject {
+        put(key, value)
+    }

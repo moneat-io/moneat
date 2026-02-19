@@ -47,19 +47,26 @@ class AlertNotificationPreferencesService {
      * Get alert notification preferences for a user in an organization.
      * If preferences don't exist, returns defaults (all enabled).
      */
-    fun getPreferences(userId: Int, organizationId: Int): List<AlertNotificationPreference> {
+    fun getPreferences(
+        userId: Int,
+        organizationId: Int
+    ): List<AlertNotificationPreference> {
         return transaction {
-            val existing = AlertNotificationPreferences.selectAll().where {
-                (AlertNotificationPreferences.user_id eq userId) and
-                    (AlertNotificationPreferences.organization_id eq organizationId)
-            }.associate {
-                it[AlertNotificationPreferences.alert_source] to AlertNotificationPreference(
-                    alertSource = it[AlertNotificationPreferences.alert_source],
-                    emailEnabled = it[AlertNotificationPreferences.email_enabled],
-                    slackEnabled = it[AlertNotificationPreferences.slack_enabled],
-                    discordEnabled = it[AlertNotificationPreferences.discord_enabled]
-                )
-            }
+            val existing =
+                AlertNotificationPreferences
+                    .selectAll()
+                    .where {
+                        (AlertNotificationPreferences.user_id eq userId) and
+                            (AlertNotificationPreferences.organization_id eq organizationId)
+                    }.associate {
+                        it[AlertNotificationPreferences.alert_source] to
+                            AlertNotificationPreference(
+                                alertSource = it[AlertNotificationPreferences.alert_source],
+                                emailEnabled = it[AlertNotificationPreferences.email_enabled],
+                                slackEnabled = it[AlertNotificationPreferences.slack_enabled],
+                                discordEnabled = it[AlertNotificationPreferences.discord_enabled]
+                            )
+                    }
 
             // Return all sources, using defaults for missing ones
             AlertSource.values().map { source ->
@@ -92,11 +99,14 @@ class AlertNotificationPreferencesService {
         return transaction {
             val now = Clock.System.now()
 
-            val existing = AlertNotificationPreferences.selectAll().where {
-                (AlertNotificationPreferences.user_id eq userId) and
-                    (AlertNotificationPreferences.organization_id eq organizationId) and
-                    (AlertNotificationPreferences.alert_source eq alertSource)
-            }.firstOrNull()
+            val existing =
+                AlertNotificationPreferences
+                    .selectAll()
+                    .where {
+                        (AlertNotificationPreferences.user_id eq userId) and
+                            (AlertNotificationPreferences.organization_id eq organizationId) and
+                            (AlertNotificationPreferences.alert_source eq alertSource)
+                    }.firstOrNull()
 
             if (existing != null) {
                 // Update existing
@@ -143,22 +153,25 @@ class AlertNotificationPreferencesService {
         channel: String // "email", "slack", or "discord"
     ): List<Pair<Int, String>> {
         return transaction {
-            val orgUsers = Memberships
-                .innerJoin(Users)
-                .selectAll()
-                .where {
-                    (Memberships.organization_id eq organizationId) and
-                        (Users.email_verified eq true)
-                }
-                .map { Pair(it[Users.id], it[Users.email]) }
+            val orgUsers =
+                Memberships
+                    .innerJoin(Users)
+                    .selectAll()
+                    .where {
+                        (Memberships.organization_id eq organizationId) and
+                            (Users.email_verified eq true)
+                    }.map { Pair(it[Users.id], it[Users.email]) }
 
             // Filter by channel preference
             orgUsers.filter { (userId, _) ->
-                val prefs = AlertNotificationPreferences.selectAll().where {
-                    (AlertNotificationPreferences.user_id eq userId) and
-                        (AlertNotificationPreferences.organization_id eq organizationId) and
-                        (AlertNotificationPreferences.alert_source eq alertSource)
-                }.firstOrNull()
+                val prefs =
+                    AlertNotificationPreferences
+                        .selectAll()
+                        .where {
+                            (AlertNotificationPreferences.user_id eq userId) and
+                                (AlertNotificationPreferences.organization_id eq organizationId) and
+                                (AlertNotificationPreferences.alert_source eq alertSource)
+                        }.firstOrNull()
 
                 if (prefs != null) {
                     when (channel.lowercase()) {
@@ -185,11 +198,14 @@ class AlertNotificationPreferencesService {
         channel: String
     ): Boolean {
         return transaction {
-            val prefs = AlertNotificationPreferences.selectAll().where {
-                (AlertNotificationPreferences.user_id eq userId) and
-                    (AlertNotificationPreferences.organization_id eq organizationId) and
-                    (AlertNotificationPreferences.alert_source eq alertSource)
-            }.firstOrNull()
+            val prefs =
+                AlertNotificationPreferences
+                    .selectAll()
+                    .where {
+                        (AlertNotificationPreferences.user_id eq userId) and
+                            (AlertNotificationPreferences.organization_id eq organizationId) and
+                            (AlertNotificationPreferences.alert_source eq alertSource)
+                    }.firstOrNull()
 
             if (prefs != null) {
                 when (channel.lowercase()) {

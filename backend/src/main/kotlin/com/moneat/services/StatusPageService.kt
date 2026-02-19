@@ -49,35 +49,47 @@ class StatusPageService(
 
     fun listStatusPages(organizationId: Int): List<StatusPageResponse> {
         return transaction {
-            StatusPages.selectAll().where { StatusPages.organizationId eq organizationId }
+            StatusPages
+                .selectAll()
+                .where { StatusPages.organizationId eq organizationId }
                 .map { it.toStatusPageResponse() }
         }
     }
 
-    fun getStatusPage(pageId: UUID, organizationId: Int): StatusPageDetailResponse? {
+    fun getStatusPage(
+        pageId: UUID,
+        organizationId: Int
+    ): StatusPageDetailResponse? {
         return transaction {
-            val page = StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: return@transaction null
+            val page =
+                StatusPages
+                    .selectAll()
+                    .where {
+                        (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                    }.firstOrNull() ?: return@transaction null
 
-            val monitors = StatusPageMonitors
-                .innerJoin(UptimeMonitors, { monitorId }, { UptimeMonitors.id })
-                .selectAll().where { StatusPageMonitors.statusPageId eq pageId }
-                .orderBy(StatusPageMonitors.sortOrder to SortOrder.ASC)
-                .map {
-                    StatusPageMonitorResponse(
-                        id = it[StatusPageMonitors.id],
-                        monitorId = it[StatusPageMonitors.monitorId].toString(),
-                        monitorName = it[UptimeMonitors.name],
-                        displayName = it[StatusPageMonitors.displayName],
-                        sortOrder = it[StatusPageMonitors.sortOrder],
-                        url = it[UptimeMonitors.url]
-                    )
-                }
+            val monitors =
+                StatusPageMonitors
+                    .innerJoin(UptimeMonitors, { monitorId }, { UptimeMonitors.id })
+                    .selectAll()
+                    .where { StatusPageMonitors.statusPageId eq pageId }
+                    .orderBy(StatusPageMonitors.sortOrder to SortOrder.ASC)
+                    .map {
+                        StatusPageMonitorResponse(
+                            id = it[StatusPageMonitors.id],
+                            monitorId = it[StatusPageMonitors.monitorId].toString(),
+                            monitorName = it[UptimeMonitors.name],
+                            displayName = it[StatusPageMonitors.displayName],
+                            sortOrder = it[StatusPageMonitors.sortOrder],
+                            url = it[UptimeMonitors.url]
+                        )
+                    }
 
-            val customDomains = StatusPageCustomDomains
-                .selectAll().where { StatusPageCustomDomains.statusPageId eq pageId }
-                .map { it.toCustomDomainResponse() }
+            val customDomains =
+                StatusPageCustomDomains
+                    .selectAll()
+                    .where { StatusPageCustomDomains.statusPageId eq pageId }
+                    .map { it.toCustomDomainResponse() }
 
             StatusPageDetailResponse(
                 id = page[StatusPages.id].toString(),
@@ -100,7 +112,10 @@ class StatusPageService(
         }
     }
 
-    fun createStatusPage(organizationId: Int, request: CreateStatusPageRequest): StatusPageResponse {
+    fun createStatusPage(
+        organizationId: Int,
+        request: CreateStatusPageRequest
+    ): StatusPageResponse {
         val pageId = UUID.randomUUID()
         val now = Clock.System.now()
 
@@ -133,17 +148,26 @@ class StatusPageService(
                 it[updatedAt] = now
             }
 
-            StatusPages.selectAll().where { StatusPages.id eq pageId }
+            StatusPages
+                .selectAll()
+                .where { StatusPages.id eq pageId }
                 .first()
                 .toStatusPageResponse()
         }
     }
 
-    fun updateStatusPage(pageId: UUID, organizationId: Int, request: UpdateStatusPageRequest): StatusPageResponse? {
+    fun updateStatusPage(
+        pageId: UUID,
+        organizationId: Int,
+        request: UpdateStatusPageRequest
+    ): StatusPageResponse? {
         return transaction {
-            val existing = StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: return@transaction null
+            val existing =
+                StatusPages
+                    .selectAll()
+                    .where {
+                        (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                    }.firstOrNull() ?: return@transaction null
 
             // Validate slug if provided
             if (request.slug != null && !request.slug.matches(Regex("^[a-z0-9-]+$"))) {
@@ -172,29 +196,41 @@ class StatusPageService(
                 it[StatusPages.updatedAt] = Clock.System.now()
             }
 
-            StatusPages.selectAll().where { StatusPages.id eq pageId }
+            StatusPages
+                .selectAll()
+                .where { StatusPages.id eq pageId }
                 .first()
                 .toStatusPageResponse()
         }
     }
 
-    fun deleteStatusPage(pageId: UUID, organizationId: Int): Boolean {
+    fun deleteStatusPage(
+        pageId: UUID,
+        organizationId: Int
+    ): Boolean {
         return transaction {
-            val deleted = StatusPages.deleteWhere {
-                (id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }
+            val deleted =
+                StatusPages.deleteWhere {
+                    (id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }
             deleted > 0
         }
     }
 
     // ==================== Monitor Management ====================
 
-    fun addMonitors(pageId: UUID, organizationId: Int, request: AddMonitorsRequest): List<StatusPageMonitorResponse> {
+    fun addMonitors(
+        pageId: UUID,
+        organizationId: Int,
+        request: AddMonitorsRequest
+    ): List<StatusPageMonitorResponse> {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
 
             // Remove existing monitors and add new ones
             StatusPageMonitors.deleteWhere { statusPageId eq pageId }
@@ -203,9 +239,11 @@ class StatusPageService(
                 val monitorUuid = UUID.fromString(assignment.monitorId)
 
                 // Verify monitor belongs to org
-                UptimeMonitors.selectAll().where {
-                    (UptimeMonitors.id eq monitorUuid) and (UptimeMonitors.organizationId eq organizationId)
-                }.firstOrNull() ?: throw IllegalArgumentException("Monitor ${assignment.monitorId} not found")
+                UptimeMonitors
+                    .selectAll()
+                    .where {
+                        (UptimeMonitors.id eq monitorUuid) and (UptimeMonitors.organizationId eq organizationId)
+                    }.firstOrNull() ?: throw IllegalArgumentException("Monitor ${assignment.monitorId} not found")
 
                 StatusPageMonitors.insert {
                     it[statusPageId] = pageId
@@ -218,7 +256,8 @@ class StatusPageService(
             // Return updated list
             StatusPageMonitors
                 .innerJoin(UptimeMonitors, { monitorId }, { UptimeMonitors.id })
-                .selectAll().where { StatusPageMonitors.statusPageId eq pageId }
+                .selectAll()
+                .where { StatusPageMonitors.statusPageId eq pageId }
                 .orderBy(StatusPageMonitors.sortOrder to SortOrder.ASC)
                 .map {
                     StatusPageMonitorResponse(
@@ -233,44 +272,64 @@ class StatusPageService(
         }
     }
 
-    fun removeMonitor(pageId: UUID, organizationId: Int, monitorId: UUID): Boolean {
+    fun removeMonitor(
+        pageId: UUID,
+        organizationId: Int,
+        monitorId: UUID
+    ): Boolean {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: return@transaction false
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: return@transaction false
 
-            val deleted = StatusPageMonitors.deleteWhere {
-                (statusPageId eq pageId) and (StatusPageMonitors.monitorId eq monitorId)
-            }
+            val deleted =
+                StatusPageMonitors.deleteWhere {
+                    (statusPageId eq pageId) and (StatusPageMonitors.monitorId eq monitorId)
+                }
             deleted > 0
         }
     }
 
     // ==================== Incident Management ====================
 
-    fun listIncidents(pageId: UUID, organizationId: Int): List<IncidentResponse> {
+    fun listIncidents(
+        pageId: UUID,
+        organizationId: Int
+    ): List<IncidentResponse> {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
 
-            StatusPageIncidents.selectAll().where { StatusPageIncidents.statusPageId eq pageId }
+            StatusPageIncidents
+                .selectAll()
+                .where { StatusPageIncidents.statusPageId eq pageId }
                 .orderBy(StatusPageIncidents.createdAt to SortOrder.DESC)
                 .map { it.toIncidentResponse() }
         }
     }
 
-    fun createIncident(pageId: UUID, organizationId: Int, request: CreateIncidentRequest): IncidentResponse {
+    fun createIncident(
+        pageId: UUID,
+        organizationId: Int,
+        request: CreateIncidentRequest
+    ): IncidentResponse {
         val incidentId = UUID.randomUUID()
         val now = Clock.System.now()
 
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
 
             // Create incident
             StatusPageIncidents.insert {
@@ -295,22 +354,33 @@ class StatusPageService(
                 it[createdAt] = now
             }
 
-            StatusPageIncidents.selectAll().where { StatusPageIncidents.id eq incidentId }
+            StatusPageIncidents
+                .selectAll()
+                .where { StatusPageIncidents.id eq incidentId }
                 .first()
                 .toIncidentResponse()
         }
     }
 
-    fun updateIncident(pageId: UUID, organizationId: Int, incidentId: UUID, request: UpdateIncidentRequest): IncidentResponse? {
+    fun updateIncident(
+        pageId: UUID,
+        organizationId: Int,
+        incidentId: UUID,
+        request: UpdateIncidentRequest
+    ): IncidentResponse? {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: return@transaction null
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: return@transaction null
 
-            StatusPageIncidents.selectAll().where {
-                (StatusPageIncidents.id eq incidentId) and (StatusPageIncidents.statusPageId eq pageId)
-            }.firstOrNull() ?: return@transaction null
+            StatusPageIncidents
+                .selectAll()
+                .where {
+                    (StatusPageIncidents.id eq incidentId) and (StatusPageIncidents.statusPageId eq pageId)
+                }.firstOrNull() ?: return@transaction null
 
             StatusPageIncidents.update({ StatusPageIncidents.id eq incidentId }) {
                 request.title?.let { title -> it[StatusPageIncidents.title] = title }
@@ -326,22 +396,33 @@ class StatusPageService(
                 it[updatedAt] = Clock.System.now()
             }
 
-            StatusPageIncidents.selectAll().where { StatusPageIncidents.id eq incidentId }
+            StatusPageIncidents
+                .selectAll()
+                .where { StatusPageIncidents.id eq incidentId }
                 .first()
                 .toIncidentResponse()
         }
     }
 
-    fun createIncidentUpdate(pageId: UUID, organizationId: Int, incidentId: UUID, request: CreateIncidentUpdateRequest): IncidentResponse? {
+    fun createIncidentUpdate(
+        pageId: UUID,
+        organizationId: Int,
+        incidentId: UUID,
+        request: CreateIncidentUpdateRequest
+    ): IncidentResponse? {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: return@transaction null
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: return@transaction null
 
-            StatusPageIncidents.selectAll().where {
-                (StatusPageIncidents.id eq incidentId) and (StatusPageIncidents.statusPageId eq pageId)
-            }.firstOrNull() ?: return@transaction null
+            StatusPageIncidents
+                .selectAll()
+                .where {
+                    (StatusPageIncidents.id eq incidentId) and (StatusPageIncidents.statusPageId eq pageId)
+                }.firstOrNull() ?: return@transaction null
 
             val now = Clock.System.now()
 
@@ -363,7 +444,9 @@ class StatusPageService(
                 }
             }
 
-            StatusPageIncidents.selectAll().where { StatusPageIncidents.id eq incidentId }
+            StatusPageIncidents
+                .selectAll()
+                .where { StatusPageIncidents.id eq incidentId }
                 .first()
                 .toIncidentResponse()
         }
@@ -371,12 +454,18 @@ class StatusPageService(
 
     // ==================== Custom Domain Management ====================
 
-    fun addCustomDomain(pageId: UUID, organizationId: Int, request: AddCustomDomainRequest): CustomDomainResponse {
+    fun addCustomDomain(
+        pageId: UUID,
+        organizationId: Int,
+        request: AddCustomDomainRequest
+    ): CustomDomainResponse {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: throw IllegalArgumentException("Status page not found")
 
             // Validate domain format
             if (!request.domain.matches(Regex("^[a-z0-9][a-z0-9.-]+[a-z0-9]$"))) {
@@ -384,9 +473,12 @@ class StatusPageService(
             }
 
             // Check uniqueness
-            val existing = StatusPageCustomDomains.selectAll().where {
-                StatusPageCustomDomains.domain eq request.domain
-            }.firstOrNull()
+            val existing =
+                StatusPageCustomDomains
+                    .selectAll()
+                    .where {
+                        StatusPageCustomDomains.domain eq request.domain
+                    }.firstOrNull()
             if (existing != null) {
                 throw IllegalArgumentException("Domain '${request.domain}' is already in use")
             }
@@ -394,29 +486,41 @@ class StatusPageService(
             val verificationToken = generateVerificationToken()
             val now = Clock.System.now()
 
-            val domainId = StatusPageCustomDomains.insert {
-                it[statusPageId] = pageId
-                it[domain] = request.domain
-                it[StatusPageCustomDomains.verificationToken] = verificationToken
-                it[createdAt] = now
-            } get StatusPageCustomDomains.id
+            val domainId =
+                StatusPageCustomDomains.insert {
+                    it[statusPageId] = pageId
+                    it[domain] = request.domain
+                    it[StatusPageCustomDomains.verificationToken] = verificationToken
+                    it[createdAt] = now
+                } get StatusPageCustomDomains.id
 
-            StatusPageCustomDomains.selectAll().where { StatusPageCustomDomains.id eq domainId }
+            StatusPageCustomDomains
+                .selectAll()
+                .where { StatusPageCustomDomains.id eq domainId }
                 .first()
                 .toCustomDomainResponse()
         }
     }
 
-    fun verifyCustomDomain(pageId: UUID, organizationId: Int, domainId: Int): CustomDomainResponse? {
+    fun verifyCustomDomain(
+        pageId: UUID,
+        organizationId: Int,
+        domainId: Int
+    ): CustomDomainResponse? {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: return@transaction null
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: return@transaction null
 
-            val domain = StatusPageCustomDomains.selectAll().where {
-                (StatusPageCustomDomains.id eq domainId) and (StatusPageCustomDomains.statusPageId eq pageId)
-            }.firstOrNull() ?: return@transaction null
+            val domain =
+                StatusPageCustomDomains
+                    .selectAll()
+                    .where {
+                        (StatusPageCustomDomains.id eq domainId) and (StatusPageCustomDomains.statusPageId eq pageId)
+                    }.firstOrNull() ?: return@transaction null
 
             val domainName = domain[StatusPageCustomDomains.domain]
             val expectedToken = domain[StatusPageCustomDomains.verificationToken]
@@ -431,22 +535,31 @@ class StatusPageService(
                 }
             }
 
-            StatusPageCustomDomains.selectAll().where { StatusPageCustomDomains.id eq domainId }
+            StatusPageCustomDomains
+                .selectAll()
+                .where { StatusPageCustomDomains.id eq domainId }
                 .first()
                 .toCustomDomainResponse()
         }
     }
 
-    fun removeCustomDomain(pageId: UUID, organizationId: Int, domainId: Int): Boolean {
+    fun removeCustomDomain(
+        pageId: UUID,
+        organizationId: Int,
+        domainId: Int
+    ): Boolean {
         return transaction {
             // Verify page belongs to org
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
-            }.firstOrNull() ?: return@transaction false
+            StatusPages
+                .selectAll()
+                .where {
+                    (StatusPages.id eq pageId) and (StatusPages.organizationId eq organizationId)
+                }.firstOrNull() ?: return@transaction false
 
-            val deleted = StatusPageCustomDomains.deleteWhere {
-                (id eq domainId) and (statusPageId eq pageId)
-            }
+            val deleted =
+                StatusPageCustomDomains.deleteWhere {
+                    (id eq domainId) and (statusPageId eq pageId)
+                }
             deleted > 0
         }
     }
@@ -454,27 +567,36 @@ class StatusPageService(
     // ==================== Public Data ====================
 
     suspend fun getPublicStatusPage(slug: String): PublicStatusPageResponse? {
-        val page = transaction {
-            StatusPages.selectAll().where {
-                (StatusPages.slug eq slug) and (StatusPages.isPublic eq true)
-            }.firstOrNull()
-        } ?: return null
+        val page =
+            transaction {
+                StatusPages
+                    .selectAll()
+                    .where {
+                        (StatusPages.slug eq slug) and (StatusPages.isPublic eq true)
+                    }.firstOrNull()
+            } ?: return null
 
         return getPublicStatusPageData(page)
     }
 
     suspend fun getPublicStatusPageByDomain(domain: String): PublicStatusPageResponse? {
-        val pageRow = transaction {
-            val customDomain = StatusPageCustomDomains.selectAll().where {
-                (StatusPageCustomDomains.domain eq domain) and (StatusPageCustomDomains.verified eq true)
-            }.firstOrNull() ?: return@transaction null
+        val pageRow =
+            transaction {
+                val customDomain =
+                    StatusPageCustomDomains
+                        .selectAll()
+                        .where {
+                            (StatusPageCustomDomains.domain eq domain) and (StatusPageCustomDomains.verified eq true)
+                        }.firstOrNull() ?: return@transaction null
 
-            val pageId = customDomain[StatusPageCustomDomains.statusPageId]
+                val pageId = customDomain[StatusPageCustomDomains.statusPageId]
 
-            StatusPages.selectAll().where {
-                (StatusPages.id eq pageId) and (StatusPages.isPublic eq true)
-            }.firstOrNull()
-        } ?: return null
+                StatusPages
+                    .selectAll()
+                    .where {
+                        (StatusPages.id eq pageId) and (StatusPages.isPublic eq true)
+                    }.firstOrNull()
+            } ?: return null
 
         return getPublicStatusPageData(pageRow)
     }
@@ -491,65 +613,73 @@ class StatusPageService(
             val displayName: String?
         )
 
-        val monitorData = transaction {
-            StatusPageMonitors
-                .innerJoin(UptimeMonitors, { monitorId }, { UptimeMonitors.id })
-                .selectAll().where { StatusPageMonitors.statusPageId eq pageId }
-                .orderBy(StatusPageMonitors.sortOrder to SortOrder.ASC)
-                .map { monitorRow ->
-                    MonitorData(
-                        monitorId = monitorRow[StatusPageMonitors.monitorId],
-                        monitorName = monitorRow[UptimeMonitors.name],
-                        displayName = monitorRow[StatusPageMonitors.displayName]
-                    )
-                }
-        }
+        val monitorData =
+            transaction {
+                StatusPageMonitors
+                    .innerJoin(UptimeMonitors, { monitorId }, { UptimeMonitors.id })
+                    .selectAll()
+                    .where { StatusPageMonitors.statusPageId eq pageId }
+                    .orderBy(StatusPageMonitors.sortOrder to SortOrder.ASC)
+                    .map { monitorRow ->
+                        MonitorData(
+                            monitorId = monitorRow[StatusPageMonitors.monitorId],
+                            monitorName = monitorRow[UptimeMonitors.name],
+                            displayName = monitorRow[StatusPageMonitors.displayName]
+                        )
+                    }
+            }
 
         // Process monitors with suspend functions
-        val monitors = monitorData.map { data ->
-            // Get current status
-            val currentStatus = getCurrentMonitorStatus(data.monitorId)
+        val monitors =
+            monitorData.map { data ->
+                // Get current status
+                val currentStatus = getCurrentMonitorStatus(data.monitorId)
 
-            // Calculate uptime percentage
-            val uptimePercentage = uptimeService.getUptimePercentage(data.monitorId, historyDays * 24)
+                // Calculate uptime percentage
+                val uptimePercentage = uptimeService.getUptimePercentage(data.monitorId, historyDays * 24)
 
-            // Get uptime history if enabled
-            val uptimeHistory = if (showHistory) {
-                getUptimeHistory(data.monitorId, historyDays)
-            } else {
-                null
+                // Get uptime history if enabled
+                val uptimeHistory =
+                    if (showHistory) {
+                        getUptimeHistory(data.monitorId, historyDays)
+                    } else {
+                        null
+                    }
+
+                PublicMonitorStatus(
+                    name = data.monitorName,
+                    displayName = data.displayName,
+                    status = currentStatus,
+                    uptimePercentage = uptimePercentage.toDouble(),
+                    uptimeHistory = uptimeHistory
+                )
             }
-
-            PublicMonitorStatus(
-                name = data.monitorName,
-                displayName = data.displayName,
-                status = currentStatus,
-                uptimePercentage = uptimePercentage.toDouble(),
-                uptimeHistory = uptimeHistory
-            )
-        }
 
         // Get active incidents (not resolved)
-        val activeIncidents = transaction {
-            StatusPageIncidents.selectAll().where {
-                (StatusPageIncidents.statusPageId eq pageId) and
-                    (StatusPageIncidents.type eq "incident") and
-                    (StatusPageIncidents.status neq "resolved")
+        val activeIncidents =
+            transaction {
+                StatusPageIncidents
+                    .selectAll()
+                    .where {
+                        (StatusPageIncidents.statusPageId eq pageId) and
+                            (StatusPageIncidents.type eq "incident") and
+                            (StatusPageIncidents.status neq "resolved")
+                    }.orderBy(StatusPageIncidents.createdAt to SortOrder.DESC)
+                    .map { it.toIncidentResponse() }
             }
-                .orderBy(StatusPageIncidents.createdAt to SortOrder.DESC)
-                .map { it.toIncidentResponse() }
-        }
 
         // Get scheduled maintenance
-        val scheduledMaintenance = transaction {
-            StatusPageIncidents.selectAll().where {
-                (StatusPageIncidents.statusPageId eq pageId) and
-                    (StatusPageIncidents.type eq "maintenance") and
-                    (StatusPageIncidents.status neq "completed")
+        val scheduledMaintenance =
+            transaction {
+                StatusPageIncidents
+                    .selectAll()
+                    .where {
+                        (StatusPageIncidents.statusPageId eq pageId) and
+                            (StatusPageIncidents.type eq "maintenance") and
+                            (StatusPageIncidents.status neq "completed")
+                    }.orderBy(StatusPageIncidents.scheduledStartAt to SortOrder.ASC)
+                    .map { it.toIncidentResponse() }
             }
-                .orderBy(StatusPageIncidents.scheduledStartAt to SortOrder.ASC)
-                .map { it.toIncidentResponse() }
-        }
 
         return PublicStatusPageResponse(
             name = page[StatusPages.name],
@@ -571,7 +701,8 @@ class StatusPageService(
         val now = Clock.System.now()
         val from = now.minus(1.hours)
 
-        val query = """
+        val query =
+            """
             SELECT status
             FROM $clickhouseDb.uptime_heartbeats
             WHERE monitor_id = '$monitorId'
@@ -579,7 +710,7 @@ class StatusPageService(
             ORDER BY timestamp DESC
             LIMIT 1
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -601,12 +732,16 @@ class StatusPageService(
         }
     }
 
-    private suspend fun getUptimeHistory(monitorId: UUID, days: Int): List<UptimeDataPoint> {
+    private suspend fun getUptimeHistory(
+        monitorId: UUID,
+        days: Int
+    ): List<UptimeDataPoint> {
         val now = Clock.System.now()
         val from = now.minus((days * 24).hours)
 
         // Get daily uptime percentages
-        val query = """
+        val query =
+            """
             SELECT 
                 toDate(timestamp) as date,
                 countIf(status = 1) as up_count,
@@ -617,7 +752,7 @@ class StatusPageService(
             GROUP BY date
             ORDER BY date ASC
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -655,16 +790,20 @@ class StatusPageService(
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
-    private fun verifyDnsTxtRecord(domain: String, expectedToken: String): Boolean {
+    private fun verifyDnsTxtRecord(
+        domain: String,
+        expectedToken: String
+    ): Boolean {
         return try {
             val txtRecordName = "_moneat-verify.$domain"
             val expectedValue = "moneat-verify=$expectedToken"
 
             // Use Java's DNS lookup
-            val attrs = javax.naming.directory.InitialDirContext().getAttributes(
-                "dns:/$txtRecordName",
-                arrayOf("TXT")
-            )
+            val attrs =
+                javax.naming.directory.InitialDirContext().getAttributes(
+                    "dns:/$txtRecordName",
+                    arrayOf("TXT")
+                )
             val txtRecords = attrs.get("TXT")
 
             if (txtRecords == null) {
@@ -688,38 +827,42 @@ class StatusPageService(
 
     // ==================== Extension Functions ====================
 
-    private fun ResultRow.toStatusPageResponse() = StatusPageResponse(
-        id = this[StatusPages.id].toString(),
-        organizationId = this[StatusPages.organizationId].toString(),
-        name = this[StatusPages.name],
-        slug = this[StatusPages.slug],
-        description = this[StatusPages.description],
-        logoUrl = this[StatusPages.logoUrl],
-        faviconUrl = this[StatusPages.faviconUrl],
-        primaryColor = this[StatusPages.primaryColor],
-        darkMode = this[StatusPages.darkMode],
-        showUptimeHistory = this[StatusPages.showUptimeHistory],
-        historyDays = this[StatusPages.historyDays],
-        isPublic = this[StatusPages.isPublic],
-        createdAt = this[StatusPages.createdAt].toString(),
-        updatedAt = this[StatusPages.updatedAt].toString()
-    )
+    private fun ResultRow.toStatusPageResponse() =
+        StatusPageResponse(
+            id = this[StatusPages.id].toString(),
+            organizationId = this[StatusPages.organizationId].toString(),
+            name = this[StatusPages.name],
+            slug = this[StatusPages.slug],
+            description = this[StatusPages.description],
+            logoUrl = this[StatusPages.logoUrl],
+            faviconUrl = this[StatusPages.faviconUrl],
+            primaryColor = this[StatusPages.primaryColor],
+            darkMode = this[StatusPages.darkMode],
+            showUptimeHistory = this[StatusPages.showUptimeHistory],
+            historyDays = this[StatusPages.historyDays],
+            isPublic = this[StatusPages.isPublic],
+            createdAt = this[StatusPages.createdAt].toString(),
+            updatedAt = this[StatusPages.updatedAt].toString()
+        )
 
     private fun ResultRow.toIncidentResponse(): IncidentResponse {
         val incidentId = this[StatusPageIncidents.id]
 
-        val updates = transaction {
-            StatusPageIncidentUpdates.selectAll().where { StatusPageIncidentUpdates.incidentId eq incidentId }
-                .orderBy(StatusPageIncidentUpdates.createdAt to SortOrder.DESC)
-                .map {
-                    IncidentUpdateResponse(
-                        id = it[StatusPageIncidentUpdates.id].toString(),
-                        status = it[StatusPageIncidentUpdates.status],
-                        message = it[StatusPageIncidentUpdates.message],
-                        createdAt = it[StatusPageIncidentUpdates.createdAt].toString()
-                    )
-                }
-        }
+        val updates =
+            transaction {
+                StatusPageIncidentUpdates
+                    .selectAll()
+                    .where { StatusPageIncidentUpdates.incidentId eq incidentId }
+                    .orderBy(StatusPageIncidentUpdates.createdAt to SortOrder.DESC)
+                    .map {
+                        IncidentUpdateResponse(
+                            id = it[StatusPageIncidentUpdates.id].toString(),
+                            status = it[StatusPageIncidentUpdates.status],
+                            message = it[StatusPageIncidentUpdates.message],
+                            createdAt = it[StatusPageIncidentUpdates.createdAt].toString()
+                        )
+                    }
+            }
 
         return IncidentResponse(
             id = incidentId.toString(),
@@ -737,13 +880,14 @@ class StatusPageService(
         )
     }
 
-    private fun ResultRow.toCustomDomainResponse() = CustomDomainResponse(
-        id = this[StatusPageCustomDomains.id],
-        domain = this[StatusPageCustomDomains.domain],
-        verificationToken = this[StatusPageCustomDomains.verificationToken],
-        verified = this[StatusPageCustomDomains.verified],
-        verifiedAt = this[StatusPageCustomDomains.verifiedAt]?.toString(),
-        sslProvisioned = this[StatusPageCustomDomains.sslProvisioned],
-        createdAt = this[StatusPageCustomDomains.createdAt].toString()
-    )
+    private fun ResultRow.toCustomDomainResponse() =
+        CustomDomainResponse(
+            id = this[StatusPageCustomDomains.id],
+            domain = this[StatusPageCustomDomains.domain],
+            verificationToken = this[StatusPageCustomDomains.verificationToken],
+            verified = this[StatusPageCustomDomains.verified],
+            verifiedAt = this[StatusPageCustomDomains.verifiedAt]?.toString(),
+            sslProvisioned = this[StatusPageCustomDomains.sslProvisioned],
+            createdAt = this[StatusPageCustomDomains.createdAt].toString()
+        )
 }

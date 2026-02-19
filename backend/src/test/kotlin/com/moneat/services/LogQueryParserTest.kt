@@ -134,11 +134,12 @@ class LogQueryParserTest {
 
     @Test
     fun `reserved attributes host source environment should work`() {
-        val queries = mapOf(
-            "host:server1" to "host",
-            "source:nginx" to "source",
-            "environment:production" to "environment"
-        )
+        val queries =
+            mapOf(
+                "host:server1" to "host",
+                "source:nginx" to "source",
+                "environment:production" to "environment"
+            )
 
         queries.forEach { (query, expectedField) ->
             val result = parser.parse(query)
@@ -337,11 +338,12 @@ class LogQueryParserTest {
 
     @Test
     fun `trace_id and span_id fields should work`() {
-        val queries = listOf(
-            "trace_id:abc123",
-            "span_id:xyz789",
-            "@trace_id:abc123"
-        )
+        val queries =
+            listOf(
+                "trace_id:abc123",
+                "span_id:xyz789",
+                "@trace_id:abc123"
+            )
 
         queries.forEach { query ->
             val result = parser.parse(query)
@@ -412,9 +414,10 @@ class LogQueryParserTest {
     @Test
     fun `complex real-world query example 1`() {
         // Real Datadog-style query
-        val result = parser.parse(
-            "service:api-gateway AND status:error AND @http.status_code:[500 TO 599] AND -@user.id:test*"
-        )
+        val result =
+            parser.parse(
+                "service:api-gateway AND status:error AND @http.status_code:[500 TO 599] AND -@user.id:test*"
+            )
         assertNotNull(result.rootNode)
 
         val sql = parser.toClickHouseSql(result.rootNode, ::escapeSql)

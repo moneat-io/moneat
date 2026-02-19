@@ -43,16 +43,17 @@ private val logger = KotlinLogging.logger {}
  */
 class UptimeCheckExecutor {
 
-    private val httpClient = HttpClient(CIO) {
-        install(HttpTimeout) {
-            socketTimeoutMillis = 60_000
-            connectTimeoutMillis = 30_000
-            requestTimeoutMillis = 60_000
+    private val httpClient =
+        HttpClient(CIO) {
+            install(HttpTimeout) {
+                socketTimeoutMillis = 60_000
+                connectTimeoutMillis = 30_000
+                requestTimeoutMillis = 60_000
+            }
+            engine {
+                requestTimeout = 60_000
+            }
         }
-        engine {
-            requestTimeout = 60_000
-        }
-    }
 
     /**
      * Execute a check for the given monitor.
@@ -90,61 +91,67 @@ class UptimeCheckExecutor {
         val startTime = System.currentTimeMillis()
 
         try {
-            val response = httpClient.request(url) {
-                method = when (monitor.method.uppercase()) {
-                    "GET" -> HttpMethod.Get
-                    "POST" -> HttpMethod.Post
-                    "PUT" -> HttpMethod.Put
-                    "DELETE" -> HttpMethod.Delete
-                    "HEAD" -> HttpMethod.Head
-                    "OPTIONS" -> HttpMethod.Options
-                    "PATCH" -> HttpMethod.Patch
-                    else -> HttpMethod.Get
-                }
-
-                // Headers
-                monitor.headers?.let { headersJson ->
-                    try {
-                        val headers = kotlinx.serialization.json.Json.decodeFromString<Map<String, String>>(headersJson)
-                        headers.forEach { (key, value) ->
-                            header(key, value)
+            val response =
+                httpClient.request(url) {
+                    method =
+                        when (monitor.method.uppercase()) {
+                            "GET" -> HttpMethod.Get
+                            "POST" -> HttpMethod.Post
+                            "PUT" -> HttpMethod.Put
+                            "DELETE" -> HttpMethod.Delete
+                            "HEAD" -> HttpMethod.Head
+                            "OPTIONS" -> HttpMethod.Options
+                            "PATCH" -> HttpMethod.Patch
+                            else -> HttpMethod.Get
                         }
-                    } catch (_: Exception) {}
-                }
 
-                // Authentication
-                when (monitor.authMethod?.lowercase()) {
-                    "basic" -> {
-                        val user = monitor.authUser ?: ""
-                        val pass = monitor.authPass ?: ""
-                        basicAuth(user, pass)
+                    // Headers
+                    monitor.headers?.let { headersJson ->
+                        try {
+                            val headers =
+                                kotlinx.serialization.json.Json
+                                    .decodeFromString<Map<String, String>>(headersJson)
+                            headers.forEach { (key, value) ->
+                                header(key, value)
+                            }
+                        } catch (_: Exception) {}
                     }
-                    "bearer" -> {
-                        val token = monitor.authPass ?: ""
-                        bearerAuth(token)
+
+                    // Authentication
+                    when (monitor.authMethod?.lowercase()) {
+                        "basic" -> {
+                            val user = monitor.authUser ?: ""
+                            val pass = monitor.authPass ?: ""
+                            basicAuth(user, pass)
+                        }
+
+                        "bearer" -> {
+                            val token = monitor.authPass ?: ""
+                            bearerAuth(token)
+                        }
+                    }
+
+                    // Body
+                    monitor.body?.let {
+                        setBody(it)
+                    }
+
+                    // TLS
+                    if (monitor.ignoreTls) {
+                        // Note: CIO engine doesn't easily support ignoring TLS
+                        // This would need custom SSL configuration
                     }
                 }
-
-                // Body
-                monitor.body?.let {
-                    setBody(it)
-                }
-
-                // TLS
-                if (monitor.ignoreTls) {
-                    // Note: CIO engine doesn't easily support ignoring TLS
-                    // This would need custom SSL configuration
-                }
-            }
 
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             val statusCode = response.status.value
 
             // Check expected status codes
-            val expectedCodes = monitor.expectedStatusCodes
-                ?.split(",")
-                ?.mapNotNull { it.trim().toIntOrNull() }
-                ?: listOf(200)
+            val expectedCodes =
+                monitor.expectedStatusCodes
+                    ?.split(",")
+                    ?.mapNotNull { it.trim().toIntOrNull() }
+                    ?: listOf(200)
 
             val isSuccess = statusCode in expectedCodes
 
@@ -207,11 +214,12 @@ class UptimeCheckExecutor {
             val value = JsonPath.read<Any>(body, jsonPath)
             val expectedValue = monitor.jsonExpectedValue
 
-            val success = if (expectedValue != null) {
-                value.toString() == expectedValue
-            } else {
-                true // Just check that path exists
-            }
+            val success =
+                if (expectedValue != null) {
+                    value.toString() == expectedValue
+                } else {
+                    true // Just check that path exists
+                }
 
             return CheckResult(
                 status = if (success) 1 else 0,

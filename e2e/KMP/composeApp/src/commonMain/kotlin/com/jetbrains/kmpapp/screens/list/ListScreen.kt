@@ -31,9 +31,7 @@ import com.jetbrains.kmpapp.screens.EmptyScreenContent
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-fun ListScreen(
-    navigateToDetails: (objectId: Int) -> Unit
-) {
+fun ListScreen(navigateToDetails: (objectId: Int) -> Unit) {
     val viewModel = koinViewModel<ListViewModel>()
     val objects by viewModel.objects.collectAsStateWithLifecycle()
 
@@ -78,16 +76,17 @@ private fun ObjectFrame(
     Column(
         modifier
             .padding(8.dp)
-            .clickable { onClick() }
+            .clickable { onClick() },
     ) {
         AsyncImage(
             model = obj.primaryImageSmall,
             contentDescription = obj.title,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .background(Color.LightGray),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .background(Color.LightGray),
         )
 
         Spacer(Modifier.height(2.dp))

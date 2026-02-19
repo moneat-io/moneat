@@ -57,20 +57,24 @@ class MonitorService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val pricingTierService = PricingTierService()
     private val retentionPolicyService = RetentionPolicyService()
-    private val defaultAlertTemplates = listOf(
-        DefaultAlertTemplate(metric = "cpu_percent", condition = ">", threshold = 80.0),
-        DefaultAlertTemplate(metric = "mem_percent", condition = ">", threshold = 80.0),
-        DefaultAlertTemplate(metric = "disk_percent", condition = ">", threshold = 80.0),
-        DefaultAlertTemplate(metric = "load_1", condition = ">", threshold = 4.0),
-        DefaultAlertTemplate(metric = "temp_max", condition = ">", threshold = 85.0),
-        DefaultAlertTemplate(metric = "gpu_percent", condition = ">", threshold = 85.0),
-        DefaultAlertTemplate(metric = "battery_percent", condition = "<=", threshold = 20.0)
-    )
+    private val defaultAlertTemplates =
+        listOf(
+            DefaultAlertTemplate(metric = "cpu_percent", condition = ">", threshold = 80.0),
+            DefaultAlertTemplate(metric = "mem_percent", condition = ">", threshold = 80.0),
+            DefaultAlertTemplate(metric = "disk_percent", condition = ">", threshold = 80.0),
+            DefaultAlertTemplate(metric = "load_1", condition = ">", threshold = 4.0),
+            DefaultAlertTemplate(metric = "temp_max", condition = ">", threshold = 85.0),
+            DefaultAlertTemplate(metric = "gpu_percent", condition = ">", threshold = 85.0),
+            DefaultAlertTemplate(metric = "battery_percent", condition = "<=", threshold = 20.0)
+        )
 
     /**
      * Create a new system and generate an agent key.
      */
-    fun createSystem(organizationId: Int, name: String): Pair<SystemData, String> {
+    fun createSystem(
+        organizationId: Int,
+        name: String
+    ): Pair<SystemData, String> {
         val agentKey = generateAgentKey()
         val agentKeyHash = hashAgentKey(agentKey)
         val systemId = UUID.randomUUID()
@@ -114,7 +118,9 @@ class MonitorService {
     fun validateAgentKey(agentKey: String): Pair<UUID, Int>? {
         val keyHash = hashAgentKey(agentKey)
         return transaction {
-            Systems.selectAll().where { Systems.agent_key_hash eq keyHash }
+            Systems
+                .selectAll()
+                .where { Systems.agent_key_hash eq keyHash }
                 .firstOrNull()
                 ?.let {
                     Pair(
@@ -130,16 +136,21 @@ class MonitorService {
      */
     fun checkSystemQuota(organizationId: Int): Boolean {
         val tier = getTierConfig(organizationId)
-        val currentCount = transaction {
-            Systems.selectAll().where { Systems.organization_id eq organizationId }.count()
-        }
+        val currentCount =
+            transaction {
+                Systems.selectAll().where { Systems.organization_id eq organizationId }.count()
+            }
         return currentCount < tier.maxSystems
     }
 
     /**
      * Ingest metrics from agent and store in ClickHouse.
      */
-    suspend fun ingestMetrics(systemId: UUID, organizationId: Int, payload: SystemMetricsPayload): Int {
+    suspend fun ingestMetrics(
+        systemId: UUID,
+        organizationId: Int,
+        payload: SystemMetricsPayload
+    ): Int {
         val now = Clock.System.now()
 
         // Update system metadata and last_seen_at
@@ -158,7 +169,8 @@ class MonitorService {
 
         // Insert system metrics to ClickHouse
         val timestamp = payload.timestamp
-        val query = """
+        val query =
+            """
             INSERT INTO $clickhouseDb.system_metrics (
                 system_id, org_id, timestamp,
                 cpu_percent, mem_total, mem_used, mem_available,
@@ -191,7 +203,7 @@ class MonitorService {
                 ${payload.gpu_power ?: 0f},
                 ${payload.battery_percent ?: 0f}
             )
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
 
@@ -217,13 +229,14 @@ class MonitorService {
         timestamp: Long,
         container: ContainerMetricsPayload
     ) {
-        val fullQuery = buildContainerInsertQuery(
-            systemId = systemId,
-            organizationId = organizationId,
-            timestamp = timestamp,
-            container = container,
-            includeNetwork = true
-        )
+        val fullQuery =
+            buildContainerInsertQuery(
+                systemId = systemId,
+                organizationId = organizationId,
+                timestamp = timestamp,
+                container = container,
+                includeNetwork = true
+            )
         var response = ClickHouseClient.execute(fullQuery)
         if (response.status.isSuccess()) return
 
@@ -245,13 +258,14 @@ class MonitorService {
             errorBody.contains("no column", ignoreCase = true)
         ) {
             // Backward compatibility for older schemas missing network byte columns.
-            val legacyQuery = buildContainerInsertQuery(
-                systemId = systemId,
-                organizationId = organizationId,
-                timestamp = timestamp,
-                container = container,
-                includeNetwork = false
-            )
+            val legacyQuery =
+                buildContainerInsertQuery(
+                    systemId = systemId,
+                    organizationId = organizationId,
+                    timestamp = timestamp,
+                    container = container,
+                    includeNetwork = false
+                )
             response = ClickHouseClient.execute(legacyQuery)
             if (response.status.isSuccess()) return
             errorBody = response.bodyAsText()
@@ -289,11 +303,12 @@ class MonitorService {
                 ${container.mem_used},
                 ${container.mem_limit}$networkValues
             )
-        """.trimIndent()
+            """.trimIndent()
     }
 
     private suspend fun ensureContainerMetricsTableExists() {
-        val query = """
+        val query =
+            """
             CREATE TABLE IF NOT EXISTS $clickhouseDb.container_metrics (
                 system_id UUID,
                 org_id UInt32,
@@ -312,7 +327,7 @@ class MonitorService {
             ORDER BY (org_id, system_id, timestamp, container_name)
             TTL timestamp + INTERVAL 90 DAY
             SETTINGS index_granularity = 8192
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         if (!response.status.isSuccess()) {
@@ -326,7 +341,9 @@ class MonitorService {
      */
     fun listSystems(organizationId: Int): List<SystemData> {
         return transaction {
-            Systems.selectAll().where { Systems.organization_id eq organizationId }
+            Systems
+                .selectAll()
+                .where { Systems.organization_id eq organizationId }
                 .orderBy(Systems.created_at to SortOrder.DESC)
                 .map { rowToSystemData(it) }
         }
@@ -337,7 +354,9 @@ class MonitorService {
      */
     fun getSystemById(systemId: UUID): SystemData? {
         return transaction {
-            Systems.selectAll().where { Systems.id eq systemId }
+            Systems
+                .selectAll()
+                .where { Systems.id eq systemId }
                 .firstOrNull()
                 ?.let { rowToSystemData(it) }
         }
@@ -346,11 +365,15 @@ class MonitorService {
     /**
      * Delete a system and all its metrics.
      */
-    fun deleteSystem(systemId: UUID, organizationId: Int): Boolean {
+    fun deleteSystem(
+        systemId: UUID,
+        organizationId: Int
+    ): Boolean {
         return transaction {
-            val deleted = Systems.deleteWhere {
-                (Systems.id eq systemId) and (Systems.organization_id eq organizationId)
-            }
+            val deleted =
+                Systems.deleteWhere {
+                    (Systems.id eq systemId) and (Systems.organization_id eq organizationId)
+                }
             deleted > 0
         }
     }
@@ -360,7 +383,8 @@ class MonitorService {
      */
     suspend fun getLatestMetrics(systemId: UUID): LatestMetrics? {
         val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
-        val query = """
+        val query =
+            """
             SELECT 
                 cpu_percent, mem_total, mem_used, disk_total, disk_used,
                 net_recv_bytes, net_sent_bytes, load_1, temp_max, gpu_percent, battery_percent
@@ -370,7 +394,7 @@ class MonitorService {
             ORDER BY timestamp DESC
             LIMIT 1
             FORMAT JSONCompact
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
 
@@ -388,12 +412,42 @@ class MonitorService {
             val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
 
             val cpuPercent = data.getOrNull(0)?.toString()?.toFloatOrNull() ?: 0f
-            val memTotal = data.getOrNull(1)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
-            val memUsed = data.getOrNull(2)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
-            val diskTotal = data.getOrNull(3)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
-            val diskUsed = data.getOrNull(4)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
-            val netRecvBytes = data.getOrNull(5)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
-            val netSentBytes = data.getOrNull(6)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
+            val memTotal =
+                data
+                    .getOrNull(1)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
+            val memUsed =
+                data
+                    .getOrNull(2)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
+            val diskTotal =
+                data
+                    .getOrNull(3)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
+            val diskUsed =
+                data
+                    .getOrNull(4)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
+            val netRecvBytes =
+                data
+                    .getOrNull(5)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
+            val netSentBytes =
+                data
+                    .getOrNull(6)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
             val load1 = data.getOrNull(7)?.toString()?.toFloatOrNull() ?: 0f
             val tempMax = data.getOrNull(8)?.toString()?.toFloatOrNull()
             val gpuPercent = data.getOrNull(9)?.toString()?.toFloatOrNull()
@@ -446,15 +500,25 @@ class MonitorService {
 
             // Auto-calculate interval if not provided
             val timeRange = effectiveTo - effectiveFrom
-            val calculatedInterval = intervalSeconds ?: when {
-                timeRange <= 3600 -> 10 // 1 hour: 10s interval
-                timeRange <= 21600 -> 60 // 6 hours: 1 min interval
-                timeRange <= 86400 -> 300 // 24 hours: 5 min interval
-                timeRange <= 604800 -> 1800 // 7 days: 30 min interval
-                else -> 3600 // 30+ days: 1 hour interval
-            }
+            val calculatedInterval =
+                intervalSeconds ?: when {
+                    timeRange <= 3600 -> 10
 
-            val query = """
+                    // 1 hour: 10s interval
+                    timeRange <= 21600 -> 60
+
+                    // 6 hours: 1 min interval
+                    timeRange <= 86400 -> 300
+
+                    // 24 hours: 5 min interval
+                    timeRange <= 604800 -> 1800
+
+                    // 7 days: 30 min interval
+                    else -> 3600 // 30+ days: 1 hour interval
+                }
+
+            val query =
+                """
             SELECT 
                 toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
                 avg(cpu_percent) as cpu,
@@ -475,7 +539,7 @@ class MonitorService {
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
-            """.trimIndent()
+                """.trimIndent()
 
             val response = ClickHouseClient.execute(query)
 
@@ -492,38 +556,50 @@ class MonitorService {
             }
 
             val body = response.bodyAsText()
-            val dataPoints = try {
-                val json = Json { ignoreUnknownKeys = true }
-                val result = json.parseToJsonElement(body).jsonObject
-                val data = result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
-                    system_id = systemId.toString(),
-                    from = effectiveFrom,
-                    to = effectiveTo,
-                    interval_seconds = calculatedInterval,
-                    data_points = emptyList()
-                )
+            val dataPoints =
+                try {
+                    val json = Json { ignoreUnknownKeys = true }
+                    val result = json.parseToJsonElement(body).jsonObject
+                    val data =
+                        result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
+                            system_id = systemId.toString(),
+                            from = effectiveFrom,
+                            to = effectiveTo,
+                            interval_seconds = calculatedInterval,
+                            data_points = emptyList()
+                        )
 
-                data.map { row ->
-                    val arr = row.jsonArray
-                    MetricDataPoint(
-                        timestamp = arr[0].toString().replace("\"", "").toLong(),
-                        cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
-                        mem_percent = arr.getOrNull(2)?.toString()?.toFloatOrNull(),
-                        disk_percent = arr.getOrNull(3)?.toString()?.toFloatOrNull(),
-                        net_recv_bytes = arr.getOrNull(4)?.toString()?.replace("\"", "")?.toLongOrNull(),
-                        net_sent_bytes = arr.getOrNull(5)?.toString()?.replace("\"", "")?.toLongOrNull(),
-                        load_1 = arr.getOrNull(6)?.toString()?.toFloatOrNull(),
-                        load_5 = arr.getOrNull(7)?.toString()?.toFloatOrNull(),
-                        load_15 = arr.getOrNull(8)?.toString()?.toFloatOrNull(),
-                        temp_max = arr.getOrNull(9)?.toString()?.toFloatOrNull(),
-                        gpu_percent = arr.getOrNull(10)?.toString()?.toFloatOrNull(),
-                        battery_percent = arr.getOrNull(11)?.toString()?.toFloatOrNull()
-                    )
+                    data.map { row ->
+                        val arr = row.jsonArray
+                        MetricDataPoint(
+                            timestamp = arr[0].toString().replace("\"", "").toLong(),
+                            cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
+                            mem_percent = arr.getOrNull(2)?.toString()?.toFloatOrNull(),
+                            disk_percent = arr.getOrNull(3)?.toString()?.toFloatOrNull(),
+                            net_recv_bytes =
+                                arr
+                                    .getOrNull(4)
+                                    ?.toString()
+                                    ?.replace("\"", "")
+                                    ?.toLongOrNull(),
+                            net_sent_bytes =
+                                arr
+                                    .getOrNull(5)
+                                    ?.toString()
+                                    ?.replace("\"", "")
+                                    ?.toLongOrNull(),
+                            load_1 = arr.getOrNull(6)?.toString()?.toFloatOrNull(),
+                            load_5 = arr.getOrNull(7)?.toString()?.toFloatOrNull(),
+                            load_15 = arr.getOrNull(8)?.toString()?.toFloatOrNull(),
+                            temp_max = arr.getOrNull(9)?.toString()?.toFloatOrNull(),
+                            gpu_percent = arr.getOrNull(10)?.toString()?.toFloatOrNull(),
+                            battery_percent = arr.getOrNull(11)?.toString()?.toFloatOrNull()
+                        )
+                    }
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to parse historical metrics" }
+                    emptyList()
                 }
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to parse historical metrics" }
-                emptyList()
-            }
 
             HistoricalMetricsResponse(
                 system_id = systemId.toString(),
@@ -540,11 +616,13 @@ class MonitorService {
     suspend fun getLatestContainers(systemId: UUID): List<ContainerStats> {
         val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
         val organizationId = getSystemById(systemId)?.organizationId
-        val monitorIntervalSeconds = organizationId
-            ?.let { getTierConfig(it).monitorIntervalSeconds }
-            ?: PricingTier.FREE.monitorIntervalSeconds
+        val monitorIntervalSeconds =
+            organizationId
+                ?.let { getTierConfig(it).monitorIntervalSeconds }
+                ?: PricingTier.FREE.monitorIntervalSeconds
         // Keep container visibility aligned with system health (5 min minimum), while respecting slower plans.
         val freshnessWindowSeconds = max(monitorIntervalSeconds * 3, 300)
+
         fun buildQuery(includeNetwork: Boolean): String {
             val networkColumns = if (includeNetwork) ", net_recv_bytes, net_sent_bytes" else ""
             return """
@@ -560,7 +638,7 @@ class MonitorService {
                 ) WHERE rn = 1
                   AND timestamp >= now() - INTERVAL $freshnessWindowSeconds SECOND
                 FORMAT JSONCompact
-            """.trimIndent()
+                """.trimIndent()
         }
 
         var includeNetwork = true
@@ -598,8 +676,18 @@ class MonitorService {
                 val arr = row.jsonArray
                 val memUsed = arr[5].toString().replace("\"", "").toLongOrNull() ?: 0
                 val memLimit = arr[6].toString().replace("\"", "").toLongOrNull() ?: 1
-                val netRecvBytes = if (includeNetwork) arr.getOrNull(7)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0 else 0
-                val netSentBytes = if (includeNetwork) arr.getOrNull(8)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0 else 0
+                val netRecvBytes =
+                    if (includeNetwork) arr
+                        .getOrNull(7)
+                        ?.toString()
+                        ?.replace("\"", "")
+                        ?.toLongOrNull() ?: 0 else 0
+                val netSentBytes =
+                    if (includeNetwork) arr
+                        .getOrNull(8)
+                        ?.toString()
+                        ?.replace("\"", "")
+                        ?.toLongOrNull() ?: 0 else 0
 
                 ContainerStats(
                     name = arr[0].toString().replace("\"", ""),
@@ -643,15 +731,17 @@ class MonitorService {
         val (effectiveFrom, effectiveTo) = clampedWindow
 
         val timeRange = effectiveTo - effectiveFrom
-        val calculatedInterval = intervalSeconds ?: when {
-            timeRange <= 3600 -> 10
-            timeRange <= 21600 -> 60
-            timeRange <= 86400 -> 300
-            timeRange <= 604800 -> 1800
-            else -> 3600
-        }
+        val calculatedInterval =
+            intervalSeconds ?: when {
+                timeRange <= 3600 -> 10
+                timeRange <= 21600 -> 60
+                timeRange <= 86400 -> 300
+                timeRange <= 604800 -> 1800
+                else -> 3600
+            }
 
-        val query = """
+        val query =
+            """
             SELECT 
                 toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
                 avg(cpu_percent) as cpu,
@@ -667,7 +757,7 @@ class MonitorService {
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
 
@@ -682,32 +772,54 @@ class MonitorService {
         }
 
         val body = response.bodyAsText()
-        val dataPoints = try {
-            val json = Json { ignoreUnknownKeys = true }
-            val result = json.parseToJsonElement(body).jsonObject
-            val data = result["data"]?.jsonArray ?: return ContainerMetricsResponse(
-                container_name = containerName,
-                from = effectiveFrom,
-                to = effectiveTo,
-                interval_seconds = calculatedInterval,
-                data_points = emptyList()
-            )
+        val dataPoints =
+            try {
+                val json = Json { ignoreUnknownKeys = true }
+                val result = json.parseToJsonElement(body).jsonObject
+                val data =
+                    result["data"]?.jsonArray ?: return ContainerMetricsResponse(
+                        container_name = containerName,
+                        from = effectiveFrom,
+                        to = effectiveTo,
+                        interval_seconds = calculatedInterval,
+                        data_points = emptyList()
+                    )
 
-            data.map { row ->
-                val arr = row.jsonArray
-                ContainerMetricDataPoint(
-                    timestamp = arr[0].toString().replace("\"", "").toLong(),
-                    cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
-                    mem_used = arr.getOrNull(2)?.toString()?.replace("\"", "")?.toLongOrNull(),
-                    mem_limit = arr.getOrNull(3)?.toString()?.replace("\"", "")?.toLongOrNull(),
-                    net_recv_bytes = arr.getOrNull(4)?.toString()?.replace("\"", "")?.toLongOrNull(),
-                    net_sent_bytes = arr.getOrNull(5)?.toString()?.replace("\"", "")?.toLongOrNull()
-                )
+                data.map { row ->
+                    val arr = row.jsonArray
+                    ContainerMetricDataPoint(
+                        timestamp = arr[0].toString().replace("\"", "").toLong(),
+                        cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
+                        mem_used =
+                            arr
+                                .getOrNull(2)
+                                ?.toString()
+                                ?.replace("\"", "")
+                                ?.toLongOrNull(),
+                        mem_limit =
+                            arr
+                                .getOrNull(3)
+                                ?.toString()
+                                ?.replace("\"", "")
+                                ?.toLongOrNull(),
+                        net_recv_bytes =
+                            arr
+                                .getOrNull(4)
+                                ?.toString()
+                                ?.replace("\"", "")
+                                ?.toLongOrNull(),
+                        net_sent_bytes =
+                            arr
+                                .getOrNull(5)
+                                ?.toString()
+                                ?.replace("\"", "")
+                                ?.toLongOrNull()
+                    )
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to parse container historical metrics" }
+                emptyList()
             }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to parse container historical metrics" }
-            emptyList()
-        }
 
         return ContainerMetricsResponse(
             container_name = containerName,
@@ -725,7 +837,10 @@ class MonitorService {
         return listSystemAlerts(systemId)
     }
 
-    fun getAlertConfig(systemId: UUID, organizationId: Int): AlertConfigResponse {
+    fun getAlertConfig(
+        systemId: UUID,
+        organizationId: Int
+    ): AlertConfigResponse {
         ensureOrganizationAlertTemplates(organizationId)
         ensureSystemAlertsSeeded(systemId, organizationId)
 
@@ -742,7 +857,11 @@ class MonitorService {
         )
     }
 
-    fun updateAlertScope(systemId: UUID, organizationId: Int, scope: String): Boolean {
+    fun updateAlertScope(
+        systemId: UUID,
+        organizationId: Int,
+        scope: String
+    ): Boolean {
         if (!isValidAlertScope(scope)) {
             return false
         }
@@ -751,10 +870,13 @@ class MonitorService {
 
         val now = Clock.System.now()
         transaction {
-            val existing = SystemAlertSettings.selectAll().where {
-                (SystemAlertSettings.system_id eq systemId) and
-                    (SystemAlertSettings.organization_id eq organizationId)
-            }.firstOrNull()
+            val existing =
+                SystemAlertSettings
+                    .selectAll()
+                    .where {
+                        (SystemAlertSettings.system_id eq systemId) and
+                            (SystemAlertSettings.organization_id eq organizationId)
+                    }.firstOrNull()
 
             if (existing != null) {
                 SystemAlertSettings.update({ SystemAlertSettings.system_id eq systemId }) {
@@ -785,18 +907,19 @@ class MonitorService {
         if (scope == ALERT_SCOPE_GLOBAL) {
             ensureOrganizationAlertTemplates(organizationId)
             val now = Clock.System.now()
-            val alertId = transaction {
-                OrganizationAlertTemplates.insert {
-                    it[OrganizationAlertTemplates.organization_id] = organizationId
-                    it[metric] = request.metric
-                    it[condition] = request.condition
-                    it[threshold] = request.threshold
-                    it[duration_seconds] = request.durationSeconds
-                    it[enabled] = request.enabled
-                    it[created_at] = now
-                    it[updated_at] = now
-                } get OrganizationAlertTemplates.id
-            }
+            val alertId =
+                transaction {
+                    OrganizationAlertTemplates.insert {
+                        it[OrganizationAlertTemplates.organization_id] = organizationId
+                        it[metric] = request.metric
+                        it[condition] = request.condition
+                        it[threshold] = request.threshold
+                        it[duration_seconds] = request.durationSeconds
+                        it[enabled] = request.enabled
+                        it[created_at] = now
+                        it[updated_at] = now
+                    } get OrganizationAlertTemplates.id
+                }
 
             return AlertResponse(
                 id = alertId,
@@ -815,19 +938,20 @@ class MonitorService {
         ensureSystemAlertsSeeded(systemId, organizationId)
         val now = Clock.System.now()
 
-        val alertId = transaction {
-            SystemAlerts.insert {
-                it[system_id] = systemId
-                it[SystemAlerts.organization_id] = organizationId
-                it[metric] = request.metric
-                it[condition] = request.condition
-                it[threshold] = request.threshold
-                it[duration_seconds] = request.durationSeconds
-                it[enabled] = request.enabled
-                it[last_triggered_at] = null
-                it[created_at] = now
-            } get SystemAlerts.id
-        }
+        val alertId =
+            transaction {
+                SystemAlerts.insert {
+                    it[system_id] = systemId
+                    it[SystemAlerts.organization_id] = organizationId
+                    it[metric] = request.metric
+                    it[condition] = request.condition
+                    it[threshold] = request.threshold
+                    it[duration_seconds] = request.durationSeconds
+                    it[enabled] = request.enabled
+                    it[last_triggered_at] = null
+                    it[created_at] = now
+                } get SystemAlerts.id
+            }
 
         return AlertResponse(
             id = alertId,
@@ -856,33 +980,35 @@ class MonitorService {
         if (scope == ALERT_SCOPE_GLOBAL) {
             val now = Clock.System.now()
             return transaction {
-                val count = OrganizationAlertTemplates.update({
-                    (OrganizationAlertTemplates.id eq alertId) and
-                        (OrganizationAlertTemplates.organization_id eq organizationId)
-                }) {
-                    request.metric?.let { metric -> it[OrganizationAlertTemplates.metric] = metric }
-                    request.condition?.let { cond -> it[condition] = cond }
-                    request.threshold?.let { thresh -> it[threshold] = thresh }
-                    request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
-                    request.enabled?.let { en -> it[enabled] = en }
-                    it[updated_at] = now
-                }
+                val count =
+                    OrganizationAlertTemplates.update({
+                        (OrganizationAlertTemplates.id eq alertId) and
+                            (OrganizationAlertTemplates.organization_id eq organizationId)
+                    }) {
+                        request.metric?.let { metric -> it[OrganizationAlertTemplates.metric] = metric }
+                        request.condition?.let { cond -> it[condition] = cond }
+                        request.threshold?.let { thresh -> it[threshold] = thresh }
+                        request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
+                        request.enabled?.let { en -> it[enabled] = en }
+                        it[updated_at] = now
+                    }
                 count > 0
             }
         }
 
         return transaction {
-            val count = SystemAlerts.update({
-                (SystemAlerts.id eq alertId) and
-                    (SystemAlerts.system_id eq systemId) and
-                    (SystemAlerts.organization_id eq organizationId)
-            }) {
-                request.metric?.let { metric -> it[SystemAlerts.metric] = metric }
-                request.condition?.let { cond -> it[condition] = cond }
-                request.threshold?.let { thresh -> it[threshold] = thresh }
-                request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
-                request.enabled?.let { en -> it[enabled] = en }
-            }
+            val count =
+                SystemAlerts.update({
+                    (SystemAlerts.id eq alertId) and
+                        (SystemAlerts.system_id eq systemId) and
+                        (SystemAlerts.organization_id eq organizationId)
+                }) {
+                    request.metric?.let { metric -> it[SystemAlerts.metric] = metric }
+                    request.condition?.let { cond -> it[condition] = cond }
+                    request.threshold?.let { thresh -> it[threshold] = thresh }
+                    request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
+                    request.enabled?.let { en -> it[enabled] = en }
+                }
             count > 0
         }
     }
@@ -898,20 +1024,22 @@ class MonitorService {
     ): Boolean {
         if (scope == ALERT_SCOPE_GLOBAL) {
             return transaction {
-                val deleted = OrganizationAlertTemplates.deleteWhere {
-                    (OrganizationAlertTemplates.id eq alertId) and
-                        (OrganizationAlertTemplates.organization_id eq organizationId)
-                }
+                val deleted =
+                    OrganizationAlertTemplates.deleteWhere {
+                        (OrganizationAlertTemplates.id eq alertId) and
+                            (OrganizationAlertTemplates.organization_id eq organizationId)
+                    }
                 deleted > 0
             }
         }
 
         return transaction {
-            val deleted = SystemAlerts.deleteWhere {
-                (SystemAlerts.id eq alertId) and
-                    (SystemAlerts.system_id eq systemId) and
-                    (SystemAlerts.organization_id eq organizationId)
-            }
+            val deleted =
+                SystemAlerts.deleteWhere {
+                    (SystemAlerts.id eq alertId) and
+                        (SystemAlerts.system_id eq systemId) and
+                        (SystemAlerts.organization_id eq organizationId)
+                }
             deleted > 0
         }
     }
@@ -924,9 +1052,12 @@ class MonitorService {
 
     private fun ensureOrganizationAlertTemplates(organizationId: Int) {
         transaction {
-            val existingCount = OrganizationAlertTemplates.selectAll().where {
-                OrganizationAlertTemplates.organization_id eq organizationId
-            }.count()
+            val existingCount =
+                OrganizationAlertTemplates
+                    .selectAll()
+                    .where {
+                        OrganizationAlertTemplates.organization_id eq organizationId
+                    }.count()
             if (existingCount > 0) {
                 return@transaction
             }
@@ -947,20 +1078,29 @@ class MonitorService {
         }
     }
 
-    private fun ensureSystemAlertsSeeded(systemId: UUID, organizationId: Int) {
+    private fun ensureSystemAlertsSeeded(
+        systemId: UUID,
+        organizationId: Int
+    ) {
         transaction {
-            val existingCount = SystemAlerts.selectAll().where {
-                (SystemAlerts.system_id eq systemId) and
-                    (SystemAlerts.organization_id eq organizationId)
-            }.count()
+            val existingCount =
+                SystemAlerts
+                    .selectAll()
+                    .where {
+                        (SystemAlerts.system_id eq systemId) and
+                            (SystemAlerts.organization_id eq organizationId)
+                    }.count()
             if (existingCount > 0) {
                 return@transaction
             }
 
             val now = Clock.System.now()
-            val templates = OrganizationAlertTemplates.selectAll().where {
-                OrganizationAlertTemplates.organization_id eq organizationId
-            }.toList()
+            val templates =
+                OrganizationAlertTemplates
+                    .selectAll()
+                    .where {
+                        OrganizationAlertTemplates.organization_id eq organizationId
+                    }.toList()
 
             if (templates.isEmpty()) {
                 defaultAlertTemplates.forEach { template ->
@@ -995,12 +1135,18 @@ class MonitorService {
         }
     }
 
-    private fun getSystemAlertScope(systemId: UUID, organizationId: Int): String {
+    private fun getSystemAlertScope(
+        systemId: UUID,
+        organizationId: Int
+    ): String {
         return transaction {
-            val existing = SystemAlertSettings.selectAll().where {
-                (SystemAlertSettings.system_id eq systemId) and
-                    (SystemAlertSettings.organization_id eq organizationId)
-            }.firstOrNull()
+            val existing =
+                SystemAlertSettings
+                    .selectAll()
+                    .where {
+                        (SystemAlertSettings.system_id eq systemId) and
+                            (SystemAlertSettings.organization_id eq organizationId)
+                    }.firstOrNull()
 
             if (existing != null) {
                 return@transaction existing[SystemAlertSettings.scope]
@@ -1019,7 +1165,9 @@ class MonitorService {
 
     private fun listSystemAlerts(systemId: UUID): List<AlertResponse> {
         return transaction {
-            SystemAlerts.selectAll().where { SystemAlerts.system_id eq systemId }
+            SystemAlerts
+                .selectAll()
+                .where { SystemAlerts.system_id eq systemId }
                 .orderBy(SystemAlerts.created_at to SortOrder.DESC)
                 .map { row ->
                     AlertResponse(
@@ -1038,19 +1186,26 @@ class MonitorService {
         }
     }
 
-    private fun listGlobalAlerts(systemId: UUID, organizationId: Int): List<AlertResponse> {
+    private fun listGlobalAlerts(
+        systemId: UUID,
+        organizationId: Int
+    ): List<AlertResponse> {
         return transaction {
-            val templateStates = SystemAlertTemplateStates.selectAll().where {
-                SystemAlertTemplateStates.system_id eq systemId
-            }.associateBy(
-                keySelector = { it[SystemAlertTemplateStates.template_alert_id] },
-                valueTransform = { it[SystemAlertTemplateStates.last_triggered_at] }
-            )
+            val templateStates =
+                SystemAlertTemplateStates
+                    .selectAll()
+                    .where {
+                        SystemAlertTemplateStates.system_id eq systemId
+                    }.associateBy(
+                        keySelector = { it[SystemAlertTemplateStates.template_alert_id] },
+                        valueTransform = { it[SystemAlertTemplateStates.last_triggered_at] }
+                    )
 
-            OrganizationAlertTemplates.selectAll().where {
-                OrganizationAlertTemplates.organization_id eq organizationId
-            }
-                .orderBy(OrganizationAlertTemplates.created_at to SortOrder.DESC)
+            OrganizationAlertTemplates
+                .selectAll()
+                .where {
+                    OrganizationAlertTemplates.organization_id eq organizationId
+                }.orderBy(OrganizationAlertTemplates.created_at to SortOrder.DESC)
                 .map { row ->
                     AlertResponse(
                         id = row[OrganizationAlertTemplates.id],
@@ -1089,7 +1244,11 @@ class MonitorService {
         return pricingTierService.getEffectiveTierForOrganization(organizationId).tier
     }
 
-    private suspend fun clampRangeToRetention(systemId: UUID, fromTimestamp: Long, toTimestamp: Long): Pair<Long, Long>? {
+    private suspend fun clampRangeToRetention(
+        systemId: UUID,
+        fromTimestamp: Long,
+        toTimestamp: Long
+    ): Pair<Long, Long>? {
         val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
         val nowEpochSeconds = Clock.System.now().epochSeconds
         val oldestAllowed = nowEpochSeconds - (retentionDays * 86_400L)

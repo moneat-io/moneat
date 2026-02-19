@@ -65,7 +65,10 @@ fun Route.ingestRoutes(
     route("/api/{projectId}") {
         // Sentry envelope endpoint (primary) - enqueue for async processing, respond 202
         post("/envelope/") {
-            val queueKey = call.application.environment.config.property("ingest.queueKey").getString()
+            val queueKey =
+                call.application.environment.config
+                    .property("ingest.queueKey")
+                    .getString()
             val projectId = call.parameters["projectId"]?.toLongOrNull()
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
@@ -94,12 +97,15 @@ fun Route.ingestRoutes(
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
 
-                val decompressedBytes = if (contentEncoding == "gzip") {
-                    logger.debug { "Decompressing gzip envelope" }
-                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-                } else {
-                    bodyBytes
-                }
+                val decompressedBytes =
+                    if (contentEncoding == "gzip") {
+                        logger.debug { "Decompressing gzip envelope" }
+                        java.util.zip
+                            .GZIPInputStream(bodyBytes.inputStream())
+                            .readBytes()
+                    } else {
+                        bodyBytes
+                    }
 
                 logger.debug { "Received envelope for project $projectId" }
                 logger.debug { "Envelope body:\n${decompressedBytes.decodeToString().take(500)}" }
@@ -113,18 +119,20 @@ fun Route.ingestRoutes(
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
                         return@post
                     }
-                    val groupedReservations = envelope.items
-                        .groupingBy { mapEnvelopeItemTypeToQuotaType(it.type) }
-                        .eachCount()
+                    val groupedReservations =
+                        envelope.items
+                            .groupingBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                            .eachCount()
 
                     // Calculate bytes per type for GB quota tracking
-                    val groupedBytes = envelope.items
-                        .groupBy { mapEnvelopeItemTypeToQuotaType(it.type) }
-                        .mapValues { (_, items) ->
-                            items.sumOf { item ->
-                                (item.payloadBytes?.size ?: item.payload.toByteArray(Charsets.UTF_8).size).toLong()
+                    val groupedBytes =
+                        envelope.items
+                            .groupBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                            .mapValues { (_, items) ->
+                                items.sumOf { item ->
+                                    (item.payloadBytes?.size ?: item.payload.toByteArray(Charsets.UTF_8).size).toLong()
+                                }
                             }
-                        }
 
                     val reservation = reserveEnvelopeQuota(orgId, groupedReservations, groupedBytes)
                     if (!reservation.allowed) {
@@ -160,9 +168,10 @@ fun Route.ingestRoutes(
 
             val authHeader = call.request.header("X-Sentry-Auth")
             val sentryKey = call.request.queryParameters["sentry_key"]
-            val publicKey = extractPublicKey(authHeader, sentryKey)
-                ?: extractPublicKeyFromDsn(call.request.header(HttpHeaders.Authorization))
-                ?: extractPublicKeyFromDsn(call.request.header("x-moneat-dsn"))
+            val publicKey =
+                extractPublicKey(authHeader, sentryKey)
+                    ?: extractPublicKeyFromDsn(call.request.header(HttpHeaders.Authorization))
+                    ?: extractPublicKeyFromDsn(call.request.header("x-moneat-dsn"))
 
             if (publicKey == null) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
@@ -183,19 +192,23 @@ fun Route.ingestRoutes(
 
             val contentEncoding = call.request.header(HttpHeaders.ContentEncoding)
             val bodyBytes = call.receive<ByteArray>()
-            val payloadBytes = if (contentEncoding == "gzip") {
-                java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-            } else {
-                bodyBytes
-            }
+            val payloadBytes =
+                if (contentEncoding == "gzip") {
+                    java.util.zip
+                        .GZIPInputStream(bodyBytes.inputStream())
+                        .readBytes()
+                } else {
+                    bodyBytes
+                }
 
-            val entries = try {
-                json.decodeFromString<List<LogIngestEntry>>(payloadBytes.decodeToString())
-            } catch (e: Exception) {
-                logger.warn(e) { "Invalid log payload for project $projectId" }
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
-                return@post
-            }
+            val entries =
+                try {
+                    json.decodeFromString<List<LogIngestEntry>>(payloadBytes.decodeToString())
+                } catch (e: Exception) {
+                    logger.warn(e) { "Invalid log payload for project $projectId" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                }
 
             if (entries.isEmpty()) {
                 call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
@@ -214,8 +227,11 @@ fun Route.ingestRoutes(
                 }
             }
 
-            val queueKey = call.application.environment.config.propertyOrNull("logs.queueKey")?.getString()
-                ?: "moneat:logs:queue"
+            val queueKey =
+                call.application.environment.config
+                    .propertyOrNull("logs.queueKey")
+                    ?.getString()
+                    ?: "moneat:logs:queue"
             val accepted = logService.enqueueSdkLogs(projectId, entries, queueKey)
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
@@ -278,12 +294,16 @@ fun Route.ingestRoutes(
     }
 }
 
-internal fun extractPublicKey(authHeader: String?, sentryKeyParam: String? = null): String? {
-    val headerKey = authHeader?.let { header ->
-        // Parse "Sentry sentry_key=xxx, sentry_version=7"
-        val keyRegex = "(?i)sentry_key=([a-z0-9]+)".toRegex()
-        keyRegex.find(header)?.groupValues?.get(1)
-    }
+internal fun extractPublicKey(
+    authHeader: String?,
+    sentryKeyParam: String? = null
+): String? {
+    val headerKey =
+        authHeader?.let { header ->
+            // Parse "Sentry sentry_key=xxx, sentry_version=7"
+            val keyRegex = "(?i)sentry_key=([a-z0-9]+)".toRegex()
+            keyRegex.find(header)?.groupValues?.get(1)
+        }
     if (headerKey != null) return headerKey
 
     // Fallback for SDKs that pass auth in query params:

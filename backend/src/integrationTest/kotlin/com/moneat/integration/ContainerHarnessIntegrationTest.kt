@@ -54,25 +54,28 @@ class ContainerHarnessIntegrationTest {
         @JvmStatic
         fun setupContainers() {
             logger.info { "Starting PostgreSQL container..." }
-            postgres = PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
-                .withDatabaseName("moneat_test")
-                .withUsername("test")
-                .withPassword("test")
+            postgres =
+                PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+                    .withDatabaseName("moneat_test")
+                    .withUsername("test")
+                    .withPassword("test")
             postgres.start()
             logger.info { "PostgreSQL started at ${postgres.jdbcUrl}" }
 
             logger.info { "Starting ClickHouse container..." }
-            clickhouse = GenericContainer(DockerImageName.parse("clickhouse/clickhouse-server:26.1-alpine"))
-                .withExposedPorts(8123, 9000)
-                .withEnv("CLICKHOUSE_DB", "moneat_test")
-                .withEnv("CLICKHOUSE_USER", "test")
-                .withEnv("CLICKHOUSE_PASSWORD", "test")
+            clickhouse =
+                GenericContainer(DockerImageName.parse("clickhouse/clickhouse-server:26.1-alpine"))
+                    .withExposedPorts(8123, 9000)
+                    .withEnv("CLICKHOUSE_DB", "moneat_test")
+                    .withEnv("CLICKHOUSE_USER", "test")
+                    .withEnv("CLICKHOUSE_PASSWORD", "test")
             clickhouse.start()
             logger.info { "ClickHouse started at http://${clickhouse.host}:${clickhouse.getMappedPort(8123)}" }
 
             logger.info { "Starting Redis container..." }
-            redis = GenericContainer(DockerImageName.parse("redis:8-alpine"))
-                .withExposedPorts(6379)
+            redis =
+                GenericContainer(DockerImageName.parse("redis:8-alpine"))
+                    .withExposedPorts(6379)
             redis.start()
             logger.info { "Redis started at ${redis.host}:${redis.getMappedPort(6379)}" }
 
@@ -86,10 +89,12 @@ class ContainerHarnessIntegrationTest {
 
             // Run Flyway migrations
             logger.info { "Running PostgreSQL migrations..." }
-            val flyway = Flyway.configure()
-                .dataSource(postgres.jdbcUrl, "test", "test")
-                .locations("classpath:db/migration")
-                .load()
+            val flyway =
+                Flyway
+                    .configure()
+                    .dataSource(postgres.jdbcUrl, "test", "test")
+                    .locations("classpath:db/migration")
+                    .load()
             flyway.migrate()
             logger.info { "PostgreSQL migrations completed" }
         }
@@ -103,10 +108,12 @@ class ContainerHarnessIntegrationTest {
 
     @Test
     fun `postgres_migrations_completed_successfully`() {
-        val flyway = Flyway.configure()
-            .dataSource(postgres.jdbcUrl, "test", "test")
-            .locations("classpath:db/migration")
-            .load()
+        val flyway =
+            Flyway
+                .configure()
+                .dataSource(postgres.jdbcUrl, "test", "test")
+                .locations("classpath:db/migration")
+                .load()
 
         val info = flyway.info()
         val pending = info.pending()

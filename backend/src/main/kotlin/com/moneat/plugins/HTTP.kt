@@ -73,8 +73,10 @@ fun Application.configureHTTP() {
         )
 
         // HSTS - only in production (not on localhost)
-        if (!call.request.local.remoteHost.contains("localhost") &&
-            !call.request.local.remoteHost.contains("127.0.0.1")
+        if (!call.request.local.remoteHost
+                .contains("localhost") &&
+            !call.request.local.remoteHost
+                .contains("127.0.0.1")
         ) {
             call.response.headers.append("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         }

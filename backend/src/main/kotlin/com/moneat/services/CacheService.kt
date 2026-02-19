@@ -49,28 +49,30 @@ object CacheService {
         parentSpan: ISpan? = null,
         loader: suspend () -> T
     ): T {
-        val cached = try {
-            withContext(Dispatchers.IO) {
-                if (RedisConfig.isConnected()) {
-                    val value = if (parentSpan != null && io.sentry.Sentry.isEnabled()) {
-                        SentryUtils.withSpan(parentSpan, "cache.get", "Redis GET $key") { span ->
-                            span?.setData("cache.key", key)
-                            span?.setData("cache.hit", false)
-                            RedisConfig.sync().get(key)
-                        }
+        val cached =
+            try {
+                withContext(Dispatchers.IO) {
+                    if (RedisConfig.isConnected()) {
+                        val value =
+                            if (parentSpan != null && io.sentry.Sentry.isEnabled()) {
+                                SentryUtils.withSpan(parentSpan, "cache.get", "Redis GET $key") { span ->
+                                    span?.setData("cache.key", key)
+                                    span?.setData("cache.hit", false)
+                                    RedisConfig.sync().get(key)
+                                }
+                            } else {
+                                RedisConfig.sync().get(key)
+                            }
+                        value
                     } else {
-                        RedisConfig.sync().get(key)
+                        null
                     }
-                    value
-                } else {
-                    null
                 }
+            } catch (e: Exception) {
+                cacheLogger.warn(e) { "Cache GET failed for key=$key" }
+                SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
+                null
             }
-        } catch (e: Exception) {
-            cacheLogger.warn(e) { "Cache GET failed for key=$key" }
-            SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
-            null
-        }
 
         if (cached != null) {
             SentryUtils.breadcrumb("cache", "Cache HIT", mapOf("key" to key))

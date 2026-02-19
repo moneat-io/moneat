@@ -59,8 +59,9 @@ class OrgManagementRoutesTest {
     fun setupDatabase() {
         if (!dbInitialized) {
             Database.connect(
-                url = "jdbc:h2:mem:moneat_org_management_routes;MODE=PostgreSQL;" +
-                    "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url =
+                    "jdbc:h2:mem:moneat_org_management_routes;MODE=PostgreSQL;" +
+                        "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
             transaction {
@@ -93,9 +94,10 @@ class OrgManagementRoutesTest {
                 routing { orgManagementRoutes() }
             }
 
-            val response = client.get("/v1/org/members") {
-                header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
-            }
+            val response =
+                client.get("/v1/org/members") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
+                }
 
             assertEquals(HttpStatusCode.OK, response.status)
             val body = response.bodyAsText()
@@ -118,9 +120,10 @@ class OrgManagementRoutesTest {
                 routing { orgManagementRoutes() }
             }
 
-            val response = client.put("/v1/org/members/not-a-number/role") {
-                header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
-            }
+            val response =
+                client.put("/v1/org/members/not-a-number/role") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
+                }
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("Invalid user ID"))
@@ -140,9 +143,10 @@ class OrgManagementRoutesTest {
                 routing { orgManagementRoutes() }
             }
 
-            val response = client.delete("/v1/org/invitations/not-a-number") {
-                header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
-            }
+            val response =
+                client.delete("/v1/org/invitations/not-a-number") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
+                }
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("Invalid invitation ID"))
@@ -169,7 +173,8 @@ class OrgManagementRoutesTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(jwtSecret))
+                    JWT
+                        .require(Algorithm.HMAC256(jwtSecret))
                         .withIssuer("moneat")
                         .withAudience("moneat-users")
                         .build()
@@ -179,8 +184,12 @@ class OrgManagementRoutesTest {
         }
     }
 
-    private fun token(userId: Int, orgId: Int): String {
-        return JWT.create()
+    private fun token(
+        userId: Int,
+        orgId: Int
+    ): String {
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
@@ -189,23 +198,32 @@ class OrgManagementRoutesTest {
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
-    private fun seedOrganization(name: String): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase()
-        } get Organizations.id
-    }
+    private fun seedOrganization(name: String): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase()
+            } get Organizations.id
+        }
 
-    private fun seedUser(email: String, name: String): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[password_hash] = "hashed"
-            it[Users.name] = name
-            it[email_verified] = true
-        } get Users.id
-    }
+    private fun seedUser(
+        email: String,
+        name: String
+    ): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[password_hash] = "hashed"
+                it[Users.name] = name
+                it[email_verified] = true
+            } get Users.id
+        }
 
-    private fun seedMembership(orgId: Int, userId: Int, role: String) = transaction {
+    private fun seedMembership(
+        orgId: Int,
+        userId: Int,
+        role: String
+    ) = transaction {
         Memberships.insert {
             it[organization_id] = orgId
             it[Memberships.user_id] = userId
@@ -213,7 +231,11 @@ class OrgManagementRoutesTest {
         }
     }
 
-    private fun seedInvitation(orgId: Int, email: String, inviterId: Int) = transaction {
+    private fun seedInvitation(
+        orgId: Int,
+        email: String,
+        inviterId: Int
+    ) = transaction {
         OrgInvitations.insert {
             it[organization_id] = orgId
             it[OrgInvitations.email] = email

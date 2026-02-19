@@ -41,29 +41,35 @@ class AdminBillingServiceTest {
         }
     }
 
-    private fun seedOrg(name: String = "Test Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Test Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun seedUser(email: String = "admin@test.com"): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[Users.name] = "Admin"
-            it[Users.password_hash] = "hashed"
-            it[Users.email_verified] = true
-        } get Users.id
-    }
+    private fun seedUser(email: String = "admin@test.com"): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[Users.name] = "Admin"
+                it[Users.password_hash] = "hashed"
+                it[Users.email_verified] = true
+            } get Users.id
+        }
 
-    private fun seedSubscription(orgId: Int, status: String = "active"): Int = transaction {
-        Subscriptions.insert {
-            it[organization_id] = orgId
-            it[Subscriptions.status] = status
-            it[plan] = "pro"
-        } get Subscriptions.id
-    }
+    private fun seedSubscription(
+        orgId: Int,
+        status: String = "active"
+    ): Int =
+        transaction {
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[Subscriptions.status] = status
+                it[plan] = "pro"
+            } get Subscriptions.id
+        }
 
     // --- grantPromotionalCredit ---
 
@@ -108,11 +114,13 @@ class AdminBillingServiceTest {
 
         service.grantPromotionalCredit(orgId, userId, bonusGb = 1.0, reason = "audit test")
 
-        val grants = transaction {
-            PromotionalCreditGrants.selectAll()
-                .where { PromotionalCreditGrants.organization_id eq orgId }
-                .toList()
-        }
+        val grants =
+            transaction {
+                PromotionalCreditGrants
+                    .selectAll()
+                    .where { PromotionalCreditGrants.organization_id eq orgId }
+                    .toList()
+            }
         assertEquals(1, grants.size)
         assertEquals("audit test", grants[0][PromotionalCreditGrants.reason])
     }
@@ -166,11 +174,13 @@ class AdminBillingServiceTest {
         val result = service.resetPromotionalCredits(orgId, userId)
         assertTrue(result)
 
-        val sub = transaction {
-            Subscriptions.selectAll()
-                .where { Subscriptions.organization_id eq orgId }
-                .first()
-        }
+        val sub =
+            transaction {
+                Subscriptions
+                    .selectAll()
+                    .where { Subscriptions.organization_id eq orgId }
+                    .first()
+            }
         assertEquals(0L, sub[Subscriptions.bonus_gb_bytes])
         assertEquals(0L, sub[Subscriptions.bonus_units])
     }

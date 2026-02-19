@@ -57,7 +57,9 @@ private fun String.toUUIDOrNull(): UUID? {
  */
 private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     return transaction {
-        Memberships.selectAll().where { Memberships.user_id eq userId }
+        Memberships
+            .selectAll()
+            .where { Memberships.user_id eq userId }
             .map { it[Memberships.organization_id] }
     }
 }

@@ -32,10 +32,11 @@ import java.util.*
 private val logger = KotlinLogging.logger {}
 
 // Top-level fields that should not be searched in tags map
-private val topLevelFields = setOf(
-    "service", "environment", "host", "source", "level", "message", "body",
-    "container_name", "container_id", "container_image", "trace_id", "span_id", "status"
-)
+private val topLevelFields =
+    setOf(
+        "service", "environment", "host", "source", "level", "message", "body",
+        "container_name", "container_id", "container_image", "trace_id", "span_id", "status"
+    )
 
 private data class LogWithCursor(
     val log: LogEntryResponse,
@@ -50,17 +51,30 @@ class LogService {
 
     fun liveChannel(projectId: Long): String = "log:live:$projectId"
 
-    suspend fun enqueueSdkLogs(projectId: Long, entries: List<LogIngestEntry>, queueKey: String): Int {
+    suspend fun enqueueSdkLogs(
+        projectId: Long,
+        entries: List<LogIngestEntry>,
+        queueKey: String
+    ): Int {
         val normalized = entries.mapNotNull { normalizeSdkEntry(it) }
         return enqueueNormalized(projectId, null, "sdk", normalized, queueKey)
     }
 
-    suspend fun enqueueAgentLogs(projectId: Long, systemId: String?, entries: List<AgentLogEntry>, queueKey: String): Int {
+    suspend fun enqueueAgentLogs(
+        projectId: Long,
+        systemId: String?,
+        entries: List<AgentLogEntry>,
+        queueKey: String
+    ): Int {
         val normalized = entries.mapNotNull { normalizeAgentEntry(it, systemId) }
         return enqueueNormalized(projectId, systemId, "agent", normalized, queueKey)
     }
 
-    suspend fun enqueueOtlpLogs(projectId: Long, body: String, queueKey: String): Int {
+    suspend fun enqueueOtlpLogs(
+        projectId: Long,
+        body: String,
+        queueKey: String
+    ): Int {
         val parsed = parseOtlpJson(body)
         val normalized = parsed.mapNotNull { normalizeOtlpEntry(it) }
         return enqueueNormalized(projectId, null, "otlp", normalized, queueKey)
@@ -72,7 +86,10 @@ class LogService {
             .sumOf { (it.message.length + it.body.length).toLong() }
     }
 
-    fun estimateBillableBytes(entries: List<AgentLogEntry>, systemId: String?): Long {
+    fun estimateBillableBytes(
+        entries: List<AgentLogEntry>,
+        systemId: String?
+    ): Long {
         return entries
             .mapNotNull { normalizeAgentEntry(it, systemId) }
             .sumOf { (it.message.length + it.body.length).toLong() }
@@ -91,8 +108,9 @@ class LogService {
 
         val systemIdValue = batch.systemId ?: "00000000-0000-0000-0000-000000000000"
 
-        val rows = batch.logs.joinToString(",\n") { entry ->
-            """
+        val rows =
+            batch.logs.joinToString(",\n") { entry ->
+                """
             (
                 toUUID('${escapeSql(entry.logId)}'),
                 ${batch.projectId},
@@ -113,10 +131,11 @@ class LogService {
                 ${mapToSqlMap(entry.tags)},
                 ${mapToSqlMap(entry.resourceAttributes)}
             )
-            """.trimIndent()
-        }
+                """.trimIndent()
+            }
 
-        val insert = """
+        val insert =
+            """
             INSERT INTO $clickhouseDb.logs (
                 log_id,
                 project_id,
@@ -138,7 +157,7 @@ class LogService {
                 resource_attributes
             ) VALUES
             $rows
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(insert)
         if (!response.status.isSuccess()) {
@@ -152,7 +171,10 @@ class LogService {
         return batch.logs.map { toResponse(it, batch.systemId) }
     }
 
-    suspend fun publishLiveLogs(projectId: Long, logs: List<LogEntryResponse>) {
+    suspend fun publishLiveLogs(
+        projectId: Long,
+        logs: List<LogEntryResponse>
+    ) {
         if (logs.isEmpty()) return
         val channel = liveChannel(projectId)
         val redis = RedisConfig.sync()
@@ -169,7 +191,10 @@ class LogService {
         }
     }
 
-    fun matchesTailFilters(log: LogEntryResponse, filters: LogTailFilters): Boolean {
+    fun matchesTailFilters(
+        log: LogEntryResponse,
+        filters: LogTailFilters
+    ): Boolean {
         if (filters.levels.isNotEmpty() && log.level.lowercase() !in filters.levels) {
             return false
         }
@@ -189,16 +214,20 @@ class LogService {
         return true
     }
 
-    suspend fun queryLogs(projectId: Long, request: LogQueryRequest): LogQueryResponse {
+    suspend fun queryLogs(
+        projectId: Long,
+        request: LogQueryRequest
+    ): LogQueryResponse {
         val limit = request.limit.coerceIn(1, 500)
         val conditions = mutableListOf<String>()
 
-        val totalCountFilter = buildScopeFilter(projectId, request.systemId) ?: return LogQueryResponse(
-            logs = emptyList(),
-            nextCursor = null,
-            hasMore = false,
-            totalCount = 0L
-        )
+        val totalCountFilter =
+            buildScopeFilter(projectId, request.systemId) ?: return LogQueryResponse(
+                logs = emptyList(),
+                nextCursor = null,
+                hasMore = false,
+                totalCount = 0L
+            )
 
         // Support filtering by either system_id or project_id
         conditions += totalCountFilter
@@ -225,7 +254,11 @@ class LogService {
             conditions += "container_name = '${escapeSql(request.containerName)}'"
         }
 
-        val normalizedLevels = request.levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
+        val normalizedLevels =
+            request.levels
+                .map { normalizeLevel(it) }
+                .filter { it.isNotBlank() }
+                .distinct()
         if (normalizedLevels.isNotEmpty()) {
             val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
             conditions += "level IN ($inClause)"
@@ -286,7 +319,8 @@ class LogService {
         // Log the complete WHERE clause for debugging (at DEBUG level to avoid logging user data in production)
         logger.debug { "Executing log query with WHERE clause: $whereClause" }
 
-        val query = """
+        val query =
+            """
             SELECT
                 toString(log_id) AS log_id,
                 formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp_formatted,
@@ -311,7 +345,7 @@ class LogService {
             ORDER BY timestamp DESC, log_id DESC
             LIMIT ${limit + 1}
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
@@ -324,30 +358,33 @@ class LogService {
         val parsed = parseQueryRows(body)
         val hasMore = parsed.size > limit
         val pageRows = if (hasMore) parsed.take(limit) else parsed
-        val nextCursor = pageRows.lastOrNull()?.let { row ->
-            if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
-        }
+        val nextCursor =
+            pageRows.lastOrNull()?.let { row ->
+                if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
+            }
 
         // Query total count - use scope filter
-        val totalCountQuery = """
+        val totalCountQuery =
+            """
             SELECT count() as count
             FROM $clickhouseDb.logs
             WHERE $totalCountFilter
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val totalCountResponse = ClickHouseClient.execute(totalCountQuery)
         val totalCountBody = totalCountResponse.bodyAsText()
-        val totalCount = if (totalCountResponse.status.isSuccess() && !totalCountBody.trimStart().startsWith("Code:")) {
-            try {
-                val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
-                jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
-            } catch (_: Exception) {
+        val totalCount =
+            if (totalCountResponse.status.isSuccess() && !totalCountBody.trimStart().startsWith("Code:")) {
+                try {
+                    val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
+                    jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
+                } catch (_: Exception) {
+                    0L
+                }
+            } else {
                 0L
             }
-        } else {
-            0L
-        }
 
         return LogQueryResponse(
             logs = pageRows.map { it.log },
@@ -357,14 +394,25 @@ class LogService {
         )
     }
 
-    fun autoInterval(fromMs: Long?, toMs: Long?): String {
+    fun autoInterval(
+        fromMs: Long?,
+        toMs: Long?
+    ): String {
         if (fromMs == null || toMs == null) return "1h"
         val rangeMs = toMs - fromMs
         return when {
-            rangeMs <= 3_600_000L -> "1m" // ≤1h → 1m
-            rangeMs <= 21_600_000L -> "5m" // ≤6h → 5m
-            rangeMs <= 86_400_000L -> "15m" // ≤24h → 15m
-            rangeMs <= 604_800_000L -> "1h" // ≤7d → 1h
+            rangeMs <= 3_600_000L -> "1m"
+
+            // ≤1h → 1m
+            rangeMs <= 21_600_000L -> "5m"
+
+            // ≤6h → 5m
+            rangeMs <= 86_400_000L -> "15m"
+
+            // ≤24h → 15m
+            rangeMs <= 604_800_000L -> "1h"
+
+            // ≤7d → 1h
             else -> "1d" // >7d → 1d
         }
     }
@@ -398,11 +446,12 @@ class LogService {
     ): LogAggregateResponse {
         val fromMs = parseTimeToMillis(from)
         val toMs = parseTimeToMillis(to) ?: System.currentTimeMillis()
-        val resolvedInterval = if (interval.isNullOrBlank() || interval == "auto") {
-            autoInterval(fromMs, toMs)
-        } else {
-            interval
-        }
+        val resolvedInterval =
+            if (interval.isNullOrBlank() || interval == "auto") {
+                autoInterval(fromMs, toMs)
+            } else {
+                interval
+            }
         val chInterval = intervalToClickHouse(resolvedInterval)
 
         val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
@@ -454,8 +503,9 @@ class LogService {
 
         val validGroupBy = groupBy?.takeIf { it in setOf("level", "service", "environment") }
 
-        val sql = if (validGroupBy != null) {
-            """
+        val sql =
+            if (validGroupBy != null) {
+                """
             SELECT toStartOfInterval(timestamp, INTERVAL $chInterval) AS bucket,
                    $validGroupBy AS group_value,
                    count() AS cnt
@@ -464,9 +514,9 @@ class LogService {
             GROUP BY bucket, group_value
             ORDER BY bucket
             FORMAT JSONEachRow
-            """.trimIndent()
-        } else {
-            """
+                """.trimIndent()
+            } else {
+                """
             SELECT toStartOfInterval(timestamp, INTERVAL $chInterval) AS bucket,
                    count() AS cnt
             FROM $clickhouseDb.logs
@@ -474,8 +524,8 @@ class LogService {
             GROUP BY bucket
             ORDER BY bucket
             FORMAT JSONEachRow
-            """.trimIndent()
-        }
+                """.trimIndent()
+            }
 
         logger.debug {
             "Aggregate logs SQL for project $projectId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql"
@@ -508,14 +558,15 @@ class LogService {
             } catch (_: Exception) {}
         }
 
-        val buckets = bucketMap.map { (ts, groups) ->
-            val count = groups.values.sum()
-            LogAggregateBucket(
-                timestamp = ts,
-                count = count,
-                groups = if (validGroupBy != null) groups else emptyMap()
-            )
-        }
+        val buckets =
+            bucketMap.map { (ts, groups) ->
+                val count = groups.values.sum()
+                LogAggregateBucket(
+                    timestamp = ts,
+                    count = count,
+                    groups = if (validGroupBy != null) groups else emptyMap()
+                )
+            }
 
         logger.debug {
             "Aggregate logs result for project $projectId: ${buckets.size} buckets, totalCount=$totalCount, interval=$resolvedInterval"
@@ -589,16 +640,21 @@ class LogService {
         val safeLimit = limit.coerceIn(1, 100)
 
         // Determine the SQL column expression for the field
-        val columnExpr = when (field) {
-            "service", "level", "environment", "host", "container_name" -> field
-            else -> {
-                // Treat as tag key
-                val escapedKey = escapeSql(field)
-                "tags['$escapedKey']"
-            }
-        }
+        val columnExpr =
+            when (field) {
+                "service", "level", "environment", "host", "container_name" -> {
+                    field
+                }
 
-        val sql = """
+                else -> {
+                    // Treat as tag key
+                    val escapedKey = escapeSql(field)
+                    "tags['$escapedKey']"
+                }
+            }
+
+        val sql =
+            """
             SELECT $columnExpr AS field_value, count() AS cnt
             FROM $clickhouseDb.logs
             WHERE $whereClause AND $columnExpr != ''
@@ -606,7 +662,7 @@ class LogService {
             ORDER BY cnt DESC
             LIMIT $safeLimit
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
@@ -626,15 +682,21 @@ class LogService {
         }
 
         // Get total count for percentage calculation
-        val totalSql = """
+        val totalSql =
+            """
             SELECT count() AS cnt FROM $clickhouseDb.logs WHERE $whereClause
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
         val totalResponse = ClickHouseClient.execute(totalSql)
         val totalBody = totalResponse.bodyAsText()
-        val totalCount = try {
-            json.parseToJsonElement(totalBody.trim()).jsonObject["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
-        } catch (_: Exception) { 0L }
+        val totalCount =
+            try {
+                json
+                    .parseToJsonElement(totalBody.trim())
+                    .jsonObject["cnt"]
+                    ?.jsonPrimitive
+                    ?.longOrNull ?: 0L
+            } catch (_: Exception) { 0L }
 
         return LogTopResponse(field = field, values = values, totalCount = totalCount)
     }
@@ -703,7 +765,8 @@ class LogService {
         val whereClause = conditions.joinToString(" AND ")
         val safeLimit = limit.coerceIn(1, 10_000)
 
-        val sql = """
+        val sql =
+            """
             SELECT
                 timestamp,
                 level, service, environment, host, message, body,
@@ -714,7 +777,7 @@ class LogService {
             ORDER BY timestamp DESC
             LIMIT $safeLimit
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         logger.debug { "Export CSV SQL: $sql" }
         val response = ClickHouseClient.execute(sql)
@@ -731,18 +794,19 @@ class LogService {
             try {
                 val obj = json.parseToJsonElement(line).jsonObject
                 val timestampStr = obj["timestamp"]?.jsonPrimitive?.content ?: ""
-                val csvRow = listOf(
-                    timestampStr,
-                    obj["level"]?.jsonPrimitive?.content ?: "",
-                    obj["service"]?.jsonPrimitive?.content ?: "",
-                    obj["environment"]?.jsonPrimitive?.content ?: "",
-                    obj["host"]?.jsonPrimitive?.content ?: "",
-                    obj["message"]?.jsonPrimitive?.content ?: "",
-                    obj["container_name"]?.jsonPrimitive?.content ?: "",
-                    obj["trace_id"]?.jsonPrimitive?.content ?: "",
-                    obj["span_id"]?.jsonPrimitive?.content ?: "",
-                    obj["tags"]?.jsonPrimitive?.content ?: "{}"
-                ).joinToString(",") { csvEscape(it) }
+                val csvRow =
+                    listOf(
+                        timestampStr,
+                        obj["level"]?.jsonPrimitive?.content ?: "",
+                        obj["service"]?.jsonPrimitive?.content ?: "",
+                        obj["environment"]?.jsonPrimitive?.content ?: "",
+                        obj["host"]?.jsonPrimitive?.content ?: "",
+                        obj["message"]?.jsonPrimitive?.content ?: "",
+                        obj["container_name"]?.jsonPrimitive?.content ?: "",
+                        obj["trace_id"]?.jsonPrimitive?.content ?: "",
+                        obj["span_id"]?.jsonPrimitive?.content ?: "",
+                        obj["tags"]?.jsonPrimitive?.content ?: "{}"
+                    ).joinToString(",") { csvEscape(it) }
                 sb.appendLine(csvRow)
             } catch (e: Exception) {
                 logger.warn(e) { "Failed to parse log line for CSV: $line" }
@@ -759,7 +823,11 @@ class LogService {
         return value
     }
 
-    suspend fun getFilterOptionsWithCounts(projectId: Long, from: String?, to: String?): LogFilterOptionsWithCountsResponse {
+    suspend fun getFilterOptionsWithCounts(
+        projectId: Long,
+        from: String?,
+        to: String?
+    ): LogFilterOptionsWithCountsResponse {
         val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
@@ -767,28 +835,31 @@ class LogService {
         if (toMs != null) conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
         val whereClause = conditions.joinToString(" AND ")
 
-        val services = queryValueCounts(
-            """
+        val services =
+            queryValueCounts(
+                """
             SELECT service AS val, count() AS cnt
             FROM $clickhouseDb.logs
             WHERE $whereClause AND service != ''
             GROUP BY val ORDER BY cnt DESC LIMIT 200
             FORMAT JSONEachRow
-            """.trimIndent()
-        )
+                """.trimIndent()
+            )
 
-        val environments = queryValueCounts(
-            """
+        val environments =
+            queryValueCounts(
+                """
             SELECT environment AS val, count() AS cnt
             FROM $clickhouseDb.logs
             WHERE $whereClause AND environment != ''
             GROUP BY val ORDER BY cnt DESC LIMIT 200
             FORMAT JSONEachRow
-            """.trimIndent()
-        )
+                """.trimIndent()
+            )
 
-        val tagKeys = queryDistinctLines(
-            """
+        val tagKeys =
+            queryDistinctLines(
+                """
             SELECT DISTINCT tag_key
             FROM (
                 SELECT arrayJoin(mapKeys(tags)) AS tag_key
@@ -799,8 +870,8 @@ class LogService {
             ORDER BY tag_key
             LIMIT 200
             FORMAT TSV
-            """.trimIndent()
-        )
+                """.trimIndent()
+            )
 
         return LogFilterOptionsWithCountsResponse(
             services = services,
@@ -829,7 +900,11 @@ class LogService {
         return results
     }
 
-    suspend fun getFilterOptions(projectId: Long, from: String?, to: String?): LogFilterOptionsResponse {
+    suspend fun getFilterOptions(
+        projectId: Long,
+        from: String?,
+        to: String?
+    ): LogFilterOptionsResponse {
         val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) {
@@ -841,30 +916,33 @@ class LogService {
         }
         val whereClause = conditions.joinToString(" AND ")
 
-        val services = queryDistinctLines(
-            """
+        val services =
+            queryDistinctLines(
+                """
             SELECT DISTINCT service
             FROM $clickhouseDb.logs
             WHERE $whereClause AND service != ''
             ORDER BY service
             LIMIT 200
             FORMAT TSV
-            """.trimIndent()
-        )
+                """.trimIndent()
+            )
 
-        val environments = queryDistinctLines(
-            """
+        val environments =
+            queryDistinctLines(
+                """
             SELECT DISTINCT environment
             FROM $clickhouseDb.logs
             WHERE $whereClause AND environment != ''
             ORDER BY environment
             LIMIT 200
             FORMAT TSV
-            """.trimIndent()
-        )
+                """.trimIndent()
+            )
 
-        val tagKeys = queryDistinctLines(
-            """
+        val tagKeys =
+            queryDistinctLines(
+                """
             SELECT DISTINCT tag_key
             FROM (
                 SELECT arrayJoin(mapKeys(tags)) AS tag_key
@@ -875,8 +953,8 @@ class LogService {
             ORDER BY tag_key
             LIMIT 200
             FORMAT TSV
-            """.trimIndent()
-        )
+                """.trimIndent()
+            )
 
         return LogFilterOptionsResponse(
             services = services,
@@ -886,7 +964,13 @@ class LogService {
         )
     }
 
-    suspend fun getTagValues(projectId: Long, key: String, from: String?, to: String?, limit: Int = 50): LogTagValuesResponse {
+    suspend fun getTagValues(
+        projectId: Long,
+        key: String,
+        from: String?,
+        to: String?,
+        limit: Int = 50
+    ): LogTagValuesResponse {
         val escapedKey = escapeSql(key.trim())
         if (escapedKey.isBlank()) return LogTagValuesResponse(key = key, values = emptyList())
 
@@ -914,29 +998,30 @@ class LogService {
         val whereClause = conditions.joinToString(" AND ")
 
         // Build the SELECT query based on field type
-        val query = if (isTopLevelField) {
-            // For top-level fields, select directly from the column
-            val enumFields = setOf("level", "source")
-            val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
-            """
+        val query =
+            if (isTopLevelField) {
+                // For top-level fields, select directly from the column
+                val enumFields = setOf("level", "source")
+                val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
+                """
             SELECT DISTINCT $fieldRef AS tag_value
             FROM $clickhouseDb.logs
             WHERE $whereClause AND $fieldRef != ''
             ORDER BY tag_value
             LIMIT ${limit.coerceIn(1, 200)}
             FORMAT TSV
-            """.trimIndent()
-        } else {
-            // For tags, access the tags map
-            """
+                """.trimIndent()
+            } else {
+                // For tags, access the tags map
+                """
             SELECT DISTINCT tags['$escapedKey'] AS tag_value
             FROM $clickhouseDb.logs
             WHERE $whereClause AND tags['$escapedKey'] != ''
             ORDER BY tag_value
             LIMIT ${limit.coerceIn(1, 200)}
             FORMAT TSV
-            """.trimIndent()
-        }
+                """.trimIndent()
+            }
 
         val values = queryDistinctLines(query)
 
@@ -960,45 +1045,49 @@ class LogService {
     private fun parseQueryRows(raw: String): List<LogWithCursor> {
         if (raw.isBlank()) return emptyList()
 
-        return raw.lineSequence()
+        return raw
+            .lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .mapNotNull { line ->
                 try {
                     val obj = json.parseToJsonElement(line).jsonObject
                     val timestampMs = obj["timestamp_ms"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
-                    val systemId = obj["system_id_text"]?.jsonPrimitive?.contentOrNull
-                        ?: obj["system_id"]?.jsonPrimitive?.contentOrNull
-                    val log = LogEntryResponse(
-                        logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                        timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
-                        level = normalizeLevel(
-                            obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content
-                        ),
-                        message = obj["message"]?.jsonPrimitive?.content ?: "",
-                        body = obj["body"]?.jsonPrimitive?.content ?: "",
-                        service = obj["service"]?.jsonPrimitive?.content ?: "",
-                        environment = obj["environment"]?.jsonPrimitive?.content ?: "",
-                        host = obj["host"]?.jsonPrimitive?.content ?: "",
-                        source = normalizeSource(
-                            obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
-                        ),
-                        containerName = obj["container_name"]?.jsonPrimitive?.content ?: "",
-                        containerId = obj["container_id"]?.jsonPrimitive?.content ?: "",
-                        containerImage = obj["container_image"]?.jsonPrimitive?.content ?: "",
-                        traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
-                        spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
-                        tags = parseMapField(obj["tags"]),
-                        resourceAttributes = parseMapField(obj["resource_attributes"]),
-                        systemId = if (systemId == "00000000-0000-0000-0000-000000000000") null else systemId
-                    )
+                    val systemId =
+                        obj["system_id_text"]?.jsonPrimitive?.contentOrNull
+                            ?: obj["system_id"]?.jsonPrimitive?.contentOrNull
+                    val log =
+                        LogEntryResponse(
+                            logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                            timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
+                            level =
+                                normalizeLevel(
+                                    obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content
+                                ),
+                            message = obj["message"]?.jsonPrimitive?.content ?: "",
+                            body = obj["body"]?.jsonPrimitive?.content ?: "",
+                            service = obj["service"]?.jsonPrimitive?.content ?: "",
+                            environment = obj["environment"]?.jsonPrimitive?.content ?: "",
+                            host = obj["host"]?.jsonPrimitive?.content ?: "",
+                            source =
+                                normalizeSource(
+                                    obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
+                                ),
+                            containerName = obj["container_name"]?.jsonPrimitive?.content ?: "",
+                            containerId = obj["container_id"]?.jsonPrimitive?.content ?: "",
+                            containerImage = obj["container_image"]?.jsonPrimitive?.content ?: "",
+                            traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
+                            spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+                            tags = parseMapField(obj["tags"]),
+                            resourceAttributes = parseMapField(obj["resource_attributes"]),
+                            systemId = if (systemId == "00000000-0000-0000-0000-000000000000") null else systemId
+                        )
                     LogWithCursor(log = log, timestampMs = timestampMs)
                 } catch (e: Exception) {
                     logger.warn(e) { "Failed to parse log row" }
                     null
                 }
-            }
-            .toList()
+            }.toList()
     }
 
     private fun parseMapField(element: JsonElement?): Map<String, String> {
@@ -1006,7 +1095,10 @@ class LogService {
 
         return try {
             when (element) {
-                is JsonObject -> element.mapValues { (_, value) -> value.jsonPrimitive.content }
+                is JsonObject -> {
+                    element.mapValues { (_, value) -> value.jsonPrimitive.content }
+                }
+
                 else -> {
                     val text = element.jsonPrimitive.contentOrNull ?: return emptyMap()
                     if (text.isBlank()) {
@@ -1031,14 +1123,15 @@ class LogService {
     ): Int {
         if (logs.isEmpty()) return 0
 
-        val message = encodeQueueMessage(
-            QueuedLogBatch(
-                projectId = projectId,
-                systemId = systemId,
-                source = source,
-                logs = logs
+        val message =
+            encodeQueueMessage(
+                QueuedLogBatch(
+                    projectId = projectId,
+                    systemId = systemId,
+                    source = source,
+                    logs = logs
+                )
             )
-        )
 
         RedisConfig.sync().lpush(queueKey, message)
         return logs.size
@@ -1068,14 +1161,18 @@ class LogService {
         )
     }
 
-    private fun normalizeAgentEntry(entry: AgentLogEntry, systemId: String?): QueuedLogEntry? {
+    private fun normalizeAgentEntry(
+        entry: AgentLogEntry,
+        systemId: String?
+    ): QueuedLogEntry? {
         val message = entry.message?.trim().orEmpty()
         if (message.isBlank()) return null
 
-        val source = when (entry.stream?.lowercase()) {
-            "stderr" -> "agent_stderr"
-            else -> "agent_stdout"
-        }
+        val source =
+            when (entry.stream?.lowercase()) {
+                "stderr" -> "agent_stderr"
+                else -> "agent_stdout"
+            }
 
         return QueuedLogEntry(
             logId = UUID.randomUUID().toString(),
@@ -1103,7 +1200,10 @@ class LogService {
         return base.copy(source = "otlp")
     }
 
-    private fun toResponse(entry: QueuedLogEntry, systemId: String?): LogEntryResponse {
+    private fun toResponse(
+        entry: QueuedLogEntry,
+        systemId: String?
+    ): LogEntryResponse {
         return LogEntryResponse(
             logId = entry.logId,
             timestamp = Instant.ofEpochMilli(entry.timestampMs).toString(),
@@ -1126,12 +1226,13 @@ class LogService {
     }
 
     fun parseOtlpJson(payload: String): List<LogIngestEntry> {
-        val parsed = try {
-            json.parseToJsonElement(payload).jsonObject
-        } catch (e: Exception) {
-            logger.warn(e) { "Invalid OTLP JSON payload" }
-            return emptyList()
-        }
+        val parsed =
+            try {
+                json.parseToJsonElement(payload).jsonObject
+            } catch (e: Exception) {
+                logger.warn(e) { "Invalid OTLP JSON payload" }
+                return emptyList()
+            }
 
         val resourceLogs = parsed["resourceLogs"]?.jsonArray ?: return emptyList()
         val entries = mutableListOf<LogIngestEntry>()
@@ -1139,9 +1240,10 @@ class LogService {
         resourceLogs.forEach { resourceLogElement ->
             val resourceLog = resourceLogElement.jsonObject
             val resourceAttrs = attributesToMap(resourceLog["resource"]?.jsonObject?.get("attributes"))
-            val scopeLogs = resourceLog["scopeLogs"]?.jsonArray
-                ?: resourceLog["instrumentationLibraryLogs"]?.jsonArray
-                ?: JsonArray(emptyList())
+            val scopeLogs =
+                resourceLog["scopeLogs"]?.jsonArray
+                    ?: resourceLog["instrumentationLibraryLogs"]?.jsonArray
+                    ?: JsonArray(emptyList())
 
             scopeLogs.forEach { scopeElement ->
                 val scopeLog = scopeElement.jsonObject
@@ -1154,24 +1256,26 @@ class LogService {
                     val bodyText = extractAnyValue(record["body"]) ?: ""
                     val message = if (bodyText.isBlank()) "OTLP log record" else bodyText
                     val severityText = record["severityText"]?.jsonPrimitive?.contentOrNull
-                    val timestampNs = record["timeUnixNano"]?.jsonPrimitive?.longOrNull
-                        ?: record["observedTimeUnixNano"]?.jsonPrimitive?.longOrNull
+                    val timestampNs =
+                        record["timeUnixNano"]?.jsonPrimitive?.longOrNull
+                            ?: record["observedTimeUnixNano"]?.jsonPrimitive?.longOrNull
                     val timestampMs = timestampNs?.div(1_000_000)
 
-                    val entry = LogIngestEntry(
-                        timestampMs = timestampMs,
-                        level = severityText,
-                        message = message,
-                        body = bodyText,
-                        service = mergedAttributes["service.name"],
-                        environment = mergedAttributes["deployment.environment"] ?: mergedAttributes["service.environment"],
-                        host = mergedAttributes["host.name"],
-                        source = "otlp",
-                        traceId = record["traceId"]?.jsonPrimitive?.contentOrNull,
-                        spanId = record["spanId"]?.jsonPrimitive?.contentOrNull,
-                        tags = HashMap(attributes),
-                        resourceAttributes = HashMap(resourceAttrs)
-                    )
+                    val entry =
+                        LogIngestEntry(
+                            timestampMs = timestampMs,
+                            level = severityText,
+                            message = message,
+                            body = bodyText,
+                            service = mergedAttributes["service.name"],
+                            environment = mergedAttributes["deployment.environment"] ?: mergedAttributes["service.environment"],
+                            host = mergedAttributes["host.name"],
+                            source = "otlp",
+                            traceId = record["traceId"]?.jsonPrimitive?.contentOrNull,
+                            spanId = record["spanId"]?.jsonPrimitive?.contentOrNull,
+                            tags = HashMap(attributes),
+                            resourceAttributes = HashMap(resourceAttrs)
+                        )
                     entries += entry
                 }
             }
@@ -1182,12 +1286,13 @@ class LogService {
 
     private fun attributesToMap(attributes: JsonElement?): Map<String, String> {
         val array = attributes as? JsonArray ?: return emptyMap()
-        return array.mapNotNull { attributeElement ->
-            val attribute = attributeElement.jsonObject
-            val key = attribute["key"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            val value = extractAnyValue(attribute["value"]) ?: return@mapNotNull null
-            key to value
-        }.toMap()
+        return array
+            .mapNotNull { attributeElement ->
+                val attribute = attributeElement.jsonObject
+                val key = attribute["key"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val value = extractAnyValue(attribute["value"]) ?: return@mapNotNull null
+                key to value
+            }.toMap()
     }
 
     private fun extractAnyValue(anyValue: JsonElement?): String? {
@@ -1219,22 +1324,29 @@ class LogService {
         }
     }
 
-    private fun buildScopeFilter(projectId: Long, systemId: String?): String? {
+    private fun buildScopeFilter(
+        projectId: Long,
+        systemId: String?
+    ): String? {
         val rawSystemId = systemId?.trim()
         if (rawSystemId.isNullOrEmpty()) {
             return ClickHouseQueryUtils.projectIdClause(projectId)
         }
 
-        val parsed = try {
-            UUID.fromString(rawSystemId)
-        } catch (_: Exception) {
-            return null
-        }
+        val parsed =
+            try {
+                UUID.fromString(rawSystemId)
+            } catch (_: Exception) {
+                return null
+            }
 
         return "system_id = toUUID('$parsed')"
     }
 
-    private fun resolveTimestampMs(timestamp: String?, timestampMs: Long?): Long {
+    private fun resolveTimestampMs(
+        timestamp: String?,
+        timestampMs: Long?
+    ): Long {
         return timestampMs
             ?: parseTimeToMillis(timestamp)
             ?: System.currentTimeMillis()
@@ -1268,21 +1380,24 @@ class LogService {
                 val key = rawKey.trim().take(128)
                 if (key.isBlank()) return@mapNotNull null
                 key to rawValue.trim().take(1024)
-            }
-            .toMap()
+            }.toMap()
     }
 
-    private fun trimTo(value: String, maxLength: Int): String {
+    private fun trimTo(
+        value: String,
+        maxLength: Int
+    ): String {
         return if (value.length <= maxLength) value else value.take(maxLength)
     }
 
     private fun mapToSqlMap(value: Map<String, String>?): String {
         if (value == null || value.isEmpty()) return "map()"
-        val pairs = value.entries
-            .sortedBy { it.key }
-            .joinToString(", ") { (key, mapValue) ->
-                "'${escapeSql(key)}', '${escapeSql(mapValue)}'"
-            }
+        val pairs =
+            value.entries
+                .sortedBy { it.key }
+                .joinToString(", ") { (key, mapValue) ->
+                    "'${escapeSql(key)}', '${escapeSql(mapValue)}'"
+                }
         return "map($pairs)"
     }
 
@@ -1301,7 +1416,10 @@ class LogService {
         }
     }
 
-    private fun encodeCursor(timestampMs: Long, logId: String): String {
+    private fun encodeCursor(
+        timestampMs: Long,
+        logId: String
+    ): String {
         val raw = "$timestampMs|$logId"
         return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
     }
@@ -1324,7 +1442,10 @@ class LogService {
      * Check if a tag key/value looks like it contains Boolean operators.
      * These should be in the query field instead.
      */
-    private fun isTagMalformed(key: String, value: String): Boolean {
+    private fun isTagMalformed(
+        key: String,
+        value: String
+    ): Boolean {
         // Check for Boolean operators with various spacing
         return key.contains(" OR", ignoreCase = true) ||
             key.contains("OR ", ignoreCase = true) ||
@@ -1341,7 +1462,11 @@ class LogService {
      * Build a SQL condition for a tag/field filter.
      * Checks if the key is a top-level field or an actual tag.
      */
-    internal fun buildTagCondition(key: String, value: String, exclude: Boolean = false): String {
+    internal fun buildTagCondition(
+        key: String,
+        value: String,
+        exclude: Boolean = false
+    ): String {
         if (key.isBlank()) return ""
 
         // If the tag value contains Boolean operators, it's actually a query that was

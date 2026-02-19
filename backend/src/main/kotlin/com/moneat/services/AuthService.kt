@@ -50,7 +50,11 @@ class AuthService {
     private val secureRandom = SecureRandom()
     private val refreshTokenService = RefreshTokenService()
 
-    fun signup(request: SignupRequest, context: SignupRequestContext = SignupRequestContext(), inviteToken: String? = null): AuthResponse {
+    fun signup(
+        request: SignupRequest,
+        context: SignupRequestContext = SignupRequestContext(),
+        inviteToken: String? = null
+    ): AuthResponse {
         if (request.email.isBlank() || request.password.length < 8) {
             throw IllegalArgumentException("Invalid email or password too short")
         }
@@ -69,180 +73,186 @@ class AuthService {
             )
         )
 
-        val (userId, emailVerified, orgId, orgRole) = transaction {
-            // Check if user exists
-            val existing = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
-            if (existing != null) {
-                SentryUtils.breadcrumb("auth", "Signup failed - user exists", mapOf("email" to request.email))
-                throw IllegalArgumentException("User already exists")
-            }
-
-            val now = System.currentTimeMillis()
-
-            // Resolve invite in a strict state-aware way.
-            val pendingInvite = if (inviteToken != null) {
-                val inviteByToken = OrgInvitations.selectAll()
-                    .where { OrgInvitations.token eq inviteToken }
-                    .singleOrNull()
-                    ?: throw IllegalArgumentException("Invitation not found")
-
-                val inviteStatus = inviteByToken[OrgInvitations.status]
-                if (inviteStatus != "pending") {
-                    throw IllegalArgumentException("Invitation is no longer valid")
+        val (userId, emailVerified, orgId, orgRole) =
+            transaction {
+                // Check if user exists
+                val existing = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
+                if (existing != null) {
+                    SentryUtils.breadcrumb("auth", "Signup failed - user exists", mapOf("email" to request.email))
+                    throw IllegalArgumentException("User already exists")
                 }
 
-                val inviteExpiresAt = inviteByToken[OrgInvitations.expires_at]
-                if (now > inviteExpiresAt) {
-                    OrgInvitations.update({ OrgInvitations.id eq inviteByToken[OrgInvitations.id] }) {
-                        it[OrgInvitations.status] = "expired"
+                val now = System.currentTimeMillis()
+
+                // Resolve invite in a strict state-aware way.
+                val pendingInvite =
+                    if (inviteToken != null) {
+                        val inviteByToken =
+                            OrgInvitations
+                                .selectAll()
+                                .where { OrgInvitations.token eq inviteToken }
+                                .singleOrNull()
+                                ?: throw IllegalArgumentException("Invitation not found")
+
+                        val inviteStatus = inviteByToken[OrgInvitations.status]
+                        if (inviteStatus != "pending") {
+                            throw IllegalArgumentException("Invitation is no longer valid")
+                        }
+
+                        val inviteExpiresAt = inviteByToken[OrgInvitations.expires_at]
+                        if (now > inviteExpiresAt) {
+                            OrgInvitations.update({ OrgInvitations.id eq inviteByToken[OrgInvitations.id] }) {
+                                it[OrgInvitations.status] = "expired"
+                            }
+                            throw IllegalArgumentException("Invitation has expired")
+                        }
+
+                        if (inviteByToken[OrgInvitations.email].lowercase() != normalizedEmail) {
+                            throw IllegalArgumentException("This invitation was sent to a different email address")
+                        }
+
+                        inviteByToken
+                    } else {
+                        OrgInvitations.update({
+                            (OrgInvitations.email eq normalizedEmail) and
+                                (OrgInvitations.status eq "pending") and
+                                (OrgInvitations.expires_at lessEq now)
+                        }) {
+                            it[OrgInvitations.status] = "expired"
+                        }
+
+                        OrgInvitations
+                            .selectAll()
+                            .where {
+                                (OrgInvitations.email eq normalizedEmail) and
+                                    (OrgInvitations.status eq "pending") and
+                                    (OrgInvitations.expires_at greater now)
+                            }.orderBy(OrgInvitations.created_at, org.jetbrains.exposed.v1.core.SortOrder.DESC)
+                            .limit(1)
+                            .singleOrNull()
                     }
-                    throw IllegalArgumentException("Invitation has expired")
-                }
 
-                if (inviteByToken[OrgInvitations.email].lowercase() != normalizedEmail) {
-                    throw IllegalArgumentException("This invitation was sent to a different email address")
-                }
+                // Generate verification token
+                val verificationToken = generateVerificationToken()
+                val expiresAt = System.currentTimeMillis() + (24 * 60 * 60 * 1000) // 24 hours
 
-                inviteByToken
-            } else {
-                OrgInvitations.update({
-                    (OrgInvitations.email eq normalizedEmail) and
-                        (OrgInvitations.status eq "pending") and
-                        (OrgInvitations.expires_at lessEq now)
-                }) {
-                    it[OrgInvitations.status] = "expired"
-                }
+                // Create user
+                val passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt())
+                val id =
+                    Users.insert {
+                        it[email] = normalizedEmail
+                        it[password_hash] = passwordHash
+                        it[name] = request.name
+                        it[email_verified] = false
+                        it[email_verification_token] = verificationToken
+                        it[email_verification_expires_at] = expiresAt
+                    }[Users.id]
 
-                OrgInvitations.selectAll()
-                    .where {
-                        (OrgInvitations.email eq normalizedEmail) and
-                            (OrgInvitations.status eq "pending") and
-                            (OrgInvitations.expires_at greater now)
+                val finalOrgId: Int
+                val finalOrgRole: String
+
+                // Join existing org if invited, otherwise create new org
+                if (pendingInvite != null) {
+                    finalOrgId = pendingInvite[OrgInvitations.organization_id]
+                    finalOrgRole = pendingInvite[OrgInvitations.role]
+
+                    // Create membership
+                    Memberships.insert {
+                        it[user_id] = id
+                        it[organization_id] = finalOrgId
+                        it[role] = finalOrgRole
                     }
-                    .orderBy(OrgInvitations.created_at, org.jetbrains.exposed.v1.core.SortOrder.DESC)
-                    .limit(1)
-                    .singleOrNull()
-            }
 
-            // Generate verification token
-            val verificationToken = generateVerificationToken()
-            val expiresAt = System.currentTimeMillis() + (24 * 60 * 60 * 1000) // 24 hours
+                    // Mark invitation as accepted
+                    OrgInvitations.update(
+                        { OrgInvitations.id eq pendingInvite[OrgInvitations.id] }
+                    ) {
+                        it[status] = "accepted"
+                    }
 
-            // Create user
-            val passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt())
-            val id = Users.insert {
-                it[email] = normalizedEmail
-                it[password_hash] = passwordHash
-                it[name] = request.name
-                it[email_verified] = false
-                it[email_verification_token] = verificationToken
-                it[email_verification_expires_at] = expiresAt
-            }[Users.id]
-
-            val finalOrgId: Int
-            val finalOrgRole: String
-
-            // Join existing org if invited, otherwise create new org
-            if (pendingInvite != null) {
-                finalOrgId = pendingInvite[OrgInvitations.organization_id]
-                finalOrgRole = pendingInvite[OrgInvitations.role]
-
-                // Create membership
-                Memberships.insert {
-                    it[user_id] = id
-                    it[organization_id] = finalOrgId
-                    it[role] = finalOrgRole
-                }
-
-                // Mark invitation as accepted
-                OrgInvitations.update(
-                    { OrgInvitations.id eq pendingInvite[OrgInvitations.id] }
-                ) {
-                    it[status] = "accepted"
-                }
-
-                SentryUtils.breadcrumb(
-                    "auth",
-                    "User joined via invitation",
-                    mapOf(
-                        "user_id" to id,
-                        "organization_id" to finalOrgId,
-                        "role" to finalOrgRole
+                    SentryUtils.breadcrumb(
+                        "auth",
+                        "User joined via invitation",
+                        mapOf(
+                            "user_id" to id,
+                            "organization_id" to finalOrgId,
+                            "role" to finalOrgRole
+                        )
                     )
-                )
-            } else {
-                // Create default organization
-                finalOrgId = Organizations.insert {
-                    it[name] = "${request.name ?: request.email}'s Organization"
-                    it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
-                }[Organizations.id]
-                finalOrgRole = "owner"
+                } else {
+                    // Create default organization
+                    finalOrgId =
+                        Organizations.insert {
+                            it[name] = "${request.name ?: request.email}'s Organization"
+                            it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
+                        }[Organizations.id]
+                    finalOrgRole = "owner"
 
-                // Add membership
-                Memberships.insert {
+                    // Add membership
+                    Memberships.insert {
+                        it[user_id] = id
+                        it[organization_id] = finalOrgId
+                        it[role] = finalOrgRole
+                    }
+
+                    SentryUtils.breadcrumb(
+                        "auth",
+                        "User created new org",
+                        mapOf(
+                            "user_id" to id,
+                            "organization_id" to finalOrgId
+                        )
+                    )
+                }
+
+                val acceptedAt = Clock.System.now()
+                UserLegalAcceptances.insert {
                     it[user_id] = id
-                    it[organization_id] = finalOrgId
-                    it[role] = finalOrgRole
+                    it[document_type] = "terms"
+                    it[document_version] = request.termsVersion
+                    it[accepted_at] = acceptedAt
+                    it[ip_address] = context.ipAddress
+                    it[user_agent] = context.userAgent
+                }
+                UserLegalAcceptances.insert {
+                    it[user_id] = id
+                    it[document_type] = "privacy"
+                    it[document_version] = request.privacyVersion
+                    it[accepted_at] = acceptedAt
+                    it[ip_address] = context.ipAddress
+                    it[user_agent] = context.userAgent
                 }
 
                 SentryUtils.breadcrumb(
                     "auth",
-                    "User created new org",
+                    "User created",
                     mapOf(
                         "user_id" to id,
                         "organization_id" to finalOrgId
                     )
                 )
-            }
-
-            val acceptedAt = Clock.System.now()
-            UserLegalAcceptances.insert {
-                it[user_id] = id
-                it[document_type] = "terms"
-                it[document_version] = request.termsVersion
-                it[accepted_at] = acceptedAt
-                it[ip_address] = context.ipAddress
-                it[user_agent] = context.userAgent
-            }
-            UserLegalAcceptances.insert {
-                it[user_id] = id
-                it[document_type] = "privacy"
-                it[document_version] = request.privacyVersion
-                it[accepted_at] = acceptedAt
-                it[ip_address] = context.ipAddress
-                it[user_agent] = context.userAgent
-            }
-
-            SentryUtils.breadcrumb(
-                "auth",
-                "User created",
-                mapOf(
-                    "user_id" to id,
-                    "organization_id" to finalOrgId
+                SentryUtils.breadcrumb(
+                    "auth",
+                    "Legal consent captured",
+                    mapOf(
+                        "user_id" to id,
+                        "terms_version" to request.termsVersion,
+                        "privacy_version" to request.privacyVersion,
+                        "ip_present" to (context.ipAddress != null),
+                        "user_agent_present" to (context.userAgent != null)
+                    )
                 )
-            )
-            SentryUtils.breadcrumb(
-                "auth",
-                "Legal consent captured",
-                mapOf(
-                    "user_id" to id,
-                    "terms_version" to request.termsVersion,
-                    "privacy_version" to request.privacyVersion,
-                    "ip_present" to (context.ipAddress != null),
-                    "user_agent_present" to (context.userAgent != null)
-                )
-            )
 
-            // Send verification email
-            try {
-                emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
-            } catch (e: Exception) {
-                // Log but don't fail signup if email fails
-                println("Failed to send verification email: ${e.message}")
+                // Send verification email
+                try {
+                    emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
+                } catch (e: Exception) {
+                    // Log but don't fail signup if email fails
+                    println("Failed to send verification email: ${e.message}")
+                }
+
+                Quadruple(id, false, finalOrgId, finalOrgRole)
             }
-
-            Quadruple(id, false, finalOrgId, finalOrgRole)
-        }
 
         val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
@@ -256,10 +266,12 @@ class AuthService {
 
     fun verifyEmail(token: String): Boolean {
         return transaction {
-            val user = Users.selectAll()
-                .where { Users.email_verification_token eq token }
-                .firstOrNull()
-                ?: return@transaction false
+            val user =
+                Users
+                    .selectAll()
+                    .where { Users.email_verification_token eq token }
+                    .firstOrNull()
+                    ?: return@transaction false
 
             val expiresAt = user[Users.email_verification_expires_at]
             if (expiresAt == null || expiresAt < System.currentTimeMillis()) {
@@ -280,10 +292,12 @@ class AuthService {
     fun resendVerificationEmail(email: String): Boolean {
         val normalizedEmail = email.lowercase().trim()
         return transaction {
-            val user = Users.selectAll()
-                .where { Users.email eq normalizedEmail }
-                .firstOrNull()
-                ?: return@transaction false
+            val user =
+                Users
+                    .selectAll()
+                    .where { Users.email eq normalizedEmail }
+                    .firstOrNull()
+                    ?: return@transaction false
 
             // Check if already verified
             if (user[Users.email_verified]) {
@@ -321,8 +335,9 @@ class AuthService {
         }
 
         return transaction {
-            val user = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
-                ?: return@transaction null
+            val user =
+                Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
+                    ?: return@transaction null
 
             if (!BCrypt.checkpw(request.password, user[Users.password_hash])) {
                 return@transaction null
@@ -335,10 +350,12 @@ class AuthService {
             val userId = user[Users.id]
 
             // Get user's org membership
-            val membership = Memberships.selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?: throw IllegalStateException("User has no organization membership")
+            val membership =
+                Memberships
+                    .selectAll()
+                    .where { Memberships.user_id eq userId }
+                    .firstOrNull()
+                    ?: throw IllegalStateException("User has no organization membership")
 
             val orgId = membership[Memberships.organization_id]
             val orgRole = membership[Memberships.role]
@@ -348,20 +365,27 @@ class AuthService {
                 token = tokenPair.accessToken,
                 refreshToken = tokenPair.refreshToken,
                 expiresIn = tokenPair.expiresIn,
-                user = UserResponse(
-                    userId,
-                    user[Users.email],
-                    user[Users.name],
-                    user[Users.email_verified],
-                    user[Users.onboarding_completed],
-                    user[Users.is_admin]
-                )
+                user =
+                    UserResponse(
+                        userId,
+                        user[Users.email],
+                        user[Users.name],
+                        user[Users.email_verified],
+                        user[Users.onboarding_completed],
+                        user[Users.is_admin]
+                    )
             )
         }
     }
 
-    private fun generateToken(userId: Int, email: String, orgId: Int, orgRole: String): String {
-        return JWT.create()
+    private fun generateToken(
+        userId: Int,
+        email: String,
+        orgId: Int,
+        orgRole: String
+    ): String {
+        return JWT
+            .create()
             .withAudience(jwtAudience)
             .withIssuer(jwtIssuer)
             .withClaim("userId", userId)
@@ -372,16 +396,22 @@ class AuthService {
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
-    fun generateImpersonationToken(userId: Int, email: String): String {
+    fun generateImpersonationToken(
+        userId: Int,
+        email: String
+    ): String {
         // For impersonation, get the user's org membership
-        val (orgId, orgRole) = transaction {
-            val membership = Memberships.selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?: throw IllegalStateException("User has no organization membership")
+        val (orgId, orgRole) =
+            transaction {
+                val membership =
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.user_id eq userId }
+                        .firstOrNull()
+                        ?: throw IllegalStateException("User has no organization membership")
 
-            membership[Memberships.organization_id] to membership[Memberships.role]
-        }
+                membership[Memberships.organization_id] to membership[Memberships.role]
+            }
 
         return generateToken(userId, email, orgId, orgRole)
     }
@@ -391,7 +421,8 @@ class AuthService {
         val demoOrgId = com.moneat.config.EnvConfig.Demo.ORG_ID
         val demoEpochMs = com.moneat.config.EnvConfig.Demo.epochMs
 
-        return JWT.create()
+        return JWT
+            .create()
             .withAudience(jwtAudience)
             .withIssuer(jwtIssuer)
             .withClaim("userId", demoUserId)
@@ -422,10 +453,12 @@ class AuthService {
     fun requestPasswordReset(email: String): Boolean {
         val normalizedEmail = email.lowercase().trim()
         return transaction {
-            val user = Users.selectAll()
-                .where { Users.email eq normalizedEmail }
-                .firstOrNull()
-                ?: return@transaction false
+            val user =
+                Users
+                    .selectAll()
+                    .where { Users.email eq normalizedEmail }
+                    .firstOrNull()
+                    ?: return@transaction false
 
             // Generate reset token
             val resetToken = generateVerificationToken()
@@ -447,16 +480,21 @@ class AuthService {
         }
     }
 
-    fun resetPassword(token: String, newPassword: String): Boolean {
+    fun resetPassword(
+        token: String,
+        newPassword: String
+    ): Boolean {
         if (newPassword.length < 8) {
             throw IllegalArgumentException("Password must be at least 8 characters")
         }
 
         return transaction {
-            val user = Users.selectAll()
-                .where { Users.password_reset_token eq token }
-                .firstOrNull()
-                ?: return@transaction false
+            val user =
+                Users
+                    .selectAll()
+                    .where { Users.password_reset_token eq token }
+                    .firstOrNull()
+                    ?: return@transaction false
 
             val expiresAt = user[Users.password_reset_expires_at]
             if (expiresAt == null || expiresAt < System.currentTimeMillis()) {
@@ -489,28 +527,34 @@ class AuthService {
         sidebarHiddenItems: List<String>? = null
     ): UserResponse {
         return transaction {
-            val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                ?: throw IllegalArgumentException("User not found")
+            val user =
+                Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                    ?: throw IllegalArgumentException("User not found")
 
             // Get the user's default organization
-            val membership = Memberships.selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?: throw IllegalArgumentException("No organization found for user")
+            val membership =
+                Memberships
+                    .selectAll()
+                    .where { Memberships.user_id eq userId }
+                    .firstOrNull()
+                    ?: throw IllegalArgumentException("No organization found for user")
 
             val orgId = membership[Memberships.organization_id]
             val membershipId = membership[Memberships.id]
 
             // Generate slug from custom input or organization name
-            val baseSlug = (customSlug ?: organizationName).lowercase()
-                .replace(Regex("[^a-z0-9]+"), "-")
-                .trim('-')
-                .take(100)
+            val baseSlug =
+                (customSlug ?: organizationName)
+                    .lowercase()
+                    .replace(Regex("[^a-z0-9]+"), "-")
+                    .trim('-')
+                    .take(100)
 
             // Ensure slug uniqueness
             var slug = baseSlug
             var suffix = 2
-            while (Organizations.selectAll()
+            while (Organizations
+                    .selectAll()
                     .where { (Organizations.slug eq slug) and (Organizations.id neq orgId) }
                     .count() > 0
             ) {
@@ -532,17 +576,18 @@ class AuthService {
             }
 
             // Update sidebar preferences if provided
-            val hiddenItems = if (sidebarHiddenItems != null) {
-                SidebarPreferenceService.updatePreferences(
-                    membershipId = membershipId,
-                    userId = userId,
-                    organizationId = orgId,
-                    hiddenItems = sidebarHiddenItems,
-                    source = "onboarding"
-                )
-            } else {
-                emptyList()
-            }
+            val hiddenItems =
+                if (sidebarHiddenItems != null) {
+                    SidebarPreferenceService.updatePreferences(
+                        membershipId = membershipId,
+                        userId = userId,
+                        organizationId = orgId,
+                        hiddenItems = sidebarHiddenItems,
+                        source = "onboarding"
+                    )
+                } else {
+                    emptyList()
+                }
 
             // Mark onboarding as completed
             Users.update({ Users.id eq userId }) {
@@ -568,30 +613,36 @@ class AuthService {
     }
 
     fun refreshToken(token: String): AuthResponse? {
-        val tokenPair = refreshTokenService.validateAndRotate(token)
-            ?: return null
+        val tokenPair =
+            refreshTokenService.validateAndRotate(token)
+                ?: return null
 
         // Get user info from the new access token to build response
-        val jwtVerifier = com.auth0.jwt.JWT
-            .require(com.auth0.jwt.algorithms.Algorithm.HMAC256(jwtSecret))
-            .build()
+        val jwtVerifier =
+            com.auth0.jwt.JWT
+                .require(
+                    com.auth0.jwt.algorithms.Algorithm
+                        .HMAC256(jwtSecret)
+                ).build()
         val decodedJWT = jwtVerifier.verify(tokenPair.accessToken)
         val userId = decodedJWT.getClaim("userId").asInt()
         val email = decodedJWT.getClaim("email").asString()
 
-        val user = transaction {
-            val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                ?: return@transaction null
+        val user =
+            transaction {
+                val userRow =
+                    Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                        ?: return@transaction null
 
-            UserResponse(
-                userId,
-                email,
-                userRow[Users.name],
-                userRow[Users.email_verified],
-                userRow[Users.onboarding_completed],
-                userRow[Users.is_admin]
-            )
-        } ?: return null
+                UserResponse(
+                    userId,
+                    email,
+                    userRow[Users.name],
+                    userRow[Users.email_verified],
+                    userRow[Users.onboarding_completed],
+                    userRow[Users.is_admin]
+                )
+            } ?: return null
 
         return AuthResponse(
             token = tokenPair.accessToken,
@@ -615,8 +666,7 @@ class AuthService {
                     (SsoConfigurations.emailDomain eq domain) and
                         (SsoConfigurations.isEnabled eq true) and
                         (SsoConfigurations.requireSso eq true)
-                }
-                .firstOrNull() != null
+                }.firstOrNull() != null
         }
     }
 }

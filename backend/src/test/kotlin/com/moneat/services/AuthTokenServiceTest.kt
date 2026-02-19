@@ -36,27 +36,30 @@ class AuthTokenServiceTest {
         }
     }
 
-    private fun seedUser(email: String = "test@example.com"): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[Users.name] = "Test User"
-            it[Users.password_hash] = "hashed"
-            it[Users.email_verified] = true
-        } get Users.id
-    }
-
-    private fun seedOrgAndMembership(userId: Int): Int = transaction {
-        val orgId = Organizations.insert {
-            it[name] = "Test Org"
-            it[slug] = "test-org"
-        } get Organizations.id
-        Memberships.insert {
-            it[user_id] = userId
-            it[organization_id] = orgId
-            it[role] = "owner"
+    private fun seedUser(email: String = "test@example.com"): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[Users.name] = "Test User"
+                it[Users.password_hash] = "hashed"
+                it[Users.email_verified] = true
+            } get Users.id
         }
-        orgId
-    }
+
+    private fun seedOrgAndMembership(userId: Int): Int =
+        transaction {
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Test Org"
+                    it[slug] = "test-org"
+                } get Organizations.id
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+            orgId
+        }
 
     // --- hasScope ---
 
@@ -149,11 +152,13 @@ class AuthTokenServiceTest {
 
         service.validateToken(created.token!!)
 
-        val tokenRow = transaction {
-            AuthTokens.selectAll()
-                .where { AuthTokens.id eq created.id }
-                .first()
-        }
+        val tokenRow =
+            transaction {
+                AuthTokens
+                    .selectAll()
+                    .where { AuthTokens.id eq created.id }
+                    .first()
+            }
         assertNotNull(tokenRow[AuthTokens.last_used_at])
     }
 

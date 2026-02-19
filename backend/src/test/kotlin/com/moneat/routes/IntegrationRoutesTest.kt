@@ -105,9 +105,10 @@ class IntegrationRoutesTest {
                 }
             }
 
-            val response = client.get("/v1/integrations") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
-            }
+            val response =
+                client.get("/v1/integrations") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
 
             assertEquals(HttpStatusCode.NotFound, response.status)
             assertTrue(response.bodyAsText().contains("No organization found"))
@@ -134,9 +135,10 @@ class IntegrationRoutesTest {
                 }
             }
 
-            val response = client.get("/v1/integrations") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
-            }
+            val response =
+                client.get("/v1/integrations") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
 
             assertEquals(HttpStatusCode.OK, response.status)
             val body = response.bodyAsText()
@@ -162,9 +164,10 @@ class IntegrationRoutesTest {
                 }
             }
 
-            val response = client.get("/v1/integrations/slack/oauth/start") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
-            }
+            val response =
+                client.get("/v1/integrations/slack/oauth/start") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
 
             assertEquals(HttpStatusCode.NotFound, response.status)
             assertTrue(response.bodyAsText().contains("No organization found"))
@@ -244,10 +247,11 @@ class IntegrationRoutesTest {
                 }
             }
 
-            val response = client.post("/v1/integrations/slack/interactions") {
-                contentType(ContentType.Application.FormUrlEncoded)
-                setBody("payload={}")
-            }
+            val response =
+                client.post("/v1/integrations/slack/interactions") {
+                    contentType(ContentType.Application.FormUrlEncoded)
+                    setBody("payload={}")
+                }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
             assertTrue(response.bodyAsText().contains("Invalid Slack signature"))
@@ -267,10 +271,11 @@ class IntegrationRoutesTest {
                 }
             }
 
-            val response = client.post("/v1/integrations/slack/link-user") {
-                contentType(ContentType.Application.Json)
-                setBody("""{"slackUserId":"U1","slackTeamId":"T1"}""")
-            }
+            val response =
+                client.post("/v1/integrations/slack/link-user") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"slackUserId":"U1","slackTeamId":"T1"}""")
+                }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
@@ -280,7 +285,8 @@ class IntegrationRoutesTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(jwtSecret))
+                    JWT
+                        .require(Algorithm.HMAC256(jwtSecret))
                         .withIssuer("moneat")
                         .withAudience("moneat-users")
                         .build()
@@ -291,7 +297,8 @@ class IntegrationRoutesTest {
     }
 
     private fun token(userId: Int): String {
-        return JWT.create()
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
@@ -299,23 +306,29 @@ class IntegrationRoutesTest {
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
-    private fun seedOrganization(name: String): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrganization(name: String): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun seedUser(email: String): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[password_hash] = "hashed"
-            it[Users.name] = email.substringBefore("@")
-            it[email_verified] = true
-        } get Users.id
-    }
+    private fun seedUser(email: String): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[password_hash] = "hashed"
+                it[Users.name] = email.substringBefore("@")
+                it[email_verified] = true
+            } get Users.id
+        }
 
-    private fun seedMembership(orgId: Int, userId: Int, role: String) = transaction {
+    private fun seedMembership(
+        orgId: Int,
+        userId: Int,
+        role: String
+    ) = transaction {
         Memberships.insert {
             it[organization_id] = orgId
             it[Memberships.user_id] = userId
@@ -323,7 +336,11 @@ class IntegrationRoutesTest {
         }
     }
 
-    private fun seedIntegration(orgId: Int, type: String, enabled: Boolean) = transaction {
+    private fun seedIntegration(
+        orgId: Int,
+        type: String,
+        enabled: Boolean
+    ) = transaction {
         OrganizationIntegrations.insert {
             it[organization_id] = orgId
             it[integration_type] = type

@@ -49,29 +49,34 @@ class MonitorServiceTest {
         }
     }
 
-    private fun seedOrg(name: String = "Test Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Test Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun seedFreeTier(): Int = transaction {
-        PricingTierConfigs.insert {
-            it[tier_name] = "FREE"
-            it[version] = 1
-            it[monthly_unit_limit] = 5000
-            it[monthly_error_limit] = 5000
-            it[retention_days] = 3
-            it[log_retention_days] = 3
-            it[max_systems] = 3
-            it[monitor_interval_seconds] = 60
-            it[monthly_price_cents] = 0
-            it[is_current] = true
-        } get PricingTierConfigs.id
-    }
+    private fun seedFreeTier(): Int =
+        transaction {
+            PricingTierConfigs.insert {
+                it[tier_name] = "FREE"
+                it[version] = 1
+                it[monthly_unit_limit] = 5000
+                it[monthly_error_limit] = 5000
+                it[retention_days] = 3
+                it[log_retention_days] = 3
+                it[max_systems] = 3
+                it[monitor_interval_seconds] = 60
+                it[monthly_price_cents] = 0
+                it[is_current] = true
+            } get PricingTierConfigs.id
+        }
 
-    private fun seedSystem(orgId: Int, name: String = "test-server"): Pair<UUID, String> {
+    private fun seedSystem(
+        orgId: Int,
+        name: String = "test-server"
+    ): Pair<UUID, String> {
         val agentKey = "test-key-${UUID.randomUUID()}"
         val keyHash = hashKey(agentKey)
         val systemId = UUID.randomUUID()
@@ -125,11 +130,13 @@ class MonitorServiceTest {
 
         val (system, _) = service.createSystem(orgId, "web-server")
 
-        val settings = transaction {
-            SystemAlertSettings.selectAll()
-                .where { SystemAlertSettings.system_id eq system.id }
-                .firstOrNull()
-        }
+        val settings =
+            transaction {
+                SystemAlertSettings
+                    .selectAll()
+                    .where { SystemAlertSettings.system_id eq system.id }
+                    .firstOrNull()
+            }
         assertNotNull(settings)
     }
 

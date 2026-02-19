@@ -48,7 +48,9 @@ private val logger = KotlinLogging.logger {}
  */
 private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     return transaction {
-        Memberships.selectAll().where { Memberships.user_id eq userId }
+        Memberships
+            .selectAll()
+            .where { Memberships.user_id eq userId }
             .map { it[Memberships.organization_id] }
     }
 }
@@ -78,24 +80,26 @@ fun Route.uptimeRoutes() {
                 }
 
                 // Parse optional payload
-                val body = try {
-                    call.receive<Map<String, Any>>()
-                } catch (_: Exception) {
-                    emptyMap()
-                }
+                val body =
+                    try {
+                        call.receive<Map<String, Any>>()
+                    } catch (_: Exception) {
+                        emptyMap()
+                    }
 
                 val status = (body["status"] as? String)?.toIntOrNull() ?: 1
                 val message = body["msg"] as? String ?: "Push received"
                 val ping = (body["ping"] as? Number)?.toFloat() ?: -1f
 
                 // Record heartbeat
-                val result = CheckResult(
-                    status = status,
-                    responseTimeMs = -1,
-                    statusCode = 0,
-                    message = message,
-                    pingMs = ping
-                )
+                val result =
+                    CheckResult(
+                        status = status,
+                        responseTimeMs = -1,
+                        statusCode = 0,
+                        message = message,
+                        pingMs = ping
+                    )
 
                 uptimeService.recordHeartbeat(monitor.id, result)
                 uptimeService.updateMonitorStatus(monitor.id, result)
@@ -167,12 +171,13 @@ fun Route.uptimeRoutes() {
                         return@post
                     }
 
-                    val monitor = try {
-                        uptimeService.createMonitor(organizationId, request)
-                    } catch (e: IllegalStateException) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-                        return@post
-                    }
+                    val monitor =
+                        try {
+                            uptimeService.createMonitor(organizationId, request)
+                        } catch (e: IllegalStateException) {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+                            return@post
+                        }
 
                     call.respond(HttpStatusCode.Created, monitor)
                 } catch (e: Exception) {
@@ -201,12 +206,13 @@ fun Route.uptimeRoutes() {
                     }
 
                     val organizationId = orgIds.first()
-                    val monitorId = try {
-                        UUID.fromString(call.parameters["id"])
-                    } catch (_: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
-                        return@get
-                    }
+                    val monitorId =
+                        try {
+                            UUID.fromString(call.parameters["id"])
+                        } catch (_: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
+                            return@get
+                        }
 
                     val monitor = uptimeService.getMonitor(monitorId, organizationId)
                     if (monitor == null) {
@@ -241,12 +247,13 @@ fun Route.uptimeRoutes() {
                     }
 
                     val organizationId = orgIds.first()
-                    val monitorId = try {
-                        UUID.fromString(call.parameters["id"])
-                    } catch (_: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
-                        return@put
-                    }
+                    val monitorId =
+                        try {
+                            UUID.fromString(call.parameters["id"])
+                        } catch (_: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
+                            return@put
+                        }
 
                     val request = call.receive<UpdateUptimeMonitorRequest>()
                     val monitor = uptimeService.updateMonitor(monitorId, organizationId, request)
@@ -283,12 +290,13 @@ fun Route.uptimeRoutes() {
                     }
 
                     val organizationId = orgIds.first()
-                    val monitorId = try {
-                        UUID.fromString(call.parameters["id"])
-                    } catch (_: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
-                        return@delete
-                    }
+                    val monitorId =
+                        try {
+                            UUID.fromString(call.parameters["id"])
+                        } catch (_: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
+                            return@delete
+                        }
 
                     val deleted = uptimeService.deleteMonitor(monitorId, organizationId)
 
@@ -324,12 +332,13 @@ fun Route.uptimeRoutes() {
                     }
 
                     val organizationId = orgIds.first()
-                    val monitorId = try {
-                        UUID.fromString(call.parameters["id"])
-                    } catch (_: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
-                        return@post
-                    }
+                    val monitorId =
+                        try {
+                            UUID.fromString(call.parameters["id"])
+                        } catch (_: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
+                            return@post
+                        }
 
                     val paused = uptimeService.pauseMonitor(monitorId, organizationId)
 
@@ -365,12 +374,13 @@ fun Route.uptimeRoutes() {
                     }
 
                     val organizationId = orgIds.first()
-                    val monitorId = try {
-                        UUID.fromString(call.parameters["id"])
-                    } catch (_: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
-                        return@post
-                    }
+                    val monitorId =
+                        try {
+                            UUID.fromString(call.parameters["id"])
+                        } catch (_: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
+                            return@post
+                        }
 
                     val resumed = uptimeService.resumeMonitor(monitorId, organizationId)
 
@@ -406,12 +416,13 @@ fun Route.uptimeRoutes() {
                     }
 
                     val organizationId = orgIds.first()
-                    val monitorId = try {
-                        UUID.fromString(call.parameters["id"])
-                    } catch (_: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
-                        return@get
-                    }
+                    val monitorId =
+                        try {
+                            UUID.fromString(call.parameters["id"])
+                        } catch (_: Exception) {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
+                            return@get
+                        }
 
                     // Verify monitor belongs to org
                     val monitor = uptimeService.getMonitor(monitorId, organizationId)
@@ -454,6 +465,7 @@ private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String?
                 return "URL is required for ${request.type} monitors"
             }
         }
+
         "tcp" -> {
             if (request.hostname.isNullOrBlank()) {
                 return "Hostname is required for TCP monitors"
@@ -462,39 +474,47 @@ private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String?
                 return "Port is required for TCP monitors"
             }
         }
+
         "ping" -> {
             if (request.hostname.isNullOrBlank()) {
                 return "Hostname is required for ping monitors"
             }
         }
+
         "dns" -> {
             if (request.hostname.isNullOrBlank()) {
                 return "Hostname is required for DNS monitors"
             }
         }
+
         "websocket" -> {
             if (request.url.isNullOrBlank()) {
                 return "URL is required for WebSocket monitors"
             }
         }
+
         "ssl" -> {
             if (request.hostname.isNullOrBlank()) {
                 return "Hostname is required for SSL monitors"
             }
         }
+
         "database" -> {
             if (request.dbConnectionString.isNullOrBlank()) {
                 return "Database connection string is required"
             }
         }
+
         "docker" -> {
             if (request.dockerContainerName.isNullOrBlank()) {
                 return "Container name is required for Docker monitors"
             }
         }
+
         "push" -> {
             // No additional validation for push monitors
         }
+
         else -> {
             return "Unknown monitor type: ${request.type}"
         }

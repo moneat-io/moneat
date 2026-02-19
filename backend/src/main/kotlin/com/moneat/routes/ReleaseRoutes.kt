@@ -59,23 +59,26 @@ fun Route.releaseRoutes() {
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
     authenticate("auth-bearer") {
         get("/api/0/") {
-            val principal = call.principal<AuthTokenPrincipal>()
-                ?: run {
-                    call.respond(HttpStatusCode.Unauthorized)
-                    return@get
-                }
-
-            val userInfo = transaction {
-                Users.selectAll()
-                    .where { Users.id eq principal.userId }
-                    .firstOrNull()
-                    ?.let { row ->
-                        SentryAuthUser(
-                            email = row[Users.email],
-                            id = row[Users.id].toString()
-                        )
+            val principal =
+                call.principal<AuthTokenPrincipal>()
+                    ?: run {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@get
                     }
-            }
+
+            val userInfo =
+                transaction {
+                    Users
+                        .selectAll()
+                        .where { Users.id eq principal.userId }
+                        .firstOrNull()
+                        ?.let { row ->
+                            SentryAuthUser(
+                                email = row[Users.email],
+                                id = row[Users.id].toString()
+                            )
+                        }
+                }
 
             call.respond(
                 SentryAuthInfoResponse(
@@ -93,11 +96,12 @@ fun Route.releaseRoutes() {
             // Create a new release
             // POST /api/0/organizations/{orgSlug}/releases/
             post("/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@post
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@post
+                        }
 
                 // Check for releases:write scope
                 if (!authTokenService.hasScope(principal.scopes, "releases:write")) {
@@ -108,27 +112,30 @@ fun Route.releaseRoutes() {
                     return@post
                 }
 
-                val orgSlug = call.parameters["orgSlug"]
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organization slug"))
-                        return@post
-                    }
+                val orgSlug =
+                    call.parameters["orgSlug"]
+                        ?: run {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organization slug"))
+                            return@post
+                        }
 
                 val request = call.receive<CreateReleaseRequest>()
 
                 // Get project ID from slug
                 // For Sentry compatibility, we support the "projects" field in the request
-                val projectSlug = request.projects?.firstOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing project"))
-                        return@post
-                    }
+                val projectSlug =
+                    request.projects?.firstOrNull()
+                        ?: run {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing project"))
+                            return@post
+                        }
 
-                val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
-                    ?: run {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
-                        return@post
-                    }
+                val projectId =
+                    releaseService.getProjectBySlug(orgSlug, projectSlug)
+                        ?: run {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                            return@post
+                        }
 
                 // Verify user has access to this project
                 if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
@@ -155,11 +162,12 @@ fun Route.releaseRoutes() {
             // Get a specific release
             // GET /api/0/organizations/{orgSlug}/releases/{version}/
             get("/{version}/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@get
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@get
+                        }
 
                 if (!authTokenService.hasScope(principal.scopes, "releases:read")) {
                     call.respond(
@@ -179,11 +187,12 @@ fun Route.releaseRoutes() {
         route("/api/0/projects/{orgSlug}/{projectSlug}/releases") {
             // Create a new release for a specific project
             post("/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@post
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@post
+                        }
 
                 if (!authTokenService.hasScope(principal.scopes, "releases:write")) {
                     call.respond(
@@ -196,11 +205,12 @@ fun Route.releaseRoutes() {
                 val orgSlug = call.parameters["orgSlug"] ?: return@post
                 val projectSlug = call.parameters["projectSlug"] ?: return@post
 
-                val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
-                    ?: run {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
-                        return@post
-                    }
+                val projectId =
+                    releaseService.getProjectBySlug(orgSlug, projectSlug)
+                        ?: run {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                            return@post
+                        }
 
                 if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
@@ -225,11 +235,12 @@ fun Route.releaseRoutes() {
 
             // List releases for a project
             get("/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@get
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@get
+                        }
 
                 if (!authTokenService.hasScope(principal.scopes, "releases:read")) {
                     call.respond(HttpStatusCode.Forbidden)
@@ -239,11 +250,12 @@ fun Route.releaseRoutes() {
                 val orgSlug = call.parameters["orgSlug"] ?: return@get
                 val projectSlug = call.parameters["projectSlug"] ?: return@get
 
-                val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
-                    ?: run {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
-                        return@get
-                    }
+                val projectId =
+                    releaseService.getProjectBySlug(orgSlug, projectSlug)
+                        ?: run {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                            return@get
+                        }
 
                 if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
@@ -257,11 +269,12 @@ fun Route.releaseRoutes() {
             // Upload source maps for a release
             // POST /api/0/projects/{orgSlug}/{projectSlug}/releases/{version}/files/
             post("/{version}/files/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@post
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@post
+                        }
 
                 if (!authTokenService.hasScope(principal.scopes, "sourcemaps:write")) {
                     call.respond(
@@ -275,11 +288,12 @@ fun Route.releaseRoutes() {
                 val projectSlug = call.parameters["projectSlug"] ?: return@post
                 val version = call.parameters["version"] ?: return@post
 
-                val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
-                    ?: run {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
-                        return@post
-                    }
+                val projectId =
+                    releaseService.getProjectBySlug(orgSlug, projectSlug)
+                        ?: run {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                            return@post
+                        }
 
                 if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
@@ -299,10 +313,12 @@ fun Route.releaseRoutes() {
                                 filePath = part.value
                             }
                         }
+
                         is PartData.FileItem -> {
                             fileName = part.originalFileName ?: "unknown"
                             fileBytes = part.provider().toByteArray()
                         }
+
                         else -> {}
                     }
                     part.dispose()
@@ -315,12 +331,13 @@ fun Route.releaseRoutes() {
                 }
 
                 try {
-                    val fileResponse = releaseService.uploadSourceMap(
-                        projectId = projectId,
-                        version = version,
-                        fileName = finalFileName,
-                        fileContent = fileBytes
-                    )
+                    val fileResponse =
+                        releaseService.uploadSourceMap(
+                            projectId = projectId,
+                            version = version,
+                            fileName = finalFileName,
+                            fileContent = fileBytes
+                        )
                     call.respond(HttpStatusCode.Created, fileResponse)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -332,11 +349,12 @@ fun Route.releaseRoutes() {
 
             // List files for a release
             get("/{version}/files/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@get
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@get
+                        }
 
                 if (!authTokenService.hasScope(principal.scopes, "sourcemaps:read")) {
                     call.respond(HttpStatusCode.Forbidden)
@@ -347,11 +365,12 @@ fun Route.releaseRoutes() {
                 val projectSlug = call.parameters["projectSlug"] ?: return@get
                 val version = call.parameters["version"] ?: return@get
 
-                val projectId = releaseService.getProjectBySlug(orgSlug, projectSlug)
-                    ?: run {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
-                        return@get
-                    }
+                val projectId =
+                    releaseService.getProjectBySlug(orgSlug, projectSlug)
+                        ?: run {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                            return@get
+                        }
 
                 if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
                     call.respond(HttpStatusCode.Forbidden)
@@ -367,11 +386,12 @@ fun Route.releaseRoutes() {
         // GET /api/0/organizations/{orgSlug}/chunk-upload/
         route("/api/0/organizations/{orgSlug}/chunk-upload") {
             get("/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@get
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@get
+                        }
 
                 val orgSlug = call.parameters["orgSlug"] ?: return@get
 
@@ -392,30 +412,32 @@ fun Route.releaseRoutes() {
                         concurrency = 8,
                         hashAlgorithm = "sha1",
                         compression = listOf("gzip"),
-                        accept = listOf(
-                            "debug_files",
-                            "release_files",
-                            "pdbs",
-                            "sources",
-                            "bcsymbolmaps",
-                            "il2cpp",
-                            "portablepdbs",
-                            "artifact_bundles",
-                            "artifact_bundles_v2",
-                            "proguard",
-                            "dartsymbolmap"
-                        )
+                        accept =
+                            listOf(
+                                "debug_files",
+                                "release_files",
+                                "pdbs",
+                                "sources",
+                                "bcsymbolmaps",
+                                "il2cpp",
+                                "portablepdbs",
+                                "artifact_bundles",
+                                "artifact_bundles_v2",
+                                "proguard",
+                                "dartsymbolmap"
+                            )
                     )
                 )
             }
 
             // POST /api/0/organizations/{orgSlug}/chunk-upload/
             post("/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@post
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@post
+                        }
 
                 val orgSlug = call.parameters["orgSlug"] ?: return@post
 
@@ -433,17 +455,18 @@ fun Route.releaseRoutes() {
                         val rawBytes = part.provider().toByteArray()
 
                         // Handle gzip-compressed chunks
-                        val bytes = if (part.name == "file_gzip") {
-                            try {
-                                val bos = ByteArrayOutputStream()
-                                GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
-                                bos.toByteArray()
-                            } catch (e: Exception) {
+                        val bytes =
+                            if (part.name == "file_gzip") {
+                                try {
+                                    val bos = ByteArrayOutputStream()
+                                    GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
+                                    bos.toByteArray()
+                                } catch (e: Exception) {
+                                    rawBytes
+                                }
+                            } else {
                                 rawBytes
                             }
-                        } else {
-                            rawBytes
-                        }
 
                         releaseService.storeChunk(checksum, bytes)
                         chunksProcessed++
@@ -460,19 +483,21 @@ fun Route.releaseRoutes() {
         // POST /api/0/organizations/{orgSlug}/artifactbundle/assemble/
         route("/api/0/organizations/{orgSlug}/artifactbundle") {
             post("/assemble/") {
-                val principal = call.principal<AuthTokenPrincipal>()
-                    ?: run {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@post
-                    }
+                val principal =
+                    call.principal<AuthTokenPrincipal>()
+                        ?: run {
+                            call.respond(HttpStatusCode.Unauthorized)
+                            return@post
+                        }
 
                 val orgSlug = call.parameters["orgSlug"] ?: return@post
 
-                val orgId = releaseService.getOrganizationIdBySlug(orgSlug)
-                    ?: run {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
-                        return@post
-                    }
+                val orgId =
+                    releaseService.getOrganizationIdBySlug(orgSlug)
+                        ?: run {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
+                            return@post
+                        }
 
                 if (!releaseService.hasOrgAccess(principal.userId, orgSlug)) {
                     call.respond(HttpStatusCode.Forbidden)

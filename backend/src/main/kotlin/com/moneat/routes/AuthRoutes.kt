@@ -53,7 +53,9 @@ private val logger = KotlinLogging.logger {}
 fun Route.authRoutes() {
     val authService = AuthService()
     val oauthService = OAuthService()
-    val config = io.ktor.server.config.ApplicationConfig("application.conf")
+    val config =
+        io.ktor.server.config
+            .ApplicationConfig("application.conf")
     val jwtSecret = config.property("jwt.secret").getString()
 
     route("/auth") {
@@ -62,18 +64,29 @@ fun Route.authRoutes() {
             val inviteToken = call.request.queryParameters["inviteToken"]
 
             // Prefer CF-Connecting-IP when behind Cloudflare, fallback to X-Forwarded-For, then origin
-            val cfConnectingIp = call.request.headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotBlank() }
-            val forwardedFor = call.request.headers["X-Forwarded-For"]
-                ?.split(",")
-                ?.firstOrNull()
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-            val remoteHost = call.request.origin.remoteHost.takeIf { it.isNotBlank() }
-            val userAgent = call.request.headers["User-Agent"]?.trim()?.takeIf { it.isNotBlank() }?.take(2048)
-            val context = SignupRequestContext(
-                ipAddress = cfConnectingIp ?: forwardedFor ?: remoteHost,
-                userAgent = userAgent
-            )
+            val cfConnectingIp =
+                call.request.headers["CF-Connecting-IP"]
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+            val forwardedFor =
+                call.request.headers["X-Forwarded-For"]
+                    ?.split(",")
+                    ?.firstOrNull()
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+            val remoteHost =
+                call.request.origin.remoteHost
+                    .takeIf { it.isNotBlank() }
+            val userAgent =
+                call.request.headers["User-Agent"]
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.take(2048)
+            val context =
+                SignupRequestContext(
+                    ipAddress = cfConnectingIp ?: forwardedFor ?: remoteHost,
+                    userAgent = userAgent
+                )
 
             try {
                 val result = authService.signup(request, context, inviteToken)
@@ -158,9 +171,12 @@ fun Route.authRoutes() {
 
             if (token != null) {
                 try {
-                    val jwtVerifier = com.auth0.jwt.JWT
-                        .require(com.auth0.jwt.algorithms.Algorithm.HMAC256(jwtSecret))
-                        .build()
+                    val jwtVerifier =
+                        com.auth0.jwt.JWT
+                            .require(
+                                com.auth0.jwt.algorithms.Algorithm
+                                    .HMAC256(jwtSecret)
+                            ).build()
                     val decodedJWT = jwtVerifier.verify(token)
                     val userId = decodedJWT?.getClaim("userId")?.asInt()
                     if (userId != null) {
@@ -388,27 +404,33 @@ fun Route.authRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
-                val available = transaction {
-                    // Get user's org ID to exclude from check
-                    val membership = Memberships.selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
+                val available =
+                    transaction {
+                        // Get user's org ID to exclude from check
+                        val membership =
+                            Memberships
+                                .selectAll()
+                                .where { Memberships.user_id eq userId }
+                                .firstOrNull()
 
-                    val userOrgId = membership?.get(Memberships.organization_id)
+                        val userOrgId = membership?.get(Memberships.organization_id)
 
-                    // Check if slug exists in other organizations
-                    val existingOrg = if (userOrgId != null) {
-                        Organizations.selectAll()
-                            .where { (Organizations.slug eq slug) and (Organizations.id neq userOrgId) }
-                            .firstOrNull()
-                    } else {
-                        Organizations.selectAll()
-                            .where { Organizations.slug eq slug }
-                            .firstOrNull()
+                        // Check if slug exists in other organizations
+                        val existingOrg =
+                            if (userOrgId != null) {
+                                Organizations
+                                    .selectAll()
+                                    .where { (Organizations.slug eq slug) and (Organizations.id neq userOrgId) }
+                                    .firstOrNull()
+                            } else {
+                                Organizations
+                                    .selectAll()
+                                    .where { Organizations.slug eq slug }
+                                    .firstOrNull()
+                            }
+
+                        existingOrg == null
                     }
-
-                    existingOrg == null
-                }
 
                 call.respond(BooleanResponse(available))
             }
@@ -419,19 +441,20 @@ fun Route.authRoutes() {
                 val request = call.receive<CompleteOnboardingRequest>()
 
                 try {
-                    val user = authService.completeOnboarding(
-                        userId,
-                        request.organizationName,
-                        request.companySize,
-                        request.slug,
-                        request.referralSource,
-                        request.utmSource,
-                        request.utmMedium,
-                        request.utmCampaign,
-                        request.utmContent,
-                        request.utmTerm,
-                        request.sidebarHiddenItems
-                    )
+                    val user =
+                        authService.completeOnboarding(
+                            userId,
+                            request.organizationName,
+                            request.companySize,
+                            request.slug,
+                            request.referralSource,
+                            request.utmSource,
+                            request.utmMedium,
+                            request.utmCampaign,
+                            request.utmContent,
+                            request.utmTerm,
+                            request.sidebarHiddenItems
+                        )
                     call.respond(user)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))

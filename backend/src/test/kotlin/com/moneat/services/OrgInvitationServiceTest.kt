@@ -47,23 +47,32 @@ class OrgInvitationServiceTest {
         }
     }
 
-    private fun seedOrg(name: String = "Test Org"): Int = transaction {
-        Organizations.insert {
-            it[Organizations.name] = name
-            it[slug] = name.lowercase().replace(" ", "-")
-        } get Organizations.id
-    }
+    private fun seedOrg(name: String = "Test Org"): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
 
-    private fun seedUser(email: String = "test@example.com", name: String = "Test User"): Int = transaction {
-        Users.insert {
-            it[Users.email] = email
-            it[Users.name] = name
-            it[Users.password_hash] = "hashed"
-            it[Users.email_verified] = true
-        } get Users.id
-    }
+    private fun seedUser(
+        email: String = "test@example.com",
+        name: String = "Test User"
+    ): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[Users.name] = name
+                it[Users.password_hash] = "hashed"
+                it[Users.email_verified] = true
+            } get Users.id
+        }
 
-    private fun seedMembership(userId: Int, orgId: Int, role: String = "owner") = transaction {
+    private fun seedMembership(
+        userId: Int,
+        orgId: Int,
+        role: String = "owner"
+    ) = transaction {
         Memberships.insert {
             it[user_id] = userId
             it[organization_id] = orgId
@@ -77,19 +86,24 @@ class OrgInvitationServiceTest {
         invitedBy: Int,
         token: String = "test-token-${System.nanoTime()}",
         status: String = "pending",
-        expiresAt: Long = Clock.System.now().plus(7.days).toEpochMilliseconds()
-    ): Int = transaction {
-        OrgInvitations.insert {
-            it[organization_id] = orgId
-            it[OrgInvitations.email] = email
-            it[role] = "member"
-            it[invited_by] = invitedBy
-            it[OrgInvitations.token] = token
-            it[OrgInvitations.status] = status
-            it[OrgInvitations.expires_at] = expiresAt
-            it[created_at] = Clock.System.now()
-        } get OrgInvitations.id
-    }
+        expiresAt: Long =
+            Clock.System
+                .now()
+                .plus(7.days)
+                .toEpochMilliseconds()
+    ): Int =
+        transaction {
+            OrgInvitations.insert {
+                it[organization_id] = orgId
+                it[OrgInvitations.email] = email
+                it[role] = "member"
+                it[invited_by] = invitedBy
+                it[OrgInvitations.token] = token
+                it[OrgInvitations.status] = status
+                it[OrgInvitations.expires_at] = expiresAt
+                it[created_at] = Clock.System.now()
+            } get OrgInvitations.id
+        }
 
     // --- inviteMember ---
 
@@ -202,7 +216,11 @@ class OrgInvitationServiceTest {
         val userId = seedUser("user@test.com", "User")
 
         val token = "expired-token"
-        val pastExpiry = Clock.System.now().minus(1.days).toEpochMilliseconds()
+        val pastExpiry =
+            Clock.System
+                .now()
+                .minus(1.days)
+                .toEpochMilliseconds()
         seedInvitation(orgId, "user@test.com", adminId, token, expiresAt = pastExpiry)
 
         assertFailsWith<BadRequestException> {
@@ -238,11 +256,13 @@ class OrgInvitationServiceTest {
         val result = service.revokeInvitation(invId, adminId)
         assertTrue(result)
 
-        val status = transaction {
-            OrgInvitations.selectAll()
-                .where { OrgInvitations.id eq invId }
-                .single()[OrgInvitations.status]
-        }
+        val status =
+            transaction {
+                OrgInvitations
+                    .selectAll()
+                    .where { OrgInvitations.id eq invId }
+                    .single()[OrgInvitations.status]
+            }
         assertEquals("revoked", status)
     }
 
@@ -269,7 +289,11 @@ class OrgInvitationServiceTest {
         val adminId = seedUser("admin@test.com", "Admin")
         seedMembership(adminId, orgId, "admin")
 
-        val pastExpiry = Clock.System.now().minus(1.days).toEpochMilliseconds()
+        val pastExpiry =
+            Clock.System
+                .now()
+                .minus(1.days)
+                .toEpochMilliseconds()
         seedInvitation(orgId, "expired1@test.com", adminId, expiresAt = pastExpiry)
         seedInvitation(orgId, "expired2@test.com", adminId, expiresAt = pastExpiry)
 
@@ -283,7 +307,11 @@ class OrgInvitationServiceTest {
         val adminId = seedUser("admin@test.com", "Admin")
         seedMembership(adminId, orgId, "admin")
 
-        val futureExpiry = Clock.System.now().plus(7.days).toEpochMilliseconds()
+        val futureExpiry =
+            Clock.System
+                .now()
+                .plus(7.days)
+                .toEpochMilliseconds()
         seedInvitation(orgId, "valid@test.com", adminId, expiresAt = futureExpiry)
 
         val count = service.cleanupExpiredInvitations()

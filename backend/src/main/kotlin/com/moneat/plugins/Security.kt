@@ -45,12 +45,13 @@ private fun extractBearerToken(rawHeader: String?): String? {
         return null
     }
 
-    val token = if (rawToken.any { it.isWhitespace() }) {
-        logger.warn("Authorization token contains whitespace; normalizing before parsing")
-        rawToken.filterNot { it.isWhitespace() }
-    } else {
-        rawToken
-    }
+    val token =
+        if (rawToken.any { it.isWhitespace() }) {
+            logger.warn("Authorization token contains whitespace; normalizing before parsing")
+            rawToken.filterNot { it.isWhitespace() }
+        } else {
+            rawToken
+        }
 
     return token.takeIf { it.isNotBlank() }
 }
@@ -95,11 +96,12 @@ fun Application.configureSecurity() {
     val realm = config.property("jwt.realm").getString()
     val authTokenService = AuthTokenService()
 
-    val jwtVerifier = JWT
-        .require(Algorithm.HMAC256(secret))
-        .withAudience(audience)
-        .withIssuer(issuer)
-        .build()
+    val jwtVerifier =
+        JWT
+            .require(Algorithm.HMAC256(secret))
+            .withAudience(audience)
+            .withIssuer(issuer)
+            .build()
 
     install(Authentication) {
         // JWT authentication for user sessions (reads from Authorization header or auth_token cookie)
@@ -126,7 +128,8 @@ fun Application.configureSecurity() {
                     val cookieToken = call.request.cookies["auth_token"]
                     if (cookieToken != null) {
                         try {
-                            io.ktor.http.auth.HttpAuthHeader.Single("Bearer", cookieToken)
+                            io.ktor.http.auth.HttpAuthHeader
+                                .Single("Bearer", cookieToken)
                         } catch (e: Exception) {
                             null
                         }

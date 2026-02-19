@@ -79,27 +79,27 @@ dependencies {
     implementation(libs.hikaricp)
     implementation(libs.flyway.core)
     implementation(libs.flyway.postgresql)
-    
+
     // Date/Time
     implementation(libs.kotlinx.datetime)
 
     // Redis
     implementation(libs.lettuce)
-    
+
     // Email - SMTP
     implementation(libs.jakarta.mail)
-    
+
     // Security
     implementation(libs.jbcrypt)
     implementation(libs.commons.codec)
-    
+
     // SSO
     implementation(libs.java.saml.core)
     implementation(libs.oauth2.oidc.sdk)
 
     // Billing
     implementation(libs.stripe.java)
-    
+
     // MessagePack for mobile replay decoding
     implementation(libs.msgpack.core)
 
@@ -112,13 +112,13 @@ dependencies {
     // Logging
     implementation(libs.logback.classic)
     implementation(libs.kotlin.logging)
-    
+
     // OpenTelemetry for logging to Moneat
     implementation(libs.opentelemetry.api)
     implementation(libs.opentelemetry.sdk)
     implementation(libs.opentelemetry.exporter.otlp)
     implementation(libs.opentelemetry.logback)
-    
+
     // Sentry - Error monitoring
     implementation(libs.sentry.kotlin)
     implementation(libs.sentry.logback)
@@ -132,7 +132,7 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.h2)
-    
+
     // Integration testing dependencies
     val integrationTestImplementation by configurations
     integrationTestImplementation(libs.ktor.server.test.host)
@@ -145,28 +145,30 @@ dependencies {
 }
 
 // Task to copy email templates into resources
-val copyEmailTemplates = tasks.register<Copy>("copyEmailTemplates") {
-    group = "build"
-    description = "Copies built email templates into backend resources"
-    
-    from("${project.rootDir}/../emails/build/templates/email")
-    into(layout.buildDirectory.dir("resources/main/email-templates"))
-    
-    // Only copy if source exists
-    onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
-}
+val copyEmailTemplates =
+    tasks.register<Copy>("copyEmailTemplates") {
+        group = "build"
+        description = "Copies built email templates into backend resources"
+
+        from("${project.rootDir}/../emails/build/templates/email")
+        into(layout.buildDirectory.dir("resources/main/email-templates"))
+
+        // Only copy if source exists
+        onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
+    }
 
 // Task to copy email templates into test resources
-val copyEmailTemplatesForTest = tasks.register<Copy>("copyEmailTemplatesForTest") {
-    group = "build"
-    description = "Copies built email templates into backend test resources"
-    
-    from("${project.rootDir}/../emails/build/templates/email")
-    into(layout.buildDirectory.dir("resources/test/email-templates"))
-    
-    // Only copy if source exists
-    onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
-}
+val copyEmailTemplatesForTest =
+    tasks.register<Copy>("copyEmailTemplatesForTest") {
+        group = "build"
+        description = "Copies built email templates into backend test resources"
+
+        from("${project.rootDir}/../emails/build/templates/email")
+        into(layout.buildDirectory.dir("resources/test/email-templates"))
+
+        // Only copy if source exists
+        onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
+    }
 
 // Ensure email templates are copied before processing resources
 tasks.named("processResources") {
@@ -181,10 +183,10 @@ tasks.named("processTestResources") {
 tasks.register<JavaExec>("seedE2EData") {
     group = "e2e"
     description = "Seeds E2E test data into the database"
-    
+
     classpath = sourceSets["main"].runtimeClasspath + sourceSets["test"].runtimeClasspath
     mainClass.set("com.moneat.e2e.DataSeederKt")
-    
+
     standardOutput = System.out
     errorOutput = System.err
 }
@@ -193,36 +195,37 @@ tasks.register<JavaExec>("seedE2EData") {
 tasks.register<JavaExec>("seedDemoData") {
     group = "demo"
     description = "Seeds realistic demo data for screenshots and demos"
-    
+
     classpath = sourceSets["main"].runtimeClasspath + sourceSets["test"].runtimeClasspath
     mainClass.set("com.moneat.demo.DemoDataSeederKt")
-    
+
     // Pass --reseed argument if provided: ./gradlew seedDemoData -Preseed
     if (project.hasProperty("reseed")) {
         args("--reseed")
     }
-    
+
     standardOutput = System.out
     errorOutput = System.err
 }
 
 // Integration test task
-val integrationTest = tasks.register<Test>("integrationTest") {
-    description = "Runs integration tests with Testcontainers"
-    group = "verification"
-    
-    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
-    classpath = sourceSets["integrationTest"].runtimeClasspath
-    
-    shouldRunAfter(tasks.test)
-    
-    useJUnitPlatform()
-    
-    testLogging {
-        events("passed", "skipped", "failed")
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+val integrationTest =
+    tasks.register<Test>("integrationTest") {
+        description = "Runs integration tests with Testcontainers"
+        group = "verification"
+
+        testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+        classpath = sourceSets["integrationTest"].runtimeClasspath
+
+        shouldRunAfter(tasks.test)
+
+        useJUnitPlatform()
+
+        testLogging {
+            events("passed", "skipped", "failed")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
     }
-}
 
 // JaCoCo configuration
 jacoco {
@@ -231,60 +234,69 @@ jacoco {
 
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
-    
+
     executionData.setFrom(
         fileTree(layout.buildDirectory.asFile).include("jacoco/*.exec")
     )
-    
+
     reports {
         xml.required.set(true)
         html.required.set(true)
         csv.required.set(false)
     }
-    
+
     classDirectories.setFrom(
-        files(classDirectories.files.map {
-            fileTree(it) {
-                exclude(
-                    "**/models/**",          // data classes — no logic to test
-                    "**/config/**",          // infrastructure wiring (DB clients, Redis, Sentry, env)
-                    "**/plugins/**",         // Ktor plugin bootstrap — framework wiring, not business logic
-                    "**/logging/**",         // log appender setup
-                    "**/enterprise/**",      // on-call/feature-flag integration stubs
-                    "**/Application*",       // entry point
-                )
+        files(
+            classDirectories.files.map {
+                fileTree(it) {
+                    exclude(
+                        "**/models/**",          // data classes — no logic to test
+                        "**/config/**",          // infrastructure wiring (DB clients, Redis, Sentry, env)
+                        "**/plugins/**",         // Ktor plugin bootstrap — framework wiring, not business logic
+                        "**/logging/**",         // log appender setup
+                        "**/enterprise/**",      // on-call/feature-flag integration stubs
+                        "**/Application*",       // entry point
+                    )
+                }
             }
-        })
+        )
     )
 }
 
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
-    
+
     violationRules {
         rule {
             limit {
                 // Staged rollout: Week 3=45%, Week 4=55%, Week 6=65%
                 // Set via COVERAGE_GATE_PHASE env var (reporting-only, soft, hard)
                 val phase = System.getenv("COVERAGE_GATE_PHASE") ?: "reporting-only"
-                val threshold = when(phase) {
-                    "reporting-only" -> "0.00" // Week 3: no enforcement
-                    "soft" -> "0.55"            // Week 4: warn threshold
-                    "hard" -> "0.65"            // Week 6: enforce threshold
-                    else -> "0.45"              // Default baseline
-                }
+                val threshold =
+                    when(phase) {
+                        "reporting-only" -> "0.00"
+
+                        // Week 3: no enforcement
+                        "soft" -> "0.55"
+
+                        // Week 4: warn threshold
+                        "hard" -> "0.65"
+
+                        // Week 6: enforce threshold
+                        else -> "0.45"              // Default baseline
+                    }
                 minimum = threshold.toBigDecimal()
             }
         }
     }
-    
+
     classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
 }
 
 tasks.test {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
-    
+
     testLogging {
         events("passed", "skipped", "failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -302,15 +314,16 @@ tasks.build {
 }
 
 // Install git hooks so contributors get pre-commit formatting automatically
-val installGitHooks = tasks.register<Exec>("installGitHooks") {
-    group = "setup"
-    description = "Configures git to use project hooks from .githooks/ (installs on first build)"
+val installGitHooks =
+    tasks.register<Exec>("installGitHooks") {
+        group = "setup"
+        description = "Configures git to use project hooks from .githooks/ (installs on first build)"
 
-    val repoRoot = rootProject.rootDir.parentFile
-    onlyIf { File(repoRoot, ".git").exists() }
-    workingDir = repoRoot
-    commandLine("sh", "-c", "git config core.hooksPath .githooks && chmod +x .githooks/*")
-}
+        val repoRoot = rootProject.rootDir.parentFile
+        onlyIf { File(repoRoot, ".git").exists() }
+        workingDir = repoRoot
+        commandLine("sh", "-c", "git config core.hooksPath .githooks && chmod +x .githooks/*")
+    }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {

@@ -15,16 +15,17 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-        
+
         // Read DSN from local.properties
         val localPropertiesFile = rootProject.file("local.properties")
-        val sentryDsn = if (localPropertiesFile.exists()) {
-            val props = Properties()
-            localPropertiesFile.inputStream().use { props.load(it) }
-            props.getProperty("sentry.dsn", "")
-        } else {
-            ""
-        }
+        val sentryDsn =
+            if (localPropertiesFile.exists()) {
+                val props = Properties()
+                localPropertiesFile.inputStream().use { props.load(it) }
+                props.getProperty("sentry.dsn", "")
+            } else {
+                ""
+            }
         manifestPlaceholders["sentryDsn"] = sentryDsn
     }
 

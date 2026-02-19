@@ -66,14 +66,15 @@ class AuthServicePasswordResetTest {
         val oldPassword = "oldpassword123"
         val newPassword = "newpassword456"
 
-        val userId = transaction {
-            insertTestUser(
-                email = "reset@example.com",
-                password = oldPassword,
-                passwordResetToken = token,
-                passwordResetExpiresAt = expiresAt
-            )
-        }
+        val userId =
+            transaction {
+                insertTestUser(
+                    email = "reset@example.com",
+                    password = oldPassword,
+                    passwordResetToken = token,
+                    passwordResetExpiresAt = expiresAt
+                )
+            }
 
         val result = authService.resetPassword(token, newPassword)
 
@@ -97,14 +98,15 @@ class AuthServicePasswordResetTest {
         val expiresAt = System.currentTimeMillis() - 1000 // 1 second ago (expired)
         val oldPassword = "oldpassword123"
 
-        val userId = transaction {
-            insertTestUser(
-                email = "expired@example.com",
-                password = oldPassword,
-                passwordResetToken = token,
-                passwordResetExpiresAt = expiresAt
-            )
-        }
+        val userId =
+            transaction {
+                insertTestUser(
+                    email = "expired@example.com",
+                    password = oldPassword,
+                    passwordResetToken = token,
+                    passwordResetExpiresAt = expiresAt
+                )
+            }
 
         val result = authService.resetPassword(token, "newpassword456")
 
@@ -147,9 +149,10 @@ class AuthServicePasswordResetTest {
             )
         }
 
-        val error = assertFailsWith<IllegalArgumentException> {
-            authService.resetPassword(token, "short")
-        }
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                authService.resetPassword(token, "short")
+            }
 
         assertTrue(error.message?.contains("at least 8 characters", ignoreCase = true) == true)
     }

@@ -42,15 +42,27 @@ fun Application.configureBackgroundJobs() {
     val uptimeScheduler = UptimeScheduler()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
-    val workerCount = environment.config.property("ingest.workerCount").getString().toInt()
+    val workerCount =
+        environment.config
+            .property("ingest.workerCount")
+            .getString()
+            .toInt()
     val ingestionWorker = IngestionWorker(queueKey, dlqKey, workerCount)
     val logQueueKey = environment.config.propertyOrNull("logs.queueKey")?.getString() ?: "moneat:logs:queue"
     val logDlqKey = environment.config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq"
-    val logWorkerCount = environment.config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull() ?: 2
+    val logWorkerCount =
+        environment.config
+            .propertyOrNull("logs.workerCount")
+            ?.getString()
+            ?.toIntOrNull() ?: 2
     val logIngestionWorker = LogIngestionWorker(logQueueKey, logDlqKey, logWorkerCount)
     val llmQueueKey = environment.config.propertyOrNull("llm.queueKey")?.getString() ?: "moneat:llm:queue"
     val llmDlqKey = environment.config.propertyOrNull("llm.dlqKey")?.getString() ?: "moneat:llm:dlq"
-    val llmWorkerCount = environment.config.propertyOrNull("llm.workerCount")?.getString()?.toIntOrNull() ?: 2
+    val llmWorkerCount =
+        environment.config
+            .propertyOrNull("llm.workerCount")
+            ?.getString()
+            ?.toIntOrNull() ?: 2
     val llmIngestionWorker = LlmIngestionWorker(llmQueueKey, llmDlqKey, llmWorkerCount)
 
     // Create a coroutine scope for background jobs

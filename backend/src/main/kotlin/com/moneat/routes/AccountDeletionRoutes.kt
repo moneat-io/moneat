@@ -62,16 +62,17 @@ fun Route.accountDeletionRoutes() {
             return@get
         }
 
-        val orgWithRole = transaction {
-            Memberships.innerJoin(Organizations)
-                .selectAll()
-                .where {
-                    (Memberships.user_id eq userId) and
-                        (Memberships.organization_id eq orgId) and
-                        (Organizations.deletedAt.isNull())
-                }
-                .singleOrNull()
-        }
+        val orgWithRole =
+            transaction {
+                Memberships
+                    .innerJoin(Organizations)
+                    .selectAll()
+                    .where {
+                        (Memberships.user_id eq userId) and
+                            (Memberships.organization_id eq orgId) and
+                            (Organizations.deletedAt.isNull())
+                    }.singleOrNull()
+            }
 
         if (orgWithRole == null) {
             call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
@@ -92,20 +93,23 @@ fun Route.accountDeletionRoutes() {
         val principal = call.principal<JWTPrincipal>()
         val userId = principal!!.payload.getClaim("userId").asInt()
 
-        val request = try {
-            call.receive<DeleteAccountRequest>()
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
-            return@delete
-        }
+        val request =
+            try {
+                call.receive<DeleteAccountRequest>()
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+                return@delete
+            }
 
         // Validate confirmation - user must type their email
-        val userEmail = transaction {
-            com.moneat.models.Users.selectAll()
-                .where { com.moneat.models.Users.id eq userId }
-                .singleOrNull()
-                ?.get(com.moneat.models.Users.email)
-        }
+        val userEmail =
+            transaction {
+                com.moneat.models.Users
+                    .selectAll()
+                    .where { com.moneat.models.Users.id eq userId }
+                    .singleOrNull()
+                    ?.get(com.moneat.models.Users.email)
+            }
 
         if (userEmail == null) {
             call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
@@ -166,20 +170,23 @@ fun Route.accountDeletionRoutes() {
             return@delete
         }
 
-        val request = try {
-            call.receive<DeleteOrganizationRequest>()
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
-            return@delete
-        }
+        val request =
+            try {
+                call.receive<DeleteOrganizationRequest>()
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+                return@delete
+            }
 
         // Get organization name for confirmation
-        val orgName = transaction {
-            Organizations.selectAll()
-                .where { Organizations.id eq orgId }
-                .singleOrNull()
-                ?.get(Organizations.name)
-        }
+        val orgName =
+            transaction {
+                Organizations
+                    .selectAll()
+                    .where { Organizations.id eq orgId }
+                    .singleOrNull()
+                    ?.get(Organizations.name)
+            }
 
         if (orgName == null) {
             call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))

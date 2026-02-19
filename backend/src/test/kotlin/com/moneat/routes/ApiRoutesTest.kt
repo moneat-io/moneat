@@ -107,7 +107,8 @@ class ApiRoutesTest {
                     install(Authentication) {
                         jwt("auth-jwt") {
                             verifier(
-                                JWT.require(Algorithm.HMAC256(jwtSecret))
+                                JWT
+                                    .require(Algorithm.HMAC256(jwtSecret))
                                     .withIssuer("moneat")
                                     .withAudience("moneat-users")
                                     .build()
@@ -124,9 +125,10 @@ class ApiRoutesTest {
                     routing { apiRoutes() }
                 }
 
-                val response = client.get("/v1/projects/-1/issues?page=2&limit=5&status=resolved") {
-                    header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
-                }
+                val response =
+                    client.get("/v1/projects/-1/issues?page=2&limit=5&status=resolved") {
+                        header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
+                    }
 
                 assertEquals(HttpStatusCode.OK, response.status)
                 val body = response.bodyAsText()
@@ -156,7 +158,8 @@ class ApiRoutesTest {
                     install(Authentication) {
                         jwt("auth-jwt") {
                             verifier(
-                                JWT.require(Algorithm.HMAC256(jwtSecret))
+                                JWT
+                                    .require(Algorithm.HMAC256(jwtSecret))
                                     .withIssuer("moneat")
                                     .withAudience("moneat-users")
                                     .build()
@@ -173,9 +176,10 @@ class ApiRoutesTest {
                     routing { apiRoutes() }
                 }
 
-                val response = client.get("/v1/issues/missing-issue") {
-                    header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
-                }
+                val response =
+                    client.get("/v1/issues/missing-issue") {
+                        header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
+                    }
                 assertEquals(HttpStatusCode.NotFound, response.status)
             }
         }
@@ -189,7 +193,8 @@ class ApiRoutesTest {
                 install(Authentication) {
                     jwt("auth-jwt") {
                         verifier(
-                            JWT.require(Algorithm.HMAC256(jwtSecret))
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
                                 .withIssuer("moneat")
                                 .withAudience("moneat-users")
                                 .build()
@@ -206,9 +211,10 @@ class ApiRoutesTest {
                 routing { apiRoutes() }
             }
 
-            val response = client.get("/v1/projects/99/issues") {
-                header(HttpHeaders.Authorization, "Bearer ${regularToken(userId = 123)}")
-            }
+            val response =
+                client.get("/v1/projects/99/issues") {
+                    header(HttpHeaders.Authorization, "Bearer ${regularToken(userId = 123)}")
+                }
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
     }
@@ -221,7 +227,8 @@ class ApiRoutesTest {
                 install(Authentication) {
                     jwt("auth-jwt") {
                         verifier(
-                            JWT.require(Algorithm.HMAC256(jwtSecret))
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
                                 .withIssuer("moneat")
                                 .withAudience("moneat-users")
                                 .build()
@@ -238,15 +245,17 @@ class ApiRoutesTest {
                 routing { apiRoutes() }
             }
 
-            val response = client.get("/v1/projects/99/traces/trace-1") {
-                header(HttpHeaders.Authorization, "Bearer ${regularToken(userId = 555)}")
-            }
+            val response =
+                client.get("/v1/projects/99/traces/trace-1") {
+                    header(HttpHeaders.Authorization, "Bearer ${regularToken(userId = 555)}")
+                }
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
     }
 
     private fun demoToken(): String {
-        return JWT.create()
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", -1)
@@ -256,7 +265,8 @@ class ApiRoutesTest {
     }
 
     private fun regularToken(userId: Int): String {
-        return JWT.create()
+        return JWT
+            .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)

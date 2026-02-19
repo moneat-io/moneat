@@ -100,7 +100,8 @@ object ClickHouseMigrations {
     }
 
     private suspend fun createMigrationsTable() {
-        val sql = """
+        val sql =
+            """
             CREATE TABLE IF NOT EXISTS $MIGRATIONS_TABLE (
                 version UInt32,
                 description String,
@@ -108,68 +109,72 @@ object ClickHouseMigrations {
                 applied_at DateTime64(3, 'UTC') DEFAULT now64(3)
             ) ENGINE = MergeTree()
             ORDER BY version
-        """.trimIndent()
+            """.trimIndent()
 
         ClickHouseClient.execute(sql)
     }
 
     private fun loadMigrations(): List<Migration> {
         val classLoader = Thread.currentThread().contextClassLoader
-        val url = classLoader.getResource(MIGRATIONS_PATH)
-            ?: throw IllegalStateException("Migrations directory not found: $MIGRATIONS_PATH")
+        val url =
+            classLoader.getResource(MIGRATIONS_PATH)
+                ?: throw IllegalStateException("Migrations directory not found: $MIGRATIONS_PATH")
 
         val uri = url.toURI()
-        val migrationPaths = if (uri.scheme == "jar") {
-            // Running from JAR - use FileSystem to read resources
-            val env = mapOf<String, Any>()
-            FileSystems.newFileSystem(uri, env).use { fs ->
-                val migrationsPath = fs.getPath("/$MIGRATIONS_PATH")
-                Files.walk(migrationsPath, 1)
-                    .filter { it.isRegularFile() && it.name.matches(Regex("^V\\d+__.+\\.sql$")) }
-                    .map { path ->
-                        val name = path.nameWithoutExtension
-                        val parts = name.split("__", limit = 2)
-                        val version = parts[0].substring(1).toInt()
-                        val description = parts.getOrNull(1) ?: ""
-                        val sql = path.readText()
-                        val checksum = calculateChecksum(sql)
-                        Migration(version, description, path.name, sql, checksum)
-                    }
-                    .toList()
-            }
-        } else {
-            // Running from filesystem (development)
-            val migrationsDir = File(uri)
-            if (!migrationsDir.exists() || !migrationsDir.isDirectory) {
-                throw IllegalStateException("Migrations directory not found: ${migrationsDir.absolutePath}")
-            }
+        val migrationPaths =
+            if (uri.scheme == "jar") {
+                // Running from JAR - use FileSystem to read resources
+                val env = mapOf<String, Any>()
+                FileSystems.newFileSystem(uri, env).use { fs ->
+                    val migrationsPath = fs.getPath("/$MIGRATIONS_PATH")
+                    Files
+                        .walk(migrationsPath, 1)
+                        .filter { it.isRegularFile() && it.name.matches(Regex("^V\\d+__.+\\.sql$")) }
+                        .map { path ->
+                            val name = path.nameWithoutExtension
+                            val parts = name.split("__", limit = 2)
+                            val version = parts[0].substring(1).toInt()
+                            val description = parts.getOrNull(1) ?: ""
+                            val sql = path.readText()
+                            val checksum = calculateChecksum(sql)
+                            Migration(version, description, path.name, sql, checksum)
+                        }.toList()
+                }
+            } else {
+                // Running from filesystem (development)
+                val migrationsDir = File(uri)
+                if (!migrationsDir.exists() || !migrationsDir.isDirectory) {
+                    throw IllegalStateException("Migrations directory not found: ${migrationsDir.absolutePath}")
+                }
 
-            val migrationFiles = migrationsDir.listFiles { file ->
-                file.isFile && file.name.matches(Regex("^V\\d+__.+\\.sql$"))
-            } ?: emptyArray()
+                val migrationFiles =
+                    migrationsDir.listFiles { file ->
+                        file.isFile && file.name.matches(Regex("^V\\d+__.+\\.sql$"))
+                    } ?: emptyArray()
 
-            migrationFiles.map { file ->
-                val name = file.nameWithoutExtension
-                val parts = name.split("__", limit = 2)
-                val version = parts[0].substring(1).toInt()
-                val description = parts.getOrNull(1) ?: ""
-                val sql = file.readText()
-                val checksum = calculateChecksum(sql)
-                Migration(version, description, file.name, sql, checksum)
+                migrationFiles.map { file ->
+                    val name = file.nameWithoutExtension
+                    val parts = name.split("__", limit = 2)
+                    val version = parts[0].substring(1).toInt()
+                    val description = parts.getOrNull(1) ?: ""
+                    val sql = file.readText()
+                    val checksum = calculateChecksum(sql)
+                    Migration(version, description, file.name, sql, checksum)
+                }
             }
-        }
 
         return migrationPaths.sortedBy { it.version }
     }
 
     private suspend fun getAppliedMigrations(): List<AppliedMigration> {
-        val query = """
+        val query =
+            """
             SELECT version, description, checksum, 
                    formatDateTime(applied_at, '%Y-%m-%d %H:%i:%S') as applied_at
             FROM $MIGRATIONS_TABLE
             ORDER BY version
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)
@@ -211,7 +216,10 @@ object ClickHouseMigrations {
         }
     }
 
-    private suspend fun applyMigration(migration: Migration, logger: org.slf4j.Logger) {
+    private suspend fun applyMigration(
+        migration: Migration,
+        logger: org.slf4j.Logger
+    ) {
         logger.info("Applying V${migration.version}__${migration.description}...")
 
         // Split SQL into individual statements (ClickHouse doesn't support multi-statement via HTTP)
@@ -231,10 +239,11 @@ object ClickHouseMigrations {
         }
 
         // Record the migration
-        val insertSql = """
+        val insertSql =
+            """
             INSERT INTO $MIGRATIONS_TABLE (version, description, checksum)
             VALUES (${migration.version}, '${escapeSql(migration.description)}', '${migration.checksum}')
-        """.trimIndent()
+            """.trimIndent()
 
         val recordResponse = ClickHouseClient.execute(insertSql)
         val recordBody = recordResponse.bodyAsText()

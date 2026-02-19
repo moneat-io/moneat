@@ -44,19 +44,20 @@ object SystemStatusTracker {
             return
         }
 
-        job = CoroutineScope(Dispatchers.Default).launch {
-            logger.info { "SystemStatusTracker started" }
+        job =
+            CoroutineScope(Dispatchers.Default).launch {
+                logger.info { "SystemStatusTracker started" }
 
-            while (isActive) {
-                try {
-                    updateSystemStatuses()
-                } catch (e: Exception) {
-                    logger.error(e) { "Error updating system statuses: ${e.message}" }
+                while (isActive) {
+                    try {
+                        updateSystemStatuses()
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error updating system statuses: ${e.message}" }
+                    }
+
+                    delay(CHECK_INTERVAL_SECONDS.seconds)
                 }
-
-                delay(CHECK_INTERVAL_SECONDS.seconds)
             }
-        }
     }
 
     fun stop() {
@@ -70,14 +71,15 @@ object SystemStatusTracker {
         val threshold = now - DOWN_THRESHOLD
 
         // Mark systems as down if last_seen_at is older than threshold
-        val downCount = transaction {
-            Systems.update({
-                (Systems.last_seen_at less threshold) and (Systems.status eq "up")
-            }) {
-                it[Systems.status] = "down"
-                it[Systems.updated_at] = now
+        val downCount =
+            transaction {
+                Systems.update({
+                    (Systems.last_seen_at less threshold) and (Systems.status eq "up")
+                }) {
+                    it[Systems.status] = "down"
+                    it[Systems.updated_at] = now
+                }
             }
-        }
 
         if (downCount > 0) {
             logger.info { "Marked $downCount system(s) as down" }

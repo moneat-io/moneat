@@ -38,108 +38,122 @@ class AiChatService {
         userId: Int,
         orgId: Int,
         request: ChatRequest
-    ): ChatApiResponse = SentryUtils.withTransaction(
-        "ai.chat",
-        "ai"
-    ) { tx ->
-        SentryUtils.breadcrumb(
-            "ai",
-            "Chat request",
-            mapOf(
-                "userId" to userId.toString(),
-                "hasConversation" to (request.conversationId != null).toString(),
-                "currentPage" to (request.currentPage ?: "none")
+    ): ChatApiResponse =
+        SentryUtils.withTransaction(
+            "ai.chat",
+            "ai"
+        ) { tx ->
+            SentryUtils.breadcrumb(
+                "ai",
+                "Chat request",
+                mapOf(
+                    "userId" to userId.toString(),
+                    "hasConversation" to (request.conversationId != null).toString(),
+                    "currentPage" to (request.currentPage ?: "none")
+                )
             )
-        )
 
-        // 1. Sanitize and validate user input
-        val sanitizedMessage = sanitizeUserInput(request.message)
-        if (sanitizedMessage.isBlank()) {
-            throw IllegalArgumentException("Message cannot be empty")
-        }
-
-        // 2. Resolve or create conversation
-        val conversationId = SentryUtils.withSpan(tx, "ai.resolve_conversation") {
-            request.conversationId ?: createConversation(orgId, userId, sanitizedMessage)
-        }
-
-        // 3. Persist user message
-        persistMessage(conversationId, "user", sanitizedMessage, request.currentPage, null, null)
-
-        // 3. Load conversation history
-        val history = loadHistory(conversationId)
-
-        // 4. Resolve page context docs
-        val contextDocNames = SentryUtils.withSpan(tx, "ai.resolve_context") {
-            AiContextResolver.resolveDocsForPage(request.currentPage)
-        }
-        val contextDocs = AiContextResolver.loadDocs(contextDocNames)
-
-        SentryUtils.breadcrumb(
-            "ai",
-            "Context resolved",
-            mapOf(
-                "docs" to contextDocNames.joinToString(","),
-                "model" to OpenAiClient.model
-            )
-        )
-
-        // 5. Build messages for OpenAI
-        val systemPrompt = AiContextResolver.loadSystemPrompt()
-        val openAiMessages = buildOpenAiMessages(systemPrompt, contextDocs, history)
-
-        // 6. Call OpenAI
-        val openAiResponse = SentryUtils.withSpan(
-            tx,
-            "ai.openai_call",
-            "OpenAI chat completion"
-        ) {
-            OpenAiClient.chatCompletion(openAiMessages)
-        }
-
-        val rawContent = openAiResponse.choices.firstOrNull()?.message?.content ?: """{"message":"I'm sorry, I couldn't generate a response."}"""
-        val tokensUsed = openAiResponse.usage?.total_tokens
-
-        SentryUtils.breadcrumb(
-            "ai",
-            "OpenAI response received",
-            mapOf(
-                "tokensUsed" to (tokensUsed?.toString() ?: "unknown"),
-                "model" to OpenAiClient.model
-            )
-        )
-
-        // 7. Parse AI response
-        val aiResponse = SentryUtils.withSpan(tx, "ai.parse_response") {
-            parseAiResponse(rawContent)
-        }
-
-        // 8. Handle context_needed (two-step enrichment)
-        val finalResponse = if (aiResponse.context_needed.isNotEmpty()) {
-            SentryUtils.withSpan(tx, "ai.context_enrichment") {
-                handleContextNeeded(aiResponse, openAiMessages, systemPrompt)
+            // 1. Sanitize and validate user input
+            val sanitizedMessage = sanitizeUserInput(request.message)
+            if (sanitizedMessage.isBlank()) {
+                throw IllegalArgumentException("Message cannot be empty")
             }
-        } else {
-            aiResponse
+
+            // 2. Resolve or create conversation
+            val conversationId =
+                SentryUtils.withSpan(tx, "ai.resolve_conversation") {
+                    request.conversationId ?: createConversation(orgId, userId, sanitizedMessage)
+                }
+
+            // 3. Persist user message
+            persistMessage(conversationId, "user", sanitizedMessage, request.currentPage, null, null)
+
+            // 3. Load conversation history
+            val history = loadHistory(conversationId)
+
+            // 4. Resolve page context docs
+            val contextDocNames =
+                SentryUtils.withSpan(tx, "ai.resolve_context") {
+                    AiContextResolver.resolveDocsForPage(request.currentPage)
+                }
+            val contextDocs = AiContextResolver.loadDocs(contextDocNames)
+
+            SentryUtils.breadcrumb(
+                "ai",
+                "Context resolved",
+                mapOf(
+                    "docs" to contextDocNames.joinToString(","),
+                    "model" to OpenAiClient.model
+                )
+            )
+
+            // 5. Build messages for OpenAI
+            val systemPrompt = AiContextResolver.loadSystemPrompt()
+            val openAiMessages = buildOpenAiMessages(systemPrompt, contextDocs, history)
+
+            // 6. Call OpenAI
+            val openAiResponse =
+                SentryUtils.withSpan(
+                    tx,
+                    "ai.openai_call",
+                    "OpenAI chat completion"
+                ) {
+                    OpenAiClient.chatCompletion(openAiMessages)
+                }
+
+            val rawContent =
+                openAiResponse.choices
+                    .firstOrNull()
+                    ?.message
+                    ?.content ?: """{"message":"I'm sorry, I couldn't generate a response."}"""
+            val tokensUsed = openAiResponse.usage?.total_tokens
+
+            SentryUtils.breadcrumb(
+                "ai",
+                "OpenAI response received",
+                mapOf(
+                    "tokensUsed" to (tokensUsed?.toString() ?: "unknown"),
+                    "model" to OpenAiClient.model
+                )
+            )
+
+            // 7. Parse AI response
+            val aiResponse =
+                SentryUtils.withSpan(tx, "ai.parse_response") {
+                    parseAiResponse(rawContent)
+                }
+
+            // 8. Handle context_needed (two-step enrichment)
+            val finalResponse =
+                if (aiResponse.context_needed.isNotEmpty()) {
+                    SentryUtils.withSpan(tx, "ai.context_enrichment") {
+                        handleContextNeeded(aiResponse, openAiMessages, systemPrompt)
+                    }
+                } else {
+                    aiResponse
+                }
+
+            // 9. Persist assistant message
+            persistMessage(conversationId, "assistant", rawContent, null, OpenAiClient.model, tokensUsed)
+
+            // 10. Update conversation title from first exchange
+            if (request.conversationId == null) {
+                updateConversationTitle(conversationId, finalResponse.message)
+            }
+
+            ChatApiResponse(
+                conversationId = conversationId,
+                response = finalResponse,
+                model = OpenAiClient.model,
+                tokensUsed = tokensUsed
+            )
         }
 
-        // 9. Persist assistant message
-        persistMessage(conversationId, "assistant", rawContent, null, OpenAiClient.model, tokensUsed)
-
-        // 10. Update conversation title from first exchange
-        if (request.conversationId == null) {
-            updateConversationTitle(conversationId, finalResponse.message)
-        }
-
-        ChatApiResponse(
-            conversationId = conversationId,
-            response = finalResponse,
-            model = OpenAiClient.model,
-            tokensUsed = tokensUsed
-        )
-    }
-
-    private fun createConversation(orgId: Int, userId: Int, firstMessage: String): Int {
+    private fun createConversation(
+        orgId: Int,
+        userId: Int,
+        firstMessage: String
+    ): Int {
         val now = Clock.System.now()
         val title = firstMessage.take(100)
         return transaction {
@@ -180,7 +194,8 @@ class AiChatService {
 
     private fun loadHistory(conversationId: Int): List<OpenAiMessage> {
         return transaction {
-            AiMessages.selectAll()
+            AiMessages
+                .selectAll()
                 .where { AiMessages.conversation_id eq conversationId }
                 .orderBy(AiMessages.created_at)
                 .map { row ->
@@ -200,11 +215,12 @@ class AiChatService {
         val messages = mutableListOf<OpenAiMessage>()
 
         // System prompt with context docs
-        val fullSystemPrompt = if (contextDocs.isNotBlank()) {
-            "$systemPrompt\n\n--- API DOCUMENTATION ---\n$contextDocs"
-        } else {
-            systemPrompt
-        }
+        val fullSystemPrompt =
+            if (contextDocs.isNotBlank()) {
+                "$systemPrompt\n\n--- API DOCUMENTATION ---\n$contextDocs"
+            } else {
+                systemPrompt
+            }
         messages.add(OpenAiMessage("system", fullSystemPrompt))
 
         // Conversation history (limit to last 20 messages to manage tokens)
@@ -232,10 +248,11 @@ class AiChatService {
 
         val enrichedMessages = previousMessages.toMutableList()
         // Replace system message with enriched context
-        enrichedMessages[0] = OpenAiMessage(
-            "system",
-            "$systemPrompt\n\n--- API DOCUMENTATION ---\n$additionalDocs"
-        )
+        enrichedMessages[0] =
+            OpenAiMessage(
+                "system",
+                "$systemPrompt\n\n--- API DOCUMENTATION ---\n$additionalDocs"
+            )
         // Add the AI's interim response and a follow-up instruction
         enrichedMessages.add(OpenAiMessage("assistant", json.encodeToString(AiResponse.serializer(), initialResponse)))
         enrichedMessages.add(
@@ -243,11 +260,18 @@ class AiChatService {
         )
 
         val enrichedResponse = OpenAiClient.chatCompletion(enrichedMessages)
-        val content = enrichedResponse.choices.firstOrNull()?.message?.content ?: return initialResponse
+        val content =
+            enrichedResponse.choices
+                .firstOrNull()
+                ?.message
+                ?.content ?: return initialResponse
         return parseAiResponse(content)
     }
 
-    private fun updateConversationTitle(conversationId: Int, message: String) {
+    private fun updateConversationTitle(
+        conversationId: Int,
+        message: String
+    ) {
         val title = message.take(100)
         transaction {
             AiConversations.update({ AiConversations.id eq conversationId }) {
@@ -256,14 +280,17 @@ class AiChatService {
         }
     }
 
-    fun getConversations(userId: Int, orgId: Int): List<ConversationSummary> {
+    fun getConversations(
+        userId: Int,
+        orgId: Int
+    ): List<ConversationSummary> {
         return transaction {
-            AiConversations.selectAll()
+            AiConversations
+                .selectAll()
                 .where {
                     (AiConversations.user_id eq userId) and
                         (AiConversations.organization_id eq orgId)
-                }
-                .orderBy(AiConversations.updated_at, SortOrder.DESC)
+                }.orderBy(AiConversations.updated_at, SortOrder.DESC)
                 .map { row ->
                     ConversationSummary(
                         id = row[AiConversations.id],
@@ -275,30 +302,37 @@ class AiChatService {
         }
     }
 
-    fun getConversation(conversationId: Int, userId: Int, orgId: Int): ConversationDetail? {
+    fun getConversation(
+        conversationId: Int,
+        userId: Int,
+        orgId: Int
+    ): ConversationDetail? {
         return transaction {
-            val conv = AiConversations.selectAll()
-                .where {
-                    (AiConversations.id eq conversationId) and
-                        (AiConversations.user_id eq userId) and
-                        (AiConversations.organization_id eq orgId)
-                }
-                .firstOrNull() ?: return@transaction null
+            val conv =
+                AiConversations
+                    .selectAll()
+                    .where {
+                        (AiConversations.id eq conversationId) and
+                            (AiConversations.user_id eq userId) and
+                            (AiConversations.organization_id eq orgId)
+                    }.firstOrNull() ?: return@transaction null
 
-            val messages = AiMessages.selectAll()
-                .where { AiMessages.conversation_id eq conversationId }
-                .orderBy(AiMessages.created_at)
-                .map { row ->
-                    MessageDto(
-                        id = row[AiMessages.id],
-                        role = row[AiMessages.role],
-                        content = row[AiMessages.content],
-                        pageContext = row[AiMessages.page_context],
-                        model = row[AiMessages.model],
-                        tokensUsed = row[AiMessages.tokens_used],
-                        createdAt = row[AiMessages.created_at].toString()
-                    )
-                }
+            val messages =
+                AiMessages
+                    .selectAll()
+                    .where { AiMessages.conversation_id eq conversationId }
+                    .orderBy(AiMessages.created_at)
+                    .map { row ->
+                        MessageDto(
+                            id = row[AiMessages.id],
+                            role = row[AiMessages.role],
+                            content = row[AiMessages.content],
+                            pageContext = row[AiMessages.page_context],
+                            model = row[AiMessages.model],
+                            tokensUsed = row[AiMessages.tokens_used],
+                            createdAt = row[AiMessages.created_at].toString()
+                        )
+                    }
 
             ConversationDetail(
                 id = conv[AiConversations.id],
@@ -310,13 +344,18 @@ class AiChatService {
         }
     }
 
-    fun deleteConversation(conversationId: Int, userId: Int, orgId: Int): Boolean {
+    fun deleteConversation(
+        conversationId: Int,
+        userId: Int,
+        orgId: Int
+    ): Boolean {
         return transaction {
-            val deleted = AiConversations.deleteWhere {
-                (AiConversations.id eq conversationId) and
-                    (AiConversations.user_id eq userId) and
-                    (AiConversations.organization_id eq orgId)
-            }
+            val deleted =
+                AiConversations.deleteWhere {
+                    (AiConversations.id eq conversationId) and
+                        (AiConversations.user_id eq userId) and
+                        (AiConversations.organization_id eq orgId)
+                }
             deleted > 0
         }
     }
@@ -330,19 +369,20 @@ class AiChatService {
         val trimmed = input.trim().take(maxLength)
 
         // Remove common prompt injection patterns
-        val dangerous = listOf(
-            "ignore previous instructions",
-            "ignore all previous",
-            "forget previous",
-            "disregard",
-            "new instructions:",
-            "system:",
-            "assistant:",
-            "###",
-            "---",
-            "<|im_start|>",
-            "<|im_end|>"
-        )
+        val dangerous =
+            listOf(
+                "ignore previous instructions",
+                "ignore all previous",
+                "forget previous",
+                "disregard",
+                "new instructions:",
+                "system:",
+                "assistant:",
+                "###",
+                "---",
+                "<|im_start|>",
+                "<|im_end|>"
+            )
 
         var sanitized = trimmed
         dangerous.forEach { pattern ->

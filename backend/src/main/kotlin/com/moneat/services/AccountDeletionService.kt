@@ -49,29 +49,30 @@ class AccountDeletionService(
     fun validateUserDeletion(userId: Int): DeletionValidationResult {
         return transaction {
             // Find all organizations where this user is an owner
-            val ownedOrgs = Memberships.innerJoin(Organizations)
-                .selectAll()
-                .where {
-                    (Memberships.user_id eq userId) and
-                        (Memberships.role eq "owner") and
-                        (Organizations.deletedAt.isNull())
-                }
-                .map { row ->
-                    val orgId = row[Memberships.organization_id]
-                    val orgName = row[Organizations.name]
+            val ownedOrgs =
+                Memberships
+                    .innerJoin(Organizations)
+                    .selectAll()
+                    .where {
+                        (Memberships.user_id eq userId) and
+                            (Memberships.role eq "owner") and
+                            (Organizations.deletedAt.isNull())
+                    }.map { row ->
+                        val orgId = row[Memberships.organization_id]
+                        val orgName = row[Organizations.name]
 
-                    // Count total owners for this org
-                    val ownerCount = Memberships.selectAll()
-                        .where {
-                            (Memberships.organization_id eq orgId) and
-                                (Memberships.role eq "owner")
-                        }
-                        .count()
+                        // Count total owners for this org
+                        val ownerCount =
+                            Memberships
+                                .selectAll()
+                                .where {
+                                    (Memberships.organization_id eq orgId) and
+                                        (Memberships.role eq "owner")
+                                }.count()
 
-                    Pair(orgName, ownerCount)
-                }
-                .filter { (_, ownerCount) -> ownerCount == 1L }
-                .map { (orgName, _) -> orgName }
+                        Pair(orgName, ownerCount)
+                    }.filter { (_, ownerCount) -> ownerCount == 1L }
+                    .map { (orgName, _) -> orgName }
 
             if (ownedOrgs.isNotEmpty()) {
                 DeletionValidationResult(
@@ -89,15 +90,19 @@ class AccountDeletionService(
      * Validates if an organization can be deleted
      * Checks if user is an owner and if there's an active subscription
      */
-    fun validateOrganizationDeletion(organizationId: Int, userId: Int): DeletionValidationResult {
+    fun validateOrganizationDeletion(
+        organizationId: Int,
+        userId: Int
+    ): DeletionValidationResult {
         return transaction {
             // Check if user is an owner
-            val membership = Memberships.selectAll()
-                .where {
-                    (Memberships.user_id eq userId) and
-                        (Memberships.organization_id eq organizationId)
-                }
-                .singleOrNull()
+            val membership =
+                Memberships
+                    .selectAll()
+                    .where {
+                        (Memberships.user_id eq userId) and
+                            (Memberships.organization_id eq organizationId)
+                    }.singleOrNull()
 
             if (membership == null || membership[Memberships.role] != "owner") {
                 return@transaction DeletionValidationResult(
@@ -107,12 +112,13 @@ class AccountDeletionService(
             }
 
             // Check for active subscription
-            val activeSubscription = Subscriptions.selectAll()
-                .where {
-                    (Subscriptions.organization_id eq organizationId) and
-                        (Subscriptions.status inList listOf("active", "trialing"))
-                }
-                .singleOrNull()
+            val activeSubscription =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        (Subscriptions.organization_id eq organizationId) and
+                            (Subscriptions.status inList listOf("active", "trialing"))
+                    }.singleOrNull()
 
             if (activeSubscription != null) {
                 return@transaction DeletionValidationResult(
@@ -141,9 +147,11 @@ class AccountDeletionService(
             }
 
             transaction {
-                val user = Users.selectAll()
-                    .where { Users.id eq userId }
-                    .singleOrNull() ?: return@transaction
+                val user =
+                    Users
+                        .selectAll()
+                        .where { Users.id eq userId }
+                        .singleOrNull() ?: return@transaction
 
                 val email = user[Users.email]
 
@@ -167,11 +175,14 @@ class AccountDeletionService(
 
             // Send confirmation email (async)
             try {
-                val userEmail = transaction {
-                    Users.selectAll()
-                        .where { Users.id eq userId }
-                        .singleOrNull()?.get(Users.email)
-                }
+                val userEmail =
+                    transaction {
+                        Users
+                            .selectAll()
+                            .where { Users.id eq userId }
+                            .singleOrNull()
+                            ?.get(Users.email)
+                    }
                 if (userEmail != null) {
                     emailService.sendAccountDeletionConfirmation(userEmail)
                 }
@@ -194,7 +205,10 @@ class AccountDeletionService(
      * - Revokes pending invitations
      * - Soft deletes organization
      */
-    suspend fun deleteOrganization(organizationId: Int, deletedByUserId: Int): Boolean {
+    suspend fun deleteOrganization(
+        organizationId: Int,
+        deletedByUserId: Int
+    ): Boolean {
         try {
             // First validate
             val validation = validateOrganizationDeletion(organizationId, deletedByUserId)
@@ -203,25 +217,32 @@ class AccountDeletionService(
                 return false
             }
 
-            val orgData = transaction {
-                val org = Organizations.selectAll()
-                    .where { Organizations.id eq organizationId }
-                    .singleOrNull() ?: return@transaction null
+            val orgData =
+                transaction {
+                    val org =
+                        Organizations
+                            .selectAll()
+                            .where { Organizations.id eq organizationId }
+                            .singleOrNull() ?: return@transaction null
 
-                val projects = Projects.selectAll()
-                    .where { Projects.organization_id eq organizationId }
-                    .map { it[Projects.id].toInt() }
+                    val projects =
+                        Projects
+                            .selectAll()
+                            .where { Projects.organization_id eq organizationId }
+                            .map { it[Projects.id].toInt() }
 
-                Triple(org[Organizations.name], org[Organizations.slug], projects)
-            } ?: return false
+                    Triple(org[Organizations.name], org[Organizations.slug], projects)
+                } ?: return false
 
             val (orgName, _, projectIds) = orgData
-            val memberEmails = transaction {
-                Users.innerJoin(Memberships)
-                    .selectAll()
-                    .where { Memberships.organization_id eq organizationId }
-                    .map { it[Users.email] }
-            }
+            val memberEmails =
+                transaction {
+                    Users
+                        .innerJoin(Memberships)
+                        .selectAll()
+                        .where { Memberships.organization_id eq organizationId }
+                        .map { it[Users.email] }
+                }
 
             logger.info { "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects" }
 
@@ -234,9 +255,11 @@ class AccountDeletionService(
             if (stripeService.isStripeEnabled()) {
                 try {
                     transaction {
-                        val subscription = Subscriptions.selectAll()
-                            .where { Subscriptions.organization_id eq organizationId }
-                            .singleOrNull()
+                        val subscription =
+                            Subscriptions
+                                .selectAll()
+                                .where { Subscriptions.organization_id eq organizationId }
+                                .singleOrNull()
 
                         subscription?.get(Subscriptions.stripe_subscription_id)?.let { stripeSubId ->
                             stripeService.cancelSubscription(stripeSubId)
@@ -297,62 +320,67 @@ class AccountDeletionService(
     /**
      * Deletes all ClickHouse data for given project IDs
      */
-    private suspend fun deleteClickHouseDataForProjects(projectIds: List<Int>) = withContext(Dispatchers.IO) {
-        try {
-            val projectIdsList = projectIds.joinToString(",")
+    private suspend fun deleteClickHouseDataForProjects(projectIds: List<Int>) =
+        withContext(Dispatchers.IO) {
+            try {
+                val projectIdsList = projectIds.joinToString(",")
 
-            // Delete from all ClickHouse tables
-            val tables = listOf(
-                "events",
-                "spans",
-                "sessions",
-                "replay_events",
-                "replay_segments",
-                "user_feedback",
-                "logs"
-            )
+                // Delete from all ClickHouse tables
+                val tables =
+                    listOf(
+                        "events",
+                        "spans",
+                        "sessions",
+                        "replay_events",
+                        "replay_segments",
+                        "user_feedback",
+                        "logs"
+                    )
 
-            tables.forEach { table ->
-                try {
-                    val query = "ALTER TABLE $table DELETE WHERE project_id IN ($projectIdsList)"
-                    val response = ClickHouseClient.execute(query)
-
-                    if (response.status == HttpStatusCode.OK) {
-                        logger.info { "Deleted ClickHouse data from $table for ${projectIds.size} projects" }
-                    } else {
-                        logger.warn { "ClickHouse deletion from $table returned status ${response.status}" }
-                    }
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to delete ClickHouse data from $table" }
-                }
-            }
-
-            // Delete monitoring data by org_id
-            val orgId = transaction {
-                projectIds.firstOrNull()?.let { projectId ->
-                    Projects.selectAll()
-                        .where { Projects.id eq projectId.toLong() }
-                        .singleOrNull()?.get(Projects.organization_id)
-                }
-            }
-
-            if (orgId != null) {
-                val monitoringTables = listOf("system_metrics", "container_metrics")
-                monitoringTables.forEach { table ->
+                tables.forEach { table ->
                     try {
-                        val query = "ALTER TABLE $table DELETE WHERE org_id = $orgId"
-                        ClickHouseClient.execute(query)
-                        logger.info { "Deleted ClickHouse monitoring data from $table for org $orgId" }
+                        val query = "ALTER TABLE $table DELETE WHERE project_id IN ($projectIdsList)"
+                        val response = ClickHouseClient.execute(query)
+
+                        if (response.status == HttpStatusCode.OK) {
+                            logger.info { "Deleted ClickHouse data from $table for ${projectIds.size} projects" }
+                        } else {
+                            logger.warn { "ClickHouse deletion from $table returned status ${response.status}" }
+                        }
                     } catch (e: Exception) {
-                        logger.error(e) { "Failed to delete monitoring data from $table" }
+                        logger.error(e) { "Failed to delete ClickHouse data from $table" }
                     }
                 }
-            }
 
-            logger.info { "Completed ClickHouse data deletion for ${projectIds.size} projects" }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to delete ClickHouse data" }
-            throw e
+                // Delete monitoring data by org_id
+                val orgId =
+                    transaction {
+                        projectIds.firstOrNull()?.let { projectId ->
+                            Projects
+                                .selectAll()
+                                .where { Projects.id eq projectId.toLong() }
+                                .singleOrNull()
+                                ?.get(Projects.organization_id)
+                        }
+                    }
+
+                if (orgId != null) {
+                    val monitoringTables = listOf("system_metrics", "container_metrics")
+                    monitoringTables.forEach { table ->
+                        try {
+                            val query = "ALTER TABLE $table DELETE WHERE org_id = $orgId"
+                            ClickHouseClient.execute(query)
+                            logger.info { "Deleted ClickHouse monitoring data from $table for org $orgId" }
+                        } catch (e: Exception) {
+                            logger.error(e) { "Failed to delete monitoring data from $table" }
+                        }
+                    }
+                }
+
+                logger.info { "Completed ClickHouse data deletion for ${projectIds.size} projects" }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to delete ClickHouse data" }
+                throw e
+            }
         }
-    }
 }

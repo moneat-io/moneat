@@ -77,12 +77,13 @@ fun Application.configureMonitoring() {
                 transaction.setData("http.status_code", status?.value ?: 0)
 
                 // Determine transaction status based on HTTP status code
-                transaction.status = when (status?.value) {
-                    in 200..299 -> SpanStatus.OK
-                    in 400..499 -> SpanStatus.INVALID_ARGUMENT
-                    in 500..599 -> SpanStatus.INTERNAL_ERROR
-                    else -> SpanStatus.UNKNOWN_ERROR
-                }
+                transaction.status =
+                    when (status?.value) {
+                        in 200..299 -> SpanStatus.OK
+                        in 400..499 -> SpanStatus.INVALID_ARGUMENT
+                        in 500..599 -> SpanStatus.INTERNAL_ERROR
+                        else -> SpanStatus.UNKNOWN_ERROR
+                    }
 
                 // Add breadcrumb for response
                 SentryUtils.breadcrumb(
@@ -123,12 +124,13 @@ fun Application.configureMonitoring() {
                         scope.setExtra("query_string", call.request.queryString())
 
                         // Add request headers as extra context (excluding sensitive ones)
-                        val safeHeaders = call.request.headers.entries()
-                            .filter { (key, _) ->
-                                !key.equals("Authorization", ignoreCase = true) &&
-                                    !key.equals("Cookie", ignoreCase = true)
-                            }
-                            .associate { (key, values) -> key to values.joinToString(", ") }
+                        val safeHeaders =
+                            call.request.headers
+                                .entries()
+                                .filter { (key, _) ->
+                                    !key.equals("Authorization", ignoreCase = true) &&
+                                        !key.equals("Cookie", ignoreCase = true)
+                                }.associate { (key, values) -> key to values.joinToString(", ") }
                         scope.setExtra("request_headers", safeHeaders.toString())
                     }
                 } catch (e: Throwable) {

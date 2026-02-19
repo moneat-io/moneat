@@ -73,17 +73,19 @@ class IngestRoutesEnvelopeTest {
         }
 
         transaction {
-            testOrgId = Organizations.insert {
-                it[name] = "Ingest Test Org"
-                it[slug] = "ingest-test-org"
-            }[Organizations.id]
+            testOrgId =
+                Organizations.insert {
+                    it[name] = "Ingest Test Org"
+                    it[slug] = "ingest-test-org"
+                }[Organizations.id]
 
-            testProjectId = Projects.insert {
-                it[organization_id] = testOrgId
-                it[name] = "ingest-project"
-                it[slug] = "ingest-project"
-                it[framework] = "kotlin"
-            }[Projects.id]
+            testProjectId =
+                Projects.insert {
+                    it[organization_id] = testOrgId
+                    it[name] = "ingest-project"
+                    it[slug] = "ingest-project"
+                    it[framework] = "kotlin"
+                }[Projects.id]
 
             ProjectKeys.insert {
                 it[project_id] = testProjectId
@@ -96,108 +98,116 @@ class IngestRoutesEnvelopeTest {
     }
 
     @Test
-    fun `envelope endpoint groups multi-item envelope by quota type and accepts`() = testApplication {
-        val reservations = mutableListOf<Map<String, Int>>()
+    fun `envelope endpoint groups multi-item envelope by quota type and accepts`() =
+        testApplication {
+            val reservations = mutableListOf<Map<String, Int>>()
 
-        environment {
-            config = MapApplicationConfig(
-                "ingest.queueKey" to "test:ingest:q",
-                "logs.queueKey" to "test:logs:q"
-            )
-        }
-        application {
-            install(ContentNegotiation) { json() }
-            routing {
-                ingestRoutes(
-                    enqueueEnvelope = { _, _ -> },
-                    isQuotaEnforcementEnabled = { true },
-                    reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
-                        reservations.add(requestedUnitsByType)
-                        QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
-                    }
-                )
-            }
-        }
-
-        val response = client.post("/api/$testProjectId/envelope/") {
-            contentType(ContentType.Application.OctetStream)
-            header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
-            setBody(
-                buildEnvelope(
-                    eventId = "evt-multi-1",
-                    items = listOf(
-                        "transaction" to """{"event_id":"txn-1","type":"transaction"}""".toByteArray(),
-                        "session" to """{"sid":"session-1","status":"ok"}""".toByteArray(),
-                        "check_in" to """{"check_in_id":"check-1","status":"ok"}""".toByteArray()
+            environment {
+                config =
+                    MapApplicationConfig(
+                        "ingest.queueKey" to "test:ingest:q",
+                        "logs.queueKey" to "test:logs:q"
                     )
-                )
-            )
-        }
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        enqueueEnvelope = { _, _ -> },
+                        isQuotaEnforcementEnabled = { true },
+                        reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
+                            reservations.add(requestedUnitsByType)
+                            QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                        }
+                    )
+                }
+            }
 
-        assertEquals(HttpStatusCode.Accepted, response.status)
-        assertEquals(1, reservations.size)
-        assertEquals(1, reservations[0]["transaction"])
-        assertEquals(2, reservations[0]["error"])
-    }
-
-    @Test
-    fun `envelope endpoint returns 429 when quota reservation rejects`() = testApplication {
-        environment {
-            config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
-        }
-        application {
-            install(ContentNegotiation) { json() }
-            routing {
-                ingestRoutes(
-                    enqueueEnvelope = { _, _ -> },
-                    isQuotaEnforcementEnabled = { true },
-                    reserveEnvelopeQuota = { orgId, _, _ ->
-                        QuotaReservationResult(
-                            allowed = false,
-                            reason = "quota_exceeded",
-                            usage = emptyUsage(orgId)
+            val response =
+                client.post("/api/$testProjectId/envelope/") {
+                    contentType(ContentType.Application.OctetStream)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                    setBody(
+                        buildEnvelope(
+                            eventId = "evt-multi-1",
+                            items =
+                                listOf(
+                                    "transaction" to """{"event_id":"txn-1","type":"transaction"}""".toByteArray(),
+                                    "session" to """{"sid":"session-1","status":"ok"}""".toByteArray(),
+                                    "check_in" to """{"check_in_id":"check-1","status":"ok"}""".toByteArray()
+                                )
                         )
-                    }
-                )
-            }
-        }
+                    )
+                }
 
-        val response = client.post("/api/$testProjectId/envelope/") {
-            contentType(ContentType.Application.OctetStream)
-            header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
-            setBody(
-                buildEnvelope(
-                    eventId = "evt-over-quota",
-                    items = listOf("transaction" to """{"event_id":"txn-2","type":"transaction"}""".toByteArray())
-                )
-            )
+            assertEquals(HttpStatusCode.Accepted, response.status)
+            assertEquals(1, reservations.size)
+            assertEquals(1, reservations[0]["transaction"])
+            assertEquals(2, reservations[0]["error"])
         }
-
-        assertEquals(HttpStatusCode.TooManyRequests, response.status)
-        assertTrue(response.bodyAsText().contains("Quota exceeded"))
-    }
 
     @Test
-    fun `envelope endpoint returns bad request for malformed envelope payload`() = testApplication {
-        environment {
-            config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
-        }
-        application {
-            install(ContentNegotiation) { json() }
-            routing {
-                ingestRoutes(enqueueEnvelope = { _, _ -> })
+    fun `envelope endpoint returns 429 when quota reservation rejects`() =
+        testApplication {
+            environment {
+                config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
             }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        enqueueEnvelope = { _, _ -> },
+                        isQuotaEnforcementEnabled = { true },
+                        reserveEnvelopeQuota = { orgId, _, _ ->
+                            QuotaReservationResult(
+                                allowed = false,
+                                reason = "quota_exceeded",
+                                usage = emptyUsage(orgId)
+                            )
+                        }
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/envelope/") {
+                    contentType(ContentType.Application.OctetStream)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                    setBody(
+                        buildEnvelope(
+                            eventId = "evt-over-quota",
+                            items = listOf("transaction" to """{"event_id":"txn-2","type":"transaction"}""".toByteArray())
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.TooManyRequests, response.status)
+            assertTrue(response.bodyAsText().contains("Quota exceeded"))
         }
 
-        val response = client.post("/api/$testProjectId/envelope/") {
-            contentType(ContentType.Application.OctetStream)
-            header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
-            setBody("not-a-valid-envelope".toByteArray())
-        }
+    @Test
+    fun `envelope endpoint returns bad request for malformed envelope payload`() =
+        testApplication {
+            environment {
+                config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(enqueueEnvelope = { _, _ -> })
+                }
+            }
 
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("Invalid envelope format"))
-    }
+            val response =
+                client.post("/api/$testProjectId/envelope/") {
+                    contentType(ContentType.Application.OctetStream)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                    setBody("not-a-valid-envelope".toByteArray())
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid envelope format"))
+        }
 
     @Test
     fun `envelope item type mapping covers transaction and fallback types`() {
@@ -210,7 +220,10 @@ class IngestRoutesEnvelopeTest {
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("unknown_type"))
     }
 
-    private fun buildEnvelope(eventId: String, items: List<Pair<String, ByteArray>>): ByteArray {
+    private fun buildEnvelope(
+        eventId: String,
+        items: List<Pair<String, ByteArray>>
+    ): ByteArray {
         val out = java.io.ByteArrayOutputStream()
         out.write("""{"event_id":"$eventId"}""".toByteArray())
         out.write('\n'.code)

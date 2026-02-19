@@ -119,20 +119,22 @@ class BuildTagConditionTest {
     fun `buildTagCondition should handle all top-level fields`() {
         val service = LogService()
         val enumFields = setOf("level", "source")
-        val topLevelFields = listOf(
-            "service", "environment", "host", "source", "level", "message", "body",
-            "container_name", "container_id", "container_image", "trace_id", "span_id"
-        )
+        val topLevelFields =
+            listOf(
+                "service", "environment", "host", "source", "level", "message", "body",
+                "container_name", "container_id", "container_image", "trace_id", "span_id"
+            )
 
         for (field in topLevelFields) {
             val condition = service.buildTagCondition(field, "test_value")
 
             // Enum fields should use toString()
-            val expected = if (field in enumFields) {
-                "toString($field) = 'test_value'"
-            } else {
-                "$field = 'test_value'"
-            }
+            val expected =
+                if (field in enumFields) {
+                    "toString($field) = 'test_value'"
+                } else {
+                    "$field = 'test_value'"
+                }
             assertEquals(expected, condition)
 
             // Should NOT use has() or tags[]

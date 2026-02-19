@@ -73,25 +73,27 @@ class BillingQuotaServiceTest {
         // Setup test data
         transaction {
             testOrgId = insertTestOrganization("Test Org", "test-org")
-            testTierId = insertTestPricingTier(
-                tierName = "PRO",
-                monthlyUnitLimit = 1000,
-                monthlyErrorLimit = 500,
-                monthlyTransactionLimit = 300,
-                monthlyReplayLimit = 100,
-                monthlyFeedbackLimit = 100,
-                paygEnabled = true,
-                paygRateMicrosPerUnit = 400000, // $0.40 per unit
-                retentionDays = 30,
-                logRetentionDays = 30
-            )
-            testSubId = insertTestSubscription(
-                organizationId = testOrgId,
-                plan = "PRO",
-                status = "active",
-                paygBudgetCents = 10000, // $100 budget
-                pricingTierConfigId = testTierId
-            )
+            testTierId =
+                insertTestPricingTier(
+                    tierName = "PRO",
+                    monthlyUnitLimit = 1000,
+                    monthlyErrorLimit = 500,
+                    monthlyTransactionLimit = 300,
+                    monthlyReplayLimit = 100,
+                    monthlyFeedbackLimit = 100,
+                    paygEnabled = true,
+                    paygRateMicrosPerUnit = 400000, // $0.40 per unit
+                    retentionDays = 30,
+                    logRetentionDays = 30
+                )
+            testSubId =
+                insertTestSubscription(
+                    organizationId = testOrgId,
+                    plan = "PRO",
+                    status = "active",
+                    paygBudgetCents = 10000, // $100 budget
+                    pricingTierConfigId = testTierId
+                )
         }
     }
 
@@ -110,11 +112,12 @@ class BillingQuotaServiceTest {
         }
 
         // With enforcement disabled by default, should succeed
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 300, // Within 500 error limit
-            eventType = "error"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 300, // Within 500 error limit
+                eventType = "error"
+            )
 
         assertTrue(result.allowed, "Should allow reservation within error limit")
         assertEquals(null, result.reason, "Should have no failure reason")
@@ -132,11 +135,12 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 50,
-            eventType = "error"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 50,
+                eventType = "error"
+            )
 
         assertTrue(result.allowed, "Should allow reservation")
         // With enforcement disabled, usage is not persisted, but returned usage reflects current state
@@ -157,11 +161,12 @@ class BillingQuotaServiceTest {
         }
 
         // Transaction request within limit should work
-        val okResult = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 40, // Would be 290, under 300 limit
-            eventType = "transaction"
-        )
+        val okResult =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 40, // Would be 290, under 300 limit
+                eventType = "transaction"
+            )
 
         assertTrue(okResult.allowed, "Request within limit should succeed")
         // With enforcement disabled, returns current state
@@ -180,11 +185,12 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 40, // Total 90, under 100 replay limit
-            eventType = "replay"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 40, // Total 90, under 100 replay limit
+                eventType = "replay"
+            )
 
         assertTrue(result.allowed, "Request within replay limit should succeed")
         // With enforcement disabled, usage is not persisted
@@ -203,11 +209,12 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 30, // Total 80, under 100 feedback limit
-            eventType = "feedback"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 30, // Total 80, under 100 feedback limit
+                eventType = "feedback"
+            )
 
         assertTrue(result.allowed, "Request within feedback limit should succeed")
         // With enforcement disabled, usage is not persisted
@@ -273,15 +280,17 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf(
-                "error" to 200,
-                "transaction" to 150,
-                "replay" to 50,
-                "feedback" to 40
+        val result =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType =
+                    mapOf(
+                        "error" to 200,
+                        "transaction" to 150,
+                        "replay" to 50,
+                        "feedback" to 40
+                    )
             )
-        )
 
         assertTrue(result.allowed, "Batch reservation should succeed within limits")
         assertEquals(null, result.reason)
@@ -302,14 +311,16 @@ class BillingQuotaServiceTest {
         }
 
         // "log" and "logs" should normalize to "error"
-        val result = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf(
-                "log" to 100,
-                "logs" to 50,
-                "error" to 100
+        val result =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType =
+                    mapOf(
+                        "log" to 100,
+                        "logs" to 50,
+                        "error" to 100
+                    )
             )
-        )
 
         assertTrue(result.allowed, "Should normalize event types and succeed")
         // With enforcement disabled, batch is allowed but not persisted
@@ -328,14 +339,16 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf(
-                "error" to 100,
-                "transaction" to 0,
-                "replay" to -50 // Should be ignored
+        val result =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType =
+                    mapOf(
+                        "error" to 100,
+                        "transaction" to 0,
+                        "replay" to -50 // Should be ignored
+                    )
             )
-        )
 
         assertTrue(result.allowed, "Should ignore zero and negative units")
         // With enforcement disabled, no persistence
@@ -344,25 +357,28 @@ class BillingQuotaServiceTest {
 
     @Test
     fun `reserveUnitsBatch returns empty request successfully`() {
-        val result = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf()
-        )
+        val result =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType = mapOf()
+            )
 
         assertTrue(result.allowed, "Empty batch should succeed")
     }
 
     @Test
     fun `reserveUnitsBatch with all zero units succeeds`() {
-        val result = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf(
-                "error" to 0,
-                "transaction" to 0,
-                "replay" to 0,
-                "feedback" to 0
+        val result =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType =
+                    mapOf(
+                        "error" to 0,
+                        "transaction" to 0,
+                        "replay" to 0,
+                        "feedback" to 0
+                    )
             )
-        )
 
         assertTrue(result.allowed, "Batch with all zeros should succeed")
     }
@@ -454,11 +470,12 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 100,
-            eventType = "error"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 100,
+                eventType = "error"
+            )
 
         assertTrue(result.allowed, "Should allow reservation for active subscription")
     }
@@ -482,11 +499,12 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 100,
-            eventType = "error"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 100,
+                eventType = "error"
+            )
 
         assertTrue(result.allowed, "Should allow reservation for trialing subscription")
     }
@@ -510,11 +528,12 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 100,
-            eventType = "error"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 100,
+                eventType = "error"
+            )
 
         assertTrue(result.allowed, "Should allow reservation for past_due subscription")
     }
@@ -525,11 +544,12 @@ class BillingQuotaServiceTest {
     fun `reserveUnits with zero units succeeds without changes`() {
         val usage1 = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = 0,
-            eventType = "error"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = 0,
+                eventType = "error"
+            )
 
         assertTrue(result.allowed, "Zero unit reservation should succeed")
         val usage2 = billingQuotaService.getUsageForOrganization(testOrgId)
@@ -540,11 +560,12 @@ class BillingQuotaServiceTest {
     fun `reserveUnits with negative units succeeds without changes`() {
         val usage1 = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        val result = billingQuotaService.reserveUnits(
-            organizationId = testOrgId,
-            requestedUnits = -100,
-            eventType = "error"
-        )
+        val result =
+            billingQuotaService.reserveUnits(
+                organizationId = testOrgId,
+                requestedUnits = -100,
+                eventType = "error"
+            )
 
         assertTrue(result.allowed, "Negative unit reservation should succeed")
         val usage2 = billingQuotaService.getUsageForOrganization(testOrgId)
@@ -554,17 +575,18 @@ class BillingQuotaServiceTest {
     @Test
     fun `reserveUnits without active subscription uses free tier limits`() {
         // Create org without subscription
-        val orgWithoutSub = transaction {
-            val id = insertTestOrganization("No Sub Org", "no-sub-org")
-            insertTestUsageCounter(
-                organizationId = id,
-                usedErrors = 0,
-                usedTransactions = 0,
-                usedReplays = 0,
-                usedFeedback = 0
-            )
-            id
-        }
+        val orgWithoutSub =
+            transaction {
+                val id = insertTestOrganization("No Sub Org", "no-sub-org")
+                insertTestUsageCounter(
+                    organizationId = id,
+                    usedErrors = 0,
+                    usedTransactions = 0,
+                    usedReplays = 0,
+                    usedFeedback = 0
+                )
+                id
+            }
 
         val usage = billingQuotaService.getUsageForOrganization(orgWithoutSub)
 
@@ -585,26 +607,30 @@ class BillingQuotaServiceTest {
         }
 
         // First batch reservation
-        val result1 = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf(
-                "error" to 200,
-                "transaction" to 100
+        val result1 =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType =
+                    mapOf(
+                        "error" to 200,
+                        "transaction" to 100
+                    )
             )
-        )
 
         assertTrue(result1.allowed, "First batch should succeed")
         // With enforcement disabled, no persistence
         assertEquals(0, result1.usage.usedErrors, "Enforcement disabled, so no persistence")
 
         // Second batch reservation reads same initial state
-        val result2 = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf(
-                "replay" to 80,
-                "feedback" to 20
+        val result2 =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType =
+                    mapOf(
+                        "replay" to 80,
+                        "feedback" to 20
+                    )
             )
-        )
 
         assertTrue(result2.allowed, "Second batch should succeed")
         // Both see the same initial state since enforcement is disabled
@@ -624,15 +650,17 @@ class BillingQuotaServiceTest {
             )
         }
 
-        val result = billingQuotaService.reserveUnitsBatch(
-            organizationId = testOrgId,
-            requestedUnitsByType = mapOf(
-                "error" to 500,
-                "transaction" to 250,
-                "replay" to 80,
-                "feedback" to 100
+        val result =
+            billingQuotaService.reserveUnitsBatch(
+                organizationId = testOrgId,
+                requestedUnitsByType =
+                    mapOf(
+                        "error" to 500,
+                        "transaction" to 250,
+                        "replay" to 80,
+                        "feedback" to 100
+                    )
             )
-        )
 
         assertTrue(result.allowed, "Large batch should succeed")
         // With enforcement disabled, no persistence
@@ -661,7 +689,10 @@ class BillingQuotaServiceTest {
 
     // ============ Helper Methods ============
 
-    private fun insertTestOrganization(name: String, slug: String): Int {
+    private fun insertTestOrganization(
+        name: String,
+        slug: String
+    ): Int {
         return Organizations.insert {
             it[Organizations.name] = name
             it[Organizations.slug] = slug

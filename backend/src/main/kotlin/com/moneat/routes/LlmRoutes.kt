@@ -93,10 +93,11 @@ fun Route.llmRoutes() {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
-                    val generationId = call.parameters["id"] ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("generation id is required"))
-                        return@get
-                    }
+                    val generationId =
+                        call.parameters["id"] ?: run {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("generation id is required"))
+                            return@get
+                        }
                     val detail = llmService.getGenerationDetail(projectId, generationId)
                     if (detail == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Generation not found"))
@@ -118,10 +119,11 @@ fun Route.llmRoutes() {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                         return@get
                     }
-                    val traceId = call.parameters["traceId"] ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("traceId is required"))
-                        return@get
-                    }
+                    val traceId =
+                        call.parameters["traceId"] ?: run {
+                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("traceId is required"))
+                            return@get
+                        }
                     val trace = llmService.getTrace(projectId, traceId)
                     if (trace == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Trace not found"))

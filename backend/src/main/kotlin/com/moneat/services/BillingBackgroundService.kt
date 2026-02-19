@@ -49,39 +49,42 @@ class BillingBackgroundService(
             return
         }
 
-        meteredUsageJob = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                try {
-                    val flushed = stripeService.flushPendingMeteredUsage()
-                    if (flushed > 0) logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
-                } catch (e: Exception) {
-                    logger.error(e) { "Metered usage flush job failed" }
+        meteredUsageJob =
+            scope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    try {
+                        val flushed = stripeService.flushPendingMeteredUsage()
+                        if (flushed > 0) logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Metered usage flush job failed" }
+                    }
+                    delay(60_000L)
                 }
-                delay(60_000L)
             }
-        }
 
-        dunningDowngradeJob = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                try {
-                    stripeService.applyDunningDowngrade()
-                } catch (e: Exception) {
-                    logger.error(e) { "Dunning downgrade job failed" }
+        dunningDowngradeJob =
+            scope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    try {
+                        stripeService.applyDunningDowngrade()
+                    } catch (e: Exception) {
+                        logger.error(e) { "Dunning downgrade job failed" }
+                    }
+                    delay(60_000L)
                 }
-                delay(60_000L)
             }
-        }
 
-        quotaNotificationJob = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                try {
-                    processQuotaThresholdNotifications()
-                } catch (e: Exception) {
-                    logger.error(e) { "Quota notification job failed" }
+        quotaNotificationJob =
+            scope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    try {
+                        processQuotaThresholdNotifications()
+                    } catch (e: Exception) {
+                        logger.error(e) { "Quota notification job failed" }
+                    }
+                    delay(60_000L)
                 }
-                delay(60_000L)
             }
-        }
     }
 
     fun stop() {
@@ -92,25 +95,28 @@ class BillingBackgroundService(
     }
 
     private fun processQuotaThresholdNotifications() {
-        val orgIds = transaction {
-            Subscriptions.selectAll().where {
-                Subscriptions.status inList listOf("active", "trialing", "past_due")
+        val orgIds =
+            transaction {
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        Subscriptions.status inList listOf("active", "trialing", "past_due")
+                    }.orderBy(Subscriptions.id to SortOrder.DESC)
+                    .map { it[Subscriptions.organization_id] }
+                    .distinct()
             }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .map { it[Subscriptions.organization_id] }
-                .distinct()
-        }
 
         for (orgId in orgIds) {
             val usage = quotaService.getUsageForOrganization(orgId)
             val periodStart = usage.periodStart
             val basePct = if (usage.baseLimitUnits > 0) (usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()) else 0.0
-            val paygPct = if (usage.paygLimitUnits > 0) {
-                val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)
-                paygUsed.toDouble() / usage.paygLimitUnits.toDouble()
-            } else {
-                0.0
-            }
+            val paygPct =
+                if (usage.paygLimitUnits > 0) {
+                    val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)
+                    paygUsed.toDouble() / usage.paygLimitUnits.toDouble()
+                } else {
+                    0.0
+                }
 
             if (basePct >= 0.8) {
                 maybeSendNotification(orgId, periodStart, "base_80", usage)
@@ -130,51 +136,67 @@ class BillingBackgroundService(
         notificationType: String,
         usage: BillingUsageResponse
     ) {
-        val inserted = transaction {
-            QuotaNotificationsSent.insertIgnore {
-                it[QuotaNotificationsSent.organization_id] = organizationId
-                it[this.period_start] = kotlinx.datetime.LocalDate.parse(periodStart)
-                it[this.notification_type] = notificationType
-                it[sent_at] = Clock.System.now()
-            }.insertedCount
-        }
+        val inserted =
+            transaction {
+                QuotaNotificationsSent
+                    .insertIgnore {
+                        it[QuotaNotificationsSent.organization_id] = organizationId
+                        it[this.period_start] = kotlinx.datetime.LocalDate.parse(periodStart)
+                        it[this.notification_type] = notificationType
+                        it[sent_at] = Clock.System.now()
+                    }.insertedCount
+            }
         if (inserted == 0) return
 
-        val recipients = transaction {
-            val ownerIds = Memberships.selectAll().where {
-                (Memberships.organization_id eq organizationId) and (Memberships.role eq "owner")
-            }.map { it[Memberships.user_id] }
-            val userIds = if (ownerIds.isNotEmpty()) {
-                ownerIds
-            } else {
-                Memberships.selectAll().where { Memberships.organization_id eq organizationId }.map { it[Memberships.user_id] }
+        val recipients =
+            transaction {
+                val ownerIds =
+                    Memberships
+                        .selectAll()
+                        .where {
+                            (Memberships.organization_id eq organizationId) and (Memberships.role eq "owner")
+                        }.map { it[Memberships.user_id] }
+                val userIds =
+                    if (ownerIds.isNotEmpty()) {
+                        ownerIds
+                    } else {
+                        Memberships.selectAll().where { Memberships.organization_id eq organizationId }.map { it[Memberships.user_id] }
+                    }
+                Users
+                    .selectAll()
+                    .where { Users.id inList userIds }
+                    .map { it[Users.email] }
+                    .distinct()
             }
-            Users.selectAll().where { Users.id inList userIds }
-                .map { it[Users.email] }
-                .distinct()
-        }
         if (recipients.isEmpty()) return
 
-        val orgName = transaction {
-            Organizations.selectAll().where { Organizations.id eq organizationId }.firstOrNull()?.get(Organizations.name)
-        } ?: "Organization $organizationId"
+        val orgName =
+            transaction {
+                Organizations
+                    .selectAll()
+                    .where { Organizations.id eq organizationId }
+                    .firstOrNull()
+                    ?.get(Organizations.name)
+            } ?: "Organization $organizationId"
 
-        val subject = when (notificationType) {
-            "base_80" -> "[$orgName] 80% of monthly quota used"
-            "base_100" -> "[$orgName] Base quota reached"
-            "payg_80" -> "[$orgName] 80% of PAYG budget consumed"
-            else -> "[$orgName] Usage notification"
-        }
-        val body = buildString {
-            appendLine("Billing usage alert for $orgName")
-            appendLine()
-            appendLine("Plan: ${usage.plan}")
-            appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
-            appendLine("Base limit: ${usage.baseLimitUnits} units")
-            appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / 100.0)}")
-            appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / 100.0)}")
-            appendLine("Billing period: ${usage.periodStart} to ${usage.periodEnd}")
-        }
+        val subject =
+            when (notificationType) {
+                "base_80" -> "[$orgName] 80% of monthly quota used"
+                "base_100" -> "[$orgName] Base quota reached"
+                "payg_80" -> "[$orgName] 80% of PAYG budget consumed"
+                else -> "[$orgName] Usage notification"
+            }
+        val body =
+            buildString {
+                appendLine("Billing usage alert for $orgName")
+                appendLine()
+                appendLine("Plan: ${usage.plan}")
+                appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
+                appendLine("Base limit: ${usage.baseLimitUnits} units")
+                appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / 100.0)}")
+                appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / 100.0)}")
+                appendLine("Billing period: ${usage.periodStart} to ${usage.periodEnd}")
+            }
 
         for (email in recipients) {
             try {

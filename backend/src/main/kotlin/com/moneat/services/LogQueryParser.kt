@@ -40,7 +40,9 @@ class LogQueryParser {
 
     sealed class Token {
         data class Text(val value: String) : Token()
+
         data class QuotedText(val value: String) : Token()
+
         data class Field(
             val name: String,
             val value: String,
@@ -48,27 +50,41 @@ class LogQueryParser {
             val rangeEnd: String? = null,
             val isQuoted: Boolean = false
         ) : Token()
+
         data class FieldGroup(val name: String, val tokens: List<Token>) : Token()
+
         object And : Token()
+
         object Or : Token()
+
         data class Not(val token: Token) : Token()
+
         data class Group(val tokens: List<Token>) : Token()
     }
 
     sealed class QueryNode {
         data class TermNode(val term: String, val isWildcard: Boolean = false) : QueryNode()
+
         data class FieldNode(val field: String, val value: String, val isWildcard: Boolean = false) : QueryNode()
+
         data class RangeNode(val field: String, val min: String, val max: String) : QueryNode()
+
         data class ComparisonNode(val field: String, val operator: String, val value: String) : QueryNode()
+
         data class ExistsNode(val field: String) : QueryNode()
+
         data class TagExistsNode(val tagKey: String) : QueryNode()
+
         data class FullTextNode(
             val term: String,
             val isWildcard: Boolean = false,
             val isPhrase: Boolean = false
         ) : QueryNode()
+
         data class AndNode(val left: QueryNode, val right: QueryNode) : QueryNode()
+
         data class OrNode(val left: QueryNode, val right: QueryNode) : QueryNode()
+
         data class NotNode(val node: QueryNode) : QueryNode()
     }
 
@@ -164,7 +180,10 @@ class LogQueryParser {
         return tokens
     }
 
-    private fun extractQuoted(query: String, startIdx: Int): Pair<String, Int> {
+    private fun extractQuoted(
+        query: String,
+        startIdx: Int
+    ): Pair<String, Int> {
         val sb = StringBuilder()
         var i = startIdx + 1 // Skip opening quote
 
@@ -175,10 +194,12 @@ class LogQueryParser {
                     sb.append(query[i + 1])
                     i += 2
                 }
+
                 query[i] == '"' -> {
                     // Closing quote
                     return Pair(sb.toString(), i + 1)
                 }
+
                 else -> {
                     sb.append(query[i])
                     i++
@@ -190,7 +211,10 @@ class LogQueryParser {
         return Pair(sb.toString(), query.length)
     }
 
-    private fun extractGroup(query: String, startIdx: Int): Pair<List<Token>, Int> {
+    private fun extractGroup(
+        query: String,
+        startIdx: Int
+    ): Pair<List<Token>, Int> {
         var depth = 0
         var i = startIdx
         val groupContent = StringBuilder()
@@ -201,6 +225,7 @@ class LogQueryParser {
                     if (depth > 0) groupContent.append(query[i])
                     depth++
                 }
+
                 ')' -> {
                     depth--
                     if (depth == 0) {
@@ -209,6 +234,7 @@ class LogQueryParser {
                     }
                     groupContent.append(query[i])
                 }
+
                 else -> {
                     if (depth > 0) groupContent.append(query[i])
                 }
@@ -220,7 +246,10 @@ class LogQueryParser {
         return Pair(tokenize(groupContent.toString()), query.length)
     }
 
-    private fun extractNextToken(query: String, startIdx: Int): Pair<Token, Int> {
+    private fun extractNextToken(
+        query: String,
+        startIdx: Int
+    ): Pair<Token, Int> {
         val sb = StringBuilder()
         var i = startIdx
 
@@ -259,15 +288,18 @@ class LogQueryParser {
                         valueSb.append(query[i])
                         i++
                     }
+
                     query[i] == ']' -> {
                         inBrackets = false
                         valueSb.append(query[i])
                         i++
                     }
+
                     query[i] == '\\' && i + 1 < query.length -> {
                         valueSb.append(query[i + 1])
                         i += 2
                     }
+
                     else -> {
                         valueSb.append(query[i])
                         i++
@@ -302,6 +334,7 @@ class LogQueryParser {
                     sb.append(query[i + 1])
                     i += 2
                 }
+
                 else -> {
                     sb.append(query[i])
                     i++
@@ -367,10 +400,12 @@ class LogQueryParser {
             is Token.Text -> {
                 QueryNode.FullTextNode(token.value, token.value.contains('*') || token.value.contains('?'))
             }
+
             is Token.QuotedText -> {
                 // Quoted text is never a wildcard — wildcards inside quotes are literal
                 QueryNode.FullTextNode(token.value, false, isPhrase = true)
             }
+
             is Token.Field -> {
                 // Strip @ prefix if present
                 val field = if (token.name.startsWith('@')) token.name.substring(1) else token.name
@@ -413,42 +448,60 @@ class LogQueryParser {
                     }
                 }
             }
+
             is Token.FieldGroup -> {
                 // field:(val1 OR val2) — parse group tokens as values for this field
                 val field = if (token.name.startsWith('@')) token.name.substring(1) else token.name
                 val innerNode = parseFieldGroupValues(field, token.tokens)
                 innerNode
             }
+
             is Token.Not -> {
                 val inner = parseSingleToken(token.token)
                 if (inner != null) QueryNode.NotNode(inner) else null
             }
+
             is Token.Group -> {
                 parseExpression(token.tokens)
             }
-            else -> null
+
+            else -> {
+                null
+            }
         }
     }
 
     /**
      * Parse grouped field values like field:(val1 OR val2 OR val3) into an OR tree of FieldNodes.
      */
-    private fun parseFieldGroupValues(field: String, tokens: List<Token>): QueryNode? {
+    private fun parseFieldGroupValues(
+        field: String,
+        tokens: List<Token>
+    ): QueryNode? {
         // Extract only the value tokens (skip OR operators)
         val values = tokens.filter { it !is Token.Or && it !is Token.And }
         if (values.isEmpty()) return null
 
-        val nodes = values.mapNotNull { token ->
-            when (token) {
-                is Token.Text -> QueryNode.FieldNode(
-                    field,
-                    token.value,
-                    token.value.contains('*') || token.value.contains('?')
-                )
-                is Token.QuotedText -> QueryNode.FieldNode(field, token.value, false)
-                else -> null
+        val nodes =
+            values.mapNotNull { token ->
+                when (token) {
+                    is Token.Text -> {
+                        QueryNode.FieldNode(
+                            field,
+                            token.value,
+                            token.value.contains('*') || token.value.contains('?')
+                        )
+                    }
+
+                    is Token.QuotedText -> {
+                        QueryNode.FieldNode(field, token.value, false)
+                    }
+
+                    else -> {
+                        null
+                    }
+                }
             }
-        }
 
         if (nodes.isEmpty()) return null
         if (nodes.size == 1) return nodes[0]
@@ -460,7 +513,10 @@ class LogQueryParser {
     /**
      * Convert a QueryNode tree to a ClickHouse WHERE clause.
      */
-    fun toClickHouseSql(node: QueryNode?, escapeFn: (String) -> String): String {
+    fun toClickHouseSql(
+        node: QueryNode?,
+        escapeFn: (String) -> String
+    ): String {
         if (node == null) return "1=1"
 
         return when (node) {
@@ -507,7 +563,12 @@ class LogQueryParser {
         }
     }
 
-    private fun buildFullTextCondition(term: String, isWildcard: Boolean, isPhrase: Boolean, escapeFn: (String) -> String): String {
+    private fun buildFullTextCondition(
+        term: String,
+        isWildcard: Boolean,
+        isPhrase: Boolean,
+        escapeFn: (String) -> String
+    ): String {
         // Search in message, body, and text fields (excluding Enum8 columns level/source
         // which cause "Block structure mismatch" when SELECT aliases them with toString())
         val fields = listOf("message", "body", "service", "environment", "host", "container_name")
@@ -535,19 +596,26 @@ class LogQueryParser {
         }
     }
 
-    private fun buildFieldCondition(field: String, value: String, isWildcard: Boolean, escapeFn: (String) -> String): String {
+    private fun buildFieldCondition(
+        field: String,
+        value: String,
+        isWildcard: Boolean,
+        escapeFn: (String) -> String
+    ): String {
         // Map reserved attributes
-        val actualField = when (field.lowercase()) {
-            "status" -> "level"
-            "message" -> "message"
-            else -> field
-        }
+        val actualField =
+            when (field.lowercase()) {
+                "status" -> "level"
+                "message" -> "message"
+                else -> field
+            }
 
         // Check if it's a top-level field or a tag/attribute
-        val topLevelFields = setOf(
-            "service", "environment", "host", "source", "level", "message", "body",
-            "container_name", "container_id", "container_image", "trace_id", "span_id"
-        )
+        val topLevelFields =
+            setOf(
+                "service", "environment", "host", "source", "level", "message", "body",
+                "container_name", "container_id", "container_image", "trace_id", "span_id"
+            )
 
         // Enum8 columns need toString() cast for string comparison
         val enumFields = setOf("level", "source")
@@ -578,12 +646,18 @@ class LogQueryParser {
         }
     }
 
-    private fun buildRangeCondition(field: String, min: String, max: String, escapeFn: (String) -> String): String {
+    private fun buildRangeCondition(
+        field: String,
+        min: String,
+        max: String,
+        escapeFn: (String) -> String
+    ): String {
         // Numerical range - assume the field is numeric
-        val actualField = when (field.lowercase()) {
-            "status" -> "level"
-            else -> field
-        }
+        val actualField =
+            when (field.lowercase()) {
+                "status" -> "level"
+                else -> field
+            }
 
         val minVal = min.toIntOrNull() ?: 0
         val maxVal = max.toIntOrNull() ?: Int.MAX_VALUE
@@ -602,21 +676,28 @@ class LogQueryParser {
         }
     }
 
-    private fun buildComparisonCondition(field: String, operator: String, value: String, escapeFn: (String) -> String): String {
+    private fun buildComparisonCondition(
+        field: String,
+        operator: String,
+        value: String,
+        escapeFn: (String) -> String
+    ): String {
         // Validate operator to prevent SQL injection
         ClickHouseSqlUtils.validateOperator(operator)
 
-        val actualField = when (field.lowercase()) {
-            "status" -> "level"
-            else -> field
-        }
+        val actualField =
+            when (field.lowercase()) {
+                "status" -> "level"
+                else -> field
+            }
 
         val numVal = value.toDoubleOrNull()
 
-        val topLevelFields = setOf(
-            "service", "environment", "host", "source", "level", "message", "body",
-            "container_name", "container_id", "container_image", "trace_id", "span_id"
-        )
+        val topLevelFields =
+            setOf(
+                "service", "environment", "host", "source", "level", "message", "body",
+                "container_name", "container_id", "container_image", "trace_id", "span_id"
+            )
 
         val enumFields = setOf("level", "source")
 
@@ -641,16 +722,21 @@ class LogQueryParser {
         }
     }
 
-    private fun buildExistsCondition(field: String, escapeFn: (String) -> String): String {
-        val actualField = when (field.lowercase()) {
-            "status" -> "level"
-            else -> field
-        }
+    private fun buildExistsCondition(
+        field: String,
+        escapeFn: (String) -> String
+    ): String {
+        val actualField =
+            when (field.lowercase()) {
+                "status" -> "level"
+                else -> field
+            }
 
-        val topLevelFields = setOf(
-            "service", "environment", "host", "source", "level", "message", "body",
-            "container_name", "container_id", "container_image", "trace_id", "span_id"
-        )
+        val topLevelFields =
+            setOf(
+                "service", "environment", "host", "source", "level", "message", "body",
+                "container_name", "container_id", "container_image", "trace_id", "span_id"
+            )
 
         return if (actualField in topLevelFields) {
             val fieldRef = if (actualField in setOf("level", "source")) "toString($actualField)" else actualField

@@ -53,28 +53,31 @@ class AuthServiceTest {
         password: String = "password123",
         emailVerified: Boolean = true,
         onboardingCompleted: Boolean = false
-    ): Int = transaction {
-        val userId = Users.insert {
-            it[Users.email] = email
-            it[password_hash] = BCrypt.hashpw(password, BCrypt.gensalt())
-            it[name] = "Test User"
-            it[email_verified] = emailVerified
-            it[Users.onboarding_completed] = onboardingCompleted
-        } get Users.id
+    ): Int =
+        transaction {
+            val userId =
+                Users.insert {
+                    it[Users.email] = email
+                    it[password_hash] = BCrypt.hashpw(password, BCrypt.gensalt())
+                    it[name] = "Test User"
+                    it[email_verified] = emailVerified
+                    it[Users.onboarding_completed] = onboardingCompleted
+                } get Users.id
 
-        val orgId = Organizations.insert {
-            it[name] = "Org for $email"
-            it[slug] = "org-${email.replace("@", "-at-").replace(".", "-")}"
-        } get Organizations.id
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Org for $email"
+                    it[slug] = "org-${email.replace("@", "-at-").replace(".", "-")}"
+                } get Organizations.id
 
-        Memberships.insert {
-            it[user_id] = userId
-            it[organization_id] = orgId
-            it[role] = "owner"
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+
+            userId
         }
-
-        userId
-    }
 
     @Test
     fun `login returns null for non-existent user`() {
@@ -107,17 +110,18 @@ class AuthServiceTest {
 
     @Test
     fun `signup creates new user`() {
-        val result = authService.signup(
-            SignupRequest(
-                email = "newuser@test.com",
-                password = "StrongPass123!",
-                name = "New User",
-                acceptTerms = true,
-                acceptPrivacy = true,
-                termsVersion = "2026-02-08",
-                privacyVersion = "2026-02-08"
+        val result =
+            authService.signup(
+                SignupRequest(
+                    email = "newuser@test.com",
+                    password = "StrongPass123!",
+                    name = "New User",
+                    acceptTerms = true,
+                    acceptPrivacy = true,
+                    termsVersion = "2026-02-08",
+                    privacyVersion = "2026-02-08"
+                )
             )
-        )
         assertNotNull(result)
         assertNotNull(result.token)
 
