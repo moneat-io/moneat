@@ -2,7 +2,11 @@
 # Rebuilds the backend with enterprise modules enabled.
 #
 # Usage:
+#   ./scripts/docker-build.sh --enterprise
 #   docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+#
+# Requires moneat-enterprise repo checked out at ../moneat-enterprise
+# (or set ENTERPRISE_PATH to a custom location).
 #
 # Enterprise modules that activate automatically:
 #   - Analytics (web analytics dashboard)

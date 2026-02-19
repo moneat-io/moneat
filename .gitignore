@@ -108,3 +108,6 @@ deploy/certbot/
 
 # Kotlin build errors
 .kotlin/
+
+# Enterprise (build helper may temporarily create this directory)
+enterprise/

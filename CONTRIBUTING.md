@@ -7,7 +7,7 @@ Thank you for your interest in contributing to Moneat! This document outlines ho
 Moneat uses an open-core dual-license model:
 
 - **Core (AGPLv3)**: All code outside the `enterprise/` directory is licensed under the GNU Affero General Public License v3.0. Contributions to core are under AGPLv3 with CLA rights (see below).
-- **Enterprise (Proprietary)**: All code inside the `enterprise/` directory is licensed under the Moneat Enterprise License (see `enterprise/LICENSE`). Contributions to enterprise code are under the proprietary license.
+- **Enterprise (Proprietary)**: Enterprise code lives in a separate private repository ([moneat-enterprise](https://github.com/moneat-io/moneat-enterprise)) and is licensed under the Moneat Enterprise License. Contributions to enterprise code are under the proprietary license.
 
 ## Contributor License Agreement (CLA)
 
@@ -75,17 +75,31 @@ cd dashboard && npm install && npm run dev
 
 ### Working on Enterprise Features
 
-Enterprise modules (Analytics, On-Call, SSO) are in `enterprise/`. To run locally with enterprise active:
+Enterprise modules (Analytics, On-Call, SSO) live in a separate private repository. To work with enterprise features locally:
 
 ```bash
-# Start databases
+# 1. Clone the enterprise repo as a sibling directory
+git clone git@github.com:moneat-io/moneat-enterprise.git ../moneat-enterprise
+
+# 2. Start databases
 docker compose up -d postgres clickhouse redis
 
-# Run backend with enterprise modules loaded
+# 3. Run backend with enterprise modules loaded
+#    Gradle auto-discovers ../moneat-enterprise/backend via settings.gradle.kts
 cd backend && ./gradlew run -Penterprise
 
-# Run dashboard — enterprise routes are synced automatically via predev hook
+# 4. Run dashboard — enterprise routes are synced automatically via predev hook
 cd dashboard && npm run dev
+```
+
+**Custom paths:** If your enterprise checkout is not at `../moneat-enterprise`:
+
+```bash
+# Backend — override Gradle enterprise path
+cd backend && ./gradlew run -Penterprise -PenterprisePath=/path/to/enterprise/backend
+
+# Dashboard — override sync script source
+ENTERPRISE_PATH=/path/to/enterprise npm run dev
 ```
 
 **How it works:** The `-Penterprise` flag adds the `:enterprise` subproject as a `runtimeOnly` dependency. The backend's `FeatureRegistry` uses Java `ServiceLoader` to auto-discover all `EnterpriseModule` implementations at startup — no additional configuration needed.
@@ -97,12 +111,18 @@ cd dashboard && npm run dev
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | On-Call voice alerts |
 | `SAML_CERT` / `SAML_KEY` / `SAML_ENTITY_ID` | SSO (SAML) |
 
-**Enterprise routes:** Files in `enterprise/dashboard/src/routes/` are the source of truth. They are copied into `dashboard/src/routes/` automatically by `scripts/sync-enterprise-routes.sh` (run via the `predev` npm hook). Never edit the copies in `dashboard/src/routes/` directly.
+**Enterprise routes:** Files in `moneat-enterprise/dashboard/src/routes/` are the source of truth. They are copied into `dashboard/src/routes/` automatically by `scripts/sync-enterprise-routes.sh` (run via the `predev` npm hook). Never edit the copies in `dashboard/src/routes/` directly.
 
 #### Docker with enterprise features
 
 ```bash
-# Build and run with enterprise modules
+# Build with enterprise modules (uses ../moneat-enterprise by default)
+./scripts/docker-build.sh --enterprise
+
+# Or with a custom enterprise path
+ENTERPRISE_PATH=/path/to/enterprise ./scripts/docker-build.sh --enterprise
+
+# Run with enterprise compose override
 docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
 
 # Optionally create .env.enterprise for enterprise-specific secrets (Twilio, SAML, etc.)
@@ -113,7 +133,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
 ## License
 
 - Contributions to files **outside** `enterprise/` are licensed under the [GNU Affero General Public License v3.0](LICENSE).
-- Contributions to files **inside** `enterprise/` are licensed under the [Moneat Enterprise License](enterprise/LICENSE).
+- Contributions to the [moneat-enterprise](https://github.com/moneat-io/moneat-enterprise) repository are licensed under the Moneat Enterprise License.
 - All contributors must sign the [Contributor License Agreement](CLA.md).
 
 ## Code of Conduct

@@ -1,3 +1,0 @@
-// Moneat Enterprise - proprietary module
-// Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.

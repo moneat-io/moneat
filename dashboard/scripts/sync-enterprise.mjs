@@ -7,17 +7,22 @@ const scriptsDir = path.dirname(scriptPath)
 const dashboardDir = path.resolve(scriptsDir, '..')
 const repoRoot = path.resolve(dashboardDir, '..')
 
-const enterpriseRoutesDir = path.join(repoRoot, 'enterprise', 'dashboard', 'src', 'routes')
+// Enterprise source root: configurable via ENTERPRISE_PATH, defaults to sibling checkout
+const defaultEnterprisePath = path.resolve(repoRoot, '..', 'moneat-enterprise')
+const enterpriseRoot = process.env.ENTERPRISE_PATH
+  ? path.resolve(process.env.ENTERPRISE_PATH)
+  : defaultEnterprisePath
+
+const enterpriseRoutesDir = path.join(enterpriseRoot, 'dashboard', 'src', 'routes')
 const enterpriseAnalyticsComponentsDir = path.join(
-  repoRoot,
-  'enterprise',
+  enterpriseRoot,
   'dashboard',
   'src',
   'components',
   'analytics'
 )
-const enterpriseOnCallComponentsDir = path.join(repoRoot, 'enterprise', 'dashboard', 'src', 'components', 'on-call')
-const enterpriseSsoComponentFile = path.join(repoRoot, 'enterprise', 'dashboard', 'src', 'components', 'sso-settings.tsx')
+const enterpriseOnCallComponentsDir = path.join(enterpriseRoot, 'dashboard', 'src', 'components', 'on-call')
+const enterpriseSsoComponentFile = path.join(enterpriseRoot, 'dashboard', 'src', 'components', 'sso-settings.tsx')
 
 const dashboardRoutesDir = path.join(dashboardDir, 'src', 'routes')
 const dashboardAnalyticsComponentsDir = path.join(dashboardDir, 'src', 'components', 'analytics')
