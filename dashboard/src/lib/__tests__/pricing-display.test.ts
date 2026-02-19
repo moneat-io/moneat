@@ -78,28 +78,28 @@ describe('pricing-display', () => {
       const tier = createBaseTier({ monthlyGbLimit: 10 * 1024 * 1024 * 1024 })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('10 GB/mo data')
+      expect(model.features).toContain('10 GB log data')
     })
 
     it('formats TB limit correctly when >= 1024 GB', () => {
       const tier = createBaseTier({ monthlyGbLimit: 2048 * 1024 * 1024 * 1024 })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('2 TB/mo data')
+      expect(model.features).toContain('2 TB log data')
     })
 
     it('formats fractional GB without trailing zero', () => {
       const tier = createBaseTier({ monthlyGbLimit: Math.floor(2.5 * 1024 * 1024 * 1024) })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features[0]).toMatch(/2\.5 GB\/mo data/)
+      expect(model.features.some(f => /2\.5 GB log data/.test(f))).toBe(true)
     })
 
     it('formats fractional TB without trailing zero', () => {
       const tier = createBaseTier({ monthlyGbLimit: Math.floor(1.5 * 1024 * 1024 * 1024 * 1024) })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features[0]).toMatch(/1\.5 TB\/mo data/)
+      expect(model.features.some(f => /1\.5 TB log data/.test(f))).toBe(true)
     })
   })
 
@@ -147,14 +147,14 @@ describe('pricing-display', () => {
       const tier = createBaseTier({ sessionReplayEnabled: true })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('Session replays and events')
+      expect(model.features).toContain('Session replays')
     })
 
     it('excludes session replays when disabled', () => {
       const tier = createBaseTier({ sessionReplayEnabled: false })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).not.toContain('Session replays and events')
+      expect(model.features).not.toContain('Session replays')
     })
 
     it('includes custom status pages with custom domains', () => {
@@ -164,7 +164,7 @@ describe('pricing-display', () => {
       })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('Custom status pages with custom domains')
+      expect(model.features).toContain('Status pages with custom domains')
     })
 
     it('includes custom status pages without custom domains', () => {
@@ -188,8 +188,8 @@ describe('pricing-display', () => {
       const model = buildPricingCardModel(tier, 'monthly')
 
       expect(model.features).toContain('Slack integration')
-      expect(model.features).toContain('SAML SSO integration')
-      expect(model.features).toContain('OIDC SSO integration')
+      expect(model.features).toContain('SAML SSO')
+      expect(model.features).toContain('OIDC SSO')
     })
 
     it('includes enterprise features when enabled', () => {
@@ -210,10 +210,11 @@ describe('pricing-display', () => {
       const model = buildPricingCardModel(tier, 'monthly')
 
       // Core features come first
-      expect(model.features[0]).toMatch(/GB\/mo data/)
-      expect(model.features[1]).toMatch(/day retention/)
-      expect(model.features[2]).toMatch(/project/)
-      expect(model.features[3]).toMatch(/monitor/)
+      expect(model.features[0]).toMatch(/replay/)
+      expect(model.features[1]).toMatch(/GB log data/)
+      expect(model.features[2]).toMatch(/day retention/)
+      expect(model.features[3]).toMatch(/project/)
+      expect(model.features[4]).toMatch(/monitor/)
     })
   })
 

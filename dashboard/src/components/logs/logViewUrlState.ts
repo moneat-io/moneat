@@ -88,13 +88,13 @@ export function parseLogViewSearch(search: Record<string, unknown>): LogViewSear
   if (typeof search.from === 'string') {
     const date = new Date(search.from)
     if (!Number.isNaN(date.getTime())) {
-      result.from = date.toISOString()
+      result.from = search.from
     }
   }
   if (typeof search.to === 'string') {
     const date = new Date(search.to)
     if (!Number.isNaN(date.getTime())) {
-      result.to = date.toISOString()
+      result.to = search.to
     }
   }
   

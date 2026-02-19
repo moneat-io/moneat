@@ -480,7 +480,7 @@ describe('ApiClient - Extended Methods', () => {
     })
 
     it('fetches log filters', async () => {
-      const mockFilters = {
+      const mockServerResponse = {
         services: ['web', 'api'],
         environments: ['production', 'staging'],
         levels: ['info', 'error', 'warning'],
@@ -489,12 +489,18 @@ describe('ApiClient - Extended Methods', () => {
 
       server.use(
         http.get(`${API_BASE}/v1/projects/1/logs/filters`, () => {
-          return HttpResponse.json(mockFilters)
+          return HttpResponse.json(mockServerResponse)
         })
       )
 
       const filters = await api.getProjectLogFilters(1)
-      expect(filters).toEqual(mockFilters)
+      // services/environments are transformed to {value, count} objects
+      expect(filters).toEqual({
+        services: [{value: 'web', count: 0}, {value: 'api', count: 0}],
+        environments: [{value: 'production', count: 0}, {value: 'staging', count: 0}],
+        levels: ['info', 'error', 'warning'],
+        tagKeys: ['user_id', 'request_id'],
+      })
     })
   })
 })

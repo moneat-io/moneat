@@ -42,6 +42,10 @@ export const handlers = [
     })
   }),
 
+  http.post(`${API_BASE}/auth/logout`, () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
   // Projects endpoints
   http.get(`${API_BASE}/v1/projects`, () => {
     return HttpResponse.json([

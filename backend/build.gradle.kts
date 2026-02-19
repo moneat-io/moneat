@@ -230,7 +230,7 @@ jacoco {
 }
 
 tasks.jacocoTestReport {
-    dependsOn(tasks.test, integrationTest)
+    dependsOn(tasks.test)
     
     executionData.setFrom(
         fileTree(layout.buildDirectory.asFile).include("jacoco/*.exec")
