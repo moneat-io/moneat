@@ -108,7 +108,7 @@ cd dashboard && npm run dev:enterprise
 
 ### Enterprise
 
-Need SSO, on-call schedules, escalation policies, or incident management? Check out the [Enterprise plan](https://moneat.io/pricing) or contact [licensing@moneat.io](mailto:licensing@moneat.io).
+Need SSO, on-call schedules, escalation policies, or incident management? Check out the [Enterprise plan](https://moneat.io/pricing) or contact [support@moneat.io](mailto:support@moneat.io).
 
 ---
 
