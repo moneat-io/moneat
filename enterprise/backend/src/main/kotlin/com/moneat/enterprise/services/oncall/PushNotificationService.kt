@@ -228,7 +228,7 @@ class PushNotificationService {
         } catch (e: Exception) {
             logger.error("Failed to send push notification", e)
         }
-    }
+        }
 
     private fun getUserDeviceTokens(userId: Int): List<String> =
         transaction {
@@ -247,7 +247,6 @@ class PushNotificationService {
         transaction {
             val now = Clock.System.now()
 
-            // Check if token already exists
             val existing =
                 UserDeviceTokens
                     .selectAll()
@@ -255,14 +254,17 @@ class PushNotificationService {
                     .singleOrNull()
 
             if (existing != null) {
-                // Update last_used_at
+                // Rebind ownership and refresh metadata when token is re-registered.
                 UserDeviceTokens.update({ UserDeviceTokens.deviceToken eq deviceToken }) {
+                    it[UserDeviceTokens.userId] = userId
+                    it[UserDeviceTokens.platform] = platform
+                    it[UserDeviceTokens.deviceName] = deviceName
                     it[lastUsedAt] = now
                 }
+                logger.info("Rebound existing device token to user $userId, platform $platform")
                 return@transaction true
             }
 
-            // Insert new token
             UserDeviceTokens.insert {
                 it[UserDeviceTokens.userId] = userId
                 it[UserDeviceTokens.deviceToken] = deviceToken

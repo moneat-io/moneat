@@ -29,7 +29,8 @@ import kotlinx.serialization.Serializable
 data class DeclareIncidentRequest(
     val title: String,
     val description: String? = null,
-    val priorityLevel: String,
+    val priorityLevel: String? = null,
+    val severity: String? = null,
 )
 
 @Serializable
@@ -356,6 +357,13 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
 
                 val request = call.receive<DeclareIncidentRequest>()
 
+                val priorityLevel = request.priorityLevel?.trim() ?: request.severity?.trim()
+
+                if (priorityLevel.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing priority level"))
+                    return@post
+                }
+
                 try {
                     val incident =
                         onCallIncidentService.declareIncident(
@@ -364,7 +372,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                             alertId = alertId,
                             title = request.title,
                             description = request.description,
-                            priorityLevel = request.priorityLevel,
+                            priorityLevel = priorityLevel,
                         )
                     call.respond(HttpStatusCode.Created, incident)
                 } catch (e: IllegalStateException) {
