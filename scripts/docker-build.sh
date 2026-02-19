@@ -57,7 +57,9 @@ else
   echo "Creating enterprise stubs for core-only build..."
   mkdir -p "$ENTERPRISE_DIR/backend/src"
   mkdir -p "$ENTERPRISE_DIR/dashboard/src/routes"
-  mkdir -p "$ENTERPRISE_DIR/dashboard/src/components"
+  mkdir -p "$ENTERPRISE_DIR/dashboard/src/components/analytics"
+  mkdir -p "$ENTERPRISE_DIR/dashboard/src/components/on-call"
+  : > "$ENTERPRISE_DIR/dashboard/src/components/sso-settings.tsx"
 
   echo "Building core-only..."
   cd "$REPO_ROOT"
