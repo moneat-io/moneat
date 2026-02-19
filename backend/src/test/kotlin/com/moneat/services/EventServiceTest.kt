@@ -139,10 +139,10 @@ class EventServiceTest {
                 exceptionType = "NullPointerException",
                 exceptionMessage = "Cannot invoke method on null object",
                 stackTrace =
-                    listOf(
-                        createStackFrame("MyClass.kt", "processData", 42, inApp = true),
-                        createStackFrame("Utils.kt", "helper", 10, inApp = true)
-                    )
+                listOf(
+                    createStackFrame("MyClass.kt", "processData", 42, inApp = true),
+                    createStackFrame("Utils.kt", "helper", 10, inApp = true)
+                )
             )
 
         val event2 =
@@ -151,17 +151,18 @@ class EventServiceTest {
                 exceptionType = "NullPointerException",
                 exceptionMessage = "Cannot invoke method on null object",
                 stackTrace =
-                    listOf(
-                        createStackFrame("MyClass.kt", "processData", 42, inApp = true),
-                        createStackFrame("Utils.kt", "helper", 10, inApp = true)
-                    )
+                listOf(
+                    createStackFrame("MyClass.kt", "processData", 42, inApp = true),
+                    createStackFrame("Utils.kt", "helper", 10, inApp = true)
+                )
             )
 
         val fingerprint1 =
             event1.let {
                 it.exception?.let { exc ->
                     val firstException = exc.values.firstOrNull()
-                    listOf(firstException?.type,
+                    listOf(
+                        firstException?.type,
                         firstException
                             ?.stacktrace
                             ?.frames
@@ -171,7 +172,8 @@ class EventServiceTest {
                             ?.stacktrace
                             ?.frames
                             ?.lastOrNull()
-                            ?.filename)
+                            ?.filename
+                    )
                         .filterNotNull()
                 } ?: emptyList()
             }
@@ -180,7 +182,8 @@ class EventServiceTest {
             event2.let {
                 it.exception?.let { exc ->
                     val firstException = exc.values.firstOrNull()
-                    listOf(firstException?.type,
+                    listOf(
+                        firstException?.type,
                         firstException
                             ?.stacktrace
                             ?.frames
@@ -190,7 +193,8 @@ class EventServiceTest {
                             ?.stacktrace
                             ?.frames
                             ?.lastOrNull()
-                            ?.filename)
+                            ?.filename
+                    )
                         .filterNotNull()
                 } ?: emptyList()
             }
@@ -267,10 +271,10 @@ class EventServiceTest {
                 exceptionType = "RuntimeException",
                 exceptionMessage = "Something failed",
                 stackTrace =
-                    listOf(
-                        createStackFrame("App.java", "main", 5, inApp = true),
-                        createStackFrame("Service.java", "execute", 100, inApp = true)
-                    )
+                listOf(
+                    createStackFrame("App.java", "main", 5, inApp = true),
+                    createStackFrame("Service.java", "execute", 100, inApp = true)
+                )
             )
 
         val eventWithDifferentStack =
@@ -278,10 +282,10 @@ class EventServiceTest {
                 exceptionType = "RuntimeException",
                 exceptionMessage = "Something failed",
                 stackTrace =
-                    listOf(
-                        createStackFrame("App.java", "main", 5, inApp = true),
-                        createStackFrame("Different.java", "execute", 100, inApp = true)
-                    )
+                listOf(
+                    createStackFrame("App.java", "main", 5, inApp = true),
+                    createStackFrame("Different.java", "execute", 100, inApp = true)
+                )
             )
 
         val stack1 =
@@ -310,18 +314,18 @@ class EventServiceTest {
             createSentryEvent(
                 platform = "android",
                 contexts =
-                    buildJsonObject {
-                        put("os", buildJsonObject { put("name", "Android") })
-                    }
+                buildJsonObject {
+                    put("os", buildJsonObject { put("name", "Android") })
+                }
             )
 
         val iosEvent =
             createSentryEvent(
                 platform = "ios",
                 contexts =
-                    buildJsonObject {
-                        put("os", buildJsonObject { put("name", "iOS") })
-                    }
+                buildJsonObject {
+                    put("os", buildJsonObject { put("name", "iOS") })
+                }
             )
 
         assertNotEquals(androidEvent.platform, iosEvent.platform, "Different platforms should be distinguishable")
@@ -553,13 +557,15 @@ class EventServiceTest {
         val event = createSentryEvent(request = request)
 
         assertNotNull(event.request, "Request object should be present")
-        assertEquals("POST",
+        assertEquals(
+            "POST",
             event.request
                 ?.get("method")
                 ?.jsonPrimitive
                 ?.content
         )
-        assertEquals("https://api.example.com/events",
+        assertEquals(
+            "https://api.example.com/events",
             event.request
                 ?.get("url")
                 ?.jsonPrimitive
@@ -659,11 +665,11 @@ class EventServiceTest {
             SentryEnvelope(
                 eventId = "multi-123",
                 items =
-                    listOf(
-                        EnvelopeItem("event", eventJson),
-                        EnvelopeItem("transaction", transactionJson),
-                        EnvelopeItem("feedback", feedbackJson)
-                    )
+                listOf(
+                    EnvelopeItem("event", eventJson),
+                    EnvelopeItem("transaction", transactionJson),
+                    EnvelopeItem("feedback", feedbackJson)
+                )
             )
 
         assertEquals(3, envelope.items.size)
@@ -685,27 +691,32 @@ class EventServiceTest {
         val exception = ExceptionValue(type = "Error", value = "Test error", stacktrace = stackTrace)
         val exceptionInfo = ExceptionInfo(values = listOf(exception))
 
-        assertEquals(3,
+        assertEquals(
+            3,
             exceptionInfo.values[0]
                 .stacktrace
                 ?.frames
                 ?.size,
-            "Should have 3 frames")
-        assertEquals("main.js",
+            "Should have 3 frames"
+        )
+        assertEquals(
+            "main.js",
             exceptionInfo.values[0]
                 .stacktrace
                 ?.frames
                 ?.get(0)
                 ?.filename
         )
-        assertEquals(true,
+        assertEquals(
+            true,
             exceptionInfo.values[0]
                 .stacktrace
                 ?.frames
                 ?.get(0)
                 ?.in_app
         )
-        assertEquals(false,
+        assertEquals(
+            false,
             exceptionInfo.values[0]
                 .stacktrace
                 ?.frames
@@ -775,13 +786,13 @@ class EventServiceTest {
             if (exceptionType != null) {
                 ExceptionInfo(
                     values =
-                        listOf(
-                            ExceptionValue(
-                                type = exceptionType,
-                                value = exceptionMessage ?: exceptionType,
-                                stacktrace = stackTrace?.let { StackTrace(frames = it) }
-                            )
+                    listOf(
+                        ExceptionValue(
+                            type = exceptionType,
+                            value = exceptionMessage ?: exceptionType,
+                            stacktrace = stackTrace?.let { StackTrace(frames = it) }
                         )
+                    )
                 )
             } else {
                 null

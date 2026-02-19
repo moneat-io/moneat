@@ -131,11 +131,11 @@ class IngestRoutesEnvelopeTest {
                         buildEnvelope(
                             eventId = "evt-multi-1",
                             items =
-                                listOf(
-                                    "transaction" to """{"event_id":"txn-1","type":"transaction"}""".toByteArray(),
-                                    "session" to """{"sid":"session-1","status":"ok"}""".toByteArray(),
-                                    "check_in" to """{"check_in_id":"check-1","status":"ok"}""".toByteArray()
-                                )
+                            listOf(
+                                "transaction" to """{"event_id":"txn-1","type":"transaction"}""".toByteArray(),
+                                "session" to """{"sid":"session-1","status":"ok"}""".toByteArray(),
+                                "check_in" to """{"check_in_id":"check-1","status":"ok"}""".toByteArray()
+                            )
                         )
                     )
                 }
@@ -176,7 +176,9 @@ class IngestRoutesEnvelopeTest {
                     setBody(
                         buildEnvelope(
                             eventId = "evt-over-quota",
-                            items = listOf("transaction" to """{"event_id":"txn-2","type":"transaction"}""".toByteArray())
+                            items = listOf(
+                                "transaction" to """{"event_id":"txn-2","type":"transaction"}""".toByteArray()
+                            )
                         )
                     )
                 }

@@ -45,8 +45,8 @@ class MonitorAlertServiceTest {
         if (!dbInitialized) {
             Database.connect(
                 url =
-                    "jdbc:h2:mem:moneat_monitor_alert_service;MODE=PostgreSQL;" +
-                        "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                "jdbc:h2:mem:moneat_monitor_alert_service;MODE=PostgreSQL;" +
+                    "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
             transaction {
@@ -116,11 +116,11 @@ class MonitorAlertServiceTest {
                 organizationId = orgId,
                 userId = userId,
                 request =
-                    CreateSilencePeriodRequest(
-                        reason = "Maintenance window",
-                        startsAt = nowMs - 60_000,
-                        endsAt = nowMs + 60_000
-                    )
+                CreateSilencePeriodRequest(
+                    reason = "Maintenance window",
+                    startsAt = nowMs - 60_000,
+                    endsAt = nowMs + 60_000
+                )
             )
 
         assertTrue(service.isAnySilenceActive(orgId))

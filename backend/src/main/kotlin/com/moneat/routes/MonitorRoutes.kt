@@ -348,19 +348,19 @@ fun Route.monitorRoutes() {
                     HttpStatusCode.Created,
                     CreateSystemResponse(
                         system =
-                            SystemResponse(
-                                id = system.id.toString(),
-                                projectId = 0L, // Not used - logs are now scoped by system_id
-                                name = system.name,
-                                host = system.host,
-                                status = system.status,
-                                last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
-                                agent_version = system.agentVersion,
-                                os = system.os,
-                                arch = system.arch,
-                                created_at = system.createdAt.toEpochMilliseconds(),
-                                latest_metrics = null
-                            ),
+                        SystemResponse(
+                            id = system.id.toString(),
+                            projectId = 0L, // Not used - logs are now scoped by system_id
+                            name = system.name,
+                            host = system.host,
+                            status = system.status,
+                            last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
+                            agent_version = system.agentVersion,
+                            os = system.os,
+                            arch = system.arch,
+                            created_at = system.createdAt.toEpochMilliseconds(),
+                            latest_metrics = null
+                        ),
                         agent_key = agentKey,
                         docker_command = dockerCommand
                     )

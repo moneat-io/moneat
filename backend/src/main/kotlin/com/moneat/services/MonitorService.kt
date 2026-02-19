@@ -303,7 +303,7 @@ class MonitorService {
                 ${container.mem_used},
                 ${container.mem_limit}$networkValues
             )
-            """.trimIndent()
+        """.trimIndent()
     }
 
     private suspend fun ensureContainerMetricsTableExists() {
@@ -577,17 +577,17 @@ class MonitorService {
                             mem_percent = arr.getOrNull(2)?.toString()?.toFloatOrNull(),
                             disk_percent = arr.getOrNull(3)?.toString()?.toFloatOrNull(),
                             net_recv_bytes =
-                                arr
-                                    .getOrNull(4)
-                                    ?.toString()
-                                    ?.replace("\"", "")
-                                    ?.toLongOrNull(),
+                            arr
+                                .getOrNull(4)
+                                ?.toString()
+                                ?.replace("\"", "")
+                                ?.toLongOrNull(),
                             net_sent_bytes =
-                                arr
-                                    .getOrNull(5)
-                                    ?.toString()
-                                    ?.replace("\"", "")
-                                    ?.toLongOrNull(),
+                            arr
+                                .getOrNull(5)
+                                ?.toString()
+                                ?.replace("\"", "")
+                                ?.toLongOrNull(),
                             load_1 = arr.getOrNull(6)?.toString()?.toFloatOrNull(),
                             load_5 = arr.getOrNull(7)?.toString()?.toFloatOrNull(),
                             load_15 = arr.getOrNull(8)?.toString()?.toFloatOrNull(),
@@ -638,7 +638,7 @@ class MonitorService {
                 ) WHERE rn = 1
                   AND timestamp >= now() - INTERVAL $freshnessWindowSeconds SECOND
                 FORMAT JSONCompact
-                """.trimIndent()
+            """.trimIndent()
         }
 
         var includeNetwork = true
@@ -677,17 +677,25 @@ class MonitorService {
                 val memUsed = arr[5].toString().replace("\"", "").toLongOrNull() ?: 0
                 val memLimit = arr[6].toString().replace("\"", "").toLongOrNull() ?: 1
                 val netRecvBytes =
-                    if (includeNetwork) arr
-                        .getOrNull(7)
-                        ?.toString()
-                        ?.replace("\"", "")
-                        ?.toLongOrNull() ?: 0 else 0
+                    if (includeNetwork) {
+                        arr
+                            .getOrNull(7)
+                            ?.toString()
+                            ?.replace("\"", "")
+                            ?.toLongOrNull() ?: 0
+                    } else {
+                        0
+                    }
                 val netSentBytes =
-                    if (includeNetwork) arr
-                        .getOrNull(8)
-                        ?.toString()
-                        ?.replace("\"", "")
-                        ?.toLongOrNull() ?: 0 else 0
+                    if (includeNetwork) {
+                        arr
+                            .getOrNull(8)
+                            ?.toString()
+                            ?.replace("\"", "")
+                            ?.toLongOrNull() ?: 0
+                    } else {
+                        0
+                    }
 
                 ContainerStats(
                     name = arr[0].toString().replace("\"", ""),
@@ -791,29 +799,29 @@ class MonitorService {
                         timestamp = arr[0].toString().replace("\"", "").toLong(),
                         cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
                         mem_used =
-                            arr
-                                .getOrNull(2)
-                                ?.toString()
-                                ?.replace("\"", "")
-                                ?.toLongOrNull(),
+                        arr
+                            .getOrNull(2)
+                            ?.toString()
+                            ?.replace("\"", "")
+                            ?.toLongOrNull(),
                         mem_limit =
-                            arr
-                                .getOrNull(3)
-                                ?.toString()
-                                ?.replace("\"", "")
-                                ?.toLongOrNull(),
+                        arr
+                            .getOrNull(3)
+                            ?.toString()
+                            ?.replace("\"", "")
+                            ?.toLongOrNull(),
                         net_recv_bytes =
-                            arr
-                                .getOrNull(4)
-                                ?.toString()
-                                ?.replace("\"", "")
-                                ?.toLongOrNull(),
+                        arr
+                            .getOrNull(4)
+                            ?.toString()
+                            ?.replace("\"", "")
+                            ?.toLongOrNull(),
                         net_sent_bytes =
-                            arr
-                                .getOrNull(5)
-                                ?.toString()
-                                ?.replace("\"", "")
-                                ?.toLongOrNull()
+                        arr
+                            .getOrNull(5)
+                            ?.toString()
+                            ?.replace("\"", "")
+                            ?.toLongOrNull()
                     )
                 }
             } catch (e: Exception) {

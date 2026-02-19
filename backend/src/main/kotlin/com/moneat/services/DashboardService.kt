@@ -837,19 +837,19 @@ class DashboardService {
                         environment = eventObj["environment"]?.jsonPrimitive?.contentOrNull,
                         release = eventObj["release"]?.jsonPrimitive?.contentOrNull,
                         user =
-                            eventObj["user_id"]?.jsonPrimitive?.content?.let {
-                                UserInfo(
-                                    id = it,
-                                    email = eventObj["user_email"]?.jsonPrimitive?.contentOrNull,
-                                    username = eventObj["user_username"]?.jsonPrimitive?.contentOrNull
-                                )
-                            },
+                        eventObj["user_id"]?.jsonPrimitive?.content?.let {
+                            UserInfo(
+                                id = it,
+                                email = eventObj["user_email"]?.jsonPrimitive?.contentOrNull,
+                                username = eventObj["user_username"]?.jsonPrimitive?.contentOrNull
+                            )
+                        },
                         tags =
-                            HashMap(
-                                eventObj["tags"]?.jsonObject?.mapValues {
-                                    it.value.jsonPrimitive.content
-                                } ?: emptyMap()
-                            ),
+                        HashMap(
+                            eventObj["tags"]?.jsonObject?.mapValues {
+                                it.value.jsonPrimitive.content
+                            } ?: emptyMap()
+                        ),
                         contexts = eventObj["contexts"]?.jsonPrimitive?.content ?: "{}",
                         exception = eventObj["stack_trace"]?.jsonPrimitive?.contentOrNull,
                         breadcrumbs = eventObj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
@@ -963,19 +963,19 @@ class DashboardService {
                         environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
                         release = obj["release"]?.jsonPrimitive?.contentOrNull,
                         user =
-                            obj["user_id"]?.jsonPrimitive?.content?.let {
-                                UserInfo(
-                                    id = it,
-                                    email = obj["user_email"]?.jsonPrimitive?.contentOrNull,
-                                    username = obj["user_username"]?.jsonPrimitive?.contentOrNull
-                                )
-                            },
+                        obj["user_id"]?.jsonPrimitive?.content?.let {
+                            UserInfo(
+                                id = it,
+                                email = obj["user_email"]?.jsonPrimitive?.contentOrNull,
+                                username = obj["user_username"]?.jsonPrimitive?.contentOrNull
+                            )
+                        },
                         tags =
-                            HashMap(
-                                obj["tags"]?.jsonObject?.mapValues {
-                                    it.value.jsonPrimitive.content
-                                } ?: emptyMap()
-                            ),
+                        HashMap(
+                            obj["tags"]?.jsonObject?.mapValues {
+                                it.value.jsonPrimitive.content
+                            } ?: emptyMap()
+                        ),
                         contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
                         exception = obj["stack_trace"]?.jsonPrimitive?.contentOrNull,
                         breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
@@ -1119,8 +1119,8 @@ class DashboardService {
                                 name = obj["name"]?.jsonPrimitive?.content ?: "",
                                 op = obj["op"]?.jsonPrimitive?.content ?: "",
                                 latestEventId =
-                                    obj["latest_event_id"]?.jsonPrimitive?.contentOrNull
-                                        ?: obj["latestEventId"]?.jsonPrimitive?.contentOrNull,
+                                obj["latest_event_id"]?.jsonPrimitive?.contentOrNull
+                                    ?: obj["latestEventId"]?.jsonPrimitive?.contentOrNull,
                                 count = obj["count"]?.jsonPrimitive?.long ?: 0,
                                 p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
                                 p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
@@ -1233,20 +1233,20 @@ class DashboardService {
 
                 PerformanceStatsResponse(
                     apdex =
-                        aggregateObj
-                            ?.get("apdex")
-                            ?.jsonPrimitive
-                            ?.contentOrNull
-                            ?.toDoubleOrNull() ?: 0.0,
+                    aggregateObj
+                        ?.get("apdex")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        ?.toDoubleOrNull() ?: 0.0,
                     throughput = throughput,
                     slowestTransactions = slowest,
                     totalTransactions = aggregateObj?.get("total")?.jsonPrimitive?.long ?: 0,
                     avgDuration =
-                        aggregateObj
-                            ?.get("avg_duration")
-                            ?.jsonPrimitive
-                            ?.contentOrNull
-                            ?.toDoubleOrNull() ?: 0.0
+                    aggregateObj
+                        ?.get("avg_duration")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        ?.toDoubleOrNull() ?: 0.0
                 )
             } catch (e: Exception) {
                 logger.error(e) { "Failed to fetch performance stats for project $projectId" }
@@ -1641,13 +1641,13 @@ class DashboardService {
                         environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
                         release = obj["release"]?.jsonPrimitive?.contentOrNull,
                         user =
-                            obj["user_id"]?.jsonPrimitive?.content?.let {
-                                UserInfo(
-                                    id = it,
-                                    email = obj["user_email"]?.jsonPrimitive?.contentOrNull,
-                                    username = obj["user_username"]?.jsonPrimitive?.contentOrNull
-                                )
-                            },
+                        obj["user_id"]?.jsonPrimitive?.content?.let {
+                            UserInfo(
+                                id = it,
+                                email = obj["user_email"]?.jsonPrimitive?.contentOrNull,
+                                username = obj["user_username"]?.jsonPrimitive?.contentOrNull
+                            )
+                        },
                         tags = parseStringMap(obj["tags"]),
                         contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
                         exception = obj["stack_trace"]?.jsonPrimitive?.contentOrNull,
@@ -2386,9 +2386,9 @@ class DashboardService {
                         op = obj["op"]?.jsonPrimitive?.content ?: "",
                         duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
                         timestamp =
-                            obj["timestamp_iso"]?.jsonPrimitive?.content
-                                ?: obj["timestamp"]?.jsonPrimitive?.content
-                                ?: ""
+                        obj["timestamp_iso"]?.jsonPrimitive?.content
+                            ?: obj["timestamp"]?.jsonPrimitive?.content
+                            ?: ""
                     )
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to parse line: $line" }
@@ -2540,11 +2540,11 @@ class DashboardService {
                             urls = parseStringArray(obj["urls"]),
                             errorCount = maxOf(rawErrorCount, fallbackErrorCount),
                             user =
-                                if (userId != null || userEmail != null || userUsername != null) {
-                                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                                } else {
-                                    null
-                                },
+                            if (userId != null || userEmail != null || userUsername != null) {
+                                UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                            } else {
+                                null
+                            },
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -2753,11 +2753,11 @@ class DashboardService {
                 release = obj["release"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 platform = obj["platform"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 user =
-                    if (userId != null || userEmail != null || userUsername != null) {
-                        UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                    } else {
-                        null
-                    },
+                if (userId != null || userEmail != null || userUsername != null) {
+                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                } else {
+                    null
+                },
                 browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -2856,8 +2856,8 @@ class DashboardService {
                                     offsetMs = (tsMs - replayStartMs).toDouble(),
                                     title = title,
                                     description =
-                                        obj["exception_value"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                                            ?: obj["message"]?.jsonPrimitive?.contentOrNull,
+                                    obj["exception_value"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                                        ?: obj["message"]?.jsonPrimitive?.contentOrNull,
                                     durationMs = null,
                                     category = obj["level"]?.jsonPrimitive?.contentOrNull,
                                     eventId = eventId,
@@ -3000,9 +3000,9 @@ class DashboardService {
                                 timestamp = spanTimestampIso,
                                 offsetMs = (startTsMs - replayStartMs).toDouble(),
                                 title =
-                                    obj["description"]?.jsonPrimitive?.content?.takeIf {
-                                        it.isNotBlank()
-                                    } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
+                                obj["description"]?.jsonPrimitive?.content?.takeIf {
+                                    it.isNotBlank()
+                                } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
                                 description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                                 durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
                                 category = obj["op"]?.jsonPrimitive?.contentOrNull,
@@ -3067,8 +3067,8 @@ class DashboardService {
                             offsetMs = (tsMs - replayStartMs).toDouble(),
                             title = title,
                             description =
-                                obj["exception_value"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                                    ?: obj["message"]?.jsonPrimitive?.contentOrNull,
+                            obj["exception_value"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                                ?: obj["message"]?.jsonPrimitive?.contentOrNull,
                             durationMs = null,
                             category = obj["level"]?.jsonPrimitive?.contentOrNull,
                             eventId = eventId,
@@ -3192,9 +3192,9 @@ class DashboardService {
                             timestamp = spanTimestampIso,
                             offsetMs = (startTsMs - replayStartMs).toDouble(),
                             title =
-                                obj["description"]?.jsonPrimitive?.content?.takeIf {
-                                    it.isNotBlank()
-                                } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
+                            obj["description"]?.jsonPrimitive?.content?.takeIf {
+                                it.isNotBlank()
+                            } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
                             description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
                             category = obj["op"]?.jsonPrimitive?.contentOrNull,
@@ -3425,14 +3425,14 @@ class DashboardService {
                 logger.warn { "Mobile replay detected but no events extracted!" }
                 ReplayRecordingResponse(
                     events =
-                        listOf(
-                            JsonObject(
-                                mapOf(
-                                    "type" to JsonPrimitive("mobile_replay_not_supported"),
-                                    "message" to JsonPrimitive("Mobile session replays are not yet supported in the web viewer")
-                                )
+                    listOf(
+                        JsonObject(
+                            mapOf(
+                                "type" to JsonPrimitive("mobile_replay_not_supported"),
+                                "message" to JsonPrimitive("Mobile session replays are not yet supported in the web viewer")
                             )
                         )
+                    )
                 )
             } else {
                 logger.info { "Returning response with ${allEvents.size} events, isMobileReplay=$isMobileReplay" }
@@ -3535,11 +3535,11 @@ class DashboardService {
                             urls = parseStringArray(obj["urls"]),
                             errorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0,
                             user =
-                                if (userId != null || userEmail != null || userUsername != null) {
-                                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                                } else {
-                                    null
-                                },
+                            if (userId != null || userEmail != null || userUsername != null) {
+                                UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                            } else {
+                                null
+                            },
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -3626,11 +3626,11 @@ class DashboardService {
                         release = obj["release"]?.jsonPrimitive?.content ?: "",
                         platform = obj["platform"]?.jsonPrimitive?.content ?: "",
                         user =
-                            if (userId != null || userEmail != null || userUsername != null) {
-                                UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                            } else {
-                                null
-                            },
+                        if (userId != null || userEmail != null || userUsername != null) {
+                            UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                        } else {
+                            null
+                        },
                         associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                         replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
                     )
@@ -3697,11 +3697,11 @@ class DashboardService {
                 release = obj["release"]?.jsonPrimitive?.content ?: "",
                 platform = obj["platform"]?.jsonPrimitive?.content ?: "",
                 user =
-                    if (userId != null || userEmail != null || userUsername != null) {
-                        UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                    } else {
-                        null
-                    },
+                if (userId != null || userEmail != null || userUsername != null) {
+                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+                } else {
+                    null
+                },
                 associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 tags = tagsMap,

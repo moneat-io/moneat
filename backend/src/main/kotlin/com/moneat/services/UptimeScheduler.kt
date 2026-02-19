@@ -353,13 +353,13 @@ class UptimeScheduler(
                         deduplicationKey = "moneat-uptime-${monitor.id}",
                         organizationId = monitor.organizationId,
                         metadata =
-                            mapOf(
-                                "monitor_id" to JsonPrimitive(monitor.id.toString()),
-                                "monitor_name" to JsonPrimitive(monitor.name),
-                                "monitor_type" to JsonPrimitive(monitor.type),
-                                "error_message" to JsonPrimitive(result.message),
-                                "response_time_ms" to JsonPrimitive(result.responseTimeMs.toString())
-                            ),
+                        mapOf(
+                            "monitor_id" to JsonPrimitive(monitor.id.toString()),
+                            "monitor_name" to JsonPrimitive(monitor.name),
+                            "monitor_type" to JsonPrimitive(monitor.type),
+                            "error_message" to JsonPrimitive(result.message),
+                            "response_time_ms" to JsonPrimitive(result.responseTimeMs.toString())
+                        ),
                         moneatUrl = "$baseUrl/uptime/${monitor.id}"
                     )
                 // IncidentService will check routing rules and only fire if configured

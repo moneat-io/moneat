@@ -151,29 +151,29 @@ class NotificationService(private val emailService: EmailService) {
             val emailData =
                 EmailService.ErrorAlertData(
                     issueTitle =
-                        event.message ?: event.exception
-                            ?.values
-                            ?.firstOrNull()
-                            ?.value ?: "Unknown error",
+                    event.message ?: event.exception
+                        ?.values
+                        ?.firstOrNull()
+                        ?.value ?: "Unknown error",
                     issueLevel = event.level ?: "error",
                     issueCulprit = culprit,
                     issueMessage =
-                        event.message ?: event.exception
-                            ?.values
-                            ?.firstOrNull()
-                            ?.value ?: "",
+                    event.message ?: event.exception
+                        ?.values
+                        ?.firstOrNull()
+                        ?.value ?: "",
                     issueCount = "1",
                     issueUrl = issueUrl,
                     projectName = projectName,
                     environment = event.environment ?: "production",
                     timestamp =
-                        event.timestamp?.let {
-                            java.time.Instant
-                                .ofEpochMilli((it * 1000).toLong())
-                                .toString()
-                        } ?: java.time.Instant
-                            .now()
-                            .toString(),
+                    event.timestamp?.let {
+                        java.time.Instant
+                            .ofEpochMilli((it * 1000).toLong())
+                            .toString()
+                    } ?: java.time.Instant
+                        .now()
+                        .toString(),
                     stackTrace = stackTrace,
                     settingsUrl = settingsUrl,
                     unsubscribeUrl = "$settingsUrl?project=$projectId"
@@ -268,14 +268,14 @@ class NotificationService(private val emailService: EmailService) {
                         deduplicationKey = "moneat-error-$projectId-$issueId",
                         organizationId = orgId,
                         metadata =
-                            mapOf(
-                                "project_id" to JsonPrimitive(projectId.toString()),
-                                "project_name" to JsonPrimitive(projectName),
-                                "issue_id" to JsonPrimitive(issueId),
-                                "level" to JsonPrimitive(emailData.issueLevel),
-                                "environment" to JsonPrimitive(emailData.environment),
-                                "culprit" to JsonPrimitive(culprit)
-                            ),
+                        mapOf(
+                            "project_id" to JsonPrimitive(projectId.toString()),
+                            "project_name" to JsonPrimitive(projectName),
+                            "issue_id" to JsonPrimitive(issueId),
+                            "level" to JsonPrimitive(emailData.issueLevel),
+                            "environment" to JsonPrimitive(emailData.environment),
+                            "culprit" to JsonPrimitive(culprit)
+                        ),
                         moneatUrl = issueUrl
                     )
                 incidentService.fireAlert(incidentEvent)

@@ -46,24 +46,24 @@ class LogIngestionWorkerTest {
                         projectId = 99,
                         source = "sdk",
                         logs =
-                            listOf(
-                                QueuedLogEntry(
-                                    logId = "00000000-0000-0000-0000-000000000000",
-                                    timestampMs = 1_738_372_400_000,
-                                    level = "info",
-                                    message = "hello",
-                                    body = "hello",
-                                    service = "api",
-                                    environment = "prod",
-                                    host = "host-1",
-                                    source = "sdk",
-                                    containerName = "",
-                                    containerId = "",
-                                    containerImage = "",
-                                    traceId = "",
-                                    spanId = ""
-                                )
+                        listOf(
+                            QueuedLogEntry(
+                                logId = "00000000-0000-0000-0000-000000000000",
+                                timestampMs = 1_738_372_400_000,
+                                level = "info",
+                                message = "hello",
+                                body = "hello",
+                                service = "api",
+                                environment = "prod",
+                                host = "host-1",
+                                source = "sdk",
+                                containerName = "",
+                                containerId = "",
+                                containerImage = "",
+                                traceId = "",
+                                spanId = ""
                             )
+                        )
                     )
                 )
 

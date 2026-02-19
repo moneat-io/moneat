@@ -212,12 +212,12 @@ class IncidentService {
                         name = row[IncidentProviderConfigs.name],
                         apiKey = row[IncidentProviderConfigs.apiKey],
                         configJson =
-                            try {
-                                val jsonStr = row[IncidentProviderConfigs.configJson]
-                                json.parseToJsonElement(jsonStr).jsonObject
-                            } catch (e: Exception) {
-                                buildJsonObject {}
-                            },
+                        try {
+                            val jsonStr = row[IncidentProviderConfigs.configJson]
+                            json.parseToJsonElement(jsonStr).jsonObject
+                        } catch (e: Exception) {
+                            buildJsonObject {}
+                        },
                         enabled = row[IncidentProviderConfigs.enabled]
                     )
                 }
@@ -336,14 +336,14 @@ class IncidentService {
                     alertSource = event.source.name,
                     deduplicationKey = event.deduplicationKey,
                     metadata =
-                        if (event.metadata.isNotEmpty()) {
-                            kotlinx.serialization.json.Json.encodeToString(
-                                kotlinx.serialization.serializer(),
-                                event.metadata
-                            )
-                        } else {
-                            null
-                        }
+                    if (event.metadata.isNotEmpty()) {
+                        kotlinx.serialization.json.Json.encodeToString(
+                            kotlinx.serialization.serializer(),
+                            event.metadata
+                        )
+                    } else {
+                        null
+                    }
                 )
 
             if (incidentId != null) {

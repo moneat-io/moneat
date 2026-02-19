@@ -709,19 +709,19 @@ class BillingQuotaService(
             maxSystems = tier.maxSystems,
             monitorIntervalSeconds = tier.monitorIntervalSeconds,
             monthlyPriceCents =
-                when (tier) {
-                    PricingTier.FREE -> 0
-                    PricingTier.PRO -> 2900
-                    PricingTier.TEAM -> 7900
-                    PricingTier.BUSINESS -> 19900
-                },
+            when (tier) {
+                PricingTier.FREE -> 0
+                PricingTier.PRO -> 2900
+                PricingTier.TEAM -> 7900
+                PricingTier.BUSINESS -> 19900
+            },
             yearlyPriceCents =
-                when (tier) {
-                    PricingTier.FREE -> 0
-                    PricingTier.PRO -> 28800
-                    PricingTier.TEAM -> 79200
-                    PricingTier.BUSINESS -> 199200
-                },
+            when (tier) {
+                PricingTier.FREE -> 0
+                PricingTier.PRO -> 28800
+                PricingTier.TEAM -> 79200
+                PricingTier.BUSINESS -> 199200
+            },
             trialDays = if (tier == PricingTier.FREE) 0 else 14,
             paygEnabled = tier != PricingTier.FREE,
             paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,

@@ -126,12 +126,12 @@ class UptimeServiceTest {
                 service.createMonitor(
                     organizationId = orgId,
                     request =
-                        com.moneat.models.CreateUptimeMonitorRequest(
-                            name = "Push Health",
-                            type = "push",
-                            intervalSeconds = 60,
-                            timeoutSeconds = 10
-                        )
+                    com.moneat.models.CreateUptimeMonitorRequest(
+                        name = "Push Health",
+                        type = "push",
+                        intervalSeconds = 60,
+                        timeoutSeconds = 10
+                    )
                 )
 
             assertEquals("push", monitor.type)

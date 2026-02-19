@@ -646,13 +646,13 @@ class MonitorAlertService {
                         deduplicationKey = "moneat-system-alert-${alert.id}",
                         organizationId = organizationId,
                         metadata =
-                            mapOf(
-                                "system_id" to JsonPrimitive(alert.systemId.toString()),
-                                "system_name" to JsonPrimitive(systemName),
-                                "metric" to JsonPrimitive(alert.metric),
-                                "current_value" to JsonPrimitive(formattedValue),
-                                "threshold" to JsonPrimitive(formattedThreshold)
-                            ),
+                        mapOf(
+                            "system_id" to JsonPrimitive(alert.systemId.toString()),
+                            "system_name" to JsonPrimitive(systemName),
+                            "metric" to JsonPrimitive(alert.metric),
+                            "current_value" to JsonPrimitive(formattedValue),
+                            "threshold" to JsonPrimitive(formattedThreshold)
+                        ),
                         moneatUrl = "$frontendUrl/monitoring/${alert.systemId}"
                     )
                 incidentService.fireAlert(incidentEvent)
@@ -824,11 +824,11 @@ class MonitorAlertService {
                     deduplicationKey = "moneat-system-down-$systemId",
                     organizationId = organizationId,
                     metadata =
-                        mapOf(
-                            "system_id" to JsonPrimitive(systemId.toString()),
-                            "system_name" to JsonPrimitive(systemName),
-                            "last_seen" to JsonPrimitive(lastSeenText)
-                        ),
+                    mapOf(
+                        "system_id" to JsonPrimitive(systemId.toString()),
+                        "system_name" to JsonPrimitive(systemName),
+                        "last_seen" to JsonPrimitive(lastSeenText)
+                    ),
                     moneatUrl = "$frontendUrl/monitoring/$systemId"
                 )
             incidentService.fireAlert(incidentEvent)

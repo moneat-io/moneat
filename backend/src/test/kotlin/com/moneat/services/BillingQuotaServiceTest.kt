@@ -27,15 +27,15 @@ import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-=======
+=== === =
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
->>>>>>> billing-fixes
+import org.jetbrains.exposed.sql.update
+>>>>>>> billing - fixes
 import kotlin.test.*
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
@@ -294,12 +294,12 @@ class BillingQuotaServiceTest {
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
                 requestedUnitsByType =
-                    mapOf(
-                        "error" to 200,
-                        "transaction" to 150,
-                        "replay" to 50,
-                        "feedback" to 40
-                    )
+                mapOf(
+                    "error" to 200,
+                    "transaction" to 150,
+                    "replay" to 50,
+                    "feedback" to 40
+                )
             )
 
         assertTrue(result.allowed, "Batch reservation should succeed within limits")
@@ -325,11 +325,11 @@ class BillingQuotaServiceTest {
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
                 requestedUnitsByType =
-                    mapOf(
-                        "log" to 100,
-                        "logs" to 50,
-                        "error" to 100
-                    )
+                mapOf(
+                    "log" to 100,
+                    "logs" to 50,
+                    "error" to 100
+                )
             )
 
         assertTrue(result.allowed, "Should normalize event types and succeed")
@@ -353,11 +353,11 @@ class BillingQuotaServiceTest {
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
                 requestedUnitsByType =
-                    mapOf(
-                        "error" to 100,
-                        "transaction" to 0,
-                        "replay" to -50 // Should be ignored
-                    )
+                mapOf(
+                    "error" to 100,
+                    "transaction" to 0,
+                    "replay" to -50 // Should be ignored
+                )
             )
 
         assertTrue(result.allowed, "Should ignore zero and negative units")
@@ -382,12 +382,12 @@ class BillingQuotaServiceTest {
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
                 requestedUnitsByType =
-                    mapOf(
-                        "error" to 0,
-                        "transaction" to 0,
-                        "replay" to 0,
-                        "feedback" to 0
-                    )
+                mapOf(
+                    "error" to 0,
+                    "transaction" to 0,
+                    "replay" to 0,
+                    "feedback" to 0
+                )
             )
 
         assertTrue(result.allowed, "Batch with all zeros should succeed")
@@ -717,10 +717,10 @@ class BillingQuotaServiceTest {
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
                 requestedUnitsByType =
-                    mapOf(
-                        "error" to 200,
-                        "transaction" to 100
-                    )
+                mapOf(
+                    "error" to 200,
+                    "transaction" to 100
+                )
             )
 
         assertTrue(result1.allowed, "First batch should succeed")
@@ -732,10 +732,10 @@ class BillingQuotaServiceTest {
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
                 requestedUnitsByType =
-                    mapOf(
-                        "replay" to 80,
-                        "feedback" to 20
-                    )
+                mapOf(
+                    "replay" to 80,
+                    "feedback" to 20
+                )
             )
 
         assertTrue(result2.allowed, "Second batch should succeed")
@@ -760,12 +760,12 @@ class BillingQuotaServiceTest {
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
                 requestedUnitsByType =
-                    mapOf(
-                        "error" to 500,
-                        "transaction" to 250,
-                        "replay" to 80,
-                        "feedback" to 100
-                    )
+                mapOf(
+                    "error" to 500,
+                    "transaction" to 250,
+                    "replay" to 80,
+                    "feedback" to 100
+                )
             )
 
         assertTrue(result.allowed, "Large batch should succeed")

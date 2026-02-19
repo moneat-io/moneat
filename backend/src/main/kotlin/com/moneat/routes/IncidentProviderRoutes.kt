@@ -83,14 +83,14 @@ fun Route.incidentProviderRoutes() {
                                     providerType = row[IncidentProviderConfigs.providerType],
                                     name = row[IncidentProviderConfigs.name],
                                     configJson =
-                                        try {
-                                            val jsonStr = row[IncidentProviderConfigs.configJson]
-                                            json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
-                                                it.value.toString().trim('"')
-                                            }
-                                        } catch (e: Exception) {
-                                            emptyMap()
-                                        },
+                                    try {
+                                        val jsonStr = row[IncidentProviderConfigs.configJson]
+                                        json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
+                                            it.value.toString().trim('"')
+                                        }
+                                    } catch (e: Exception) {
+                                        emptyMap()
+                                    },
                                     enabled = row[IncidentProviderConfigs.enabled],
                                     createdAt = row[IncidentProviderConfigs.createdAt].toEpochMilliseconds(),
                                     updatedAt = row[IncidentProviderConfigs.updatedAt].toEpochMilliseconds()
@@ -298,12 +298,12 @@ fun Route.incidentProviderRoutes() {
                                     name = row[IncidentProviderConfigs.name],
                                     apiKey = row[IncidentProviderConfigs.apiKey],
                                     configJson =
-                                        try {
-                                            val jsonStr = row[IncidentProviderConfigs.configJson]
-                                            json.parseToJsonElement(jsonStr).jsonObject
-                                        } catch (e: Exception) {
-                                            buildJsonObject {}
-                                        },
+                                    try {
+                                        val jsonStr = row[IncidentProviderConfigs.configJson]
+                                        json.parseToJsonElement(jsonStr).jsonObject
+                                    } catch (e: Exception) {
+                                        buildJsonObject {}
+                                    },
                                     enabled = row[IncidentProviderConfigs.enabled]
                                 )
                             }

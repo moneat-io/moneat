@@ -149,9 +149,9 @@ class AdminBillingService {
                         bonusUnits = row[PromotionalCreditGrants.bonus_units],
                         reason = row[PromotionalCreditGrants.reason],
                         grantedAt =
-                            row[PromotionalCreditGrants.granted_at]
-                                .toLocalDateTime(TimeZone.UTC)
-                                .toString()
+                        row[PromotionalCreditGrants.granted_at]
+                            .toLocalDateTime(TimeZone.UTC)
+                            .toString()
                     )
                 }
         }
@@ -187,9 +187,9 @@ class AdminBillingService {
                         bonusUnits = row[PromotionalCreditGrants.bonus_units],
                         reason = row[PromotionalCreditGrants.reason],
                         grantedAt =
-                            row[PromotionalCreditGrants.granted_at]
-                                .toLocalDateTime(TimeZone.UTC)
-                                .toString()
+                        row[PromotionalCreditGrants.granted_at]
+                            .toLocalDateTime(TimeZone.UTC)
+                            .toString()
                     )
                 }
         }

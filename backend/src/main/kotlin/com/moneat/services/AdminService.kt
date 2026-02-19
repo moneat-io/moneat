@@ -336,8 +336,12 @@ class AdminService {
                 val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
                 val quotaPct =
                     when {
-                        tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
-                        tier.monthlyUnitLimit > 0 -> (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
+                        tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(
+                            100.0
+                        )
+                        tier.monthlyUnitLimit > 0 -> (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(
+                            100.0
+                        )
                         else -> null
                     }
 
@@ -397,7 +401,9 @@ class AdminService {
             val quotaPct =
                 when {
                     tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
-                    tier.monthlyUnitLimit > 0 -> (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(100.0)
+                    tier.monthlyUnitLimit > 0 -> (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(
+                        100.0
+                    )
                     else -> null
                 }
 
@@ -481,8 +487,8 @@ class AdminService {
                             replay = byType["replay"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                             feedback = byType["feedback"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                             log =
-                                (byType["log"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L) +
-                                    (byType["logs"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L),
+                            (byType["log"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L) +
+                                (byType["logs"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L),
                             total = recs.sumOf { it[UsageRecords.event_count].toLong() }
                         )
                     }.toSortedMap()

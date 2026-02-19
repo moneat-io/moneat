@@ -302,13 +302,15 @@ class OAuthService {
 
     private fun buildAppleRsaPublicKey(key: ApplePublicKey): RSAPublicKey {
         val modulus =
-            BigInteger(1,
+            BigInteger(
+                1,
                 java.util.Base64
                     .getUrlDecoder()
                     .decode(key.n)
             )
         val exponent =
-            BigInteger(1,
+            BigInteger(
+                1,
                 java.util.Base64
                     .getUrlDecoder()
                     .decode(key.e)
@@ -346,14 +348,14 @@ class OAuthService {
                 return@transaction AuthResponse(
                     token = token,
                     user =
-                        UserResponse(
-                            userId,
-                            existingOAuthUser[Users.email],
-                            existingOAuthUser[Users.name],
-                            existingOAuthUser[Users.email_verified],
-                            existingOAuthUser[Users.onboarding_completed],
-                            existingOAuthUser[Users.is_admin]
-                        )
+                    UserResponse(
+                        userId,
+                        existingOAuthUser[Users.email],
+                        existingOAuthUser[Users.name],
+                        existingOAuthUser[Users.email_verified],
+                        existingOAuthUser[Users.onboarding_completed],
+                        existingOAuthUser[Users.is_admin]
+                    )
                 )
             }
 
@@ -394,14 +396,14 @@ class OAuthService {
                     return@transaction AuthResponse(
                         token = token,
                         user =
-                            UserResponse(
-                                userId,
-                                existingEmailUser[Users.email],
-                                existingEmailUser[Users.name],
-                                existingEmailUser[Users.email_verified],
-                                existingEmailUser[Users.onboarding_completed],
-                                existingEmailUser[Users.is_admin]
-                            )
+                        UserResponse(
+                            userId,
+                            existingEmailUser[Users.email],
+                            existingEmailUser[Users.name],
+                            existingEmailUser[Users.email_verified],
+                            existingEmailUser[Users.onboarding_completed],
+                            existingEmailUser[Users.is_admin]
+                        )
                     )
                 } else if (existingProvider != userData.provider) {
                     // Different OAuth provider
@@ -426,14 +428,14 @@ class OAuthService {
                     return@transaction AuthResponse(
                         token = token,
                         user =
-                            UserResponse(
-                                userId,
-                                existingEmailUser[Users.email],
-                                existingEmailUser[Users.name],
-                                existingEmailUser[Users.email_verified],
-                                existingEmailUser[Users.onboarding_completed],
-                                existingEmailUser[Users.is_admin]
-                            )
+                        UserResponse(
+                            userId,
+                            existingEmailUser[Users.email],
+                            existingEmailUser[Users.name],
+                            existingEmailUser[Users.email_verified],
+                            existingEmailUser[Users.onboarding_completed],
+                            existingEmailUser[Users.is_admin]
+                        )
                     )
                 }
             }
@@ -469,14 +471,14 @@ class OAuthService {
             AuthResponse(
                 token = token,
                 user =
-                    UserResponse(
-                        userId,
-                        userData.email,
-                        userData.name,
-                        userData.emailVerified,
-                        true,
-                        false
-                    )
+                UserResponse(
+                    userId,
+                    userData.email,
+                    userData.name,
+                    userData.emailVerified,
+                    true,
+                    false
+                )
             )
         }
     }

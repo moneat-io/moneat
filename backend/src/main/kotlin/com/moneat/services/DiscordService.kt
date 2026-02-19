@@ -189,12 +189,12 @@ class DiscordService {
                 url = "$baseUrl/monitoring?system=$systemId",
                 color = 0xECB22E, // Warning yellow
                 fields =
-                    listOf(
-                        DiscordField("System", systemName, true),
-                        DiscordField("Metric", metric, true),
-                        DiscordField("Condition", "$condition $threshold", true),
-                        DiscordField("Current Value", currentValue, true)
-                    ),
+                listOf(
+                    DiscordField("System", systemName, true),
+                    DiscordField("Metric", metric, true),
+                    DiscordField("Condition", "$condition $threshold", true),
+                    DiscordField("Current Value", currentValue, true)
+                ),
                 footer = DiscordFooter("Moneat Alert"),
                 timestamp = Clock.System.now().toString()
             )
@@ -224,10 +224,10 @@ class DiscordService {
                 url = "$baseUrl/monitoring?system=$systemId",
                 color = 0xE01E5A, // Error red
                 fields =
-                    listOf(
-                        DiscordField("System", systemName, true),
-                        DiscordField("Last Seen", lastSeen, true)
-                    ),
+                listOf(
+                    DiscordField("System", systemName, true),
+                    DiscordField("Last Seen", lastSeen, true)
+                ),
                 footer = DiscordFooter("Moneat Alert"),
                 timestamp = Clock.System.now().toString()
             )
@@ -256,10 +256,10 @@ class DiscordService {
                 url = "$baseUrl/monitoring?system=$systemId",
                 color = 0x2EB67D, // Success green
                 fields =
-                    listOf(
-                        DiscordField("System", systemName, true),
-                        DiscordField("Status", "Online", true)
-                    ),
+                listOf(
+                    DiscordField("System", systemName, true),
+                    DiscordField("Status", "Online", true)
+                ),
                 footer = DiscordFooter("Moneat Alert"),
                 timestamp = Clock.System.now().toString()
             )
@@ -350,13 +350,13 @@ class DiscordService {
                 url = issueUrl,
                 color = color,
                 fields =
-                    listOf(
-                        DiscordField("Project", projectName, true),
-                        DiscordField("Level", level.uppercase(), true),
-                        DiscordField("First Seen", firstSeen, true),
-                        DiscordField("Events", "$eventCount", true),
-                        DiscordField("Users", "$userCount", true)
-                    ),
+                listOf(
+                    DiscordField("Project", projectName, true),
+                    DiscordField("Level", level.uppercase(), true),
+                    DiscordField("First Seen", firstSeen, true),
+                    DiscordField("Events", "$eventCount", true),
+                    DiscordField("Users", "$userCount", true)
+                ),
                 footer = DiscordFooter("Moneat Error Tracking"),
                 timestamp = Clock.System.now().toString()
             )
@@ -383,10 +383,10 @@ class DiscordService {
                 url = baseUrl,
                 color = 0x2EB67D,
                 fields =
-                    listOf(
-                        DiscordField("Status", "Connected", true),
-                        DiscordField("Guild ID", config.guildId, true)
-                    ),
+                listOf(
+                    DiscordField("Status", "Connected", true),
+                    DiscordField("Guild ID", config.guildId, true)
+                ),
                 footer = DiscordFooter("Moneat"),
                 timestamp = Clock.System.now().toString()
             )

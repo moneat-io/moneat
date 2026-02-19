@@ -258,11 +258,11 @@ class SlackService {
                 SlackBlock(
                     type = "header",
                     text =
-                        SlackText(
-                            type = "plain_text",
-                            text = "⚠️ System Alert",
-                            emoji = true
-                        )
+                    SlackText(
+                        type = "plain_text",
+                        text = "⚠️ System Alert",
+                        emoji = true
+                    )
                 )
             )
 
@@ -271,23 +271,23 @@ class SlackService {
                 SlackBlock(
                     type = "section",
                     fields =
-                        listOf(
-                            SlackText(type = "mrkdwn", text = "*System:*\n$systemName"),
-                            SlackText(type = "mrkdwn", text = "*Metric:*\n$metric"),
-                            SlackText(type = "mrkdwn", text = "*Condition:*\n$condition $threshold"),
-                            SlackText(type = "mrkdwn", text = "*Current Value:*\n$currentValue")
-                        )
+                    listOf(
+                        SlackText(type = "mrkdwn", text = "*System:*\n$systemName"),
+                        SlackText(type = "mrkdwn", text = "*Metric:*\n$metric"),
+                        SlackText(type = "mrkdwn", text = "*Condition:*\n$condition $threshold"),
+                        SlackText(type = "mrkdwn", text = "*Current Value:*\n$currentValue")
+                    )
                 ),
                 SlackBlock(
                     type = "actions",
                     elements =
-                        listOf(
-                            SlackElement(
-                                type = "button",
-                                text = SlackText(type = "plain_text", text = "View System"),
-                                url = "$baseUrl/monitoring?system=$systemId"
-                            )
+                    listOf(
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "View System"),
+                            url = "$baseUrl/monitoring?system=$systemId"
                         )
+                    )
                 )
             )
 
@@ -325,11 +325,11 @@ class SlackService {
                 SlackBlock(
                     type = "header",
                     text =
-                        SlackText(
-                            type = "plain_text",
-                            text = "🔴 System Down",
-                            emoji = true
-                        )
+                    SlackText(
+                        type = "plain_text",
+                        text = "🔴 System Down",
+                        emoji = true
+                    )
                 )
             )
 
@@ -338,21 +338,21 @@ class SlackService {
                 SlackBlock(
                     type = "section",
                     fields =
-                        listOf(
-                            SlackText(type = "mrkdwn", text = "*System:*\n$systemName"),
-                            SlackText(type = "mrkdwn", text = "*Last Seen:*\n$lastSeen")
-                        )
+                    listOf(
+                        SlackText(type = "mrkdwn", text = "*System:*\n$systemName"),
+                        SlackText(type = "mrkdwn", text = "*Last Seen:*\n$lastSeen")
+                    )
                 ),
                 SlackBlock(
                     type = "actions",
                     elements =
-                        listOf(
-                            SlackElement(
-                                type = "button",
-                                text = SlackText(type = "plain_text", text = "View System"),
-                                url = "$baseUrl/monitoring?system=$systemId"
-                            )
+                    listOf(
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "View System"),
+                            url = "$baseUrl/monitoring?system=$systemId"
                         )
+                    )
                 )
             )
 
@@ -389,11 +389,11 @@ class SlackService {
                 SlackBlock(
                     type = "header",
                     text =
-                        SlackText(
-                            type = "plain_text",
-                            text = "🟢 System Recovered",
-                            emoji = true
-                        )
+                    SlackText(
+                        type = "plain_text",
+                        text = "🟢 System Recovered",
+                        emoji = true
+                    )
                 )
             )
 
@@ -402,21 +402,21 @@ class SlackService {
                 SlackBlock(
                     type = "section",
                     text =
-                        SlackText(
-                            type = "mrkdwn",
-                            text = "*System:* $systemName\n\nThe system is now reporting data again."
-                        )
+                    SlackText(
+                        type = "mrkdwn",
+                        text = "*System:* $systemName\n\nThe system is now reporting data again."
+                    )
                 ),
                 SlackBlock(
                     type = "actions",
                     elements =
-                        listOf(
-                            SlackElement(
-                                type = "button",
-                                text = SlackText(type = "plain_text", text = "View System"),
-                                url = "$baseUrl/monitoring?system=$systemId"
-                            )
+                    listOf(
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "View System"),
+                            url = "$baseUrl/monitoring?system=$systemId"
                         )
+                    )
                 )
             )
 
@@ -461,11 +461,11 @@ class SlackService {
                 SlackBlock(
                     type = "header",
                     text =
-                        SlackText(
-                            type = "plain_text",
-                            text = "$emoji $headerText",
-                            emoji = true
-                        )
+                    SlackText(
+                        type = "plain_text",
+                        text = "$emoji $headerText",
+                        emoji = true
+                    )
                 )
             )
 
@@ -474,22 +474,22 @@ class SlackService {
                 SlackBlock(
                     type = "section",
                     fields =
-                        listOf(
-                            SlackText(type = "mrkdwn", text = "*Monitor:*\n$monitorName"),
-                            SlackText(type = "mrkdwn", text = "*Status:*\n$oldStatus → $newStatus"),
-                            SlackText(type = "mrkdwn", text = "*Message:*\n$message")
-                        )
+                    listOf(
+                        SlackText(type = "mrkdwn", text = "*Monitor:*\n$monitorName"),
+                        SlackText(type = "mrkdwn", text = "*Status:*\n$oldStatus → $newStatus"),
+                        SlackText(type = "mrkdwn", text = "*Message:*\n$message")
+                    )
                 ),
                 SlackBlock(
                     type = "actions",
                     elements =
-                        listOf(
-                            SlackElement(
-                                type = "button",
-                                text = SlackText(type = "plain_text", text = "View Monitor"),
-                                url = "$baseUrl/uptime?monitor=$monitorId"
-                            )
+                    listOf(
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "View Monitor"),
+                            url = "$baseUrl/uptime?monitor=$monitorId"
                         )
+                    )
                 )
             )
 
@@ -558,11 +558,11 @@ class SlackService {
                 SlackBlock(
                     type = "header",
                     text =
-                        SlackText(
-                            type = "plain_text",
-                            text = "$levelEmoji New ${level.uppercase()}",
-                            emoji = true
-                        )
+                    SlackText(
+                        type = "plain_text",
+                        text = "$levelEmoji New ${level.uppercase()}",
+                        emoji = true
+                    )
                 )
             )
 
@@ -574,10 +574,10 @@ class SlackService {
             SlackBlock(
                 type = "section",
                 text =
-                    SlackText(
-                        type = "mrkdwn",
-                        text = "*<$baseUrl/projects/$projectId/issues/$issueId|$issueTitle>*"
-                    )
+                SlackText(
+                    type = "mrkdwn",
+                    text = "*<$baseUrl/projects/$projectId/issues/$issueId|$issueTitle>*"
+                )
             )
         )
 
@@ -629,10 +629,10 @@ class SlackService {
                 SlackBlock(
                     type = "section",
                     text =
-                        SlackText(
-                            type = "mrkdwn",
-                            text = "*Stack Trace:*\n```$stackTrace```"
-                        )
+                    SlackText(
+                        type = "mrkdwn",
+                        text = "*Stack Trace:*\n```$stackTrace```"
+                    )
                 )
             )
         }
@@ -642,13 +642,13 @@ class SlackService {
             SlackBlock(
                 type = "actions",
                 elements =
-                    listOf(
-                        SlackElement(
-                            type = "button",
-                            text = SlackText(type = "plain_text", text = "View Issue"),
-                            url = "$baseUrl/projects/$projectId/issues/$issueId"
-                        )
+                listOf(
+                    SlackElement(
+                        type = "button",
+                        text = SlackText(type = "plain_text", text = "View Issue"),
+                        url = "$baseUrl/projects/$projectId/issues/$issueId"
                     )
+                )
             )
         )
 
@@ -680,19 +680,19 @@ class SlackService {
                 SlackBlock(
                     type = "header",
                     text =
-                        SlackText(
-                            type = "plain_text",
-                            text = "✅ Test Message",
-                            emoji = true
-                        )
+                    SlackText(
+                        type = "plain_text",
+                        text = "✅ Test Message",
+                        emoji = true
+                    )
                 ),
                 SlackBlock(
                     type = "section",
                     text =
-                        SlackText(
-                            type = "mrkdwn",
-                            text = "Your Slack integration is working correctly! You'll receive notifications here when alerts are triggered."
-                        )
+                    SlackText(
+                        type = "mrkdwn",
+                        text = "Your Slack integration is working correctly! You'll receive notifications here when alerts are triggered."
+                    )
                 )
             )
 
@@ -877,22 +877,22 @@ class SlackService {
                     SlackBlock(
                         type = "actions",
                         elements =
-                            listOf(
-                                SlackElement(
-                                    type = "button",
-                                    text = SlackText(type = "plain_text", text = "Acknowledge", emoji = false),
-                                    action_id = "incident_acknowledge_$incidentId"
-                                ),
-                                SlackElement(
-                                    type = "button",
-                                    text = SlackText(type = "plain_text", text = "View Details", emoji = false),
-                                    url = "${com.moneat.config.EnvConfig.get(
-                                        "FRONTEND_URL",
-                                        "https://moneat.io"
-                                    )}/on-call/incidents/$incidentId",
-                                    action_id = "incident_view_$incidentId"
-                                )
+                        listOf(
+                            SlackElement(
+                                type = "button",
+                                text = SlackText(type = "plain_text", text = "Acknowledge", emoji = false),
+                                action_id = "incident_acknowledge_$incidentId"
+                            ),
+                            SlackElement(
+                                type = "button",
+                                text = SlackText(type = "plain_text", text = "View Details", emoji = false),
+                                url = "${com.moneat.config.EnvConfig.get(
+                                    "FRONTEND_URL",
+                                    "https://moneat.io"
+                                )}/on-call/incidents/$incidentId",
+                                action_id = "incident_view_$incidentId"
                             )
+                        )
                     )
                 )
 

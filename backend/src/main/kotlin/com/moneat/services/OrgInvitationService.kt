@@ -147,9 +147,9 @@ class OrgInvitationService(
                 invitedByEmail = inviter[Users.email],
                 createdAt = Clock.System.now().toString(),
                 expiresAt =
-                    kotlin.time.Instant
-                        .fromEpochMilliseconds(expiresAt)
-                        .toString()
+                kotlin.time.Instant
+                    .fromEpochMilliseconds(expiresAt)
+                    .toString()
             )
         }
 
@@ -202,9 +202,9 @@ class OrgInvitationService(
                         invitedByEmail = row[Users.email],
                         createdAt = row[OrgInvitations.created_at].toString(),
                         expiresAt =
-                            kotlin.time.Instant
-                                .fromEpochMilliseconds(row[OrgInvitations.expires_at])
-                                .toString()
+                        kotlin.time.Instant
+                            .fromEpochMilliseconds(row[OrgInvitations.expires_at])
+                            .toString()
                     )
                 }
         }
@@ -227,9 +227,9 @@ class OrgInvitationService(
                 role = invite[OrgInvitations.role],
                 invitedBy = invite[Users.name] ?: invite[Users.email],
                 expiresAt =
-                    kotlin.time.Instant
-                        .fromEpochMilliseconds(expiresAt)
-                        .toString(),
+                kotlin.time.Instant
+                    .fromEpochMilliseconds(expiresAt)
+                    .toString(),
                 valid = status == "pending" && !isExpired
             )
         }

@@ -138,7 +138,9 @@ class AttributionAnalyticsService {
 
                                                 // Convert to monthly MRR
                                                 if (interval == "yearly") {
-                                                    BigDecimal(basePriceCents).divide(BigDecimal(12), 2, RoundingMode.HALF_UP)
+                                                    BigDecimal(
+                                                        basePriceCents
+                                                    ).divide(BigDecimal(12), 2, RoundingMode.HALF_UP)
                                                 } else {
                                                     BigDecimal(basePriceCents)
                                                 }

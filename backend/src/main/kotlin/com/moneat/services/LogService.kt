@@ -1061,18 +1061,18 @@ class LogService {
                             logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                             timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
                             level =
-                                normalizeLevel(
-                                    obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content
-                                ),
+                            normalizeLevel(
+                                obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content
+                            ),
                             message = obj["message"]?.jsonPrimitive?.content ?: "",
                             body = obj["body"]?.jsonPrimitive?.content ?: "",
                             service = obj["service"]?.jsonPrimitive?.content ?: "",
                             environment = obj["environment"]?.jsonPrimitive?.content ?: "",
                             host = obj["host"]?.jsonPrimitive?.content ?: "",
                             source =
-                                normalizeSource(
-                                    obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
-                                ),
+                            normalizeSource(
+                                obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
+                            ),
                             containerName = obj["container_name"]?.jsonPrimitive?.content ?: "",
                             containerId = obj["container_id"]?.jsonPrimitive?.content ?: "",
                             containerImage = obj["container_image"]?.jsonPrimitive?.content ?: "",

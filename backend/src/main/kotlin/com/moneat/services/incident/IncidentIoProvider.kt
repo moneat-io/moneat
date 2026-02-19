@@ -86,10 +86,10 @@ class IncidentIoProvider : IncidentProvider {
                 AlertEventPayload(
                     deduplication_key = event.deduplicationKey,
                     status =
-                        when (event.status) {
-                            IncidentStatus.FIRING -> "firing"
-                            IncidentStatus.RESOLVED -> "resolved"
-                        },
+                    when (event.status) {
+                        IncidentStatus.FIRING -> "firing"
+                        IncidentStatus.RESOLVED -> "resolved"
+                    },
                     title = event.title,
                     description = event.description,
                     metadata = baseMetadata + convertedMetadata

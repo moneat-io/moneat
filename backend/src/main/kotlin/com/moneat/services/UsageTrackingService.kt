@@ -99,7 +99,8 @@ class UsageTrackingService {
 
         buffer.compute(key) { _, pair ->
             if (pair == null) {
-                Pair(AtomicInteger(1),
+                Pair(
+                    AtomicInteger(1),
                     java.util.concurrent.atomic
                         .AtomicLong(byteSize.toLong())
                 )

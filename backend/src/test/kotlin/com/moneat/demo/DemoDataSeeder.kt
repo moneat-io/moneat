@@ -1369,7 +1369,10 @@ object DemoDataSeeder {
                 when (template.platform) {
                     "android" -> Pair("sentry.java.android", "7.${random.nextInt(0, 5)}.${random.nextInt(0, 10)}")
                     "cocoa" -> Pair("sentry.cocoa", "8.${random.nextInt(15, 30)}.${random.nextInt(0, 5)}")
-                    else -> Pair("sentry.javascript.react-native", "5.${random.nextInt(15, 30)}.${random.nextInt(0, 5)}")
+                    else -> Pair(
+                        "sentry.javascript.react-native",
+                        "5.${random.nextInt(15, 30)}.${random.nextInt(0, 5)}"
+                    )
                 }
             val tags =
                 buildString {
@@ -2002,7 +2005,11 @@ object DemoDataSeeder {
                 Triple("App froze on payment screen - lost my order", "emma.williams@example.com", "Emma W."),
                 Triple("Search results are not relevant to what I'm looking for", "mike.chen@example.com", "Mike Chen"),
                 Triple("Would be great to have a wishlist feature!", "sarah.johnson@example.com", "Sarah Johnson"),
-                Triple("The app is very slow when scrolling through products", "alex.rivera@example.com", "Alex Rivera"),
+                Triple(
+                    "The app is very slow when scrolling through products",
+                    "alex.rivera@example.com",
+                    "Alex Rivera"
+                ),
                 Triple("Got an error message when viewing product details", "priya.patel@example.com", "Priya P."),
                 Triple("Unable to login with Google - keeps timing out", "john.smith@example.com", "John S."),
                 Triple("Product recommendations are really helpful!", "emma.williams@example.com", "Emma Williams"),

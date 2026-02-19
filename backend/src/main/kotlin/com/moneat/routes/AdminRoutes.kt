@@ -324,9 +324,9 @@ fun Route.adminRoutes() {
                                             projectName = "Test Project",
                                             environment = "production",
                                             timestamp =
-                                                java.time.Instant
-                                                    .now()
-                                                    .toString(),
+                                            java.time.Instant
+                                                .now()
+                                                .toString(),
                                             stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)",
                                             settingsUrl = "$frontendUrl/settings/notifications",
                                             unsubscribeUrl = "$frontendUrl/settings/notifications"
@@ -347,29 +347,29 @@ fun Route.adminRoutes() {
                                             affectedUsers = "1.2K",
                                             usersTrend = 5,
                                             topIssues =
-                                                listOf(
-                                                    com.moneat.services.EmailService.TopIssue(
-                                                        title = "[TEST] Database timeout",
-                                                        culprit = "DatabaseConnection.query",
-                                                        project = "Test API",
-                                                        count = "156"
-                                                    ),
-                                                    com.moneat.services.EmailService.TopIssue(
-                                                        title = "[TEST] Invalid token",
-                                                        culprit = "AuthMiddleware.validate",
-                                                        project = "Test Mobile",
-                                                        count = "89"
-                                                    )
+                                            listOf(
+                                                com.moneat.services.EmailService.TopIssue(
+                                                    title = "[TEST] Database timeout",
+                                                    culprit = "DatabaseConnection.query",
+                                                    project = "Test API",
+                                                    count = "156"
                                                 ),
+                                                com.moneat.services.EmailService.TopIssue(
+                                                    title = "[TEST] Invalid token",
+                                                    culprit = "AuthMiddleware.validate",
+                                                    project = "Test Mobile",
+                                                    count = "89"
+                                                )
+                                            ),
                                             projects =
-                                                listOf(
-                                                    com.moneat.services.EmailService.ProjectSummary(
-                                                        name = "Test API",
-                                                        events = "8.2K",
-                                                        issues = "15",
-                                                        crashFree = "99.8"
-                                                    )
-                                                ),
+                                            listOf(
+                                                com.moneat.services.EmailService.ProjectSummary(
+                                                    name = "Test API",
+                                                    events = "8.2K",
+                                                    issues = "15",
+                                                    crashFree = "99.8"
+                                                )
+                                            ),
                                             dashboardUrl = frontendUrl,
                                             settingsUrl = "$frontendUrl/settings/notifications",
                                             unsubscribeUrl = "$frontendUrl/settings/notifications"
@@ -441,9 +441,9 @@ fun Route.adminRoutes() {
                                                 occurrenceCount = 42,
                                                 environment = "production",
                                                 timestamp =
-                                                    java.time.Instant
-                                                        .now()
-                                                        .toString(),
+                                                java.time.Instant
+                                                    .now()
+                                                    .toString(),
                                                 stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)"
                                             )
                                     }

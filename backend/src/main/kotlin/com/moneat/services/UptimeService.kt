@@ -656,9 +656,9 @@ class UptimeService(
             port = monitor.port,
             method = monitor.method,
             headers =
-                monitor.headers?.let {
-                    try { Json.decodeFromString<Map<String, String>>(it) } catch (e: Exception) { null }
-                },
+            monitor.headers?.let {
+                try { Json.decodeFromString<Map<String, String>>(it) } catch (e: Exception) { null }
+            },
             body = monitor.body,
             authMethod = monitor.authMethod,
             authUser = monitor.authUser,

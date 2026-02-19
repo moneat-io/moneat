@@ -413,19 +413,19 @@ fun Route.releaseRoutes() {
                         hashAlgorithm = "sha1",
                         compression = listOf("gzip"),
                         accept =
-                            listOf(
-                                "debug_files",
-                                "release_files",
-                                "pdbs",
-                                "sources",
-                                "bcsymbolmaps",
-                                "il2cpp",
-                                "portablepdbs",
-                                "artifact_bundles",
-                                "artifact_bundles_v2",
-                                "proguard",
-                                "dartsymbolmap"
-                            )
+                        listOf(
+                            "debug_files",
+                            "release_files",
+                            "pdbs",
+                            "sources",
+                            "bcsymbolmaps",
+                            "il2cpp",
+                            "portablepdbs",
+                            "artifact_bundles",
+                            "artifact_bundles_v2",
+                            "proguard",
+                            "dartsymbolmap"
+                        )
                     )
                 )
             }
