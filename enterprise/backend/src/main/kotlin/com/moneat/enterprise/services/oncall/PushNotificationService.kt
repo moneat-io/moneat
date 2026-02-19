@@ -218,10 +218,14 @@ class PushNotificationService {
             .singleOrNull()
         
         if (existing != null) {
-            // Update last_used_at
+            // Rebind ownership and refresh metadata when token is re-registered.
             UserDeviceTokens.update({ UserDeviceTokens.deviceToken eq deviceToken }) {
+                it[UserDeviceTokens.userId] = userId
+                it[UserDeviceTokens.platform] = platform
+                it[UserDeviceTokens.deviceName] = deviceName
                 it[lastUsedAt] = now
             }
+            logger.info("Rebound existing device token to user $userId, platform $platform")
             return@transaction true
         }
         
