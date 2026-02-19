@@ -3781,7 +3781,7 @@ class ApiClient {
   }
 
   // On-Call Incidents (Declared)
-  async declareIncident(alertId: number, data: { title: string; description: string; severity: string }) {
+  async declareIncident(alertId: number, data: { title: string; description: string; priorityLevel: string }) {
     return this.request<{id: number}>(`${API_BASE}/incidents/${alertId}/declare`, {
       method: 'POST',
       body: JSON.stringify(data),

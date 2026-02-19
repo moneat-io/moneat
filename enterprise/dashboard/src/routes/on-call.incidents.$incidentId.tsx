@@ -114,7 +114,7 @@ function IncidentDetailPage() {
     mutationFn: () => api.declareIncident(Number(incidentId), {
       title: declareTitle,
       description: declareDesc,
-      severity: declareSeverity
+      priorityLevel: declareSeverity
     }),
     onSuccess: () => {
       setDeclareOpen(false)
