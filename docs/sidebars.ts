@@ -21,6 +21,7 @@ const sidebars: SidebarsConfig = {
         'logging',
         'releases',
         'ai-observability',
+        'product-analytics',
       ],
     },
     {

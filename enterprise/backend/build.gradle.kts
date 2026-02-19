@@ -32,6 +32,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlin.logging)
+    implementation(libs.lettuce)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("com.auth0:java-jwt:4.4.0")
     implementation(libs.oauth2.oidc.sdk)
     implementation(libs.java.saml.core)

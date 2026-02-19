@@ -1,0 +1,30 @@
+{
+  "name": "@moneat/analytics",
+  "version": "0.1.0",
+  "description": "Privacy-focused web analytics tracking script for Moneat",
+  "main": "dist/analytics.cjs.js",
+  "module": "dist/analytics.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w"
+  },
+  "keywords": [
+    "analytics",
+    "privacy",
+    "cookie-free",
+    "moneat"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "rollup": "^4.14.0",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.5"
+  }
+}
