@@ -137,7 +137,7 @@ function AnalyticsOverview() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <AnalyticsFilterBar filters={filters} onFiltersChange={setFilters} />
@@ -162,7 +162,7 @@ function AnalyticsOverview() {
 
       {/* Breakdown Tables with Tabs */}
       <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
-        <TabsList className="h-9">
+        <TabsList className="h-8">
           <TabsTrigger value="pages" className="gap-1.5 text-xs">
             <FileText className="h-3.5 w-3.5" /> Pages
           </TabsTrigger>
@@ -189,7 +189,7 @@ function AnalyticsOverview() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pages" className="mt-4">
+        <TabsContent value="pages" className="mt-3">
           <AnalyticsBreakdownTable
             title="Top Pages"
             icon={FileText}
@@ -202,7 +202,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="entry-pages" className="mt-4">
+        <TabsContent value="entry-pages" className="mt-3">
           <AnalyticsBreakdownTable
             title="Entry Pages"
             icon={LogIn}
@@ -214,7 +214,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="exit-pages" className="mt-4">
+        <TabsContent value="exit-pages" className="mt-3">
           <AnalyticsBreakdownTable
             title="Exit Pages"
             icon={LogOut}
@@ -225,7 +225,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="sources" className="mt-4">
+        <TabsContent value="sources" className="mt-3">
           <AnalyticsBreakdownTable
             title="Top Sources"
             icon={Share2}
@@ -236,7 +236,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="locations" className="mt-4">
+        <TabsContent value="locations" className="mt-3">
           <AnalyticsBreakdownTable
             title="Countries"
             icon={MapPin}
@@ -247,7 +247,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="devices" className="mt-4">
+        <TabsContent value="devices" className="mt-3">
           <div className="grid gap-4 lg:grid-cols-3">
             <AnalyticsBreakdownTable
               title="Browsers"
@@ -276,7 +276,7 @@ function AnalyticsOverview() {
           </div>
         </TabsContent>
 
-        <TabsContent value="utm" className="mt-4">
+        <TabsContent value="utm" className="mt-3">
           <AnalyticsBreakdownTable
             title="UTM Sources"
             icon={Megaphone}
@@ -286,7 +286,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="events" className="mt-4">
+        <TabsContent value="events" className="mt-3">
           <AnalyticsBreakdownTable
             title="Custom Events"
             icon={MousePointerClick}

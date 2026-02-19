@@ -25,15 +25,15 @@ function AnalyticsLayout() {
   const project = projects?.find(p => p.id === projectId)
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 shadow-lg shadow-blue-500/20">
-            <BarChart3 className="h-5 w-5 text-white" />
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600">
+            <BarChart3 className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Analytics</h1>
-            <p className="text-muted-foreground text-sm">
+            <h1 className="text-xl font-semibold leading-tight">Analytics</h1>
+            <p className="text-muted-foreground text-xs">
               {project ? `${project.name} — ` : ''}Privacy-focused web analytics
             </p>
           </div>

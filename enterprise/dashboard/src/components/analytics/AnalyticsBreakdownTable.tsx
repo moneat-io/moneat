@@ -74,13 +74,13 @@ export function AnalyticsBreakdownTable({
 
   return (
     <Card>
-      <CardHeader className="px-4 py-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          {Icon && <Icon className={cn('h-4 w-4', iconColor)} />}
+      <CardHeader className="px-4 py-2.5">
+        <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+          {Icon && <Icon className={cn('h-3.5 w-3.5', iconColor)} />}
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-0 pb-2">
+      <CardContent className="px-0 pb-1.5">
         {isLoading ? (
           <div className="px-4 space-y-3">
             {[...Array(5)].map((_, i) => (
@@ -123,7 +123,7 @@ export function AnalyticsBreakdownTable({
                 <button
                   key={`${item.name}-${i}`}
                   className={cn(
-                    'w-full flex items-center px-4 py-2 text-sm transition-colors relative group',
+                    'w-full flex items-center px-4 py-1.5 text-[13px] transition-colors relative group',
                     onRowClick ? 'hover:bg-accent/50 cursor-pointer' : 'cursor-default'
                   )}
                   onClick={() => onRowClick?.(item)}
