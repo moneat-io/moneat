@@ -15,11 +15,17 @@ interface AnalyticsConfig {
 let config: AnalyticsConfig | null = null
 
 function isBot(): boolean {
+  const botWindow = window as Window & {
+    _phantom?: unknown
+    __nightmare?: unknown
+    __puppeteer?: unknown
+  }
+
   return !!(
-    (window as any)._phantom ||
-    (window as any).__nightmare ||
+    botWindow._phantom ||
+    botWindow.__nightmare ||
     navigator.webdriver ||
-    (window as any).__puppeteer
+    botWindow.__puppeteer
   )
 }
 
