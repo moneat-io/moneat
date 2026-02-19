@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   buildPricingCardModel,
   type PricingCardTierInput,
-  type BillingInterval,
 } from '@/lib/pricing-display'
 
 const BYTES_PER_GB = 1024 * 1024 * 1024

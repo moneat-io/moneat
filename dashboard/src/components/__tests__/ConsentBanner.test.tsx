@@ -5,7 +5,7 @@ import { ConsentBanner } from '../ConsentBanner'
 describe('ConsentBanner', () => {
   beforeEach(() => {
     localStorage.clear()
-    // @ts-ignore
+    // @ts-expect-error - gtag not in window type
     window.gtag = vi.fn()
   })
 
