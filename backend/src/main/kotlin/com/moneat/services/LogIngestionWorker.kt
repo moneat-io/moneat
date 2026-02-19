@@ -59,21 +59,28 @@ class LogIngestionWorker(
             try {
                 val result = RedisConfig.syncBlocking().brpop(5, queueKey)
                 val payload = result?.value ?: continue
-
-                try {
-                    val batch = logService.decodeQueueMessage(payload)
-                    val inserted = logService.insertBatch(batch)
-                    logService.publishLiveLogs(batch.projectId, inserted)
-                } catch (e: Exception) {
-                    logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
-                    RedisConfig.syncBlocking().rpush(dlqKey, payload)
-                }
+                processMessageForTest(workerId, payload)
             } catch (e: CancellationException) {
                 break
             } catch (e: Exception) {
                 logger.error(e) { "Log worker $workerId error in BRPOP loop" }
                 delay(1000)
             }
+        }
+    }
+
+    internal suspend fun processMessageForTest(
+        workerId: Int,
+        payload: String,
+        onDlq: (String) -> Unit = { message -> RedisConfig.syncBlocking().rpush(dlqKey, message) }
+    ) {
+        try {
+            val batch = logService.decodeQueueMessage(payload)
+            val inserted = logService.insertBatch(batch)
+            logService.publishLiveLogs(batch.projectId, inserted)
+        } catch (e: Exception) {
+            logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
+            onDlq(payload)
         }
     }
 }
