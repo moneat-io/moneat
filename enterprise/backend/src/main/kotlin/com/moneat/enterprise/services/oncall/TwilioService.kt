@@ -21,6 +21,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -132,7 +133,7 @@ class TwilioService {
 
             recordNotification(userId, incidentId, "sms", twilioSid, "queued", toNumber)
 
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 logger.info("SMS sent to $toNumber for incident $incidentId, SID=$twilioSid")
             } else {
                 logger.error("SMS failed for incident $incidentId: ${response.status} - $responseText")
@@ -202,7 +203,7 @@ class TwilioService {
 
             recordNotification(userId, incidentId, "call", twilioSid, "queued", toNumber)
 
-            if (response.status.isSuccess()) {
+            if (response.status.value in 200..299) {
                 logger.info("Call initiated to $toNumber for incident $incidentId, SID=$twilioSid")
             } else {
                 logger.error("Call failed for incident $incidentId: ${response.status} - $responseText")
@@ -230,7 +231,7 @@ class TwilioService {
                     ),
                 )
             }
-        if (!response.status.isSuccess()) {
+        if (response.status.value !in 200..299) {
             val text = response.bodyAsText()
             logger.error("Test SMS failed: ${response.status} - $text")
             throw Exception("Twilio SMS failed: ${response.status}")
@@ -258,7 +259,7 @@ class TwilioService {
                     ),
                 )
             }
-        if (!response.status.isSuccess()) {
+        if (response.status.value !in 200..299) {
             val text = response.bodyAsText()
             logger.error("Test call failed: ${response.status} - $text")
             throw Exception("Twilio call failed: ${response.status}")

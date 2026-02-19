@@ -12,3 +12,8 @@ src/routes/on-call.declared-incidents.tsx
 src/routes/on-call.declared-incidents.$incidentId.tsx
 src/routes/auth.oauth.callback.tsx
 src/routes/auth.sso.callback.tsx
+
+# Enterprise components — source of truth is enterprise/dashboard/src/components/
+src/components/analytics/
+src/components/on-call/
+src/components/sso-settings.tsx

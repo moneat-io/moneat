@@ -23,7 +23,10 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -628,7 +631,7 @@ class EscalationEngine(
         transaction {
             val row =
                 Incidents
-                    .leftJoin(EscalationPolicies, { escalationPolicyId }, { id })
+                    .join(EscalationPolicies, JoinType.LEFT, Incidents.escalationPolicyId, EscalationPolicies.id)
                     .selectAll()
                     .where { Incidents.id eq incidentId }
                     .singleOrNull() ?: return@transaction null

@@ -172,7 +172,6 @@ class BillingQuotaService(
             }
 
             // GB/byte limit check
-<<<<<<< HEAD
             val effectiveBytesLimit =
                 if (state.bytesLimit > 0) {
                     state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes
@@ -192,21 +191,6 @@ class BillingQuotaService(
                         "bonus_gb_bytes" to state.bonusGbBytes
                     )
                 )
-=======
-            val effectiveBytesLimit = if (state.bytesLimit > 0) {
-                state.bytesLimit + state.bonusGbBytes
-            } else {
-                Long.MAX_VALUE
-            }
-            if (state.bytesLimit > 0 && bytesAfter > effectiveBytesLimit) {
-                SentryUtils.breadcrumb("billing", "GB quota exceeded", mapOf(
-                    "organization_id" to organizationId,
-                        "requested_bytes" to requestedTotalBytes,
-                        "used_bytes" to state.usedBytes,
-                        "bytes_limit" to state.bytesLimit,
-                        "bonus_gb_bytes" to state.bonusGbBytes
-                    ))
->>>>>>> billing-fixes
 
                 return@transaction QuotaReservationResult(
                     allowed = false,
@@ -532,7 +516,6 @@ class BillingQuotaService(
     }
 
     private fun toUsageResponse(state: QuotaState): BillingUsageResponse {
-<<<<<<< HEAD
         val effectivePaygHeadroom = state.paygLimitUnits + state.bonusUnits
         val eventLimitsWithinBudget =
             listOf(
@@ -545,18 +528,6 @@ class BillingQuotaService(
             }
         val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + effectivePaygHeadroom)
         val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes)
-=======
-        val meteredEventLimitsWithinBudget = listOf(
-            state.usedErrors to state.errorLimit,
-            state.usedTransactions to state.transactionLimit,
-            state.usedReplays to state.replayLimit,
-            state.usedFeedback to state.feedbackLimit
-        ).all { (used, limit) ->
-            limit < 0 || used <= (limit + state.paygLimitUnits + state.bonusUnits)
-        }
-        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + state.bonusUnits)
-        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.bonusGbBytes)
->>>>>>> billing-fixes
 
         // Per-type overage cost estimates
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
@@ -567,15 +538,6 @@ class BillingQuotaService(
                 0
             }
 
-<<<<<<< HEAD
-        val replayOverageCents =
-            if (state.replayOverageRateCentsPerGb > 0 && state.usedReplayBytes > 0) {
-                val overageReplays = max(0, state.usedReplays - state.replayLimit)
-                ((overageReplays * state.replayOverageRateCentsPerGb) / 100).toInt()
-            } else {
-                0
-            }
-=======
         val replayOverageCents = when {
             state.replayLimit < 0 -> 0
             state.replayOverageRateCentsPerGb <= 0 -> 0
@@ -590,7 +552,6 @@ class BillingQuotaService(
                 }
             }
         }
->>>>>>> billing-fixes
 
         val logOverageBytes = max(0, state.usedLogBytes - state.bytesLimit)
         val logOverageCents =
@@ -657,7 +618,7 @@ class BillingQuotaService(
             oncallEnabled = state.oncallEnabled,
             plan = state.plan,
             status = state.status,
-            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && meteredEventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
+            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
             bonusGbBytes = state.bonusGbBytes,
             bonusUnits = state.bonusUnits,
             bonusReason = state.bonusReason
@@ -793,18 +754,11 @@ class BillingQuotaService(
         }
     }
 
-<<<<<<< HEAD
-    private fun usedUnitsForType(
-        state: QuotaState,
-        eventType: String
-    ): Long {
-=======
     private fun isStripeMeteredUnitType(eventType: String): Boolean {
         return eventType == "error" || eventType == "transaction" || eventType == "replay" || eventType == "feedback"
     }
 
     private fun usedUnitsForType(state: QuotaState, eventType: String): Long {
->>>>>>> billing-fixes
         return when (eventType) {
             "error" -> state.usedErrors
             "transaction" -> state.usedTransactions

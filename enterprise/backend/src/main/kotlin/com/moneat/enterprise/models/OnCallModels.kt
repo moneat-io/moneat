@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.models
 
+import com.moneat.models.EscalationPolicies
 import com.moneat.models.OnCallParticipants
 import com.moneat.models.OnCallSchedules
 import com.moneat.models.Organizations

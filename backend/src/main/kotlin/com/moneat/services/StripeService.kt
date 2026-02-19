@@ -29,24 +29,16 @@ import io.ktor.server.config.*
 import io.sentry.Sentry
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
-<<<<<<< HEAD
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Instant
-=======
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
-import java.util.UUID
->>>>>>> billing-fixes
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
@@ -127,7 +119,15 @@ class StripeService(
 
         val customerId = getOrCreateCustomer(organizationId)
 
-<<<<<<< HEAD
+        val subscriptionDataBuilder = CheckoutSessionCreateParams.SubscriptionData
+            .builder()
+            .putMetadata("organization_id", organizationId.toString())
+            .putMetadata("tier_name", tier.tierName)
+            .putMetadata("billing_interval", billingInterval)
+        if (tier.trialDays > 0) {
+            subscriptionDataBuilder.setTrialPeriodDays(tier.trialDays.toLong())
+        }
+
         val paramsBuilder =
             CheckoutSessionCreateParams
                 .builder()
@@ -136,15 +136,8 @@ class StripeService(
                 .setSuccessUrl(successUrl)
                 .setCancelUrl(cancelUrl)
                 .setAllowPromotionCodes(true)
-                .setSubscriptionData(
-                    CheckoutSessionCreateParams.SubscriptionData
-                        .builder()
-                        .setTrialPeriodDays(14L)
-                        .putMetadata("organization_id", organizationId.toString())
-                        .putMetadata("tier_name", tier.tierName)
-                        .putMetadata("billing_interval", billingInterval)
-                        .build()
-                ).putMetadata("organization_id", organizationId.toString())
+                .setSubscriptionData(subscriptionDataBuilder.build())
+                .putMetadata("organization_id", organizationId.toString())
                 .putMetadata("tier_name", tier.tierName)
                 .putMetadata("billing_interval", billingInterval)
                 .addLineItem(
@@ -154,32 +147,6 @@ class StripeService(
                         .setQuantity(1L)
                         .build()
                 )
-=======
-        val subscriptionDataBuilder = CheckoutSessionCreateParams.SubscriptionData.builder()
-            .putMetadata("organization_id", organizationId.toString())
-            .putMetadata("tier_name", tier.tierName)
-            .putMetadata("billing_interval", billingInterval)
-        if (tier.trialDays > 0) {
-            subscriptionDataBuilder.setTrialPeriodDays(tier.trialDays.toLong())
-        }
-
-        val paramsBuilder = CheckoutSessionCreateParams.builder()
-            .setMode(CheckoutSessionCreateParams.Mode.SUBSCRIPTION)
-            .setCustomer(customerId)
-            .setSuccessUrl(successUrl)
-            .setCancelUrl(cancelUrl)
-            .setAllowPromotionCodes(true)
-            .setSubscriptionData(subscriptionDataBuilder.build())
-            .putMetadata("organization_id", organizationId.toString())
-            .putMetadata("tier_name", tier.tierName)
-            .putMetadata("billing_interval", billingInterval)
-            .addLineItem(
-                CheckoutSessionCreateParams.LineItem.builder()
-                    .setPrice(basePriceId)
-                    .setQuantity(1L)
-                    .build()
-            )
->>>>>>> billing-fixes
         if (tier.paygEnabled && !overagePriceId.isNullOrBlank()) {
             paramsBuilder.addLineItem(
                 CheckoutSessionCreateParams.LineItem
@@ -414,15 +381,9 @@ class StripeService(
         errorMessage: String? = null
     ) {
         transaction {
-            val now = kotlinx.datetime.Clock.System.now()
+            val now = Clock.System.now()
             val updated = StripeWebhookEvents.update({ StripeWebhookEvents.event_id eq event.id }) {
                 it[event_type] = event.type
-<<<<<<< HEAD
-                it[processed_at] = Clock.System.now()
-                it[StripeWebhookEvents.status] = status
-                it[this.error_message] = errorMessage
-                it[created_at] = Clock.System.now()
-=======
                 it[processed_at] = now
                 it[StripeWebhookEvents.status] = status
                 it[this.error_message] = errorMessage
@@ -436,7 +397,6 @@ class StripeService(
                     it[this.error_message] = errorMessage
                     it[created_at] = now
                 }
->>>>>>> billing-fixes
             }
         }
     }
@@ -612,9 +572,15 @@ class StripeService(
                     ?: fallbackTier?.tierName?.lowercase()
                     ?: "free"
             val tierId = resolvedTier?.id?.takeIf { it > 0 }
-<<<<<<< HEAD
-            val startInstant = subscription.startDate?.let { kotlin.time.Instant.fromEpochSeconds(it) }
-            val endInstant = subscription.trialEnd?.let { kotlin.time.Instant.fromEpochSeconds(it) }
+            val periodSourceItem = if (baseItemId != null) {
+                subscription.items.data.find { it.id == baseItemId }
+            } else {
+                subscription.items.data.firstOrNull()
+            }
+            val periodStartEpoch = periodSourceItem?.currentPeriodStart ?: subscription.startDate
+            val periodEndEpoch = periodSourceItem?.currentPeriodEnd ?: subscription.trialEnd
+            val startInstant = periodStartEpoch?.let { Instant.fromEpochSeconds(it) }
+            val endInstant = periodEndEpoch?.let { Instant.fromEpochSeconds(it) }
             val billingInterval =
                 if (baseItemId != null) {
                     subscription.items.data
@@ -625,20 +591,6 @@ class StripeService(
                 } else {
                     "monthly"
                 }
-=======
-            val periodSourceItem = if (baseItemId != null) {
-                subscription.items.data.find { it.id == baseItemId }
-            } else {
-                subscription.items.data.firstOrNull()
-            }
-            val periodStartEpoch = periodSourceItem?.currentPeriodStart ?: subscription.startDate
-            val periodEndEpoch = periodSourceItem?.currentPeriodEnd ?: subscription.trialEnd
-            val startInstant = periodStartEpoch?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
-            val endInstant = periodEndEpoch?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
-            val billingInterval = if (baseItemId != null) {
-                 subscription.items.data.find { it.id == baseItemId }?.price?.recurring?.interval ?: "monthly"
-            } else "monthly"
->>>>>>> billing-fixes
             val finalInterval = if (billingInterval == "year") "yearly" else "monthly"
 
             if (existing != null) {
@@ -881,20 +833,6 @@ class StripeService(
     fun flushPendingMeteredUsage(limit: Int = 200): Int {
         if (!isStripeEnabled() && !allowMeteringWhenStripeDisabled) return 0
         val meterEventName = config.propertyOrNull("stripe.meterEventName")?.getString() ?: "moneat_overage_units"
-<<<<<<< HEAD
-        val rows =
-            transaction {
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.pending_meter_units greater 0L) and
-                            (Subscriptions.stripe_customer_id.isNotNull()) and
-                            (Subscriptions.status inList listOf("active", "trialing"))
-                    }.orderBy(Subscriptions.id to SortOrder.ASC)
-                    .limit(limit)
-                    .toList()
-            }
-=======
         val subscriptionIds = transaction {
             Subscriptions.select(Subscriptions.id).where {
                 (Subscriptions.pending_meter_units greater 0L) and
@@ -905,7 +843,6 @@ class StripeService(
                 .limit(limit)
                 .map { it[Subscriptions.id] }
         }
->>>>>>> billing-fixes
 
         var flushed = 0
         for (subscriptionId in subscriptionIds) {
@@ -944,25 +881,14 @@ class StripeService(
             } ?: continue
 
             try {
-<<<<<<< HEAD
-                val params =
-                    MeterEventCreateParams
-                        .builder()
-                        .setEventName(meterEventName)
-                        .setIdentifier("sub-${row[Subscriptions.id]}-${System.currentTimeMillis()}")
-                        .putPayload("stripe_customer_id", customerId)
-                        .putPayload("value", units.toString())
-                        .build()
-                MeterEvent.create(params)
-=======
-                val params = MeterEventCreateParams.builder()
+                val params = MeterEventCreateParams
+                    .builder()
                     .setEventName(meterEventName)
                     .setIdentifier(batch.batchId)
                     .putPayload("stripe_customer_id", batch.customerId)
                     .putPayload("value", batch.batchUnits.toString())
                     .build()
                 meterEventSender(params)
->>>>>>> billing-fixes
 
                 transaction {
                     TransactionManager.current().exec(
@@ -1007,7 +933,6 @@ class StripeService(
                                 (Subscriptions.billing_grace_until lessEq now)
                         }.toList()
 
-<<<<<<< HEAD
                 for (row in pastDueRows) {
                     Subscriptions.update({ Subscriptions.id eq row[Subscriptions.id] }) {
                         it[status] = "canceled"
@@ -1023,26 +948,9 @@ class StripeService(
                         it[payg_used_units] = 0
                         it[payg_used_micros] = 0
                         it[pending_meter_units] = 0
+                        it[pending_meter_batch_id] = null
+                        it[pending_meter_batch_units] = 0
                     }
-=======
-            for (row in pastDueRows) {
-                Subscriptions.update({ Subscriptions.id eq row[Subscriptions.id] }) {
-                    it[status] = "canceled"
-                }
-                Subscriptions.insert {
-                    it[organization_id] = row[Subscriptions.organization_id]
-                    it[plan] = "free"
-                    it[status] = "active"
-                    it[current_period_start] = now
-                    it[current_period_end] = addDays(now, 30)
-                    it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
-                    it[payg_budget_cents] = 0
-                    it[payg_used_units] = 0
-                    it[payg_used_micros] = 0
-                    it[pending_meter_units] = 0
-                    it[pending_meter_batch_id] = null
-                    it[pending_meter_batch_units] = 0
->>>>>>> billing-fixes
                 }
                 pastDueRows.size
             }

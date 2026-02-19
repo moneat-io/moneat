@@ -9,6 +9,7 @@ import com.moneat.enterprise.models.OnCallScheduleUsergroups
 import com.moneat.enterprise.models.SlackUserMapping
 import com.moneat.models.OnCallSchedules
 import com.moneat.models.OrganizationIntegrations
+import com.moneat.models.SlackUserMappings
 import com.moneat.services.SlackService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction

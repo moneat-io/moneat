@@ -11,8 +11,11 @@ import com.moneat.enterprise.models.Incidents
 import com.moneat.models.EscalationPolicies
 import com.moneat.models.Users
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -29,8 +32,8 @@ class IncidentManagementService(
         transaction {
             val row =
                 Incidents
-                    .leftJoin(EscalationPolicies, { escalationPolicyId }, { id })
-                    .leftJoin(Users, { Incidents.acknowledgedBy }, { Users.id })
+                    .join(EscalationPolicies, JoinType.LEFT, Incidents.escalationPolicyId, EscalationPolicies.id)
+                    .join(Users, JoinType.LEFT, Incidents.acknowledgedBy, Users.id)
                     .selectAll()
                     .where { Incidents.id eq incidentId }
                     .singleOrNull() ?: return@transaction null
@@ -95,7 +98,7 @@ class IncidentManagementService(
 
             var query =
                 Incidents
-                    .leftJoin(EscalationPolicies, { escalationPolicyId }, { id })
+                    .join(EscalationPolicies, JoinType.LEFT, Incidents.escalationPolicyId, EscalationPolicies.id)
                     .selectAll()
                     .where { Incidents.organizationId eq organizationId }
 
@@ -143,7 +146,7 @@ class IncidentManagementService(
     fun getTimeline(incidentId: Int): List<IncidentTimelineEvent> =
         transaction {
             IncidentTimeline
-                .leftJoin(Users, { actorUserId }, { id })
+                .join(Users, JoinType.LEFT, IncidentTimeline.actorUserId, Users.id)
                 .selectAll()
                 .where { IncidentTimeline.incidentId eq incidentId }
                 .orderBy(IncidentTimeline.createdAt to SortOrder.ASC)
@@ -196,7 +199,7 @@ class IncidentManagementService(
 
             val row =
                 IncidentTimeline
-                    .leftJoin(Users, { actorUserId }, { id })
+                    .join(Users, JoinType.LEFT, IncidentTimeline.actorUserId, Users.id)
                     .selectAll()
                     .where { IncidentTimeline.id eq eventId }
                     .single()

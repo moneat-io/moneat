@@ -14,6 +14,8 @@ import com.moneat.models.OnCallSchedules
 import com.moneat.models.Users
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -303,7 +305,7 @@ class EscalationPolicyService {
                 // Delete existing steps and targets
                 val existingStepIds =
                     EscalationSteps
-                        .select(EscalationSteps.id)
+                        .selectAll()
                         .where { EscalationSteps.escalationPolicyId eq policyId }
                         .map { it[EscalationSteps.id].value }
 

@@ -13,8 +13,13 @@ COPY dashboard/package.json dashboard/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 COPY dashboard/ .
-# Copy enterprise routes if present (always included in the dashboard image)
+# Copy enterprise routes and components (always included in the dashboard image)
 COPY enterprise/dashboard/src/routes/ ./src/routes/
+COPY enterprise/dashboard/src/components/ ./src/components-enterprise/
+RUN cp -r ./src/components-enterprise/analytics/ ./src/components/analytics/ && \
+    cp -r ./src/components-enterprise/on-call/ ./src/components/on-call/ && \
+    cp ./src/components-enterprise/sso-settings.tsx ./src/components/sso-settings.tsx && \
+    rm -rf ./src/components-enterprise
 COPY --from=docs-build /app/build ./public/docs
 ARG VITE_BACKEND_URL=""
 ARG VITE_API_URL=""

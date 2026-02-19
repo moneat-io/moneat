@@ -16,6 +16,8 @@ import com.moneat.models.Users
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -181,17 +183,17 @@ class OnCallIncidentService {
         priorityLevel: String? = null,
     ): List<OnCallIncident> =
         transaction {
-            val query =
+            var query =
                 OnCallIncidents
                     .selectAll()
                     .where { OnCallIncidents.organizationId eq organizationId }
 
             if (status != null) {
-                query.andWhere { OnCallIncidents.status eq status }
+                query = query.andWhere { OnCallIncidents.status eq status }
             }
 
             if (priorityLevel != null) {
-                query.andWhere { OnCallIncidents.severity eq priorityLevel }
+                query = query.andWhere { OnCallIncidents.severity eq priorityLevel }
             }
 
             query
