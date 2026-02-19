@@ -23,9 +23,10 @@ import {ProjectProvider} from './contexts/project-context'
 import {TooltipProvider} from './components/ui/tooltip'
 import {HelmetProvider} from 'react-helmet-async'
 import * as Sentry from '@sentry/react'
+import { initAnalytics } from './lib/analytics'
 import './index.css'
 
-// Initialize Sentry
+// Initialize Sentry (error monitoring)
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN,
@@ -42,6 +43,16 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     // Session Replay
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
+  })
+}
+
+// Initialize Moneat product analytics (pageviews + custom events)
+if (import.meta.env.VITE_ANALYTICS_KEY) {
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+  initAnalytics({
+    domain: window.location.hostname,
+    apiHost: backendUrl,
+    key: import.meta.env.VITE_ANALYTICS_KEY,
   })
 }
 

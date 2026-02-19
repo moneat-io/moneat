@@ -18,6 +18,7 @@ import {useState} from 'react'
 import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
 import {useProject} from '@/contexts/project-context'
 import {ThemeSwitcher} from '@/components/theme-switcher'
 import {Button} from '@/components/ui/button'
@@ -130,6 +131,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     mutationFn: (data: { name: string; framework: string; targets?: string[] }) =>
       api.createProject(data.name, data.framework, data.targets),
     onSuccess: (project) => {
+      trackEvent('Project Create', { framework: project.framework || 'none' })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       setSelectedProjectId(project.id)
       resetCreateForm()

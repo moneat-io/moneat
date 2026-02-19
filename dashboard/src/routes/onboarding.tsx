@@ -17,6 +17,7 @@
 import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
 import {useState, useEffect} from 'react'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
@@ -172,6 +173,7 @@ function OnboardingPage() {
       
       // Clean up UTM params after successful onboarding
       localStorage.removeItem('utm_params')
+      trackEvent('Onboarding Complete', { company_size: companySize })
       
       navigate({ to: '/' })
     } catch (err) {

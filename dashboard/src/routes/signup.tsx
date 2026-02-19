@@ -17,6 +17,7 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useEffect, useState} from 'react'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
@@ -85,6 +86,7 @@ function SignupPage() {
         termsVersion: LEGAL_TERMS_VERSION,
         privacyVersion: LEGAL_PRIVACY_VERSION,
       }, inviteToken)
+      trackEvent('Signup')
       setSuccess(true)
     } catch (err) {
       setError('Failed to create account. Email may already be in use.')

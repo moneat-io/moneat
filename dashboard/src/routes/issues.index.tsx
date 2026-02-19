@@ -18,6 +18,7 @@ import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
@@ -192,6 +193,7 @@ function DashboardPage() {
       await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'resolved' })))
     },
     onSuccess: () => {
+      trackEvent('Issue Resolve', { count: String(selectedIssues.size) })
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
       queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
       toast({
