@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
   push:
     branches: [main, develop]
+    paths-ignore:
+      - 'badges/coverage-badge.json'
   schedule:
     # Nightly at 2 AM UTC
     - cron: '0 2 * * *'
@@ -509,6 +511,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-unit, frontend-unit]
     if: always()
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -557,6 +561,43 @@ jobs:
           echo "backend_coverage=$BACKEND_PCT" >> $GITHUB_OUTPUT
           echo "frontend_coverage=$FRONTEND_PCT" >> $GITHUB_OUTPUT
           echo "global_coverage=$GLOBAL_PCT" >> $GITHUB_OUTPUT
+
+      - name: Update coverage badge endpoint
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
+        run: |
+          COLOR="red"
+          if [ "$(echo "$GLOBAL_COV >= 80" | bc -l)" -eq 1 ]; then
+            COLOR="brightgreen"
+          elif [ "$(echo "$GLOBAL_COV >= 70" | bc -l)" -eq 1 ]; then
+            COLOR="green"
+          elif [ "$(echo "$GLOBAL_COV >= 60" | bc -l)" -eq 1 ]; then
+            COLOR="yellowgreen"
+          elif [ "$(echo "$GLOBAL_COV >= 50" | bc -l)" -eq 1 ]; then
+            COLOR="yellow"
+          elif [ "$(echo "$GLOBAL_COV >= 40" | bc -l)" -eq 1 ]; then
+            COLOR="orange"
+          fi
+
+          mkdir -p badges
+          cat > badges/coverage-badge.json <<EOF
+          {"schemaVersion":1,"label":"coverage","message":"${GLOBAL_COV}%","color":"${COLOR}"}
+          EOF
+
+      - name: Commit coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- badges/coverage-badge.json; then
+            echo "Coverage badge is already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add badges/coverage-badge.json
+          git commit -m "chore: update coverage badge [skip ci]"
+          git push
 
       - name: Generate coverage summary
         env:

@@ -15,6 +15,7 @@
   <a href="https://discord.gg/skH5Pstr"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/moneat-io/moneat/commits"><img src="https://img.shields.io/github/commit-activity/m/moneat-io/moneat?style=flat-square" alt="Commit Activity"></a>
   <a href="https://github.com/moneat-io/moneat/stargazers"><img src="https://img.shields.io/github/stars/moneat-io/moneat?style=flat-square" alt="GitHub Stars"></a>
+  <a href="https://github.com/moneat-io/moneat/actions/workflows/test.yml"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/moneat-io/moneat/main/badges/coverage-badge.json&style=flat-square" alt="Coverage"></a>
 </p>
 
 <p align="center">
