@@ -134,6 +134,16 @@ fun Application.configureDatabases() {
                     .target(MigrationVersion.LATEST)
                     .load()
 
+            val flywayConfig = flyway.configuration
+            log.info(
+                "Flyway config: sqlPrefix=${flywayConfig.sqlMigrationPrefix}, " +
+                    "repeatablePrefix=${flywayConfig.repeatableSqlMigrationPrefix}, " +
+                    "separator=${flywayConfig.sqlMigrationSeparator}, " +
+                    "suffixes=${flywayConfig.sqlMigrationSuffixes.joinToString(",")}, " +
+                    "locations=${flywayConfig.locations.joinToString(",") { it.descriptor }}, " +
+                    "target=${flywayConfig.target}"
+            )
+
             val migrationsApplied = flyway.migrate()
             log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
 
