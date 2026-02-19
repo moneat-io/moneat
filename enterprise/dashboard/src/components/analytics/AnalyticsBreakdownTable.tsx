@@ -131,7 +131,7 @@ export function AnalyticsBreakdownTable({
                 >
                   {/* Background bar */}
                   <div
-                    className="absolute left-0 top-0 bottom-0 bg-blue-500/15 group-hover:bg-blue-500/25 transition-colors"
+                    className="absolute left-0 top-0 bottom-0 bg-blue-100 dark:bg-blue-400/40 group-hover:bg-blue-200 dark:group-hover:bg-blue-400/50 transition-colors"
                     style={{width: `${(item.visitors / maxVisitors) * 100}%`}}
                   />
 

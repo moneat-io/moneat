@@ -13,8 +13,10 @@ import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '@/components/analyti
 import {AnalyticsChart} from '@/components/analytics/AnalyticsChart'
 import {AnalyticsBreakdownTable} from '@/components/analytics/AnalyticsBreakdownTable'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {Card, CardContent} from '@/components/ui/card'
+import {CopyBlock} from '@/components/ui/copy-block'
 import {
-  FileText, Globe, Laptop, LogIn, LogOut, MapPin, Megaphone, MousePointerClick, Share2,
+  ArrowRight, BarChart3, BookOpen, FileText, Globe, Laptop, LogIn, LogOut, MapPin, Megaphone, MousePointerClick, Share2,
 } from 'lucide-react'
 import type {AnalyticsFilter, AnalyticsParams, AnalyticsPeriod, AnalyticsBreakdownItem} from '@/lib/api'
 
@@ -35,7 +37,9 @@ function AnalyticsOverview() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
+  const hasSelectedProject = selectedProjectId != null && projects?.some(p => p.id === selectedProjectId)
+  const projectId = (hasSelectedProject ? selectedProjectId : null) || projects?.[0]?.id
+  const project = projects?.find(p => p.id === projectId)
 
   const buildParams = useCallback((): AnalyticsParams => ({
     period,
@@ -132,6 +136,66 @@ function AnalyticsOverview() {
     return (
       <div className="text-center py-20">
         <p className="text-muted-foreground">Select a project to view analytics</p>
+      </div>
+    )
+  }
+
+  if (!overviewLoading && (!overview || (overview.uniqueVisitors === 0 && overview.totalPageviews === 0))) {
+    let scriptHost = 'https://your-moneat-instance.com'
+    let publicKey = 'your-project-public-key'
+    if (project?.dsn) {
+      try {
+        const url = new URL(project.dsn)
+        scriptHost = `${url.protocol}//${url.host}`
+        publicKey = url.username || publicKey
+      } catch { /* ignore parse errors */ }
+    }
+
+    const scriptCode = `<script
+  defer
+  data-domain="yoursite.com"
+  data-key="${publicKey}"
+  src="${scriptHost}/js/m.js"
+></script>`
+
+    return (
+      <div className="flex flex-col items-center justify-center py-8">
+        <div className="max-w-2xl w-full space-y-6">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-blue-500/10 mb-4">
+              <BarChart3 className="h-7 w-7 text-blue-500" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Get Started with Analytics</h2>
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              Add privacy-focused, cookie-free web analytics to your site. No cookies, no personal data stored.
+            </p>
+          </div>
+
+          <Card>
+            <CardContent className="p-6 space-y-5">
+              <div>
+                <h3 className="text-sm font-medium mb-2.5">1. Add the tracking script to your site</h3>
+                <CopyBlock code={scriptCode} language="html" />
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium mb-2.5">2. Or use the NPM package for SPAs</h3>
+                <CopyBlock code="npm install @moneat/analytics" language="bash" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="text-center">
+            <a
+              href="/docs/product-analytics"
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <BookOpen className="h-4 w-4" />
+              View Full Documentation
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
+        </div>
       </div>
     )
   }

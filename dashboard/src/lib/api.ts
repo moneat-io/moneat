@@ -2143,6 +2143,7 @@ class ApiClient {
   async logout() {
     sessionStorage.removeItem('impersonate_token')
     sessionStorage.removeItem('authenticated')
+    localStorage.removeItem('selectedProjectId')
     this.removeRefreshToken()
     // Clear demo mode
     setDemoEpoch(null)

@@ -21,7 +21,8 @@ function AnalyticsLayout() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
+  const hasSelectedProject = selectedProjectId != null && projects?.some(p => p.id === selectedProjectId)
+  const projectId = (hasSelectedProject ? selectedProjectId : null) || projects?.[0]?.id
   const project = projects?.find(p => p.id === projectId)
 
   return (
