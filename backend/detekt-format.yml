@@ -1,0 +1,10 @@
+# Detekt config for the detektFormat task.
+# Only enables formatting rules (ktlint via detekt-formatting plugin).
+# Analysis rules are intentionally disabled here — they run via the normal `detekt` task.
+build:
+  maxIssues: 0
+
+formatting:
+  active: true
+  android: false
+  autoCorrect: true

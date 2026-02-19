@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+# Only run if Kotlin files are staged
+STAGED_KT=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.kts?$' || true)
+if [ -z "$STAGED_KT" ]; then
+    exit 0
+fi
+
+# Snapshot all staged files before formatting
+ALL_STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+
+echo "⚙️  Running ktlint auto-format (detektFormat)..."
+cd "$ROOT/backend"
+./gradlew detektFormat --daemon -q
+
+# Re-stage only files that were already staged AND were reformatted
+cd "$ROOT"
+CHANGED=$(git diff --name-only -- '*.kt' '*.kts')
+if [ -n "$CHANGED" ]; then
+    echo "$ALL_STAGED" | while IFS= read -r f; do
+        if echo "$CHANGED" | grep -qxF "$f"; then
+            git add "$f"
+        fi
+    done
+fi

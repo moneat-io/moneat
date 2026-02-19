@@ -298,6 +298,18 @@ tasks.check {
 
 tasks.build {
     dependsOn("detekt")
+    dependsOn("installGitHooks")
+}
+
+// Install git hooks so contributors get pre-commit formatting automatically
+val installGitHooks = tasks.register<Exec>("installGitHooks") {
+    group = "setup"
+    description = "Configures git to use project hooks from .githooks/ (installs on first build)"
+
+    val repoRoot = rootProject.rootDir.parentFile
+    onlyIf { File(repoRoot, ".git").exists() }
+    workingDir = repoRoot
+    commandLine("sh", "-c", "git config core.hooksPath .githooks && chmod +x .githooks/*")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
@@ -313,4 +325,25 @@ detekt {
     buildUponDefaultConfig = true
     parallel = true
     source.setFrom(files("src/main/kotlin", "src/test/kotlin", "src/integrationTest/kotlin"))
+}
+
+// detektFormat - auto-correct formatting issues via detekt-formatting (ktlint)
+// Run with: ./gradlew detektFormat
+tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektFormat") {
+    description = "Auto-corrects code style issues using detekt-formatting (ktlint)"
+    autoCorrect = true
+    // Use a format-only config — disables analysis rules so only ktlint formatting rules run
+    config.setFrom(files("$projectDir/detekt-format.yml"))
+    buildUponDefaultConfig = false
+    parallel = true
+    setSource(files("src/main/kotlin", "src/test/kotlin", "src/integrationTest/kotlin"))
+    // No type resolution needed for formatting rules — keeps this task fast
+    classpath.setFrom()
+    reports {
+        html.required.set(false)
+        xml.required.set(false)
+        txt.required.set(false)
+        sarif.required.set(false)
+        md.required.set(false)
+    }
 }
