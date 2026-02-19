@@ -29,6 +29,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.config.MapApplicationConfig
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -103,6 +106,7 @@ class IngestRoutesEnvelopeTest {
             )
         }
         application {
+            install(ContentNegotiation) { json() }
             routing {
                 ingestRoutes(
                     enqueueEnvelope = { _, _ -> },
@@ -142,6 +146,7 @@ class IngestRoutesEnvelopeTest {
             config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
         }
         application {
+            install(ContentNegotiation) { json() }
             routing {
                 ingestRoutes(
                     enqueueEnvelope = { _, _ -> },
@@ -178,6 +183,7 @@ class IngestRoutesEnvelopeTest {
             config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
         }
         application {
+            install(ContentNegotiation) { json() }
             routing {
                 ingestRoutes(enqueueEnvelope = { _, _ -> })
             }

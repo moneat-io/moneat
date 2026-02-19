@@ -16,6 +16,8 @@
 
 package com.moneat.routes
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.Memberships
 import com.moneat.models.Organizations
 import com.moneat.models.Users
@@ -25,6 +27,12 @@ import io.ktor.client.request.cookie
 import io.ktor.client.request.get
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.core.eq
@@ -40,9 +48,31 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class AuthRoutesTest {
+    private val jwtSecret = "test-secret-for-unit-tests"
+
     companion object {
         private var dbInitialized = false
     }
+
+    private fun io.ktor.server.testing.ApplicationTestBuilder.installPlugins() {
+        application {
+            install(ContentNegotiation) { json() }
+            install(Authentication) {
+                jwt("auth-jwt") {
+                    verifier(
+                        JWT.require(Algorithm.HMAC256(jwtSecret))
+                            .withIssuer("moneat")
+                            .withAudience("moneat-users")
+                            .build()
+                    )
+                    validate { JWTPrincipal(it.payload) }
+                }
+            }
+        }
+    }
+
+    private fun io.ktor.server.testing.ApplicationTestBuilder.noRedirectClient() =
+        createClient { followRedirects = false }
 
     @BeforeTest
     fun setupDatabase() {
@@ -79,9 +109,10 @@ class AuthRoutesTest {
                 )
             ) {
                 testApplication {
+                    installPlugins()
                     routing { authRoutes() }
 
-                    val response = client.get("/auth/github")
+                    val response = noRedirectClient().get("/auth/github")
                     assertEquals(HttpStatusCode.Found, response.status)
 
                     val location = response.headers[HttpHeaders.Location]
@@ -105,9 +136,10 @@ class AuthRoutesTest {
             mapOf("FRONTEND_URL" to "https://dashboard.test.local")
         ) {
             testApplication {
+                installPlugins()
                 routing { authRoutes() }
 
-                val response = client.get("/auth/github/callback")
+                val response = noRedirectClient().get("/auth/github/callback")
                 assertEquals(HttpStatusCode.Found, response.status)
 
                 val location = response.headers[HttpHeaders.Location]
@@ -124,9 +156,10 @@ class AuthRoutesTest {
             mapOf("FRONTEND_URL" to "https://dashboard.test.local")
         ) {
             testApplication {
+                installPlugins()
                 routing { authRoutes() }
 
-                val response = client.get("/auth/github/callback?code=test-code&state=expected") {
+                val response = noRedirectClient().get("/auth/github/callback?code=test-code&state=expected") {
                     cookie("oauth_state", "different")
                 }
                 assertEquals(HttpStatusCode.Found, response.status)
@@ -165,9 +198,10 @@ class AuthRoutesTest {
                 )
             ) {
                 testApplication {
+                    installPlugins()
                     routing { authRoutes() }
 
-                    val response = client.get("/auth/github/callback?code=test-code&state=good-state") {
+                    val response = noRedirectClient().get("/auth/github/callback?code=test-code&state=good-state") {
                         cookie("oauth_state", "good-state")
                     }
                     assertEquals(HttpStatusCode.Found, response.status)
