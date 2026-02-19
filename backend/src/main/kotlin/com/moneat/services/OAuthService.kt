@@ -99,7 +99,7 @@ class OAuthService {
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
-    private val dashboardUrl = EnvConfig.get("DASHBOARD_URL") ?: "https://moneat.io"
+    private val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
     
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
     private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")

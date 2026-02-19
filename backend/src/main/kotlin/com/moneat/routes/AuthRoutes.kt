@@ -220,7 +220,7 @@ fun Route.authRoutes() {
                 call.respondRedirect(authUrl)
             } catch (e: Exception) {
                 logger.error(e) { "GitHub OAuth init failed" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
@@ -251,15 +251,15 @@ fun Route.authRoutes() {
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)
                 
                 AuthCookieUtils.setAuthCookie(call, authResponse.token)
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/auth/oauth/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed&message=${e.message}")
             } catch (e: Exception) {
                 logger.error(e) { "GitHub OAuth callback error" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
@@ -290,7 +290,7 @@ fun Route.authRoutes() {
                 call.respondRedirect(authUrl)
             } catch (e: Exception) {
                 logger.error(e) { "Apple OAuth init failed" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
@@ -319,15 +319,15 @@ fun Route.authRoutes() {
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)
                 
                 AuthCookieUtils.setAuthCookie(call, authResponse.token)
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/auth/oauth/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Apple OAuth callback failed: ${e.message}" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed&message=${e.message}")
             } catch (e: Exception) {
                 logger.error(e) { "Apple OAuth callback error" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
+                val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
