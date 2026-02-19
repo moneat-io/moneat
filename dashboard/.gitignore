@@ -1,0 +1,14 @@
+# Enterprise routes — source of truth is enterprise/dashboard/src/routes/
+# These are copied here by scripts/sync-enterprise-routes.sh at build time.
+src/routes/analytics.tsx
+src/routes/analytics.index.tsx
+src/routes/on-call.tsx
+src/routes/on-call.index.tsx
+src/routes/on-call.schedules.tsx
+src/routes/on-call.incidents.tsx
+src/routes/on-call.incidents.$incidentId.tsx
+src/routes/on-call.escalation-policies.tsx
+src/routes/on-call.declared-incidents.tsx
+src/routes/on-call.declared-incidents.$incidentId.tsx
+src/routes/auth.oauth.callback.tsx
+src/routes/auth.sso.callback.tsx

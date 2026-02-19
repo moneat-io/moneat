@@ -142,6 +142,11 @@ dependencies {
     integrationTestImplementation(libs.testcontainers.core)
     integrationTestImplementation(libs.testcontainers.postgresql)
     integrationTestImplementation(libs.testcontainers.clickhouse)
+
+    // Enterprise modules — included only when building with -Penterprise
+    if (project.hasProperty("enterprise")) {
+        runtimeOnly(project(":enterprise"))
+    }
 }
 
 // Task to copy email templates into resources

@@ -1,0 +1,22 @@
+# Enterprise override for local development.
+# Rebuilds the backend with enterprise modules enabled.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+#
+# Enterprise modules that activate automatically:
+#   - Analytics (web analytics dashboard)
+#   - On-Call (incident management and escalation)
+#   - SSO (SAML/OIDC authentication)
+#
+# Add enterprise-specific environment variables to your .env file:
+#   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER (for On-Call voice alerts)
+#   SAML_CERT, SAML_KEY, SAML_ENTITY_ID (for SSO)
+
+services:
+  backend:
+    build:
+      args:
+        ENTERPRISE: "true"
+    env_file:
+      - .env.enterprise  # Optional: enterprise-specific secrets (Twilio, SAML, etc.)

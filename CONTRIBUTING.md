@@ -58,14 +58,54 @@ The CLA does **not** change your copyright ownership. You retain full rights to 
 ### Development Setup
 
 ```bash
-# Start infrastructure
-docker-compose up -d
+# Start infrastructure + app (community features only)
+docker compose up -d
 
-# Run backend
+# Or run services individually for development:
+
+# Start only the databases
+docker compose up -d postgres clickhouse redis
+
+# Run backend (community)
 cd backend && ./gradlew run
 
 # Run dashboard
 cd dashboard && npm install && npm run dev
+```
+
+### Working on Enterprise Features
+
+Enterprise modules (Analytics, On-Call, SSO) are in `enterprise/`. To run locally with enterprise active:
+
+```bash
+# Start databases
+docker compose up -d postgres clickhouse redis
+
+# Run backend with enterprise modules loaded
+cd backend && ./gradlew run -Penterprise
+
+# Run dashboard — enterprise routes are synced automatically via predev hook
+cd dashboard && npm run dev
+```
+
+**How it works:** The `-Penterprise` flag adds the `:enterprise` subproject as a `runtimeOnly` dependency. The backend's `FeatureRegistry` uses Java `ServiceLoader` to auto-discover all `EnterpriseModule` implementations at startup — no additional configuration needed.
+
+**Enterprise-specific environment variables** (add to `.env` as needed):
+
+| Variable | Required for |
+|----------|-------------|
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | On-Call voice alerts |
+| `SAML_CERT` / `SAML_KEY` / `SAML_ENTITY_ID` | SSO (SAML) |
+
+**Enterprise routes:** Files in `enterprise/dashboard/src/routes/` are the source of truth. They are copied into `dashboard/src/routes/` automatically by `scripts/sync-enterprise-routes.sh` (run via the `predev` npm hook). Never edit the copies in `dashboard/src/routes/` directly.
+
+#### Docker with enterprise features
+
+```bash
+# Build and run with enterprise modules
+docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+
+# Optionally create .env.enterprise for enterprise-specific secrets (Twilio, SAML, etc.)
 ```
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
