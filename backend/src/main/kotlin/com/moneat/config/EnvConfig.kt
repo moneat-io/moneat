@@ -76,6 +76,12 @@ object EnvConfig {
 
     fun isLoaded(): Boolean = dotenv != null
 
+    // Self-host mode configuration
+    object SelfHost {
+        val enabled: Boolean
+            get() = get("SELF_HOST", "false").toBoolean()
+    }
+
     // Demo mode configuration
     object Demo {
         val enabled: Boolean

@@ -77,6 +77,7 @@ import {
 import { SsoTab } from '@/components/sso-settings'
 import { TeamSettings } from '@/components/settings/team-settings'
 import { useAuth } from '@/hooks/useAuth'
+import { useIsSelfHosted } from '@/hooks/useEnterpriseFeatures'
 import { CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys } from '@/lib/sidebar-config'
 
 const AUTH_TOKEN_SCOPES = [
@@ -172,6 +173,7 @@ function SettingsPage() {
   const tier = subscription?.tier?.tierName || 'FREE'
   const canUseSso = tier === 'TEAM' || tier === 'BUSINESS'
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
+  const isSelfHosted = useIsSelfHosted()
   
   return (
     <div>
@@ -245,6 +247,7 @@ function SettingsPage() {
                   Team
                 </TabsTrigger>
               )}
+              {!isSelfHosted && (
               <TabsTrigger 
                 value="billing" 
                 className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
@@ -252,6 +255,7 @@ function SettingsPage() {
                 <CreditCard className="h-4 w-4 mr-2" />
                 Billing
               </TabsTrigger>
+              )}
               <TabsTrigger 
                 value="usage" 
                 className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
@@ -303,9 +307,11 @@ function SettingsPage() {
             <TabsContent value="sidebar" className="space-y-4 mt-0">
               <SidebarTab />
             </TabsContent>
+            {!isSelfHosted && (
             <TabsContent value="billing" className="space-y-4 mt-0">
               <BillingTab />
             </TabsContent>
+            )}
             <TabsContent value="usage" className="space-y-4 mt-0">
               <UsageTab />
             </TabsContent>

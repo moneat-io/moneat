@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
@@ -135,6 +136,7 @@ class MonitorService {
      * Check if organization can add more systems.
      */
     fun checkSystemQuota(organizationId: Int): Boolean {
+        if (EnvConfig.SelfHost.enabled) return true
         val tier = getTierConfig(organizationId)
         val currentCount =
             transaction {
@@ -219,6 +221,7 @@ class MonitorService {
         }
 
         // Return the poll interval for this organization's tier
+        if (EnvConfig.SelfHost.enabled) return 10
         val tier = getTierConfig(organizationId)
         return tier.monitorIntervalSeconds
     }

@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
@@ -50,6 +51,7 @@ class BillingQuotaService(
     private val config = ApplicationConfig("application.conf")
 
     fun isEnforcementEnabled(): Boolean {
+        if (EnvConfig.SelfHost.enabled) return false
         return config.propertyOrNull("billing.enforcementEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
     }
 

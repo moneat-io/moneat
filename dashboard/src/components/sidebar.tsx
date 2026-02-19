@@ -57,7 +57,7 @@ import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {Logo} from '@/components/logo'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
-import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
+import {hasEnterpriseModule, useEnterpriseFeatures, useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
@@ -85,6 +85,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const { data: features } = useEnterpriseFeatures()
+  const isSelfHosted = useIsSelfHosted()
 
   // Create project dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -123,9 +124,9 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
 
   // Get current tier from billing usage
   const currentPlan = billingPlans?.plans?.find((p) => p.tier.tierName === billingUsage?.plan?.toUpperCase())
-  const maxProjects = currentPlan?.tier.maxProjects
+  const maxProjects = isSelfHosted ? null : currentPlan?.tier.maxProjects
   const projectCount = projects?.length ?? 0
-  const isAtProjectLimit = maxProjects != null && projectCount >= maxProjects
+  const isAtProjectLimit = !isSelfHosted && maxProjects != null && projectCount >= maxProjects
 
   const createProjectMutation = useMutation({
     mutationFn: (data: { name: string; framework: string; targets?: string[] }) =>

@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
@@ -516,6 +517,7 @@ class UptimeService(
      * Check uptime monitor quota for organization.
      */
     fun checkUptimeMonitorQuota(organizationId: Int) {
+        if (EnvConfig.SelfHost.enabled) return
         val currentCount =
             transaction {
                 UptimeMonitors

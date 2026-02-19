@@ -31,15 +31,18 @@ class EnvironmentValidator {
     fun validate(): ValidationResult {
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
+        val isSelfHost = EnvConfig.SelfHost.enabled
 
         // CRITICAL: These must be set
         validateCriticalSecret("JWT_SECRET", errors)
         validateCriticalSecret("DATABASE_PASSWORD", errors)
         validateCriticalSecret("CLICKHOUSE_PASSWORD", errors)
 
-        // CRITICAL: Production URLs must be set correctly
-        validateProductionUrl("FRONTEND_URL", errors, warnings)
-        validateProductionUrl("BACKEND_URL", errors, warnings)
+        // CRITICAL: Production URLs must be set correctly (relaxed for self-host)
+        if (!isSelfHost) {
+            validateProductionUrl("FRONTEND_URL", errors, warnings)
+            validateProductionUrl("BACKEND_URL", errors, warnings)
+        }
 
         // CONDITIONAL: Required when features are enabled
         validateConditionalConfig(errors)

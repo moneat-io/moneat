@@ -509,7 +509,7 @@ class DashboardService {
             // Check project limit based on tier
             val tierContext = pricingTierService.getEffectiveTierForOrganization(orgId)
             val maxProjects = tierContext.tier.maxProjects
-            if (maxProjects != null) {
+            if (!EnvConfig.SelfHost.enabled && maxProjects != null) {
                 val currentProjectCount =
                     Projects
                         .selectAll()

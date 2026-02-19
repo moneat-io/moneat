@@ -18,6 +18,7 @@ package com.moneat.plugins
 
 import com.moneat.ai.aiChatRoutes
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.routes.adminRoutes
@@ -59,7 +60,8 @@ data class HealthResponse(
 @Serializable
 data class FeaturesResponse(
     val enterprise: Boolean,
-    val modules: List<String>
+    val modules: List<String>,
+    val selfHost: Boolean
 )
 
 fun Application.configureRouting() {
@@ -72,7 +74,8 @@ fun Application.configureRouting() {
             call.respond(
                 FeaturesResponse(
                     enterprise = FeatureRegistry.isEnterpriseAvailable,
-                    modules = FeatureRegistry.registeredModules.map { it.name }
+                    modules = FeatureRegistry.registeredModules.map { it.name },
+                    selfHost = EnvConfig.SelfHost.enabled
                 )
             )
         }

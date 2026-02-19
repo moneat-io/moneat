@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
@@ -442,6 +443,7 @@ class AuthService {
     }
 
     private fun validateSignupLegalConsent(request: SignupRequest) {
+        if (EnvConfig.SelfHost.enabled) return
         if (!request.acceptTerms || !request.acceptPrivacy) {
             throw IllegalArgumentException("You must accept the Terms of Use and Privacy Policy to create an account")
         }

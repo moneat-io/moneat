@@ -78,6 +78,7 @@ services:
       FRONTEND_URL: http://localhost:3000
       BACKEND_URL: http://localhost:8080
       STRIPE_ENABLED: "false"
+      SELF_HOST: "true"
     volumes:
       - backend_storage:/app/storage
     depends_on:

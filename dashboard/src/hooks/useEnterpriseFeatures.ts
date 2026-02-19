@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 interface FeaturesResponse {
   enterprise: boolean
   modules: string[]
+  selfHost: boolean
 }
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || ''
@@ -22,7 +23,7 @@ export function useEnterpriseFeatures() {
     queryKey: ['features'],
     queryFn: async () => {
       const res = await fetch(FEATURES_URL)
-      if (!res.ok) return { enterprise: false, modules: [] }
+      if (!res.ok) return { enterprise: false, modules: [], selfHost: false }
       return res.json()
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
@@ -33,4 +34,9 @@ export function useEnterpriseFeatures() {
 export function useHasModule(moduleName: string): boolean {
   const { data } = useEnterpriseFeatures()
   return hasEnterpriseModule(data, moduleName)
+}
+
+export function useIsSelfHosted(): boolean {
+  const { data } = useEnterpriseFeatures()
+  return data?.selfHost ?? false
 }
