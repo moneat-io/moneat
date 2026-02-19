@@ -33,7 +33,7 @@ import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.routing.routing
+import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -54,7 +54,7 @@ class AuthRoutesTest {
         private var dbInitialized = false
     }
 
-    private fun io.ktor.server.testing.ApplicationTestBuilder.installPlugins() {
+    private fun ApplicationTestBuilder.installPlugins() {
         application {
             install(ContentNegotiation) { json() }
             install(Authentication) {
@@ -72,7 +72,7 @@ class AuthRoutesTest {
         }
     }
 
-    private fun io.ktor.server.testing.ApplicationTestBuilder.noRedirectClient() = createClient { followRedirects = false }
+    private fun ApplicationTestBuilder.noRedirectClient() = createClient { followRedirects = false }
 
     @BeforeTest
     fun setupDatabase() {
