@@ -282,6 +282,9 @@ jobs:
       - name: Run integration tests
         working-directory: backend
         run: ./gradlew integrationTest --no-daemon
+        env:
+          DOCKER_HOST: unix:///var/run/docker.sock
+          TESTCONTAINERS_RYUK_DISABLED: "true"
 
       - name: Upload integration test results
         if: always()
