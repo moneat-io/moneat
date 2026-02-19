@@ -19,9 +19,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.slf4j.LoggerFactory
@@ -49,7 +49,11 @@ class TwilioService {
      * @param url the full URL of the request (including query string)
      * @param params the POST body parameters, sorted by key
      */
-    fun validateSignature(signature: String, url: String, params: Map<String, String>): Boolean {
+    fun validateSignature(
+        signature: String,
+        url: String,
+        params: Map<String, String>,
+    ): Boolean {
         if (authToken.isEmpty()) return false
         val sortedParams = params.entries.sortedBy { it.key }.joinToString("") { it.key + it.value }
         val data = url + sortedParams
@@ -81,7 +85,7 @@ class TwilioService {
         incidentId: Int,
         incidentTitle: String,
         priorityLevel: String,
-        userId: Int
+        userId: Int,
     ) {
         if (!isEnabled()) {
             logger.warn("Twilio not configured, skipping SMS to $toNumber")
@@ -90,12 +94,13 @@ class TwilioService {
 
         // Race-condition guard: re-check consent AND that the stored number still matches.
         // This prevents sends to an old number if the user changed their number while opted in.
-        val stillConsented = transaction {
-            val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
-            val optedIn = row?.get(Users.oncall_phone_opt_in) ?: false
-            val storedPhone = row?.get(Users.phone_number)
-            optedIn && storedPhone == toNumber
-        }
+        val stillConsented =
+            transaction {
+                val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                val optedIn = row?.get(Users.oncall_phone_opt_in) ?: false
+                val storedPhone = row?.get(Users.phone_number)
+                optedIn && storedPhone == toNumber
+            }
         if (!stillConsented) {
             logger.warn("User $userId consent check failed (opted out or phone mismatch) before SMS, skipping")
             return
@@ -106,15 +111,20 @@ class TwilioService {
         val statusCallback = "$backendUrl/v1/webhooks/twilio/sms-status"
 
         try {
-            val response = httpClient.post(messagesUrl) {
-                header(HttpHeaders.Authorization, basicAuthHeader())
-                setBody(FormDataContent(Parameters.build {
-                    append("To", toNumber)
-                    append("From", fromNumber)
-                    append("Body", body)
-                    append("StatusCallback", statusCallback)
-                }))
-            }
+            val response =
+                httpClient.post(messagesUrl) {
+                    header(HttpHeaders.Authorization, basicAuthHeader())
+                    setBody(
+                        FormDataContent(
+                            Parameters.build {
+                                append("To", toNumber)
+                                append("From", fromNumber)
+                                append("Body", body)
+                                append("StatusCallback", statusCallback)
+                            },
+                        ),
+                    )
+                }
 
             val responseText = response.bodyAsText()
             val twilioSid = extractSid(responseText, "sid")
@@ -136,7 +146,7 @@ class TwilioService {
         incidentId: Int,
         incidentTitle: String,
         priorityLevel: String,
-        userId: Int
+        userId: Int,
     ) {
         if (!isEnabled()) {
             logger.warn("Twilio not configured, skipping call to $toNumber")
@@ -145,12 +155,13 @@ class TwilioService {
 
         // Race-condition guard: re-check consent AND that the stored number still matches.
         // This prevents calls to an old number if the user changed their number while opted in.
-        val stillConsented = transaction {
-            val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
-            val optedIn = row?.get(Users.oncall_phone_opt_in) ?: false
-            val storedPhone = row?.get(Users.phone_number)
-            optedIn && storedPhone == toNumber
-        }
+        val stillConsented =
+            transaction {
+                val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
+                val optedIn = row?.get(Users.oncall_phone_opt_in) ?: false
+                val storedPhone = row?.get(Users.phone_number)
+                optedIn && storedPhone == toNumber
+            }
         if (!stillConsented) {
             logger.warn("User $userId consent check failed (opted out or phone mismatch) before call, skipping")
             return
@@ -162,7 +173,7 @@ class TwilioService {
         val safeTitle = incidentTitle.escapeXml()
         val safePriority = priorityLevel.escapeXml()
         val twiml = """<Response>
-  <Say voice="alice">Moneat on-call alert. Priority ${safePriority}. ${safeTitle}.</Say>
+  <Say voice="alice">Moneat on-call alert. Priority $safePriority. $safeTitle.</Say>
   <Gather numDigits="1" action="$gatherUrl" method="POST">
     <Say voice="alice">Press 1 to acknowledge this incident.</Say>
   </Gather>
@@ -170,15 +181,20 @@ class TwilioService {
 </Response>"""
 
         try {
-            val response = httpClient.post(callsUrl) {
-                header(HttpHeaders.Authorization, basicAuthHeader())
-                setBody(FormDataContent(Parameters.build {
-                    append("To", toNumber)
-                    append("From", fromNumber)
-                    append("Twiml", twiml)
-                    append("StatusCallback", statusCallback)
-                }))
-            }
+            val response =
+                httpClient.post(callsUrl) {
+                    header(HttpHeaders.Authorization, basicAuthHeader())
+                    setBody(
+                        FormDataContent(
+                            Parameters.build {
+                                append("To", toNumber)
+                                append("From", fromNumber)
+                                append("Twiml", twiml)
+                                append("StatusCallback", statusCallback)
+                            },
+                        ),
+                    )
+                }
 
             val responseText = response.bodyAsText()
             val twilioSid = extractSid(responseText, "sid")
@@ -200,14 +216,19 @@ class TwilioService {
             throw IllegalStateException("Twilio is not configured")
         }
         val body = "[TEST] Moneat on-call SMS test. If you received this, SMS is working correctly."
-        val response = httpClient.post(messagesUrl) {
-            header(HttpHeaders.Authorization, basicAuthHeader())
-            setBody(FormDataContent(Parameters.build {
-                append("To", toNumber)
-                append("From", fromNumber)
-                append("Body", body)
-            }))
-        }
+        val response =
+            httpClient.post(messagesUrl) {
+                header(HttpHeaders.Authorization, basicAuthHeader())
+                setBody(
+                    FormDataContent(
+                        Parameters.build {
+                            append("To", toNumber)
+                            append("From", fromNumber)
+                            append("Body", body)
+                        },
+                    ),
+                )
+            }
         if (!response.status.isSuccess()) {
             val text = response.bodyAsText()
             logger.error("Test SMS failed: ${response.status} - $text")
@@ -221,14 +242,19 @@ class TwilioService {
             throw IllegalStateException("Twilio is not configured")
         }
         val twiml = """<Response><Say voice="alice">This is a test call from Moneat on-call alerting. Your phone call integration is working correctly.</Say></Response>"""
-        val response = httpClient.post(callsUrl) {
-            header(HttpHeaders.Authorization, basicAuthHeader())
-            setBody(FormDataContent(Parameters.build {
-                append("To", toNumber)
-                append("From", fromNumber)
-                append("Twiml", twiml)
-            }))
-        }
+        val response =
+            httpClient.post(callsUrl) {
+                header(HttpHeaders.Authorization, basicAuthHeader())
+                setBody(
+                    FormDataContent(
+                        Parameters.build {
+                            append("To", toNumber)
+                            append("From", fromNumber)
+                            append("Twiml", twiml)
+                        },
+                    ),
+                )
+            }
         if (!response.status.isSuccess()) {
             val text = response.bodyAsText()
             logger.error("Test call failed: ${response.status} - $text")
@@ -237,7 +263,10 @@ class TwilioService {
         logger.info("Test call initiated to $toNumber")
     }
 
-    fun updateNotificationStatus(twilioSid: String, status: String) {
+    fun updateNotificationStatus(
+        twilioSid: String,
+        status: String,
+    ) {
         transaction {
             TwilioNotificationsSent.update({ TwilioNotificationsSent.twilioSid eq twilioSid }) {
                 it[TwilioNotificationsSent.status] = status
@@ -253,7 +282,7 @@ class TwilioService {
         channel: String,
         twilioSid: String?,
         status: String,
-        phoneNumber: String
+        phoneNumber: String,
     ) {
         transaction {
             TwilioNotificationsSent.insert {
@@ -268,18 +297,25 @@ class TwilioService {
         }
     }
 
-    private fun extractSid(responseText: String, key: String): String? {
-        return try {
-            Json.parseToJsonElement(responseText).jsonObject[key]?.jsonPrimitive?.content
+    private fun extractSid(
+        responseText: String,
+        key: String,
+    ): String? =
+        try {
+            Json
+                .parseToJsonElement(responseText)
+                .jsonObject[key]
+                ?.jsonPrimitive
+                ?.content
         } catch (_: Exception) {
             null
         }
-    }
 }
 
-private fun String.escapeXml(): String = this
-    .replace("&", "&amp;")
-    .replace("<", "&lt;")
-    .replace(">", "&gt;")
-    .replace("\"", "&quot;")
-    .replace("'", "&apos;")
+private fun String.escapeXml(): String =
+    this
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")

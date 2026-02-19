@@ -13,13 +13,13 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.javatime.time
+import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import org.jetbrains.exposed.v1.javatime.time
 import org.postgresql.util.PGobject
 import java.time.LocalTime
 
@@ -72,7 +72,7 @@ data class AlertPriority(
     val label: String,
     val description: String? = null,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 // ===== Business Hours =====
@@ -99,7 +99,7 @@ data class BusinessHoursWindow(
     @Serializable(with = LocalTimeSerializer::class)
     val startTime: LocalTime,
     @Serializable(with = LocalTimeSerializer::class)
-    val endTime: LocalTime
+    val endTime: LocalTime,
 )
 
 @Serializable
@@ -110,7 +110,7 @@ data class BusinessHoursConfig(
     val enabled: Boolean,
     val windows: List<BusinessHoursWindow>,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 // ===== Escalation Policies =====
@@ -138,7 +138,7 @@ data class EscalationStepTarget(
     val id: Int,
     val targetType: String,
     val targetId: Int,
-    val targetName: String? = null
+    val targetName: String? = null,
 )
 
 @Serializable
@@ -148,7 +148,7 @@ data class EscalationStep(
     val timeoutMinutes: Int,
     val smsFallbackDelayMinutes: Int = 2,
     val targets: List<EscalationStepTarget>,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
@@ -160,7 +160,7 @@ data class EscalationPolicy(
     val repeatCount: Int,
     val steps: List<EscalationStep>,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 // ===== On-Call Schedules =====
@@ -190,7 +190,7 @@ data class OnCallParticipant(
     val userId: Int,
     val userName: String,
     val userEmail: String,
-    val position: Int
+    val position: Int,
 )
 
 @Serializable
@@ -202,7 +202,7 @@ data class OnCallOverride(
     val startAt: String,
     val endAt: String,
     val createdBy: Int,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
@@ -220,7 +220,7 @@ data class OnCallSchedule(
     val slackUsergroupId: String? = null,
     val slackUsergroupHandle: String? = null,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 // ===== On-Call Incidents (User Declared) =====
@@ -256,7 +256,7 @@ data class OnCallIncident(
     val alertCount: Int = 0,
     val alerts: List<Incident> = emptyList(),
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 object OnCallIncidentTimeline : IntIdTable("on_call_incident_timeline") {
@@ -272,7 +272,10 @@ object OnCallIncidentTimeline : IntIdTable("on_call_incident_timeline") {
 object Incidents : IntIdTable("incidents") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.SET_NULL).nullable()
-    val escalationPolicyId = integer("escalation_policy_id").references(EscalationPolicies.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val escalationPolicyId =
+        integer(
+            "escalation_policy_id",
+        ).references(EscalationPolicies.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val title = varchar("title", 500)
     val description = text("description").nullable()
     val priorityLevel = varchar("priority_level", 10)
@@ -324,7 +327,7 @@ data class Incident(
     val nextEscalationAt: String? = null,
     val viewedByCurrentUser: Boolean = false,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 object OnCallIncidentAlerts : Table("on_call_incident_alerts") {
@@ -345,7 +348,7 @@ data class IncidentTimelineEvent(
     // Fields for merged on-call incident timeline
     val source: String? = null, // "incident" or "alert"
     val alertId: Int? = null,
-    val alertTitle: String? = null
+    val alertTitle: String? = null,
 )
 
 // ===== Device Tokens =====
@@ -367,7 +370,7 @@ data class UserDeviceToken(
     val platform: String,
     val deviceName: String? = null,
     val createdAt: String,
-    val lastUsedAt: String
+    val lastUsedAt: String,
 )
 
 // ===== Slack User Mappings =====
@@ -382,7 +385,7 @@ data class SlackUserMapping(
     val slackUserId: String,
     val slackTeamId: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 // ===== Twilio Notifications =====
@@ -401,12 +404,13 @@ object TwilioNotificationsSent : IntIdTable("twilio_notifications_sent") {
 
 object LocalTimeSerializer : KSerializer<LocalTime> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalTime", PrimitiveKind.STRING)
-    
-    override fun serialize(encoder: Encoder, value: LocalTime) {
+
+    override fun serialize(
+        encoder: Encoder,
+        value: LocalTime,
+    ) {
         encoder.encodeString(value.toString())
     }
-    
-    override fun deserialize(decoder: Decoder): LocalTime {
-        return LocalTime.parse(decoder.decodeString())
-    }
+
+    override fun deserialize(decoder: Decoder): LocalTime = LocalTime.parse(decoder.decodeString())
 }

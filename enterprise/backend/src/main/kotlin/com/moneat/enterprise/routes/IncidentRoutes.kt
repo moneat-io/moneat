@@ -6,16 +6,16 @@ package com.moneat.enterprise.routes
 
 import com.moneat.enterprise.services.oncall.IncidentManagementService
 import com.moneat.enterprise.services.oncall.OnCallIncidentService
-import io.ktor.http.HttpStatusCode
+import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.application
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.principal
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
@@ -29,71 +29,71 @@ import kotlinx.serialization.Serializable
 data class DeclareIncidentRequest(
     val title: String,
     val description: String? = null,
-    val priorityLevel: String
+    val priorityLevel: String,
 )
 
 @Serializable
 data class AddAlertToIncidentRequest(
-    val alertId: Int
+    val alertId: Int,
 )
 
 @Serializable
 data class ReassignIncidentRequest(
-    val toUserId: Int
+    val toUserId: Int,
 )
 
 @Serializable
 data class AddNoteRequest(
-    val note: String
+    val note: String,
 )
 
 fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementService) {
-    
     val onCallIncidentService = OnCallIncidentService()
-    
+
     route("/v1/incidents") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
-                
+
                 val status = call.request.queryParameters["status"]
                 val priorityLevel = call.request.queryParameters["priority"]
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
                 val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
-                
+
                 val incidentService = incidentServiceProvider()
-                val incidents = incidentService.listIncidents(
-                    organizationId = organizationId,
-                    status = status,
-                    priorityLevel = priorityLevel,
-                    limit = limit,
-                    offset = offset,
-                    currentUserId = principal.payload.getClaim("userId").asInt()
-                )
+                val incidents =
+                    incidentService.listIncidents(
+                        organizationId = organizationId,
+                        status = status,
+                        priorityLevel = priorityLevel,
+                        limit = limit,
+                        offset = offset,
+                        currentUserId = principal.payload.getClaim("userId").asInt(),
+                    )
                 call.respond(incidents)
             }
-            
+
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId, principal.payload.getClaim("userId").asInt())
                 if (incident != null && incident.organizationId == organizationId) {
@@ -102,54 +102,54 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                 }
             }
-            
+
             get("/{id}/timeline") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@get
                 }
-                
+
                 val timeline = incidentService.getTimeline(incidentId)
                 call.respond(timeline)
             }
-            
+
             post("/{id}/acknowledge") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val jwtUserId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 if (jwtUserId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
@@ -164,28 +164,28 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not acknowledge incident"))
                 }
             }
-            
+
             post("/{id}/resolve") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val jwtUserId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 if (jwtUserId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
@@ -200,37 +200,37 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not resolve incident"))
                 }
             }
-            
+
             post("/{id}/reassign") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val byUserId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 if (byUserId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
-                
+
                 val request = call.receive<ReassignIncidentRequest>()
-                
+
                 val reassigned = incidentService.reassign(incidentId, request.toUserId, byUserId)
                 if (reassigned) {
                     call.respond(HttpStatusCode.OK, MessageResponse("Incident reassigned"))
@@ -238,91 +238,91 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not reassign incident"))
                 }
             }
-            
+
             post("/{id}/notes") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
-                
+
                 val request = call.receive<AddNoteRequest>()
-                
+
                 val event = incidentService.addNote(incidentId, userId, request.note)
                 call.respond(HttpStatusCode.Created, event)
             }
-            
+
             post("/{id}/view") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null || userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
-                
+
                 incidentService.viewIncident(incidentId, userId)
                 call.respond(HttpStatusCode.OK, MessageResponse("Incident viewed"))
             }
-            
+
             post("/{id}/unavailable") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null || userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val incident = incidentService.getIncident(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
-                
+
                 val result = incidentService.markUnavailable(incidentId, userId)
                 if (result) {
                     call.respond(HttpStatusCode.OK, MessageResponse("Escalated to next on-call"))
@@ -330,41 +330,42 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not escalate incident"))
                 }
             }
-            
+
             post("/{alertId}/declare") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val alertId = call.parameters["alertId"]?.toIntOrNull()
-                
+
                 if (organizationId == null || userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (alertId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
-                
+
                 val incidentService = incidentServiceProvider()
                 val alert = incidentService.getIncident(alertId)
                 if (alert == null || alert.organizationId != organizationId) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
-                
+
                 val request = call.receive<DeclareIncidentRequest>()
-                
+
                 try {
-                    val incident = onCallIncidentService.declareIncident(
-                        organizationId = organizationId,
-                        userId = userId,
-                        alertId = alertId,
-                        title = request.title,
-                        description = request.description,
-                        priorityLevel = request.priorityLevel
-                    )
+                    val incident =
+                        onCallIncidentService.declareIncident(
+                            organizationId = organizationId,
+                            userId = userId,
+                            alertId = alertId,
+                            title = request.title,
+                            description = request.description,
+                            priorityLevel = request.priorityLevel,
+                        )
                     call.respond(HttpStatusCode.Created, incident)
                 } catch (e: IllegalStateException) {
                     call.respond(HttpStatusCode.Conflict, ErrorResponse(e.message))
@@ -374,44 +375,44 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
             }
         }
     }
-    
+
     route("/v1/on-call-incidents") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
-                
+
                 val status = call.request.queryParameters["status"]
                 val priorityLevel = call.request.queryParameters["priorityLevel"]
                 val incidents = onCallIncidentService.getIncidents(organizationId, status, priorityLevel)
                 call.respond(incidents)
             }
-            
+
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
-                
+
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@get
                 }
-                
+
                 val incident = onCallIncidentService.getIncident(incidentId)
                 if (incident != null) {
                     call.respond(incident)
@@ -419,28 +420,28 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                 }
             }
-            
+
             post("/{id}/resolve") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null || userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
-                
+
                 val incident = onCallIncidentService.resolveIncident(incidentId, userId)
                 if (incident != null) {
                     call.respond(incident)
@@ -448,36 +449,36 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to resolve incident"))
                 }
             }
-            
+
             post("/{id}/add-alert") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
-                
+
                 val request = call.receive<AddAlertToIncidentRequest>()
                 val incidentService = incidentServiceProvider()
                 val alert = incidentService.getIncident(request.alertId)
-                
+
                 if (alert == null || alert.organizationId != organizationId) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Alert not found or not in organization"))
                     return@post
                 }
-                
+
                 try {
                     onCallIncidentService.addAlertToIncident(incidentId, request.alertId)
                     call.respond(HttpStatusCode.OK, MessageResponse("Alert added to incident"))
@@ -485,52 +486,52 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 }
             }
-            
+
             get("/{id}/timeline") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@get
                 }
-                
+
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@get
                 }
-                
+
                 val timeline = onCallIncidentService.getIncidentTimeline(incidentId)
                 call.respond(timeline)
             }
-            
+
             post("/{id}/notes") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
                 val incidentId = call.parameters["id"]?.toIntOrNull()
-                
+
                 if (organizationId == null || userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 if (incidentId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
                     return@post
                 }
-                
+
                 if (!onCallIncidentService.isIncidentInOrganization(incidentId, organizationId)) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
                     return@post
                 }
-                
+
                 val request = call.receive<AddNoteRequest>()
                 onCallIncidentService.addNote(incidentId, userId, request.note)
                 call.respond(HttpStatusCode.OK, MessageResponse("Note added"))

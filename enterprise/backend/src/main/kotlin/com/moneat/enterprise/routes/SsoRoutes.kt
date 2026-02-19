@@ -5,26 +5,26 @@
 package com.moneat.enterprise.routes
 
 import com.moneat.config.EnvConfig
-import com.moneat.models.*
 import com.moneat.enterprise.models.*
 import com.moneat.enterprise.services.SsoService
+import com.moneat.models.*
 import com.moneat.utils.AuthCookieUtils
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
+import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.application
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.request.receiveParameters
+import io.ktor.server.auth.principal
 import io.ktor.server.request.*
+import io.ktor.server.request.receiveParameters
+import io.ktor.server.response.*
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
-import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -34,17 +34,17 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
 fun Route.ssoRoutes() {
     val ssoService = SsoService()
-    
+
     route("/auth/sso") {
         // Public SSO flow endpoints
         post("/init") {
@@ -60,7 +60,7 @@ fun Route.ssoRoutes() {
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("SSO initialization failed"))
             }
         }
-        
+
         get("/saml/metadata") {
             try {
                 val orgSlug = call.parameters["org"]
@@ -74,15 +74,15 @@ fun Route.ssoRoutes() {
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to generate SAML metadata"))
             }
         }
-        
+
         post("/saml/acs") {
             try {
                 val params = call.receiveParameters()
                 val samlResponse = params["SAMLResponse"] ?: throw IllegalArgumentException("Missing SAMLResponse")
                 val relayState = params["RelayState"]
-                
+
                 val callbackData = ssoService.handleSamlResponse(samlResponse, relayState)
-                
+
                 AuthCookieUtils.setAuthCookie(call, callbackData.token)
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/auth/sso/callback")
@@ -96,14 +96,14 @@ fun Route.ssoRoutes() {
                 call.respondRedirect("$dashboardUrl/login?error=sso_failed")
             }
         }
-        
+
         get("/oidc/callback") {
             try {
                 val code = call.parameters["code"] ?: throw IllegalArgumentException("Missing authorization code")
                 val state = call.parameters["state"] ?: throw IllegalArgumentException("Missing state parameter")
-                
+
                 val callbackData = ssoService.handleOidcCallback(code, state)
-                
+
                 AuthCookieUtils.setAuthCookie(call, callbackData.token)
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/auth/sso/callback")
@@ -118,34 +118,37 @@ fun Route.ssoRoutes() {
             }
         }
     }
-    
+
     // Protected SSO configuration endpoints
     route("/v1/sso") {
         authenticate("auth-jwt") {
             get("/config") {
                 try {
                     val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
-                        ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    
+                    val userId =
+                        principal?.payload?.getClaim("userId")?.asInt()
+                            ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+
                     // Get user's primary organization
-                    val orgId = call.parameters["organizationId"]?.toIntOrNull()
-                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
-                    
+                    val orgId =
+                        call.parameters["organizationId"]?.toIntOrNull()
+                            ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
+
                     // Verify user has access to this organization
-                    val isMember = transaction {
-                        Memberships.selectAll()
-                            .where {
-                                (Memberships.organization_id eq orgId) and
-                                (Memberships.user_id eq userId)
-                            }
-                            .firstOrNull() != null
-                    }
-                    
+                    val isMember =
+                        transaction {
+                            Memberships
+                                .selectAll()
+                                .where {
+                                    (Memberships.organization_id eq orgId) and
+                                        (Memberships.user_id eq userId)
+                                }.firstOrNull() != null
+                        }
+
                     if (!isMember) {
                         return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
                     }
-                    
+
                     val config = ssoService.getSsoConfig(orgId)
                     if (config != null) {
                         call.respond(config)
@@ -157,17 +160,19 @@ fun Route.ssoRoutes() {
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to retrieve SSO configuration"))
                 }
             }
-            
+
             put("/config") {
                 try {
                     val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
-                        ?: return@put call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    
+                    val userId =
+                        principal?.payload?.getClaim("userId")?.asInt()
+                            ?: return@put call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+
                     val request = call.receive<SsoConfigRequest>()
-                    val orgId = call.parameters["organizationId"]?.toIntOrNull()
-                        ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
-                    
+                    val orgId =
+                        call.parameters["organizationId"]?.toIntOrNull()
+                            ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
+
                     val config = ssoService.configureSso(orgId, userId, request)
                     call.respond(config)
                 } catch (e: IllegalArgumentException) {
@@ -178,16 +183,18 @@ fun Route.ssoRoutes() {
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to configure SSO"))
                 }
             }
-            
+
             delete("/config") {
                 try {
                     val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
-                        ?: return@delete call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    
-                    val orgId = call.parameters["organizationId"]?.toIntOrNull()
-                        ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
-                    
+                    val userId =
+                        principal?.payload?.getClaim("userId")?.asInt()
+                            ?: return@delete call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+
+                    val orgId =
+                        call.parameters["organizationId"]?.toIntOrNull()
+                            ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
+
                     val deleted = ssoService.deleteSsoConfig(orgId, userId)
                     if (deleted) {
                         call.respond(HttpStatusCode.OK, MessageResponse("SSO configuration deleted"))
@@ -202,13 +209,14 @@ fun Route.ssoRoutes() {
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete SSO configuration"))
                 }
             }
-            
+
             post("/check-required") {
                 try {
                     val request = call.receive<Map<String, String>>()
-                    val email = request["email"] 
-                        ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing email"))
-                    
+                    val email =
+                        request["email"]
+                            ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing email"))
+
                     val required = ssoService.checkSsoRequired(email)
                     call.respond(mapOf("required" to required))
                 } catch (e: Exception) {
