@@ -19,7 +19,7 @@ import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
-import {ThemeToggle} from '@/components/theme-toggle'
+import {ThemeSwitcher} from '@/components/theme-switcher'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
@@ -580,13 +580,13 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
           {isExpanded ? (
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-sm text-muted-foreground">Theme</span>
-              <ThemeToggle />
+              <ThemeSwitcher />
             </div>
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div>
-                  <ThemeToggle />
+                  <ThemeSwitcher />
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right">
