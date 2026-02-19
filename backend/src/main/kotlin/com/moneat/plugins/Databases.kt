@@ -20,7 +20,6 @@ import com.moneat.config.configureClickHouseMigrations
 import com.moneat.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import io.ktor.events.*
 import io.ktor.server.application.*
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
@@ -66,6 +65,16 @@ fun Application.configureDatabases() {
 
             val migrationsApplied = flyway.migrate()
             log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
+
+            val flywayInfo = flyway.info()
+            val resolvedMigrations = flywayInfo.all().size
+            val appliedMigrations = flywayInfo.applied().size
+            if (resolvedMigrations == 0 || appliedMigrations == 0) {
+                throw IllegalStateException(
+                    "Flyway resolved=$resolvedMigrations applied=$appliedMigrations. " +
+                        "Database is not in a valid migrated state."
+                )
+            }
         } else {
             log.info("Test database detected (H2), skipping PostgreSQL migrations")
         }
