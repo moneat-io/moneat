@@ -17,15 +17,15 @@
 package com.moneat.services.incident
 
 import com.moneat.config.EnvConfig
-import com.moneat.models.*
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.models.*
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 
@@ -36,7 +36,7 @@ import kotlin.time.Clock
 class IncidentService {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
-    
+
     /**
      * Fire an alert to all enabled incident providers for the organization.
      * Severity is resolved in order: per-monitor override > routing rule default > skip
@@ -45,17 +45,17 @@ class IncidentService {
         try {
             // Check if native on-call is enabled
             val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
-            
+
             if (onCallEnabled) {
                 triggerNativeEscalation(event)
             }
-            
+
             val configs = getEnabledProviderConfigs(event.organizationId)
             if (configs.isEmpty()) {
                 logger.debug("No enabled incident providers for org ${event.organizationId}")
                 return
             }
-            
+
             configs.forEach { config ->
                 try {
                     // Check if we should route this alert
@@ -64,7 +64,7 @@ class IncidentService {
                         logger.debug("Skipping alert for provider ${config.name}: no routing rule for ${event.source}")
                         return@forEach
                     }
-                    
+
                     // Get the provider implementation
                     val provider = IncidentProviderRegistry.getProvider(config.providerType)
                     if (provider == null) {
@@ -72,10 +72,10 @@ class IncidentService {
                         logEvent(config, event, success = false, errorMessage = "Provider not registered")
                         return@forEach
                     }
-                    
+
                     // Send the alert
                     val result = provider.sendAlert(event, config)
-                    
+
                     result.fold(
                         onSuccess = { incidentId ->
                             logger.info("Alert sent to ${config.name}: $incidentId")
@@ -95,7 +95,7 @@ class IncidentService {
             logger.error("Error firing alert", e)
         }
     }
-    
+
     /**
      * Resolve an alert with all enabled incident providers.
      */
@@ -105,7 +105,7 @@ class IncidentService {
             if (configs.isEmpty()) {
                 return
             }
-            
+
             configs.forEach { config ->
                 try {
                     // Check if this provider has a routing rule for this source
@@ -114,35 +114,56 @@ class IncidentService {
                         logger.debug("Skipping resolve for provider ${config.name}: no routing rule for $source")
                         return@forEach
                     }
-                    
+
                     val provider = IncidentProviderRegistry.getProvider(config.providerType)
                     if (provider == null) {
                         logger.error("Provider type ${config.providerType} not registered")
                         return@forEach
                     }
-                    
+
                     val result = provider.resolveAlert(deduplicationKey, config)
-                    
+
                     result.fold(
                         onSuccess = { incidentId ->
                             logger.info("Alert resolved with ${config.name}: $incidentId")
-                            logResolveEvent(config, organizationId, source, deduplicationKey, success = true, providerIncidentId = incidentId)
+                            logResolveEvent(
+                                config,
+                                organizationId,
+                                source,
+                                deduplicationKey,
+                                success = true,
+                                providerIncidentId = incidentId
+                            )
                         },
                         onFailure = { error ->
                             logger.error("Failed to resolve alert with ${config.name}: ${error.message}", error)
-                            logResolveEvent(config, organizationId, source, deduplicationKey, success = false, errorMessage = error.message)
+                            logResolveEvent(
+                                config,
+                                organizationId,
+                                source,
+                                deduplicationKey,
+                                success = false,
+                                errorMessage = error.message
+                            )
                         }
                     )
                 } catch (e: Exception) {
                     logger.error("Error resolving alert for provider ${config.name}", e)
-                    logResolveEvent(config, organizationId, source, deduplicationKey, success = false, errorMessage = e.message)
+                    logResolveEvent(
+                        config,
+                        organizationId,
+                        source,
+                        deduplicationKey,
+                        success = false,
+                        errorMessage = e.message
+                    )
                 }
             }
         } catch (e: Exception) {
             logger.error("Error resolving alert", e)
         }
     }
-    
+
     /**
      * Get incident severity from per-monitor override or routing rule.
      * Returns null if no severity is configured (alert should be skipped).
@@ -156,24 +177,24 @@ class IncidentService {
         monitorSeverityOverride?.let {
             return IncidentSeverity.fromString(it)
         }
-        
+
         // Fall back to routing rule
         return transaction {
             IncidentRoutingRules.selectAll().where {
                 (IncidentRoutingRules.providerConfigId eq providerConfigId) and
-                (IncidentRoutingRules.alertSource eq alertSource.name) and
-                IncidentRoutingRules.alertType.isNull()
+                    (IncidentRoutingRules.alertSource eq alertSource.name) and
+                    IncidentRoutingRules.alertType.isNull()
             }.firstOrNull()?.let { row ->
                 IncidentSeverity.fromString(row[IncidentRoutingRules.incidentSeverity])
             }
         }
     }
-    
+
     private fun getEnabledProviderConfigs(organizationId: Int): List<ProviderConfig> {
         return transaction {
             IncidentProviderConfigs.selectAll().where {
                 (IncidentProviderConfigs.organizationId eq organizationId) and
-                (IncidentProviderConfigs.enabled eq true)
+                    (IncidentProviderConfigs.enabled eq true)
             }.map { row ->
                 ProviderConfig(
                     id = row[IncidentProviderConfigs.id].value,
@@ -192,17 +213,17 @@ class IncidentService {
             }
         }
     }
-    
+
     private fun shouldRouteAlert(providerConfigId: Int, source: AlertSource): Boolean {
         return transaction {
             IncidentRoutingRules.selectAll()
                 .where {
                     (IncidentRoutingRules.providerConfigId eq providerConfigId) and
-                    (IncidentRoutingRules.alertSource eq source.name)
+                        (IncidentRoutingRules.alertSource eq source.name)
                 }.count() > 0
         }
     }
-    
+
     private fun logEvent(
         config: ProviderConfig,
         event: IncidentEvent,
@@ -228,7 +249,7 @@ class IncidentService {
             }
         }
     }
-    
+
     private fun logResolveEvent(
         config: ProviderConfig,
         organizationId: Int,
@@ -256,7 +277,7 @@ class IncidentService {
             }
         }
     }
-    
+
     /**
      * Trigger native on-call escalation engine if configured.
      */
@@ -269,27 +290,27 @@ class IncidentService {
         try {
             // Check if organization has an escalation policy for this alert source
             val escalationPolicyId = getEscalationPolicyForSource(event.organizationId, event.source)
-            
+
             if (escalationPolicyId == null) {
                 logger.debug("No escalation policy configured for org ${event.organizationId}, source ${event.source}")
                 return
             }
-            
+
             // Resolve priority level from severity
             val priority = bridge.resolvePriority(event.organizationId, event.severity.name)
             if (priority == null) {
                 logger.warn("Could not resolve priority for severity ${event.severity}")
                 return
             }
-            
+
             // Check if we should escalate based on business hours
             val shouldEscalate = bridge.shouldEscalate(event.organizationId, priority.priorityLevel)
-            
+
             if (!shouldEscalate) {
                 logger.debug("Alert deferred: outside business hours for priority ${priority.priorityLevel}")
                 return
             }
-            
+
             // Trigger escalation
             val incidentId = bridge.triggerEscalation(
                 organizationId = event.organizationId,
@@ -308,7 +329,7 @@ class IncidentService {
                     null
                 }
             )
-            
+
             if (incidentId != null) {
                 logger.info("Native escalation triggered for incident $incidentId")
             }
@@ -316,7 +337,7 @@ class IncidentService {
             logger.error("Error triggering native escalation", e)
         }
     }
-    
+
     /**
      * Get the escalation policy ID for a given alert source.
      * This could be extended to support per-source routing rules.

@@ -18,11 +18,11 @@ package com.moneat.services
 
 import com.moneat.models.*
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
@@ -32,29 +32,29 @@ import java.util.*
 
 class ReleaseService {
     private val dateFormatter = DateTimeFormatter.ISO_INSTANT
-    
+
     /**
      * Create a new release for a project
      */
     fun createRelease(projectId: Long, version: String, ref: String?): ReleaseResponse {
         val createdAt = System.currentTimeMillis()
-        
+
         val projectSlug = transaction {
             // Check if release already exists
             val existing = Releases.selectAll()
                 .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
                 .firstOrNull()
-            
+
             if (existing != null) {
                 throw IllegalArgumentException("Release $version already exists for this project")
             }
-            
+
             // Get project slug for response
             val project = Projects.selectAll()
                 .where { Projects.id eq projectId }
                 .firstOrNull()
                 ?: throw IllegalArgumentException("Project not found")
-            
+
             // Create release
             Releases.insert {
                 it[project_id] = projectId
@@ -62,10 +62,10 @@ class ReleaseService {
                 it[Releases.ref] = ref
                 it[created_at] = createdAt
             }
-            
+
             project[Projects.slug]
         }
-        
+
         return ReleaseResponse(
             version = version,
             ref = ref,
@@ -73,7 +73,7 @@ class ReleaseService {
             dateCreated = formatTimestamp(createdAt)
         )
     }
-    
+
     /**
      * Upload a source map file to a release
      */
@@ -84,27 +84,27 @@ class ReleaseService {
         fileContent: ByteArray
     ): SourceMapFileResponse {
         val createdAt = System.currentTimeMillis()
-        
+
         return transaction {
             // Find the release
             val release = Releases.selectAll()
                 .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
                 .firstOrNull()
                 ?: throw IllegalArgumentException("Release $version not found")
-            
+
             val releaseId = release[Releases.id]
-            
+
             // Create storage directory if it doesn't exist
             val storageDir = File("./storage/sourcemaps/$projectId/$version")
             storageDir.mkdirs()
-            
+
             // Generate unique filename to prevent overwrites
             val uniqueFileName = "${UUID.randomUUID()}_${fileName.replace("/", "_")}"
             val storagePath = "${storageDir.path}/$uniqueFileName"
-            
+
             // Write file to disk
             File(storagePath).writeBytes(fileContent)
-            
+
             // Save file metadata to database
             val fileId = ReleaseFiles.insert {
                 it[release_id] = releaseId
@@ -114,7 +114,7 @@ class ReleaseService {
                 it[file_type] = if (fileName.endsWith(".map")) "source_map" else "source_file"
                 it[ReleaseFiles.created_at] = createdAt
             }[ReleaseFiles.id]
-            
+
             SourceMapFileResponse(
                 id = fileId,
                 name = fileName,
@@ -122,19 +122,19 @@ class ReleaseService {
             )
         }
     }
-    
+
     /**
      * Auto-detect and upsert release from an incoming event.
      * Creates the release if it doesn't exist, or updates last_seen and event_count.
      */
     fun upsertReleaseFromEvent(projectId: Long, version: String, eventTimestampMs: Long) {
         if (version.isBlank()) return
-        
+
         transaction {
             val existing = Releases.selectAll()
                 .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
                 .firstOrNull()
-            
+
             if (existing != null) {
                 val currentFirstSeen = existing[Releases.first_seen]
                 Releases.update(
@@ -160,7 +160,7 @@ class ReleaseService {
             }
         }
     }
-    
+
     /**
      * Get a release by version
      */
@@ -170,12 +170,12 @@ class ReleaseService {
                 .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
                 .firstOrNull()
                 ?: return@transaction null
-            
+
             val project = Projects.selectAll()
                 .where { Projects.id eq projectId }
                 .firstOrNull()
                 ?: return@transaction null
-            
+
             ReleaseResponse(
                 version = release[Releases.version],
                 ref = release[Releases.ref],
@@ -184,7 +184,7 @@ class ReleaseService {
             )
         }
     }
-    
+
     /**
      * List all releases for a project
      */
@@ -194,7 +194,7 @@ class ReleaseService {
                 .where { Projects.id eq projectId }
                 .firstOrNull()
                 ?: return@transaction emptyList()
-            
+
             Releases.selectAll()
                 .where { Releases.project_id eq projectId }
                 .orderBy(Releases.created_at, SortOrder.DESC)
@@ -208,7 +208,7 @@ class ReleaseService {
                 }
         }
     }
-    
+
     /**
      * List source map files for a release
      */
@@ -218,9 +218,9 @@ class ReleaseService {
                 .where { (Releases.project_id eq projectId) and (Releases.version eq version) }
                 .firstOrNull()
                 ?: return@transaction emptyList()
-            
+
             val releaseId = release[Releases.id]
-            
+
             ReleaseFiles.selectAll()
                 .where { ReleaseFiles.release_id eq releaseId }
                 .orderBy(ReleaseFiles.created_at, SortOrder.DESC)
@@ -233,7 +233,7 @@ class ReleaseService {
                 }
         }
     }
-    
+
     /**
      * Check if user has access to a project
      */
@@ -243,15 +243,15 @@ class ReleaseService {
                 .where { Projects.id eq projectId }
                 .firstOrNull()
                 ?: return@transaction false
-            
+
             val orgId = project[Projects.organization_id]
-            
+
             Memberships.selectAll()
                 .where { (Memberships.user_id eq userId) and (Memberships.organization_id eq orgId) }
                 .count() > 0
         }
     }
-    
+
     /**
      * Get project ID by organization slug and project slug
      */
@@ -261,16 +261,16 @@ class ReleaseService {
                 .where { Organizations.slug eq orgSlug }
                 .firstOrNull()
                 ?: return@transaction null
-            
+
             val orgId = org[Organizations.id]
-            
+
             Projects.selectAll()
                 .where { (Projects.organization_id eq orgId) and (Projects.slug eq projectSlug) }
                 .firstOrNull()
                 ?.get(Projects.id)
         }
     }
-    
+
     /**
      * Format timestamp to ISO-8601 string
      */

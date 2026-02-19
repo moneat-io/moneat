@@ -22,18 +22,15 @@ import com.moneat.services.LogService
 import com.moneat.services.MonitorAlertService
 import com.moneat.services.MonitorService
 import com.moneat.services.UsageTrackingService
-import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
-import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.call
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
+import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.request.header
+import io.ktor.server.auth.principal
 import io.ktor.server.request.*
+import io.ktor.server.request.header
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -41,21 +38,19 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.*
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
 
 @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-private val json = Json { 
+private val json = Json {
     ignoreUnknownKeys = true
     isLenient = true
     encodeDefaults = true
@@ -98,9 +93,8 @@ fun Route.monitorRoutes() {
     val usageTracking = UsageTrackingService.instance
     val quotaService = BillingQuotaService()
     val logService = LogService()
-    
+
     route("/v1/monitor") {
-        
         /**
          * Agent-facing ingestion endpoint.
          * Auth: Bearer token (agent key)
@@ -113,39 +107,39 @@ fun Route.monitorRoutes() {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid Authorization header"))
                     return@post
                 }
-                
+
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
                 val (systemId, organizationId) = monitorService.validateAgentKey(agentKey) ?: run {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid agent key"))
                     return@post
                 }
-                
+
                 // Parse payload
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
-                
+
                 val decompressedBytes = if (contentEncoding == "gzip") {
                     java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
                 } else {
                     bodyBytes
                 }
-                
+
                 val payload = json.decodeFromString<SystemMetricsPayload>(
                     decompressedBytes.decodeToString()
                 )
-                
+
                 logger.debug { "Received metrics from system $systemId (org $organizationId)" }
-                
+
                 // Track bandwidth usage
                 usageTracking.recordUsage(
                     projectId = systemId.mostSignificantBits, // Use system UUID as pseudo-project for usage tracking
                     eventType = "system_metric",
                     byteSize = bodyBytes.size
                 )
-                
+
                 // Ingest metrics and get poll interval
                 val intervalSeconds = monitorService.ingestMetrics(systemId, organizationId, payload)
-                
+
                 call.respond(
                     HttpStatusCode.OK,
                     IngestResponse(
@@ -250,28 +244,27 @@ fun Route.monitorRoutes() {
                 )
             }
         }
-        
+
         /**
          * Dashboard-facing endpoints (JWT auth required).
          */
         authenticate("auth-jwt") {
-            
             // List all systems for organization
             get("/systems") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
-                
+
                 // Get systems from all user's organizations
                 val allSystems = organizationIds.flatMap { orgId ->
                     monitorService.listSystems(orgId)
                 }
-                
+
                 val response = allSystems.map { system ->
                     SystemResponse(
                         id = system.id.toString(),
@@ -287,24 +280,24 @@ fun Route.monitorRoutes() {
                         latest_metrics = monitorService.getLatestMetrics(system.id)
                     )
                 }
-                
+
                 call.respond(HttpStatusCode.OK, response)
             }
-            
+
             // Create a new system
             post("/systems") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@post
                 }
-                
+
                 // Use the first organization for creating the system
                 val organizationId = organizationIds.first()
-                
+
                 // Check quota
                 if (!monitorService.checkSystemQuota(organizationId)) {
                     call.respond(
@@ -313,10 +306,10 @@ fun Route.monitorRoutes() {
                     )
                     return@post
                 }
-                
+
                 val request = call.receive<CreateSystemRequest>()
                 val (system, agentKey) = monitorService.createSystem(organizationId, request.name)
-                
+
                 // Generate docker run command
                 val dockerCommand = """
                     docker run -d --name moneat-agent \
@@ -326,7 +319,7 @@ fun Route.monitorRoutes() {
                       -e MONEAT_KEY="$agentKey" \
                       adrianelder/moneat-agent:latest
                 """.trimIndent()
-                
+
                 call.respond(
                     HttpStatusCode.Created,
                     CreateSystemResponse(
@@ -348,32 +341,32 @@ fun Route.monitorRoutes() {
                     )
                 )
             }
-            
+
             // Get system details
             get("/systems/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
-                
+
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
-                
+
                 call.respond(
                     HttpStatusCode.OK,
                     SystemResponse(
@@ -391,184 +384,188 @@ fun Route.monitorRoutes() {
                     )
                 )
             }
-            
+
             // Delete system
             delete("/systems/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@delete
                 }
-                
+
                 // Check if system belongs to any of user's organizations
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@delete
                 }
-                
+
                 val deleted = monitorService.deleteSystem(systemId, system.organizationId)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@delete
                 }
-                
+
                 call.respond(HttpStatusCode.NoContent)
             }
-            
+
             // Get historical metrics with downsampling
             get("/systems/{id}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
-                
+
                 val fromParam = call.request.queryParameters["from"]?.toLongOrNull()
                 val toParam = call.request.queryParameters["to"]?.toLongOrNull()
                 val intervalParam = call.request.queryParameters["interval"]?.toIntOrNull()
-                
+
                 if (fromParam == null || toParam == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing required parameters: from, to"))
                     return@get
                 }
-                
+
                 val response = monitorService.getHistoricalMetrics(systemId, fromParam, toParam, intervalParam)
                 call.respond(HttpStatusCode.OK, response)
             }
-            
+
             // Get latest container stats
             get("/systems/{id}/containers") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
-                
+
                 val containers = monitorService.getLatestContainers(systemId)
                 call.respond(HttpStatusCode.OK, ContainerStatsResponse(containers = containers))
             }
-            
+
             // Get container historical metrics
             get("/systems/{id}/containers/{name}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
                 val containerName = call.parameters["name"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
-                
+
                 if (containerName == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing container name"))
                     return@get
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
-                
+
                 val fromParam = call.request.queryParameters["from"]?.toLongOrNull()
                 val toParam = call.request.queryParameters["to"]?.toLongOrNull()
                 val intervalParam = call.request.queryParameters["interval"]?.toIntOrNull()
-                
+
                 if (fromParam == null || toParam == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing required parameters: from, to"))
                     return@get
                 }
-                
+
                 val response = monitorService.getContainerHistoricalMetrics(
-                    systemId, containerName, fromParam, toParam, intervalParam
+                    systemId,
+                    containerName,
+                    fromParam,
+                    toParam,
+                    intervalParam
                 )
                 call.respond(HttpStatusCode.OK, response)
             }
-            
+
             // Get logs for a system (container logs)
             get("/systems/{id}/logs") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
-                
+
                 // Parse query parameters
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
                 val cursor = call.request.queryParameters["cursor"]
@@ -579,7 +576,7 @@ fun Route.monitorRoutes() {
                 val containerName = call.request.queryParameters["container_name"]
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
-                
+
                 val logRequest = LogQueryRequest(
                     limit = limit,
                     cursor = cursor,
@@ -592,38 +589,38 @@ fun Route.monitorRoutes() {
                     systemId = systemIdStr,
                     containerName = containerName
                 )
-                
+
                 // Use a dummy projectId (0) since we're querying by systemId
                 val response = logService.queryLogs(0L, logRequest)
                 call.respond(HttpStatusCode.OK, response)
             }
-            
+
             // List alerts for a system
             get("/systems/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@get
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@get
                 }
-                
+
                 val alerts = monitorService.listAlerts(systemId)
                 call.respond(HttpStatusCode.OK, alerts)
             }
@@ -692,33 +689,33 @@ fun Route.monitorRoutes() {
                 monitorService.updateAlertScope(systemId, system.organizationId, scope)
                 call.respond(HttpStatusCode.NoContent)
             }
-            
+
             // Create an alert
             post("/systems/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["id"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@post
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@post
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@post
                 }
-                
+
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
@@ -729,40 +726,40 @@ fun Route.monitorRoutes() {
                 val alert = monitorService.createAlert(systemId, system.organizationId, request, scope)
                 call.respond(HttpStatusCode.Created, alert)
             }
-            
+
             // Update an alert
             put("/systems/{systemId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["systemId"]
                 val alertIdStr = call.parameters["alertId"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@put
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@put
                 }
-                
+
                 val alertId = alertIdStr?.toIntOrNull()
                 if (alertId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@put
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@put
                 }
-                
+
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
@@ -775,43 +772,43 @@ fun Route.monitorRoutes() {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@put
                 }
-                
+
                 call.respond(HttpStatusCode.NoContent)
             }
-            
+
             // Delete an alert
             delete("/systems/{systemId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val systemIdStr = call.parameters["systemId"]
                 val alertIdStr = call.parameters["alertId"]
-                
+
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete
                 }
-                
+
                 val systemId = try {
                     UUID.fromString(systemIdStr)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
                     return@delete
                 }
-                
+
                 val alertId = alertIdStr?.toIntOrNull()
                 if (alertId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@delete
                 }
-                
+
                 // Verify ownership
                 val system = monitorService.getSystemById(systemId)
                 if (system == null || system.organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
                     return@delete
                 }
-                
+
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
@@ -823,7 +820,7 @@ fun Route.monitorRoutes() {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@delete
                 }
-                
+
                 call.respond(HttpStatusCode.NoContent)
             }
 

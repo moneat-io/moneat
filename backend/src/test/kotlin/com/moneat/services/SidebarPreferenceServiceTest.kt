@@ -82,8 +82,10 @@ class SidebarPreferenceServiceTest {
 
     @Test
     fun `normalizeHiddenItems accepts all configurable items`() {
-        val all = listOf("dashboard", "performance", "issues", "logs", "replays",
-            "feedback", "releases", "ai", "uptime", "status-pages", "monitoring", "on-call")
+        val all = listOf(
+            "dashboard", "performance", "issues", "logs", "replays",
+            "feedback", "releases", "ai", "uptime", "status-pages", "monitoring", "on-call"
+        )
         val result = SidebarPreferenceService.normalizeHiddenItems(all)
         assertEquals(all.sorted(), result)
     }
@@ -105,7 +107,11 @@ class SidebarPreferenceServiceTest {
 
         val result = transaction {
             SidebarPreferenceService.updatePreferences(
-                memId, userId, orgId, listOf("replays", "unknown", "issues"), "test"
+                memId,
+                userId,
+                orgId,
+                listOf("replays", "unknown", "issues"),
+                "test"
             )
         }
         assertEquals(listOf("issues", "replays"), result)

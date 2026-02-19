@@ -32,7 +32,7 @@ class PublicBillingRoutesTest {
     companion object {
         private var dbInitialized = false
     }
-    
+
     @BeforeTest
     fun setupDatabase() {
         // Initialize DB connection and schema once per test class
@@ -46,7 +46,7 @@ class PublicBillingRoutesTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             PricingTierConfigs.deleteAll()
@@ -92,9 +92,9 @@ class PublicBillingRoutesTest {
     fun `billing plans endpoint returns feature flags`() {
         val pricingTierService = PricingTierService()
         val plans = pricingTierService.getCurrentPlans()
-        
+
         assertEquals(1, plans.size)
-        
+
         val plan = plans[0]
         assertEquals("FREE", plan.tier.tierName)
         assertTrue(plan.tier.statusPagesEnabled)

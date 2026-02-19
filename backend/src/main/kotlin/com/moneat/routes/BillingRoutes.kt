@@ -20,22 +20,18 @@ import com.moneat.models.BillingPlansListResponse
 import com.moneat.models.CheckoutSessionRequest
 import com.moneat.models.Subscriptions
 import com.moneat.models.UpdateOnCallSeatsRequest
-import com.moneat.models.UpdateOnCallSeatsResponse
 import com.moneat.models.UpdatePaygBudgetRequest
 import com.moneat.models.UpdatePaygBudgetResponse
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.PricingTierService
 import com.moneat.services.StripeService
 import com.moneat.services.UsageTrackingService
-import io.ktor.http.HttpStatusCode
-import com.moneat.utils.ErrorResponse
-import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.application
+import com.moneat.utils.ErrorResponse
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.principal
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
@@ -43,18 +39,14 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.*
 
 private val logger = KotlinLogging.logger {}
 
@@ -97,13 +89,18 @@ fun Route.billingRoutes() {
             }
 
             val usage = quotaService.getUsageForOrganization(orgId)
-            
+
             // Compute accurate usedBytes from usage_records
             try {
                 val startDate = LocalDate.parse(usage.periodStart)
                 val endDate = LocalDate.parse(usage.periodEnd)
                 val computedBytes = usageTrackingService.getTotalBytesForOrg(orgId, startDate, endDate)
-                val computedLogs = usageTrackingService.getEventCountForOrg(orgId, startDate, endDate, listOf("log", "logs"))
+                val computedLogs = usageTrackingService.getEventCountForOrg(
+                    orgId,
+                    startDate,
+                    endDate,
+                    listOf("log", "logs")
+                )
                 call.respond(
                     usage.copy(
                         usedBytes = maxOf(computedBytes, usage.usedBytes),
@@ -141,7 +138,10 @@ fun Route.billingRoutes() {
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid checkout request")))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse((e.message ?: "Failed to create checkout session")))
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                )
             }
         }
 
@@ -234,9 +234,15 @@ fun Route.billingRoutes() {
             try {
                 call.respond(stripeService.cancelSubscription(orgId))
             } catch (e: IllegalStateException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "No cancelable subscription found")))
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse((e.message ?: "No cancelable subscription found"))
+                )
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse((e.message ?: "Failed to cancel subscription")))
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                )
             }
         }
 
@@ -292,7 +298,7 @@ fun Route.billingRoutes() {
                 call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                 return@put
             }
-            
+
             val request = call.receive<UpdateOnCallSeatsRequest>()
             if (request.seats < 0) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Seats must be non-negative"))
@@ -313,7 +319,10 @@ fun Route.billingRoutes() {
                 0
             }
             if (request.seats < usedSeats) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Cannot reduce seats below currently assigned users ($usedSeats)"))
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse("Cannot reduce seats below currently assigned users ($usedSeats)")
+                )
                 return@put
             }
 

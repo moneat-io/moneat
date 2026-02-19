@@ -19,7 +19,6 @@ package com.moneat.logging
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.AppenderBase
 import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -28,22 +27,24 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     var dsn: String = ""
     var serviceName: String = "moneat-backend"
     var environment: String = "development"
-    
+
     private val executor = Executors.newSingleThreadExecutor()
-    
+
     override fun start() {
         super.start()
         // Log appender configuration on startup
         if (dsn.isBlank()) {
             System.err.println("[MoneatLogAppender] WARNING: DSN is blank - logs will NOT be shipped to remote")
         } else {
-            System.err.println("[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, environment=$environment, dsn=<set>")
+            System.err.println(
+                "[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, environment=$environment, dsn=<set>"
+            )
         }
     }
-    
+
     override fun append(event: ILoggingEvent) {
         if (dsn.isBlank()) return
-        
+
         executor.submit {
             try {
                 sendLog(event)
@@ -52,7 +53,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             }
         }
     }
-    
+
     private fun sendLog(event: ILoggingEvent) {
         val payload = """
 {
@@ -73,7 +74,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
   }]
 }
         """.trimIndent()
-        
+
         val connection = java.net.URI(endpoint).toURL().openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
@@ -82,14 +83,14 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             connection.doOutput = true
             connection.connectTimeout = 1000
             connection.readTimeout = 1000
-            
+
             connection.outputStream.use { it.write(payload.toByteArray()) }
             connection.responseCode // Trigger request
         } finally {
             connection.disconnect()
         }
     }
-    
+
     private fun escapeJson(str: String): String {
         return "\"" + str
             .replace("\\", "\\\\")
@@ -98,7 +99,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             .replace("\r", "\\r")
             .replace("\t", "\\t") + "\""
     }
-    
+
     override fun stop() {
         executor.shutdown()
         executor.awaitTermination(5, TimeUnit.SECONDS)

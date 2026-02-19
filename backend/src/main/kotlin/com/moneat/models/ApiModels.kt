@@ -71,7 +71,7 @@ data class ProjectResponse(
     val slug: String,
     val framework: String?,
     val keys: List<ProjectKeyResponse>,
-    val dsn: String,  // First key's DSN for backward compatibility
+    val dsn: String, // First key's DSN for backward compatibility
     val issueCount: Long = 0
 )
 
@@ -540,9 +540,9 @@ data class FeedbackUpdateRequest(
 
 @Serializable
 data class TestNotificationRequest(
-    val type: String,  // error_alert, weekly_summary, system_up, system_down, uptime_alert, verification, password_reset
-    val channel: String,  // email, slack, both
-    val testEmail: String? = null  // Optional test email address
+    val type: String, // error_alert, weekly_summary, system_up, system_down, uptime_alert, verification, password_reset
+    val channel: String, // email, slack, both
+    val testEmail: String? = null // Optional test email address
 )
 
 @Serializable

@@ -133,24 +133,27 @@ class PricingTierServiceTest {
     fun `createTierVersion increments version`() {
         seedTier("PRO", version = 1)
 
-        val created = service.createTierVersion("PRO", CreateTierVersionRequest(
-            monthlyUnitLimit = 50_000,
-            monthlyErrorLimit = 50_000,
-            monthlyTransactionLimit = 0,
-            monthlyReplayLimit = 0,
-            monthlyFeedbackLimit = 0,
-            monthlyGbLimit = 1_073_741_824,
-            retentionDays = 7,
-            logRetentionDays = 7,
-            maxProjects = 5,
-            maxSystems = 5,
-            monitorIntervalSeconds = 60,
-            monthlyPriceCents = 2900,
-            yearlyPriceCents = 24900,
-            trialDays = 14,
-            paygEnabled = false,
-            paygRateMicrosPerUnit = 0
-        ))
+        val created = service.createTierVersion(
+            "PRO",
+            CreateTierVersionRequest(
+                monthlyUnitLimit = 50_000,
+                monthlyErrorLimit = 50_000,
+                monthlyTransactionLimit = 0,
+                monthlyReplayLimit = 0,
+                monthlyFeedbackLimit = 0,
+                monthlyGbLimit = 1_073_741_824,
+                retentionDays = 7,
+                logRetentionDays = 7,
+                maxProjects = 5,
+                maxSystems = 5,
+                monitorIntervalSeconds = 60,
+                monthlyPriceCents = 2900,
+                yearlyPriceCents = 24900,
+                trialDays = 14,
+                paygEnabled = false,
+                paygRateMicrosPerUnit = 0
+            )
+        )
 
         assertEquals(2, created.version)
         assertEquals("PRO", created.tierName)

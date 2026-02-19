@@ -18,17 +18,12 @@ package com.moneat.routes
 
 import com.moneat.models.*
 import com.moneat.services.UptimeService
-import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
-import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.application
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.authentication
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.principal
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
@@ -37,17 +32,14 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
-import kotlin.time.Clock
-import kotlin.time.Instant
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.*
 import java.util.*
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
 
@@ -66,9 +58,8 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
  */
 fun Route.uptimeRoutes() {
     val uptimeService = UptimeService()
-    
+
     route("/v1/uptime") {
-        
         /**
          * Push monitor heartbeat endpoint (no auth required).
          */
@@ -79,24 +70,24 @@ fun Route.uptimeRoutes() {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing token"))
                     return@post
                 }
-                
+
                 val monitor = uptimeService.getMonitorByPushToken(token)
                 if (monitor == null) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Invalid push token"))
                     return@post
                 }
-                
+
                 // Parse optional payload
                 val body = try {
                     call.receive<Map<String, Any>>()
                 } catch (_: Exception) {
                     emptyMap()
                 }
-                
+
                 val status = (body["status"] as? String)?.toIntOrNull() ?: 1
                 val message = body["msg"] as? String ?: "Push received"
                 val ping = (body["ping"] as? Number)?.toFloat() ?: -1f
-                
+
                 // Record heartbeat
                 val result = CheckResult(
                     status = status,
@@ -105,20 +96,19 @@ fun Route.uptimeRoutes() {
                     message = message,
                     pingMs = ping
                 )
-                
+
                 uptimeService.recordHeartbeat(monitor.id, result)
                 uptimeService.updateMonitorStatus(monitor.id, result)
-                
+
                 call.respond(HttpStatusCode.OK, mapOf("ok" to true))
             } catch (e: Exception) {
                 logger.error(e) { "Push heartbeat error: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
             }
         }
-        
+
         // All other routes require authentication
         authenticate("auth-jwt") {
-            
             /**
              * List all monitors for organization.
              */
@@ -126,28 +116,28 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@get
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@get
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val monitors = uptimeService.listMonitors(organizationId)
-                    
+
                     call.respond(HttpStatusCode.OK, monitors)
                 } catch (e: Exception) {
                     logger.error(e) { "List monitors error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list monitors"))
                 }
             }
-            
+
             /**
              * Create a new monitor.
              */
@@ -155,42 +145,42 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@post
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@post
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val request = call.receive<CreateUptimeMonitorRequest>()
-                    
+
                     // Validate required fields based on type
                     val validationError = validateMonitorRequest(request)
                     if (validationError != null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse(validationError))
                         return@post
                     }
-                    
+
                     val monitor = try {
                         uptimeService.createMonitor(organizationId, request)
                     } catch (e: IllegalStateException) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                         return@post
                     }
-                    
+
                     call.respond(HttpStatusCode.Created, monitor)
                 } catch (e: Exception) {
                     logger.error(e) { "Create monitor error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create monitor"))
                 }
             }
-            
+
             /**
              * Get monitor details.
              */
@@ -198,18 +188,18 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@get
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@get
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val monitorId = try {
                         UUID.fromString(call.parameters["id"])
@@ -217,20 +207,20 @@ fun Route.uptimeRoutes() {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
                         return@get
                     }
-                    
+
                     val monitor = uptimeService.getMonitor(monitorId, organizationId)
                     if (monitor == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found"))
                         return@get
                     }
-                    
+
                     call.respond(HttpStatusCode.OK, monitor)
                 } catch (e: Exception) {
                     logger.error(e) { "Get monitor error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get monitor"))
                 }
             }
-            
+
             /**
              * Update a monitor.
              */
@@ -238,18 +228,18 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@put
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@put
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val monitorId = try {
                         UUID.fromString(call.parameters["id"])
@@ -257,22 +247,22 @@ fun Route.uptimeRoutes() {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
                         return@put
                     }
-                    
+
                     val request = call.receive<UpdateUptimeMonitorRequest>()
                     val monitor = uptimeService.updateMonitor(monitorId, organizationId, request)
-                    
+
                     if (monitor == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found"))
                         return@put
                     }
-                    
+
                     call.respond(HttpStatusCode.OK, monitor)
                 } catch (e: Exception) {
                     logger.error(e) { "Update monitor error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update monitor"))
                 }
             }
-            
+
             /**
              * Delete a monitor.
              */
@@ -280,18 +270,18 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@delete
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@delete
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val monitorId = try {
                         UUID.fromString(call.parameters["id"])
@@ -299,21 +289,21 @@ fun Route.uptimeRoutes() {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
                         return@delete
                     }
-                    
+
                     val deleted = uptimeService.deleteMonitor(monitorId, organizationId)
-                    
+
                     if (!deleted) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found"))
                         return@delete
                     }
-                    
+
                     call.respond(HttpStatusCode.OK, mapOf("ok" to true))
                 } catch (e: Exception) {
                     logger.error(e) { "Delete monitor error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete monitor"))
                 }
             }
-            
+
             /**
              * Pause a monitor.
              */
@@ -321,18 +311,18 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@post
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@post
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val monitorId = try {
                         UUID.fromString(call.parameters["id"])
@@ -340,21 +330,21 @@ fun Route.uptimeRoutes() {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
                         return@post
                     }
-                    
+
                     val paused = uptimeService.pauseMonitor(monitorId, organizationId)
-                    
+
                     if (!paused) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found"))
                         return@post
                     }
-                    
+
                     call.respond(HttpStatusCode.OK, mapOf("ok" to true))
                 } catch (e: Exception) {
                     logger.error(e) { "Pause monitor error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to pause monitor"))
                 }
             }
-            
+
             /**
              * Resume a monitor.
              */
@@ -362,18 +352,18 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@post
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@post
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val monitorId = try {
                         UUID.fromString(call.parameters["id"])
@@ -381,21 +371,21 @@ fun Route.uptimeRoutes() {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
                         return@post
                     }
-                    
+
                     val resumed = uptimeService.resumeMonitor(monitorId, organizationId)
-                    
+
                     if (!resumed) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found"))
                         return@post
                     }
-                    
+
                     call.respond(HttpStatusCode.OK, mapOf("ok" to true))
                 } catch (e: Exception) {
                     logger.error(e) { "Resume monitor error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to resume monitor"))
                 }
             }
-            
+
             /**
              * Get heartbeats for a monitor.
              */
@@ -403,18 +393,18 @@ fun Route.uptimeRoutes() {
                 try {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    
+
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                         return@get
                     }
-                    
+
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization membership"))
                         return@get
                     }
-                    
+
                     val organizationId = orgIds.first()
                     val monitorId = try {
                         UUID.fromString(call.parameters["id"])
@@ -422,24 +412,24 @@ fun Route.uptimeRoutes() {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid monitor ID"))
                         return@get
                     }
-                    
+
                     // Verify monitor belongs to org
                     val monitor = uptimeService.getMonitor(monitorId, organizationId)
                     if (monitor == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found"))
                         return@get
                     }
-                    
+
                     // Parse time range
                     val fromParam = call.request.queryParameters["from"]?.toLongOrNull()
                     val toParam = call.request.queryParameters["to"]?.toLongOrNull()
-                    
+
                     val now = Clock.System.now()
                     val from = fromParam?.let { Instant.fromEpochMilliseconds(it) } ?: now.minus(24.hours)
                     val to = toParam?.let { Instant.fromEpochMilliseconds(it) } ?: now
-                    
+
                     val heartbeats = uptimeService.getHeartbeats(monitorId, from, to)
-                    
+
                     call.respond(HttpStatusCode.OK, heartbeats)
                 } catch (e: Exception) {
                     logger.error(e) { "Get heartbeats error: ${e.message}" }
@@ -457,7 +447,7 @@ private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String?
     if (request.name.isBlank()) {
         return "Monitor name is required"
     }
-    
+
     when (request.type.lowercase()) {
         "http", "keyword", "json_query" -> {
             if (request.url.isNullOrBlank()) {
@@ -509,14 +499,14 @@ private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String?
             return "Unknown monitor type: ${request.type}"
         }
     }
-    
+
     if (request.intervalSeconds < 10) {
         return "Check interval must be at least 10 seconds"
     }
-    
+
     if (request.timeoutSeconds < 1) {
         return "Timeout must be at least 1 second"
     }
-    
+
     return null
 }

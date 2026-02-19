@@ -17,9 +17,9 @@
 package com.moneat.ai
 
 import com.moneat.utils.SentryUtils
-import kotlin.time.Clock
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -27,7 +27,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.core.*
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -39,18 +39,21 @@ class AiChatService {
         orgId: Int,
         request: ChatRequest
     ): ChatApiResponse = SentryUtils.withTransaction("ai.chat", "ai") { tx ->
-        SentryUtils.breadcrumb("ai", "Chat request", mapOf(
-            "userId" to userId.toString(),
-            "hasConversation" to (request.conversationId != null).toString(),
-            "currentPage" to (request.currentPage ?: "none")
-        ))
+        SentryUtils.breadcrumb(
+            "ai", "Chat request",
+            mapOf(
+                "userId" to userId.toString(),
+                "hasConversation" to (request.conversationId != null).toString(),
+                "currentPage" to (request.currentPage ?: "none")
+            )
+        )
 
         // 1. Sanitize and validate user input
         val sanitizedMessage = sanitizeUserInput(request.message)
         if (sanitizedMessage.isBlank()) {
             throw IllegalArgumentException("Message cannot be empty")
         }
-        
+
         // 2. Resolve or create conversation
         val conversationId = SentryUtils.withSpan(tx, "ai.resolve_conversation") {
             request.conversationId ?: createConversation(orgId, userId, sanitizedMessage)
@@ -68,10 +71,13 @@ class AiChatService {
         }
         val contextDocs = AiContextResolver.loadDocs(contextDocNames)
 
-        SentryUtils.breadcrumb("ai", "Context resolved", mapOf(
-            "docs" to contextDocNames.joinToString(","),
-            "model" to OpenAiClient.model
-        ))
+        SentryUtils.breadcrumb(
+            "ai", "Context resolved",
+            mapOf(
+                "docs" to contextDocNames.joinToString(","),
+                "model" to OpenAiClient.model
+            )
+        )
 
         // 5. Build messages for OpenAI
         val systemPrompt = AiContextResolver.loadSystemPrompt()
@@ -85,10 +91,13 @@ class AiChatService {
         val rawContent = openAiResponse.choices.firstOrNull()?.message?.content ?: """{"message":"I'm sorry, I couldn't generate a response."}"""
         val tokensUsed = openAiResponse.usage?.total_tokens
 
-        SentryUtils.breadcrumb("ai", "OpenAI response received", mapOf(
-            "tokensUsed" to (tokensUsed?.toString() ?: "unknown"),
-            "model" to OpenAiClient.model
-        ))
+        SentryUtils.breadcrumb(
+            "ai", "OpenAI response received",
+            mapOf(
+                "tokensUsed" to (tokensUsed?.toString() ?: "unknown"),
+                "model" to OpenAiClient.model
+            )
+        )
 
         // 7. Parse AI response
         val aiResponse = SentryUtils.withSpan(tx, "ai.parse_response") {
@@ -219,7 +228,9 @@ class AiChatService {
         )
         // Add the AI's interim response and a follow-up instruction
         enrichedMessages.add(OpenAiMessage("assistant", json.encodeToString(AiResponse.serializer(), initialResponse)))
-        enrichedMessages.add(OpenAiMessage("user", "Now that you have the documentation, please provide the complete response."))
+        enrichedMessages.add(
+            OpenAiMessage("user", "Now that you have the documentation, please provide the complete response.")
+        )
 
         val enrichedResponse = OpenAiClient.chatCompletion(enrichedMessages)
         val content = enrichedResponse.choices.firstOrNull()?.message?.content ?: return initialResponse
@@ -240,7 +251,7 @@ class AiChatService {
             AiConversations.selectAll()
                 .where {
                     (AiConversations.user_id eq userId) and
-                    (AiConversations.organization_id eq orgId)
+                        (AiConversations.organization_id eq orgId)
                 }
                 .orderBy(AiConversations.updated_at, SortOrder.DESC)
                 .map { row ->
@@ -259,8 +270,8 @@ class AiChatService {
             val conv = AiConversations.selectAll()
                 .where {
                     (AiConversations.id eq conversationId) and
-                    (AiConversations.user_id eq userId) and
-                    (AiConversations.organization_id eq orgId)
+                        (AiConversations.user_id eq userId) and
+                        (AiConversations.organization_id eq orgId)
                 }
                 .firstOrNull() ?: return@transaction null
 
@@ -293,13 +304,13 @@ class AiChatService {
         return transaction {
             val deleted = AiConversations.deleteWhere {
                 (AiConversations.id eq conversationId) and
-                (AiConversations.user_id eq userId) and
-                (AiConversations.organization_id eq orgId)
+                    (AiConversations.user_id eq userId) and
+                    (AiConversations.organization_id eq orgId)
             }
             deleted > 0
         }
     }
-    
+
     /**
      * Sanitizes user input to prevent prompt injection attacks.
      * Removes/escapes potentially dangerous patterns while preserving legitimate content.
@@ -307,7 +318,7 @@ class AiChatService {
     private fun sanitizeUserInput(input: String): String {
         val maxLength = 4000 // Reasonable limit for chat messages
         val trimmed = input.trim().take(maxLength)
-        
+
         // Remove common prompt injection patterns
         val dangerous = listOf(
             "ignore previous instructions",
@@ -322,12 +333,12 @@ class AiChatService {
             "<|im_start|>",
             "<|im_end|>"
         )
-        
+
         var sanitized = trimmed
         dangerous.forEach { pattern ->
             sanitized = sanitized.replace(pattern, "", ignoreCase = true)
         }
-        
+
         return sanitized.trim()
     }
 }

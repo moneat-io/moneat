@@ -17,7 +17,6 @@
 package com.moneat.utils
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DemoClockTest {

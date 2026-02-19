@@ -18,8 +18,6 @@ package com.moneat.utils
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
-import kotlin.test.assertFalse
 
 class ClickHouseQueryUtilsTest {
 

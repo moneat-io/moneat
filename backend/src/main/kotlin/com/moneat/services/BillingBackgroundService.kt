@@ -19,14 +19,14 @@ package com.moneat.services
 import com.moneat.models.*
 import io.ktor.server.config.*
 import kotlinx.coroutines.*
-import kotlin.time.Clock
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.core.*
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
@@ -38,7 +38,7 @@ class BillingBackgroundService(
 ) {
     private val config = ApplicationConfig("application.conf")
     private val billingEnabled = config.propertyOrNull("billing.backgroundJobsEnabled")?.getString()?.toBooleanStrictOrNull() ?: true
-    
+
     private var meteredUsageJob: Job? = null
     private var dunningDowngradeJob: Job? = null
     private var quotaNotificationJob: Job? = null
@@ -181,7 +181,7 @@ class BillingBackgroundService(
                 emailService.sendEmail(
                     to = email,
                     subject = subject,
-                    htmlBody = "<pre>${body}</pre>",
+                    htmlBody = "<pre>$body</pre>",
                     textBody = body,
                     emailType = "quota_notification"
                 )

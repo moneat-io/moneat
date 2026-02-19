@@ -34,7 +34,7 @@ object SentryUtils {
         if (parent == null || !Sentry.isEnabled()) {
             return block(null)
         }
-        
+
         val span = parent.startChild(operation, description)
         return try {
             block(span).also {
@@ -48,7 +48,7 @@ object SentryUtils {
             span.finish()
         }
     }
-    
+
     /**
      * Execute a block within a Sentry transaction, automatically finishing it when complete
      */
@@ -60,7 +60,7 @@ object SentryUtils {
         if (!Sentry.isEnabled()) {
             return block(null)
         }
-        
+
         val transaction = Sentry.startTransaction(name, operation)
         return try {
             block(transaction).also {
@@ -74,7 +74,7 @@ object SentryUtils {
             transaction.finish()
         }
     }
-    
+
     /**
      * Add a breadcrumb to Sentry for debugging
      */
@@ -85,45 +85,49 @@ object SentryUtils {
         data: Map<String, Any>? = null
     ) {
         if (!Sentry.isEnabled()) return
-        
-        Sentry.addBreadcrumb(Breadcrumb().apply {
-            this.message = message
-            this.category = category
-            this.level = level
-            data?.forEach { (key, value) ->
-                // Convert to string to avoid serialization issues with complex objects
-                // This ensures we never try to serialize Stripe SDK objects or LinkedHashMaps
-                val stringValue = when (value) {
-                    is String -> value
-                    is Number -> value.toString()
-                    is Boolean -> value.toString()
-                    else -> value.toString() // Safe fallback for any complex object
+
+        Sentry.addBreadcrumb(
+            Breadcrumb().apply {
+                this.message = message
+                this.category = category
+                this.level = level
+                data?.forEach { (key, value) ->
+                    // Convert to string to avoid serialization issues with complex objects
+                    // This ensures we never try to serialize Stripe SDK objects or LinkedHashMaps
+                    val stringValue = when (value) {
+                        is String -> value
+                        is Number -> value.toString()
+                        is Boolean -> value.toString()
+                        else -> value.toString() // Safe fallback for any complex object
+                    }
+                    this.setData(key, stringValue)
                 }
-                this.setData(key, stringValue)
             }
-        })
+        )
     }
-    
+
     /**
      * Add a simple breadcrumb for a state change or event
      */
     fun breadcrumb(category: String, message: String, data: Map<String, Any>? = null) {
         addBreadcrumb(message, category, SentryLevel.INFO, data)
     }
-    
+
     /**
      * Set user context in Sentry
      */
     fun setUser(userId: Int, email: String? = null, username: String? = null) {
         if (!Sentry.isEnabled()) return
-        
-        Sentry.setUser(io.sentry.protocol.User().apply {
-            this.id = userId.toString()
-            this.email = email
-            this.username = username
-        })
+
+        Sentry.setUser(
+            io.sentry.protocol.User().apply {
+                this.id = userId.toString()
+                this.email = email
+                this.username = username
+            }
+        )
     }
-    
+
     /**
      * Clear user context
      */
@@ -131,7 +135,7 @@ object SentryUtils {
         if (!Sentry.isEnabled()) return
         Sentry.setUser(null)
     }
-    
+
     /**
      * Set a tag in the current scope
      */
@@ -139,7 +143,7 @@ object SentryUtils {
         if (!Sentry.isEnabled()) return
         Sentry.setTag(key, value)
     }
-    
+
     /**
      * Set extra context data
      */

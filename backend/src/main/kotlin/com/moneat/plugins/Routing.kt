@@ -20,14 +20,12 @@ import com.moneat.ai.aiChatRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.routes.accountDeletionRoutes
 import com.moneat.routes.adminRoutes
 import com.moneat.routes.apiRoutes
 import com.moneat.routes.authRoutes
 import com.moneat.routes.authTokenRoutes
-import com.moneat.routes.ingestRoutes
 import com.moneat.routes.incidentProviderRoutes
-import com.moneat.routes.integrationRoutes
+import com.moneat.routes.ingestRoutes
 import com.moneat.routes.llmIngestRoutes
 import com.moneat.routes.llmRoutes
 import com.moneat.routes.logRoutes
@@ -38,12 +36,12 @@ import com.moneat.routes.statusPageRoutes
 import com.moneat.routes.stripeWebhookRoutes
 import com.moneat.routes.uptimeRoutes
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.call
 import io.ktor.server.application.*
+import io.ktor.server.application.call
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
-import io.ktor.server.response.respondText
 import io.ktor.server.response.*
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
@@ -71,10 +69,12 @@ fun Application.configureRouting() {
         }
 
         get("/features") {
-            call.respond(FeaturesResponse(
-                enterprise = FeatureRegistry.isEnterpriseAvailable,
-                modules = FeatureRegistry.registeredModules.map { it.name }
-            ))
+            call.respond(
+                FeaturesResponse(
+                    enterprise = FeatureRegistry.isEnterpriseAvailable,
+                    modules = FeatureRegistry.registeredModules.map { it.name }
+                )
+            )
         }
 
         get("/health") {
@@ -93,7 +93,9 @@ fun Application.configureRouting() {
                 if (RedisConfig.isConnected()) {
                     RedisConfig.sync().ping()
                     "ok"
-                } else "error"
+                } else {
+                    "error"
+                }
             } catch (_: Exception) {
                 "error"
             }
@@ -101,7 +103,9 @@ fun Application.configureRouting() {
                 if (RedisConfig.isConnected()) {
                     val queueKey = call.application.environment.config.property("ingest.queueKey").getString()
                     RedisConfig.sync().llen(queueKey)
-                } else 0L
+                } else {
+                    0L
+                }
             } catch (_: Exception) {
                 0L
             }
@@ -122,46 +126,46 @@ fun Application.configureRouting() {
 
         // Stripe webhooks
         stripeWebhookRoutes()
-        
+
         // Dashboard API endpoints
         apiRoutes()
-        
+
         // LLM observability API endpoints
         llmRoutes()
-        
+
         // Authentication endpoints
         authRoutes()
-        
+
         // Auth token management endpoints
         authTokenRoutes()
-        
+
         // Release and source map endpoints
         releaseRoutes()
-        
+
         // Admin dashboard endpoints
         adminRoutes()
-        
+
         // Server monitoring endpoints
         monitorRoutes()
 
         // Logging ingestion and query endpoints
         logRoutes()
-        
+
         // Uptime monitoring endpoints
         uptimeRoutes()
-        
+
         // Status page endpoints
         statusPageRoutes()
-        
+
         // Incident provider integration endpoints
         incidentProviderRoutes()
-        
+
         // Organization team management endpoints
         orgManagementRoutes()
-        
+
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
-        
+
         // AI chat assistant endpoints
         aiChatRoutes()
     }

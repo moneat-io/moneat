@@ -24,14 +24,14 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object IncidentProviderRegistry {
     private val providers = ConcurrentHashMap<String, IncidentProvider>()
-    
+
     /**
      * Register a provider implementation.
      */
     fun register(provider: IncidentProvider) {
         providers[provider.providerType] = provider
     }
-    
+
     /**
      * Get a provider by type.
      * @return The provider implementation, or null if not registered
@@ -39,7 +39,7 @@ object IncidentProviderRegistry {
     fun getProvider(providerType: String): IncidentProvider? {
         return providers[providerType]
     }
-    
+
     /**
      * Get all registered provider types.
      */

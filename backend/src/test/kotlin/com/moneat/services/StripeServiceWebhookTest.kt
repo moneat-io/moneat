@@ -19,16 +19,16 @@ package com.moneat.services
 import com.moneat.models.*
 import com.stripe.exception.SignatureVerificationException
 import com.stripe.model.Event
-import com.stripe.model.Subscription
 import com.stripe.model.Invoice
-import kotlin.time.Clock
-import kotlin.time.Instant
+import com.stripe.model.Subscription
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlin.test.*
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class StripeServiceWebhookTest {
     private val stripeService = StripeService()
@@ -64,7 +64,7 @@ class StripeServiceWebhookTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             StripeWebhookEvents.deleteAll()
@@ -202,22 +202,22 @@ class StripeServiceWebhookTest {
     @Test
     fun `wasEventProcessed returns false for new event`() {
         val eventId = "evt_new_event_001"
-        
+
         val isProcessed = stripeService.wasEventProcessed(eventId)
-        
+
         assertFalse(isProcessed, "New event should not be marked as processed")
     }
 
     @Test
     fun `wasEventProcessed returns true after marking event processed`() {
         val eventId = "evt_idempotent_001"
-        
+
         // Create a mock event
         val event = mockEvent(eventId, "customer.subscription.created")
         stripeService.markEventProcessed(event, "success")
-        
+
         val isProcessed = stripeService.wasEventProcessed(eventId)
-        
+
         assertTrue(isProcessed, "Event should be marked as processed after marking")
     }
 
@@ -225,15 +225,15 @@ class StripeServiceWebhookTest {
     fun `markEventProcessed creates record with correct status`() {
         val eventId = "evt_mark_status_001"
         val eventType = "customer.subscription.created"
-        
+
         val event = mockEvent(eventId, eventType)
         stripeService.markEventProcessed(event, "success", null)
-        
+
         transaction {
             val record = StripeWebhookEvents.selectAll()
                 .where { StripeWebhookEvents.event_id eq eventId }
                 .firstOrNull()
-            
+
             assertNotNull(record, "Event record should exist")
             assertEquals(eventId, record[StripeWebhookEvents.event_id])
             assertEquals(eventType, record[StripeWebhookEvents.event_type])
@@ -245,15 +245,15 @@ class StripeServiceWebhookTest {
     fun `markEventProcessed with error message stores error`() {
         val eventId = "evt_mark_error_001"
         val errorMsg = "Customer not found in database"
-        
+
         val event = mockEvent(eventId, "customer.subscription.created")
         stripeService.markEventProcessed(event, "failed", errorMsg)
-        
+
         transaction {
             val record = StripeWebhookEvents.selectAll()
                 .where { StripeWebhookEvents.event_id eq eventId }
                 .firstOrNull()
-            
+
             assertNotNull(record, "Event record should exist")
             assertEquals("failed", record[StripeWebhookEvents.status])
             assertEquals(errorMsg, record[StripeWebhookEvents.error_message])
@@ -264,23 +264,23 @@ class StripeServiceWebhookTest {
     fun `duplicate event ID is idempotent - insertIgnore prevents duplicates`() {
         val eventId = "evt_duplicate_001"
         val event = mockEvent(eventId, "customer.subscription.created")
-        
+
         // First processing
         stripeService.markEventProcessed(event, "success")
-        
+
         // Second processing (should be ignored due to unique constraint)
         try {
             stripeService.markEventProcessed(event, "success")
         } catch (e: Exception) {
             // Unique constraint violation is expected and ignored
         }
-        
+
         // Count records - should only be 1
         transaction {
             val count = StripeWebhookEvents.selectAll()
                 .where { StripeWebhookEvents.event_id eq eventId }
                 .count()
-            
+
             assertEquals(1, count, "Should have exactly 1 record for duplicate event (due to unique constraint)")
         }
     }
@@ -288,14 +288,14 @@ class StripeServiceWebhookTest {
     @Test
     fun `processing same event multiple times returns same result due to idempotency check`() {
         val eventId = "evt_multi_check_001"
-        
+
         // First check
         assertFalse(stripeService.wasEventProcessed(eventId))
-        
+
         // Mark as processed
         val event = mockEvent(eventId, "customer.subscription.created")
         stripeService.markEventProcessed(event, "success")
-        
+
         // Multiple checks should all return same result
         assertTrue(stripeService.wasEventProcessed(eventId))
         assertTrue(stripeService.wasEventProcessed(eventId))
@@ -308,7 +308,7 @@ class StripeServiceWebhookTest {
     fun `customer subscription created event type is recognized`() {
         val eventId = "evt_subscription_created_001"
         val event = mockEvent(eventId, "customer.subscription.created")
-        
+
         assertEquals("customer.subscription.created", event.type)
         assertFalse(stripeService.wasEventProcessed(eventId))
     }
@@ -317,7 +317,7 @@ class StripeServiceWebhookTest {
     fun `customer subscription updated event type is recognized`() {
         val eventId = "evt_subscription_updated_001"
         val event = mockEvent(eventId, "customer.subscription.updated")
-        
+
         assertEquals("customer.subscription.updated", event.type)
         assertFalse(stripeService.wasEventProcessed(eventId))
     }
@@ -326,7 +326,7 @@ class StripeServiceWebhookTest {
     fun `customer subscription deleted event type is recognized`() {
         val eventId = "evt_subscription_deleted_001"
         val event = mockEvent(eventId, "customer.subscription.deleted")
-        
+
         assertEquals("customer.subscription.deleted", event.type)
         assertFalse(stripeService.wasEventProcessed(eventId))
     }
@@ -335,7 +335,7 @@ class StripeServiceWebhookTest {
     fun `invoice payment succeeded event type is recognized`() {
         val eventId = "evt_invoice_paid_001"
         val event = mockEvent(eventId, "invoice.payment_succeeded")
-        
+
         assertEquals("invoice.payment_succeeded", event.type)
         assertFalse(stripeService.wasEventProcessed(eventId))
     }
@@ -344,7 +344,7 @@ class StripeServiceWebhookTest {
     fun `invoice payment failed event type is recognized`() {
         val eventId = "evt_invoice_failed_001"
         val event = mockEvent(eventId, "invoice.payment_failed")
-        
+
         assertEquals("invoice.payment_failed", event.type)
         assertFalse(stripeService.wasEventProcessed(eventId))
     }
@@ -353,16 +353,16 @@ class StripeServiceWebhookTest {
     fun `unknown event type can be stored without error`() {
         val eventId = "evt_unknown_001"
         val event = mockEvent(eventId, "some.unknown.event.type")
-        
+
         // Should not throw - unknown events should be stored gracefully
         stripeService.markEventProcessed(event, "skipped", "Unknown event type")
-        
+
         assertTrue(stripeService.wasEventProcessed(eventId))
         transaction {
             val record = StripeWebhookEvents.selectAll()
                 .where { StripeWebhookEvents.event_id eq eventId }
                 .firstOrNull()
-            
+
             assertNotNull(record)
             assertEquals("some.unknown.event.type", record[StripeWebhookEvents.event_type])
         }
@@ -375,23 +375,23 @@ class StripeServiceWebhookTest {
         val newOrgId = transaction {
             insertTestOrganization("New Org", "new-org")
         }
-        
+
         val subscription = mockSubscription(
             subscriptionId = "sub_new_001",
             customerId = mockCustomerId,
             status = "active",
             organizationId = newOrgId
         )
-        
+
         stripeService.syncSubscriptionFromStripe(subscription)
-        
+
         transaction {
             val record = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq newOrgId) and
                     (Subscriptions.stripe_subscription_id eq "sub_new_001")
             }
                 .firstOrNull()
-            
+
             assertNotNull(record, "Subscription should be created")
             assertEquals("active", record[Subscriptions.status])
         }
@@ -405,7 +405,7 @@ class StripeServiceWebhookTest {
             status = "trialing",
             organizationId = testOrgId
         )
-        
+
         // Link the subscription first
         transaction {
             Subscriptions.update({ Subscriptions.id eq testSubId }) {
@@ -413,14 +413,14 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.stripe_customer_id] = mockCustomerId
             }
         }
-        
+
         stripeService.syncSubscriptionFromStripe(subscription)
-        
+
         transaction {
             val record = Subscriptions.selectAll()
                 .where { Subscriptions.id eq testSubId }
                 .firstOrNull()
-            
+
             assertNotNull(record)
             assertEquals("trialing", record[Subscriptions.status])
         }
@@ -474,23 +474,23 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.stripe_customer_id] = mockCustomerId
             }
         }
-        
+
         val subscription = mockSubscription(
             subscriptionId = mockSubscriptionId,
             customerId = mockCustomerId,
             status = "canceled",
             organizationId = testOrgId
         )
-        
+
         stripeService.handleSubscriptionDeleted(subscription)
-        
+
         transaction {
             // Original should be marked canceled
             val original = Subscriptions.selectAll()
                 .where { Subscriptions.id eq testSubId }
                 .firstOrNull()
             assertEquals("canceled", original?.get(Subscriptions.status))
-            
+
             // New free tier subscription should exist
             val freeSubscriptions = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq testOrgId) and
@@ -513,19 +513,19 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.billing_grace_until] = Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
             }
         }
-        
+
         val invoice = mockInvoice(
             customerId = mockCustomerId,
             organizationId = testOrgId
         )
-        
+
         stripeService.handleInvoicePaid(invoice)
-        
+
         transaction {
             val record = Subscriptions.selectAll()
                 .where { Subscriptions.id eq testSubId }
                 .firstOrNull()
-            
+
             assertNotNull(record)
             assertEquals("active", record[Subscriptions.status])
             assertEquals(0L, record[Subscriptions.payg_used_units])
@@ -543,19 +543,19 @@ class StripeServiceWebhookTest {
                 it[stripe_customer_id] = mockCustomerId
             }
         }
-        
+
         val invoice = mockInvoice(
             customerId = mockCustomerId,
             organizationId = testOrgId
         )
-        
+
         stripeService.handleInvoicePaymentFailed(invoice, graceDays = 7)
-        
+
         transaction {
             val record = Subscriptions.selectAll()
                 .where { Subscriptions.id eq testSubId }
                 .firstOrNull()
-            
+
             assertNotNull(record)
             assertEquals("past_due", record[Subscriptions.status])
             assertNotNull(record[Subscriptions.billing_grace_until], "Should have grace period set")
@@ -565,7 +565,7 @@ class StripeServiceWebhookTest {
     @Test
     fun `subscription lifecycle - created to active to past due to canceled`() {
         val subId = "sub_lifecycle_001"
-        
+
         transaction {
             Subscriptions.update({ Subscriptions.id eq testSubId }) {
                 it[stripe_subscription_id] = subId
@@ -573,7 +573,7 @@ class StripeServiceWebhookTest {
                 it[status] = "active"
             }
         }
-        
+
         // Step 1: Verify active
         transaction {
             val record = Subscriptions.selectAll()
@@ -581,22 +581,22 @@ class StripeServiceWebhookTest {
                 .firstOrNull()
             assertEquals("active", record?.get(Subscriptions.status))
         }
-        
+
         // Step 2: Mark as past_due
         val invoice = mockInvoice(mockCustomerId, testOrgId)
         stripeService.handleInvoicePaymentFailed(invoice)
-        
+
         transaction {
             val record = Subscriptions.selectAll()
                 .where { Subscriptions.id eq testSubId }
                 .firstOrNull()
             assertEquals("past_due", record?.get(Subscriptions.status))
         }
-        
+
         // Step 3: Cancel subscription
         val subscription = mockSubscription(subId, mockCustomerId, "canceled", testOrgId)
         stripeService.handleSubscriptionDeleted(subscription)
-        
+
         transaction {
             val canceled = Subscriptions.selectAll().where {
                 (Subscriptions.organization_id eq testOrgId) and
@@ -646,7 +646,7 @@ class StripeServiceWebhookTest {
     fun `syncSubscriptionFromStripe with no organization resolves by customer ID`() {
         val customerId = "cus_resolve_001"
         val subId = "sub_resolve_001"
-        
+
         // Link subscription to customer
         transaction {
             Subscriptions.update({ Subscriptions.id eq testSubId }) {
@@ -654,7 +654,7 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.stripe_customer_id] = customerId
             }
         }
-        
+
         // Create subscription without organization_id in metadata
         // (should resolve by customer_id)
         val subscription = mockSubscription(
@@ -664,9 +664,9 @@ class StripeServiceWebhookTest {
             organizationId = testOrgId,
             withOrgMetadata = false // No org_id in metadata
         )
-        
+
         stripeService.syncSubscriptionFromStripe(subscription)
-        
+
         // Should still resolve by customer ID and sync
         assertTrue(stripeService.wasEventProcessed(subId) || true) // Syncing itself isn't tracked
     }
@@ -676,12 +676,12 @@ class StripeServiceWebhookTest {
     @Test
     fun `markEventProcessed with status variations stores correctly`() {
         val statuses = listOf("success", "failed", "skipped", "retry")
-        
+
         for ((index, status) in statuses.withIndex()) {
             val uniqueEventId = "evt_status_var_${index}_001"
             val evt = mockEvent(uniqueEventId, "test.event")
             stripeService.markEventProcessed(evt, status)
-            
+
             transaction {
                 val record = StripeWebhookEvents.selectAll()
                     .where { StripeWebhookEvents.event_id eq uniqueEventId }
@@ -695,7 +695,7 @@ class StripeServiceWebhookTest {
     fun `event processing with null organization resolves gracefully`() {
         val customerId = "cus_no_org_001"
         val subId = "sub_no_org_001"
-        
+
         // Subscription with no organization linked and no metadata
         val subscription = mockSubscription(
             subscriptionId = subId,
@@ -704,11 +704,11 @@ class StripeServiceWebhookTest {
             organizationId = testOrgId, // Use valid org
             withOrgMetadata = false // Don't include org_id in metadata so it will be resolved by customer ID but customer not linked
         )
-        
+
         // Should not throw - handles gracefully when customer has no linked subscription
         // (syncSubscriptionFromStripe returns early when organizationId resolves to null)
         stripeService.syncSubscriptionFromStripe(subscription)
-        
+
         assertTrue(true, "Processing subscription with unresolvable org should not throw")
     }
 
@@ -716,17 +716,17 @@ class StripeServiceWebhookTest {
     fun `concurrent event processing is idempotent via unique constraint`() {
         val eventId = "evt_concurrent_001"
         val event = mockEvent(eventId, "customer.subscription.created")
-        
+
         // Simulate concurrent processing
         stripeService.markEventProcessed(event, "success")
-        
+
         // Try marking again - should be ignored by unique constraint
         try {
             stripeService.markEventProcessed(event, "success")
         } catch (e: Exception) {
             // Unique constraint violation is expected and fine
         }
-        
+
         // Should still only have one record
         transaction {
             val count = StripeWebhookEvents.selectAll()
@@ -770,12 +770,12 @@ class StripeServiceWebhookTest {
         subscription.status = status
         subscription.startDate = System.currentTimeMillis() / 1000
         subscription.trialEnd = (System.currentTimeMillis() / 1000) + 1296000 // 15 days
-        
+
         // Mock empty items collection
         val itemsCollection = com.stripe.model.SubscriptionItemCollection()
         itemsCollection.setData(emptyList())
         subscription.setItems(itemsCollection)
-        
+
         val metadata = mutableMapOf<String, String>()
         if (withOrgMetadata) {
             metadata["organization_id"] = organizationId.toString()
@@ -795,9 +795,9 @@ class StripeServiceWebhookTest {
         invoice.status = "paid"
         invoice.periodStart = System.currentTimeMillis() / 1000
         invoice.periodEnd = (System.currentTimeMillis() / 1000) + 2592000 // 30 days
-        
+
         invoice.metadata = mapOf("organization_id" to organizationId.toString())
-        
+
         return invoice
     }
 

@@ -1,7 +1,6 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import kotlin.time.Clock
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -23,7 +22,11 @@ class AdminBillingServiceTest {
             )
             transaction {
                 SchemaUtils.create(
-                    Organizations, Users, Memberships, Subscriptions, PromotionalCreditGrants
+                    Organizations,
+                    Users,
+                    Memberships,
+                    Subscriptions,
+                    PromotionalCreditGrants
                 )
             }
             dbInitialized = true

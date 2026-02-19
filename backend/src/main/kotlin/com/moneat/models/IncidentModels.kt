@@ -16,10 +16,9 @@
 
 package com.moneat.models
 
+import kotlinx.serialization.json.JsonObject
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
-import kotlinx.serialization.json.JsonObject
-import java.time.Instant
 
 // Enums
 enum class IncidentSeverity {
@@ -27,7 +26,7 @@ enum class IncidentSeverity {
 
     companion object {
         fun fromString(value: String?): IncidentSeverity? {
-            return value?.let { 
+            return value?.let {
                 try {
                     valueOf(it.uppercase())
                 } catch (e: IllegalArgumentException) {

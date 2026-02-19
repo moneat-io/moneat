@@ -26,11 +26,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlin.time.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import kotlin.time.Clock
 
 private val sdkVersionLogger = KotlinLogging.logger {}
 private val sdkVersionJson = Json { ignoreUnknownKeys = true }
@@ -82,7 +82,11 @@ object SdkVersionService {
         VersionTarget("io.sentry:sentry-android", "getsentry/sentry-java", fallbackVersion = "7.0.0"),
         VersionTarget("io.sentry:sentry", "getsentry/sentry-java", fallbackVersion = "7.0.0"),
         VersionTarget("io.sentry:sentry-spring-boot-starter", "getsentry/sentry-java"),
-        VersionTarget("io.sentry:sentry-kotlin-multiplatform", "getsentry/sentry-kotlin-multiplatform", fallbackVersion = "4.0.0"),
+        VersionTarget(
+            "io.sentry:sentry-kotlin-multiplatform",
+            "getsentry/sentry-kotlin-multiplatform",
+            fallbackVersion = "4.0.0"
+        ),
         VersionTarget("pod:Sentry", "getsentry/sentry-cocoa", fallbackVersion = "8.0"),
         VersionTarget("pub:sentry_flutter", "getsentry/sentry-dart", fallbackVersion = "8.0.0"),
         VersionTarget("sentry-sdk", "getsentry/sentry-python"),
@@ -98,8 +102,16 @@ object SdkVersionService {
         VersionTarget("sentry-unreal", "getsentry/sentry-unreal"),
         VersionTarget("sentry-godot", "getsentry/sentry-godot"),
         VersionTarget("sentry-native", "getsentry/sentry-native"),
-        VersionTarget("io.opentelemetry:opentelemetry-sdk-logs", "open-telemetry/opentelemetry-java", fallbackVersion = "1.34.0"),
-        VersionTarget("io.opentelemetry:opentelemetry-exporter-otlp", "open-telemetry/opentelemetry-java", fallbackVersion = "1.34.0"),
+        VersionTarget(
+            "io.opentelemetry:opentelemetry-sdk-logs",
+            "open-telemetry/opentelemetry-java",
+            fallbackVersion = "1.34.0"
+        ),
+        VersionTarget(
+            "io.opentelemetry:opentelemetry-exporter-otlp",
+            "open-telemetry/opentelemetry-java",
+            fallbackVersion = "1.34.0"
+        ),
     )
 
     private val repositories = versionTargets.map { it.repository }.distinct()

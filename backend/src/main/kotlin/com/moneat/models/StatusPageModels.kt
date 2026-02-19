@@ -18,10 +18,8 @@ package com.moneat.models
 
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.core.java.javaUUID
-import kotlin.time.Clock
-import java.util.UUID
+import org.jetbrains.exposed.v1.datetime.timestamp
 
 // ==================== Exposed Tables ====================
 
@@ -31,21 +29,21 @@ object StatusPages : Table("status_pages") {
     val name = varchar("name", 255)
     val slug = varchar("slug", 100).uniqueIndex()
     val description = text("description").nullable()
-    
+
     // Branding
     val logoUrl = text("logo_url").nullable()
     val faviconUrl = text("favicon_url").nullable()
     val primaryColor = varchar("primary_color", 7).default("#3B82F6")
     val darkMode = bool("dark_mode").default(false)
-    
+
     // Settings
     val showUptimeHistory = bool("show_uptime_history").default(true)
     val historyDays = integer("history_days").default(90)
     val isPublic = bool("is_public").default(true)
-    
+
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
-    
+
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -56,7 +54,7 @@ object StatusPageMonitors : Table("status_page_monitors") {
     val displayName = varchar("display_name", 255).nullable()
     val sortOrder = integer("sort_order").default(0)
     val createdAt = timestamp("created_at")
-    
+
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -72,7 +70,7 @@ object StatusPageIncidents : Table("status_page_incidents") {
     val resolvedAt = timestamp("resolved_at").nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
-    
+
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -82,7 +80,7 @@ object StatusPageIncidentUpdates : Table("status_page_incident_updates") {
     val status = varchar("status", 50)
     val message = text("message")
     val createdAt = timestamp("created_at")
-    
+
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -95,7 +93,7 @@ object StatusPageCustomDomains : Table("status_page_custom_domains") {
     val verifiedAt = timestamp("verified_at").nullable()
     val sslProvisioned = bool("ssl_provisioned").default(false)
     val createdAt = timestamp("created_at")
-    
+
     override val primaryKey = PrimaryKey(id)
 }
 

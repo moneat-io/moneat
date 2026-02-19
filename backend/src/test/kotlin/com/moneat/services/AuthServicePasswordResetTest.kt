@@ -47,7 +47,7 @@ class AuthServicePasswordResetTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             RefreshTokens.deleteAll()
@@ -65,7 +65,7 @@ class AuthServicePasswordResetTest {
         val expiresAt = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour from now
         val oldPassword = "oldpassword123"
         val newPassword = "newpassword456"
-        
+
         val userId = transaction {
             insertTestUser(
                 email = "reset@example.com",
@@ -76,14 +76,14 @@ class AuthServicePasswordResetTest {
         }
 
         val result = authService.resetPassword(token, newPassword)
-        
+
         assertTrue(result, "Password reset should succeed")
-        
+
         // Verify password was changed and token cleared
         transaction {
             val user = Users.selectAll().where { Users.id eq userId }.first()
             val newHash = user[Users.password_hash]
-            
+
             assertTrue(BCrypt.checkpw(newPassword, newHash), "New password should be set")
             assertFalse(BCrypt.checkpw(oldPassword, newHash), "Old password should not work")
             assertNull(user[Users.password_reset_token], "Reset token should be cleared")
@@ -96,7 +96,7 @@ class AuthServicePasswordResetTest {
         val token = "expired-reset-token"
         val expiresAt = System.currentTimeMillis() - 1000 // 1 second ago (expired)
         val oldPassword = "oldpassword123"
-        
+
         val userId = transaction {
             insertTestUser(
                 email = "expired@example.com",
@@ -107,9 +107,9 @@ class AuthServicePasswordResetTest {
         }
 
         val result = authService.resetPassword(token, "newpassword456")
-        
+
         assertFalse(result, "Password reset should fail with expired token")
-        
+
         // Verify password unchanged
         transaction {
             val user = Users.selectAll().where { Users.id eq userId }.first()
@@ -129,7 +129,7 @@ class AuthServicePasswordResetTest {
         }
 
         val result = authService.resetPassword("wrong-token", "newpassword456")
-        
+
         assertFalse(result, "Password reset should fail with wrong token")
     }
 
@@ -137,7 +137,7 @@ class AuthServicePasswordResetTest {
     fun `resetPassword rejects short passwords`() {
         val token = "valid-token"
         val expiresAt = System.currentTimeMillis() + 1000000
-        
+
         transaction {
             insertTestUser(
                 email = "test@example.com",
@@ -150,7 +150,7 @@ class AuthServicePasswordResetTest {
         val error = assertFailsWith<IllegalArgumentException> {
             authService.resetPassword(token, "short")
         }
-        
+
         assertTrue(error.message?.contains("at least 8 characters", ignoreCase = true) == true)
     }
 
@@ -166,7 +166,7 @@ class AuthServicePasswordResetTest {
         }
 
         val result = authService.resetPassword("any-token", "newpassword123")
-        
+
         assertFalse(result, "Password reset should fail when no token exists")
     }
 
@@ -184,21 +184,24 @@ class AuthServicePasswordResetTest {
         val timeBefore = System.currentTimeMillis()
         authService.requestPasswordReset("request@example.com")
         val timeAfter = System.currentTimeMillis()
-        
+
         // Note: This may fail if email service is not available, which is okay for unit tests
         // The important part is that the token is set in the database
-        
+
         transaction {
             val user = Users.selectAll().where { Users.email eq "request@example.com" }.first()
             assertNotNull(user[Users.password_reset_token], "Reset token should be generated")
-            
+
             val expiresAt = user[Users.password_reset_expires_at]
             assertNotNull(expiresAt, "Expiration should be set")
-            
+
             // Token should expire in approximately 1 hour (60 * 60 * 1000 ms)
             val expectedExpiry = timeBefore + (60 * 60 * 1000)
             assertTrue(expiresAt >= expectedExpiry - 1000, "Expiry should be ~1 hour from now (lower bound)")
-            assertTrue(expiresAt <= timeAfter + (60 * 60 * 1000) + 1000, "Expiry should be ~1 hour from now (upper bound)")
+            assertTrue(
+                expiresAt <= timeAfter + (60 * 60 * 1000) + 1000,
+                "Expiry should be ~1 hour from now (upper bound)"
+            )
         }
     }
 

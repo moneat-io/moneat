@@ -16,8 +16,8 @@
 
 package com.moneat.services
 
-import com.moneat.models.OrganizationIntegrations
 import com.moneat.models.Memberships
+import com.moneat.models.OrganizationIntegrations
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -26,22 +26,20 @@ import io.ktor.client.statement.*
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import kotlin.time.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.*
 import org.slf4j.LoggerFactory
 import java.util.*
 
 class SlackService {
     private val logger = LoggerFactory.getLogger(SlackService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
-    
+
     private val httpClient = HttpClient(CIO) {
         install(HttpTimeout) {
             socketTimeoutMillis = 10_000
@@ -73,7 +71,7 @@ class SlackService {
         val url: String? = null,
         val action_id: String? = null
     )
-    
+
     @Serializable
     data class SlackContextElement(
         val type: String,
@@ -85,7 +83,7 @@ class SlackService {
         val channel: String,
         val blocks: List<SlackBlock>? = null,
         val attachments: List<SlackAttachment>? = null,
-        val text: String? = null  // Fallback text for notifications
+        val text: String? = null // Fallback text for notifications
     )
 
     @Serializable
@@ -136,8 +134,8 @@ class SlackService {
                 .selectAll()
                 .where {
                     (OrganizationIntegrations.organization_id eq organizationId) and
-                    (OrganizationIntegrations.integration_type eq "slack") and
-                    (OrganizationIntegrations.enabled eq true)
+                        (OrganizationIntegrations.integration_type eq "slack") and
+                        (OrganizationIntegrations.enabled eq true)
                 }
                 .singleOrNull()
                 ?.let { row ->
@@ -145,7 +143,9 @@ class SlackService {
                     val channel = row[OrganizationIntegrations.channel_id]
                     if (token != null && channel != null) {
                         SlackConfig(token, channel)
-                    } else null
+                    } else {
+                        null
+                    }
                 }
         }
     }
@@ -157,7 +157,7 @@ class SlackService {
                 header("Authorization", "Bearer $accessToken")
                 setBody("""{"channel":"$channel"}""")
             }
-            
+
             val result = json.decodeFromString<SlackConversationJoinResponse>(response.bodyAsText())
             if (result.ok) {
                 logger.debug("Successfully joined Slack channel $channel")
@@ -182,9 +182,9 @@ class SlackService {
     }
 
     private suspend fun sendMessage(
-        accessToken: String, 
-        channel: String, 
-        blocks: List<SlackBlock>? = null, 
+        accessToken: String,
+        channel: String,
+        blocks: List<SlackBlock>? = null,
         attachments: List<SlackAttachment>? = null,
         fallbackText: String
     ): Pair<Boolean, String?> {
@@ -195,23 +195,23 @@ class SlackService {
                 logger.error("Cannot send message: $joinError")
                 return false to joinError
             }
-            
+
             val message = SlackMessage(
                 channel = channel,
                 blocks = blocks,
                 attachments = attachments,
                 text = fallbackText
             )
-            
+
             val messageJson = json.encodeToString(message)
             logger.debug("Sending Slack message: $messageJson")
-            
+
             val response: HttpResponse = httpClient.post("https://slack.com/api/chat.postMessage") {
                 contentType(ContentType.Application.Json)
                 header("Authorization", "Bearer $accessToken")
                 setBody(messageJson)
             }
-            
+
             if (response.status == HttpStatusCode.OK) {
                 val responseBody = response.bodyAsText()
                 val result = json.decodeFromString<SlackPostMessageResponse>(responseBody)
@@ -246,7 +246,7 @@ class SlackService {
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
-        
+
         val mainBlocks = listOf(
             SlackBlock(
                 type = "header",
@@ -257,7 +257,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachmentBlocks = listOf(
             SlackBlock(
                 type = "section",
@@ -279,7 +279,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachments = listOf(
             SlackAttachment(
                 color = "#ECB22E", // Warning yellow
@@ -287,7 +287,7 @@ class SlackService {
                 fallback = "⚠️ System Alert: $systemName"
             )
         )
-        
+
         val (success, _) = sendMessage(
             accessToken = config.accessToken,
             channel = config.channelId,
@@ -306,7 +306,7 @@ class SlackService {
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
-        
+
         val mainBlocks = listOf(
             SlackBlock(
                 type = "header",
@@ -317,7 +317,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachmentBlocks = listOf(
             SlackBlock(
                 type = "section",
@@ -337,7 +337,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachments = listOf(
             SlackAttachment(
                 color = "#E01E5A", // Error red
@@ -345,7 +345,7 @@ class SlackService {
                 fallback = "🔴 System Down: $systemName"
             )
         )
-        
+
         val (success, _) = sendMessage(
             accessToken = config.accessToken,
             channel = config.channelId,
@@ -363,7 +363,7 @@ class SlackService {
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
-        
+
         val mainBlocks = listOf(
             SlackBlock(
                 type = "header",
@@ -374,7 +374,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachmentBlocks = listOf(
             SlackBlock(
                 type = "section",
@@ -394,7 +394,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachments = listOf(
             SlackAttachment(
                 color = "#2EB67D", // Success green
@@ -402,7 +402,7 @@ class SlackService {
                 fallback = "🟢 System Recovered: $systemName"
             )
         )
-        
+
         val (success, _) = sendMessage(
             accessToken = config.accessToken,
             channel = config.channelId,
@@ -423,12 +423,12 @@ class SlackService {
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
-        
+
         val isDown = newStatus.equals("down", ignoreCase = true)
         val emoji = if (isDown) "🔴" else "🟢"
         val headerText = if (isDown) "Monitor Down" else "Monitor Recovered"
         val color = if (isDown) "#E01E5A" else "#2EB67D"
-        
+
         val mainBlocks = listOf(
             SlackBlock(
                 type = "header",
@@ -439,7 +439,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachmentBlocks = listOf(
             SlackBlock(
                 type = "section",
@@ -460,7 +460,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachments = listOf(
             SlackAttachment(
                 color = color,
@@ -468,7 +468,7 @@ class SlackService {
                 fallback = "$emoji Monitor $headerText: $monitorName"
             )
         )
-        
+
         val (success, _) = sendMessage(
             accessToken = config.accessToken,
             channel = config.channelId,
@@ -494,7 +494,7 @@ class SlackService {
         stackTrace: String? = null
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
-        
+
         val levelLower = level.lowercase()
         val levelEmoji = when (levelLower) {
             "error" -> "🔴"
@@ -502,14 +502,14 @@ class SlackService {
             "info" -> "ℹ️"
             else -> "⚠️"
         }
-        
+
         val color = when (levelLower) {
             "error" -> "#E01E5A" // Slack red
             "warning" -> "#ECB22E" // Slack warning yellow
             "info" -> "#2EB67D" // Slack green
             else -> "#ECB22E"
         }
-        
+
         // Header block
         val mainBlocks = listOf(
             SlackBlock(
@@ -521,50 +521,61 @@ class SlackService {
                 )
             )
         )
-        
+
         // Attachment blocks
         val attachmentBlocks = mutableListOf<SlackBlock>()
-        
+
         // Issue Title and Link
         attachmentBlocks.add(
             SlackBlock(
                 type = "section",
                 text = SlackText(
                     type = "mrkdwn",
-                    text = "*<${baseUrl}/projects/$projectId/issues/$issueId|$issueTitle>*"
+                    text = "*<$baseUrl/projects/$projectId/issues/$issueId|$issueTitle>*"
                 )
             )
         )
-        
+
         // Fields
         val fields = mutableListOf<SlackText>()
         fields.add(SlackText(type = "mrkdwn", text = "*Project:*\n$projectName"))
-        
+
         if (environment != null) {
-            fields.add(SlackText(type = "mrkdwn", text = "*Environment:*\n${environment.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}"))
+            fields.add(
+                SlackText(
+                    type = "mrkdwn",
+                    text = "*Environment:*\n${environment.replaceFirstChar { if (it.isLowerCase()) {
+                        it.titlecase(
+                            Locale.getDefault()
+                        )
+                    } else {
+                        it.toString()
+                    } }}"
+                )
+            )
         }
-        
+
         if (culprit != null) {
             fields.add(SlackText(type = "mrkdwn", text = "*Culprit:*\n`$culprit`"))
         }
-        
+
         if (occurrenceCount > 1) {
             fields.add(SlackText(type = "mrkdwn", text = "*Occurrences:*\n$occurrenceCount"))
         } else {
             fields.add(SlackText(type = "mrkdwn", text = "*Level:*\n${level.uppercase()}"))
         }
-        
+
         if (timestamp != null) {
-             fields.add(SlackText(type = "mrkdwn", text = "*Time:*\n$timestamp"))
+            fields.add(SlackText(type = "mrkdwn", text = "*Time:*\n$timestamp"))
         }
-        
+
         attachmentBlocks.add(
             SlackBlock(
                 type = "section",
                 fields = fields
             )
         )
-        
+
         // Stack trace
         if (stackTrace != null) {
             attachmentBlocks.add(
@@ -577,7 +588,7 @@ class SlackService {
                 )
             )
         }
-        
+
         // Actions
         attachmentBlocks.add(
             SlackBlock(
@@ -591,7 +602,7 @@ class SlackService {
                 )
             )
         )
-        
+
         val attachments = listOf(
             SlackAttachment(
                 color = color,
@@ -599,7 +610,7 @@ class SlackService {
                 fallback = "$levelEmoji New ${level.uppercase()}: $issueTitle"
             )
         )
-        
+
         val (success, _) = sendMessage(
             accessToken = config.accessToken,
             channel = config.channelId,
@@ -612,7 +623,7 @@ class SlackService {
 
     suspend fun testConnection(organizationId: Int): Pair<Boolean, String> {
         val config = getSlackConfig(organizationId) ?: return false to "No Slack integration configured"
-        
+
         val blocks = listOf(
             SlackBlock(
                 type = "header",
@@ -630,12 +641,12 @@ class SlackService {
                 )
             )
         )
-        
+
         return try {
             val (success, error) = sendMessage(
-                accessToken = config.accessToken, 
-                channel = config.channelId, 
-                blocks = blocks, 
+                accessToken = config.accessToken,
+                channel = config.channelId,
+                blocks = blocks,
                 fallbackText = "✅ Test Message"
             )
             if (success) {
@@ -657,7 +668,7 @@ class SlackService {
                     "code=$code&client_id=$clientId&client_secret=$clientSecret&redirect_uri=$redirectUri"
                 )
             }
-            
+
             json.decodeFromString<SlackOAuthResponse>(response.bodyAsText())
         } catch (e: Exception) {
             logger.error("Error exchanging OAuth code", e)
@@ -686,7 +697,7 @@ class SlackService {
                 parameter("types", "public_channel,private_channel")
                 parameter("limit", 200)
             }
-            
+
             val result = json.decodeFromString<SlackChannelsResponse>(response.bodyAsText())
             if (result.ok && result.channels != null) {
                 result.channels
@@ -699,16 +710,16 @@ class SlackService {
             emptyList()
         }
     }
-    
+
     // ===== User Groups =====
-    
+
     @Serializable
     data class SlackUsergroupsResponse(
         val ok: Boolean,
         val usergroups: List<SlackUsergroup>? = null,
         val error: String? = null
     )
-    
+
     @Serializable
     data class SlackUsergroup(
         val id: String,
@@ -716,19 +727,19 @@ class SlackService {
         val name: String,
         val description: String? = null
     )
-    
+
     @Serializable
     data class SlackUsergroupUsersUpdateResponse(
         val ok: Boolean,
         val error: String? = null
     )
-    
+
     suspend fun listUsergroups(accessToken: String): List<SlackUsergroup> {
         return try {
             val response: HttpResponse = httpClient.get("https://slack.com/api/usergroups.list") {
                 header("Authorization", "Bearer $accessToken")
             }
-            
+
             val result = json.decodeFromString<SlackUsergroupsResponse>(response.bodyAsText())
             if (result.ok && result.usergroups != null) {
                 result.usergroups
@@ -741,7 +752,7 @@ class SlackService {
             emptyList()
         }
     }
-    
+
     suspend fun updateUsergroupMembers(accessToken: String, usergroupId: String, userIds: List<String>): Boolean {
         return try {
             val response: HttpResponse = httpClient.post("https://slack.com/api/usergroups.users.update") {
@@ -749,7 +760,7 @@ class SlackService {
                 header("Authorization", "Bearer $accessToken")
                 setBody("usergroup=$usergroupId&users=${userIds.joinToString(",")}")
             }
-            
+
             val result = json.decodeFromString<SlackUsergroupUsersUpdateResponse>(response.bodyAsText())
             if (result.ok) {
                 logger.debug("Successfully updated usergroup $usergroupId with ${userIds.size} members")
@@ -763,9 +774,9 @@ class SlackService {
             false
         }
     }
-    
+
     // ===== On-Call Notifications =====
-    
+
     suspend fun sendOnCallAlert(userId: Int, incidentId: Int, title: String, priorityLevel: String) {
         try {
             // Get Slack user mapping
@@ -773,11 +784,11 @@ class SlackService {
                 logger.debug("No Slack mapping found for user $userId")
                 return
             }
-            
+
             // Get organization's bot token
             val orgId = getUserOrganizationId(userId) ?: return
             val accessToken = getAccessToken(orgId) ?: return
-            
+
             // Send DM with interactive buttons
             val blocks = listOf(
                 SlackBlock(
@@ -799,23 +810,28 @@ class SlackService {
                         SlackElement(
                             type = "button",
                             text = SlackText(type = "plain_text", text = "View Details", emoji = false),
-                            url = "${com.moneat.config.EnvConfig.get("FRONTEND_URL", "https://moneat.io")}/on-call/incidents/$incidentId",
+                            url = "${com.moneat.config.EnvConfig.get(
+                                "FRONTEND_URL",
+                                "https://moneat.io"
+                            )}/on-call/incidents/$incidentId",
                             action_id = "incident_view_$incidentId"
                         )
                     )
                 )
             )
-            
+
             val response = httpClient.post("https://slack.com/api/chat.postMessage") {
                 contentType(ContentType.Application.Json)
                 header("Authorization", "Bearer $accessToken")
-                setBody(SlackMessage(
-                    channel = slackUserId, // DM to user
-                    blocks = blocks,
-                    text = "[$priorityLevel] $title" // Fallback
-                ))
+                setBody(
+                    SlackMessage(
+                        channel = slackUserId, // DM to user
+                        blocks = blocks,
+                        text = "[$priorityLevel] $title" // Fallback
+                    )
+                )
             }
-            
+
             val result = json.decodeFromString<SlackPostMessageResponse>(response.bodyAsText())
             if (result.ok) {
                 logger.info("Sent on-call Slack DM to user $userId for incident $incidentId")
@@ -826,7 +842,7 @@ class SlackService {
             logger.error("Error sending on-call Slack alert", e)
         }
     }
-    
+
     private fun getSlackUserIdForUser(userId: Int): String? = transaction {
         com.moneat.models.SlackUserMappings
             .selectAll()
@@ -840,14 +856,14 @@ class SlackService {
             .selectAll()
             .where {
                 (OrganizationIntegrations.organization_id eq organizationId) and
-                (OrganizationIntegrations.integration_type eq "slack") and
-                (OrganizationIntegrations.enabled eq true)
+                    (OrganizationIntegrations.integration_type eq "slack") and
+                    (OrganizationIntegrations.enabled eq true)
             }
             .limit(1)
             .singleOrNull()
             ?.get(OrganizationIntegrations.access_token)
     }
-    
+
     private fun getUserOrganizationId(userId: Int): Int? = transaction {
         Memberships
             .selectAll()

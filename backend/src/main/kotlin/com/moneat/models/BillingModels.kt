@@ -238,7 +238,7 @@ data class BillingUsageResponse(
 @Serializable
 data class CheckoutSessionRequest(
     val tierName: String,
-    val billingInterval: String = "monthly",  // "monthly" or "yearly"
+    val billingInterval: String = "monthly", // "monthly" or "yearly"
     val successUrl: String,
     val cancelUrl: String,
     val oncallSeats: Int = 0
@@ -389,8 +389,8 @@ data class AdminBillingSubscriptionResponse(
 
 @Serializable
 data class GrantPromotionalCreditRequest(
-    val bonusGb: Double? = null,  // Bonus in GB (e.g., 5.0 for 5GB)
-    val bonusUnits: Long? = null,  // Bonus in event units
+    val bonusGb: Double? = null, // Bonus in GB (e.g., 5.0 for 5GB)
+    val bonusUnits: Long? = null, // Bonus in event units
     val reason: String
 )
 
@@ -399,7 +399,7 @@ data class GrantPromotionalCreditResponse(
     val organizationId: Int,
     val bonusGbBytes: Long,
     val bonusUnits: Long,
-    val bonusGb: Double,  // Human-readable GB value
+    val bonusGb: Double, // Human-readable GB value
     val reason: String,
     val grantedAt: String
 )

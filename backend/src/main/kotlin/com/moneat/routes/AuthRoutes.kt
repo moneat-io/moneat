@@ -22,35 +22,31 @@ import com.moneat.services.AuthService
 import com.moneat.services.OAuthService
 import com.moneat.services.SignupRequestContext
 import com.moneat.utils.AuthCookieUtils
-import com.moneat.utils.ErrorResponse
-import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.DemoLoginResponse
-import io.ktor.http.HttpStatusCode
+import com.moneat.utils.ErrorResponse
+import com.moneat.utils.MessageResponse
 import io.ktor.http.Cookie
-import io.ktor.server.application.application
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.authentication
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.principal
 import io.ktor.server.plugins.origin
-import io.ktor.server.request.receiveParameters
 import io.ktor.server.request.*
-import io.ktor.server.response.respondRedirect
+import io.ktor.server.request.receiveParameters
 import io.ktor.server.response.*
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.*
 
 private val logger = KotlinLogging.logger {}
 
@@ -59,12 +55,12 @@ fun Route.authRoutes() {
     val oauthService = OAuthService()
     val config = io.ktor.server.config.ApplicationConfig("application.conf")
     val jwtSecret = config.property("jwt.secret").getString()
-    
+
     route("/auth") {
         post("/signup") {
             val request = call.receive<SignupRequest>()
             val inviteToken = call.request.queryParameters["inviteToken"]
-            
+
             // Prefer CF-Connecting-IP when behind Cloudflare, fallback to X-Forwarded-For, then origin
             val cfConnectingIp = call.request.headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotBlank() }
             val forwardedFor = call.request.headers["X-Forwarded-For"]
@@ -78,7 +74,7 @@ fun Route.authRoutes() {
                 ipAddress = cfConnectingIp ?: forwardedFor ?: remoteHost,
                 userAgent = userAgent
             )
-            
+
             try {
                 val result = authService.signup(request, context, inviteToken)
                 AuthCookieUtils.setAuthCookie(call, result.token)
@@ -87,10 +83,10 @@ fun Route.authRoutes() {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
         }
-        
+
         post("/login") {
             val request = call.receive<LoginRequest>()
-            
+
             try {
                 val result = authService.login(request)
                 if (result != null) {
@@ -103,10 +99,10 @@ fun Route.authRoutes() {
                 call.respond(HttpStatusCode.Forbidden, ErrorResponse(e.message))
             }
         }
-        
+
         post("/verify-email") {
             val request = call.receive<VerifyEmailRequest>()
-            
+
             val success = authService.verifyEmail(request.token)
             if (success) {
                 call.respond(MessageResponse("Email verified successfully"))
@@ -114,10 +110,10 @@ fun Route.authRoutes() {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid or expired token"))
             }
         }
-        
+
         post("/resend-verification") {
             val request = call.receive<ResendVerificationRequest>()
-            
+
             try {
                 val success = authService.resendVerificationEmail(request.email)
                 if (success) {
@@ -129,18 +125,18 @@ fun Route.authRoutes() {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
         }
-        
+
         post("/forgot-password") {
             val request = call.receive<ForgotPasswordRequest>()
-            
+
             // Always return success to prevent email enumeration
             authService.requestPasswordReset(request.email)
             call.respond(MessageResponse("If an account exists with this email, a password reset link has been sent"))
         }
-        
+
         post("/reset-password") {
             val request = call.receive<ResetPasswordRequest>()
-            
+
             try {
                 val success = authService.resetPassword(request.token, request.newPassword)
                 if (success) {
@@ -152,14 +148,14 @@ fun Route.authRoutes() {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
         }
-        
+
         post("/logout") {
             // Get userId from auth if available to revoke refresh tokens
             val authHeader = call.request.headers["Authorization"]
             val tokenFromHeader = authHeader?.removePrefix("Bearer ")?.removePrefix("bearer ")?.trim()
             val tokenFromCookie = call.request.cookies["auth_token"]
             val token = tokenFromHeader ?: tokenFromCookie
-            
+
             if (token != null) {
                 try {
                     val jwtVerifier = com.auth0.jwt.JWT
@@ -174,14 +170,14 @@ fun Route.authRoutes() {
                     // Token invalid or expired, continue with logout
                 }
             }
-            
+
             AuthCookieUtils.clearAuthCookie(call)
             call.respond(MessageResponse("Logged out"))
         }
-        
+
         post("/refresh") {
             val request = call.receive<RefreshTokenRequest>()
-            
+
             try {
                 val result = authService.refreshToken(request.refreshToken)
                 if (result != null) {
@@ -194,7 +190,7 @@ fun Route.authRoutes() {
                 call.respond(HttpStatusCode.Unauthorized, ErrorResponse(e.message))
             }
         }
-        
+
         // GitHub OAuth
         get("/github") {
             try {
@@ -202,7 +198,7 @@ fun Route.authRoutes() {
                     call.respond(HttpStatusCode.NotImplemented, ErrorResponse("GitHub OAuth is not configured"))
                     return@get
                 }
-                
+
                 val state = oauthService.generateState()
                 val secureCookie = call.request.origin.scheme == "https"
                 call.response.cookies.append(
@@ -223,12 +219,12 @@ fun Route.authRoutes() {
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
-        
+
         get("/github/callback") {
             try {
                 val code = call.parameters["code"]
                 val state = call.parameters["state"]
-                
+
                 if (code == null || state == null) {
                     throw IllegalArgumentException("Missing code or state parameter")
                 }
@@ -245,10 +241,10 @@ fun Route.authRoutes() {
                         secure = call.request.origin.scheme == "https"
                     )
                 )
-                
+
                 val userData = oauthService.handleGitHubCallback(code)
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)
-                
+
                 AuthCookieUtils.setAuthCookie(call, authResponse.token)
                 val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/auth/oauth/callback")
@@ -262,7 +258,7 @@ fun Route.authRoutes() {
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
-        
+
         // Apple Sign In
         get("/apple") {
             try {
@@ -270,7 +266,7 @@ fun Route.authRoutes() {
                     call.respond(HttpStatusCode.NotImplemented, ErrorResponse("Apple Sign In is not configured"))
                     return@get
                 }
-                
+
                 val state = oauthService.generateState()
                 call.response.cookies.append(
                     Cookie(
@@ -293,7 +289,7 @@ fun Route.authRoutes() {
                 call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             }
         }
-        
+
         post("/apple/callback") {
             try {
                 val params = call.receiveParameters()
@@ -313,10 +309,10 @@ fun Route.authRoutes() {
                         extensions = mapOf("SameSite" to "None")
                     )
                 )
-                
+
                 val userData = oauthService.handleAppleCallback(idToken)
                 val authResponse = oauthService.findOrCreateOAuthUser(userData)
-                
+
                 AuthCookieUtils.setAuthCookie(call, authResponse.token)
                 val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
                 call.respondRedirect("$dashboardUrl/auth/oauth/callback")
@@ -340,14 +336,16 @@ fun Route.authRoutes() {
 
             try {
                 val token = authService.generateDemoToken()
-                
+
                 // Set httpOnly auth cookie with extended lifetime for demo
                 AuthCookieUtils.setDemoCookie(call, token)
-                
-                call.respond(DemoLoginResponse(
-                    token = token,
-                    demoEpochMs = EnvConfig.Demo.epochMs
-                ))
+
+                call.respond(
+                    DemoLoginResponse(
+                        token = token,
+                        demoEpochMs = EnvConfig.Demo.epochMs
+                    )
+                )
             } catch (e: IllegalStateException) {
                 logger.error(e) { "Demo login failed: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Demo mode not properly configured"))
@@ -365,17 +363,19 @@ fun Route.authRoutes() {
                 val token = authService.generateDemoToken()
                 AuthCookieUtils.setDemoCookie(call, token)
 
-                call.respond(DemoLoginResponse(
-                    token = token,
-                    demoEpochMs = EnvConfig.Demo.epochMs
-                ))
+                call.respond(
+                    DemoLoginResponse(
+                        token = token,
+                        demoEpochMs = EnvConfig.Demo.epochMs
+                    )
+                )
             } catch (e: IllegalStateException) {
                 logger.error(e) { "Demo refresh failed: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Demo mode not properly configured"))
             }
         }
     }
-    
+
     authenticate("auth-jwt") {
         route("/auth") {
             get("/check-slug") {
@@ -384,18 +384,18 @@ fun Route.authRoutes() {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("slug parameter is required"))
                     return@get
                 }
-                
+
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                
+
                 val available = transaction {
                     // Get user's org ID to exclude from check
                     val membership = Memberships.selectAll()
                         .where { Memberships.user_id eq userId }
                         .firstOrNull()
-                    
+
                     val userOrgId = membership?.get(Memberships.organization_id)
-                    
+
                     // Check if slug exists in other organizations
                     val existingOrg = if (userOrgId != null) {
                         Organizations.selectAll()
@@ -406,24 +406,24 @@ fun Route.authRoutes() {
                             .where { Organizations.slug eq slug }
                             .firstOrNull()
                     }
-                    
+
                     existingOrg == null
                 }
-                
+
                 call.respond(BooleanResponse(available))
             }
-            
+
             post("/complete-onboarding") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val request = call.receive<CompleteOnboardingRequest>()
-                
+
                 try {
                     val user = authService.completeOnboarding(
-                        userId, 
-                        request.organizationName, 
-                        request.companySize, 
-                        request.slug, 
+                        userId,
+                        request.organizationName,
+                        request.companySize,
+                        request.slug,
                         request.referralSource,
                         request.utmSource,
                         request.utmMedium,

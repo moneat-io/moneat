@@ -18,8 +18,8 @@ package com.moneat.services
 
 import kotlinx.coroutines.*
 import mu.KotlinLogging
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 private val logger = KotlinLogging.logger {}
 
@@ -28,14 +28,17 @@ fun interface RefreshTokenCleaner {
 }
 
 class RefreshTokenCleanupService(
-    private val refreshTokenCleaner: RefreshTokenCleaner = RefreshTokenCleaner { RefreshTokenService().cleanupExpiredTokens() },
+    private val refreshTokenCleaner: RefreshTokenCleaner =
+        RefreshTokenCleaner {
+            RefreshTokenService().cleanupExpiredTokens()
+        },
     private val cleanupInterval: Duration = 24.hours
 ) {
     private var cleanupJob: Job? = null
-    
+
     fun start(scope: CoroutineScope) {
         logger.info { "Starting refresh token cleanup service" }
-        
+
         cleanupJob = scope.launch {
             while (isActive) {
                 try {
@@ -46,13 +49,13 @@ class RefreshTokenCleanupService(
                 } catch (e: Exception) {
                     logger.error(e) { "Error during refresh token cleanup" }
                 }
-                
+
                 // Run cleanup periodically
                 delay(cleanupInterval)
             }
         }
     }
-    
+
     fun stop() {
         logger.info { "Stopping refresh token cleanup service" }
         cleanupJob?.cancel()

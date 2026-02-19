@@ -31,12 +31,10 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.util.*
 import kotlin.test.*
-import kotlin.time.Clock
 
 /**
  * Comprehensive tests for EventService ingestion logic covering P0 scenarios:
@@ -74,7 +72,7 @@ class EventServiceTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             ProjectKeys.deleteAll()
@@ -379,12 +377,15 @@ class EventServiceTest {
     @Test
     fun `device context is extracted from contexts object`() {
         val contexts = buildJsonObject {
-            put("device", buildJsonObject {
-                put("name", "iPhone 13")
-                put("model", "iPhone13,2")
-                put("model_id", "A2223")
-                put("os_version", "16.0")
-            })
+            put(
+                "device",
+                buildJsonObject {
+                    put("name", "iPhone 13")
+                    put("model", "iPhone13,2")
+                    put("model_id", "A2223")
+                    put("os_version", "16.0")
+                }
+            )
         }
 
         val event = createSentryEvent(contexts = contexts)
@@ -434,10 +435,12 @@ class EventServiceTest {
 
     @Test
     fun `extra context data is preserved in event`() {
-        val breadcrumbs = Json.parseToJsonElement("""[
+        val breadcrumbs = Json.parseToJsonElement(
+            """[
             {"message": "User logged in", "level": "info"},
             {"message": "API call initiated", "level": "debug"}
-        ]""").jsonArray
+        ]"""
+        ).jsonArray
 
         val event = createSentryEvent(breadcrumbs = breadcrumbs)
 
@@ -450,10 +453,13 @@ class EventServiceTest {
         val request = buildJsonObject {
             put("method", "POST")
             put("url", "https://api.example.com/events")
-            put("headers", buildJsonObject {
-                put("Content-Type", "application/json")
-                put("User-Agent", "sentry-java/5.0.0")
-            })
+            put(
+                "headers",
+                buildJsonObject {
+                    put("Content-Type", "application/json")
+                    put("User-Agent", "sentry-java/5.0.0")
+                }
+            )
         }
 
         val event = createSentryEvent(request = request)
@@ -638,7 +644,9 @@ class EventServiceTest {
                     )
                 )
             )
-        } else null
+        } else {
+            null
+        }
 
         return SentryEvent(
             event_id = eventId ?: UUID.randomUUID().toString(),

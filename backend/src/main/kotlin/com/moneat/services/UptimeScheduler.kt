@@ -31,14 +31,14 @@ class UptimeScheduler(
     private val uptimeService: UptimeService = UptimeService(),
     private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor()
 ) {
-    
+
     private val slackService = SlackService()
     private val discordService = DiscordService()
     private val incidentService = com.moneat.services.incident.IncidentService()
     private var schedulerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val runningChecks = Collections.synchronizedSet(mutableSetOf<UUID>())
-    
+
     /**
      * Start the scheduler.
      */
@@ -47,9 +47,9 @@ class UptimeScheduler(
             logger.warn { "Uptime scheduler is already running" }
             return
         }
-        
+
         logger.info { "Starting uptime monitor scheduler..." }
-        
+
         schedulerJob = scope.launch {
             while (isActive) {
                 try {
@@ -57,15 +57,15 @@ class UptimeScheduler(
                 } catch (e: Exception) {
                     logger.error(e) { "Error in uptime scheduler loop: ${e.message}" }
                 }
-                
+
                 // Check every second
                 delay(1000)
             }
         }
-        
+
         logger.info { "Uptime monitor scheduler started" }
     }
-    
+
     /**
      * Stop the scheduler.
      */
@@ -75,7 +75,7 @@ class UptimeScheduler(
         schedulerJob = null
         logger.info { "Uptime monitor scheduler stopped" }
     }
-    
+
     /**
      * Check all monitors that are due for a check.
      */
@@ -86,16 +86,16 @@ class UptimeScheduler(
             logger.error(e) { "Failed to fetch monitors due for check: ${e.message}" }
             return
         }
-        
+
         if (monitors.isEmpty()) return
-        
+
         // Launch check for each monitor in parallel
         monitors.forEach { monitor ->
             // Skip if already running a check for this monitor
             if (!runningChecks.add(monitor.id)) {
                 return@forEach
             }
-            
+
             scope.launch {
                 try {
                     performCheck(monitor.id)
@@ -107,7 +107,7 @@ class UptimeScheduler(
             }
         }
     }
-    
+
     /**
      * Perform a check for a specific monitor.
      */
@@ -119,17 +119,17 @@ class UptimeScheduler(
             logger.error(e) { "Failed to fetch monitor $monitorId: ${e.message}" }
             return
         }
-        
+
         if (monitor == null) {
             logger.warn { "Monitor $monitorId not found or not active" }
             return
         }
-        
+
         // Skip push monitors (they don't have active checks)
         if (monitor.type.lowercase() == "push") {
             return
         }
-        
+
         // Execute the check
         val result = try {
             withTimeout(monitor.timeoutSeconds * 1000L + 5000) { // Add 5s buffer
@@ -139,35 +139,35 @@ class UptimeScheduler(
             logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
             com.moneat.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
         }
-        
+
         // Handle retries for failed checks
         val finalResult = if (result.status == 0 && monitor.retries > 0) {
             handleRetries(monitor, result)
         } else {
             result
         }
-        
+
         // Record heartbeat
         try {
             uptimeService.recordHeartbeat(monitor.id, finalResult)
         } catch (e: Exception) {
             logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
         }
-        
+
         // Update monitor status
         val oldStatus = monitor.status
         uptimeService.updateMonitorStatus(monitor.id, finalResult)
-        
+
         // Detect status changes (up -> down or down -> up)
         val newStatus = when (finalResult.status) {
             1 -> "up"
             0 -> "down"
             else -> "pending"
         }
-        
+
         if (oldStatus != newStatus && (oldStatus == "up" || oldStatus == "down") && (newStatus == "up" || newStatus == "down")) {
             logger.info { "Monitor ${monitor.name} status changed: $oldStatus -> $newStatus" }
-            
+
             // TODO: Trigger alert via MonitorAlertService or notification service
             // This would integrate with the existing alert system
             try {
@@ -177,7 +177,7 @@ class UptimeScheduler(
             }
         }
     }
-    
+
     /**
      * Handle retries for failed checks.
      */
@@ -186,10 +186,10 @@ class UptimeScheduler(
         initialResult: com.moneat.models.CheckResult
     ): com.moneat.models.CheckResult {
         var lastResult = initialResult
-        
+
         for (retry in 1..monitor.retries) {
             delay(monitor.retryIntervalSeconds * 1000L)
-            
+
             val retryResult = try {
                 withTimeout(monitor.timeoutSeconds * 1000L + 5000) {
                     checkExecutor.executeCheck(monitor)
@@ -198,19 +198,19 @@ class UptimeScheduler(
                 logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
                 com.moneat.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
             }
-            
+
             lastResult = retryResult
-            
+
             // If check succeeded, stop retrying
             if (retryResult.status == 1) {
                 logger.debug { "Monitor ${monitor.name} recovered on retry $retry/${monitor.retries}" }
                 break
             }
         }
-        
+
         return lastResult
     }
-    
+
     /**
      * Notify about status changes.
      */
@@ -222,14 +222,14 @@ class UptimeScheduler(
     ) {
         logger.info {
             "Uptime alert: Monitor '${monitor.name}' (${monitor.type}) changed from $oldStatus to $newStatus. " +
-            "Message: ${result.message}"
+                "Message: ${result.message}"
         }
-        
+
         val config = io.ktor.server.config.ApplicationConfig("application.conf")
         val baseUrl = config.property("email.frontendUrl").getString()
         val monitorUrl = "$baseUrl/uptime/${monitor.id}"
         val prefsService = com.moneat.services.AlertNotificationPreferencesService()
-        
+
         // Send email notifications
         try {
             val emailRecipients = prefsService.getUsersWithChannelEnabled(
@@ -237,7 +237,7 @@ class UptimeScheduler(
                 alertSource = "UPTIME_MONITOR",
                 channel = "email"
             )
-            
+
             val emailService = com.moneat.services.EmailService()
             emailRecipients.forEach { (_, email) ->
                 scope.launch {
@@ -257,7 +257,7 @@ class UptimeScheduler(
         } catch (e: Exception) {
             logger.error(e) { "Failed to send uptime alert emails" }
         }
-        
+
         // Send Slack notification
         val slackEnabled = try {
             prefsService.getUsersWithChannelEnabled(
@@ -284,7 +284,7 @@ class UptimeScheduler(
                 logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
             }
         }
-        
+
         // Send Discord notification
         val discordEnabled = try {
             prefsService.getUsersWithChannelEnabled(
@@ -312,7 +312,7 @@ class UptimeScheduler(
                 logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
             }
         }
-        
+
         // Fire or resolve incident alert
         try {
             if (newStatus == "down") {
@@ -321,10 +321,10 @@ class UptimeScheduler(
                 val severityOverride = monitor.incidentSeverity?.let {
                     com.moneat.models.IncidentSeverity.fromString(it)
                 }
-                
+
                 // Use override severity if set, otherwise use a default that routing rules can override
                 val severity = severityOverride ?: com.moneat.models.IncidentSeverity.HIGH
-                
+
                 val incidentEvent = com.moneat.models.IncidentEvent(
                     title = "Uptime Monitor Down: ${monitor.name}",
                     description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",

@@ -76,7 +76,12 @@ class AuthCookieUtilsTest {
     @Test
     fun `setDemoCookie sets 24 hour max age`() = cookieTest(
         handler = { call -> AuthCookieUtils.setDemoCookie(call, "demo-token") },
-        assertions = { cookie -> assertTrue(cookie.contains("Max-Age=86400"), "Demo cookie should have 24 hour max age") }
+        assertions = { cookie ->
+            assertTrue(
+                cookie.contains("Max-Age=86400"),
+                "Demo cookie should have 24 hour max age"
+            )
+        }
     )
 
     @Test
@@ -98,8 +103,8 @@ class AuthCookieUtilsTest {
         // Ktor renders maxAge=0 as an Expires header with epoch date
         assertTrue(
             cookie.contains("Max-Age=0") ||
-            cookie.lowercase().contains("expires=") ||
-            cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
+                cookie.lowercase().contains("expires=") ||
+                cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
             "Cleared cookie should be expired but got: $cookie"
         )
     }
@@ -108,8 +113,10 @@ class AuthCookieUtilsTest {
     fun `clearAuthCookie sets empty value`() = cookieTest(
         handler = { call -> AuthCookieUtils.clearAuthCookie(call) },
         assertions = { cookie ->
-            assertTrue(cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
-                "Cleared cookie should have empty value")
+            assertTrue(
+                cookie.contains("auth_token=;") || cookie.contains("auth_token= ;"),
+                "Cleared cookie should have empty value"
+            )
         }
     )
 

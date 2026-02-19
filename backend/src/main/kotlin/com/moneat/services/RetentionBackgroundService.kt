@@ -23,8 +23,6 @@ import kotlinx.coroutines.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.and
 
 private val logger = KotlinLogging.logger {}
 
@@ -70,7 +68,7 @@ class RetentionBackgroundService(
     private suspend fun runSweep() {
         val retentionByOrg = retentionPolicyService.getRetentionDaysByOrganization()
         val logRetentionByOrg = retentionPolicyService.getLogRetentionDaysByOrganization()
-        
+
         if (retentionByOrg.isEmpty()) {
             logger.debug { "Retention sweep skipped: no organizations found" }
             return
@@ -84,7 +82,7 @@ class RetentionBackgroundService(
 
         var tableMutationCount = 0
         var orgGroupCount = 0
-        
+
         // Process event retention
         val groupedOrgIds = retentionByOrg.entries.groupBy({ it.value }, { it.key })
         for ((retentionDays, orgIds) in groupedOrgIds) {

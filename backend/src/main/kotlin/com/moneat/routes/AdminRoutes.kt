@@ -16,44 +16,38 @@
 
 package com.moneat.routes
 
-import com.moneat.models.Users
-import com.moneat.models.TriggerIncidentRequest
-import com.moneat.models.IncidentEvent
 import com.moneat.models.AlertSource
+import com.moneat.models.IncidentEvent
 import com.moneat.models.IncidentSeverity
 import com.moneat.models.IncidentStatus
+import com.moneat.models.TriggerIncidentRequest
+import com.moneat.models.Users
 import com.moneat.services.AdminOrgDetail
 import com.moneat.services.AdminOrgUsagePoint
 import com.moneat.services.AdminService
 import com.moneat.services.AuthService
 import com.moneat.services.PricingTierService
-import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
-import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.call
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
+import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.principal
 import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.request.*
 import io.ktor.server.response.*
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonPrimitive
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.*
 
 @Serializable
 private data class AdminUsersResponse(
@@ -78,39 +72,41 @@ fun Route.adminRoutes() {
     val authService = AuthService()
     val pricingTierService = PricingTierService()
     val attributionAnalyticsService = com.moneat.services.AttributionAnalyticsService()
-    
+
     authenticate("auth-jwt") {
         route("/v1/admin") {
-            install(createRouteScopedPlugin("AdminCheck") {
-                onCall { call ->
-                    val principal = call.principal<JWTPrincipal>()
-                    if (principal == null) {
-                        call.respond(HttpStatusCode.Unauthorized, "Authentication required")
-                        return@onCall
-                    }
-                    val userId = principal.payload.getClaim("userId").asInt()
-                    val isAdmin = transaction {
-                        Users.selectAll().where { Users.id eq userId }
-                            .firstOrNull()?.get(Users.is_admin) ?: false
-                    }
-                    if (!isAdmin) {
-                        call.respond(HttpStatusCode.Forbidden, com.moneat.models.ErrorResponse("Admin access required"))
+            install(
+                createRouteScopedPlugin("AdminCheck") {
+                    onCall { call ->
+                        val principal = call.principal<JWTPrincipal>()
+                        if (principal == null) {
+                            call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                            return@onCall
+                        }
+                        val userId = principal.payload.getClaim("userId").asInt()
+                        val isAdmin = transaction {
+                            Users.selectAll().where { Users.id eq userId }
+                                .firstOrNull()?.get(Users.is_admin) ?: false
+                        }
+                        if (!isAdmin) {
+                            call.respond(HttpStatusCode.Forbidden, com.moneat.models.ErrorResponse("Admin access required"))
+                        }
                     }
                 }
-            })
-            
+            )
+
             get("/overview") {
                 val stats = adminService.getOverviewStats()
                 call.respond(stats)
             }
-            
+
             get("/organizations") {
                 val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
                 val orgs = adminService.getAllOrganizations(page, limit)
                 call.respond(orgs)
             }
-            
+
             get("/organizations/{orgId}") {
                 val orgId = call.parameters["orgId"]?.toIntOrNull()
                 if (orgId == null) {
@@ -124,7 +120,7 @@ fun Route.adminRoutes() {
                     call.respond<AdminOrgDetail>(detail)
                 }
             }
-            
+
             get("/organizations/{orgId}/usage") {
                 val orgId = call.parameters["orgId"]?.toIntOrNull()
                 if (orgId == null) {
@@ -143,43 +139,43 @@ fun Route.adminRoutes() {
                 }
                 call.respond(response)
             }
-            
+
             get("/usage") {
                 val period = call.request.queryParameters["period"] ?: "7d"
                 val breakdown = adminService.getUsageBreakdown(period)
                 call.respond(breakdown)
             }
-            
+
             get("/revenue") {
                 val metrics = adminService.getRevenueMetrics()
                 call.respond(metrics)
             }
-            
+
             get("/infrastructure") {
                 val health = adminService.getInfrastructureHealth()
                 call.respond(health)
             }
-            
+
             get("/top-consumers") {
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
                 val consumers = adminService.getTopConsumers(limit)
                 call.respond(consumers)
             }
-            
+
             get("/emails") {
                 val period = call.request.queryParameters["period"] ?: "30d"
                 val stats = adminService.getEmailStats(period)
                 call.respond(stats)
             }
-            
+
             post("/impersonate/{userId}") {
                 val targetUserId = call.parameters["userId"]?.toIntOrNull()
                     ?: return@post call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid user ID"))
-                
+
                 val targetUser = transaction {
                     Users.selectAll().where { Users.id eq targetUserId }.firstOrNull()
                 } ?: return@post call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("User not found"))
-                
+
                 val token = authService.generateImpersonationToken(
                     targetUser[Users.id],
                     targetUser[Users.email]
@@ -193,10 +189,10 @@ fun Route.adminRoutes() {
                     call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 // Get user's organization
                 val orgId = transaction {
-                     com.moneat.models.Memberships.selectAll()
+                    com.moneat.models.Memberships.selectAll()
                         .where { com.moneat.models.Memberships.user_id eq userId }
                         .firstOrNull()?.get(com.moneat.models.Memberships.organization_id)
                 } ?: run {
@@ -206,14 +202,16 @@ fun Route.adminRoutes() {
 
                 try {
                     val request = call.receive<TriggerIncidentRequest>()
-                    
+
                     val incidentService = com.moneat.services.incident.IncidentService()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
-                    
+
                     val severityEnum = IncidentSeverity.fromString(request.severity) ?: IncidentSeverity.MEDIUM
-                    val sourceEnum = try { AlertSource.valueOf(request.source) } catch(e: Exception) { AlertSource.SYSTEM_ALERT }
-                    
+                    val sourceEnum = try { AlertSource.valueOf(
+                        request.source
+                    ) } catch (e: Exception) { AlertSource.SYSTEM_ALERT }
+
                     val event = IncidentEvent(
                         title = request.title,
                         description = request.description,
@@ -225,24 +223,27 @@ fun Route.adminRoutes() {
                         moneatUrl = frontendUrl,
                         metadata = mapOf("triggered_by" to JsonPrimitive(userId.toString()))
                     )
-                    
+
                     incidentService.fireAlert(event)
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.InternalServerError, com.moneat.models.ErrorResponse(e.message ?: "Unknown error"))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.models.ErrorResponse(e.message ?: "Unknown error")
+                    )
                 }
             }
-            
+
             post("/test-notification") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal?.payload?.getClaim("userId")?.asInt() ?: run {
                     call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Invalid token"))
                     return@post
                 }
-                
+
                 try {
                     val request = call.receive<com.moneat.models.TestNotificationRequest>()
-                    
+
                     // Get user email for testing - use testEmail from request if provided
                     val userEmail = if (!request.testEmail.isNullOrBlank()) {
                         request.testEmail
@@ -255,29 +256,29 @@ fun Route.adminRoutes() {
                         call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("User not found"))
                         return@post
                     }
-                    
+
                     // Get user's organization for Slack testing
                     val orgId = transaction {
                         com.moneat.models.Memberships.selectAll()
                             .where { com.moneat.models.Memberships.user_id eq userId }
                             .firstOrNull()?.get(com.moneat.models.Memberships.organization_id)
                     }
-                    
+
                     val emailService = com.moneat.services.EmailService()
                     val slackService = com.moneat.services.SlackService()
                     val discordService = com.moneat.services.DiscordService()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
-                    
+
                     var emailSent = false
                     var slackSent = false
                     var discordSent = false
                     val errors = mutableListOf<String>()
-                    
+
                     val testEmail = request.channel == "email" || request.channel == "both" || request.channel == "all"
                     val testSlack = request.channel == "slack" || request.channel == "both" || request.channel == "all"
                     val testDiscord = request.channel == "discord" || request.channel == "all"
-                    
+
                     // Send email notification if requested
                     if (testEmail) {
                         try {
@@ -344,7 +345,11 @@ fun Route.adminRoutes() {
                                     emailSent = true
                                 }
                                 "password_reset" -> {
-                                    emailService.sendPasswordResetEmail(userEmail, "test-reset-token-67890", "Test User")
+                                    emailService.sendPasswordResetEmail(
+                                        userEmail,
+                                        "test-reset-token-67890",
+                                        "Test User"
+                                    )
                                     emailSent = true
                                 }
                                 "system_up" -> {
@@ -372,7 +377,7 @@ fun Route.adminRoutes() {
                             errors.add("Email failed: ${e.message}")
                         }
                     }
-                    
+
                     // Send Slack notification if requested
                     if (testSlack) {
                         if (orgId == null) {
@@ -425,11 +430,15 @@ fun Route.adminRoutes() {
                                         )
                                     }
                                     else -> {
-                                        errors.add("Notification type '${request.type}' not supported for Slack channel")
+                                        errors.add(
+                                            "Notification type '${request.type}' not supported for Slack channel"
+                                        )
                                     }
                                 }
                                 if (!slackSent && errors.isEmpty()) {
-                                    errors.add("Slack notification failed (no Slack integration configured or error occurred)")
+                                    errors.add(
+                                        "Slack notification failed (no Slack integration configured or error occurred)"
+                                    )
                                 }
                             } catch (e: Exception) {
                                 errors.add("Slack failed: ${e.message}")
@@ -486,18 +495,22 @@ fun Route.adminRoutes() {
                                         )
                                     }
                                     else -> {
-                                        errors.add("Notification type '${request.type}' not supported for Discord channel")
+                                        errors.add(
+                                            "Notification type '${request.type}' not supported for Discord channel"
+                                        )
                                     }
                                 }
                                 if (!discordSent && errors.isEmpty()) {
-                                    errors.add("Discord notification failed (no Discord integration configured or error occurred)")
+                                    errors.add(
+                                        "Discord notification failed (no Discord integration configured or error occurred)"
+                                    )
                                 }
                             } catch (e: Exception) {
                                 errors.add("Discord failed: ${e.message}")
                             }
                         }
                     }
-                    
+
                     val response = com.moneat.models.TestNotificationResponse(
                         success = emailSent || slackSent || discordSent,
                         emailSent = emailSent,
@@ -505,15 +518,18 @@ fun Route.adminRoutes() {
                         discordSent = discordSent,
                         errors = errors
                     )
-                    
+
                     call.respond(if (emailSent || slackSent || discordSent) HttpStatusCode.OK else HttpStatusCode.BadRequest, response)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.InternalServerError, com.moneat.models.TestNotificationResponse(
-                        success = false,
-                        emailSent = false,
-                        slackSent = false,
-                        errors = listOf(e.message ?: "Unknown error")
-                    ))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.models.TestNotificationResponse(
+                            success = false,
+                            emailSent = false,
+                            slackSent = false,
+                            errors = listOf(e.message ?: "Unknown error")
+                        )
+                    )
                 }
             }
 
@@ -529,12 +545,15 @@ fun Route.adminRoutes() {
 
                 try {
                     val request = call.receive<TestSmsCallRequest>()
-                    
+
                     // TwilioService is in the enterprise module — access via reflection
                     val twilioServiceClass = try {
                         Class.forName("com.moneat.enterprise.services.oncall.TwilioService")
                     } catch (_: ClassNotFoundException) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("On-call features require the enterprise module"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse("On-call features require the enterprise module")
+                        )
                         return@post
                     }
                     val instanceField = twilioServiceClass.getDeclaredField("instance")
@@ -542,7 +561,12 @@ fun Route.adminRoutes() {
                     val isEnabled = twilioServiceClass.getMethod("isEnabled").invoke(twilioService) as Boolean
 
                     if (!isEnabled) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse(
+                                "Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)"
+                            )
+                        )
                         return@post
                     }
 
@@ -554,24 +578,39 @@ fun Route.adminRoutes() {
                     val consented = user?.get(Users.oncall_phone_opt_in) ?: false
 
                     if (phoneNumber.isNullOrBlank() || !consented) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(
-                            "No consented on-call phone number configured. Please set up your on-call contact in notification settings first."
-                        ))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse(
+                                "No consented on-call phone number configured. Please set up your on-call contact in notification settings first."
+                            )
+                        )
                         return@post
                     }
 
                     when (request.channel) {
-                        "sms" -> twilioServiceClass.getMethod("sendTestSms", String::class.java).invoke(twilioService, phoneNumber)
-                        "call" -> twilioServiceClass.getMethod("makeTestCall", String::class.java).invoke(twilioService, phoneNumber)
+                        "sms" -> twilioServiceClass.getMethod(
+                            "sendTestSms",
+                            String::class.java
+                        ).invoke(twilioService, phoneNumber)
+                        "call" -> twilioServiceClass.getMethod(
+                            "makeTestCall",
+                            String::class.java
+                        ).invoke(twilioService, phoneNumber)
                         else -> {
-                            call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("channel must be 'sms' or 'call'"))
+                            call.respond(
+                                HttpStatusCode.BadRequest,
+                                com.moneat.models.ErrorResponse("channel must be 'sms' or 'call'")
+                            )
                             return@post
                         }
                     }
 
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.InternalServerError, com.moneat.models.ErrorResponse(e.message ?: "Unknown error"))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.models.ErrorResponse(e.message ?: "Unknown error")
+                    )
                 }
             }
 
@@ -606,7 +645,10 @@ fun Route.adminRoutes() {
                         call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse("User not found"))
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.models.ErrorResponse(e.message ?: "Invalid request")
+                    )
                 }
             }
 
@@ -616,7 +658,10 @@ fun Route.adminRoutes() {
                     val result = adminService.deleteUsers(request.userIds)
                     call.respond(HttpStatusCode.OK, result)
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.models.ErrorResponse(e.message ?: "Invalid request")
+                    )
                 }
             }
 
@@ -626,7 +671,9 @@ fun Route.adminRoutes() {
                     if (tierName.isNullOrBlank()) {
                         call.respond<List<com.moneat.models.BillingPlanResponse>>(pricingTierService.getCurrentPlans())
                     } else {
-                        call.respond<List<com.moneat.models.PricingTierConfigResponse>>(pricingTierService.getTierVersions(tierName))
+                        call.respond<List<com.moneat.models.PricingTierConfigResponse>>(
+                            pricingTierService.getTierVersions(tierName)
+                        )
                     }
                 }
 
@@ -641,7 +688,10 @@ fun Route.adminRoutes() {
                         val created = pricingTierService.createTierVersion(tierName, request)
                         call.respond(HttpStatusCode.Created, created)
                     } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse(e.message ?: "Invalid request")
+                        )
                     }
                 }
 
@@ -656,7 +706,10 @@ fun Route.adminRoutes() {
                         val response = pricingTierService.migrateSubscribers(tierName, request)
                         call.respond(response)
                     } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse(e.message ?: "Invalid request")
+                        )
                     }
                 }
 
@@ -669,7 +722,10 @@ fun Route.adminRoutes() {
                     val tierName = call.parameters["tierName"]?.uppercase()
                     val version = call.parameters["version"]?.toIntOrNull()
                     if (tierName.isNullOrBlank() || version == null) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Missing tier name or version"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse("Missing tier name or version")
+                        )
                         return@patch
                     }
                     try {
@@ -677,7 +733,10 @@ fun Route.adminRoutes() {
                         val updated = pricingTierService.updateStripePriceIds(tierName, version, request)
                         call.respond(updated)
                     } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse(e.message ?: "Invalid request")
+                        )
                     }
                 }
 
@@ -693,7 +752,10 @@ fun Route.adminRoutes() {
 
                     val orgId = call.parameters["orgId"]?.toIntOrNull()
                     if (orgId == null) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid organization ID"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse("Invalid organization ID")
+                        )
                         return@post
                     }
 
@@ -708,16 +770,25 @@ fun Route.adminRoutes() {
                         )
                         call.respond(HttpStatusCode.Created, response)
                     } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse(e.message ?: "Invalid request"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse(e.message ?: "Invalid request")
+                        )
                     } catch (e: IllegalStateException) {
-                        call.respond(HttpStatusCode.NotFound, com.moneat.models.ErrorResponse(e.message ?: "Organization not found"))
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            com.moneat.models.ErrorResponse(e.message ?: "Organization not found")
+                        )
                     }
                 }
 
                 get("/organizations/{orgId}/promotional-credits") {
                     val orgId = call.parameters["orgId"]?.toIntOrNull()
                     if (orgId == null) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid organization ID"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse("Invalid organization ID")
+                        )
                         return@get
                     }
 
@@ -740,7 +811,10 @@ fun Route.adminRoutes() {
 
                     val orgId = call.parameters["orgId"]?.toIntOrNull()
                     if (orgId == null) {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("Invalid organization ID"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.models.ErrorResponse("Invalid organization ID")
+                        )
                         return@delete
                     }
 
@@ -752,11 +826,11 @@ fun Route.adminRoutes() {
                     }
                 }
             }
-            
+
             // Attribution analytics endpoint for ROAS tracking
             get("/attribution") {
                 val groupBy = call.request.queryParameters["groupBy"] ?: "campaign"
-                
+
                 val analytics = attributionAnalyticsService.getAttributionMetrics(groupBy = groupBy)
                 call.respond(analytics)
             }

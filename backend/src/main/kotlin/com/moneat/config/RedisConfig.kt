@@ -16,8 +16,8 @@
 
 package com.moneat.config
 
-import io.ktor.server.application.*
 import io.ktor.events.*
+import io.ktor.server.application.*
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.api.StatefulRedisConnection
@@ -74,7 +74,7 @@ fun Application.configureRedis() {
         log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
         return
     }
-    
+
     try {
         log.info("Connecting to Redis at $redisUrl...")
         RedisConfig.init(redisUrl)

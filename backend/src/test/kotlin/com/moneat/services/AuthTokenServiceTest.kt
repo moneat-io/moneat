@@ -146,9 +146,9 @@ class AuthTokenServiceTest {
         val userId = seedUser()
         seedOrgAndMembership(userId)
         val created = service.generateToken(userId, "test", listOf("project:read"))
-        
+
         service.validateToken(created.token!!)
-        
+
         val tokenRow = transaction {
             AuthTokens.selectAll()
                 .where { AuthTokens.id eq created.id }

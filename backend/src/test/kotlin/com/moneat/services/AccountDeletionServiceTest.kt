@@ -4,8 +4,8 @@ import com.moneat.models.*
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.time.Clock
 import kotlin.test.*
+import kotlin.time.Clock
 
 class AccountDeletionServiceTest {
     private val service = AccountDeletionService()
@@ -23,8 +23,13 @@ class AccountDeletionServiceTest {
             )
             transaction {
                 SchemaUtils.create(
-                    Organizations, Users, Memberships, Subscriptions,
-                    OrgInvitations, RefreshTokens, Projects
+                    Organizations,
+                    Users,
+                    Memberships,
+                    Subscriptions,
+                    OrgInvitations,
+                    RefreshTokens,
+                    Projects
                 )
             }
             dbInitialized = true

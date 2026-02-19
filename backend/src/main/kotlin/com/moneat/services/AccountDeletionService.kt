@@ -23,12 +23,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.datetime.CurrentTimestamp
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.datetime.CurrentTimestamp
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
@@ -36,13 +35,13 @@ class AccountDeletionService(
     private val stripeService: StripeService = StripeService(),
     private val emailService: EmailService = EmailService()
 ) {
-    
+
     data class DeletionValidationResult(
         val canDelete: Boolean,
         val errorMessage: String? = null,
         val organizationsAsLastOwner: List<String> = emptyList()
     )
-    
+
     /**
      * Validates if a user can delete their account
      * Users cannot delete if they are the last owner of any organization
@@ -52,28 +51,28 @@ class AccountDeletionService(
             // Find all organizations where this user is an owner
             val ownedOrgs = Memberships.innerJoin(Organizations)
                 .selectAll()
-                .where { 
-                    (Memberships.user_id eq userId) and 
-                    (Memberships.role eq "owner") and
-                    (Organizations.deletedAt.isNull())
+                .where {
+                    (Memberships.user_id eq userId) and
+                        (Memberships.role eq "owner") and
+                        (Organizations.deletedAt.isNull())
                 }
                 .map { row ->
                     val orgId = row[Memberships.organization_id]
                     val orgName = row[Organizations.name]
-                    
+
                     // Count total owners for this org
                     val ownerCount = Memberships.selectAll()
-                        .where { 
-                            (Memberships.organization_id eq orgId) and 
-                            (Memberships.role eq "owner")
+                        .where {
+                            (Memberships.organization_id eq orgId) and
+                                (Memberships.role eq "owner")
                         }
                         .count()
-                    
+
                     Pair(orgName, ownerCount)
                 }
                 .filter { (_, ownerCount) -> ownerCount == 1L }
                 .map { (orgName, _) -> orgName }
-            
+
             if (ownedOrgs.isNotEmpty()) {
                 DeletionValidationResult(
                     canDelete = false,
@@ -85,7 +84,7 @@ class AccountDeletionService(
             }
         }
     }
-    
+
     /**
      * Validates if an organization can be deleted
      * Checks if user is an owner and if there's an active subscription
@@ -94,38 +93,38 @@ class AccountDeletionService(
         return transaction {
             // Check if user is an owner
             val membership = Memberships.selectAll()
-                .where { 
-                    (Memberships.user_id eq userId) and 
-                    (Memberships.organization_id eq organizationId)
+                .where {
+                    (Memberships.user_id eq userId) and
+                        (Memberships.organization_id eq organizationId)
                 }
                 .singleOrNull()
-            
+
             if (membership == null || membership[Memberships.role] != "owner") {
                 return@transaction DeletionValidationResult(
                     canDelete = false,
                     errorMessage = "Only organization owners can delete the organization"
                 )
             }
-            
+
             // Check for active subscription
             val activeSubscription = Subscriptions.selectAll()
                 .where {
                     (Subscriptions.organization_id eq organizationId) and
-                    (Subscriptions.status inList listOf("active", "trialing"))
+                        (Subscriptions.status inList listOf("active", "trialing"))
                 }
                 .singleOrNull()
-            
+
             if (activeSubscription != null) {
                 return@transaction DeletionValidationResult(
                     canDelete = false,
                     errorMessage = "Please cancel your active subscription before deleting the organization"
                 )
             }
-            
+
             DeletionValidationResult(canDelete = true)
         }
     }
-    
+
     /**
      * Deletes a user account
      * - Removes user from all organizations
@@ -140,30 +139,32 @@ class AccountDeletionService(
                 logger.warn { "Cannot delete user $userId: ${validation.errorMessage}" }
                 return false
             }
-            
+
             transaction {
                 val user = Users.selectAll()
                     .where { Users.id eq userId }
                     .singleOrNull() ?: return@transaction
-                
+
                 val email = user[Users.email]
-                
+
                 // Remove user from all organizations (CASCADE will handle this via FK)
                 Memberships.deleteWhere { Memberships.user_id eq userId }
-                
+
                 // Revoke pending invitations sent by this user
-                OrgInvitations.update({ (OrgInvitations.invited_by eq userId) and (OrgInvitations.status eq "pending") }) {
+                OrgInvitations.update(
+                    { (OrgInvitations.invited_by eq userId) and (OrgInvitations.status eq "pending") }
+                ) {
                     it[status] = "revoked"
                 }
-                
+
                 // Soft delete user
                 Users.update({ Users.id eq userId }) {
                     it[deletedAt] = CurrentTimestamp
                 }
-                
+
                 logger.info { "Soft deleted user account: $userId ($email)" }
             }
-            
+
             // Send confirmation email (async)
             try {
                 val userEmail = transaction {
@@ -177,14 +178,14 @@ class AccountDeletionService(
             } catch (e: Exception) {
                 logger.error(e) { "Failed to send account deletion confirmation email" }
             }
-            
+
             return true
         } catch (e: Exception) {
             logger.error(e) { "Failed to delete user account $userId" }
             return false
         }
     }
-    
+
     /**
      * Deletes an organization and all associated data
      * - Cancels active subscriptions
@@ -201,19 +202,19 @@ class AccountDeletionService(
                 logger.warn { "Cannot delete organization $organizationId: ${validation.errorMessage}" }
                 return false
             }
-            
+
             val orgData = transaction {
                 val org = Organizations.selectAll()
                     .where { Organizations.id eq organizationId }
                     .singleOrNull() ?: return@transaction null
-                
+
                 val projects = Projects.selectAll()
                     .where { Projects.organization_id eq organizationId }
                     .map { it[Projects.id].toInt() }
-                
+
                 Triple(org[Organizations.name], org[Organizations.slug], projects)
             } ?: return false
-            
+
             val (orgName, _, projectIds) = orgData
             val memberEmails = transaction {
                 Users.innerJoin(Memberships)
@@ -221,14 +222,14 @@ class AccountDeletionService(
                     .where { Memberships.organization_id eq organizationId }
                     .map { it[Users.email] }
             }
-            
+
             logger.info { "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects" }
-            
+
             // Delete ClickHouse data for all projects
             if (projectIds.isNotEmpty()) {
                 deleteClickHouseDataForProjects(projectIds)
             }
-            
+
             // Cancel Stripe subscription if exists
             if (stripeService.isStripeEnabled()) {
                 try {
@@ -236,7 +237,7 @@ class AccountDeletionService(
                         val subscription = Subscriptions.selectAll()
                             .where { Subscriptions.organization_id eq organizationId }
                             .singleOrNull()
-                        
+
                         subscription?.get(Subscriptions.stripe_subscription_id)?.let { stripeSubId ->
                             stripeService.cancelSubscription(stripeSubId)
                             logger.info { "Cancelled Stripe subscription $stripeSubId for org $organizationId" }
@@ -247,32 +248,32 @@ class AccountDeletionService(
                     // Continue with deletion even if Stripe fails
                 }
             }
-            
+
             // PostgreSQL cleanup (most handled by CASCADE)
             transaction {
                 // Revoke pending invitations
-                OrgInvitations.update({ 
-                    (OrgInvitations.organization_id eq organizationId) and 
-                    (OrgInvitations.status eq "pending") 
+                OrgInvitations.update({
+                    (OrgInvitations.organization_id eq organizationId) and
+                        (OrgInvitations.status eq "pending")
                 }) {
                     it[status] = "revoked"
                 }
-                
+
                 // Delete usage records
                 UsageRecords.deleteWhere { UsageRecords.organization_id eq organizationId }
 
                 // Revoke access to deleted organization by removing all memberships.
                 Memberships.deleteWhere { Memberships.organization_id eq organizationId }
-                
+
                 // Soft delete organization
                 Organizations.update({ Organizations.id eq organizationId }) {
                     it[deletedAt] = CurrentTimestamp
                     it[deletedBy] = deletedByUserId
                 }
-                
+
                 logger.info { "Soft deleted organization: $organizationId ($orgName)" }
             }
-            
+
             // Send confirmation emails to all members
             try {
                 memberEmails.forEach { email ->
@@ -285,37 +286,37 @@ class AccountDeletionService(
             } catch (e: Exception) {
                 logger.error(e) { "Failed to send organization deletion notifications" }
             }
-            
+
             return true
         } catch (e: Exception) {
             logger.error(e) { "Failed to delete organization $organizationId" }
             return false
         }
     }
-    
+
     /**
      * Deletes all ClickHouse data for given project IDs
      */
     private suspend fun deleteClickHouseDataForProjects(projectIds: List<Int>) = withContext(Dispatchers.IO) {
         try {
             val projectIdsList = projectIds.joinToString(",")
-            
+
             // Delete from all ClickHouse tables
             val tables = listOf(
                 "events",
-                "spans", 
+                "spans",
                 "sessions",
                 "replay_events",
                 "replay_segments",
                 "user_feedback",
                 "logs"
             )
-            
+
             tables.forEach { table ->
                 try {
                     val query = "ALTER TABLE $table DELETE WHERE project_id IN ($projectIdsList)"
                     val response = ClickHouseClient.execute(query)
-                    
+
                     if (response.status == HttpStatusCode.OK) {
                         logger.info { "Deleted ClickHouse data from $table for ${projectIds.size} projects" }
                     } else {
@@ -325,7 +326,7 @@ class AccountDeletionService(
                     logger.error(e) { "Failed to delete ClickHouse data from $table" }
                 }
             }
-            
+
             // Delete monitoring data by org_id
             val orgId = transaction {
                 projectIds.firstOrNull()?.let { projectId ->
@@ -334,7 +335,7 @@ class AccountDeletionService(
                         .singleOrNull()?.get(Projects.organization_id)
                 }
             }
-            
+
             if (orgId != null) {
                 val monitoringTables = listOf("system_metrics", "container_metrics")
                 monitoringTables.forEach { table ->
@@ -347,7 +348,7 @@ class AccountDeletionService(
                     }
                 }
             }
-            
+
             logger.info { "Completed ClickHouse data deletion for ${projectIds.size} projects" }
         } catch (e: Exception) {
             logger.error(e) { "Failed to delete ClickHouse data" }

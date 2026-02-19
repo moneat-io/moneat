@@ -17,9 +17,7 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
@@ -29,6 +27,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 
 class BillingQuotaServiceTest {
@@ -62,7 +61,7 @@ class BillingQuotaServiceTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             OrgUsageCounters.deleteAll()
@@ -70,7 +69,7 @@ class BillingQuotaServiceTest {
             Organizations.deleteAll()
             PricingTierConfigs.deleteAll()
         }
-        
+
         // Setup test data
         transaction {
             testOrgId = insertTestOrganization("Test Org", "test-org")
@@ -255,7 +254,7 @@ class BillingQuotaServiceTest {
         // Rate: 400000 micros per unit
         // 1 cent = 10000 micros, so 10000 cents = 100000000 micros
         // Units: 100000000 / 400000 = 250 units
-        
+
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
         assertEquals(250, usage.paygLimitUnits)
     }
@@ -334,7 +333,7 @@ class BillingQuotaServiceTest {
             requestedUnitsByType = mapOf(
                 "error" to 100,
                 "transaction" to 0,
-                "replay" to -50  // Should be ignored
+                "replay" to -50 // Should be ignored
             )
         )
 
@@ -525,7 +524,7 @@ class BillingQuotaServiceTest {
     @Test
     fun `reserveUnits with zero units succeeds without changes`() {
         val usage1 = billingQuotaService.getUsageForOrganization(testOrgId)
-        
+
         val result = billingQuotaService.reserveUnits(
             organizationId = testOrgId,
             requestedUnits = 0,
@@ -540,7 +539,7 @@ class BillingQuotaServiceTest {
     @Test
     fun `reserveUnits with negative units succeeds without changes`() {
         val usage1 = billingQuotaService.getUsageForOrganization(testOrgId)
-        
+
         val result = billingQuotaService.reserveUnits(
             organizationId = testOrgId,
             requestedUnits = -100,

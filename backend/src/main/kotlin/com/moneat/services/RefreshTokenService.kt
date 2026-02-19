@@ -22,11 +22,11 @@ import com.moneat.config.EnvConfig
 import com.moneat.models.RefreshTokens
 import com.moneat.models.Users
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
@@ -42,18 +42,18 @@ class RefreshTokenService {
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
-    
+
     companion object {
         private const val REFRESH_TOKEN_LENGTH = 64
         private const val REFRESH_TOKEN_EXPIRY_DAYS = 30L
         private const val ACCESS_TOKEN_EXPIRY_HOURS = 1L
-        
+
         private fun hashToken(token: String): String {
             val digest = MessageDigest.getInstance("SHA-256")
             val hashBytes = digest.digest(token.toByteArray())
             return hashBytes.joinToString("") { "%02x".format(it) }
         }
-        
+
         private fun generateRandomToken(): String {
             val random = SecureRandom()
             val bytes = ByteArray(REFRESH_TOKEN_LENGTH)
@@ -61,7 +61,7 @@ class RefreshTokenService {
             return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
         }
     }
-    
+
     /**
      * Generate a new refresh token for a user
      */
@@ -70,7 +70,7 @@ class RefreshTokenService {
         val tokenHash = hashToken(refreshToken)
         val now = System.currentTimeMillis()
         val expiresAt = now + (REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
-        
+
         transaction {
             RefreshTokens.insert {
                 it[RefreshTokens.user_id] = userId
@@ -81,22 +81,22 @@ class RefreshTokenService {
                 it[revoked] = false
             }
         }
-        
+
         val accessToken = generateAccessToken(userId, email, orgId, orgRole)
-        
+
         return RefreshTokenResponse(
             accessToken = accessToken,
             refreshToken = refreshToken,
             expiresIn = ACCESS_TOKEN_EXPIRY_HOURS * 3600
         )
     }
-    
+
     /**
      * Validate a refresh token and rotate it (issue new access + refresh tokens)
      */
     fun validateAndRotate(token: String): RefreshTokenResponse? {
         val tokenHash = hashToken(token)
-        
+
         return transaction {
             // Find the refresh token
             val tokenRow = RefreshTokens
@@ -104,40 +104,40 @@ class RefreshTokenService {
                 .where { (RefreshTokens.token_hash eq tokenHash) and (RefreshTokens.revoked eq false) }
                 .firstOrNull()
                 ?: return@transaction null
-            
+
             val expiresAt = tokenRow[RefreshTokens.expires_at]
             val userId = tokenRow[RefreshTokens.user_id]
-            
+
             // Check if expired
             if (expiresAt < System.currentTimeMillis()) {
                 return@transaction null
             }
-            
+
             // Get user email and membership (SECURITY: Never trust client-supplied orgId/orgRole)
             val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 ?: return@transaction null
             val email = user[Users.email]
-            
+
             // Get user's actual organization membership from database
             val membership = com.moneat.models.Memberships.selectAll()
                 .where { com.moneat.models.Memberships.user_id eq userId }
                 .firstOrNull()
                 ?: return@transaction null
-            
+
             val orgId = membership[com.moneat.models.Memberships.organization_id]
             val orgRole = membership[com.moneat.models.Memberships.role]
-            
+
             // Revoke old refresh token
             RefreshTokens.update({ RefreshTokens.token_hash eq tokenHash }) {
                 it[revoked] = true
                 it[last_used_at] = System.currentTimeMillis()
             }
-            
+
             // Generate new refresh token
             generateRefreshToken(userId, email, orgId, orgRole)
         }
     }
-    
+
     /**
      * Revoke all refresh tokens for a user (for logout or security)
      */
@@ -148,19 +148,19 @@ class RefreshTokenService {
             }
         }
     }
-    
+
     /**
      * Clean up expired refresh tokens (to be run periodically)
      */
     fun cleanupExpiredTokens(): Int {
         val now = System.currentTimeMillis()
         return transaction {
-            RefreshTokens.deleteWhere { 
+            RefreshTokens.deleteWhere {
                 (expires_at less now) or (revoked eq true)
             }
         }
     }
-    
+
     /**
      * Generate a JWT access token
      */

@@ -18,11 +18,10 @@ package com.moneat.models
 
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import org.jetbrains.exposed.v1.core.java.javaUUID
-import java.sql.ResultSet
 
 class TextArrayColumnType : ColumnType<List<String>>() {
     private fun isH2(): Boolean =
@@ -135,7 +134,10 @@ object Memberships : Table("memberships") {
     val user_id = integer("user_id").references(Users.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val role = varchar("role", 50)
-    val sidebar_hidden_items = registerColumn<List<String>>("sidebar_hidden_items", TextArrayColumnType()).default(emptyList())
+    val sidebar_hidden_items = registerColumn<List<String>>(
+        "sidebar_hidden_items",
+        TextArrayColumnType()
+    ).default(emptyList())
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -241,7 +243,7 @@ object ArtifactBundles : Table("artifact_bundles") {
 object UsageRecords : Table("usage_records") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)
-    val project_id = integer("project_id").nullable()  // FK to projects(id) in DB
+    val project_id = integer("project_id").nullable() // FK to projects(id) in DB
     val event_type = varchar("event_type", 50).default("error")
     val event_count = integer("event_count").default(0)
     val bytes_ingested = long("bytes_ingested").default(0)
@@ -400,20 +402,20 @@ object OrganizationIntegrations : Table("organization_integrations") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)
     val integration_type = varchar("integration_type", 50)
-    
+
     // OAuth data (for Slack App)
     val access_token = text("access_token").nullable()
     val bot_user_id = varchar("bot_user_id", 255).nullable()
     val team_id = varchar("team_id", 255).nullable()
     val team_name = varchar("team_name", 255).nullable()
-    
+
     // Channel configuration
     val channel_id = varchar("channel_id", 255).nullable()
     val channel_name = varchar("channel_name", 255).nullable()
-    
+
     // Legacy webhook support (deprecated)
     val webhook_url = text("webhook_url").nullable()
-    
+
     val enabled = bool("enabled").default(true)
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")

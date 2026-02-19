@@ -19,21 +19,21 @@ package com.moneat.services
 import com.moneat.models.Projects
 import com.moneat.models.Subscriptions
 import com.moneat.models.UsageRecords
-import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
@@ -64,7 +64,7 @@ class UsageTrackingService {
     companion object {
         val instance = UsageTrackingService()
     }
-    
+
     private val buffer = ConcurrentHashMap<String, Pair<AtomicInteger, java.util.concurrent.atomic.AtomicLong>>()
     private val flushThreshold = 100
     private val flushIntervalMs = 10_000L
@@ -253,7 +253,9 @@ class UsageTrackingService {
 
     private fun getBillingPeriod(orgId: Int): Pair<kotlinx.datetime.LocalDate, kotlinx.datetime.LocalDate> {
         return transaction {
-            val sub = Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+            val sub = Subscriptions.selectAll().where {
+                (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
+            }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
             val startTs = sub?.get(Subscriptions.current_period_start)

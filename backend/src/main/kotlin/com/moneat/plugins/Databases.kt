@@ -20,8 +20,8 @@ import com.moneat.config.configureClickHouseMigrations
 import com.moneat.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import io.ktor.server.application.*
 import io.ktor.events.*
+import io.ktor.server.application.*
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -30,7 +30,7 @@ import java.sql.Connection
 
 fun Application.configureDatabases() {
     val config = environment.config
-    
+
     try {
         // PostgreSQL connection pool
         val hikariConfig = HikariConfig().apply {
@@ -46,12 +46,12 @@ fun Application.configureDatabases() {
             transactionIsolation = "TRANSACTION_READ_COMMITTED"
             validate()
         }
-        
+
         val dataSource = HikariDataSource(hikariConfig)
-        
+
         // Skip Flyway migrations for H2 test database
         val isTestDatabase = hikariConfig.jdbcUrl.contains("jdbc:h2:mem")
-        
+
         if (!isTestDatabase) {
             // Run Flyway migrations for PostgreSQL
             log.info("Running PostgreSQL migrations...")
@@ -60,18 +60,18 @@ fun Application.configureDatabases() {
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
                 .load()
-            
+
             val migrationsApplied = flyway.migrate()
             log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
         } else {
             log.info("Test database detected (H2), skipping PostgreSQL migrations")
         }
-        
+
         Database.connect(dataSource)
         TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED
-        
+
         log.info("PostgreSQL database connected")
-        
+
         // Run ClickHouse migrations only if ClickHouse is configured
         if (!isTestDatabase) {
             runBlocking {
@@ -89,7 +89,7 @@ fun Application.configureDatabases() {
                 }
             }
         }
-        
+
         // Register shutdown hook
         monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")

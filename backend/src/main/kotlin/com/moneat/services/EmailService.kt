@@ -27,15 +27,13 @@ import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeBodyPart
 import jakarta.mail.internet.MimeMessage
 import jakarta.mail.internet.MimeMultipart
-import kotlin.time.Clock
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.*
-import java.io.File
 import java.util.*
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
@@ -43,14 +41,14 @@ class EmailService {
     private val config = ApplicationConfig("application.conf")
     private val fromEmail = config.property("email.from").getString()
     private val frontendUrl = config.property("email.frontendUrl").getString()
-    
+
     private val smtpHost = config.propertyOrNull("email.smtp.host")?.getString()
     private val smtpPort = config.propertyOrNull("email.smtp.port")?.getString()?.toIntOrNull() ?: 587
     private val smtpUsername = config.propertyOrNull("email.smtp.username")?.getString()
     private val smtpPassword = config.propertyOrNull("email.smtp.password")?.getString()
     private val smtpAuth = config.propertyOrNull("email.smtp.auth")?.getString()?.toBoolean() ?: true
     private val smtpStartTls = config.propertyOrNull("email.smtp.starttls")?.getString()?.toBoolean() ?: true
-    
+
     private val session: Session? by lazy {
         if (smtpHost.isNullOrBlank() || smtpUsername.isNullOrBlank() || smtpPassword.isNullOrBlank()) {
             logger.warn { "SMTP configuration incomplete. Email sending will be disabled." }
@@ -63,19 +61,22 @@ class EmailService {
                 put("mail.smtp.starttls.enable", smtpStartTls.toString())
                 put("mail.smtp.ssl.protocols", "TLSv1.2")
             }
-            
-            Session.getInstance(props, object : Authenticator() {
-                override fun getPasswordAuthentication(): PasswordAuthentication {
-                    return PasswordAuthentication(smtpUsername, smtpPassword)
+
+            Session.getInstance(
+                props,
+                object : Authenticator() {
+                    override fun getPasswordAuthentication(): PasswordAuthentication {
+                        return PasswordAuthentication(smtpUsername, smtpPassword)
+                    }
                 }
-            })
+            )
         }
     }
-    
+
     fun sendVerificationEmail(email: String, token: String, userName: String?) {
         val verificationUrl = "$frontendUrl/verify-email?token=$token"
         val displayName = userName ?: email.substringBefore("@")
-        
+
         val subject = "Verify your email address"
         val htmlBody = loadVerificationTemplate(displayName, verificationUrl)
         val textBody = """
@@ -92,14 +93,14 @@ class EmailService {
             Best regards,
             The Moneat Team
         """.trimIndent()
-        
+
         sendEmail(email, subject, htmlBody, textBody, "verification")
     }
-    
+
     fun sendPasswordResetEmail(email: String, token: String, userName: String?) {
         val resetUrl = "$frontendUrl/reset-password?token=$token"
         val displayName = userName ?: email.substringBefore("@")
-        
+
         val subject = "Reset your password"
         val htmlBody = loadPasswordResetTemplate(displayName, resetUrl)
         val textBody = """
@@ -116,13 +117,13 @@ class EmailService {
             Best regards,
             The Moneat Team
         """.trimIndent()
-        
+
         sendEmail(email, subject, htmlBody, textBody, "password_reset")
     }
-    
+
     fun sendInvitationEmail(toEmail: String, inviterName: String, orgName: String, role: String, token: String) {
         val inviteUrl = "$frontendUrl/accept-invite?token=$token"
-        
+
         val subject = "You've been invited to join $orgName on Moneat"
         val htmlBody = loadInvitationTemplate(inviterName, orgName, role, inviteUrl)
         val textBody = """
@@ -141,17 +142,21 @@ class EmailService {
             Best regards,
             The Moneat Team
         """.trimIndent()
-        
+
         sendEmail(toEmail, subject, htmlBody, textBody, "org_invitation")
     }
-    
+
     fun sendEmail(to: String, subject: String, htmlBody: String, textBody: String, emailType: String = "other") {
-        SentryUtils.breadcrumb("email", "Sending email", mapOf(
-            "to" to to,
-            "subject" to subject,
-            "type" to emailType
-        ))
-        
+        SentryUtils.breadcrumb(
+            "email",
+            "Sending email",
+            mapOf(
+                "to" to to,
+                "subject" to subject,
+                "type" to emailType
+            )
+        )
+
         val mailSession = session
         if (mailSession == null) {
             logger.warn { "Email service not configured. Would send to $to: $subject" }
@@ -159,39 +164,43 @@ class EmailService {
             trackEmailSent(to, emailType, false)
             return
         }
-        
+
         var success = false
         try {
             val message = MimeMessage(mailSession).apply {
                 setFrom(InternetAddress(fromEmail, "Moneat"))
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
                 setSubject(subject)
-                
+
                 // Create multipart message with both HTML and text
                 val multipart = MimeMultipart("alternative")
-                
+
                 // Add text part
                 val textPart = MimeBodyPart().apply {
                     setText(textBody, "UTF-8")
                 }
                 multipart.addBodyPart(textPart)
-                
+
                 // Add HTML part
                 val htmlPart = MimeBodyPart().apply {
                     setContent(htmlBody, "text/html; charset=UTF-8")
                 }
                 multipart.addBodyPart(htmlPart)
-                
+
                 setContent(multipart)
             }
-            
+
             Transport.send(message)
             success = true
             logger.info { "Email sent to $to" }
-            SentryUtils.breadcrumb("email", "Email sent successfully", mapOf(
-                "to" to to,
-                "type" to emailType
-            ))
+            SentryUtils.breadcrumb(
+                "email",
+                "Email sent successfully",
+                mapOf(
+                    "to" to to,
+                    "type" to emailType
+                )
+            )
         } catch (e: Exception) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
@@ -205,7 +214,7 @@ class EmailService {
             trackEmailSent(to, emailType, success)
         }
     }
-    
+
     private fun trackEmailSent(recipient: String, emailType: String, success: Boolean) {
         try {
             val normalizedEmail = recipient.lowercase().trim()
@@ -218,7 +227,7 @@ class EmailService {
                             .firstOrNull()
                             ?.get(Memberships.organization_id)
                     }
-                
+
                 EmailsSent.insert {
                     it[EmailsSent.organization_id] = orgId
                     it[EmailsSent.email_type] = emailType
@@ -231,11 +240,11 @@ class EmailService {
             logger.warn(e) { "Failed to track email sent to $recipient" }
         }
     }
-    
+
     private fun loadVerificationTemplate(userName: String, verificationUrl: String): String {
         // Try to load the built email template from classpath
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/verify-email.html")
-        
+
         return if (templateResource != null) {
             templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ userName }}", userName)
@@ -267,11 +276,11 @@ class EmailService {
             """.trimIndent()
         }
     }
-    
+
     private fun loadPasswordResetTemplate(userName: String, resetUrl: String): String {
         // Try to load the built email template from classpath
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/reset-password.html")
-        
+
         return if (templateResource != null) {
             templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ userName }}", userName)
@@ -303,10 +312,10 @@ class EmailService {
             """.trimIndent()
         }
     }
-    
+
     private fun loadInvitationTemplate(inviterName: String, orgName: String, role: String, inviteUrl: String): String {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/org-invitation.html")
-        
+
         return if (templateResource != null) {
             templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ inviterName }}", inviterName)
@@ -339,7 +348,7 @@ class EmailService {
             """.trimIndent()
         }
     }
-    
+
     data class ErrorAlertData(
         val issueTitle: String,
         val issueLevel: String,
@@ -354,7 +363,7 @@ class EmailService {
         val settingsUrl: String,
         val unsubscribeUrl: String
     )
-    
+
     data class WeeklySummaryData(
         val startDate: String,
         val endDate: String,
@@ -370,21 +379,21 @@ class EmailService {
         val settingsUrl: String,
         val unsubscribeUrl: String
     )
-    
+
     data class TopIssue(
         val title: String,
         val culprit: String,
         val project: String,
         val count: String
     )
-    
+
     data class ProjectSummary(
         val name: String,
         val events: String,
         val issues: String,
         val crashFree: String
     )
-    
+
     fun sendErrorAlertEmail(to: String, data: ErrorAlertData) {
         val subject = "[${data.projectName}] ${data.issueLevel.uppercase()}: ${data.issueTitle}"
         val htmlBody = loadErrorAlertTemplate(data)
@@ -403,10 +412,10 @@ class EmailService {
             
             Manage notification preferences: ${data.settingsUrl}
         """.trimIndent()
-        
+
         sendEmail(to, subject, htmlBody, textBody, "error_alert")
     }
-    
+
     fun sendWeeklySummaryEmail(to: String, data: WeeklySummaryData) {
         val subject = "Your Weekly Summary: ${data.totalEvents} events, ${data.newIssues} new issues"
         val htmlBody = loadWeeklySummaryTemplate(data)
@@ -424,7 +433,7 @@ class EmailService {
             Open Dashboard: ${data.dashboardUrl}
             Manage preferences: ${data.settingsUrl}
         """.trimIndent()
-        
+
         sendEmail(to, subject, htmlBody, textBody, "weekly_summary")
     }
 
@@ -452,7 +461,7 @@ class EmailService {
             </body>
             </html>
         """.trimIndent()
-        
+
         val textBody = """
             🔴 System Down
             
@@ -466,10 +475,10 @@ class EmailService {
             ---
             Moneat Server Monitoring
         """.trimIndent()
-        
+
         sendEmail(to, subject, htmlBody, textBody, "system_down")
     }
-    
+
     fun sendUptimeAlertEmail(to: String, monitorName: String, status: String, message: String, monitorUrl: String) {
         val isDown = status.lowercase() == "down"
         val emoji = if (isDown) "🔴" else "✅"
@@ -478,7 +487,7 @@ class EmailService {
         val borderColor = if (isDown) "#dc2626" else "#16a34a"
         val headingColor = if (isDown) "#dc2626" else "#16a34a"
         val buttonColor = if (isDown) "#dc2626" else "#16a34a"
-        
+
         val htmlBody = """
             <!DOCTYPE html>
             <html>
@@ -500,7 +509,7 @@ class EmailService {
                 </div>
             </body>
             </html>
-            """.trimIndent()
+        """.trimIndent()
         val textBody = """
             Uptime Monitor ${if (isDown) "Down" else "Recovered"}: $monitorName
             
@@ -508,8 +517,8 @@ class EmailService {
             ${if (message.isNotBlank()) "Message: $message" else ""}
             
             View monitor: $monitorUrl
-            """.trimIndent()
-        
+        """.trimIndent()
+
         sendEmail(to, subject, htmlBody, textBody, "uptime_alert")
     }
 
@@ -536,7 +545,7 @@ class EmailService {
             </body>
             </html>
         """.trimIndent()
-        
+
         val textBody = """
             ✅ System Recovered
             
@@ -549,14 +558,14 @@ class EmailService {
             ---
             Moneat Server Monitoring
         """.trimIndent()
-        
+
         sendEmail(to, subject, htmlBody, textBody, "system_up")
     }
-    
+
     private fun loadErrorAlertTemplate(data: ErrorAlertData): String {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/error-alert.html")
         val year = java.time.Year.now().value.toString()
-        
+
         return if (templateResource != null) {
             templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ issueTitle }}", data.issueTitle)
@@ -589,11 +598,11 @@ class EmailService {
             """.trimIndent()
         }
     }
-    
+
     private fun loadWeeklySummaryTemplate(data: WeeklySummaryData): String {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/weekly-summary.html")
         val year = java.time.Year.now().value.toString()
-        
+
         return if (templateResource != null) {
             var html = templateResource.bufferedReader().use { it.readText() }
                 .replace("{{ startDate }}", data.startDate)
@@ -608,7 +617,7 @@ class EmailService {
                 .replace("{{ settingsUrl }}", data.settingsUrl)
                 .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
                 .replace("{{ year }}", year)
-            
+
             // Replace issue list (simplified - in production would use proper template engine)
             val issuesHtml = data.topIssues.joinToString("\n") { issue ->
                 """
@@ -627,7 +636,7 @@ class EmailService {
                 """.trimIndent()
             }
             html = html.replace("<!-- ISSUES_PLACEHOLDER -->", issuesHtml)
-            
+
             val projectsHtml = data.projects.joinToString("\n") { project ->
                 """
                 <tr>
@@ -639,7 +648,7 @@ class EmailService {
                 """.trimIndent()
             }
             html = html.replace("<!-- PROJECTS_PLACEHOLDER -->", projectsHtml)
-            
+
             html
         } else {
             // Fallback HTML
@@ -657,7 +666,7 @@ class EmailService {
             """.trimIndent()
         }
     }
-    
+
     fun sendAccountDeletionConfirmation(email: String) {
         val subject = "Your Moneat account has been deleted"
         val htmlBody = """
@@ -679,7 +688,7 @@ class EmailService {
             </body>
             </html>
         """.trimIndent()
-        
+
         val textBody = """
             Account Deleted
             
@@ -691,10 +700,10 @@ class EmailService {
             
             Thank you for using Moneat.
         """.trimIndent()
-        
+
         sendEmail(email, subject, htmlBody, textBody, "account_deletion")
     }
-    
+
     fun sendOrganizationDeletionNotification(email: String, organizationName: String) {
         val subject = "Organization deleted: $organizationName"
         val htmlBody = """
@@ -716,7 +725,7 @@ class EmailService {
             </body>
             </html>
         """.trimIndent()
-        
+
         val textBody = """
             Organization Deleted
             
@@ -731,7 +740,7 @@ class EmailService {
             ---
             Moneat
         """.trimIndent()
-        
+
         sendEmail(email, subject, htmlBody, textBody, "organization_deletion")
     }
 }

@@ -21,9 +21,9 @@ import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.events.*
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.events.*
 import io.sentry.ISpan
 import io.sentry.Sentry
 
@@ -58,7 +58,7 @@ object ClickHouseClient {
                 childSpan?.setData("db.system", "clickhouse")
                 childSpan?.setData("db.name", database)
                 childSpan?.setData("db.statement", query.take(200)) // Truncate long queries
-                
+
                 httpClient!!.post(baseUrl) {
                     parameter("database", database)
                     parameter("user", user)
@@ -109,7 +109,7 @@ fun Application.configureClickHouse() {
         log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
         return
     }
-    
+
     try {
         val config = environment.config
         val database = config.property("database.clickhouse.database").getString()

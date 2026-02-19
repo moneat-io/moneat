@@ -47,7 +47,7 @@ class AuthServiceEmailVerificationTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             RefreshTokens.deleteAll()
@@ -63,7 +63,7 @@ class AuthServiceEmailVerificationTest {
     fun `verifyEmail succeeds with valid token`() {
         val token = "valid-token-123"
         val expiresAt = System.currentTimeMillis() + (24 * 60 * 60 * 1000) // 24 hours from now
-        
+
         transaction {
             insertTestUser(
                 email = "test@example.com",
@@ -74,9 +74,9 @@ class AuthServiceEmailVerificationTest {
         }
 
         val result = authService.verifyEmail(token)
-        
+
         assertTrue(result, "Email verification should succeed")
-        
+
         // Verify database state
         transaction {
             val user = Users.selectAll().where { Users.email eq "test@example.com" }.first()
@@ -90,7 +90,7 @@ class AuthServiceEmailVerificationTest {
     fun `verifyEmail fails with expired token`() {
         val token = "expired-token"
         val expiresAt = System.currentTimeMillis() - 1000 // 1 second ago (expired)
-        
+
         transaction {
             insertTestUser(
                 email = "test@example.com",
@@ -101,9 +101,9 @@ class AuthServiceEmailVerificationTest {
         }
 
         val result = authService.verifyEmail(token)
-        
+
         assertFalse(result, "Email verification should fail with expired token")
-        
+
         // Verify database state unchanged
         transaction {
             val user = Users.selectAll().where { Users.email eq "test@example.com" }.first()
@@ -124,7 +124,7 @@ class AuthServiceEmailVerificationTest {
         }
 
         val result = authService.verifyEmail("wrong-token")
-        
+
         assertFalse(result, "Email verification should fail with wrong token")
     }
 
@@ -140,7 +140,7 @@ class AuthServiceEmailVerificationTest {
         }
 
         val result = authService.verifyEmail("any-token")
-        
+
         assertFalse(result, "Email verification should fail when no token exists")
     }
 
@@ -158,7 +158,7 @@ class AuthServiceEmailVerificationTest {
         val error = assertFailsWith<IllegalArgumentException> {
             authService.resendVerificationEmail("verified@example.com")
         }
-        
+
         assertTrue(error.message?.contains("already verified", ignoreCase = true) == true)
     }
 

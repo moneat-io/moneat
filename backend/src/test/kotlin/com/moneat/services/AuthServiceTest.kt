@@ -107,15 +107,17 @@ class AuthServiceTest {
 
     @Test
     fun `signup creates new user`() {
-        val result = authService.signup(SignupRequest(
-            email = "newuser@test.com",
-            password = "StrongPass123!",
-            name = "New User",
-            acceptTerms = true,
-            acceptPrivacy = true,
-            termsVersion = "2026-02-08",
-            privacyVersion = "2026-02-08"
-        ))
+        val result = authService.signup(
+            SignupRequest(
+                email = "newuser@test.com",
+                password = "StrongPass123!",
+                name = "New User",
+                acceptTerms = true,
+                acceptPrivacy = true,
+                termsVersion = "2026-02-08",
+                privacyVersion = "2026-02-08"
+            )
+        )
         assertNotNull(result)
         assertNotNull(result.token)
 
@@ -133,15 +135,17 @@ class AuthServiceTest {
         insertTestUser(email = "existing@test.com")
 
         assertFailsWith<Exception> {
-            authService.signup(SignupRequest(
-                email = "existing@test.com",
-                password = "StrongPass123!",
-                name = "Duplicate",
-                acceptTerms = true,
-                acceptPrivacy = true,
-                termsVersion = "2026-02-08",
-                privacyVersion = "2026-02-08"
-            ))
+            authService.signup(
+                SignupRequest(
+                    email = "existing@test.com",
+                    password = "StrongPass123!",
+                    name = "Duplicate",
+                    acceptTerms = true,
+                    acceptPrivacy = true,
+                    termsVersion = "2026-02-08",
+                    privacyVersion = "2026-02-08"
+                )
+            )
         }
     }
 

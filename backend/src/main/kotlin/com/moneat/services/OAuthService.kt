@@ -100,48 +100,50 @@ class OAuthService {
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
-    
+
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
     private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")
     private val githubOauthBaseUrl = EnvConfig.get("GITHUB_OAUTH_BASE_URL", "https://github.com").trimEnd('/')
     private val githubApiBaseUrl = EnvConfig.get("GITHUB_API_BASE_URL", "https://api.github.com").trimEnd('/')
-    
+
     private val appleClientId = EnvConfig.get("APPLE_CLIENT_ID")
     private val appleTeamId = EnvConfig.get("APPLE_TEAM_ID")
     private val appleKeyId = EnvConfig.get("APPLE_KEY_ID")
     private val applePrivateKey = EnvConfig.get("APPLE_PRIVATE_KEY")
     private val appleKeysUrl = EnvConfig.get("APPLE_KEYS_URL", "https://appleid.apple.com/auth/keys")
-    
+
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-            })
+            json(
+                Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                }
+            )
         }
     }
-    
+
     fun isGitHubEnabled(): Boolean = githubClientId != null && githubClientSecret != null
     fun isAppleEnabled(): Boolean = appleClientId != null && appleTeamId != null && appleKeyId != null && applePrivateKey != null
-    
+
     fun generateGitHubAuthUrl(state: String): String {
         if (!isGitHubEnabled()) {
             throw IllegalStateException("GitHub OAuth is not configured")
         }
-        
+
         val redirectUri = "$backendUrl/auth/github/callback"
         return "$githubOauthBaseUrl/login/oauth/authorize?" +
-                "client_id=$githubClientId&" +
-                "redirect_uri=${redirectUri.encodeURLParameter()}&" +
-                "scope=user:email&" +
-                "state=${state.encodeURLParameter()}"
+            "client_id=$githubClientId&" +
+            "redirect_uri=${redirectUri.encodeURLParameter()}&" +
+            "scope=user:email&" +
+            "state=${state.encodeURLParameter()}"
     }
-    
+
     suspend fun handleGitHubCallback(code: String): OAuthUserData {
         if (!isGitHubEnabled()) {
             throw IllegalStateException("GitHub OAuth is not configured")
         }
-        
+
         // Exchange code for access token
         val tokenResponse: HttpResponse = httpClient.post("$githubOauthBaseUrl/login/oauth/access_token") {
             headers {
@@ -151,15 +153,15 @@ class OAuthService {
             parameter("client_secret", githubClientSecret)
             parameter("code", code)
         }
-        
+
         if (tokenResponse.status.value !in 200..299) {
             logger.error { "GitHub token exchange failed: ${tokenResponse.status}" }
             throw IllegalArgumentException("Failed to exchange code for token")
         }
-        
+
         val tokenData: GitHubAccessTokenResponse = tokenResponse.body()
         val accessToken = tokenData.access_token
-        
+
         // Fetch user info
         val userResponse: HttpResponse = httpClient.get("$githubApiBaseUrl/user") {
             headers {
@@ -167,18 +169,18 @@ class OAuthService {
                 append(HttpHeaders.Accept, "application/json")
             }
         }
-        
+
         if (userResponse.status.value !in 200..299) {
             logger.error { "GitHub user fetch failed: ${userResponse.status}" }
             throw IllegalArgumentException("Failed to fetch user info")
         }
-        
+
         val user: GitHubUser = userResponse.body()
-        
+
         // Fetch user emails if email is not in user object
         var email = user.email
         var emailVerified = false
-        
+
         if (email.isNullOrBlank()) {
             val emailsResponse: HttpResponse = httpClient.get("$githubApiBaseUrl/user/emails") {
                 headers {
@@ -186,12 +188,12 @@ class OAuthService {
                     append(HttpHeaders.Accept, "application/json")
                 }
             }
-            
+
             if (emailsResponse.status.value in 200..299) {
                 val emails: List<GitHubEmail> = emailsResponse.body()
                 val primaryEmail = emails.firstOrNull { it.primary && it.verified }
                     ?: emails.firstOrNull { it.verified }
-                
+
                 if (primaryEmail != null) {
                     email = primaryEmail.email
                     emailVerified = primaryEmail.verified
@@ -200,11 +202,11 @@ class OAuthService {
         } else {
             emailVerified = true // GitHub emails in user object are verified
         }
-        
+
         if (email.isNullOrBlank()) {
             throw IllegalArgumentException("No verified email found in GitHub account")
         }
-        
+
         return OAuthUserData(
             provider = "github",
             providerId = user.id.toString(),
@@ -213,57 +215,57 @@ class OAuthService {
             emailVerified = emailVerified
         )
     }
-    
+
     fun generateAppleAuthUrl(state: String): String {
         if (!isAppleEnabled()) {
             throw IllegalStateException("Apple Sign In is not configured")
         }
-        
+
         val redirectUri = "$backendUrl/auth/apple/callback"
         return "https://appleid.apple.com/auth/authorize?" +
-                "client_id=$appleClientId&" +
-                "redirect_uri=${redirectUri.encodeURLParameter()}&" +
-                "response_type=code id_token&" +
-                "scope=name email&" +
-                "response_mode=form_post&" +
-                "state=${state.encodeURLParameter()}"
+            "client_id=$appleClientId&" +
+            "redirect_uri=${redirectUri.encodeURLParameter()}&" +
+            "response_type=code id_token&" +
+            "scope=name email&" +
+            "response_mode=form_post&" +
+            "state=${state.encodeURLParameter()}"
     }
-    
+
     suspend fun handleAppleCallback(idToken: String): OAuthUserData {
         if (!isAppleEnabled()) {
             throw IllegalStateException("Apple Sign In is not configured")
         }
-        
+
         val decodedToken = verifyAppleIdToken(idToken)
-        
+
         // Verify issuer
         if (decodedToken.issuer != "https://appleid.apple.com") {
             throw IllegalArgumentException("Invalid Apple ID token issuer")
         }
-        
+
         // Verify audience
         if (decodedToken.audience.firstOrNull() != appleClientId) {
             throw IllegalArgumentException("Invalid Apple ID token audience")
         }
-        
+
         // Verify expiration
         if (decodedToken.expiresAt?.before(Date()) != false) {
             throw IllegalArgumentException("Apple ID token has expired")
         }
-        
+
         // Extract user info from token claims
         val subject = decodedToken.subject
         val email = decodedToken.getClaim("email").asString()
         val emailVerified = decodedToken.getClaim("email_verified").asBoolean() ?: false
-        
+
         if (email.isNullOrBlank()) {
             throw IllegalArgumentException("No email found in Apple ID token")
         }
-        
+
         // Apple doesn't always provide name in token, it's provided separately on first auth
         // For now, use email as fallback for name
         val name = email.substringBefore("@")
-        
+
         return OAuthUserData(
             provider = "apple",
             providerId = subject,
@@ -295,17 +297,17 @@ class OAuthService {
         val keySpec = RSAPublicKeySpec(modulus, exponent)
         return KeyFactory.getInstance("RSA").generatePublic(keySpec) as RSAPublicKey
     }
-    
+
     fun findOrCreateOAuthUser(userData: OAuthUserData): AuthResponse {
         return transaction {
             // Check if user exists with this OAuth provider
             val existingOAuthUser = Users.selectAll()
                 .where {
                     (Users.oauth_provider eq userData.provider) and
-                    (Users.oauth_provider_id eq userData.providerId)
+                        (Users.oauth_provider_id eq userData.providerId)
                 }
                 .firstOrNull()
-            
+
             if (existingOAuthUser != null) {
                 // Existing OAuth user - log them in
                 val userId = existingOAuthUser[Users.id]
@@ -313,12 +315,12 @@ class OAuthService {
                     .where { Memberships.user_id eq userId }
                     .firstOrNull()
                     ?: throw IllegalStateException("User has no organization membership")
-                
+
                 val orgId = membership[Memberships.organization_id]
                 val orgRole = membership[Memberships.role]
-                
+
                 val token = generateToken(userId, existingOAuthUser[Users.email], orgId, orgRole)
-                
+
                 return@transaction AuthResponse(
                     token = token,
                     user = UserResponse(
@@ -331,16 +333,16 @@ class OAuthService {
                     )
                 )
             }
-            
+
             // Check if user exists with matching email
             val existingEmailUser = Users.selectAll()
                 .where { Users.email eq userData.email }
                 .firstOrNull()
-            
+
             if (existingEmailUser != null) {
                 // User exists with this email
                 val existingProvider = existingEmailUser[Users.oauth_provider]
-                
+
                 if (existingProvider == null) {
                     // Email/password user - link OAuth to this account
                     Users.update({ Users.id eq existingEmailUser[Users.id] }) {
@@ -350,18 +352,18 @@ class OAuthService {
                             it[email_verified] = true
                         }
                     }
-                    
+
                     val userId = existingEmailUser[Users.id]
                     val membership = Memberships.selectAll()
                         .where { Memberships.user_id eq userId }
                         .firstOrNull()
                         ?: throw IllegalStateException("User has no organization membership")
-                    
+
                     val orgId = membership[Memberships.organization_id]
                     val orgRole = membership[Memberships.role]
-                    
+
                     val token = generateToken(userId, existingEmailUser[Users.email], orgId, orgRole)
-                    
+
                     return@transaction AuthResponse(
                         token = token,
                         user = UserResponse(
@@ -375,7 +377,9 @@ class OAuthService {
                     )
                 } else if (existingProvider != userData.provider) {
                     // Different OAuth provider
-                    throw IllegalArgumentException("This email is already registered with ${existingProvider}. Please sign in with ${existingProvider}.")
+                    throw IllegalArgumentException(
+                        "This email is already registered with $existingProvider. Please sign in with $existingProvider."
+                    )
                 } else {
                     // Same provider but different ID? Shouldn't happen, but log them in
                     val userId = existingEmailUser[Users.id]
@@ -383,12 +387,12 @@ class OAuthService {
                         .where { Memberships.user_id eq userId }
                         .firstOrNull()
                         ?: throw IllegalStateException("User has no organization membership")
-                    
+
                     val orgId = membership[Memberships.organization_id]
                     val orgRole = membership[Memberships.role]
-                    
+
                     val token = generateToken(userId, existingEmailUser[Users.email], orgId, orgRole)
-                    
+
                     return@transaction AuthResponse(
                         token = token,
                         user = UserResponse(
@@ -402,7 +406,7 @@ class OAuthService {
                     )
                 }
             }
-            
+
             // New user - create account
             val userId = Users.insert {
                 it[email] = userData.email
@@ -413,22 +417,22 @@ class OAuthService {
                 it[oauth_provider] = userData.provider
                 it[oauth_provider_id] = userData.providerId
             }[Users.id]
-            
+
             // Create default organization
             val orgId = Organizations.insert {
                 it[name] = "${userData.name ?: userData.email}'s Organization"
                 it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
             }[Organizations.id]
-            
+
             // Add membership
             Memberships.insert {
                 it[user_id] = userId
                 it[organization_id] = orgId
                 it[role] = "owner"
             }
-            
+
             val token = generateToken(userId, userData.email, orgId, "owner")
-            
+
             AuthResponse(
                 token = token,
                 user = UserResponse(
@@ -442,7 +446,7 @@ class OAuthService {
             )
         }
     }
-    
+
     private fun generateToken(userId: Int, email: String, orgId: Int, orgRole: String): String {
         return JWT.create()
             .withAudience(jwtAudience)
@@ -454,7 +458,7 @@ class OAuthService {
             .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
             .sign(Algorithm.HMAC256(jwtSecret))
     }
-    
+
     fun generateState(): String {
         val bytes = ByteArray(32)
         java.security.SecureRandom().nextBytes(bytes)

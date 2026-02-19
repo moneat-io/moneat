@@ -20,17 +20,16 @@ import com.moneat.models.*
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
 import kotlinx.datetime.*
-import kotlin.time.Instant
-import kotlin.time.Clock
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.and
 import kotlin.math.max
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
@@ -126,15 +125,18 @@ class BillingQuotaService(
                 val effectiveTypeLimit = if (typeLimit >= 0) typeLimit + state.paygLimitUnits + state.bonusUnits else Long.MAX_VALUE
 
                 if (typeLimit >= 0 && typeAfter > effectiveTypeLimit) {
-                    SentryUtils.breadcrumb("billing", "Per-type quota exceeded", mapOf(
-                        "organization_id" to organizationId,
-                        "requested_units" to requestedUnits,
-                        "event_type" to eventType,
-                        "used_type_units" to usedForType,
-                        "type_limit" to typeLimit,
-                        "payg_limit_units" to state.paygLimitUnits,
-                        "bonus_units" to state.bonusUnits
-                    ))
+                    SentryUtils.breadcrumb(
+                        "billing", "Per-type quota exceeded",
+                        mapOf(
+                            "organization_id" to organizationId,
+                            "requested_units" to requestedUnits,
+                            "event_type" to eventType,
+                            "used_type_units" to usedForType,
+                            "type_limit" to typeLimit,
+                            "payg_limit_units" to state.paygLimitUnits,
+                            "bonus_units" to state.bonusUnits
+                        )
+                    )
 
                     return@transaction QuotaReservationResult(
                         allowed = false,
@@ -148,13 +150,16 @@ class BillingQuotaService(
             // Aggregate unit check (excludes LLM and logs)
             val effectiveTotalLimit = state.totalLimitUnits + state.bonusUnits
             if (totalAfter > effectiveTotalLimit) {
-                SentryUtils.breadcrumb("billing", "Quota exceeded", mapOf(
-                    "organization_id" to organizationId,
-                    "requested_units" to requestedAggregate,
-                    "used_units" to state.usedUnits,
-                    "total_limit" to state.totalLimitUnits,
-                    "bonus_units" to state.bonusUnits
-                ))
+                SentryUtils.breadcrumb(
+                    "billing", "Quota exceeded",
+                    mapOf(
+                        "organization_id" to organizationId,
+                        "requested_units" to requestedAggregate,
+                        "used_units" to state.usedUnits,
+                        "total_limit" to state.totalLimitUnits,
+                        "bonus_units" to state.bonusUnits
+                    )
+                )
 
                 return@transaction QuotaReservationResult(
                     allowed = false,
@@ -170,14 +175,17 @@ class BillingQuotaService(
                 Long.MAX_VALUE
             }
             if (state.bytesLimit > 0 && bytesAfter > effectiveBytesLimit) {
-                SentryUtils.breadcrumb("billing", "GB quota exceeded", mapOf(
-                    "organization_id" to organizationId,
-                    "requested_bytes" to requestedTotalBytes,
-                    "used_bytes" to state.usedBytes,
-                    "bytes_limit" to state.bytesLimit,
-                    "payg_limit_bytes" to state.paygLimitBytes,
-                    "bonus_gb_bytes" to state.bonusGbBytes
-                ))
+                SentryUtils.breadcrumb(
+                    "billing", "GB quota exceeded",
+                    mapOf(
+                        "organization_id" to organizationId,
+                        "requested_bytes" to requestedTotalBytes,
+                        "used_bytes" to state.usedBytes,
+                        "bytes_limit" to state.bytesLimit,
+                        "payg_limit_bytes" to state.paygLimitBytes,
+                        "bonus_gb_bytes" to state.bonusGbBytes
+                    )
+                )
 
                 return@transaction QuotaReservationResult(
                     allowed = false,
@@ -220,11 +228,14 @@ class BillingQuotaService(
             val overageDelta = overageAfter - overageBefore
 
             if (state.subscriptionId != null && overageDelta > 0 && state.paygRateMicrosPerUnit > 0) {
-                SentryUtils.breadcrumb("billing", "PAYG overage incurred", mapOf(
-                    "organization_id" to organizationId,
-                    "overage_delta" to overageDelta,
-                    "subscription_id" to state.subscriptionId
-                ))
+                SentryUtils.breadcrumb(
+                    "billing", "PAYG overage incurred",
+                    mapOf(
+                        "organization_id" to organizationId,
+                        "overage_delta" to overageDelta,
+                        "subscription_id" to state.subscriptionId
+                    )
+                )
 
                 val overageMicros = overageDelta * state.paygRateMicrosPerUnit
                 Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
@@ -417,7 +428,7 @@ class BillingQuotaService(
         }
         val baseLimit = if (tier.monthlyUnitLimit > 0) tier.monthlyUnitLimit else aggregateBaseFromTypes
         val totalLimit = baseLimit + paygLimitUnits
-        
+
         val bonusGbBytes = sub?.get(Subscriptions.bonus_gb_bytes) ?: 0L
         val bonusUnits = sub?.get(Subscriptions.bonus_units) ?: 0L
         val bonusReason = sub?.get(Subscriptions.bonus_reason)
@@ -489,21 +500,32 @@ class BillingQuotaService(
 
         // Per-type overage cost estimates
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
-        val errorOverageCents = if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0)
-            ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt() else 0
+        val errorOverageCents = if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0) {
+            ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt()
+        } else {
+            0
+        }
 
         val replayOverageCents = if (state.replayOverageRateCentsPerGb > 0 && state.usedReplayBytes > 0) {
             val overageReplays = max(0, state.usedReplays - state.replayLimit)
             ((overageReplays * state.replayOverageRateCentsPerGb) / 100).toInt()
-        } else 0
+        } else {
+            0
+        }
 
         val logOverageBytes = max(0, state.usedLogBytes - state.bytesLimit)
-        val logOverageCents = if (state.logOverageRateCentsPerGb > 0 && logOverageBytes > 0)
-            ((logOverageBytes * state.logOverageRateCentsPerGb) / BYTES_PER_GB).toInt() else 0
+        val logOverageCents = if (state.logOverageRateCentsPerGb > 0 && logOverageBytes > 0) {
+            ((logOverageBytes * state.logOverageRateCentsPerGb) / BYTES_PER_GB).toInt()
+        } else {
+            0
+        }
 
         val llmOverageUnits = max(0, state.usedLlmEvents - state.llmEventLimit)
-        val llmOverageCents = if (state.llmOverageRateCentsPer1k > 0 && llmOverageUnits > 0)
-            ((llmOverageUnits * state.llmOverageRateCentsPer1k) / 1000).toInt() else 0
+        val llmOverageCents = if (state.llmOverageRateCentsPer1k > 0 && llmOverageUnits > 0) {
+            ((llmOverageUnits * state.llmOverageRateCentsPer1k) / 1000).toInt()
+        } else {
+            0
+        }
 
         val totalOverageCents = errorOverageCents + replayOverageCents + logOverageCents + llmOverageCents
 

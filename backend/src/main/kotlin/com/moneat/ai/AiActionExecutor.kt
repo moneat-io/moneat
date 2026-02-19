@@ -29,10 +29,14 @@ class AiActionExecutor {
         actionId: String,
         @Suppress("UNUSED_PARAMETER") params: Map<String, String>
     ): ActionResult = SentryUtils.withTransaction("ai.execute_action", "ai") { tx ->
-        SentryUtils.breadcrumb("ai", "Executing action", mapOf(
-            "actionId" to actionId,
-            "orgId" to orgId.toString()
-        ))
+        SentryUtils.breadcrumb(
+            "ai",
+            "Executing action",
+            mapOf(
+                "actionId" to actionId,
+                "orgId" to orgId.toString()
+            )
+        )
 
         try {
             // Actions are executed by the frontend calling the real API endpoints

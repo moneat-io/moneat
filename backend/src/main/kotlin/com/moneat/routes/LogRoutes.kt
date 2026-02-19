@@ -20,36 +20,31 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.LogQueryRequest
 import com.moneat.models.LogTailFilters
-import com.moneat.plugins.isDemoUser
 import com.moneat.plugins.getDemoEpochMs
+import com.moneat.plugins.isDemoUser
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.DashboardService
 import com.moneat.services.EventService
 import com.moneat.services.LogService
+import com.moneat.utils.ErrorResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import com.moneat.utils.ErrorResponse
-import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
+import io.ktor.server.application.*
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
-import io.ktor.server.application.*
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.authentication
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.request.header
+import io.ktor.server.auth.principal
 import io.ktor.server.request.*
+import io.ktor.server.request.header
+import io.ktor.server.response.*
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondTextWriter
-import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.pubsub.RedisPubSubAdapter
@@ -313,7 +308,9 @@ fun Route.logRoutes() {
                     excludeTags = parseExcludeTagQueryParams(call),
                     groupBy = call.request.queryParameters["groupBy"]
                 )
-                logger.debug { "Aggregate logs response for project $projectId: ${result.buckets.size} buckets, totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, to=$defaultTo, isDemo=$isDemo" }
+                logger.debug {
+                    "Aggregate logs response for project $projectId: ${result.buckets.size} buckets, totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, to=$defaultTo, isDemo=$isDemo"
+                }
                 call.respond(HttpStatusCode.OK, result)
             }
 

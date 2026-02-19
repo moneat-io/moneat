@@ -71,7 +71,7 @@ object CacheService {
             SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
             null
         }
-        
+
         if (cached != null) {
             SentryUtils.breadcrumb("cache", "Cache HIT", mapOf("key" to key))
             return try {
@@ -81,10 +81,10 @@ object CacheService {
                 loader()
             }
         }
-        
+
         SentryUtils.breadcrumb("cache", "Cache MISS", mapOf("key" to key))
         val value = loader()
-        
+
         try {
             withContext(Dispatchers.IO) {
                 if (RedisConfig.isConnected()) {

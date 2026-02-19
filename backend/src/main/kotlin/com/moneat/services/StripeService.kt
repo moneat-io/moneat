@@ -27,16 +27,16 @@ import com.stripe.param.*
 import com.stripe.param.billing.MeterEventCreateParams
 import io.ktor.server.config.*
 import io.sentry.Sentry
-import kotlin.time.Clock
-import kotlin.time.Instant
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.time.Clock
+import kotlin.time.Instant
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
@@ -68,33 +68,37 @@ class StripeService(
         oncallSeats: Int
     ): CheckoutSessionResponse {
         ensureEnabled()
-        
-        SentryUtils.breadcrumb("stripe", "Creating checkout session", mapOf(
-            "organization_id" to organizationId,
-            "tier_name" to tierName,
-            "billing_interval" to billingInterval,
-            "oncall_seats" to oncallSeats
-        ))
+
+        SentryUtils.breadcrumb(
+            "stripe",
+            "Creating checkout session",
+            mapOf(
+                "organization_id" to organizationId,
+                "tier_name" to tierName,
+                "billing_interval" to billingInterval,
+                "oncall_seats" to oncallSeats
+            )
+        )
 
         val tier = pricingTierService.getCurrentTier(tierName)
             ?: throw IllegalArgumentException("Unknown tier: $tierName")
         if (tier.tierName.equals("FREE", ignoreCase = true)) {
             throw IllegalArgumentException("Checkout is only supported for paid tiers")
         }
-        
+
         val isYearly = billingInterval.equals("yearly", ignoreCase = true)
         val basePriceId = if (isYearly) {
             tier.stripeYearlyBasePriceId ?: tier.stripeBasePriceId
         } else {
             tier.stripeBasePriceId
         } ?: throw IllegalArgumentException("Tier missing Stripe base price ID for $billingInterval")
-        
+
         val overagePriceId = if (isYearly) {
             tier.stripeYearlyOveragePriceId ?: tier.stripeOveragePriceId
         } else {
             tier.stripeOveragePriceId
         }
-        
+
         val oncallPriceId = if (isYearly) {
             tier.stripeOncallYearlyPriceId ?: tier.stripeOncallPriceId
         } else {
@@ -149,10 +153,14 @@ class StripeService(
 
         return try {
             val session = com.stripe.model.checkout.Session.create(params)
-            SentryUtils.breadcrumb("stripe", "Checkout session created", mapOf(
-                "session_id" to session.id,
-                "customer_id" to customerId
-            ))
+            SentryUtils.breadcrumb(
+                "stripe",
+                "Checkout session created",
+                mapOf(
+                    "session_id" to session.id,
+                    "customer_id" to customerId
+                )
+            )
             CheckoutSessionResponse(
                 sessionId = session.id,
                 url = session.url ?: ""
@@ -232,20 +240,22 @@ class StripeService(
 
     fun confirmSetupIntentAndUpdatePaymentMethod(organizationId: Int, setupIntentId: String) {
         ensureEnabled()
-        
-        logger.info { "Confirming setup intent and updating payment method: orgId=$organizationId, setupIntentId=$setupIntentId" }
-        
+
+        logger.info {
+            "Confirming setup intent and updating payment method: orgId=$organizationId, setupIntentId=$setupIntentId"
+        }
+
         // Retrieve the setup intent to get the payment method and customer
         val setupIntent = SetupIntent.retrieve(setupIntentId)
         val customerId = setupIntent.customer ?: throw IllegalStateException("Setup intent has no customer")
         val paymentMethodId = setupIntent.paymentMethod ?: throw IllegalStateException("Setup intent has no payment method")
-        
+
         // Verify this customer belongs to the organization
         val expectedCustomerId = getOrCreateCustomer(organizationId)
         if (customerId != expectedCustomerId) {
             throw IllegalStateException("Setup intent customer mismatch")
         }
-        
+
         // Update customer's default payment method
         Customer.retrieve(customerId).update(
             CustomerUpdateParams.builder()
@@ -256,7 +266,7 @@ class StripeService(
                 )
                 .build()
         )
-        
+
         logger.info { "Successfully updated default payment method for customer $customerId to $paymentMethodId" }
     }
 
@@ -294,7 +304,7 @@ class StripeService(
             currentPeriodEnd = epochSecondsToIso(canceled.cancelAt)
         )
     }
-    
+
     fun cancelSubscription(stripeSubscriptionId: String) {
         ensureEnabled()
         Subscription.retrieve(stripeSubscriptionId).cancel()
@@ -345,7 +355,7 @@ class StripeService(
 
         val stripeSubId = subRow[Subscriptions.stripe_subscription_id]
             ?: throw IllegalArgumentException("Subscription is not linked to Stripe")
-        
+
         val tierId = subRow[Subscriptions.pricing_tier_config_id]
         val tier = pricingTierService.getTierById(tierId ?: 0)
             ?: throw IllegalArgumentException("Subscription has no valid pricing tier")
@@ -388,10 +398,10 @@ class StripeService(
                 )
             }
         }
-        
+
         // Fetch upcoming invoice to estimate proration cost if any
         // NOTE: Commented out due to compilation issues with Invoice.upcoming in current SDK setup
-        val upcomingInvoice: com.stripe.model.Invoice? = null 
+        val upcomingInvoice: com.stripe.model.Invoice? = null
         /* try {
             com.stripe.model.Invoice.upcoming(
                 com.stripe.param.InvoiceUpcomingParams.builder()
@@ -415,11 +425,15 @@ class StripeService(
 
     fun syncSubscriptionFromStripe(subscription: Subscription) {
         val metadataOrgId = subscription.metadata?.get("organization_id")
-        logger.info { "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, metadata_org_id='$metadataOrgId'" }
-        
+        logger.info {
+            "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, metadata_org_id='$metadataOrgId'"
+        }
+
         val organizationId = resolveOrganizationId(metadataOrgId, subscription.customer)
         if (organizationId == null) {
-            logger.error { "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. metadata_org_id='$metadataOrgId', customer=${subscription.customer}, full_metadata=${subscription.metadata}" }
+            logger.error {
+                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. metadata_org_id='$metadataOrgId', customer=${subscription.customer}, full_metadata=${subscription.metadata}"
+            }
             return
         }
         logger.info { "Resolved organization ID $organizationId for subscription ${subscription.id}" }
@@ -477,8 +491,10 @@ class StripeService(
             val startInstant = subscription.startDate?.let { kotlin.time.Instant.fromEpochSeconds(it) }
             val endInstant = subscription.trialEnd?.let { kotlin.time.Instant.fromEpochSeconds(it) }
             val billingInterval = if (baseItemId != null) {
-                 subscription.items.data.find { it.id == baseItemId }?.price?.recurring?.interval ?: "monthly"
-            } else "monthly"
+                subscription.items.data.find { it.id == baseItemId }?.price?.recurring?.interval ?: "monthly"
+            } else {
+                "monthly"
+            }
             val finalInterval = if (billingInterval == "year") "yearly" else "monthly"
 
             if (existing != null) {
@@ -560,7 +576,9 @@ class StripeService(
     }
 
     fun handleCheckoutCompleted(session: com.stripe.model.checkout.Session) {
-        logger.info { "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}, subscription=${session.subscription}" }
+        logger.info {
+            "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}, subscription=${session.subscription}"
+        }
         val customerId = session.customer
         val subscriptionId = session.subscription
         if (customerId == null || subscriptionId == null) {
@@ -574,7 +592,9 @@ class StripeService(
         val metadataOrgId = session.metadata?.get("organization_id")
         val organizationId = resolveOrganizationId(metadataOrgId, customerId)
         if (organizationId == null) {
-            logger.error { "CRITICAL: Could not resolve organization ID from checkout session ${session.id}. metadata_org_id='$metadataOrgId', customer=$customerId" }
+            logger.error {
+                "CRITICAL: Could not resolve organization ID from checkout session ${session.id}. metadata_org_id='$metadataOrgId', customer=$customerId"
+            }
             return
         }
         logger.info { "Setting subscription $subscriptionId to active for org $organizationId" }
@@ -630,12 +650,16 @@ class StripeService(
     fun handleSetupIntentSucceeded(setupIntent: SetupIntent) {
         val customerId = setupIntent.customer ?: return
         val paymentMethodId = setupIntent.paymentMethod ?: return
-        
-        SentryUtils.breadcrumb("stripe", "Setup intent succeeded", mapOf(
-            "customer_id" to customerId,
-            "payment_method_id" to paymentMethodId
-        ))
-        
+
+        SentryUtils.breadcrumb(
+            "stripe",
+            "Setup intent succeeded",
+            mapOf(
+                "customer_id" to customerId,
+                "payment_method_id" to paymentMethodId
+            )
+        )
+
         try {
             // Update customer's default payment method
             Customer.retrieve(customerId).update(
@@ -647,7 +671,7 @@ class StripeService(
                     )
                     .build()
             )
-            
+
             logger.info { "Updated default payment method for customer $customerId" }
         } catch (e: Exception) {
             logger.error(e) { "Failed to update default payment method for customer $customerId" }

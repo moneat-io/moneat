@@ -1,3 +1,19 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 package com.moneat.routes
 
 import com.moneat.models.Memberships
@@ -11,9 +27,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -127,8 +143,14 @@ class AuthRoutesTest {
     fun `github callback success clears state cookie sets auth cookie and redirects`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(200, """{"access_token":"token-ok","token_type":"bearer","scope":"user:email"}""")
-                "/user" -> exchange.respond(200, """{"id":111,"login":"tester","email":"oauth@test.com","name":"OAuth Tester"}""")
+                "/login/oauth/access_token" -> exchange.respond(
+                    200,
+                    """{"access_token":"token-ok","token_type":"bearer","scope":"user:email"}"""
+                )
+                "/user" -> exchange.respond(
+                    200,
+                    """{"id":111,"login":"tester","email":"oauth@test.com","name":"OAuth Tester"}"""
+                )
                 "/user/emails" -> exchange.respond(200, """[]""")
                 else -> exchange.respond(404, """{"error":"not found"}""")
             }
@@ -156,10 +178,10 @@ class AuthRoutesTest {
 
                     val setCookies = response.headers.getAll(HttpHeaders.SetCookie).orEmpty()
                     assertTrue(setCookies.any { it.startsWith("auth_token=") }, "Expected auth_token cookie")
-                    assertTrue(
-                        setCookies.any { it.startsWith("oauth_state=") && (it.contains("Max-Age=0") || it.contains("Expires=")) },
-                        "Expected oauth_state clear cookie"
-                    )
+                    val oauthStateCleared = setCookies.any {
+                        it.startsWith("oauth_state=") && (it.contains("Max-Age=0") || it.contains("Expires="))
+                    }
+                    assertTrue(oauthStateCleared, "Expected oauth_state clear cookie")
                 }
 
                 transaction {

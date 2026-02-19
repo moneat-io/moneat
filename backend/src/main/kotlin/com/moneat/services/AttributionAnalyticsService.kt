@@ -20,10 +20,8 @@ import com.moneat.models.*
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -55,7 +53,7 @@ data class AttributionSummary(
 )
 
 class AttributionAnalyticsService {
-    
+
     fun getAttributionMetrics(
         groupBy: String = "campaign" // "source", "medium", "campaign", "all"
     ): AttributionAnalyticsResponse {
@@ -64,36 +62,44 @@ class AttributionAnalyticsService {
             val query = Organizations
                 .leftJoin(Subscriptions, { Organizations.id }, { Subscriptions.organization_id })
                 .selectAll()
-            
+
             val results = query.toList()
-            
+
             // Group by UTM parameters based on groupBy parameter
             val grouped = results.groupBy { row ->
                 when (groupBy) {
                     "source" -> Triple(row[Organizations.utm_source], null, null)
                     "medium" -> Triple(null, row[Organizations.utm_medium], null)
-                    "campaign" -> Triple(row[Organizations.utm_source], row[Organizations.utm_medium], row[Organizations.utm_campaign])
-                    else -> Triple(row[Organizations.utm_source], row[Organizations.utm_medium], row[Organizations.utm_campaign])
+                    "campaign" -> Triple(
+                        row[Organizations.utm_source],
+                        row[Organizations.utm_medium],
+                        row[Organizations.utm_campaign]
+                    )
+                    else -> Triple(
+                        row[Organizations.utm_source],
+                        row[Organizations.utm_medium],
+                        row[Organizations.utm_campaign]
+                    )
                 }
             }
-            
+
             val metrics = grouped.map { (key, rows) ->
                 val (source, medium, campaign) = key
                 val signups = rows.distinctBy { it[Organizations.id] }.size
-                
+
                 // Count unique organizations with active paid subscriptions
                 val paidOrgs = rows.filter { row ->
                     row.getOrNull(Subscriptions.id) != null &&
-                    row.getOrNull(Subscriptions.status) in listOf("active", "trialing") &&
-                    row.getOrNull(Subscriptions.plan) != "FREE"
+                        row.getOrNull(Subscriptions.status) in listOf("active", "trialing") &&
+                        row.getOrNull(Subscriptions.plan) != "FREE"
                 }.distinctBy { it[Organizations.id] }.size
-                
+
                 // Calculate total MRR
                 val totalMrr = rows
                     .filter { row ->
                         row.getOrNull(Subscriptions.id) != null &&
-                        row.getOrNull(Subscriptions.status) in listOf("active", "trialing") &&
-                        row.getOrNull(Subscriptions.plan) != "FREE"
+                            row.getOrNull(Subscriptions.status) in listOf("active", "trialing") &&
+                            row.getOrNull(Subscriptions.plan) != "FREE"
                     }
                     .mapNotNull { row ->
                         val pricingTierId = row.getOrNull(Subscriptions.pricing_tier_config_id)
@@ -109,7 +115,7 @@ class AttributionAnalyticsService {
                                     } else {
                                         pricing[PricingTierConfigs.monthly_price_cents]
                                     }
-                                    
+
                                     // Convert to monthly MRR
                                     if (interval == "yearly") {
                                         BigDecimal(basePriceCents).divide(BigDecimal(12), 2, RoundingMode.HALF_UP)
@@ -117,22 +123,28 @@ class AttributionAnalyticsService {
                                         BigDecimal(basePriceCents)
                                     }
                                 }
-                        } else null
+                        } else {
+                            null
+                        }
                     }
                     .fold(BigDecimal.ZERO) { acc, value -> acc + value }
                     .divide(BigDecimal(100), 2, RoundingMode.HALF_UP) // Convert cents to dollars
-                
+
                 val conversionRate = if (signups > 0) {
                     (paidOrgs.toDouble() / signups.toDouble()) * 100
-                } else 0.0
-                
+                } else {
+                    0.0
+                }
+
                 val averageMrr = if (paidOrgs > 0) {
                     totalMrr.divide(BigDecimal(paidOrgs), 2, RoundingMode.HALF_UP)
-                } else BigDecimal.ZERO
-                
+                } else {
+                    BigDecimal.ZERO
+                }
+
                 // Estimated LTV (assuming 12-month retention for simplicity)
                 val estimatedLtv = totalMrr.multiply(BigDecimal(12))
-                
+
                 AttributionMetrics(
                     source = source,
                     medium = medium,
@@ -145,24 +157,24 @@ class AttributionAnalyticsService {
                     estimatedLtv = estimatedLtv.toString()
                 )
             }.sortedByDescending { it.signups }
-            
+
             // Calculate summary
             val totalSignups = results.distinctBy { it[Organizations.id] }.size
             val totalPaid = results.filter { row ->
                 row.getOrNull(Subscriptions.id) != null &&
-                row.getOrNull(Subscriptions.status) in listOf("active", "trialing") &&
-                row.getOrNull(Subscriptions.plan) != "FREE"
+                    row.getOrNull(Subscriptions.status) in listOf("active", "trialing") &&
+                    row.getOrNull(Subscriptions.plan) != "FREE"
             }.distinctBy { it[Organizations.id] }.size
-            
+
             val totalMrrValue = metrics.fold(BigDecimal.ZERO) { acc, m -> acc + BigDecimal(m.totalMrr) }
-            
+
             val summary = AttributionSummary(
                 totalSignups = totalSignups,
                 totalPaidOrganizations = totalPaid,
                 overallConversionRate = if (totalSignups > 0) (totalPaid.toDouble() / totalSignups.toDouble()) * 100 else 0.0,
                 totalMrr = totalMrrValue.toString()
             )
-            
+
             AttributionAnalyticsResponse(
                 metrics = metrics,
                 summary = summary

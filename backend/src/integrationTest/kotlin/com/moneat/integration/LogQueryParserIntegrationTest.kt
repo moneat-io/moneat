@@ -129,7 +129,8 @@ class LogQueryParserIntegrationTest {
         logger.info { "Creating logs table..." }
 
         // Create logs table (simplified for testing — no partition/TTL/bloom indexes)
-        executeRawQuery("""
+        executeRawQuery(
+            """
             CREATE TABLE IF NOT EXISTS logs (
                 log_id UUID,
                 project_id UInt64,
@@ -153,7 +154,8 @@ class LogQueryParserIntegrationTest {
             ) ENGINE = MergeTree()
             ORDER BY (project_id, timestamp, log_id)
             SETTINGS index_granularity = 8192
-        """.trimIndent())
+            """.trimIndent()
+        )
 
         logger.info { "Logs table created." }
     }
@@ -268,8 +270,10 @@ class LogQueryParserIntegrationTest {
         // level:error AND timeout — only log 6 has both (level=error + "timeout" in message)
         val ids = queryLogIds("level:error AND timeout")
         assertTrue(ids.contains(logId(6)), "AND should find log with both terms: $ids")
-        assertTrue(ids.all { it == logId(6) || it != logId(1) || it != logId(2) },
-            "AND should narrow results")
+        assertTrue(
+            ids.all { it == logId(6) || it != logId(1) || it != logId(2) },
+            "AND should narrow results"
+        )
     }
 
     @Test

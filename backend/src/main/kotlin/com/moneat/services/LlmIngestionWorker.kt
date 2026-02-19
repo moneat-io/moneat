@@ -131,7 +131,8 @@ class LlmIngestionWorker(
                     '${esc(gen.release)}',
                     $tags,
                     '${esc(metadataStr)}'
-                )""".trimIndent()
+                )
+                """.trimIndent()
             } catch (e: Exception) {
                 logger.warn(e) { "Failed to build row for LLM generation" }
                 null

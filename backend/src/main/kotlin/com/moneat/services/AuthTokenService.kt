@@ -21,22 +21,22 @@ import com.moneat.models.AuthTokenResponse
 import com.moneat.models.AuthTokens
 import com.moneat.models.Memberships
 import com.moneat.models.Organizations
-import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
+import kotlin.time.Clock
 
 class AuthTokenService {
     private val secureRandom = SecureRandom()
-    
+
     companion object {
         // Supported permission scopes
         val VALID_SCOPES = setOf(
@@ -49,12 +49,12 @@ class AuthTokenService {
             "event:read",
             "org:read"
         )
-        
+
         // sentry-cli compatible org auth token format: sntrys_{base64_payload}_{base64_secret}
         private const val TOKEN_PREFIX = "sntrys_"
         private const val TOKEN_LENGTH = 32 // 32 bytes = 256 bits
     }
-    
+
     /**
      * Build a sentry-cli compatible token string.
      * Format: sntrys_{base64_payload}_{base64_secret}
@@ -62,13 +62,13 @@ class AuthTokenService {
      */
     private fun buildSentryToken(orgSlug: String, secretBytes: ByteArray): String {
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
-        val iat = System.currentTimeMillis() / 1000  // Use Long instead of Double to avoid scientific notation
+        val iat = System.currentTimeMillis() / 1000 // Use Long instead of Double to avoid scientific notation
         val payloadJson = """{"iat":$iat,"url":"$backendUrl","region_url":"$backendUrl","org":"$orgSlug"}"""
         val payloadEncoded = Base64.getEncoder().encodeToString(payloadJson.toByteArray())
         val secretEncoded = Base64.getEncoder().withoutPadding().encodeToString(secretBytes)
-        return "${TOKEN_PREFIX}${payloadEncoded}_${secretEncoded}"
+        return "${TOKEN_PREFIX}${payloadEncoded}_$secretEncoded"
     }
-    
+
     /**
      * Generate a new authentication token for a user
      */
@@ -78,11 +78,11 @@ class AuthTokenService {
         if (invalidScopes.isNotEmpty()) {
             throw IllegalArgumentException("Invalid scopes: ${invalidScopes.joinToString()}")
         }
-        
+
         if (name.isBlank()) {
             throw IllegalArgumentException("Token name cannot be blank")
         }
-        
+
         // Look up the user's org slug for the token payload
         val orgSlug = transaction {
             (Memberships innerJoin Organizations)
@@ -91,22 +91,22 @@ class AuthTokenService {
                 .firstOrNull()
                 ?.get(Organizations.slug)
         } ?: "default"
-        
+
         // Generate secure random secret
         val tokenBytes = ByteArray(TOKEN_LENGTH)
         secureRandom.nextBytes(tokenBytes)
         val tokenValue = buildSentryToken(orgSlug, tokenBytes)
-        
+
         // Hash the token for storage
         val tokenHash = hashToken(tokenValue)
-        
+
         // Calculate expiration if specified
         val expiresAt = expiresInDays?.let {
             Clock.System.now().plus(it * 24 * 60 * 60, DateTimeUnit.SECOND)
         }
-        
+
         val createdAt = Clock.System.now()
-        
+
         val tokenId = transaction {
             AuthTokens.insert {
                 it[user_id] = userId
@@ -118,7 +118,7 @@ class AuthTokenService {
                 it[last_used_at] = null
             }[AuthTokens.id]
         }
-        
+
         return AuthTokenResponse(
             id = tokenId,
             name = name,
@@ -129,7 +129,7 @@ class AuthTokenService {
             createdAt = createdAt.toString()
         )
     }
-    
+
     /**
      * Validate a token and return user ID and scopes if valid.
      */
@@ -137,9 +137,9 @@ class AuthTokenService {
         if (!token.startsWith(TOKEN_PREFIX)) {
             return null
         }
-        
+
         val tokenHash = hashToken(token)
-        
+
         return transaction {
             val tokenRow = AuthTokens.selectAll()
                 .where { AuthTokens.token_hash eq tokenHash }
@@ -147,40 +147,40 @@ class AuthTokenService {
             if (tokenRow == null) {
                 return@transaction null
             }
-            
+
             // Check if token is expired
             val expiresAt = tokenRow[AuthTokens.expires_at]
             if (expiresAt != null && expiresAt < Clock.System.now()) {
                 return@transaction null
             }
-            
+
             val userId = tokenRow[AuthTokens.user_id]
             val scopes = tokenRow[AuthTokens.scopes]
             val tokenId = tokenRow[AuthTokens.id]
-            
+
             // Update last_used_at timestamp
             AuthTokens.update({ AuthTokens.id eq tokenId }) {
                 it[last_used_at] = Clock.System.now()
             }
-            
+
             TokenValidationResult(userId, scopes, tokenId)
         }
     }
-    
+
     /**
      * Check if a token has a required scope
      */
     fun hasScope(tokenScopes: List<String>, requiredScope: String): Boolean {
         return requiredScope in tokenScopes
     }
-    
+
     /**
      * Check if a token has any of the required scopes
      */
     fun hasAnyScope(tokenScopes: List<String>, requiredScopes: List<String>): Boolean {
         return requiredScopes.any { it in tokenScopes }
     }
-    
+
     /**
      * List all tokens for a user
      */
@@ -202,7 +202,7 @@ class AuthTokenService {
                 }
         }
     }
-    
+
     /**
      * Revoke a token
      */
@@ -213,11 +213,11 @@ class AuthTokenService {
                 .where { (AuthTokens.id eq tokenId) and (AuthTokens.user_id eq userId) }
                 .empty().not()
             if (!tokenExists) return@transaction false
-            
+
             AuthTokens.deleteWhere { id eq tokenId } > 0
         }
     }
-    
+
     /**
      * Update token name and/or scopes
      */
@@ -229,23 +229,23 @@ class AuthTokenService {
                 throw IllegalArgumentException("Invalid scopes: ${invalidScopes.joinToString()}")
             }
         }
-        
+
         return transaction {
             // Verify the token belongs to the user before updating
             val tokenExists = AuthTokens.selectAll()
                 .where { (AuthTokens.id eq tokenId) and (AuthTokens.user_id eq userId) }
                 .empty().not()
             if (!tokenExists) return@transaction false
-            
+
             AuthTokens.update({ AuthTokens.id eq tokenId }) {
                 name?.let { newName -> it[AuthTokens.name] = newName }
                 scopes?.let { newScopes -> it[AuthTokens.scopes] = newScopes }
             }
-            
+
             true
         }
     }
-    
+
     /**
      * Hash a token using SHA256
      */
@@ -254,8 +254,6 @@ class AuthTokenService {
         val hashBytes = digest.digest(token.toByteArray())
         return hashBytes.joinToString("") { "%02x".format(it) }
     }
-    
-
 }
 
 /**

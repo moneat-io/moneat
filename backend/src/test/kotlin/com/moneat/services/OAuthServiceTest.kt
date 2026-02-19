@@ -1,3 +1,19 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 package com.moneat.services
 
 import com.moneat.testsupport.MockHttpServer
@@ -37,8 +53,14 @@ class OAuthServiceTest {
     fun `handleGitHubCallback prefers user email when present`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(200, """{"access_token":"token-1","token_type":"bearer","scope":"user:email"}""")
-                "/user" -> exchange.respond(200, """{"id":42,"login":"octocat","email":"User@Test.com","name":"Octo Cat"}""")
+                "/login/oauth/access_token" -> exchange.respond(
+                    200,
+                    """{"access_token":"token-1","token_type":"bearer","scope":"user:email"}"""
+                )
+                "/user" -> exchange.respond(
+                    200,
+                    """{"id":42,"login":"octocat","email":"User@Test.com","name":"Octo Cat"}"""
+                )
                 "/user/emails" -> exchange.respond(200, """[]""")
                 else -> exchange.respond(404, """{"error":"not found"}""")
             }
@@ -66,7 +88,10 @@ class OAuthServiceTest {
     fun `handleGitHubCallback falls back to primary verified email`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(200, """{"access_token":"token-2","token_type":"bearer","scope":"user:email"}""")
+                "/login/oauth/access_token" -> exchange.respond(
+                    200,
+                    """{"access_token":"token-2","token_type":"bearer","scope":"user:email"}"""
+                )
                 "/user" -> exchange.respond(200, """{"id":77,"login":"fallback","email":null,"name":null}""")
                 "/user/emails" -> exchange.respond(
                     200,
@@ -101,7 +126,10 @@ class OAuthServiceTest {
     fun `handleGitHubCallback fails when no verified email exists`() {
         MockHttpServer { exchange ->
             when (exchange.requestURI.path) {
-                "/login/oauth/access_token" -> exchange.respond(200, """{"access_token":"token-3","token_type":"bearer","scope":"user:email"}""")
+                "/login/oauth/access_token" -> exchange.respond(
+                    200,
+                    """{"access_token":"token-3","token_type":"bearer","scope":"user:email"}"""
+                )
                 "/user" -> exchange.respond(200, """{"id":88,"login":"noemail","email":null,"name":"No Email"}""")
                 "/user/emails" -> exchange.respond(
                     200,

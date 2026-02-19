@@ -26,7 +26,7 @@ import com.moneat.models.ProviderConfig
 interface IncidentProvider {
     /** Unique identifier for this provider type (e.g., "incident_io", "pagerduty") */
     val providerType: String
-    
+
     /**
      * Send an alert to the incident provider.
      * @param event The incident event to send
@@ -34,7 +34,7 @@ interface IncidentProvider {
      * @return Result containing the provider's incident ID on success, or error message on failure
      */
     suspend fun sendAlert(event: IncidentEvent, config: ProviderConfig): Result<String>
-    
+
     /**
      * Resolve an alert with the incident provider.
      * @param deduplicationKey The deduplication key of the alert to resolve
@@ -42,7 +42,7 @@ interface IncidentProvider {
      * @return Result containing success status or error message
      */
     suspend fun resolveAlert(deduplicationKey: String, config: ProviderConfig): Result<String>
-    
+
     /**
      * Test the connection to the incident provider.
      * @param config Provider-specific configuration

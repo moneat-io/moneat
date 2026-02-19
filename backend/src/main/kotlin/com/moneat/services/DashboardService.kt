@@ -19,8 +19,8 @@ package com.moneat.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.models.*
-import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
 import io.ktor.http.HttpStatusCode
 import io.sentry.ISpan
@@ -29,11 +29,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.msgpack.core.MessagePack
 import org.msgpack.core.MessageUnpacker
 import org.msgpack.value.ValueType
@@ -48,7 +48,7 @@ class DashboardService {
     private val json = Json { ignoreUnknownKeys = true }
     private val retentionPolicyService = RetentionPolicyService()
     private val pricingTierService = PricingTierService()
-    
+
     /**
      * Safely extracts body text from ClickHouse response, checking for error messages.
      * Returns null if the response contains a ClickHouse error instead of valid data.
@@ -65,20 +65,22 @@ class DashboardService {
         }
         return body
     }
-    
+
     fun hasProjectAccess(userId: Int, projectId: Long): Boolean {
         return transaction {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
-            
+
             logger.debug { "hasProjectAccess: userId=$userId, projectId=$projectId, orgIds=$orgIds" }
 
-            val hasAccess = Projects.selectAll().where { (Projects.id eq projectId) and (Projects.organization_id inList orgIds) }.count() > 0
+            val hasAccess = Projects.selectAll().where {
+                (Projects.id eq projectId) and (Projects.organization_id inList orgIds)
+            }.count() > 0
             logger.debug { "hasProjectAccess result: $hasAccess" }
             hasAccess
         }
     }
-    
+
     suspend fun hasIssueAccess(userId: Int, issueId: String): Boolean {
         val projectId = getProjectIdForIssue(issueId)
         logger.debug { "hasIssueAccess: issueId=$issueId, projectId=$projectId" }
@@ -108,7 +110,7 @@ class DashboardService {
         val projectId = getProjectIdForFeedback(feedbackId) ?: return false
         return hasProjectAccess(userId, projectId)
     }
-    
+
     private suspend fun getProjectIdForIssue(issueId: String): Long? {
         val escapedIssueId = ClickHouseSqlUtils.escapeSql(issueId)
         val query = """
@@ -118,10 +120,10 @@ class DashboardService {
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
-        
+
         return try {
             val response = ClickHouseClient.execute(query)
-            
+
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to get project ID for issue $issueId: ${response.status} ${body.take(400)}" }
@@ -229,14 +231,16 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for feedback $feedbackId: ${response.status} ${
-                    body.take(400)}" }
+                logger.error {
+                    "Failed to get project ID for feedback $feedbackId: ${response.status} ${
+                        body.take(400)}"
+                }
                 return null
             }
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             val projectId = obj["project_id"]?.jsonPrimitive?.longOrNull
-            
+
             // Validate project_id is in valid range (reject corrupted data)
             if (projectId == null || projectId <= 0) {
                 logger.warn { "Invalid project_id for feedback $feedbackId: $projectId" }
@@ -265,7 +269,11 @@ class DashboardService {
 
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for transaction $eventId: ${response.status} ${body.take(400)}" }
+                logger.error {
+                    "Failed to get project ID for transaction $eventId: ${response.status} ${body.take(
+                        400
+                    )}"
+                }
                 return null
             }
             if (body.isBlank()) return null
@@ -276,7 +284,7 @@ class DashboardService {
             null
         }
     }
-    
+
     private suspend fun getIssueCount(projectId: Long, demoEpochMs: Long? = null): Long {
         val retentionDays = getProjectRetentionDays(projectId)
         val projectIdClause = if (projectId < 0) "toInt64(project_id) = $projectId" else "project_id = $projectId"
@@ -287,13 +295,17 @@ class DashboardService {
                 AND ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
         """.trimIndent()
-        
+
         return try {
             val response = ClickHouseClient.execute(query)
-            
+
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get issue count for project $projectId: ${response.status} ${body.take(400)}" }
+                logger.error {
+                    "Failed to get issue count for project $projectId: ${response.status} ${body.take(
+                        400
+                    )}"
+                }
                 return 0
             }
             if (body.isBlank()) return 0
@@ -304,7 +316,7 @@ class DashboardService {
             0
         }
     }
-    
+
     private suspend fun getBatchIssueCounts(projectIds: List<Long>, demoEpochMs: Long? = null): Map<Long, Long> {
         if (projectIds.isEmpty()) return emptyMap()
         // Use a default retention — individual retention per project would require N queries to resolve.
@@ -319,7 +331,7 @@ class DashboardService {
             GROUP BY project_id
             FORMAT JSONEachRow
         """.trimIndent()
-        
+
         return try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
@@ -339,17 +351,17 @@ class DashboardService {
             emptyMap()
         }
     }
-    
+
     suspend fun getProjects(userId: Int, demoEpochMs: Long? = null): List<ProjectResponse> {
         val projectsData = transaction {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
-            
+
             val projects = Projects.selectAll().where { Projects.organization_id inList orgIds }
                 .map { row -> row[Projects.id] to row }
-            
+
             val projectIds = projects.map { it.first }
-            
+
             // Batch fetch all project keys in a single query
             val keysByProject = ProjectKeys.selectAll()
                 .where { ProjectKeys.project_id inList projectIds }
@@ -358,11 +370,13 @@ class DashboardService {
                     rows.map { keyRow ->
                         ProjectKeyResponse(
                             platformTarget = keyRow[ProjectKeys.platform_target],
-                            dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                            dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix(
+                                "http://"
+                            ).removePrefix("https://")}/$projectId"
                         )
                     }
                 }
-            
+
             projects.map { (projectId, row) ->
                 val keys = keysByProject[projectId] ?: emptyList()
                 Pair(
@@ -379,17 +393,17 @@ class DashboardService {
                 )
             }
         }
-        
+
         if (projectsData.isEmpty()) return emptyList()
-        
+
         // Batch fetch all issue counts in a single ClickHouse query
         val issueCounts = getBatchIssueCounts(projectsData.map { it.first }, demoEpochMs)
-        
+
         return projectsData.map { (projectId, projectResponse) ->
             projectResponse.copy(issueCount = issueCounts[projectId] ?: 0)
         }
     }
-    
+
     suspend fun getProject(projectId: Long): ProjectResponse? {
         val projectData = transaction {
             Projects.selectAll().where { Projects.id eq projectId }
@@ -398,10 +412,12 @@ class DashboardService {
                         .map { keyRow ->
                             ProjectKeyResponse(
                                 platformTarget = keyRow[ProjectKeys.platform_target],
-                                dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                                dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix(
+                                    "http://"
+                                ).removePrefix("https://")}/$projectId"
                             )
                         }
-                    
+
                     ProjectResponse(
                         id = projectId,
                         name = row[Projects.name],
@@ -414,10 +430,10 @@ class DashboardService {
                 }
                 .firstOrNull()
         }
-        
+
         return projectData?.copy(issueCount = getIssueCount(projectId))
     }
-    
+
     fun createProject(userId: Int, request: com.moneat.models.CreateProjectRequest): ProjectResponse {
         return transaction {
             // Get user's first organization
@@ -425,7 +441,7 @@ class DashboardService {
                 .firstOrNull()
                 ?.get(Memberships.organization_id)
                 ?: throw IllegalStateException("User has no organization")
-            
+
             // Check project limit based on tier
             val tierContext = pricingTierService.getEffectiveTierForOrganization(orgId)
             val maxProjects = tierContext.tier.maxProjects
@@ -433,26 +449,26 @@ class DashboardService {
                 val currentProjectCount = Projects.selectAll()
                     .where { Projects.organization_id eq orgId }
                     .count()
-                
+
                 if (currentProjectCount >= maxProjects) {
                     throw IllegalStateException("project_limit_reached")
                 }
             }
-            
+
             // Create slug from name
             val slug = request.name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
-            
+
             // Check if slug already exists in this organization
             val existingProject = Projects.selectAll()
-                .where { 
+                .where {
                     (Projects.organization_id eq orgId) and (Projects.slug eq slug)
                 }
                 .firstOrNull()
-            
+
             if (existingProject != null) {
                 throw IllegalStateException("A project with this name already exists")
             }
-            
+
             // Insert project
             val projectId = Projects.insert {
                 it[organization_id] = orgId
@@ -460,15 +476,15 @@ class DashboardService {
                 it[Projects.slug] = slug
                 it[framework] = request.framework
             } get Projects.id
-            
+
             // Generate project keys (one per target or single key if no targets)
             val keys = mutableListOf<ProjectKeyResponse>()
             val targets = request.targets?.takeIf { it.isNotEmpty() } ?: listOf(null)
-            
+
             for (target in targets) {
                 val publicKey = java.util.UUID.randomUUID().toString().replace("-", "")
                 val secretKey = java.util.UUID.randomUUID().toString().replace("-", "")
-                
+
                 ProjectKeys.insert {
                     it[project_id] = projectId
                     it[ProjectKeys.public_key] = publicKey
@@ -476,11 +492,11 @@ class DashboardService {
                     it[platform_target] = target
                     it[is_active] = true
                 }
-                
+
                 val dsn = "https://$publicKey@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
                 keys.add(ProjectKeyResponse(platformTarget = target, dsn = dsn))
             }
-            
+
             ProjectResponse(
                 id = projectId,
                 name = request.name,
@@ -492,15 +508,15 @@ class DashboardService {
             )
         }
     }
-    
+
     fun addProjectTarget(projectId: Long, target: String): ProjectKeyResponse {
         return transaction {
             // Check if target already exists (excluding NULL platform_target entries)
             val existing = ProjectKeys.selectAll()
-                .where { 
-                    (ProjectKeys.project_id eq projectId) and 
-                    (ProjectKeys.platform_target eq target) and
-                    (ProjectKeys.platform_target.isNotNull())
+                .where {
+                    (ProjectKeys.project_id eq projectId) and
+                        (ProjectKeys.platform_target eq target) and
+                        (ProjectKeys.platform_target.isNotNull())
                 }
                 .firstOrNull()
 
@@ -537,26 +553,28 @@ class DashboardService {
             }
         }
     }
-    
+
     fun deleteProject(projectId: Long) {
         transaction {
             Projects.deleteWhere { Projects.id eq projectId }
         }
     }
-    
+
     suspend fun getIssues(projectId: Long, page: Int, limit: Int, status: String?, demoEpochMs: Long? = null): List<IssueResponse> =
         CacheService.cached("cache:issues:$projectId:$page:$limit:${status ?: ""}:${demoEpochMs ?: 0}", 30) {
-        val offset = (page - 1) * limit
-        val retentionDays = getProjectRetentionDays(projectId)
-        val validStatuses = setOf("unresolved", "resolved", "ignored")
-        val statusFilter = if (status != null && status in validStatuses) {
-            "AND status = '${status.replace("'", "''")}'"
-        } else ""
-        
-        val projectIdClause = if (projectId < 0) "toInt64(e.project_id) = $projectId" else "e.project_id = $projectId"
-        
-        // Query events table directly and aggregate
-        val query = """
+            val offset = (page - 1) * limit
+            val retentionDays = getProjectRetentionDays(projectId)
+            val validStatuses = setOf("unresolved", "resolved", "ignored")
+            val statusFilter = if (status != null && status in validStatuses) {
+                "AND status = '${status.replace("'", "''")}'"
+            } else {
+                ""
+            }
+
+            val projectIdClause = if (projectId < 0) "toInt64(e.project_id) = $projectId" else "e.project_id = $projectId"
+
+            // Query events table directly and aggregate
+            val query = """
             SELECT 
                 issue_id,
                 any(message) as title,
@@ -582,37 +600,37 @@ class DashboardService {
             ORDER BY last_seen DESC
             LIMIT $limit OFFSET $offset
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to fetch issues for project $projectId: ${response.status} ${body.take(400)}" }
-                return@cached emptyList<IssueResponse>()
-            }
-            body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    IssueResponse(
-                        id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
-                        projectId = projectId,
-                        title = obj["title"]?.jsonPrimitive?.content ?: "",
-                        culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
-                        level = obj["level"]?.jsonPrimitive?.content ?: "error",
-                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                        firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
-                        lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
-                        eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
-                        userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                        status = obj["status"]?.jsonPrimitive?.content ?: "unresolved"
-                    )
+            """.trimIndent()
+
+            try {
+                val response = ClickHouseClient.execute(query)
+                val body = response.bodyAsText()
+                if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                    logger.error { "Failed to fetch issues for project $projectId: ${response.status} ${body.take(400)}" }
+                    return@cached emptyList<IssueResponse>()
                 }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch issues" }
-            emptyList()
-        }
+                body.lines()
+                    .filter { it.isNotBlank() }
+                    .map { line ->
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        IssueResponse(
+                            id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
+                            projectId = projectId,
+                            title = obj["title"]?.jsonPrimitive?.content ?: "",
+                            culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
+                            level = obj["level"]?.jsonPrimitive?.content ?: "error",
+                            platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                            firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
+                            lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
+                            eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
+                            userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
+                            status = obj["status"]?.jsonPrimitive?.content ?: "unresolved"
+                        )
+                    }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to fetch issues" }
+                emptyList()
+            }
         }
 
     suspend fun getIssue(issueId: String, demoEpochMs: Long? = null): IssueDetailResponse? {
@@ -620,7 +638,7 @@ class DashboardService {
         val retentionDays = getProjectRetentionDays(projectId)
         val escapedIssueId = issueId.replace("'", "''")
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
-        
+
         // Query events table directly and aggregate
         val query = """
             SELECT 
@@ -647,7 +665,7 @@ class DashboardService {
             GROUP BY issue_id
             FORMAT JSONEachRow
         """.trimIndent()
-        
+
         // Fetch latest event with full details
         val latestEventQuery = """
             SELECT 
@@ -673,20 +691,20 @@ class DashboardService {
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
-        
+
         return try {
             val response = ClickHouseClient.execute(query)
-            
+
             val body = response.bodyAsText()
-            
+
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch issue detail for $issueId: ${response.status} ${body.take(400)}" }
                 return null
             }
             if (body.isBlank()) return null
-            
+
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            
+
             // Fetch latest event
             val latestEventResponse = ClickHouseClient.execute(latestEventQuery)
             val latestEventBody = latestEventResponse.bodyAsText()
@@ -707,15 +725,19 @@ class DashboardService {
                             username = eventObj["user_username"]?.jsonPrimitive?.contentOrNull
                         )
                     },
-                    tags = HashMap(eventObj["tags"]?.jsonObject?.mapValues { 
-                        it.value.jsonPrimitive.content 
-                    } ?: emptyMap()),
+                    tags = HashMap(
+                        eventObj["tags"]?.jsonObject?.mapValues {
+                            it.value.jsonPrimitive.content
+                        } ?: emptyMap()
+                    ),
                     contexts = eventObj["contexts"]?.jsonPrimitive?.content ?: "{}",
                     exception = eventObj["stack_trace"]?.jsonPrimitive?.contentOrNull,
                     breadcrumbs = eventObj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
                 )
-            } else null
-            
+            } else {
+                null
+            }
+
             val projectName = when {
                 projectId == -1L -> "Android"
                 projectId == -2L -> "iOS"
@@ -725,7 +747,7 @@ class DashboardService {
                         .firstOrNull()?.get(Projects.name) ?: ""
                 }
             }
-            
+
             IssueDetailResponse(
                 id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
                 projectId = projectId,
@@ -747,7 +769,7 @@ class DashboardService {
             null
         }
     }
-    
+
     suspend fun getIssueEvents(issueId: String, limit: Int, demoEpochMs: Long? = null): List<EventResponse> {
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
         val retentionDays = getProjectRetentionDays(projectId)
@@ -776,17 +798,17 @@ class DashboardService {
             LIMIT $limit
             FORMAT JSONEachRow
         """.trimIndent()
-        
+
         return try {
             val response = ClickHouseClient.execute(query)
-            
+
             val body = response.bodyAsText()
-            
+
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch events for issue $issueId: ${response.status} ${body.take(400)}" }
                 return emptyList()
             }
-            
+
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
@@ -806,9 +828,11 @@ class DashboardService {
                                 username = obj["user_username"]?.jsonPrimitive?.contentOrNull
                             )
                         },
-                        tags = HashMap(obj["tags"]?.jsonObject?.mapValues { 
-                            it.value.jsonPrimitive.content 
-                        } ?: emptyMap()),
+                        tags = HashMap(
+                            obj["tags"]?.jsonObject?.mapValues {
+                                it.value.jsonPrimitive.content
+                            } ?: emptyMap()
+                        ),
                         contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
                         exception = obj["stack_trace"]?.jsonPrimitive?.contentOrNull,
                         breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
@@ -861,12 +885,12 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
-            
+
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch transactions for issue $issueId: ${response.status} ${body.take(400)}" }
                 return emptyList()
             }
-            
+
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
@@ -894,12 +918,15 @@ class DashboardService {
         operation: String? = null,
         demoEpochMs: Long? = null
     ): List<TransactionSummaryResponse> =
-        CacheService.cached("cache:transactions:$projectId:$period:${environment ?: ""}:${operation ?: ""}:${demoEpochMs ?: ""}", 60) {
-        val periodConfig = getPeriodConfig(period)
-        val retentionDays = getProjectRetentionDays(projectId)
-        val filters = buildTransactionFilterClause(environment, operation)
-        val nowSql = demoNowClause(demoEpochMs)
-        val query = """
+        CacheService.cached(
+            "cache:transactions:$projectId:$period:${environment ?: ""}:${operation ?: ""}:${demoEpochMs ?: ""}",
+            60
+        ) {
+            val periodConfig = getPeriodConfig(period)
+            val retentionDays = getProjectRetentionDays(projectId)
+            val filters = buildTransactionFilterClause(environment, operation)
+            val nowSql = demoNowClause(demoEpochMs)
+            val query = """
             SELECT
                 transaction_name as name,
                 transaction_op as op,
@@ -920,37 +947,41 @@ class DashboardService {
             ORDER BY p95 DESC
             LIMIT 200
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
-        try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to fetch transactions for project $projectId: ${response.status} ${body.take(400)}" }
-                emptyList<TransactionSummaryResponse>()
-            } else {
-                body.lines()
-                    .filter { it.isNotBlank() }
-                    .map { line ->
-                        val obj = json.parseToJsonElement(line).jsonObject
-                        TransactionSummaryResponse(
-                            name = obj["name"]?.jsonPrimitive?.content ?: "",
-                            op = obj["op"]?.jsonPrimitive?.content ?: "",
-                            latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull
-                                ?: obj["latestEventId"]?.jsonPrimitive?.contentOrNull,
-                            count = obj["count"]?.jsonPrimitive?.long ?: 0,
-                            p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                            p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                            p95 = obj["p95"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                            failureRate = obj["failure_rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                            tpm = obj["tpm"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                        )
+            try {
+                val response = ClickHouseClient.execute(query)
+                val body = response.bodyAsText()
+                if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                    logger.error {
+                        "Failed to fetch transactions for project $projectId: ${response.status} ${body.take(
+                            400
+                        )}"
                     }
+                    emptyList<TransactionSummaryResponse>()
+                } else {
+                    body.lines()
+                        .filter { it.isNotBlank() }
+                        .map { line ->
+                            val obj = json.parseToJsonElement(line).jsonObject
+                            TransactionSummaryResponse(
+                                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                                op = obj["op"]?.jsonPrimitive?.content ?: "",
+                                latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull
+                                    ?: obj["latestEventId"]?.jsonPrimitive?.contentOrNull,
+                                count = obj["count"]?.jsonPrimitive?.long ?: 0,
+                                p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                                p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                                p95 = obj["p95"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                                failureRate = obj["failure_rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                                tpm = obj["tpm"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+                            )
+                        }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to fetch transactions for project $projectId" }
+                emptyList()
             }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch transactions for project $projectId" }
-            emptyList()
-        }
         }
 
     suspend fun getPerformanceStats(
@@ -960,13 +991,16 @@ class DashboardService {
         operation: String? = null,
         demoEpochMs: Long? = null
     ): PerformanceStatsResponse =
-        CacheService.cached("cache:perf_stats:$projectId:$period:${environment ?: ""}:${operation ?: ""}:${demoEpochMs ?: ""}", 60) {
-        val periodConfig = getPeriodConfig(period)
-        val retentionDays = getProjectRetentionDays(projectId)
-        val filters = buildTransactionFilterClause(environment, operation)
-        val nowSql = demoNowClause(demoEpochMs)
+        CacheService.cached(
+            "cache:perf_stats:$projectId:$period:${environment ?: ""}:${operation ?: ""}:${demoEpochMs ?: ""}",
+            60
+        ) {
+            val periodConfig = getPeriodConfig(period)
+            val retentionDays = getProjectRetentionDays(projectId)
+            val filters = buildTransactionFilterClause(environment, operation)
+            val nowSql = demoNowClause(demoEpochMs)
 
-        val aggregateQuery = """
+            val aggregateQuery = """
             SELECT
                 count() as total,
                 avg(duration_ms) as avg_duration,
@@ -978,9 +1012,9 @@ class DashboardService {
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
                 $filters
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
-        val throughputQuery = """
+            val throughputQuery = """
             SELECT
                 formatDateTime(
                     toStartOfInterval(e.timestamp, INTERVAL ${periodConfig.intervalMinutes} MINUTE),
@@ -996,9 +1030,9 @@ class DashboardService {
             GROUP BY time
             ORDER BY time
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
-        val slowestQuery = """
+            val slowestQuery = """
             SELECT
                 toString(e.event_id) as event_id,
                 e.transaction_name as name,
@@ -1014,14 +1048,43 @@ class DashboardService {
             ORDER BY e.duration_ms DESC
             LIMIT 10
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
-        try {
-            val aggregateResponse = ClickHouseClient.execute(aggregateQuery)
-            val aggregateBody = aggregateResponse.bodyAsText()
-            if (aggregateResponse.status.value !in 200..299 || aggregateBody.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to fetch aggregate performance stats for project $projectId: ${aggregateResponse.status} ${aggregateBody.take(400)}" }
-                return@cached PerformanceStatsResponse(
+            try {
+                val aggregateResponse = ClickHouseClient.execute(aggregateQuery)
+                val aggregateBody = aggregateResponse.bodyAsText()
+                if (aggregateResponse.status.value !in 200..299 || aggregateBody.trimStart().startsWith("Code:")) {
+                    logger.error {
+                        "Failed to fetch aggregate performance stats for project $projectId: ${aggregateResponse.status} ${aggregateBody.take(
+                            400
+                        )}"
+                    }
+                    return@cached PerformanceStatsResponse(
+                        apdex = 0.0,
+                        throughput = emptyList(),
+                        slowestTransactions = emptyList(),
+                        totalTransactions = 0,
+                        avgDuration = 0.0
+                    )
+                }
+
+                val aggregateObj = aggregateBody.lines().firstOrNull { it.isNotBlank() }?.let {
+                    json.parseToJsonElement(it).jsonObject
+                }
+
+                val throughput = executeTimelineQuery(throughputQuery)
+                val slowest = executeSlowestTransactionsQuery(slowestQuery)
+
+                PerformanceStatsResponse(
+                    apdex = aggregateObj?.get("apdex")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                    throughput = throughput,
+                    slowestTransactions = slowest,
+                    totalTransactions = aggregateObj?.get("total")?.jsonPrimitive?.long ?: 0,
+                    avgDuration = aggregateObj?.get("avg_duration")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to fetch performance stats for project $projectId" }
+                PerformanceStatsResponse(
                     apdex = 0.0,
                     throughput = emptyList(),
                     slowestTransactions = emptyList(),
@@ -1029,32 +1092,7 @@ class DashboardService {
                     avgDuration = 0.0
                 )
             }
-            
-            val aggregateObj = aggregateBody.lines().firstOrNull { it.isNotBlank() }?.let {
-                json.parseToJsonElement(it).jsonObject
-            }
-
-            val throughput = executeTimelineQuery(throughputQuery)
-            val slowest = executeSlowestTransactionsQuery(slowestQuery)
-
-            PerformanceStatsResponse(
-                apdex = aggregateObj?.get("apdex")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                throughput = throughput,
-                slowestTransactions = slowest,
-                totalTransactions = aggregateObj?.get("total")?.jsonPrimitive?.long ?: 0,
-                avgDuration = aggregateObj?.get("avg_duration")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
-            PerformanceStatsResponse(
-                apdex = 0.0,
-                throughput = emptyList(),
-                slowestTransactions = emptyList(),
-                totalTransactions = 0,
-                avgDuration = 0.0
-            )
         }
-    }
 
     suspend fun getTransaction(eventId: String): TransactionDetailResponse? {
         val normalizedEventId = normalizeUuid(eventId) ?: return null
@@ -1167,12 +1205,12 @@ class DashboardService {
             val response = ClickHouseClient.execute(query)
 
             val body = response.bodyAsText()
-            
+
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch spans for transaction $eventId: ${response.status} ${body.take(400)}" }
                 return null
             }
-            
+
             val spans = body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
@@ -1223,7 +1261,7 @@ class DashboardService {
     suspend fun getTraceDetails(projectId: Long, traceId: String): TraceDetailResponse? {
         val retentionDays = getProjectRetentionDays(projectId)
         val escapedTraceId = escapeSql(traceId)
-        
+
         val query = """
             SELECT
                 span_id,
@@ -1249,16 +1287,16 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            
+
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch trace $traceId: ${response.status} ${body.take(400)}" }
                 return null
             }
-            
+
             if (body.isBlank()) {
                 return null
             }
-            
+
             val spans = body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
@@ -1278,11 +1316,11 @@ class DashboardService {
                         data = obj["data"]?.jsonPrimitive?.contentOrNull
                     )
                 }
-            
+
             val startTimestamp = spans.minOfOrNull { it.startTimestamp } ?: 0.0
             val endTimestamp = spans.maxOfOrNull { it.endTimestamp } ?: 0.0
             val duration = (endTimestamp - startTimestamp) * 1000.0
-            
+
             TraceDetailResponse(
                 traceId = traceId,
                 projectId = projectId,
@@ -1300,7 +1338,7 @@ class DashboardService {
     suspend fun getSpanDetails(projectId: Long, spanId: String): SpanDetailResponse? {
         val retentionDays = getProjectRetentionDays(projectId)
         val escapedSpanId = escapeSql(spanId)
-        
+
         val query = """
             SELECT
                 span_id,
@@ -1326,16 +1364,16 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            
+
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to fetch span $spanId: ${response.status} ${body.take(400)}" }
                 return null
             }
-            
+
             if (body.isBlank()) {
                 return null
             }
-            
+
             val obj = json.parseToJsonElement(body.trim()).jsonObject
             val span = SpanResponse(
                 spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
@@ -1351,9 +1389,9 @@ class DashboardService {
                 tags = parseStringMap(obj["tags"]),
                 data = obj["data"]?.jsonPrimitive?.contentOrNull
             )
-            
+
             val transaction = span.transactionId?.let { getTransaction(it) }
-            
+
             SpanDetailResponse(
                 span = span,
                 transaction = transaction
@@ -1400,7 +1438,7 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query)
             val body = extractClickHouseBody(response) ?: return emptyList()
-            
+
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
@@ -1431,50 +1469,50 @@ class DashboardService {
             emptyList()
         }
     }
-    
+
     suspend fun getProjectStats(projectId: Long, period: String = "7d", parentSpan: ISpan? = null, demoEpochMs: Long? = null): ProjectStatsResponse =
         CacheService.cached("cache:project_stats:$projectId:$period:${demoEpochMs ?: ""}", 60, parentSpan) {
-        val retentionDays = getProjectRetentionDays(projectId)
-        val hoursBack = when (period) {
-            "24h" -> 24
-            "7d" -> 168
-            "30d" -> 720
-            "90d" -> 2160
-            else -> 168
-        }
-        
-        val intervalMinutes = when (period) {
-            "24h" -> 60  // 1 hour buckets
-            "7d" -> 360  // 6 hour buckets
-            "30d" -> 1440 // 1 day buckets
-            "90d" -> 4320 // 3 day buckets
-            else -> 360
-        }
-        
-        val nowSql = demoNowClause(demoEpochMs)
-        
-        // Total events in period
-        val totalEventsQuery = """
+            val retentionDays = getProjectRetentionDays(projectId)
+            val hoursBack = when (period) {
+                "24h" -> 24
+                "7d" -> 168
+                "30d" -> 720
+                "90d" -> 2160
+                else -> 168
+            }
+
+            val intervalMinutes = when (period) {
+                "24h" -> 60 // 1 hour buckets
+                "7d" -> 360 // 6 hour buckets
+                "30d" -> 1440 // 1 day buckets
+                "90d" -> 4320 // 3 day buckets
+                else -> 360
+            }
+
+            val nowSql = demoNowClause(demoEpochMs)
+
+            // Total events in period
+            val totalEventsQuery = """
             SELECT count() as total
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Total issues
-        val totalIssuesQuery = """
+            """.trimIndent()
+
+            // Total issues
+            val totalIssuesQuery = """
             SELECT count(DISTINCT issue_id) as total
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
                 AND event_type = 'error'
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Unresolved issues
-        val unresolvedIssuesQuery = """
+            """.trimIndent()
+
+            // Unresolved issues
+            val unresolvedIssuesQuery = """
             SELECT count() as total
             FROM (
                 SELECT issue_id
@@ -1484,10 +1522,10 @@ class DashboardService {
                     AND ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             )
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Affected users in period
-        val affectedUsersQuery = """
+            """.trimIndent()
+
+            // Affected users in period
+            val affectedUsersQuery = """
             SELECT uniq(user_id) as total
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
@@ -1495,10 +1533,10 @@ class DashboardService {
                 AND user_id != ''
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Events timeline
-        val eventsTimelineQuery = """
+            """.trimIndent()
+
+            // Events timeline
+            val eventsTimelineQuery = """
             SELECT 
                 toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE) as time,
                 count() as count
@@ -1509,10 +1547,10 @@ class DashboardService {
             GROUP BY time
             ORDER BY time
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Events by level
-        val eventsByLevelQuery = """
+            """.trimIndent()
+
+            // Events by level
+            val eventsByLevelQuery = """
             SELECT 
                 level,
                 count() as count
@@ -1522,10 +1560,10 @@ class DashboardService {
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             GROUP BY level
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Events by platform
-        val eventsByPlatformQuery = """
+            """.trimIndent()
+
+            // Events by platform
+            val eventsByPlatformQuery = """
             SELECT 
                 platform,
                 count() as count
@@ -1538,10 +1576,10 @@ class DashboardService {
             ORDER BY count DESC
             LIMIT 10
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Events by browser
-        val eventsByBrowserQuery = """
+            """.trimIndent()
+
+            // Events by browser
+            val eventsByBrowserQuery = """
             SELECT 
                 browser_name,
                 count() as count
@@ -1554,10 +1592,10 @@ class DashboardService {
             ORDER BY count DESC
             LIMIT 10
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Events by environment
-        val eventsByEnvironmentQuery = """
+            """.trimIndent()
+
+            // Events by environment
+            val eventsByEnvironmentQuery = """
             SELECT 
                 environment,
                 count() as count
@@ -1568,10 +1606,10 @@ class DashboardService {
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             GROUP BY environment
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Issues by status
-        val issuesByStatusQuery = """
+            """.trimIndent()
+
+            // Issues by status
+            val issuesByStatusQuery = """
             SELECT 
                 status,
                 count() as count
@@ -1580,10 +1618,10 @@ class DashboardService {
                 AND ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             GROUP BY status
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Top issues
-        val topIssuesQuery = """
+            """.trimIndent()
+
+            // Top issues
+            val topIssuesQuery = """
             SELECT 
                 issue_id,
                 any(message) as title,
@@ -1597,10 +1635,10 @@ class DashboardService {
             ORDER BY count DESC
             LIMIT 10
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        // Users timeline
-        val usersTimelineQuery = """
+            """.trimIndent()
+
+            // Users timeline
+            val usersTimelineQuery = """
             SELECT 
                 toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE) as time,
                 uniq(user_id) as count
@@ -1612,67 +1650,86 @@ class DashboardService {
             GROUP BY time
             ORDER BY time
             FORMAT JSONEachRow
-        """.trimIndent()
-        
-        try {
-            // Execute all queries in parallel
-            coroutineScope {
-                val totalEventsDeferred = async { executeScalarQuery(totalEventsQuery, parentSpan) }
-                val totalIssuesDeferred = async { executeScalarQuery(totalIssuesQuery, parentSpan) }
-                val unresolvedIssuesDeferred = async { executeScalarQuery(unresolvedIssuesQuery, parentSpan) }
-                val affectedUsersDeferred = async { executeScalarQuery(affectedUsersQuery, parentSpan) }
-                val eventsTimelineDeferred = async { executeTimelineQuery(eventsTimelineQuery, parentSpan) }
-                val eventsByLevelDeferred = async { executeMapQuery(eventsByLevelQuery, "level", parentSpan) }
-                val eventsByPlatformDeferred = async { executeMapQuery(eventsByPlatformQuery, "platform", parentSpan) }
-                val eventsByBrowserDeferred = async { executeMapQuery(eventsByBrowserQuery, "browser_name", parentSpan) }
-                val eventsByEnvironmentDeferred = async { executeMapQuery(eventsByEnvironmentQuery, "environment", parentSpan) }
-                val issuesByStatusDeferred = async { executeMapQuery(issuesByStatusQuery, "status", parentSpan) }
-                val topIssuesDeferred = async { executeTopIssuesQuery(topIssuesQuery, parentSpan) }
-                val usersTimelineDeferred = async { executeTimelineQuery(usersTimelineQuery, parentSpan) }
-                val releaseMarkersDeferred = async { executeReleaseMarkersQuery(projectId, hoursBack, retentionDays, parentSpan) }
-                
-                // Await all results
+            """.trimIndent()
+
+            try {
+                // Execute all queries in parallel
+                coroutineScope {
+                    val totalEventsDeferred = async { executeScalarQuery(totalEventsQuery, parentSpan) }
+                    val totalIssuesDeferred = async { executeScalarQuery(totalIssuesQuery, parentSpan) }
+                    val unresolvedIssuesDeferred = async { executeScalarQuery(unresolvedIssuesQuery, parentSpan) }
+                    val affectedUsersDeferred = async { executeScalarQuery(affectedUsersQuery, parentSpan) }
+                    val eventsTimelineDeferred = async { executeTimelineQuery(eventsTimelineQuery, parentSpan) }
+                    val eventsByLevelDeferred = async { executeMapQuery(eventsByLevelQuery, "level", parentSpan) }
+                    val eventsByPlatformDeferred = async { executeMapQuery(eventsByPlatformQuery, "platform", parentSpan) }
+                    val eventsByBrowserDeferred = async {
+                        executeMapQuery(
+                            eventsByBrowserQuery,
+                            "browser_name",
+                            parentSpan
+                        )
+                    }
+                    val eventsByEnvironmentDeferred = async {
+                        executeMapQuery(
+                            eventsByEnvironmentQuery,
+                            "environment",
+                            parentSpan
+                        )
+                    }
+                    val issuesByStatusDeferred = async { executeMapQuery(issuesByStatusQuery, "status", parentSpan) }
+                    val topIssuesDeferred = async { executeTopIssuesQuery(topIssuesQuery, parentSpan) }
+                    val usersTimelineDeferred = async { executeTimelineQuery(usersTimelineQuery, parentSpan) }
+                    val releaseMarkersDeferred = async {
+                        executeReleaseMarkersQuery(
+                            projectId,
+                            hoursBack,
+                            retentionDays,
+                            parentSpan
+                        )
+                    }
+
+                    // Await all results
+                    ProjectStatsResponse(
+                        totalEvents = totalEventsDeferred.await(),
+                        totalIssues = totalIssuesDeferred.await(),
+                        unresolvedIssues = unresolvedIssuesDeferred.await(),
+                        affectedUsers = affectedUsersDeferred.await(),
+                        eventsTimeline = eventsTimelineDeferred.await(),
+                        eventsByLevel = eventsByLevelDeferred.await(),
+                        eventsByPlatform = eventsByPlatformDeferred.await(),
+                        eventsByBrowser = eventsByBrowserDeferred.await(),
+                        eventsByEnvironment = eventsByEnvironmentDeferred.await(),
+                        issuesByStatus = issuesByStatusDeferred.await(),
+                        topIssues = topIssuesDeferred.await(),
+                        usersTimeline = usersTimelineDeferred.await(),
+                        releaseMarkers = releaseMarkersDeferred.await()
+                    )
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to fetch project stats" }
                 ProjectStatsResponse(
-                    totalEvents = totalEventsDeferred.await(),
-                    totalIssues = totalIssuesDeferred.await(),
-                    unresolvedIssues = unresolvedIssuesDeferred.await(),
-                    affectedUsers = affectedUsersDeferred.await(),
-                    eventsTimeline = eventsTimelineDeferred.await(),
-                    eventsByLevel = eventsByLevelDeferred.await(),
-                    eventsByPlatform = eventsByPlatformDeferred.await(),
-                    eventsByBrowser = eventsByBrowserDeferred.await(),
-                    eventsByEnvironment = eventsByEnvironmentDeferred.await(),
-                    issuesByStatus = issuesByStatusDeferred.await(),
-                    topIssues = topIssuesDeferred.await(),
-                    usersTimeline = usersTimelineDeferred.await(),
-                    releaseMarkers = releaseMarkersDeferred.await()
+                    totalEvents = 0,
+                    totalIssues = 0,
+                    unresolvedIssues = 0,
+                    affectedUsers = 0,
+                    eventsTimeline = emptyList(),
+                    eventsByLevel = emptyMap(),
+                    eventsByPlatform = emptyMap(),
+                    eventsByBrowser = emptyMap(),
+                    eventsByEnvironment = emptyMap(),
+                    issuesByStatus = emptyMap(),
+                    topIssues = emptyList(),
+                    usersTimeline = emptyList(),
+                    releaseMarkers = emptyList()
                 )
             }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch project stats" }
-            ProjectStatsResponse(
-                totalEvents = 0,
-                totalIssues = 0,
-                unresolvedIssues = 0,
-                affectedUsers = 0,
-                eventsTimeline = emptyList(),
-                eventsByLevel = emptyMap(),
-                eventsByPlatform = emptyMap(),
-                eventsByBrowser = emptyMap(),
-                eventsByEnvironment = emptyMap(),
-                issuesByStatus = emptyMap(),
-                topIssues = emptyList(),
-                usersTimeline = emptyList(),
-                releaseMarkers = emptyList()
-            )
-        }
         }
 
     suspend fun getReleases(projectId: Long, parentSpan: ISpan? = null): List<ReleaseListResponse> =
         CacheService.cached("cache:releases:$projectId", 120, parentSpan) {
-        val retentionDays = getProjectRetentionDays(projectId)
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
-        val releasesQuery = """
+            val retentionDays = getProjectRetentionDays(projectId)
+            val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+            val releasesQuery = """
             SELECT
                 release as version,
                 formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
@@ -1685,29 +1742,31 @@ class DashboardService {
             GROUP BY release
             ORDER BY first_seen DESC
             FORMAT JSONEachRow
-        """.trimIndent()
+            """.trimIndent()
 
-        try {
-            val releases = executeReleasesListQuery(releasesQuery, parentSpan)
-            val result = mutableListOf<ReleaseListResponse>()
-            for (r in releases) {
-                val newIssueCount = getNewIssueCountForRelease(projectId, r.version, retentionDays)
-                val crashFreeRate = getCrashFreeRateForRelease(projectId, r.version, retentionDays)
-                result.add(ReleaseListResponse(
-                    version = r.version,
-                    firstSeen = r.firstSeen,
-                    lastSeen = r.lastSeen,
-                    eventCount = r.eventCount,
-                    newIssueCount = newIssueCount,
-                    crashFreeRate = crashFreeRate,
-                    userCount = r.userCount
-                ))
+            try {
+                val releases = executeReleasesListQuery(releasesQuery, parentSpan)
+                val result = mutableListOf<ReleaseListResponse>()
+                for (r in releases) {
+                    val newIssueCount = getNewIssueCountForRelease(projectId, r.version, retentionDays)
+                    val crashFreeRate = getCrashFreeRateForRelease(projectId, r.version, retentionDays)
+                    result.add(
+                        ReleaseListResponse(
+                            version = r.version,
+                            firstSeen = r.firstSeen,
+                            lastSeen = r.lastSeen,
+                            eventCount = r.eventCount,
+                            newIssueCount = newIssueCount,
+                            crashFreeRate = crashFreeRate,
+                            userCount = r.userCount
+                        )
+                    )
+                }
+                result
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to fetch releases for project $projectId" }
+                emptyList()
             }
-            result
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch releases for project $projectId" }
-            emptyList()
-        }
         }
 
     suspend fun getReleaseStats(projectId: Long, version: String): ReleaseDetailStats? {
@@ -1812,12 +1871,12 @@ class DashboardService {
         return try {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
-            
+
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "Failed to execute release markers query: ${response.status} ${body.take(400)}" }
                 return emptyList()
             }
-            
+
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line ->
@@ -1844,12 +1903,12 @@ class DashboardService {
     private suspend fun executeReleasesListQuery(query: String, parentSpan: ISpan? = null): List<ReleaseListRow> {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
-        
+
         if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute releases list query: ${response.status} ${body.take(400)}" }
             return emptyList()
         }
-        
+
         return body.lines()
             .filter { it.isNotBlank() }
             .map { line ->
@@ -1925,14 +1984,19 @@ class DashboardService {
             conditions.add("transaction_op = '${escapeSql(it)}'")
         }
 
-        return if (conditions.isEmpty()) "" else conditions.joinToString(separator = "\n                ", prefix = "AND ")
+        return if (conditions.isEmpty()) "" else conditions.joinToString(
+            separator = "\n                ",
+            prefix = "AND "
+        )
     }
 
     private fun parseStringMap(element: JsonElement?): HashMap<String, String> {
         val objectValue = element as? JsonObject ?: return hashMapOf()
-        return HashMap(objectValue.entries.associate { (key, value) ->
-            key to (value.jsonPrimitive.contentOrNull ?: "")
-        })
+        return HashMap(
+            objectValue.entries.associate { (key, value) ->
+                key to (value.jsonPrimitive.contentOrNull ?: "")
+            }
+        )
     }
 
     private fun parseTraceContext(contexts: String): JsonObject? {
@@ -1951,7 +2015,13 @@ class DashboardService {
 
         val hexRegex = Regex("^[0-9a-f]{32}$")
         if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(0, 8)}-${trimmed.substring(8, 12)}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+            return "${trimmed.substring(
+                0,
+                8
+            )}-${trimmed.substring(
+                8,
+                12
+            )}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
         }
 
         return null
@@ -1977,7 +2047,7 @@ class DashboardService {
             "now()"
         }
     }
-    
+
     private suspend fun executeScalarQuery(query: String, parentSpan: ISpan? = null): Long {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
@@ -1989,16 +2059,16 @@ class DashboardService {
         val obj = json.parseToJsonElement(body.lines().first()).jsonObject
         return obj["total"]?.jsonPrimitive?.long ?: 0
     }
-    
+
     private suspend fun executeTimelineQuery(query: String, parentSpan: ISpan? = null): List<TimelinePoint> {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
-        
+
         if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "ClickHouse query failed: ${body.take(400)}" }
             return emptyList()
         }
-        
+
         return body.lines()
             .filter { it.isNotBlank() }
             .mapNotNull { line ->
@@ -2018,12 +2088,12 @@ class DashboardService {
     private suspend fun executeSlowestTransactionsQuery(query: String, parentSpan: ISpan? = null): List<SlowTransactionResponse> {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
-        
+
         if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "ClickHouse query failed: ${body.take(400)}" }
             return emptyList()
         }
-        
+
         return body.lines()
             .filter { it.isNotBlank() }
             .mapNotNull { line ->
@@ -2044,16 +2114,16 @@ class DashboardService {
                 }
             }
     }
-    
+
     private suspend fun executeMapQuery(query: String, keyField: String, parentSpan: ISpan? = null): Map<String, Long> {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
-        
+
         if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute map query: ${response.status} ${body.take(400)}" }
             return emptyMap()
         }
-        
+
         return body.lines()
             .filter { it.isNotBlank() }
             .associate { line ->
@@ -2063,16 +2133,16 @@ class DashboardService {
                 key to count
             }
     }
-    
+
     private suspend fun executeTopIssuesQuery(query: String, parentSpan: ISpan? = null): List<TopIssue> {
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
-        
+
         if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
             logger.error { "Failed to execute top issues query: ${response.status} ${body.take(400)}" }
             return emptyList()
         }
-        
+
         return body.lines()
             .filter { it.isNotBlank() }
             .map { line ->
@@ -2084,7 +2154,7 @@ class DashboardService {
                 )
             }
     }
-    
+
     suspend fun getReplays(
         projectId: Long,
         page: Int = 1,
@@ -2096,7 +2166,7 @@ class DashboardService {
         val offset = (page - 1) * limit
         val retentionDays = getProjectRetentionDays(projectId)
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
-        
+
         val nowMs = demoEpochMs ?: System.currentTimeMillis()
         val periodMs = when (period) {
             "24h" -> 24 * 60 * 60 * 1000L
@@ -2106,10 +2176,12 @@ class DashboardService {
         }
         val periodStartMs = nowMs - periodMs
         val retentionStartMs = nowMs - (retentionDays * 24 * 60 * 60 * 1000L)
-        
+
         val envClause = if (environment != null && environment.isNotBlank()) {
             "AND environment = '${environment.replace("'", "''")}'"
-        } else ""
+        } else {
+            ""
+        }
 
         val query = """
             SELECT
@@ -2173,7 +2245,9 @@ class DashboardService {
                             errorCount = maxOf(rawErrorCount, fallbackErrorCount),
                             user = if (userId != null || userEmail != null || userUsername != null) {
                                 UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                            } else null,
+                            } else {
+                                null
+                            },
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -2260,7 +2334,11 @@ class DashboardService {
                 .lines()
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
-                    runCatching { json.parseToJsonElement(line).jsonObject["event_id"]?.jsonPrimitive?.contentOrNull }.getOrNull()
+                    runCatching {
+                        json.parseToJsonElement(
+                            line
+                        ).jsonObject["event_id"]?.jsonPrimitive?.contentOrNull
+                    }.getOrNull()
                 }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch replay window error IDs for project $projectId" }
@@ -2366,7 +2444,9 @@ class DashboardService {
                 platform = obj["platform"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 user = if (userId != null || userEmail != null || userUsername != null) {
                     UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                } else null,
+                } else {
+                    null
+                },
                 browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -2424,8 +2504,15 @@ class DashboardService {
                     val response = ClickHouseClient.execute(query)
                     val body = response.bodyAsText()
                     if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                        if (response.status.value !in 200..299) logger.error { "Replay timeline errors by IDs failed: ${response.status} ${body.take(400)}" }
-                        else logger.error { "Replay timeline errors by IDs (ClickHouse): ${body.take(400)}" }
+                        if (response.status.value !in 200..299) {
+                            logger.error {
+                                "Replay timeline errors by IDs failed: ${response.status} ${body.take(
+                                    400
+                                )}"
+                            }
+                        } else {
+                            logger.error { "Replay timeline errors by IDs (ClickHouse): ${body.take(400)}" }
+                        }
                         return@runCatching
                     }
                     body.lines()
@@ -2486,8 +2573,15 @@ class DashboardService {
                 val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
                 if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                    if (response.status.value !in 200..299) logger.error { "Replay timeline transactions by trace IDs failed: ${response.status} ${body.take(400)}" }
-                    else logger.error { "Replay timeline transactions by trace IDs (ClickHouse): ${body.take(400)}" }
+                    if (response.status.value !in 200..299) {
+                        logger.error {
+                            "Replay timeline transactions by trace IDs failed: ${response.status} ${body.take(
+                                400
+                            )}"
+                        }
+                    } else {
+                        logger.error { "Replay timeline transactions by trace IDs (ClickHouse): ${body.take(400)}" }
+                    }
                     return@runCatching
                 }
                 body.lines()
@@ -2498,7 +2592,9 @@ class DashboardService {
                         val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
                         val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return@forEach
                         if (!addedIds.add(eventId)) return@forEach
-                        val traceId = parseTraceContext(obj["contexts"]?.jsonPrimitive?.content ?: "{}")?.get("trace_id")?.jsonPrimitive?.contentOrNull
+                        val traceId = parseTraceContext(
+                            obj["contexts"]?.jsonPrimitive?.content ?: "{}"
+                        )?.get("trace_id")?.jsonPrimitive?.contentOrNull
                         items.add(
                             ReplayTimelineItem(
                                 id = eventId,
@@ -2540,8 +2636,15 @@ class DashboardService {
                 val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
                 if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                    if (response.status.value !in 200..299) logger.error { "Replay timeline spans by trace IDs failed: ${response.status} ${body.take(400)}" }
-                    else logger.error { "Replay timeline spans by trace IDs (ClickHouse): ${body.take(400)}" }
+                    if (response.status.value !in 200..299) {
+                        logger.error {
+                            "Replay timeline spans by trace IDs failed: ${response.status} ${body.take(
+                                400
+                            )}"
+                        }
+                    } else {
+                        logger.error { "Replay timeline spans by trace IDs (ClickHouse): ${body.take(400)}" }
+                    }
                     return@runCatching
                 }
                 body.lines()
@@ -2561,7 +2664,9 @@ class DashboardService {
                                 type = "span",
                                 timestamp = spanTimestampIso,
                                 offsetMs = (startTsMs - replayStartMs).toDouble(),
-                                title = obj["description"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
+                                title = obj["description"]?.jsonPrimitive?.content?.takeIf {
+                                    it.isNotBlank()
+                                } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
                                 description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                                 durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
                                 category = obj["op"]?.jsonPrimitive?.contentOrNull,
@@ -2598,8 +2703,11 @@ class DashboardService {
             val response = ClickHouseClient.execute(errorsInRangeQuery)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                if (response.status.value !in 200..299) logger.error { "Replay timeline errors by time range failed: ${response.status} ${body.take(400)}" }
-                else logger.error { "Replay timeline errors by time range (ClickHouse): ${body.take(400)}" }
+                if (response.status.value !in 200..299) {
+                    logger.error { "Replay timeline errors by time range failed: ${response.status} ${body.take(400)}" }
+                } else {
+                    logger.error { "Replay timeline errors by time range (ClickHouse): ${body.take(400)}" }
+                }
                 return@runCatching
             }
             body.lines()
@@ -2653,8 +2761,15 @@ class DashboardService {
             val response = ClickHouseClient.execute(transactionsInRangeQuery)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                if (response.status.value !in 200..299) logger.error { "Replay timeline transactions by time range failed: ${response.status} ${body.take(400)}" }
-                else logger.error { "Replay timeline transactions by time range (ClickHouse): ${body.take(400)}" }
+                if (response.status.value !in 200..299) {
+                    logger.error {
+                        "Replay timeline transactions by time range failed: ${response.status} ${body.take(
+                            400
+                        )}"
+                    }
+                } else {
+                    logger.error { "Replay timeline transactions by time range (ClickHouse): ${body.take(400)}" }
+                }
                 return@runCatching
             }
             body.lines()
@@ -2665,7 +2780,9 @@ class DashboardService {
                     val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
                     val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return@forEach
                     if (!addedIds.add(eventId)) return@forEach
-                    val traceId = parseTraceContext(obj["contexts"]?.jsonPrimitive?.content ?: "{}")?.get("trace_id")?.jsonPrimitive?.contentOrNull
+                    val traceId = parseTraceContext(
+                        obj["contexts"]?.jsonPrimitive?.content ?: "{}"
+                    )?.get("trace_id")?.jsonPrimitive?.contentOrNull
                     items.add(
                         ReplayTimelineItem(
                             id = eventId,
@@ -2706,8 +2823,11 @@ class DashboardService {
             val response = ClickHouseClient.execute(spansInRangeQuery)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                if (response.status.value !in 200..299) logger.error { "Replay timeline spans by time range failed: ${response.status} ${body.take(400)}" }
-                else logger.error { "Replay timeline spans by time range (ClickHouse): ${body.take(400)}" }
+                if (response.status.value !in 200..299) {
+                    logger.error { "Replay timeline spans by time range failed: ${response.status} ${body.take(400)}" }
+                } else {
+                    logger.error { "Replay timeline spans by time range (ClickHouse): ${body.take(400)}" }
+                }
                 return@runCatching
             }
             body.lines()
@@ -2727,7 +2847,9 @@ class DashboardService {
                             type = "span",
                             timestamp = spanTimestampIso,
                             offsetMs = (startTsMs - replayStartMs).toDouble(),
-                            title = obj["description"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
+                            title = obj["description"]?.jsonPrimitive?.content?.takeIf {
+                                it.isNotBlank()
+                            } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
                             description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
                             category = obj["op"]?.jsonPrimitive?.contentOrNull,
@@ -2911,9 +3033,9 @@ class DashboardService {
             val body = response.bodyAsText()
             val allEvents = mutableListOf<JsonElement>()
             var isMobileReplay = false
-            
+
             logger.debug { "Processing replay recording response, body lines: ${body.lines().filter { it.isNotBlank() }.size}" }
-            
+
             body.lines()
                 .filter { it.isNotBlank() }
                 .forEachIndexed { segmentIdx, line ->
@@ -2925,18 +3047,22 @@ class DashboardService {
                     }
                     allEvents.addAll(segment.events)
                 }
-            
+
             logger.info { "Msgpack decoding complete, extracted ${allEvents.size} total events from all segments" }
-            
+
             // If mobile replay but no events decoded, return placeholder
             if (isMobileReplay && allEvents.isEmpty()) {
                 logger.warn { "Mobile replay detected but no events extracted!" }
-                ReplayRecordingResponse(events = listOf(
-                    JsonObject(mapOf(
-                        "type" to JsonPrimitive("mobile_replay_not_supported"),
-                        "message" to JsonPrimitive("Mobile session replays are not yet supported in the web viewer")
-                    ))
-                ))
+                ReplayRecordingResponse(
+                    events = listOf(
+                        JsonObject(
+                            mapOf(
+                                "type" to JsonPrimitive("mobile_replay_not_supported"),
+                                "message" to JsonPrimitive("Mobile session replays are not yet supported in the web viewer")
+                            )
+                        )
+                    )
+                )
             } else {
                 logger.info { "Returning response with ${allEvents.size} events, isMobileReplay=$isMobileReplay" }
                 ReplayRecordingResponse(events = allEvents)
@@ -3031,7 +3157,9 @@ class DashboardService {
                             errorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0,
                             user = if (userId != null || userEmail != null || userUsername != null) {
                                 UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                            } else null,
+                            } else {
+                                null
+                            },
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -3062,7 +3190,9 @@ class DashboardService {
         val validStatuses = setOf("unresolved", "resolved", "archived")
         val statusFilter = if (status != null && status in validStatuses) {
             "AND status = '${status.replace("'", "''")}'"
-        } else ""
+        } else {
+            ""
+        }
 
         val query = """
             SELECT
@@ -3114,7 +3244,9 @@ class DashboardService {
                         platform = obj["platform"]?.jsonPrimitive?.content ?: "",
                         user = if (userId != null || userEmail != null || userUsername != null) {
                             UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                        } else null,
+                        } else {
+                            null
+                        },
                         associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                         replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
                     )
@@ -3129,7 +3261,7 @@ class DashboardService {
         val normalizedFeedbackId = normalizeUuid(feedbackId) ?: return null
         val projectId = getProjectIdForFeedback(normalizedFeedbackId) ?: return null
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
-        
+
         // For feedback detail, we don't apply retention filtering since we're looking up a specific ID
         // The feedback item was already shown in the list (which did apply retention), so we know it exists
         val query = """
@@ -3181,7 +3313,9 @@ class DashboardService {
                 platform = obj["platform"]?.jsonPrimitive?.content ?: "",
                 user = if (userId != null || userEmail != null || userUsername != null) {
                     UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                } else null,
+                } else {
+                    null
+                },
                 associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 tags = tagsMap,
@@ -3228,16 +3362,16 @@ class DashboardService {
             if (update.status !in validStatuses) {
                 throw IllegalArgumentException("Invalid status value")
             }
-            
+
             val escapedIssueId = issueId.replace("'", "''")
             val escapedStatus = update.status.replace("'", "''")
-            
+
             val query = """
                 ALTER TABLE $clickhouseDb.issues
                 UPDATE status = '$escapedStatus'
                 WHERE issue_id = '$escapedIssueId'
             """.trimIndent()
-            
+
             try {
                 ClickHouseClient.execute(query)
             } catch (e: Exception) {

@@ -19,8 +19,8 @@ package com.moneat.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.models.*
-import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.encodeToString
@@ -220,7 +220,7 @@ class LogService {
         if (!request.environment.isNullOrBlank()) {
             conditions += "environment = '${escapeSql(request.environment)}'"
         }
-        
+
         if (!request.containerName.isNullOrBlank()) {
             conditions += "container_name = '${escapeSql(request.containerName)}'"
         }
@@ -264,7 +264,7 @@ class LogService {
         if (!request.excludeEnvironment.isNullOrBlank()) {
             conditions += "environment != '${escapeSql(request.excludeEnvironment)}'"
         }
-        
+
         if (!request.excludeContainerName.isNullOrBlank()) {
             conditions += "container_name != '${escapeSql(request.excludeContainerName)}'"
         }
@@ -282,10 +282,10 @@ class LogService {
         }
 
         val whereClause = conditions.joinToString(" AND ")
-        
+
         // Log the complete WHERE clause for debugging (at DEBUG level to avoid logging user data in production)
         logger.debug { "Executing log query with WHERE clause: $whereClause" }
-        
+
         val query = """
             SELECT
                 toString(log_id) AS log_id,
@@ -335,7 +335,7 @@ class LogService {
             WHERE $totalCountFilter
             FORMAT JSONEachRow
         """.trimIndent()
-        
+
         val totalCountResponse = ClickHouseClient.execute(totalCountQuery)
         val totalCountBody = totalCountResponse.bodyAsText()
         val totalCount = if (totalCountResponse.status.isSuccess() && !totalCountBody.trimStart().startsWith("Code:")) {
@@ -361,11 +361,11 @@ class LogService {
         if (fromMs == null || toMs == null) return "1h"
         val rangeMs = toMs - fromMs
         return when {
-            rangeMs <= 3_600_000L -> "1m"           // ≤1h → 1m
-            rangeMs <= 21_600_000L -> "5m"          // ≤6h → 5m
-            rangeMs <= 86_400_000L -> "15m"         // ≤24h → 15m
-            rangeMs <= 604_800_000L -> "1h"         // ≤7d → 1h
-            else -> "1d"                            // >7d → 1d
+            rangeMs <= 3_600_000L -> "1m" // ≤1h → 1m
+            rangeMs <= 21_600_000L -> "5m" // ≤6h → 5m
+            rangeMs <= 86_400_000L -> "15m" // ≤24h → 15m
+            rangeMs <= 604_800_000L -> "1h" // ≤7d → 1h
+            else -> "1d" // >7d → 1d
         }
     }
 
@@ -400,7 +400,9 @@ class LogService {
         val toMs = parseTimeToMillis(to) ?: System.currentTimeMillis()
         val resolvedInterval = if (interval.isNullOrBlank() || interval == "auto") {
             autoInterval(fromMs, toMs)
-        } else interval
+        } else {
+            interval
+        }
         val chInterval = intervalToClickHouse(resolvedInterval)
 
         val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
@@ -436,7 +438,7 @@ class LogService {
                 conditions += condition
             }
         }
-        
+
         // Exclude filters
         if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
         if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
@@ -475,7 +477,9 @@ class LogService {
             """.trimIndent()
         }
 
-        logger.debug { "Aggregate logs SQL for project $projectId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql" }
+        logger.debug {
+            "Aggregate logs SQL for project $projectId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql"
+        }
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
         logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(500)}" }
@@ -513,7 +517,9 @@ class LogService {
             )
         }
 
-        logger.debug { "Aggregate logs result for project $projectId: ${buckets.size} buckets, totalCount=$totalCount, interval=$resolvedInterval" }
+        logger.debug {
+            "Aggregate logs result for project $projectId: ${buckets.size} buckets, totalCount=$totalCount, interval=$resolvedInterval"
+        }
         return LogAggregateResponse(buckets = buckets, totalCount = totalCount, interval = resolvedInterval)
     }
 
@@ -567,7 +573,7 @@ class LogService {
                 conditions += condition
             }
         }
-        
+
         // Exclude filters
         if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
         if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
@@ -682,7 +688,7 @@ class LogService {
                 conditions += condition
             }
         }
-        
+
         // Exclude filters
         if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
         if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
@@ -886,17 +892,17 @@ class LogService {
 
         // Map status to level
         val actualField = if (key == "status") "level" else key
-        
+
         // Check if this is a top-level field or a tag
         val isTopLevelField = actualField in topLevelFields
-        
+
         val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
-        
+
         // Only add has() check for actual tags, not top-level fields
         if (!isTopLevelField) {
             conditions += "has(tags, '$escapedKey')"
         }
-        
+
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) {
             conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
@@ -966,13 +972,17 @@ class LogService {
                     val log = LogEntryResponse(
                         logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                         timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
-                        level = normalizeLevel(obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content),
+                        level = normalizeLevel(
+                            obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content
+                        ),
                         message = obj["message"]?.jsonPrimitive?.content ?: "",
                         body = obj["body"]?.jsonPrimitive?.content ?: "",
                         service = obj["service"]?.jsonPrimitive?.content ?: "",
                         environment = obj["environment"]?.jsonPrimitive?.content ?: "",
                         host = obj["host"]?.jsonPrimitive?.content ?: "",
-                        source = normalizeSource(obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"),
+                        source = normalizeSource(
+                            obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
+                        ),
                         containerName = obj["container_name"]?.jsonPrimitive?.content ?: "",
                         containerId = obj["container_id"]?.jsonPrimitive?.content ?: "",
                         containerImage = obj["container_image"]?.jsonPrimitive?.content ?: "",
@@ -1221,7 +1231,7 @@ class LogService {
             return null
         }
 
-        return "system_id = toUUID('${parsed}')"
+        return "system_id = toUUID('$parsed')"
     }
 
     private fun resolveTimestampMs(timestamp: String?, timestampMs: Long?): Long {
@@ -1309,7 +1319,7 @@ class LogService {
             null
         }
     }
-    
+
     /**
      * Check if a tag key/value looks like it contains Boolean operators.
      * These should be in the query field instead.
@@ -1317,23 +1327,23 @@ class LogService {
     private fun isTagMalformed(key: String, value: String): Boolean {
         // Check for Boolean operators with various spacing
         return key.contains(" OR", ignoreCase = true) ||
-               key.contains("OR ", ignoreCase = true) ||
-               key.contains(" AND", ignoreCase = true) ||
-               key.contains("AND ", ignoreCase = true) ||
-               key.startsWith("-") ||
-               value.contains(" OR", ignoreCase = true) ||
-               value.contains("OR ", ignoreCase = true) ||
-               value.contains(" AND", ignoreCase = true) ||
-               value.contains("AND ", ignoreCase = true)
+            key.contains("OR ", ignoreCase = true) ||
+            key.contains(" AND", ignoreCase = true) ||
+            key.contains("AND ", ignoreCase = true) ||
+            key.startsWith("-") ||
+            value.contains(" OR", ignoreCase = true) ||
+            value.contains("OR ", ignoreCase = true) ||
+            value.contains(" AND", ignoreCase = true) ||
+            value.contains("AND ", ignoreCase = true)
     }
-    
+
     /**
      * Build a SQL condition for a tag/field filter.
      * Checks if the key is a top-level field or an actual tag.
      */
     internal fun buildTagCondition(key: String, value: String, exclude: Boolean = false): String {
         if (key.isBlank()) return ""
-        
+
         // If the tag value contains Boolean operators, it's actually a query that was
         // mistakenly sent as a tag. Route it through the query parser instead of dropping it.
         if (isTagMalformed(key, value)) {
@@ -1343,22 +1353,24 @@ class LogService {
                 if (parsed.rootNode != null) {
                     val condition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
                     if (exclude && condition.isNotBlank()) "NOT ($condition)" else condition
-                } else ""
+                } else {
+                    ""
+                }
             } catch (e: Exception) {
                 logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
                 ""
             }
         }
-        
+
         val escapedKey = escapeSql(key)
         val escapedValue = escapeSql(value)
-        
+
         // Map status to level
         val actualField = if (key == "status") "level" else key
-        
+
         // Enum8 columns need toString() cast for string comparison
         val enumFields = setOf("level", "source")
-        
+
         // Check if this is a top-level field
         val operator = if (exclude) "!=" else "="
         return if (actualField in topLevelFields) {

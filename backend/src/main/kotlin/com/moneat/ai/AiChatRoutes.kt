@@ -19,23 +19,18 @@ package com.moneat.ai
 import com.moneat.models.Memberships
 import com.moneat.models.Users
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.application
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.principal
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.*
 
 private val logger = KotlinLogging.logger {}
 
@@ -45,7 +40,6 @@ fun Route.aiChatRoutes() {
 
     authenticate("auth-jwt") {
         route("/v1/ai") {
-
             post("/chat") {
                 if (!OpenAiClient.isEnabled) {
                     call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "AI chat is not enabled"))
@@ -54,13 +48,16 @@ fun Route.aiChatRoutes() {
 
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                
+
                 // Check if user is admin
                 if (!isUserAdmin(userId)) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "AI chat is only available for admin users"))
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "AI chat is only available for admin users")
+                    )
                     return@post
                 }
-                
+
                 val orgId = getOrgIdForUser(userId)
                 if (orgId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
@@ -90,13 +87,16 @@ fun Route.aiChatRoutes() {
 
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                
+
                 // Check if user is admin
                 if (!isUserAdmin(userId)) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "AI chat is only available for admin users"))
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "AI chat is only available for admin users")
+                    )
                     return@post
                 }
-                
+
                 val orgId = getOrgIdForUser(userId)
                 if (orgId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))

@@ -25,7 +25,7 @@ enum class PricingTier(
     val monthlyErrorLimit: Long,
     val monthlyReplayLimit: Long,
     val monthlyLlmEventLimit: Long,
-    val monthlyGbBytes: Long,  // GB limit in bytes
+    val monthlyGbBytes: Long, // GB limit in bytes
     val retentionDays: Int,
     val maxProjects: Int?,
     val maxSystems: Int,
@@ -35,7 +35,7 @@ enum class PricingTier(
         monthlyErrorLimit = 10_000,
         monthlyReplayLimit = 300,
         monthlyLlmEventLimit = 1_000,
-        monthlyGbBytes = 1_073_741_824L,  // 1 GB
+        monthlyGbBytes = 1_073_741_824L, // 1 GB
         retentionDays = 3,
         maxProjects = 1,
         maxSystems = 3,
@@ -45,7 +45,7 @@ enum class PricingTier(
         monthlyErrorLimit = 500_000,
         monthlyReplayLimit = 300,
         monthlyLlmEventLimit = 10_000,
-        monthlyGbBytes = 53_687_091_200L,  // 50 GB
+        monthlyGbBytes = 53_687_091_200L, // 50 GB
         retentionDays = 30,
         maxProjects = null,
         maxSystems = 10,
@@ -55,7 +55,7 @@ enum class PricingTier(
         monthlyErrorLimit = 5_000_000,
         monthlyReplayLimit = 300,
         monthlyLlmEventLimit = 100_000,
-        monthlyGbBytes = 214_748_364_800L,  // 200 GB
+        monthlyGbBytes = 214_748_364_800L, // 200 GB
         retentionDays = 30,
         maxProjects = null,
         maxSystems = 25,
@@ -65,7 +65,7 @@ enum class PricingTier(
         monthlyErrorLimit = Long.MAX_VALUE,
         monthlyReplayLimit = 300,
         monthlyLlmEventLimit = 1_000_000,
-        monthlyGbBytes = 1_099_511_627_776L,  // 1 TB
+        monthlyGbBytes = 1_099_511_627_776L, // 1 TB
         retentionDays = 90,
         maxProjects = null,
         maxSystems = Int.MAX_VALUE,

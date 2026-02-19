@@ -31,12 +31,10 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.lowerCase
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
-import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
 
@@ -240,7 +238,10 @@ class AdminService {
             Triple(orgs, users, subs)
         }
 
-        val (allTimeEvents, last30Events, eventsTimeline) = queryClickHouseEvents(today.minus(365, DateTimeUnit.DAY), today)
+        val (allTimeEvents, last30Events, eventsTimeline) = queryClickHouseEvents(
+            today.minus(365, DateTimeUnit.DAY),
+            today
+        )
 
         val mrr = transaction {
             Subscriptions.selectAll().where { Subscriptions.status eq "active" }
@@ -322,7 +323,9 @@ class AdminService {
 
         return transaction {
             val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@transaction null
-            val sub = Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+            val sub = Subscriptions.selectAll().where {
+                (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
+            }
                 .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
             val plan = sub?.get(Subscriptions.plan)?.lowercase() ?: "free"
@@ -528,7 +531,9 @@ class AdminService {
                 .mapNotNull { (orgId, pair) ->
                     val (events, bytes) = pair
                     val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@mapNotNull null
-                    val plan = Subscriptions.selectAll().where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
+                    val plan = Subscriptions.selectAll().where {
+                        (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
+                    }
                         .orderBy(Subscriptions.id to SortOrder.DESC)
                         .firstOrNull()
                         ?.get(Subscriptions.plan)
@@ -556,7 +561,7 @@ class AdminService {
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
         return usageTracker.getUsageForOrg(orgId, startDate, today)
     }
-    
+
     fun getEmailStats(period: String = "30d"): AdminEmailStats {
         val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
         val daysBack = when (period) {
@@ -565,55 +570,55 @@ class AdminService {
             else -> 30
         }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
-        
+
         return transaction {
             // Total sent all time (only successful)
             val totalSent = EmailsSent.selectAll()
                 .where { EmailsSent.success eq true }
                 .count()
-            
+
             // By type
             val byType = EmailsSent.selectAll()
                 .where { EmailsSent.success eq true }
                 .toList()
                 .groupBy { it[EmailsSent.email_type] }
                 .mapValues { it.value.size.toLong() }
-            
+
             // Timeline for last 7 days
             val last7DaysStart = today.minus(7, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
             val last7Days = EmailsSent.selectAll()
-                .where { 
-                    (EmailsSent.success eq true) and 
-                    (EmailsSent.sent_at greaterEq last7DaysStart)
+                .where {
+                    (EmailsSent.success eq true) and
+                        (EmailsSent.sent_at greaterEq last7DaysStart)
                 }
                 .toList()
-                .groupBy { row -> 
+                .groupBy { row ->
                     row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
                 }
-                .map { (date, emails) -> 
+                .map { (date, emails) ->
                     EmailTimelinePoint(date = date, count = emails.size.toLong())
                 }
                 .sortedBy { it.date }
-            
+
             // Timeline for last 30 days
             val last30DaysStart = startDate.atStartOfDayIn(TimeZone.UTC)
             val last30Days = EmailsSent.selectAll()
-                .where { 
-                    (EmailsSent.success eq true) and 
-                    (EmailsSent.sent_at greaterEq last30DaysStart)
+                .where {
+                    (EmailsSent.success eq true) and
+                        (EmailsSent.sent_at greaterEq last30DaysStart)
                 }
                 .toList()
-                .groupBy { row -> 
+                .groupBy { row ->
                     row[EmailsSent.sent_at].toLocalDateTime(TimeZone.UTC).date.toString()
                 }
-                .map { (date, emails) -> 
+                .map { (date, emails) ->
                     EmailTimelinePoint(date = date, count = emails.size.toLong())
                 }
                 .sortedBy { it.date }
-            
+
             // Estimate cost - AWS SES costs $0.10 per 1,000 emails
             val estimatedCost = totalSent * 0.0001
-            
+
             AdminEmailStats(
                 totalSent = totalSent,
                 byType = byType,
@@ -649,10 +654,15 @@ class AdminService {
                 timelineResp.bodyAsText().trim().split("\n").filter { it.isNotBlank() }
                     .mapNotNull { line ->
                         val parts = line.split("\t")
-                        if (parts.size >= 2) AdminTimelinePoint(parts[0], parts[1].toLongOrNull() ?: 0L)
-                        else null
+                        if (parts.size >= 2) {
+                            AdminTimelinePoint(parts[0], parts[1].toLongOrNull() ?: 0L)
+                        } else {
+                            null
+                        }
                     }
-            } else emptyList()
+            } else {
+                emptyList()
+            }
 
             Triple(allTime, last30Count, timeline)
         } catch (e: Exception) {
@@ -716,12 +726,12 @@ class AdminService {
         return transaction {
             Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 ?: return@transaction false
-            
+
             Users.update({ Users.id eq userId }) {
                 updates.isAdmin?.let { isAdmin -> it[Users.is_admin] = isAdmin }
                 updates.emailVerified?.let { verified -> it[Users.email_verified] = verified }
             }
-            
+
             true
         }
     }
@@ -752,7 +762,7 @@ class AdminService {
                         val memberCount = Memberships.selectAll()
                             .where { Memberships.organization_id eq orgId }
                             .count()
-                        
+
                         // If user is the only member, delete the entire organization and related data
                         if (memberCount.toInt() == 1) {
                             deleteOrganizationData(orgId)
@@ -853,13 +863,13 @@ class AdminService {
             // Delete systems
             val systemIds = Systems.selectAll().where { Systems.organization_id eq orgId }
                 .map { it[Systems.id] }
-            
+
             // Delete system alerts (through system relationship)
             systemIds.forEach { systemId ->
                 SystemAlerts.deleteWhere { SystemAlerts.system_id eq systemId }
                 SystemAlertSettings.deleteWhere { SystemAlertSettings.system_id eq systemId }
             }
-            
+
             // Now delete systems
             Systems.deleteWhere { Systems.organization_id eq orgId }
 

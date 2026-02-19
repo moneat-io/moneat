@@ -17,16 +17,16 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
 
@@ -143,7 +143,9 @@ class PricingTierService {
                         (PricingTierConfigs.tier_name eq "FREE")
                 }.firstOrNull()
 
-            val tier = if (tierRow != null) rowToResponse(tierRow) else enumFallbackToResponse(subscription[Subscriptions.plan])
+            val tier = if (tierRow != null) rowToResponse(
+                tierRow
+            ) else enumFallbackToResponse(subscription[Subscriptions.plan])
 
             EffectiveTierContext(
                 tier = tier,
@@ -431,9 +433,9 @@ class PricingTierService {
         }
         val yearlyPrice = when (tier) {
             PricingTier.FREE -> 0
-            PricingTier.PRO -> 28800  // $288/yr
-            PricingTier.TEAM -> 79200  // $792/yr
-            PricingTier.BUSINESS -> 199200  // $1992/yr
+            PricingTier.PRO -> 28800 // $288/yr
+            PricingTier.TEAM -> 79200 // $792/yr
+            PricingTier.BUSINESS -> 199200 // $1992/yr
         }
         return PricingTierConfigResponse(
             id = 0,
@@ -468,13 +470,13 @@ class PricingTierService {
             yearlyPriceCents = yearlyPrice,
             trialDays = defaultTrialDaysForTier(tier.name),
             paygEnabled = tier != PricingTier.FREE,
-            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,  // $0.40/GB in micros
-            overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,  // $0.40/GB
+            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000, // $0.40/GB in micros
+            overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40, // $0.40/GB
             errorOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 10,
             replayOverageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
             llmOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 100,
-            oncallPerUserMonthlyCents = 500,  // Default $5
-            oncallPerUserYearlyCents = 5000,  // Default $50
+            oncallPerUserMonthlyCents = 500, // Default $5
+            oncallPerUserYearlyCents = 5000, // Default $50
             oncallEnabled = tier != PricingTier.FREE,
             stripeBasePriceId = null,
             stripeOveragePriceId = null,

@@ -45,10 +45,13 @@ class IngestionWorker(
 
     fun start() {
         logger.info { "Starting IngestionWorker with $workerCount workers, queue=$queueKey" }
-        SentryUtils.breadcrumb("worker", "IngestionWorker starting", mapOf(
-            "worker_count" to workerCount,
-            "queue" to queueKey
-        ))
+        SentryUtils.breadcrumb(
+            "worker", "IngestionWorker starting",
+            mapOf(
+                "worker_count" to workerCount,
+                "queue" to queueKey
+            )
+        )
         jobs = (1..workerCount).map { id ->
             scope.launch {
                 runWorker(id)
@@ -89,10 +92,13 @@ class IngestionWorker(
         try {
             val (projectId, envelopeBytes) = decodeMessage(value)
 
-            SentryUtils.breadcrumb("ingestion", "Processing envelope", mapOf(
-                "project_id" to projectId,
-                "size_bytes" to envelopeBytes.size
-            ))
+            SentryUtils.breadcrumb(
+                "ingestion", "Processing envelope",
+                mapOf(
+                    "project_id" to projectId,
+                    "size_bytes" to envelopeBytes.size
+                )
+            )
 
             val envelope = SentryEnvelope.parse(envelopeBytes)
             eventService.processEnvelope(projectId, envelope)

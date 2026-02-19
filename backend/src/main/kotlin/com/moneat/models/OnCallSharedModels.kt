@@ -16,11 +16,11 @@
 
 package com.moneat.models
 
-import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.javatime.time
+import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import org.jetbrains.exposed.v1.javatime.time
 import kotlin.time.Clock
 
 /**

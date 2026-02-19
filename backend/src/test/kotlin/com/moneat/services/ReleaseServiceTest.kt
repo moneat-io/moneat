@@ -21,7 +21,16 @@ class ReleaseServiceTest {
                 driver = "org.h2.Driver"
             )
             transaction {
-                SchemaUtils.create(Organizations, Users, Memberships, Projects, Releases, ReleaseFiles, FileBlobs, ArtifactBundles)
+                SchemaUtils.create(
+                    Organizations,
+                    Users,
+                    Memberships,
+                    Projects,
+                    Releases,
+                    ReleaseFiles,
+                    FileBlobs,
+                    ArtifactBundles
+                )
             }
             dbInitialized = true
         }

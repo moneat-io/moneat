@@ -94,13 +94,13 @@ fun Application.configureSecurity() {
     val audience = config.property("jwt.audience").getString()
     val realm = config.property("jwt.realm").getString()
     val authTokenService = AuthTokenService()
-    
+
     val jwtVerifier = JWT
         .require(Algorithm.HMAC256(secret))
         .withAudience(audience)
         .withIssuer(issuer)
         .build()
-    
+
     install(Authentication) {
         // JWT authentication for user sessions (reads from Authorization header or auth_token cookie)
         jwt("auth-jwt") {
@@ -113,7 +113,7 @@ fun Application.configureSecurity() {
                     val email = credential.payload.getClaim("email").asString()
                     SentryUtils.setUser(userId, email = email)
                     SentryUtils.setTag("auth.type", "jwt")
-                    
+
                     JWTPrincipal(credential.payload)
                 } else {
                     null
@@ -136,7 +136,7 @@ fun Application.configureSecurity() {
                 }
             }
         }
-        
+
         // Bearer token authentication for build tools (CLI, CI/CD)
         bearer("auth-bearer") {
             this.realm = realm
@@ -152,7 +152,7 @@ fun Application.configureSecurity() {
                     SentryUtils.setUser(validationResult.userId)
                     SentryUtils.setTag("auth.type", "bearer")
                     SentryUtils.setTag("auth.token_id", validationResult.tokenId.toString())
-                    
+
                     AuthTokenPrincipal(
                         userId = validationResult.userId,
                         scopes = validationResult.scopes,
@@ -163,7 +163,7 @@ fun Application.configureSecurity() {
                 }
             }
         }
-        
+
         // Combined authentication - accepts either JWT or Bearer token
         // Use this for endpoints that should work with both user sessions and auth tokens
         bearer("auth-combined") {
@@ -183,25 +183,25 @@ fun Application.configureSecurity() {
                     SentryUtils.setUser(validationResult.userId)
                     SentryUtils.setTag("auth.type", "bearer")
                     SentryUtils.setTag("auth.token_id", validationResult.tokenId.toString())
-                    
+
                     return@authenticate AuthTokenPrincipal(
                         userId = validationResult.userId,
                         scopes = validationResult.scopes,
                         tokenId = validationResult.tokenId
                     )
                 }
-                
+
                 // If not an auth token, try as JWT
                 try {
                     val decodedJWT = jwtVerifier.verify(token)
                     val userId = decodedJWT.getClaim("userId").asInt()
-                    
+
                     if (userId != null) {
                         // Set user context in Sentry
                         val email = decodedJWT.getClaim("email").asString()
                         SentryUtils.setUser(userId, email = email)
                         SentryUtils.setTag("auth.type", "jwt")
-                        
+
                         // Return as AuthTokenPrincipal with full scopes for JWT users
                         return@authenticate AuthTokenPrincipal(
                             userId = userId,
@@ -212,7 +212,7 @@ fun Application.configureSecurity() {
                 } catch (e: Exception) {
                     // Not a valid JWT either
                 }
-                
+
                 null
             }
         }

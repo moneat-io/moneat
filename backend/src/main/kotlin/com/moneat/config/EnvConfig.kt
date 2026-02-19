@@ -23,18 +23,18 @@ import java.io.File
 object EnvConfig {
     private val dotenv: Dotenv? by lazy {
         val workingDir = File(System.getProperty("user.dir"))
-        
+
         // Try multiple locations: current dir, parent dir, or project root
         val possibleLocations = listOf(
-            workingDir,                          // Current directory
+            workingDir, // Current directory
             workingDir.parentFile ?: workingDir, // Parent directory (if running from backend/)
             File(workingDir, "../").canonicalFile // Explicit parent
         )
-        
+
         val envFile = possibleLocations
             .map { File(it, ".env") }
             .firstOrNull { it.exists() && it.canRead() }
-        
+
         if (envFile != null) {
             dotenv {
                 directory = envFile.parent

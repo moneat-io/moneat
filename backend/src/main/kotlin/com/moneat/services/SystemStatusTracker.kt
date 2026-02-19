@@ -18,14 +18,12 @@ package com.moneat.services
 
 import com.moneat.models.Systems
 import kotlinx.coroutines.*
-import kotlin.time.Clock
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.*
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -39,38 +37,38 @@ object SystemStatusTracker {
     private var job: Job? = null
     private const val CHECK_INTERVAL_SECONDS = 30L
     private val DOWN_THRESHOLD = 5.minutes
-    
+
     fun start() {
         if (job != null && job?.isActive == true) {
             logger.warn { "SystemStatusTracker already running" }
             return
         }
-        
+
         job = CoroutineScope(Dispatchers.Default).launch {
             logger.info { "SystemStatusTracker started" }
-            
+
             while (isActive) {
                 try {
                     updateSystemStatuses()
                 } catch (e: Exception) {
                     logger.error(e) { "Error updating system statuses: ${e.message}" }
                 }
-                
+
                 delay(CHECK_INTERVAL_SECONDS.seconds)
             }
         }
     }
-    
+
     fun stop() {
         job?.cancel()
         job = null
         logger.info { "SystemStatusTracker stopped" }
     }
-    
+
     private fun updateSystemStatuses() {
         val now = Clock.System.now()
         val threshold = now - DOWN_THRESHOLD
-        
+
         // Mark systems as down if last_seen_at is older than threshold
         val downCount = transaction {
             Systems.update({
@@ -80,11 +78,11 @@ object SystemStatusTracker {
                 it[Systems.updated_at] = now
             }
         }
-        
+
         if (downCount > 0) {
             logger.info { "Marked $downCount system(s) as down" }
         }
-        
+
         // Note: Systems are marked as "up" in MonitorService.ingestMetrics when they send data
     }
 }

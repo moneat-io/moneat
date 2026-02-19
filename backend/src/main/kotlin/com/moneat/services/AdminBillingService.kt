@@ -17,16 +17,16 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
@@ -100,8 +100,8 @@ class AdminBillingService {
 
             logger.info {
                 "Granted promotional credit to org $organizationId: " +
-                    "${bonusGb ?: 0.0} GB (${bonusGbBytes} bytes), " +
-                    "${bonusUnitsValue} units by user $grantedByUserId"
+                    "${bonusGb ?: 0.0} GB ($bonusGbBytes bytes), " +
+                    "$bonusUnitsValue units by user $grantedByUserId"
             }
 
             GrantPromotionalCreditResponse(
@@ -207,7 +207,7 @@ class AdminBillingService {
                 ?: return@transaction false
 
             val subscriptionId = subscription[Subscriptions.id]
-            
+
             Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
                 it[bonus_gb_bytes] = 0L
                 it[bonus_units] = 0L

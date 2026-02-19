@@ -36,16 +36,16 @@ import io.ktor.server.netty.EngineMain
 fun main(args: Array<String>) {
     // Load .env file into system properties before starting the server
     EnvConfig.initialize()
-    
+
     // Validate critical environment variables and fail fast if missing
     EnvironmentValidator().validateAndFailFast()
-    
+
     // Discover and register enterprise modules (if on classpath)
     FeatureRegistry.initialize()
-    
+
     // Initialize Sentry for error monitoring (points to Moneat via SENTRY_DSN)
     com.moneat.config.SentryConfig.initialize()
-    
+
     EngineMain.main(args)
 }
 

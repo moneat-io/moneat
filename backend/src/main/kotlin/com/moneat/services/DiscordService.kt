@@ -27,23 +27,22 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import kotlin.time.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.*
 import org.slf4j.LoggerFactory
 import java.util.*
+import kotlin.time.Clock
 
 class DiscordService {
     private val logger = LoggerFactory.getLogger(DiscordService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
     private val botToken = EnvConfig.get("DISCORD_BOT_TOKEN") ?: ""
-    
+
     private val httpClient = HttpClient(CIO) {
         install(HttpTimeout) {
             socketTimeoutMillis = 10_000
@@ -114,8 +113,8 @@ class DiscordService {
                 .selectAll()
                 .where {
                     (OrganizationIntegrations.organization_id eq organizationId) and
-                    (OrganizationIntegrations.integration_type eq "discord") and
-                    (OrganizationIntegrations.enabled eq true)
+                        (OrganizationIntegrations.integration_type eq "discord") and
+                        (OrganizationIntegrations.enabled eq true)
                 }
                 .singleOrNull()
                 ?.let { row ->
@@ -123,7 +122,9 @@ class DiscordService {
                     val channel = row[OrganizationIntegrations.channel_id]
                     if (guildId != null && channel != null) {
                         DiscordConfig(guildId, channel)
-                    } else null
+                    } else {
+                        null
+                    }
                 }
         }
     }
@@ -137,22 +138,22 @@ class DiscordService {
             logger.error("DISCORD_BOT_TOKEN not configured")
             return false to "Discord bot token not configured"
         }
-        
+
         return try {
             val message = DiscordMessage(
                 content = fallbackText,
                 embeds = listOf(embed)
             )
-            
+
             val messageJson = json.encodeToString(message)
             logger.debug("Sending Discord message: $messageJson")
-            
+
             val response: HttpResponse = httpClient.post("https://discord.com/api/v10/channels/$channelId/messages") {
                 contentType(ContentType.Application.Json)
                 header("Authorization", "Bot $botToken")
                 setBody(messageJson)
             }
-            
+
             if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
                 logger.debug("Successfully sent message to Discord")
                 true to null
@@ -178,7 +179,7 @@ class DiscordService {
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
-        
+
         val embed = DiscordEmbed(
             title = "⚠️ System Alert",
             description = "**$systemName** triggered an alert",
@@ -193,7 +194,7 @@ class DiscordService {
             footer = DiscordFooter("Moneat Alert"),
             timestamp = Clock.System.now().toString()
         )
-        
+
         val (success, _) = sendMessage(
             channelId = config.channelId,
             embed = embed,
@@ -210,7 +211,7 @@ class DiscordService {
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
-        
+
         val embed = DiscordEmbed(
             title = "🔴 System Down",
             description = "**$systemName** is not responding",
@@ -223,7 +224,7 @@ class DiscordService {
             footer = DiscordFooter("Moneat Alert"),
             timestamp = Clock.System.now().toString()
         )
-        
+
         val (success, _) = sendMessage(
             channelId = config.channelId,
             embed = embed,
@@ -239,7 +240,7 @@ class DiscordService {
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
-        
+
         val embed = DiscordEmbed(
             title = "✅ System Recovered",
             description = "**$systemName** is back online",
@@ -252,7 +253,7 @@ class DiscordService {
             footer = DiscordFooter("Moneat Alert"),
             timestamp = Clock.System.now().toString()
         )
-        
+
         val (success, _) = sendMessage(
             channelId = config.channelId,
             embed = embed,
@@ -272,7 +273,7 @@ class DiscordService {
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
-        
+
         val title = if (isDown) "🔴 Uptime Monitor Down" else "✅ Uptime Monitor Recovered"
         val color = if (isDown) 0xE01E5A else 0x2EB67D
         val statusText = when {
@@ -280,16 +281,16 @@ class DiscordService {
             statusCode != null -> "HTTP $statusCode"
             else -> "Unknown"
         }
-        
+
         val fields = mutableListOf(
             DiscordField("URL", monitorUrl, false),
             DiscordField("Status", statusText, true)
         )
-        
+
         if (responseTime != null) {
             fields.add(DiscordField("Response Time", "${responseTime}ms", true))
         }
-        
+
         val embed = DiscordEmbed(
             title = title,
             description = if (isDown) "Monitor detected a failure" else "Monitor has recovered",
@@ -299,7 +300,7 @@ class DiscordService {
             footer = DiscordFooter("Moneat Uptime Monitor"),
             timestamp = Clock.System.now().toString()
         )
-        
+
         val (success, _) = sendMessage(
             channelId = config.channelId,
             embed = embed,
@@ -319,13 +320,13 @@ class DiscordService {
         issueUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
-        
+
         val color = when (level.lowercase()) {
             "fatal", "error" -> 0xE01E5A
             "warning" -> 0xECB22E
             else -> 0x2EB67D
         }
-        
+
         val embed = DiscordEmbed(
             title = "🐛 New Issue Detected",
             description = "**$issueTitle**",
@@ -341,7 +342,7 @@ class DiscordService {
             footer = DiscordFooter("Moneat Error Tracking"),
             timestamp = Clock.System.now().toString()
         )
-        
+
         val (success, _) = sendMessage(
             channelId = config.channelId,
             embed = embed,
@@ -352,7 +353,7 @@ class DiscordService {
 
     suspend fun testConnection(organizationId: Int, baseUrl: String): Pair<Boolean, String?> {
         val config = getDiscordConfig(organizationId) ?: return false to "Discord not configured"
-        
+
         val embed = DiscordEmbed(
             title = "✅ Discord Integration Test",
             description = "Your Discord integration is working correctly!",
@@ -365,7 +366,7 @@ class DiscordService {
             footer = DiscordFooter("Moneat"),
             timestamp = Clock.System.now().toString()
         )
-        
+
         return sendMessage(
             channelId = config.channelId,
             embed = embed,
@@ -381,7 +382,7 @@ class DiscordService {
                     "grant_type=authorization_code&code=$code&client_id=$clientId&client_secret=$clientSecret&redirect_uri=$redirectUri"
                 )
             }
-            
+
             json.decodeFromString<DiscordOAuthResponse>(response.bodyAsText())
         } catch (e: Exception) {
             logger.error("Error exchanging Discord OAuth code", e)
@@ -394,12 +395,12 @@ class DiscordService {
             logger.error("DISCORD_BOT_TOKEN not configured")
             return emptyList()
         }
-        
+
         return try {
             val response: HttpResponse = httpClient.get("https://discord.com/api/v10/guilds/$guildId/channels") {
                 header(HttpHeaders.Authorization, "Bot $botToken")
             }
-            
+
             if (response.status == HttpStatusCode.OK) {
                 val allChannels = json.decodeFromString<List<DiscordChannel>>(response.bodyAsText())
                 // Filter to text channels only (type 0)

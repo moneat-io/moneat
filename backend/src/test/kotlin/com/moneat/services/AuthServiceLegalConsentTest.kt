@@ -57,7 +57,7 @@ class AuthServiceLegalConsentTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             OrgInvitations.deleteAll()

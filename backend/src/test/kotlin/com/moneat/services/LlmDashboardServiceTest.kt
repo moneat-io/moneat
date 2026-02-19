@@ -1,3 +1,19 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
@@ -14,6 +30,16 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LlmDashboardServiceTest {
+    companion object {
+        @Suppress("MaximumLineLength")
+        private const val STATS_JSON =
+            """{"total_generations":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}"""
+
+        @Suppress("MaximumLineLength")
+        private const val MODEL_STATS_JSON =
+            """{"model":"gpt-4o-mini","provider":"openai","call_count":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}"""
+    }
+
     @BeforeTest
     fun setup() {
         ClickHouseClient.close()
@@ -30,11 +56,7 @@ class LlmDashboardServiceTest {
             val query = exchange.requestBodyText()
             when {
                 query.contains("count() as total_generations") -> {
-                    exchange.respond(
-                        200,
-                        """{"total_generations":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}""",
-                        contentType = "text/plain"
-                    )
+                    exchange.respond(200, STATS_JSON, contentType = "text/plain")
                 }
 
                 query.contains("GROUP BY ts") -> {
@@ -49,11 +71,7 @@ class LlmDashboardServiceTest {
                 }
 
                 query.contains("GROUP BY model, provider") && query.contains("LIMIT 20") -> {
-                    exchange.respond(
-                        200,
-                        """{"model":"gpt-4o-mini","provider":"openai","call_count":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}""",
-                        contentType = "text/plain"
-                    )
+                    exchange.respond(200, MODEL_STATS_JSON, contentType = "text/plain")
                 }
 
                 else -> exchange.respond(500, "unexpected query", contentType = "text/plain")

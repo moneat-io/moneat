@@ -59,11 +59,14 @@ fun Application.configureMonitoring() {
             call.attributes.put(SentryTransactionKey, transaction)
 
             // Add breadcrumb for request
-            SentryUtils.breadcrumb("http.request", "HTTP $method $path", mapOf(
-                "method" to method,
-                "path" to path,
-                "query" to (call.request.queryString().takeIf { it.isNotEmpty() } ?: "")
-            ))
+            SentryUtils.breadcrumb(
+                "http.request", "HTTP $method $path",
+                mapOf(
+                    "method" to method,
+                    "path" to path,
+                    "query" to (call.request.queryString().takeIf { it.isNotEmpty() } ?: "")
+                )
+            )
 
             try {
                 proceed()
@@ -81,10 +84,13 @@ fun Application.configureMonitoring() {
                 }
 
                 // Add breadcrumb for response
-                SentryUtils.breadcrumb("http.response", "HTTP ${status?.value ?: 0}", mapOf(
-                    "status" to (status?.value ?: 0),
-                    "description" to (status?.description ?: "")
-                ))
+                SentryUtils.breadcrumb(
+                    "http.response", "HTTP ${status?.value ?: 0}",
+                    mapOf(
+                        "status" to (status?.value ?: 0),
+                        "description" to (status?.description ?: "")
+                    )
+                )
             } catch (e: Exception) {
                 transaction.status = SpanStatus.INTERNAL_ERROR
                 transaction.throwable = e
@@ -96,11 +102,11 @@ fun Application.configureMonitoring() {
             proceed()
         }
     }
-    
+
     install(StatusPages) {
         exception<Throwable> { call, cause ->
             logger.error(cause) { "Unhandled exception: ${cause.message}" }
-            
+
             // Send to Sentry if enabled
             if (SentryConfig.isEnabled()) {
                 try {
@@ -108,17 +114,17 @@ fun Application.configureMonitoring() {
                         scope.setTag("http.method", call.request.httpMethod.value)
                         scope.setTag("http.path", call.request.path())
                         scope.setTag("http.status_code", "500")
-                        
+
                         val userAgent = call.request.headers["User-Agent"] ?: "unknown"
                         scope.setExtra("user_agent", userAgent)
                         scope.setExtra("remote_host", call.request.local.remoteHost)
                         scope.setExtra("query_string", call.request.queryString())
-                        
+
                         // Add request headers as extra context (excluding sensitive ones)
                         val safeHeaders = call.request.headers.entries()
-                            .filter { (key, _) -> 
-                                !key.equals("Authorization", ignoreCase = true) && 
-                                !key.equals("Cookie", ignoreCase = true)
+                            .filter { (key, _) ->
+                                !key.equals("Authorization", ignoreCase = true) &&
+                                    !key.equals("Cookie", ignoreCase = true)
                             }
                             .associate { (key, values) -> key to values.joinToString(", ") }
                         scope.setExtra("request_headers", safeHeaders.toString())
@@ -127,7 +133,7 @@ fun Application.configureMonitoring() {
                     logger.error(e) { "Failed to capture exception to Sentry" }
                 }
             }
-            
+
             cause.printStackTrace()
             call.respond(
                 HttpStatusCode.InternalServerError,
@@ -135,7 +141,7 @@ fun Application.configureMonitoring() {
             )
         }
     }
-    
+
     install(CallLogging) {
         level = Level.TRACE
         filter { call -> call.request.path().startsWith("/") }

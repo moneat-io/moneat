@@ -26,11 +26,10 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.core.*
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
@@ -46,7 +45,7 @@ class EventService(private val notificationService: NotificationService? = null)
     private val usageTracker = UsageTrackingService.instance
     private val releaseService = ReleaseService()
     private val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
-    
+
     // In-memory caches for hot-path lookups (project keys & org IDs rarely change)
     private data class CachedEntry<T>(val value: T, val expiresAt: Long)
     private val projectKeyCache = ConcurrentHashMap<String, CachedEntry<ProjectKeyVerification>>()
@@ -54,23 +53,23 @@ class EventService(private val notificationService: NotificationService? = null)
     private val knownIssueIds = ConcurrentHashMap.newKeySet<String>()
     private val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
     private val MAX_KNOWN_ISSUES = 100_000
-    
+
     // Track replay segment counters for mobile replays that lack a separate replay_event item.
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
     private val replaySegmentCounters = ConcurrentHashMap<String, AtomicInteger>()
-    
+
     data class ProjectKeyVerification(val isValid: Boolean, val platformTarget: String?)
-    
+
     fun verifyProjectKey(projectId: Long, publicKey: String): ProjectKeyVerification {
         val cacheKey = "$projectId:$publicKey"
         val now = System.currentTimeMillis()
         projectKeyCache[cacheKey]?.let { if (it.expiresAt > now) return it.value }
-        
+
         val result = transaction {
             ProjectKeys.selectAll().where {
                 (ProjectKeys.project_id eq projectId) and
-                        (ProjectKeys.public_key eq publicKey) and
-                        (ProjectKeys.is_active eq true)
+                    (ProjectKeys.public_key eq publicKey) and
+                    (ProjectKeys.is_active eq true)
             }.firstOrNull()?.let { row ->
                 ProjectKeyVerification(true, row[ProjectKeys.platform_target])
             } ?: ProjectKeyVerification(false, null)
@@ -82,7 +81,7 @@ class EventService(private val notificationService: NotificationService? = null)
     fun getOrganizationIdForProject(projectId: Long): Int? {
         val now = System.currentTimeMillis()
         orgIdCache[projectId]?.let { if (it.expiresAt > now) return it.value }
-        
+
         val result = transaction {
             Projects.selectAll().where { Projects.id eq projectId }
                 .firstOrNull()
@@ -91,7 +90,7 @@ class EventService(private val notificationService: NotificationService? = null)
         orgIdCache[projectId] = CachedEntry(result, now + CACHE_TTL_MS)
         return result
     }
-    
+
     suspend fun processEnvelope(projectId: Long, envelope: SentryEnvelope) {
         var lastReplayId: String? = null
         var lastSegmentId: Int = 0
@@ -133,7 +132,7 @@ class EventService(private val notificationService: NotificationService? = null)
                     // The SDK may send a preceding replay_event item (with replay_id & segment_id)
                     // or just a standalone replay_video. Handle both cases.
                     val rid = lastReplayId ?: envelope.eventId
-                    
+
                     val segmentId = if (lastReplayId != null) {
                         // A replay_event was parsed in this envelope - use its segment_id
                         lastSegmentId
@@ -147,12 +146,12 @@ class EventService(private val notificationService: NotificationService? = null)
                             .computeIfAbsent(rid) { AtomicInteger(0) }
                             .getAndIncrement()
                     }
-                    
+
                     // Only create a synthetic replay event for the first segment of a session
                     if (lastReplayId == null && segmentId == 0) {
                         storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
                     }
-                    
+
                     storeReplayRecording(projectId, rid, segmentId, item.payload)
                     recordUsage(projectId, "replay", item)
                     lastReplayId = null
@@ -170,7 +169,7 @@ class EventService(private val notificationService: NotificationService? = null)
             }
         }
     }
-    
+
     suspend fun processStoreEvent(projectId: Long, body: String) {
         val event = json.decodeFromString<SentryEvent>(body)
         storeEvent(projectId, event)
@@ -303,7 +302,7 @@ class EventService(private val notificationService: NotificationService? = null)
             }
 
             logger.info { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
-            
+
             // Detect ai.* spans and cross-insert into llm_generations
             val aiSpans = spans.filter { span ->
                 val op = span.op ?: ""
@@ -312,7 +311,7 @@ class EventService(private val notificationService: NotificationService? = null)
             if (aiSpans.isNotEmpty()) {
                 insertAiSpansAsLlmGenerations(projectId, traceId, transaction, aiSpans)
             }
-            
+
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                 try {
                     releaseService.upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
@@ -324,15 +323,17 @@ class EventService(private val notificationService: NotificationService? = null)
             logger.error(e) { "Error storing transaction in ClickHouse" }
         }
     }
-    
+
     private suspend fun storeEvent(projectId: Long, event: SentryEvent) {
         val eventId = event.event_id ?: UUID.randomUUID().toString()
-        
-        logger.debug { "Full event structure - exception: ${event.exception}, message: ${event.message}, platform: ${event.platform}" }
-        
+
+        logger.debug {
+            "Full event structure - exception: ${event.exception}, message: ${event.message}, platform: ${event.platform}"
+        }
+
         // Convert Unix timestamp (seconds with fractional part) to milliseconds
         val timestamp = event.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
-        
+
         // Generate issue ID from fingerprint
         val fingerprint = if (event.fingerprint.isNullOrEmpty()) {
             generateFingerprint(event)
@@ -342,31 +343,31 @@ class EventService(private val notificationService: NotificationService? = null)
         logger.debug { "Generated fingerprint: $fingerprint" }
         val issueId = generateIssueId(fingerprint)
         logger.debug { "Generated issue ID: $issueId" }
-        
+
         // Extract exception info
         val firstException = event.exception?.values?.firstOrNull()
         val exceptionType = firstException?.type ?: ""
         val exceptionValue = firstException?.value ?: event.message ?: ""
-        
+
         // Detect if this is a crash (unhandled exception)
         val mechanism = firstException?.mechanism
         val isHandled = mechanism?.get("handled")?.jsonPrimitive?.booleanOrNull ?: true
         val mechanismType = mechanism?.get("type")?.jsonPrimitive?.contentOrNull
         val isCrash = !isHandled || mechanismType == "onerror" || mechanismType == "onunhandledrejection"
-        
+
         // Determine level: fatal for crashes, otherwise use provided level
         val eventLevel = if (isCrash && event.level == null) "fatal" else (event.level ?: "error")
-        
+
         // Encode full exception with stack trace
-        val stackTrace = event.exception?.let { 
-            Json.encodeToString(ExceptionInfo.serializer(), it) 
+        val stackTrace = event.exception?.let {
+            Json.encodeToString(ExceptionInfo.serializer(), it)
         } ?: ""
-        
+
         // Extract contexts
         val contexts = event.contexts?.toString() ?: "{}"
         val breadcrumbs = event.breadcrumbs?.toString() ?: "[]"
         val request = event.request?.toString() ?: "{}"
-        
+
         // Build ClickHouse insert query
         val query = """
             INSERT INTO $clickhouseDb.events (
@@ -377,7 +378,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 fingerprint, issue_id, tags, contexts, breadcrumbs, request,
                 sdk_name, sdk_version
             ) VALUES (
-                toUUID('${eventId}'),
+                toUUID('$eventId'),
                 $projectId,
                 fromUnixTimestamp64Milli($timestamp),
                 'error',
@@ -405,7 +406,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 '${escapeSql(event.sdk?.version ?: "")}'
             )
         """.trimIndent()
-        
+
         try {
             val response = ClickHouseClient.execute(query)
             if (!response.status.isSuccess()) {
@@ -420,7 +421,7 @@ class EventService(private val notificationService: NotificationService? = null)
                         logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                     }
                 }
-                
+
                 // Check if this is a new issue and trigger notifications
                 scope.launch {
                     try {
@@ -444,7 +445,7 @@ class EventService(private val notificationService: NotificationService? = null)
             logger.error { "Invalid projectId $projectId for feedback, skipping insert" }
             return
         }
-        
+
         val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
         val timestamp = feedback.timestamp?.let {
             try {
@@ -517,7 +518,7 @@ class EventService(private val notificationService: NotificationService? = null)
             logger.error { "Invalid projectId $projectId for replay event, skipping insert" }
             return
         }
-        
+
         val replayId = replayEvent.replay_id ?: UUID.randomUUID().toString()
         val segmentId = replayEvent.segment_id ?: 0
         val ts = replayEvent.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
@@ -634,15 +635,15 @@ class EventService(private val notificationService: NotificationService? = null)
             logger.error { "Invalid projectId $projectId for synthetic replay event, skipping insert" }
             return
         }
-        
+
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
-        
+
         // Extract SDK info from envelope header if available
         val sdkName = "sentry.java.android"
         val sdkVersion = ""
         val platform = "android"
-        
+
         val replayEventInsert = """
             INSERT INTO $clickhouseDb.replay_events (
                 replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
@@ -775,35 +776,35 @@ class EventService(private val notificationService: NotificationService? = null)
         val instant = runCatching { Instant.parse(raw) }.getOrNull() ?: return null
         return instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
     }
-    
+
     private fun generateFingerprint(event: SentryEvent): List<String> {
         val firstException = event.exception?.values?.firstOrNull()
         val type = firstException?.type
-        
+
         logger.info { "=== FINGERPRINT GENERATION ===" }
         logger.info { "Exception type: $type" }
         logger.info { "Total frames: ${firstException?.stacktrace?.frames?.size}" }
-        
+
         // Find the last in_app frame (innermost/actual error location), or fall back to the last frame
         val relevantFrame = firstException?.stacktrace?.frames?.findLast { it.in_app == true }
             ?: firstException?.stacktrace?.frames?.lastOrNull()
-        
+
         val function = relevantFrame?.function
         val filename = relevantFrame?.filename
-        
+
         logger.info { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.in_app}" }
-        
+
         val fingerprint = buildList {
             type?.let { add(it) }
             function?.let { add(it) }
             filename?.let { add(it) }
         }
-        
+
         logger.info { "Final fingerprint: $fingerprint" }
-        
+
         return fingerprint.ifEmpty { listOf("{{ default }}") }
     }
-    
+
     private fun generateIssueId(fingerprint: List<String>): String {
         val combined = fingerprint.joinToString("::")
         val digest = MessageDigest.getInstance("SHA-256")
@@ -818,7 +819,13 @@ class EventService(private val notificationService: NotificationService? = null)
 
         val hexRegex = Regex("^[0-9a-f]{32}$")
         if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(0, 8)}-${trimmed.substring(8, 12)}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+            return "${trimmed.substring(
+                0,
+                8
+            )}-${trimmed.substring(
+                8,
+                12
+            )}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
         }
 
         return UUID.randomUUID().toString()
@@ -893,7 +900,8 @@ class EventService(private val notificationService: NotificationService? = null)
                     '${escapeSql(transaction.release ?: "")}',
                     ${tagsToMap(span.tags)},
                     '{}'
-                )""".trimIndent()
+                )
+                """.trimIndent()
             }
 
             if (rows.isEmpty()) return
@@ -934,24 +942,24 @@ class EventService(private val notificationService: NotificationService? = null)
         if (start == null || end == null) return 0.0
         return ((end - start) * 1000.0).coerceAtLeast(0.0)
     }
-    
+
     private fun escapeSql(str: String): String {
         return ClickHouseSqlUtils.escapeSql(str)
     }
-    
+
     private fun fingerprintToArray(fingerprint: List<String>): String {
         return "[${fingerprint.joinToString(",") { "'${escapeSql(it)}'" }}]"
     }
-    
+
     private fun tagsToMap(tags: Map<String, String>?): String {
         if (tags.isNullOrEmpty()) return "{}"
         return "{${tags.entries.joinToString(",") { "'${escapeSql(it.key)}':'${escapeSql(it.value)}'" }}}"
     }
-    
+
     private suspend fun isNewIssue(projectId: Long, issueId: String): Boolean {
         val cacheKey = "$projectId:$issueId"
         if (cacheKey in knownIssueIds) return false
-        
+
         val query = """
             SELECT count() as cnt
             FROM $clickhouseDb.events
@@ -959,13 +967,13 @@ class EventService(private val notificationService: NotificationService? = null)
               AND issue_id = '$issueId'
             FORMAT JSON
         """.trimIndent()
-        
+
         return try {
             val response = ClickHouseClient.execute(query)
             val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
             val count = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
                 ?.get("cnt")?.jsonPrimitive?.longOrNull ?: 0
-            
+
             if (count > 1) {
                 // Evict oldest entries if cache grows too large
                 if (knownIssueIds.size > MAX_KNOWN_ISSUES) {

@@ -19,30 +19,27 @@ package com.moneat.routes
 import com.moneat.config.RedisConfig
 import com.moneat.models.LogIngestEntry
 import com.moneat.models.SentryEnvelope
+import com.moneat.services.BillingQuotaService
+import com.moneat.services.EmailService
 import com.moneat.services.EventService
 import com.moneat.services.IngestionWorker
 import com.moneat.services.LogService
-import com.moneat.services.EmailService
 import com.moneat.services.NotificationService
-import com.moneat.services.BillingQuotaService
 import com.moneat.services.QuotaReservationResult
+import com.moneat.utils.DetailedErrorResponse
+import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import com.moneat.utils.ErrorResponse
-import com.moneat.utils.DetailedErrorResponse
-import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
-import io.ktor.server.application.call
 import io.ktor.server.application.*
+import io.ktor.server.application.call
+import io.ktor.server.request.*
 import io.ktor.server.request.header
 import io.ktor.server.request.receiveText
-import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
@@ -58,20 +55,13 @@ fun Route.ingestRoutes(
         RedisConfig.sync().lpush(queueKey, message)
     },
     isQuotaEnforcementEnabled: () -> Boolean = { quotaService.isEnforcementEnabled() },
-    reserveEnvelopeQuota: (organizationId: Int, requestedUnitsByType: Map<String, Int>, requestedBytesByType: Map<String, Long>) -> QuotaReservationResult =
-        { orgId, requestedUnitsByType, requestedBytesByType ->
-            quotaService.reserveUnitsBatch(orgId, requestedUnitsByType, requestedBytesByType)
-        },
-    reserveLogQuota: (organizationId: Int, requestedUnits: Int, requestedBytes: Long) -> QuotaReservationResult =
-        { orgId, requestedUnits, requestedBytes ->
-            quotaService.reserveUnits(orgId, requestedUnits, "log", requestedBytes)
-        },
-    reserveSingleQuota: (organizationId: Int, requestedUnits: Int, eventType: String, requestedBytes: Long) -> QuotaReservationResult =
-        { orgId, requestedUnits, eventType, requestedBytes ->
-            quotaService.reserveUnits(orgId, requestedUnits, eventType, requestedBytes)
-        }
+    reserveEnvelopeQuota: (Int, Map<String, Int>, Map<String, Long>) -> QuotaReservationResult =
+        { orgId, uByType, bByType -> quotaService.reserveUnitsBatch(orgId, uByType, bByType) },
+    reserveLogQuota: (Int, Int, Long) -> QuotaReservationResult =
+        { orgId, units, bytes -> quotaService.reserveUnits(orgId, units, "log", bytes) },
+    reserveSingleQuota: (Int, Int, String, Long) -> QuotaReservationResult =
+        { orgId, units, eType, bytes -> quotaService.reserveUnits(orgId, units, eType, bytes) }
 ) {
-
     route("/api/{projectId}") {
         // Sentry envelope endpoint (primary) - enqueue for async processing, respond 202
         post("/envelope/") {
@@ -153,7 +143,10 @@ fun Route.ingestRoutes(
             } catch (e: Exception) {
                 logger.error(e) { "Failed to process envelope: ${e.message}" }
                 e.printStackTrace()
-                call.respond(HttpStatusCode.BadRequest, DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error"))
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error")
+                )
             }
         }
 
@@ -226,7 +219,7 @@ fun Route.ingestRoutes(
             val accepted = logService.enqueueSdkLogs(projectId, entries, queueKey)
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
-        
+
         // Legacy store endpoint
         post("/store/") {
             val projectId = call.parameters["projectId"]?.toLongOrNull()
@@ -234,7 +227,7 @@ fun Route.ingestRoutes(
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
             }
-            
+
             val authHeader = call.request.header("X-Sentry-Auth")
             val sentryKey = call.request.queryParameters["sentry_key"]
             val publicKey = extractPublicKey(authHeader, sentryKey)
@@ -248,10 +241,10 @@ fun Route.ingestRoutes(
                 call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
                 return@post
             }
-            
+
             val body = call.receiveText()
             logger.debug { "Received store event for project $projectId" }
-            
+
             try {
                 if (isQuotaEnforcementEnabled()) {
                     val orgId = eventService.getOrganizationIdForProject(projectId)
@@ -277,7 +270,7 @@ fun Route.ingestRoutes(
                 call.respond(HttpStatusCode.BadRequest, "Invalid event format")
             }
         }
-        
+
         // Security/CORS preflight
         get("/security/") {
             call.respond(HttpStatusCode.OK)

@@ -36,7 +36,7 @@ class PricingTierServiceFeatureFlagsTest {
     companion object {
         private var dbInitialized = false
     }
-    
+
     @BeforeTest
     fun setupDatabase() {
         // Initialize DB connection and schema once per test class
@@ -50,7 +50,7 @@ class PricingTierServiceFeatureFlagsTest {
             }
             dbInitialized = true
         }
-        
+
         // Clean up any existing test data from previous tests
         transaction {
             PricingTierConfigs.deleteAll()

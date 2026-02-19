@@ -17,10 +17,8 @@
 package com.moneat.routes
 
 import com.moneat.services.StripeService
-import io.ktor.http.HttpStatusCode
 import com.moneat.utils.ErrorResponse
-import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
@@ -35,7 +33,7 @@ fun Route.stripeWebhookRoutes() {
 
     post("/api/webhooks/stripe") {
         logger.info { "Received webhook request at /api/webhooks/stripe" }
-        
+
         if (!stripeService.isStripeEnabled()) {
             logger.warn { "Stripe webhook rejected - Stripe is disabled" }
             call.respond(HttpStatusCode.NotFound, ErrorResponse("Stripe disabled"))
@@ -45,7 +43,7 @@ fun Route.stripeWebhookRoutes() {
         val payload = call.receiveText()
         val signature = call.request.headers["Stripe-Signature"]
         logger.info { "Webhook payload received, signature present: ${!signature.isNullOrBlank()}" }
-        
+
         val event = try {
             stripeService.verifyAndParseEvent(payload, signature)
         } catch (e: Exception) {
@@ -53,7 +51,7 @@ fun Route.stripeWebhookRoutes() {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
             return@post
         }
-        
+
         logger.info { "Webhook event verified: type=${event.type}, id=${event.id}" }
 
         if (stripeService.wasEventProcessed(event.id)) {
