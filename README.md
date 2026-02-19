@@ -33,13 +33,13 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
 
 **What you get out of the box:**
 
-- 🐛 [**Error Monitoring**](#-error-monitoring) — Sentry-compatible, drop-in error tracking
-- 🎥 [**Session Replay**](#-session-replay) — See exactly what users did before the crash
-- ⚡ [**Performance Monitoring**](#-performance-monitoring) — Trace slow transactions and bottlenecks
-- 📋 [**Logging**](#-logging) — Centralized, searchable log management
-- 🟢 [**Uptime Monitoring & Status Pages**](#-uptime-monitoring--status-pages) — Know when things go down, tell users what's up
-- 🤖 [**AI Observability**](#-ai-observability) — Trace and debug LLM calls
-- 🚨 [**On-Call & Incident Management**](#-on-call--incident-management-enterprise) — PagerDuty-style escalations (Enterprise)
+- [**Error Monitoring**](#error-monitoring) — Sentry-compatible, drop-in error tracking
+- [**Session Replay**](#session-replay) — See exactly what users did before the crash
+- [**Performance Monitoring**](#performance-monitoring) — Trace slow transactions and bottlenecks
+- [**Logging**](#logging) — Centralized, searchable log management
+- [**Uptime Monitoring & Status Pages**](#uptime-monitoring--status-pages) — Know when things go down, tell users what's up
+- [**AI Observability**](#ai-observability) — Trace and debug LLM calls
+- [**On-Call & Incident Management**](#on-call--incident-management-enterprise) — PagerDuty-style escalations (Enterprise)
 
 <p align="center">
   <img src="dashboard/public/screenshots/dashboard.png" alt="Moneat Dashboard" width="800">
@@ -51,13 +51,13 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
 
 - [Get Started](#get-started)
 - [Features](#features)
-  - [Error Monitoring](#-error-monitoring)
-  - [Session Replay](#-session-replay)
-  - [Performance Monitoring](#-performance-monitoring)
-  - [Logging](#-logging)
-  - [Uptime Monitoring & Status Pages](#-uptime-monitoring--status-pages)
-  - [AI Observability](#-ai-observability)
-  - [On-Call & Incident Management (Enterprise)](#-on-call--incident-management-enterprise)
+  - [Error Monitoring](#error-monitoring)
+  - [Session Replay](#session-replay)
+  - [Performance Monitoring](#performance-monitoring)
+  - [Logging](#logging)
+  - [Uptime Monitoring & Status Pages](#uptime-monitoring--status-pages)
+  - [AI Observability](#ai-observability)
+  - [On-Call & Incident Management (Enterprise)](#on-call--incident-management-enterprise)
 - [Sentry Compatibility](#sentry-compatibility)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
@@ -114,7 +114,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
 
 ## Features
 
-### 🐛 Error Monitoring
+### Error Monitoring
 
 **Know when things break — and why.**
 
@@ -131,7 +131,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
   <img src="dashboard/public/screenshots/error-tracking.png" alt="Error Monitoring" width="800">
 </p>
 
-### 🎥 Session Replay
+### Session Replay
 
 **Understand what users actually did.**
 
@@ -147,7 +147,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
   <img src="dashboard/public/screenshots/session-replay.png" alt="Session Replay" width="800">
 </p>
 
-### ⚡ Performance Monitoring
+### Performance Monitoring
 
 **Find the slow spots.**
 
@@ -163,7 +163,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
   <img src="dashboard/public/screenshots/performance.png" alt="Performance Monitoring" width="800">
 </p>
 
-### 📋 Logging
+### Logging
 
 **Centralized logs, actually searchable.**
 
@@ -179,7 +179,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
   <img src="dashboard/public/screenshots/log-management.png" alt="Log Management" width="800">
 </p>
 
-### 🟢 Uptime Monitoring & Status Pages
+### Uptime Monitoring & Status Pages
 
 **Know when things go down. Tell users what's up.**
 
@@ -196,7 +196,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
   <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="400">
 </p>
 
-### 🤖 AI Observability
+### AI Observability
 
 **Debug your LLM pipelines.**
 
@@ -207,7 +207,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
 
 → [AI Observability docs](https://moneat.io/docs)
 
-### 🚨 On-Call & Incident Management (Enterprise)
+### On-Call & Incident Management (Enterprise)
 
 **PagerDuty-style on-call, built right in.**
 
@@ -293,7 +293,7 @@ We welcome contributions! Whether it's a bug fix, feature, or documentation impr
 
 1. Read the [Contributing Guide](CONTRIBUTING.md)
 2. Sign our [Contributor License Agreement (CLA)](CLA.md)
-3. Open a PR 🚀
+3. Open a PR
 
 ---
 
