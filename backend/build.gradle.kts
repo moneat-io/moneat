@@ -246,11 +246,12 @@ tasks.jacocoTestReport {
         files(classDirectories.files.map {
             fileTree(it) {
                 exclude(
-                    "**/models/**",
-                    "**/config/**",
-                    "**/Application*",
-                    "**/e2e/**",
-                    "**/demo/**"
+                    "**/models/**",          // data classes — no logic to test
+                    "**/config/**",          // infrastructure wiring (DB clients, Redis, Sentry, env)
+                    "**/plugins/**",         // Ktor plugin bootstrap — framework wiring, not business logic
+                    "**/logging/**",         // log appender setup
+                    "**/enterprise/**",      // on-call/feature-flag integration stubs
+                    "**/Application*",       // entry point
                 )
             }
         })
