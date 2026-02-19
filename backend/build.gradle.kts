@@ -1,18 +1,9 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
-val kotlin_version: String by project
-val ktor_version: String by project
-val logback_version: String by project
-val exposed_version: String by project
-val hikari_version: String by project
-
 plugins {
-    kotlin("jvm") version "1.9.22"
-    kotlin("plugin.serialization") version "1.9.22"
-    id("io.ktor.plugin") version "2.3.7"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.2"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ktor)
+    alias(libs.plugins.shadow)
+    alias(libs.plugins.detekt)
     jacoco
 }
 
@@ -61,93 +52,96 @@ tasks.named<ProcessResources>("processIntegrationTestResources") {
 
 dependencies {
     // Ktor Server
-    implementation("io.ktor:ktor-server-core-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-netty-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktor_version")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-cors-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-auth-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-auth-jwt-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-rate-limit-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-call-logging-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-status-pages-jvm:$ktor_version")
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.netty)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.server.cors)
+    implementation(libs.ktor.server.auth)
+    implementation(libs.ktor.server.auth.jwt)
+    implementation(libs.ktor.server.rate.limit)
+    implementation(libs.ktor.server.call.logging)
+    implementation(libs.ktor.server.status.pages)
 
     // Ktor Client (for ClickHouse HTTP API)
-    implementation("io.ktor:ktor-client-core:$ktor_version")
-    implementation("io.ktor:ktor-client-cio:$ktor_version")
-    implementation("io.ktor:ktor-client-content-negotiation:$ktor_version")
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
 
     // Database - PostgreSQL
-    implementation("org.jetbrains.exposed:exposed-core:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-dao:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-jdbc:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-kotlin-datetime:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-java-time:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-json:$exposed_version")
-    implementation("org.postgresql:postgresql:42.7.7")
-    implementation("com.zaxxer:HikariCP:$hikari_version")
-    implementation("org.flywaydb:flyway-core:10.6.0")
-    implementation("org.flywaydb:flyway-database-postgresql:10.6.0")
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.dao)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.kotlin.datetime)
+    implementation(libs.exposed.java.time)
+    implementation(libs.exposed.json)
+    implementation(libs.postgresql)
+    implementation(libs.hikaricp)
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.postgresql)
     
     // Date/Time
-    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
+    implementation(libs.kotlinx.datetime)
 
     // Redis
-    implementation("io.lettuce:lettuce-core:6.3.1.RELEASE")
+    implementation(libs.lettuce)
     
     // Email - SMTP
-    implementation("com.sun.mail:jakarta.mail:2.0.2")
+    implementation(libs.jakarta.mail)
     
     // Security
-    implementation("org.mindrot:jbcrypt:0.4")
-    implementation("commons-codec:commons-codec:1.16.0")
+    implementation(libs.jbcrypt)
+    implementation(libs.commons.codec)
     
     // SSO
-    implementation("com.onelogin:java-saml-core:2.9.0")
-    implementation("com.nimbusds:oauth2-oidc-sdk:11.10")
+    implementation(libs.java.saml.core)
+    implementation(libs.oauth2.oidc.sdk)
 
     // Billing
-    implementation("com.stripe:stripe-java:31.3.0")
+    implementation(libs.stripe.java)
     
     // MessagePack for mobile replay decoding
-    implementation("org.msgpack:msgpack-core:0.9.8")
+    implementation(libs.msgpack.core)
 
     // JSON path query for uptime monitoring
-    implementation("com.jayway.jsonpath:json-path:2.9.0")
+    implementation(libs.jsonpath)
 
     // Environment variables
-    implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
+    implementation(libs.dotenv.kotlin)
 
     // Logging
-    implementation("ch.qos.logback:logback-classic:$logback_version")
-    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation(libs.logback.classic)
+    implementation(libs.kotlin.logging)
     
     // OpenTelemetry for logging to Moneat
-    implementation("io.opentelemetry:opentelemetry-api:1.34.0")
-    implementation("io.opentelemetry:opentelemetry-sdk:1.34.0")
-    implementation("io.opentelemetry:opentelemetry-exporter-otlp:1.34.0")
-    implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.1.0-alpha")
+    implementation(libs.opentelemetry.api)
+    implementation(libs.opentelemetry.sdk)
+    implementation(libs.opentelemetry.exporter.otlp)
+    implementation(libs.opentelemetry.logback)
     
     // Sentry - Error monitoring
-    implementation("io.sentry:sentry-kotlin-extensions:7.6.0")
-    implementation("io.sentry:sentry-logback:7.6.0")
+    implementation(libs.sentry.kotlin)
+    implementation(libs.sentry.logback)
+
+    // Detekt formatting (ktlint via Detekt)
+    detektPlugins(libs.detekt.formatting)
 
     // Testing
-    testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:$kotlin_version")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.1")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.1")
-    testImplementation("com.h2database:h2:2.2.224")
+    testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.kotlin.test.junit5)
+    testImplementation(libs.junit.jupiter.api)
+    testRuntimeOnly(libs.junit.jupiter.engine)
+    testImplementation(libs.h2)
     
     // Integration testing dependencies
     val integrationTestImplementation by configurations
-    integrationTestImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
-    integrationTestImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
-    integrationTestImplementation("org.junit.jupiter:junit-jupiter-api:5.10.1")
-    integrationTestImplementation("org.junit.jupiter:junit-jupiter-engine:5.10.1")
-    integrationTestImplementation("org.testcontainers:testcontainers:1.19.3")
-    integrationTestImplementation("org.testcontainers:postgresql:1.19.3")
-    integrationTestImplementation("org.testcontainers:clickhouse:1.19.3")
+    integrationTestImplementation(libs.ktor.server.test.host)
+    integrationTestImplementation(libs.kotlin.test.junit)
+    integrationTestImplementation(libs.junit.jupiter.api)
+    integrationTestImplementation(libs.junit.jupiter.engine)
+    integrationTestImplementation(libs.testcontainers.core)
+    integrationTestImplementation(libs.testcontainers.postgresql)
+    integrationTestImplementation(libs.testcontainers.clickhouse)
 }
 
 // Task to copy email templates into resources
@@ -156,7 +150,7 @@ val copyEmailTemplates = tasks.register<Copy>("copyEmailTemplates") {
     description = "Copies built email templates into backend resources"
     
     from("${project.rootDir}/../emails/build/templates/email")
-    into("${project.buildDir}/resources/main/email-templates")
+    into(layout.buildDirectory.dir("resources/main/email-templates"))
     
     // Only copy if source exists
     onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
@@ -168,7 +162,7 @@ val copyEmailTemplatesForTest = tasks.register<Copy>("copyEmailTemplatesForTest"
     description = "Copies built email templates into backend test resources"
     
     from("${project.rootDir}/../emails/build/templates/email")
-    into("${project.buildDir}/resources/test/email-templates")
+    into(layout.buildDirectory.dir("resources/test/email-templates"))
     
     // Only copy if source exists
     onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
@@ -305,9 +299,10 @@ tasks.build {
     dependsOn("detekt")
 }
 
-tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions {
-        allWarningsAsErrors = true
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+        freeCompilerArgs.add("-opt-in=kotlin.uuid.ExperimentalUuidApi")
     }
 }
 
@@ -317,15 +312,4 @@ detekt {
     buildUponDefaultConfig = true
     parallel = true
     source.setFrom(files("src/main/kotlin", "src/test/kotlin", "src/integrationTest/kotlin"))
-}
-
-// ktlint - formatting and style
-ktlint {
-    version.set("1.5.0")
-    android.set(false)
-    outputToConsole.set(true)
-    ignoreFailures.set(false)
-    filter {
-        exclude("*.kts")
-    }
 }

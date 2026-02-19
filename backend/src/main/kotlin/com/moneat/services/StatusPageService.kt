@@ -19,20 +19,20 @@ package com.moneat.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
 import io.ktor.client.statement.*
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
-import kotlinx.datetime.toJavaInstant
+import kotlin.time.Clock
+import kotlin.time.Instant
+import kotlin.time.jdk8.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.format.DateTimeFormatter
@@ -282,8 +282,8 @@ class StatusPageService(
                 it[status] = request.status
                 it[type] = request.type
                 it[impact] = request.impact
-                it[scheduledStartAt] = request.scheduledStartAt?.let { ts -> kotlinx.datetime.Instant.parse(ts) }
-                it[scheduledEndAt] = request.scheduledEndAt?.let { ts -> kotlinx.datetime.Instant.parse(ts) }
+                it[scheduledStartAt] = request.scheduledStartAt?.let { ts -> kotlin.time.Instant.parse(ts) }
+                it[scheduledEndAt] = request.scheduledEndAt?.let { ts -> kotlin.time.Instant.parse(ts) }
                 it[createdAt] = now
                 it[updatedAt] = now
             }
@@ -323,8 +323,8 @@ class StatusPageService(
                     }
                 }
                 request.impact?.let { impact -> it[StatusPageIncidents.impact] = impact }
-                request.scheduledStartAt?.let { ts -> it[scheduledStartAt] = kotlinx.datetime.Instant.parse(ts) }
-                request.scheduledEndAt?.let { ts -> it[scheduledEndAt] = kotlinx.datetime.Instant.parse(ts) }
+                request.scheduledStartAt?.let { ts -> it[scheduledStartAt] = kotlin.time.Instant.parse(ts) }
+                request.scheduledEndAt?.let { ts -> it[scheduledEndAt] = kotlin.time.Instant.parse(ts) }
                 it[updatedAt] = Clock.System.now()
             }
             

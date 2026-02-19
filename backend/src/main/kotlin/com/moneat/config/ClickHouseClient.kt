@@ -118,7 +118,7 @@ fun Application.configureClickHouse() {
         log.info("Initializing ClickHouse client for $url...")
         ClickHouseClient.init(url, database, user, password)
         log.info("ClickHouse client initialized")
-        environment.monitor.subscribe(ApplicationStopping) {
+        monitor.subscribe(ApplicationStopping) {
             ClickHouseClient.close()
         }
     } catch (e: Exception) {

@@ -18,14 +18,14 @@ package com.moneat.services
 
 import com.moneat.models.*
 import io.ktor.server.plugins.*
-import kotlinx.datetime.Clock
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.kotlin.datetime.CurrentTimestamp
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import kotlin.time.Clock
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.datetime.CurrentTimestamp
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 import org.slf4j.LoggerFactory
 import java.security.SecureRandom
 import java.util.Base64
@@ -140,7 +140,7 @@ class OrgInvitationService(
             invitedBy = inviter[Users.name] ?: "",
             invitedByEmail = inviter[Users.email],
             createdAt = Clock.System.now().toString(),
-            expiresAt = kotlinx.datetime.Instant.fromEpochMilliseconds(expiresAt).toString()
+            expiresAt = kotlin.time.Instant.fromEpochMilliseconds(expiresAt).toString()
         )
     }
     
@@ -192,7 +192,7 @@ class OrgInvitationService(
                     invitedBy = row[Users.name] ?: "",
                     invitedByEmail = row[Users.email],
                     createdAt = row[OrgInvitations.created_at].toString(),
-                    expiresAt = kotlinx.datetime.Instant.fromEpochMilliseconds(row[OrgInvitations.expires_at]).toString()
+                    expiresAt = kotlin.time.Instant.fromEpochMilliseconds(row[OrgInvitations.expires_at]).toString()
                 )
             }
     }
@@ -212,7 +212,7 @@ class OrgInvitationService(
             orgName = invite[Organizations.name],
             role = invite[OrgInvitations.role],
             invitedBy = invite[Users.name] ?: invite[Users.email],
-            expiresAt = kotlinx.datetime.Instant.fromEpochMilliseconds(expiresAt).toString(),
+            expiresAt = kotlin.time.Instant.fromEpochMilliseconds(expiresAt).toString(),
             valid = status == "pending" && !isExpired
         )
     }

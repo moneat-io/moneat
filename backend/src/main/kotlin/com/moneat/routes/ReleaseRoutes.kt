@@ -17,8 +17,8 @@
 package com.moneat.routes
 
 import com.moneat.models.AssembleArtifactBundleRequest
-import com.moneat.models.ChunkUploadParameters
 import com.moneat.models.AssembleResponse
+import com.moneat.models.ChunkUploadParameters
 import com.moneat.models.CreateReleaseRequest
 import com.moneat.models.SentryAuthDetails
 import com.moneat.models.SentryAuthInfoResponse
@@ -27,31 +27,31 @@ import com.moneat.models.Users
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.services.AuthTokenService
 import com.moneat.services.ReleaseService
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
-import io.ktor.http.HttpStatusCode
+import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
-import com.moneat.utils.BooleanResponse
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
-import io.ktor.http.content.streamProvider
 import io.ktor.server.application.application
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
-import io.ktor.server.request.receiveMultipart
 import io.ktor.server.request.*
+import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.toByteArray
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
 
@@ -305,7 +305,7 @@ fun Route.releaseRoutes() {
                         }
                         is PartData.FileItem -> {
                             fileName = part.originalFileName ?: "unknown"
-                            fileBytes = part.streamProvider().readBytes()
+                            fileBytes = part.provider().toByteArray()
                         }
                         else -> {}
                     }
@@ -323,7 +323,7 @@ fun Route.releaseRoutes() {
                         projectId = projectId,
                         version = version,
                         fileName = finalFileName,
-                        fileContent = fileBytes!!
+                        fileContent = fileBytes
                     )
                     call.respond(HttpStatusCode.Created, fileResponse)
                 } catch (e: IllegalArgumentException) {
@@ -432,7 +432,7 @@ fun Route.releaseRoutes() {
                 multipart.forEachPart { part ->
                     if (part is PartData.FileItem) {
                         val checksum = part.originalFileName ?: part.name ?: ""
-                        val rawBytes = part.streamProvider().readBytes()
+                        val rawBytes = part.provider().toByteArray()
                         
                         // Handle gzip-compressed chunks
                         val bytes = if (part.name == "file_gzip") {

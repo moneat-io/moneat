@@ -28,14 +28,16 @@ import io.ktor.server.routing.routing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 import java.time.LocalTime
 
 @Serializable
@@ -299,7 +301,7 @@ fun Route.onCallRoutes(
                     )
                     
                     // Notify override user if they are on-call immediately
-                    val now = kotlinx.datetime.Clock.System.now()
+                    val now = Clock.System.now()
                     if (startAt <= now && endAt > now) {
                         val schedule = scheduleService.getSchedule(scheduleId)
                         if (schedule != null && pushNotificationService != null) {
@@ -376,8 +378,8 @@ fun Route.onCallRoutes(
                 val request = call.receive<SetScheduleUsergroupRequest>()
                 
                 try {
-                    org.jetbrains.exposed.sql.transactions.transaction {
-                        val now = kotlinx.datetime.Clock.System.now()
+                    org.jetbrains.exposed.v1.jdbc.transactions.transaction {
+                        val now = Clock.System.now()
                         
                         // Check if mapping already exists
                         val existing = OnCallScheduleUsergroups
@@ -440,7 +442,7 @@ fun Route.onCallRoutes(
                 }
                 
                 try {
-                    val deleted = org.jetbrains.exposed.sql.transactions.transaction {
+                    val deleted = org.jetbrains.exposed.v1.jdbc.transactions.transaction {
                         OnCallScheduleUsergroups.deleteWhere {
                             OnCallScheduleUsergroups.scheduleId eq scheduleId
                         }

@@ -18,9 +18,10 @@ package com.moneat.services
 
 import com.moneat.models.Memberships
 import com.moneat.models.SidebarPreferenceEvents
-import kotlinx.datetime.Clock
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.kotlin.datetime.CurrentTimestamp
+import kotlin.time.Clock
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.datetime.CurrentTimestamp
 
 object SidebarPreferenceService {
     // Configurable sidebar items (admin is NOT hideable per user requirement)

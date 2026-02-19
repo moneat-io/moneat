@@ -16,34 +16,26 @@
 
 package com.moneat.models
 
-import org.jetbrains.exposed.sql.ColumnType
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.kotlin.datetime.date
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
-import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.v1.core.ColumnType
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.datetime.date
+import org.jetbrains.exposed.v1.datetime.timestamp
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.core.java.javaUUID
 import java.sql.ResultSet
 
-class TextArrayColumnType : ColumnType() {
+class TextArrayColumnType : ColumnType<List<String>>() {
     private fun isH2(): Boolean =
         TransactionManager.currentOrNull()?.db?.url?.contains("h2", ignoreCase = true) == true
 
     override fun sqlType(): String = if (isH2()) "VARCHAR ARRAY" else "TEXT[]"
 
-    override fun nonNullValueToString(value: Any): String {
-        if (isH2()) {
-            val list = when (value) {
-                is List<*> -> value.filterIsInstance<String>()
-                is Array<*> -> value.filterIsInstance<String>()
-                else -> emptyList()
-            }
-            return "ARRAY[${list.joinToString(",") { "'$it'" }}]"
+    override fun nonNullValueToString(value: List<String>): String {
+        return if (isH2()) {
+            "ARRAY[${value.joinToString(",") { "'$it'" }}]"
+        } else {
+            "ARRAY[${value.joinToString(",") { "'$it'" }}]::TEXT[]"
         }
-        val list = when (value) {
-            is List<*> -> value.filterIsInstance<String>()
-            is Array<*> -> value.filterIsInstance<String>()
-            else -> emptyList()
-        }
-        return "ARRAY[${list.joinToString(",") { "'$it'" }}]::TEXT[]"
     }
 
     override fun valueFromDB(value: Any): List<String> {
@@ -55,22 +47,20 @@ class TextArrayColumnType : ColumnType() {
         }
     }
 
-    override fun notNullValueToDB(value: Any): Any {
-        return when (value) {
-            is List<*> -> value.filterIsInstance<String>().toTypedArray()
-            is Array<*> -> value
-            else -> throw IllegalArgumentException("Unexpected value type: ${value::class}")
-        }
+    override fun notNullValueToDB(value: List<String>): Any {
+        return value.toTypedArray()
     }
 
-    override fun setParameter(stmt: org.jetbrains.exposed.sql.statements.api.PreparedStatementApi, index: Int, value: Any?) {
+    override fun setParameter(stmt: org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi, index: Int, value: Any?) {
         if (value == null) {
             stmt.setNull(index, this)
         } else {
-            val preparedStatement = stmt as org.jetbrains.exposed.sql.statements.jdbc.JdbcPreparedStatementImpl
-            val array = notNullValueToDB(value) as Array<*>
+            val preparedStatement = stmt as org.jetbrains.exposed.v1.jdbc.statements.jdbc.JdbcPreparedStatementImpl
+
+            @Suppress("UNCHECKED_CAST")
+            val array = value as Array<*>
             val connection = preparedStatement.statement.connection
-            val sqlArray = connection.createArrayOf("text", array)
+            val sqlArray = connection.createArrayOf(if (isH2()) "VARCHAR" else "text", array)
             preparedStatement.statement.setArray(index, sqlArray)
         }
     }
@@ -336,7 +326,7 @@ object PromotionalCreditGrants : Table("promotional_credit_grants") {
 }
 
 object Systems : Table("systems") {
-    val id = uuid("id")
+    val id = javaUUID("id")
     val organization_id = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val host = varchar("host", 255).nullable()
@@ -353,7 +343,7 @@ object Systems : Table("systems") {
 
 object SystemAlerts : Table("system_alerts") {
     val id = integer("id").autoIncrement()
-    val system_id = uuid("system_id").references(Systems.id)
+    val system_id = javaUUID("system_id").references(Systems.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val metric = varchar("metric", 50)
     val condition = varchar("condition", 20)
@@ -381,7 +371,7 @@ object OrganizationAlertTemplates : Table("organization_alert_templates") {
 }
 
 object SystemAlertSettings : Table("system_alert_settings") {
-    val system_id = uuid("system_id").references(Systems.id)
+    val system_id = javaUUID("system_id").references(Systems.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val scope = varchar("scope", 20).default("system")
     val updated_at = timestamp("updated_at")
@@ -390,7 +380,7 @@ object SystemAlertSettings : Table("system_alert_settings") {
 
 object SystemAlertTemplateStates : Table("system_alert_template_states") {
     val template_alert_id = integer("template_alert_id").references(OrganizationAlertTemplates.id)
-    val system_id = uuid("system_id").references(Systems.id)
+    val system_id = javaUUID("system_id").references(Systems.id)
     val last_triggered_at = timestamp("last_triggered_at").nullable()
     override val primaryKey = PrimaryKey(template_alert_id, system_id)
 }

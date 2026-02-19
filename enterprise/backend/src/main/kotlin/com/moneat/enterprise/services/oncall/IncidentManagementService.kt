@@ -6,14 +6,15 @@ package com.moneat.enterprise.services.oncall
 
 import com.moneat.models.*
 import com.moneat.enterprise.models.*
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.serialization.json.JsonPrimitive
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 
 class IncidentManagementService(
     private val escalationEngine: EscalationEngine
@@ -93,7 +94,7 @@ class IncidentManagementService(
         
         query
             .orderBy(Incidents.triggeredAt to SortOrder.DESC)
-            .limit(limit, offset.toLong())
+            .limit(limit).offset(offset.toLong())
             .map { row ->
                 val incId = row[Incidents.id].value
                 Incident(

@@ -71,8 +71,7 @@ fun Application.configureBackgroundJobs() {
     FeatureRegistry.startBackgroundJobs(this)
 
     // Register shutdown hook
-    environment.monitor.subscribe(ApplicationStopping) {
-        logger.info { "Stopping background jobs" }
+    monitor.subscribe(ApplicationStopping) {
         monitorAlertService.stop()
         billingBackgroundService.stop()
         retentionBackgroundService.stop()

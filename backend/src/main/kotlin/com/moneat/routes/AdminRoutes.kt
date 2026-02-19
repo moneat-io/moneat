@@ -49,10 +49,11 @@ import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.*
 
 @Serializable
 private data class AdminUsersResponse(
@@ -80,24 +81,23 @@ fun Route.adminRoutes() {
     
     authenticate("auth-jwt") {
         route("/v1/admin") {
-            intercept(ApplicationCallPipeline.Call) {
-                val principal = call.principal<JWTPrincipal>()
-                if (principal == null) {
-                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
-                    finish()
-                    return@intercept
+            install(createRouteScopedPlugin("AdminCheck") {
+                onCall { call ->
+                    val principal = call.principal<JWTPrincipal>()
+                    if (principal == null) {
+                        call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                        return@onCall
+                    }
+                    val userId = principal.payload.getClaim("userId").asInt()
+                    val isAdmin = transaction {
+                        Users.selectAll().where { Users.id eq userId }
+                            .firstOrNull()?.get(Users.is_admin) ?: false
+                    }
+                    if (!isAdmin) {
+                        call.respond(HttpStatusCode.Forbidden, com.moneat.models.ErrorResponse("Admin access required"))
+                    }
                 }
-                val userId = principal.payload.getClaim("userId").asInt()
-                val isAdmin = transaction {
-                    Users.selectAll().where { Users.id eq userId }
-                        .firstOrNull()?.get(Users.is_admin) ?: false
-                }
-                if (!isAdmin) {
-                    call.respond(HttpStatusCode.Forbidden, com.moneat.models.ErrorResponse("Admin access required"))
-                    finish()
-                    return@intercept
-                }
-            }
+            })
             
             get("/overview") {
                 val stats = adminService.getOverviewStats()

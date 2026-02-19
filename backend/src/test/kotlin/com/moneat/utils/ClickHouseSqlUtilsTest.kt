@@ -16,7 +16,7 @@
 
 package com.moneat.utils
 
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 

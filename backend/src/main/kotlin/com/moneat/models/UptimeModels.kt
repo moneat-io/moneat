@@ -17,13 +17,14 @@
 package com.moneat.models
 
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.datetime.timestamp
+import org.jetbrains.exposed.v1.core.java.javaUUID
 import java.util.UUID
 
 // Exposed Table Definition
 object UptimeMonitors : Table("uptime_monitors") {
-    val id = uuid("id")
+    val id = javaUUID("id")
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val type = varchar("type", 50)
@@ -358,12 +359,12 @@ data class UptimeMonitorData(
     
     // Status
     val status: String,
-    val lastCheckAt: kotlinx.datetime.Instant? = null,
-    val lastStatusChangeAt: kotlinx.datetime.Instant? = null,
+    val lastCheckAt: kotlin.time.Instant? = null,
+    val lastStatusChangeAt: kotlin.time.Instant? = null,
     val consecutiveFailures: Int = 0,
     
     val pushToken: String? = null,
     val incidentSeverity: String? = null,
-    val createdAt: kotlinx.datetime.Instant,
-    val updatedAt: kotlinx.datetime.Instant
+    val createdAt: kotlin.time.Instant,
+    val updatedAt: kotlin.time.Instant
 )

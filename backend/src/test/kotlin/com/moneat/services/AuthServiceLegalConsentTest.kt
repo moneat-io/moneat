@@ -18,11 +18,12 @@ package com.moneat.services
 
 import com.moneat.models.*
 import io.ktor.server.config.*
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.deleteAll
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
 
 class AuthServiceLegalConsentTest {
@@ -44,7 +45,15 @@ class AuthServiceLegalConsentTest {
                 driver = "org.h2.Driver"
             )
             transaction {
-                SchemaUtils.create(Users, UserLegalAcceptances, Organizations, Memberships, OrgInvitations, RefreshTokens)
+                SchemaUtils.create(
+                    Users,
+                    UserLegalAcceptances,
+                    Organizations,
+                    Memberships,
+                    OrgInvitations,
+                    RefreshTokens,
+                    EmailsSent,
+                )
             }
             dbInitialized = true
         }
@@ -53,6 +62,7 @@ class AuthServiceLegalConsentTest {
         transaction {
             OrgInvitations.deleteAll()
             RefreshTokens.deleteAll()
+            EmailsSent.deleteAll()
             UserLegalAcceptances.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

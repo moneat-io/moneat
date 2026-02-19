@@ -21,18 +21,19 @@ import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.mindrot.jbcrypt.BCrypt
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.days
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 
 /**
@@ -1975,11 +1976,11 @@ object DemoDataSeeder {
                     it[UptimeMonitors.retries] = 2
                     it[UptimeMonitors.method] = "GET"
                     it[UptimeMonitors.status] = if (random.nextFloat() < 0.9) "up" else "down"
-                    it[UptimeMonitors.lastCheckAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(lastCheckAt.toEpochMilli())
+                    it[UptimeMonitors.lastCheckAt] = kotlin.time.Instant.fromEpochMilliseconds(lastCheckAt.toEpochMilli())
                     it[UptimeMonitors.consecutiveFailures] = if (random.nextFloat() < 0.9) 0 else random.nextInt(1, 5)
                     it[UptimeMonitors.pushToken] = pushToken
-                    it[UptimeMonitors.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
-                    it[UptimeMonitors.updatedAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                    it[UptimeMonitors.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                    it[UptimeMonitors.updatedAt] = kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
                 }
                 
                 Triple(monitorId, intervalSeconds, monitors.indexOf(Triple(name, url, intervalSeconds)))
@@ -2029,9 +2030,9 @@ object DemoDataSeeder {
             transaction {
                 existingSystems.forEach { (systemId, _) ->
                     Systems.update({ Systems.id eq systemId }) {
-                        it[Systems.last_seen_at] = kotlinx.datetime.Clock.System.now()
+                        it[Systems.last_seen_at] = Clock.System.now()
                         it[Systems.status] = "online"
-                        it[Systems.updated_at] = kotlinx.datetime.Clock.System.now()
+                        it[Systems.updated_at] = Clock.System.now()
                     }
                 }
             }
@@ -2062,12 +2063,12 @@ object DemoDataSeeder {
                     it[Systems.host] = "10.0.${random.nextInt(1, 10)}.${random.nextInt(1, 255)}"
                     it[Systems.agent_key_hash] = agentKeyHash
                     it[Systems.status] = "online"
-                    it[Systems.last_seen_at] = kotlinx.datetime.Instant.fromEpochMilliseconds(lastSeenAt.toEpochMilli())
+                    it[Systems.last_seen_at] = kotlin.time.Instant.fromEpochMilliseconds(lastSeenAt.toEpochMilli())
                     it[Systems.agent_version] = "1.2.${random.nextInt(0, 10)}"
                     it[Systems.os] = osInfo
                     it[Systems.arch] = arch
-                    it[Systems.created_at] = kotlinx.datetime.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
-                    it[Systems.updated_at] = kotlinx.datetime.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                    it[Systems.created_at] = kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                    it[Systems.updated_at] = kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
                 }
             }
         }
@@ -2379,8 +2380,8 @@ object DemoDataSeeder {
                 it[StatusPages.showUptimeHistory] = true
                 it[StatusPages.historyDays] = 90
                 it[StatusPages.isPublic] = true
-                it[StatusPages.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
-                it[StatusPages.updatedAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                it[StatusPages.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                it[StatusPages.updatedAt] = kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
             }
             pageId
         }
@@ -2393,7 +2394,7 @@ object DemoDataSeeder {
                     it[StatusPageMonitors.monitorId] = monitorId
                     it[StatusPageMonitors.displayName] = null // Use actual monitor name
                     it[StatusPageMonitors.sortOrder] = index
-                    it[StatusPageMonitors.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                    it[StatusPageMonitors.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
                 }
             }
         }
@@ -2464,10 +2465,10 @@ object DemoDataSeeder {
                     it[StatusPageIncidents.impact] = impact
                     
                     if (isScheduledMaintenance) {
-                        it[StatusPageIncidents.scheduledStartAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(
+                        it[StatusPageIncidents.scheduledStartAt] = kotlin.time.Instant.fromEpochMilliseconds(
                             Instant.now().plus(7, ChronoUnit.DAYS).toEpochMilli()
                         )
-                        it[StatusPageIncidents.scheduledEndAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(
+                        it[StatusPageIncidents.scheduledEndAt] = kotlin.time.Instant.fromEpochMilliseconds(
                             Instant.now().plus(7, ChronoUnit.DAYS).plus(2, ChronoUnit.HOURS).toEpochMilli()
                         )
                     } else {
@@ -2476,10 +2477,10 @@ object DemoDataSeeder {
                     }
                     
                     it[StatusPageIncidents.resolvedAt] = resolvedAt?.let { resolved ->
-                        kotlinx.datetime.Instant.fromEpochMilliseconds(resolved.toEpochMilli())
+                        kotlin.time.Instant.fromEpochMilliseconds(resolved.toEpochMilli())
                     }
-                    it[StatusPageIncidents.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
-                    it[StatusPageIncidents.updatedAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(
+                    it[StatusPageIncidents.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                    it[StatusPageIncidents.updatedAt] = kotlin.time.Instant.fromEpochMilliseconds(
                         resolvedAt?.toEpochMilli() ?: createdAt.toEpochMilli()
                     )
                 }
@@ -2493,7 +2494,7 @@ object DemoDataSeeder {
                         it[StatusPageIncidentUpdates.incidentId] = incidentId
                         it[StatusPageIncidentUpdates.status] = status
                         it[StatusPageIncidentUpdates.message] = message
-                        it[StatusPageIncidentUpdates.createdAt] = kotlinx.datetime.Instant.fromEpochMilliseconds(updateTime.toEpochMilli())
+                        it[StatusPageIncidentUpdates.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(updateTime.toEpochMilli())
                     }
                 }
             }

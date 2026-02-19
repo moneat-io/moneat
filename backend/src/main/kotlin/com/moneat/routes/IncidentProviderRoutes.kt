@@ -29,7 +29,6 @@ import com.moneat.utils.MessageResponse
 import com.moneat.utils.BooleanResponse
 import io.ktor.server.application.application
 import io.ktor.server.application.call
-import io.ktor.server.application.log
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -49,11 +48,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.transactions.transaction
-import kotlinx.datetime.Clock
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.time.Clock
 
 fun Route.incidentProviderRoutes() {
     val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
@@ -168,7 +167,7 @@ fun Route.incidentProviderRoutes() {
                     
                     // Build update SQL dynamically based on what's provided
                     val setClauses = mutableListOf<String>()
-                    val params = mutableListOf<Pair<IColumnType, Any?>>()
+                    val params = mutableListOf<Pair<IColumnType<*>, Any?>>()
                     
                     request.name?.let {
                         setClauses.add("name = ?")

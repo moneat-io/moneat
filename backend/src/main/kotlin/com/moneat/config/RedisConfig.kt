@@ -79,7 +79,7 @@ fun Application.configureRedis() {
         log.info("Connecting to Redis at $redisUrl...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
-        environment.monitor.subscribe(ApplicationStopping) {
+        monitor.subscribe(ApplicationStopping) {
             RedisConfig.close()
         }
     } catch (e: Exception) {

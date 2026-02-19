@@ -70,7 +70,6 @@ class IncidentIoProvider : IncidentProvider {
                     is JsonPrimitive -> value.content
                     is JsonArray -> value.toString()
                     is JsonObject -> value.toString()
-                    else -> value.toString()
                 }
             }
             

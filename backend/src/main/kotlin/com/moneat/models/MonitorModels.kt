@@ -244,12 +244,12 @@ data class SystemData(
     val host: String?,
     val agentKeyHash: String,
     val status: String,
-    val lastSeenAt: kotlinx.datetime.Instant?,
+    val lastSeenAt: kotlin.time.Instant?,
     val agentVersion: String?,
     val os: String?,
     val arch: String?,
-    val createdAt: kotlinx.datetime.Instant,
-    val updatedAt: kotlinx.datetime.Instant
+    val createdAt: kotlin.time.Instant,
+    val updatedAt: kotlin.time.Instant
 )
 
 @Serializable
@@ -279,8 +279,8 @@ data class AlertData(
     val threshold: Double,
     val durationSeconds: Int,
     val enabled: Boolean,
-    val lastTriggeredAt: kotlinx.datetime.Instant?,
-    val createdAt: kotlinx.datetime.Instant,
+    val lastTriggeredAt: kotlin.time.Instant?,
+    val createdAt: kotlin.time.Instant,
     val scope: String = "system",
     val templateAlertId: Int? = null
 )

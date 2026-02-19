@@ -17,12 +17,13 @@
 package com.moneat.services
 
 import com.moneat.models.*
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.deleteAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
 import kotlin.test.*
 
@@ -42,7 +43,7 @@ class AuthServiceEmailVerificationTest {
                 driver = "org.h2.Driver"
             )
             transaction {
-                SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens)
+                SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens, EmailsSent)
             }
             dbInitialized = true
         }
@@ -50,6 +51,7 @@ class AuthServiceEmailVerificationTest {
         // Clean up any existing test data from previous tests
         transaction {
             RefreshTokens.deleteAll()
+            EmailsSent.deleteAll()
             UserLegalAcceptances.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

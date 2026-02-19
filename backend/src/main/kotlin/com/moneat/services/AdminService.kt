@@ -16,25 +16,27 @@
 
 package com.moneat.services
 
+import com.moneat.ai.AiConversations
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.*
 import com.moneat.models.SsoConfigurations
-import com.moneat.ai.AiConversations
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.datetime.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.lowerCase
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
 
@@ -226,7 +228,7 @@ class AdminService {
 
     suspend fun getOverviewStats(): AdminOverviewStats {
         usageTracker.flushBuffer()
-        val today = Clock.System.todayIn(TimeZone.UTC)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
 
         val (totalOrgs, totalUsers, subsByPlan) = transaction {
             val orgs = Organizations.selectAll().count().toInt()
@@ -265,13 +267,13 @@ class AdminService {
 
     fun getAllOrganizations(page: Int, limit: Int): List<AdminOrgSummary> {
         usageTracker.flushBuffer()
-        val today = Clock.System.todayIn(TimeZone.UTC)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
             val orgs = Organizations
                 .selectAll()
-                .limit(limit, offset = (page - 1) * limit.toLong())
+                .limit(limit).offset((page - 1) * limit.toLong())
                 .toList()
 
             orgs.map { row ->
@@ -315,7 +317,7 @@ class AdminService {
 
     fun getOrgDetail(orgId: Int): AdminOrgDetail? {
         usageTracker.flushBuffer()
-        val today = Clock.System.todayIn(TimeZone.UTC)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
@@ -382,7 +384,7 @@ class AdminService {
 
     fun getUsageBreakdown(period: String): AdminUsageBreakdown {
         usageTracker.flushBuffer()
-        val today = Clock.System.todayIn(TimeZone.UTC)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
         val daysBack = when (period) {
             "24h" -> 0
             "7d" -> 6
@@ -507,7 +509,7 @@ class AdminService {
 
     fun getTopConsumers(limit: Int): List<AdminTopConsumer> {
         usageTracker.flushBuffer()
-        val today = Clock.System.todayIn(TimeZone.UTC)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
@@ -544,7 +546,7 @@ class AdminService {
     }
 
     fun getOrgUsage(orgId: Int, period: String): List<OrgUsageSummary> {
-        val today = Clock.System.todayIn(TimeZone.UTC)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
         val daysBack = when (period) {
             "24h" -> 1
             "7d" -> 7
@@ -556,7 +558,7 @@ class AdminService {
     }
     
     fun getEmailStats(period: String = "30d"): AdminEmailStats {
-        val today = Clock.System.todayIn(TimeZone.UTC)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
         val daysBack = when (period) {
             "7d" -> 7
             "30d" -> 30
@@ -672,7 +674,7 @@ class AdminService {
         return transaction {
             val userRows = applyUserSearchFilter(Users.selectAll(), search)
                 .orderBy(Users.id to SortOrder.DESC)
-                .limit(limit, offset = (page - 1) * limit.toLong())
+                .limit(limit).offset((page - 1) * limit.toLong())
                 .toList()
 
             val userIds = userRows.map { row -> row[Users.id] }

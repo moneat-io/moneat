@@ -17,9 +17,9 @@
 package com.moneat.models
 
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.kotlin.datetime.date
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.datetime.date
+import org.jetbrains.exposed.v1.datetime.timestamp
 
 object PricingTierConfigs : Table("pricing_tier_configs") {
     val id = integer("id").autoIncrement()

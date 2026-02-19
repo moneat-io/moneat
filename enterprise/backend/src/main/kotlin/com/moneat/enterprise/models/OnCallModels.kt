@@ -13,42 +13,41 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.dao.id.IntIdTable
-import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.ColumnType
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.javatime.time
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
+import org.jetbrains.exposed.v1.core.Column
+import org.jetbrains.exposed.v1.core.ColumnType
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.javatime.time
+import org.jetbrains.exposed.v1.datetime.timestamp
 import org.postgresql.util.PGobject
 import java.time.LocalTime
 
 // ===== Custom Column Types =====
 
-fun Table.jsonb(name: String): Column<Map<String, kotlinx.serialization.json.JsonElement>?> = 
-    registerColumn<Map<String, kotlinx.serialization.json.JsonElement>?>(name, object : ColumnType() {
-        override fun sqlType() = "JSONB"
-        
-        override fun valueFromDB(value: Any): Any {
-            if (value is PGobject && value.value == null) {
-                return emptyMap<String, kotlinx.serialization.json.JsonElement>()
-            }
-            return when (value) {
-                is PGobject -> Json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(value.value ?: "{}")
-                is String -> Json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(value)
-                else -> emptyMap<String, kotlinx.serialization.json.JsonElement>()
-            }
+private class JsonbColumnType : ColumnType<Map<String, kotlinx.serialization.json.JsonElement>>() {
+    override fun sqlType() = "JSONB"
+
+    override fun valueFromDB(value: Any): Map<String, kotlinx.serialization.json.JsonElement> {
+        if (value is PGobject && value.value == null) {
+            return emptyMap()
         }
-        
-        override fun notNullValueToDB(value: Any): Any {
-            @Suppress("UNCHECKED_CAST")
-            val map = value as Map<String, kotlinx.serialization.json.JsonElement>
-            return PGobject().apply {
-                type = "jsonb"
-                this.value = Json.encodeToString(kotlinx.serialization.serializer(), map)
-            }
+        return when (value) {
+            is PGobject -> Json.decodeFromString(value.value ?: "{}")
+            is String -> Json.decodeFromString(value)
+            else -> emptyMap()
         }
-    })
+    }
+
+    override fun notNullValueToDB(value: Map<String, kotlinx.serialization.json.JsonElement>): Any =
+        PGobject().apply {
+            type = "jsonb"
+            this.value = Json.encodeToString(kotlinx.serialization.serializer(), value)
+        }
+}
+
+fun Table.jsonb(name: String): Column<Map<String, kotlinx.serialization.json.JsonElement>?> =
+    registerColumn<Map<String, kotlinx.serialization.json.JsonElement>>(name, JsonbColumnType()).nullable()
 
 // ===== Priority Management =====
 

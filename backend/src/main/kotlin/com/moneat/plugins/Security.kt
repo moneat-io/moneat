@@ -33,7 +33,7 @@ data class AuthTokenPrincipal(
     val userId: Int,
     val scopes: List<String>,
     val tokenId: Int
-) : Principal
+)
 
 private fun extractBearerToken(rawHeader: String?): String? {
     if (rawHeader == null || !rawHeader.startsWith("Bearer ", ignoreCase = true)) {

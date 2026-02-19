@@ -21,7 +21,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.ktor.server.application.Application
 import io.ktor.server.application.application
-import io.ktor.server.application.log
+import org.slf4j.LoggerFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -301,6 +301,7 @@ object ClickHouseMigrations {
  * Extension function to configure ClickHouse migrations on application startup.
  */
 suspend fun Application.configureClickHouseMigrations() {
+    val log = LoggerFactory.getLogger("ClickHouseMigrations")
     log.info("Running ClickHouse migrations...")
     ClickHouseMigrations.migrate(log)
 }

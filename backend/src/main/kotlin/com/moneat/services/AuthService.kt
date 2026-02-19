@@ -21,12 +21,13 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.*
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.*
-import kotlinx.datetime.Clock
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import kotlin.time.Clock
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.core.*
 import org.mindrot.jbcrypt.BCrypt
 import java.security.SecureRandom
 import java.util.*
@@ -118,7 +119,7 @@ class AuthService {
                             (OrgInvitations.status eq "pending") and
                             (OrgInvitations.expires_at greater now)
                     }
-                    .orderBy(OrgInvitations.created_at, org.jetbrains.exposed.sql.SortOrder.DESC)
+                    .orderBy(OrgInvitations.created_at, org.jetbrains.exposed.v1.core.SortOrder.DESC)
                     .limit(1)
                     .singleOrNull()
             }

@@ -24,8 +24,8 @@ import io.ktor.server.application.*
 import io.ktor.events.*
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
 
 fun Application.configureDatabases() {
@@ -91,7 +91,7 @@ fun Application.configureDatabases() {
         }
         
         // Register shutdown hook
-        environment.monitor.subscribe(ApplicationStopping) {
+        monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
             SystemStatusTracker.stop()
         }

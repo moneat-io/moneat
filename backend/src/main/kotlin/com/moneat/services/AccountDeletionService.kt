@@ -22,13 +22,13 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.kotlin.datetime.CurrentTimestamp
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.datetime.CurrentTimestamp
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 
 private val logger = KotlinLogging.logger {}
 
@@ -158,7 +158,7 @@ class AccountDeletionService(
                 
                 // Soft delete user
                 Users.update({ Users.id eq userId }) {
-                    it[deletedAt] = CurrentTimestamp()
+                    it[deletedAt] = CurrentTimestamp
                 }
                 
                 logger.info { "Soft deleted user account: $userId ($email)" }
@@ -266,7 +266,7 @@ class AccountDeletionService(
                 
                 // Soft delete organization
                 Organizations.update({ Organizations.id eq organizationId }) {
-                    it[deletedAt] = CurrentTimestamp()
+                    it[deletedAt] = CurrentTimestamp
                     it[deletedBy] = deletedByUserId
                 }
                 

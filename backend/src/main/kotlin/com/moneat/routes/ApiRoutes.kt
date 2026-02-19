@@ -65,17 +65,17 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.core.*
 import com.moneat.models.OnCallPhoneConsentEvents
 import com.moneat.models.OnCallContactResponse
 import com.moneat.models.UpdateOnCallContactRequest
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 fun Route.apiRoutes() {
     val dashboardService = DashboardService()
@@ -1118,7 +1118,7 @@ fun Route.apiRoutes() {
                             it[error_alerts] = errorAlerts
                             it[weekly_summary] = weeklySummary
                             it[alert_frequency_minutes] = alertFrequency
-                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                            it[updated_at] = Clock.System.now()
                         }
                     } else {
                         NotificationPreferences.insert {
@@ -1128,8 +1128,8 @@ fun Route.apiRoutes() {
                             it[error_alerts] = errorAlerts
                             it[weekly_summary] = weeklySummary
                             it[alert_frequency_minutes] = alertFrequency
-                            it[created_at] = kotlinx.datetime.Clock.System.now()
-                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                            it[created_at] = Clock.System.now()
+                            it[updated_at] = Clock.System.now()
                         }
                     }
                 }
@@ -1176,7 +1176,7 @@ fun Route.apiRoutes() {
                             it[error_alerts] = errorAlerts
                             it[weekly_summary] = weeklySummary
                             it[alert_frequency_minutes] = alertFrequency
-                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                            it[updated_at] = Clock.System.now()
                         }
                     } else {
                         NotificationPreferences.insert {
@@ -1186,8 +1186,8 @@ fun Route.apiRoutes() {
                             it[error_alerts] = errorAlerts
                             it[weekly_summary] = weeklySummary
                             it[alert_frequency_minutes] = alertFrequency
-                            it[created_at] = kotlinx.datetime.Clock.System.now()
-                            it[updated_at] = kotlinx.datetime.Clock.System.now()
+                            it[created_at] = Clock.System.now()
+                            it[updated_at] = Clock.System.now()
                         }
                     }
                 }

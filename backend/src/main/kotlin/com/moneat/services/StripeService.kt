@@ -27,14 +27,16 @@ import com.stripe.param.*
 import com.stripe.param.billing.MeterEventCreateParams
 import io.ktor.server.config.*
 import io.sentry.Sentry
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
@@ -322,10 +324,10 @@ class StripeService(
             StripeWebhookEvents.insertIgnore {
                 it[event_id] = event.id
                 it[event_type] = event.type
-                it[processed_at] = kotlinx.datetime.Clock.System.now()
+                it[processed_at] = Clock.System.now()
                 it[StripeWebhookEvents.status] = status
                 it[this.error_message] = errorMessage
-                it[created_at] = kotlinx.datetime.Clock.System.now()
+                it[created_at] = Clock.System.now()
             }
         }
     }
@@ -472,8 +474,8 @@ class StripeService(
                 ?: fallbackTier?.tierName?.lowercase()
                 ?: "free"
             val tierId = resolvedTier?.id?.takeIf { it > 0 }
-            val startInstant = subscription.startDate?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
-            val endInstant = subscription.trialEnd?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
+            val startInstant = subscription.startDate?.let { kotlin.time.Instant.fromEpochSeconds(it) }
+            val endInstant = subscription.trialEnd?.let { kotlin.time.Instant.fromEpochSeconds(it) }
             val billingInterval = if (baseItemId != null) {
                  subscription.items.data.find { it.id == baseItemId }?.price?.recurring?.interval ?: "monthly"
             } else "monthly"
@@ -596,8 +598,8 @@ class StripeService(
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }.orderBy(Subscriptions.id to SortOrder.DESC)
             val row = q.firstOrNull() ?: return@transaction
-            val start = invoice.periodStart?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
-            val end = invoice.periodEnd?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
+            val start = invoice.periodStart?.let { kotlin.time.Instant.fromEpochSeconds(it) }
+            val end = invoice.periodEnd?.let { kotlin.time.Instant.fromEpochSeconds(it) }
 
             Subscriptions.update({ Subscriptions.id eq row[Subscriptions.id] }) {
                 it[status] = "active"
@@ -613,7 +615,7 @@ class StripeService(
 
     fun handleInvoicePaymentFailed(invoice: Invoice, graceDays: Int = 7) {
         val organizationId = resolveOrganizationId(invoice.metadata["organization_id"], invoice.customer) ?: return
-        val graceUntil = addDays(kotlinx.datetime.Clock.System.now(), graceDays)
+        val graceUntil = addDays(Clock.System.now(), graceDays)
         transaction {
             Subscriptions.update({
                 (Subscriptions.organization_id eq organizationId) and
@@ -673,8 +675,8 @@ class StripeService(
                 it[Subscriptions.organization_id] = organizationId
                 it[plan] = "free"
                 it[status] = "active"
-                it[current_period_start] = kotlinx.datetime.Clock.System.now()
-                it[current_period_end] = addDays(kotlinx.datetime.Clock.System.now(), 30)
+                it[current_period_start] = Clock.System.now()
+                it[current_period_end] = addDays(Clock.System.now(), 30)
                 it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
                 it[payg_budget_cents] = 0
                 it[payg_used_units] = 0
@@ -729,7 +731,7 @@ class StripeService(
 
     fun applyDunningDowngrade(@Suppress("UNUSED_PARAMETER") graceDays: Int = 7): Int {
         val freeTier = pricingTierService.getCurrentTier("FREE")
-        val now = kotlinx.datetime.Clock.System.now()
+        val now = Clock.System.now()
         val downgraded = transaction {
             val pastDueRows = Subscriptions.selectAll().where {
                 (Subscriptions.status eq "past_due") and

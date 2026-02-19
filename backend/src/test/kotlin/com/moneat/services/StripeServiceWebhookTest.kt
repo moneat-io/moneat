@@ -21,10 +21,11 @@ import com.stripe.exception.SignatureVerificationException
 import com.stripe.model.Event
 import com.stripe.model.Subscription
 import com.stripe.model.Invoice
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.transaction
+import kotlin.time.Clock
+import kotlin.time.Instant
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec

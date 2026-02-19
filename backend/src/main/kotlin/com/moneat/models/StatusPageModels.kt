@@ -17,15 +17,16 @@
 package com.moneat.models
 
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
-import kotlinx.datetime.Clock
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.datetime.timestamp
+import org.jetbrains.exposed.v1.core.java.javaUUID
+import kotlin.time.Clock
 import java.util.UUID
 
 // ==================== Exposed Tables ====================
 
 object StatusPages : Table("status_pages") {
-    val id = uuid("id").autoGenerate()
+    val id = javaUUID("id").autoGenerate()
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val slug = varchar("slug", 100).uniqueIndex()
@@ -50,8 +51,8 @@ object StatusPages : Table("status_pages") {
 
 object StatusPageMonitors : Table("status_page_monitors") {
     val id = integer("id").autoIncrement()
-    val statusPageId = uuid("status_page_id").references(StatusPages.id)
-    val monitorId = uuid("monitor_id").references(UptimeMonitors.id)
+    val statusPageId = javaUUID("status_page_id").references(StatusPages.id)
+    val monitorId = javaUUID("monitor_id").references(UptimeMonitors.id)
     val displayName = varchar("display_name", 255).nullable()
     val sortOrder = integer("sort_order").default(0)
     val createdAt = timestamp("created_at")
@@ -60,8 +61,8 @@ object StatusPageMonitors : Table("status_page_monitors") {
 }
 
 object StatusPageIncidents : Table("status_page_incidents") {
-    val id = uuid("id").autoGenerate()
-    val statusPageId = uuid("status_page_id").references(StatusPages.id)
+    val id = javaUUID("id").autoGenerate()
+    val statusPageId = javaUUID("status_page_id").references(StatusPages.id)
     val title = varchar("title", 255)
     val status = varchar("status", 50)
     val type = varchar("type", 50).default("incident")
@@ -76,8 +77,8 @@ object StatusPageIncidents : Table("status_page_incidents") {
 }
 
 object StatusPageIncidentUpdates : Table("status_page_incident_updates") {
-    val id = uuid("id").autoGenerate()
-    val incidentId = uuid("incident_id").references(StatusPageIncidents.id)
+    val id = javaUUID("id").autoGenerate()
+    val incidentId = javaUUID("incident_id").references(StatusPageIncidents.id)
     val status = varchar("status", 50)
     val message = text("message")
     val createdAt = timestamp("created_at")
@@ -87,7 +88,7 @@ object StatusPageIncidentUpdates : Table("status_page_incident_updates") {
 
 object StatusPageCustomDomains : Table("status_page_custom_domains") {
     val id = integer("id").autoIncrement()
-    val statusPageId = uuid("status_page_id").references(StatusPages.id)
+    val statusPageId = javaUUID("status_page_id").references(StatusPages.id)
     val domain = varchar("domain", 255).uniqueIndex()
     val verificationToken = varchar("verification_token", 64)
     val verified = bool("verified").default(false)

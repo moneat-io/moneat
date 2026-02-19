@@ -6,18 +6,18 @@ package com.moneat.enterprise.services.oncall
 
 import com.moneat.models.*
 import com.moneat.enterprise.models.*
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
-import kotlinx.datetime.toJavaInstant
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
+import kotlin.time.Clock
+import kotlin.time.Instant
+import org.jetbrains.exposed.v1.core.*
+
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.time.ZoneId
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 import java.time.LocalTime
 
 class OnCallScheduleService {
@@ -162,7 +162,7 @@ class OnCallScheduleService {
         // Calculate days since epoch using schedule timezone and handoffTime
         val zoneId = ZoneId.of(schedule[OnCallSchedules.timezone])
         val handoffLocalTime = schedule[OnCallSchedules.handoffTime]
-        val zonedNow = now.toJavaInstant().atZone(zoneId)
+        val zonedNow = java.time.Instant.ofEpochMilli(now.toEpochMilliseconds()).atZone(zoneId)
         val rotationDate = if (zonedNow.toLocalTime().isBefore(handoffLocalTime)) {
             zonedNow.toLocalDate().minusDays(1)
         } else {

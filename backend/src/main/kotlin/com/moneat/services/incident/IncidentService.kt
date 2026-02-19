@@ -20,13 +20,14 @@ import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import com.moneat.enterprise.FeatureRegistry
 import kotlinx.serialization.json.*
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.and
 import org.slf4j.LoggerFactory
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 /**
  * Middleware service for dispatching incident alerts to configured providers.

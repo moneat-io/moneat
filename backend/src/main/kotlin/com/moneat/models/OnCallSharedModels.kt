@@ -16,12 +16,12 @@
 
 package com.moneat.models
 
-import org.jetbrains.exposed.dao.id.IntIdTable
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.javatime.time
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
-import kotlinx.datetime.Clock
+import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.javatime.time
+import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.time.Clock
 
 /**
  * Exposed table objects for on-call/enterprise database tables.

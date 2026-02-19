@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.config.EnvConfig
 import com.moneat.models.*
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -29,21 +30,20 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.encodeURLParameter
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.config.*
-import io.ktor.util.decodeBase64Bytes
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.math.BigInteger
 import java.security.KeyFactory
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.RSAPublicKeySpec
 import java.util.*
-import com.moneat.config.EnvConfig
-import java.math.BigInteger
 
 private val logger = KotlinLogging.logger {}
 
@@ -287,8 +287,8 @@ class OAuthService {
     }
 
     private fun buildAppleRsaPublicKey(key: ApplePublicKey): RSAPublicKey {
-        val modulus = BigInteger(1, key.n.decodeBase64Bytes())
-        val exponent = BigInteger(1, key.e.decodeBase64Bytes())
+        val modulus = BigInteger(1, java.util.Base64.getUrlDecoder().decode(key.n))
+        val exponent = BigInteger(1, java.util.Base64.getUrlDecoder().decode(key.e))
         val keySpec = RSAPublicKeySpec(modulus, exponent)
         return KeyFactory.getInstance("RSA").generatePublic(keySpec) as RSAPublicKey
     }

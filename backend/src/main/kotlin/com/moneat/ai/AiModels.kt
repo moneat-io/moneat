@@ -17,8 +17,8 @@
 package com.moneat.ai
 
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.datetime.timestamp
 
 // ── Exposed Tables ──────────────────────────────────────────────────────
 
