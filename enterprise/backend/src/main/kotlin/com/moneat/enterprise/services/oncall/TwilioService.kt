@@ -15,6 +15,7 @@ import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.util.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -59,6 +60,7 @@ class TwilioService {
     }
 
     companion object {
+        @JvmStatic
         val instance: TwilioService by lazy { TwilioService() }
     }
 
@@ -215,6 +217,10 @@ class TwilioService {
         logger.info("Test SMS sent to $toNumber")
     }
 
+    fun sendTestSmsBlocking(toNumber: String) = runBlocking {
+        sendTestSms(toNumber)
+    }
+
     suspend fun makeTestCall(toNumber: String) {
         if (!isEnabled()) {
             throw IllegalStateException("Twilio is not configured")
@@ -234,6 +240,10 @@ class TwilioService {
             throw Exception("Twilio call failed: ${response.status}")
         }
         logger.info("Test call initiated to $toNumber")
+    }
+
+    fun makeTestCallBlocking(toNumber: String) = runBlocking {
+        makeTestCall(toNumber)
     }
 
     fun updateNotificationStatus(twilioSid: String, status: String) {

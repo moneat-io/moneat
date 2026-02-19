@@ -537,8 +537,7 @@ fun Route.adminRoutes() {
                         call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("On-call features require the enterprise module"))
                         return@post
                     }
-                    val instanceField = twilioServiceClass.getDeclaredField("instance")
-                    val twilioService = instanceField.get(null)
+                    val twilioService = twilioServiceClass.getMethod("getInstance").invoke(null)
                     val isEnabled = twilioServiceClass.getMethod("isEnabled").invoke(twilioService) as Boolean
 
                     if (!isEnabled) {
@@ -561,8 +560,8 @@ fun Route.adminRoutes() {
                     }
 
                     when (request.channel) {
-                        "sms" -> twilioServiceClass.getMethod("sendTestSms", String::class.java).invoke(twilioService, phoneNumber)
-                        "call" -> twilioServiceClass.getMethod("makeTestCall", String::class.java).invoke(twilioService, phoneNumber)
+                        "sms" -> twilioServiceClass.getMethod("sendTestSmsBlocking", String::class.java).invoke(twilioService, phoneNumber)
+                        "call" -> twilioServiceClass.getMethod("makeTestCallBlocking", String::class.java).invoke(twilioService, phoneNumber)
                         else -> {
                             call.respond(HttpStatusCode.BadRequest, com.moneat.models.ErrorResponse("channel must be 'sms' or 'call'"))
                             return@post
