@@ -99,6 +99,9 @@ cd backend && ./gradlew run
 
 # 3. Start the dashboard (UI at localhost:5173)
 cd dashboard && npm install && npm run dev
+
+# Optional: Start dashboard with enterprise routes/components
+cd dashboard && npm run dev --enterprise
 ```
 
 ### Enterprise

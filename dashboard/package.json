@@ -4,7 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "node ./scripts/dev.mjs",
+    "sync-enterprise": "node ./scripts/sync-enterprise.mjs",
+    "dev:enterprise": "npm run dev --enterprise",
     "build": "npm run lint && tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
