@@ -1,4 +1,4 @@
-import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset } from 'lucide-react'
+import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset, Check } from 'lucide-react'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -58,22 +58,27 @@ export function ThemeSwitcher() {
         <DropdownMenuItem onClick={() => handleThemeChange('light')}>
           <Sun className="mr-2 h-4 w-4" />
           <span>Light</span>
+          {theme === 'light' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('dark')}>
           <Moon className="mr-2 h-4 w-4" />
           <span>Dark</span>
+          {theme === 'dark' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('midnight')}>
           <CloudMoon className="mr-2 h-4 w-4" />
           <span>Midnight</span>
+          {theme === 'midnight' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('forest')}>
           <Leaf className="mr-2 h-4 w-4" />
           <span>Forest</span>
+          {theme === 'forest' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('sunset')}>
           <Sunset className="mr-2 h-4 w-4" />
           <span>Sunset</span>
+          {theme === 'sunset' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
