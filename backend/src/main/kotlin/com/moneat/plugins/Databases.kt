@@ -23,9 +23,76 @@ import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.*
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.MigrationVersion
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
+
+private fun Application.logPostgresSchemaState(dataSource: HikariDataSource) {
+    dataSource.connection.use { connection ->
+        connection.createStatement().use { statement ->
+            statement.executeQuery(
+                "SELECT current_database(), current_user, current_schema(), current_setting('search_path')"
+            ).use { rs ->
+                if (rs.next()) {
+                    log.info(
+                        "PostgreSQL context: database=${rs.getString(1)}, user=${rs.getString(2)}, " +
+                            "schema=${rs.getString(3)}, search_path=${rs.getString(4)}"
+                    )
+                }
+            }
+
+            statement.executeQuery(
+                """
+                SELECT table_schema, table_name
+                FROM information_schema.tables
+                WHERE table_name IN ('users', 'subscriptions', 'flyway_schema_history')
+                ORDER BY table_schema, table_name
+                """.trimIndent()
+            ).use { rs ->
+                val tableLocations = mutableListOf<String>()
+                while (rs.next()) {
+                    tableLocations += "${rs.getString(1)}.${rs.getString(2)}"
+                }
+                log.info("PostgreSQL table locations: ${tableLocations.joinToString(", ")}")
+            }
+        }
+    }
+}
+
+private fun verifyCriticalColumnsPresent(dataSource: HikariDataSource) {
+    val requiredColumns =
+        setOf(
+            "users.phone_number",
+            "subscriptions.pending_meter_batch_id",
+            "subscriptions.pending_meter_batch_units",
+        )
+
+    val existingColumns =
+        buildSet {
+            dataSource.connection.use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery(
+                        """
+                        SELECT table_name, column_name
+                        FROM information_schema.columns
+                        WHERE (table_name = 'users' AND column_name = 'phone_number')
+                           OR (table_name = 'subscriptions' AND column_name IN ('pending_meter_batch_id', 'pending_meter_batch_units'))
+                        """.trimIndent()
+                    ).use { rs ->
+                        while (rs.next()) {
+                            add("${rs.getString(1)}.${rs.getString(2)}")
+                        }
+                    }
+                }
+            }
+        }
+
+    val missing = requiredColumns - existingColumns
+    if (missing.isNotEmpty()) {
+        throw IllegalStateException("PostgreSQL schema missing critical columns: ${missing.joinToString(", ")}")
+    }
+}
 
 fun Application.configureDatabases() {
     val config = environment.config
@@ -53,6 +120,8 @@ fun Application.configureDatabases() {
         val isTestDatabase = hikariConfig.jdbcUrl.contains("jdbc:h2:mem")
 
         if (!isTestDatabase) {
+            logPostgresSchemaState(dataSource)
+
             // Run Flyway migrations for PostgreSQL
             log.info("Running PostgreSQL migrations...")
             val flyway =
@@ -61,6 +130,8 @@ fun Application.configureDatabases() {
                     .dataSource(dataSource)
                     .locations("classpath:db/migration")
                     .baselineOnMigrate(true)
+                    // Force full migration to latest even if an external target cap is present.
+                    .target(MigrationVersion.LATEST)
                     .load()
 
             val migrationsApplied = flyway.migrate()
@@ -69,12 +140,23 @@ fun Application.configureDatabases() {
             val flywayInfo = flyway.info()
             val resolvedMigrations = flywayInfo.all().size
             val appliedMigrations = flywayInfo.applied().size
+            val currentVersion = flywayInfo.current()?.version?.toString() ?: "none"
+            val pendingMigrations = flywayInfo.pending()
+            log.info(
+                "Flyway state: currentVersion=$currentVersion, resolved=$resolvedMigrations, " +
+                    "applied=$appliedMigrations, pending=${pendingMigrations.size}"
+            )
+            if (pendingMigrations.isNotEmpty()) {
+                log.info("Flyway pending scripts: ${pendingMigrations.joinToString(", ") { it.script }}")
+            }
             if (resolvedMigrations == 0 || appliedMigrations == 0) {
                 throw IllegalStateException(
                     "Flyway resolved=$resolvedMigrations applied=$appliedMigrations. " +
                         "Database is not in a valid migrated state."
                 )
             }
+
+            verifyCriticalColumnsPresent(dataSource)
         } else {
             log.info("Test database detected (H2), skipping PostgreSQL migrations")
         }
