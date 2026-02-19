@@ -27,6 +27,7 @@ import {useToast} from '@/hooks/use-toast'
 import {
     Activity,
     AlertCircle,
+    BarChart3,
     Bell,
     BookOpen,
     Brain,
@@ -239,6 +240,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
     { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
+    ...(features?.modules?.includes('Analytics') ? [{ key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false }] : []),
     ...(features?.modules?.includes('On-Call') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false }] : []),
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { key: 'settings', icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },

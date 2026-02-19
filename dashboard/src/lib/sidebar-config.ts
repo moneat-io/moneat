@@ -16,6 +16,7 @@ export interface SidebarItem {
 import {
   Activity,
   AlertCircle,
+  BarChart3,
   Bell,
   Brain,
   Globe,
@@ -40,6 +41,7 @@ export const CONFIGURABLE_SIDEBAR_ITEMS: SidebarItem[] = [
   { key: 'uptime', label: 'Uptime', icon: Activity },
   { key: 'status-pages', label: 'Status Pages', icon: Globe },
   { key: 'monitoring', label: 'Monitoring', icon: Server },
+  { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'on-call', label: 'On-Call', icon: Bell },
 ];
 

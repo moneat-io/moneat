@@ -1788,6 +1788,71 @@ interface OnCallContactSettings {
   onCallPhoneConsentVersion: string | null
 }
 
+// --- Product Analytics types ---
+
+type AnalyticsPeriod = 'today' | '7d' | '30d' | 'month' | '6mo' | '12mo' | 'custom'
+type AnalyticsComparison = 'previous_period' | 'year_over_year' | 'none'
+
+interface AnalyticsFilter {
+  property: string
+  operator: 'is' | 'is_not' | 'contains' | 'not_contains'
+  value: string
+}
+
+interface AnalyticsParams {
+  period?: AnalyticsPeriod
+  from?: string
+  to?: string
+  filters?: AnalyticsFilter[]
+  comparison?: AnalyticsComparison
+}
+
+interface AnalyticsOverview {
+  uniqueVisitors: number
+  totalPageviews: number
+  bounceRate: number
+  avgVisitDuration: number
+  viewsPerVisit: number
+  comparison?: {
+    uniqueVisitors: number
+    totalPageviews: number
+    bounceRate: number
+    avgVisitDuration: number
+    viewsPerVisit: number
+  }
+}
+
+interface AnalyticsTimeseriesPoint {
+  timestamp: string
+  visitors: number
+  pageviews: number
+}
+
+interface AnalyticsBreakdownItem {
+  name: string
+  visitors: number
+  pageviews: number
+  bounceRate?: number
+  avgDuration?: number
+  percentage: number
+}
+
+interface AnalyticsRealtimeResponse {
+  currentVisitors: number
+}
+
+interface AnalyticsFunnelStep {
+  name: string
+  visitors: number
+  dropoff: number
+  conversionRate: number
+}
+
+interface AnalyticsFunnelResponse {
+  steps: AnalyticsFunnelStep[]
+  overallConversion: number
+}
+
 class ApiClient {
   private authRedirectInProgress = false
   private refreshPromise: Promise<boolean> | null = null
@@ -3918,6 +3983,75 @@ class ApiClient {
       method: 'DELETE',
     })
   }
+
+  // --- Product Analytics ---
+
+  private buildAnalyticsQuery(params?: AnalyticsParams): string {
+    const qs = new URLSearchParams()
+    if (params?.period) qs.append('period', params.period)
+    if (params?.from) qs.append('from', params.from)
+    if (params?.to) qs.append('to', params.to)
+    if (params?.comparison && params.comparison !== 'none') qs.append('comparison', params.comparison)
+    if (params?.filters) {
+      for (const f of params.filters) {
+        qs.append('filters[]', `${f.property}:${f.operator}:${f.value}`)
+      }
+    }
+    const s = qs.toString()
+    return s ? `?${s}` : ''
+  }
+
+  async getAnalyticsOverview(projectId: number, params?: AnalyticsParams): Promise<AnalyticsOverview> {
+    return this.request<AnalyticsOverview>(`${API_BASE}/analytics/${projectId}/overview${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsTimeseries(projectId: number, params?: AnalyticsParams): Promise<AnalyticsTimeseriesPoint[]> {
+    return this.request<AnalyticsTimeseriesPoint[]>(`${API_BASE}/analytics/${projectId}/timeseries${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsPages(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/pages${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsEntryPages(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/entry-pages${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsExitPages(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/exit-pages${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsSources(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/sources${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsUtm(projectId: number, utmParam: string, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/utm/${utmParam}${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsLocations(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/locations${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsDevices(projectId: number, type: 'browser' | 'os' | 'device', params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    const qs = this.buildAnalyticsQuery(params)
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/devices${qs}${qs ? '&' : '?'}type=${type}`)
+  }
+
+  async getAnalyticsEvents(projectId: number, params?: AnalyticsParams): Promise<AnalyticsBreakdownItem[]> {
+    return this.request<AnalyticsBreakdownItem[]>(`${API_BASE}/analytics/${projectId}/events${this.buildAnalyticsQuery(params)}`)
+  }
+
+  async getAnalyticsRealtime(projectId: number): Promise<AnalyticsRealtimeResponse> {
+    return this.request<AnalyticsRealtimeResponse>(`${API_BASE}/analytics/${projectId}/realtime`)
+  }
+
+  async getAnalyticsFunnel(projectId: number, steps: string[], params?: AnalyticsParams): Promise<AnalyticsFunnelResponse> {
+    const qs = this.buildAnalyticsQuery(params)
+    const sep = qs ? '&' : '?'
+    const stepsParam = steps.map(s => `steps[]=${encodeURIComponent(s)}`).join('&')
+    return this.request<AnalyticsFunnelResponse>(`${API_BASE}/analytics/${projectId}/funnel${qs}${sep}${stepsParam}`)
+  }
 }
 
 export const api = new ApiClient()
@@ -4069,4 +4203,14 @@ export type {
   LlmCostBreakdown,
   LlmCostsResponse,
   OnCallContactSettings,
+  AnalyticsPeriod,
+  AnalyticsComparison,
+  AnalyticsFilter,
+  AnalyticsParams,
+  AnalyticsOverview,
+  AnalyticsTimeseriesPoint,
+  AnalyticsBreakdownItem,
+  AnalyticsRealtimeResponse,
+  AnalyticsFunnelStep,
+  AnalyticsFunnelResponse,
 }

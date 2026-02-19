@@ -1,0 +1,301 @@
+// Moneat Enterprise - proprietary module
+// Copyright (c) 2026 Moneat. All rights reserved.
+// See enterprise/LICENSE for license terms.
+
+import {useState, useCallback} from 'react'
+import {createFileRoute} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {AnalyticsDatePicker} from '../components/analytics/AnalyticsDatePicker'
+import {AnalyticsFilterBar} from '../components/analytics/AnalyticsFilterBar'
+import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '../components/analytics/AnalyticsKpiCards'
+import {AnalyticsChart} from '../components/analytics/AnalyticsChart'
+import {AnalyticsBreakdownTable} from '../components/analytics/AnalyticsBreakdownTable'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {
+  FileText, Globe, Laptop, LogIn, LogOut, MapPin, Megaphone, MousePointerClick, Share2,
+} from 'lucide-react'
+import type {AnalyticsFilter, AnalyticsParams, AnalyticsPeriod, AnalyticsBreakdownItem} from '@/lib/api'
+
+export const Route = createFileRoute('/analytics/')({
+  component: AnalyticsOverview,
+})
+
+function AnalyticsOverview() {
+  const {selectedProjectId} = useProject()
+  const [period, setPeriod] = useState<AnalyticsPeriod>('30d')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [filters, setFilters] = useState<AnalyticsFilter[]>([])
+  const [breakdownTab, setBreakdownTab] = useState('pages')
+
+  const {data: projects} = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+  })
+
+  const projectId = selectedProjectId || projects?.[0]?.id
+
+  const buildParams = useCallback((): AnalyticsParams => ({
+    period,
+    ...(period === 'custom' && customFrom && customTo ? {from: customFrom, to: customTo} : {}),
+    filters: filters.length > 0 ? filters : undefined,
+    comparison: 'previous_period',
+  }), [period, customFrom, customTo, filters])
+
+  const params = buildParams()
+
+  const {data: overview, isLoading: overviewLoading} = useQuery({
+    queryKey: ['analytics-overview', projectId, params],
+    queryFn: () => api.getAnalyticsOverview(projectId!, params),
+    enabled: !!projectId,
+  })
+
+  const {data: timeseries, isLoading: timeseriesLoading} = useQuery({
+    queryKey: ['analytics-timeseries', projectId, params],
+    queryFn: () => api.getAnalyticsTimeseries(projectId!, params),
+    enabled: !!projectId,
+  })
+
+  const {data: pages, isLoading: pagesLoading} = useQuery({
+    queryKey: ['analytics-pages', projectId, params],
+    queryFn: () => api.getAnalyticsPages(projectId!, params),
+    enabled: !!projectId && breakdownTab === 'pages',
+  })
+
+  const {data: entryPages, isLoading: entryPagesLoading} = useQuery({
+    queryKey: ['analytics-entry-pages', projectId, params],
+    queryFn: () => api.getAnalyticsEntryPages(projectId!, params),
+    enabled: !!projectId && breakdownTab === 'entry-pages',
+  })
+
+  const {data: exitPages, isLoading: exitPagesLoading} = useQuery({
+    queryKey: ['analytics-exit-pages', projectId, params],
+    queryFn: () => api.getAnalyticsExitPages(projectId!, params),
+    enabled: !!projectId && breakdownTab === 'exit-pages',
+  })
+
+  const {data: sources, isLoading: sourcesLoading} = useQuery({
+    queryKey: ['analytics-sources', projectId, params],
+    queryFn: () => api.getAnalyticsSources(projectId!, params),
+    enabled: !!projectId && breakdownTab === 'sources',
+  })
+
+  const {data: locations, isLoading: locationsLoading} = useQuery({
+    queryKey: ['analytics-locations', projectId, params],
+    queryFn: () => api.getAnalyticsLocations(projectId!, params),
+    enabled: !!projectId && breakdownTab === 'locations',
+  })
+
+  const {data: browsers, isLoading: browsersLoading} = useQuery({
+    queryKey: ['analytics-devices-browser', projectId, params],
+    queryFn: () => api.getAnalyticsDevices(projectId!, 'browser', params),
+    enabled: !!projectId && breakdownTab === 'devices',
+  })
+
+  const {data: operatingSystems, isLoading: osLoading} = useQuery({
+    queryKey: ['analytics-devices-os', projectId, params],
+    queryFn: () => api.getAnalyticsDevices(projectId!, 'os', params),
+    enabled: !!projectId && breakdownTab === 'devices',
+  })
+
+  const {data: deviceTypes, isLoading: deviceTypesLoading} = useQuery({
+    queryKey: ['analytics-devices-device', projectId, params],
+    queryFn: () => api.getAnalyticsDevices(projectId!, 'device', params),
+    enabled: !!projectId && breakdownTab === 'devices',
+  })
+
+  const {data: utmSources, isLoading: utmSourcesLoading} = useQuery({
+    queryKey: ['analytics-utm-source', projectId, params],
+    queryFn: () => api.getAnalyticsUtm(projectId!, 'source', params),
+    enabled: !!projectId && breakdownTab === 'utm',
+  })
+
+  const {data: customEvents, isLoading: customEventsLoading} = useQuery({
+    queryKey: ['analytics-events', projectId, params],
+    queryFn: () => api.getAnalyticsEvents(projectId!, params),
+    enabled: !!projectId && breakdownTab === 'events',
+  })
+
+  const handleCustomRangeChange = (from: string, to: string) => {
+    setCustomFrom(from)
+    setCustomTo(to)
+  }
+
+  const addFilterFromRow = (property: string) => (item: AnalyticsBreakdownItem) => {
+    if (filters.some(f => f.property === property && f.value === item.name)) return
+    setFilters([...filters, {property, operator: 'is', value: item.name}])
+  }
+
+  if (!projectId) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-muted-foreground">Select a project to view analytics</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <AnalyticsFilterBar filters={filters} onFiltersChange={setFilters} />
+        <AnalyticsDatePicker
+          period={period}
+          onPeriodChange={setPeriod}
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={handleCustomRangeChange}
+        />
+      </div>
+
+      {/* KPI Cards */}
+      {overviewLoading ? (
+        <AnalyticsKpiCardsSkeleton />
+      ) : (
+        <AnalyticsKpiCards data={overview} isLoading={overviewLoading} />
+      )}
+
+      {/* Timeseries Chart */}
+      <AnalyticsChart data={timeseries} isLoading={timeseriesLoading} />
+
+      {/* Breakdown Tables with Tabs */}
+      <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
+        <TabsList className="h-9">
+          <TabsTrigger value="pages" className="gap-1.5 text-xs">
+            <FileText className="h-3.5 w-3.5" /> Pages
+          </TabsTrigger>
+          <TabsTrigger value="entry-pages" className="gap-1.5 text-xs">
+            <LogIn className="h-3.5 w-3.5" /> Entry Pages
+          </TabsTrigger>
+          <TabsTrigger value="exit-pages" className="gap-1.5 text-xs">
+            <LogOut className="h-3.5 w-3.5" /> Exit Pages
+          </TabsTrigger>
+          <TabsTrigger value="sources" className="gap-1.5 text-xs">
+            <Share2 className="h-3.5 w-3.5" /> Sources
+          </TabsTrigger>
+          <TabsTrigger value="locations" className="gap-1.5 text-xs">
+            <MapPin className="h-3.5 w-3.5" /> Locations
+          </TabsTrigger>
+          <TabsTrigger value="devices" className="gap-1.5 text-xs">
+            <Laptop className="h-3.5 w-3.5" /> Devices
+          </TabsTrigger>
+          <TabsTrigger value="utm" className="gap-1.5 text-xs">
+            <Megaphone className="h-3.5 w-3.5" /> UTM
+          </TabsTrigger>
+          <TabsTrigger value="events" className="gap-1.5 text-xs">
+            <MousePointerClick className="h-3.5 w-3.5" /> Events
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pages" className="mt-4">
+          <AnalyticsBreakdownTable
+            title="Top Pages"
+            icon={FileText}
+            iconColor="text-blue-500"
+            data={pages}
+            isLoading={pagesLoading}
+            showBounceRate
+            showDuration
+            onRowClick={addFilterFromRow('page')}
+          />
+        </TabsContent>
+
+        <TabsContent value="entry-pages" className="mt-4">
+          <AnalyticsBreakdownTable
+            title="Entry Pages"
+            icon={LogIn}
+            iconColor="text-emerald-500"
+            data={entryPages}
+            isLoading={entryPagesLoading}
+            showBounceRate
+            onRowClick={addFilterFromRow('page')}
+          />
+        </TabsContent>
+
+        <TabsContent value="exit-pages" className="mt-4">
+          <AnalyticsBreakdownTable
+            title="Exit Pages"
+            icon={LogOut}
+            iconColor="text-rose-500"
+            data={exitPages}
+            isLoading={exitPagesLoading}
+            onRowClick={addFilterFromRow('page')}
+          />
+        </TabsContent>
+
+        <TabsContent value="sources" className="mt-4">
+          <AnalyticsBreakdownTable
+            title="Top Sources"
+            icon={Share2}
+            iconColor="text-violet-500"
+            data={sources}
+            isLoading={sourcesLoading}
+            onRowClick={addFilterFromRow('source')}
+          />
+        </TabsContent>
+
+        <TabsContent value="locations" className="mt-4">
+          <AnalyticsBreakdownTable
+            title="Countries"
+            icon={MapPin}
+            iconColor="text-amber-500"
+            data={locations}
+            isLoading={locationsLoading}
+            onRowClick={addFilterFromRow('country')}
+          />
+        </TabsContent>
+
+        <TabsContent value="devices" className="mt-4">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <AnalyticsBreakdownTable
+              title="Browsers"
+              icon={Globe}
+              iconColor="text-blue-500"
+              data={browsers}
+              isLoading={browsersLoading}
+              onRowClick={addFilterFromRow('browser')}
+            />
+            <AnalyticsBreakdownTable
+              title="Operating Systems"
+              icon={Laptop}
+              iconColor="text-emerald-500"
+              data={operatingSystems}
+              isLoading={osLoading}
+              onRowClick={addFilterFromRow('os')}
+            />
+            <AnalyticsBreakdownTable
+              title="Device Types"
+              icon={Laptop}
+              iconColor="text-violet-500"
+              data={deviceTypes}
+              isLoading={deviceTypesLoading}
+              onRowClick={addFilterFromRow('device')}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="utm" className="mt-4">
+          <AnalyticsBreakdownTable
+            title="UTM Sources"
+            icon={Megaphone}
+            iconColor="text-cyan-500"
+            data={utmSources}
+            isLoading={utmSourcesLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="events" className="mt-4">
+          <AnalyticsBreakdownTable
+            title="Custom Events"
+            icon={MousePointerClick}
+            iconColor="text-orange-500"
+            data={customEvents}
+            isLoading={customEventsLoading}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
