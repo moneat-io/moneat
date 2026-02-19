@@ -47,6 +47,13 @@ class EscalationEngine(
         private const val ACTIVE_INCIDENTS_KEY = "escalation:active"
         private const val SMS_FALLBACK_KEY = "escalation:sms_fallback"
     }
+
+    private data class IncidentEscalationState(
+        val status: String,
+        val escalationPolicyId: Int?,
+        val currentStep: Int,
+        val repeatIteration: Int
+    )
     
     fun start() {
         logger.info("Starting escalation engine timeout polling")
@@ -177,12 +184,28 @@ class EscalationEngine(
             step.targets.forEach { target ->
                 when (target.targetType) {
                     "USER" -> {
-                        notifyUser(incidentId, target.targetId, incident[Incidents.title], incident[Incidents.priorityLevel], step.smsFallbackDelayMinutes)
+                        notifyUser(
+                            incidentId,
+                            target.targetId,
+                            incident[Incidents.title],
+                            incident[Incidents.priorityLevel],
+                            step.smsFallbackDelayMinutes,
+                            stepIndex,
+                            iteration
+                        )
                     }
                     "ON_CALL_SCHEDULE" -> {
                         val onCall = onCallScheduleService.getCurrentOnCall(target.targetId)
                         if (onCall != null) {
-                            notifyUser(incidentId, onCall.userId, incident[Incidents.title], incident[Incidents.priorityLevel], step.smsFallbackDelayMinutes)
+                            notifyUser(
+                                incidentId,
+                                onCall.userId,
+                                incident[Incidents.title],
+                                incident[Incidents.priorityLevel],
+                                step.smsFallbackDelayMinutes,
+                                stepIndex,
+                                iteration
+                            )
                         } else {
                             logger.warn("No on-call user found for schedule ${target.targetId}")
                         }
@@ -202,7 +225,15 @@ class EscalationEngine(
         }
     }
     
-    private fun notifyUser(incidentId: Int, userId: Int, title: String, priorityLevel: String, smsFallbackDelayMinutes: Int = 2) {
+    private fun notifyUser(
+        incidentId: Int,
+        userId: Int,
+        title: String,
+        priorityLevel: String,
+        smsFallbackDelayMinutes: Int = 2,
+        stepIndex: Int,
+        iteration: Int
+    ) {
         val (userName, phoneNumber, phoneOptIn) = transaction {
             val row = Users.selectAll().where { Users.id eq userId }.singleOrNull()
             Triple(row?.get(Users.name), row?.get(Users.phone_number), row?.get(Users.oncall_phone_opt_in) ?: false)
@@ -226,7 +257,16 @@ class EscalationEngine(
                 // Schedule SMS/call fallback only when phone is set AND user has consented
                 if (!phoneNumber.isNullOrBlank() && smsFallbackDelayMinutes > 0 && twilioService.isEnabled()) {
                     if (phoneOptIn) {
-                        scheduleSmsFallback(incidentId, userId, phoneNumber, title, priorityLevel, smsFallbackDelayMinutes.toLong())
+                        scheduleSmsFallback(
+                            incidentId = incidentId,
+                            userId = userId,
+                            phoneNumber = phoneNumber,
+                            title = title,
+                            priorityLevel = priorityLevel,
+                            delayMinutes = smsFallbackDelayMinutes.toLong(),
+                            stepIndex = stepIndex,
+                            iteration = iteration
+                        )
                     } else {
                         logTimelineEvent(
                             incidentId,
@@ -280,7 +320,9 @@ class EscalationEngine(
         phoneNumber: String,
         title: String,
         priorityLevel: String,
-        delayMinutes: Long
+        delayMinutes: Long,
+        stepIndex: Int,
+        iteration: Int
     ) {
         val fireAt = Clock.System.now().plus(delayMinutes.minutes)
         val data = mapOf(
@@ -288,10 +330,43 @@ class EscalationEngine(
             "userId" to userId.toString(),
             "phoneNumber" to phoneNumber,
             "title" to title,
-            "priorityLevel" to priorityLevel
+            "priorityLevel" to priorityLevel,
+            "stepIndex" to stepIndex.toString(),
+            "iteration" to iteration.toString()
         )
         redisClient.zadd(SMS_FALLBACK_KEY, fireAt.epochSeconds.toDouble(), Json.encodeToString(kotlinx.serialization.serializer(), data))
         logger.debug("Scheduled SMS/call fallback for incident $incidentId at $fireAt")
+    }
+
+    private fun isFallbackStillValid(incidentId: Int, userId: Int, stepIndex: Int, iteration: Int): Boolean {
+        val state = transaction {
+            Incidents.selectAll()
+                .where { Incidents.id eq incidentId }
+                .singleOrNull()
+                ?.let { row ->
+                    IncidentEscalationState(
+                        status = row[Incidents.status],
+                        escalationPolicyId = row[Incidents.escalationPolicyId],
+                        currentStep = row[Incidents.currentStep],
+                        repeatIteration = row[Incidents.repeatIteration]
+                    )
+                }
+        } ?: return false
+
+        if (state.status != "TRIGGERED") return false
+        if (state.currentStep != stepIndex || state.repeatIteration != iteration) return false
+
+        val policyId = state.escalationPolicyId ?: return false
+        val policy = escalationPolicyService.getPolicy(policyId) ?: return false
+        val step = policy.steps.getOrNull(stepIndex) ?: return false
+
+        return step.targets.any { target ->
+            when (target.targetType) {
+                "USER" -> target.targetId == userId
+                "ON_CALL_SCHEDULE" -> onCallScheduleService.getCurrentOnCall(target.targetId)?.userId == userId
+                else -> false
+            }
+        }
     }
 
     private fun removeSmsFallback(incidentId: Int) {
@@ -320,14 +395,10 @@ class EscalationEngine(
                 val phoneNumber = data["phoneNumber"] ?: return@forEach
                 val title = data["title"] ?: return@forEach
                 val priorityLevel = data["priorityLevel"] ?: return@forEach
+                val stepIndex = data["stepIndex"]?.toIntOrNull() ?: return@forEach
+                val iteration = data["iteration"]?.toIntOrNull() ?: return@forEach
 
-                // Only fire if incident is still TRIGGERED
-                val stillTriggered = transaction {
-                    Incidents.selectAll().where { Incidents.id eq incidentId }
-                        .singleOrNull()?.get(Incidents.status) == "TRIGGERED"
-                }
-
-                if (stillTriggered) {
+                if (isFallbackStillValid(incidentId, userId, stepIndex, iteration)) {
                     logger.info("SMS/call fallback firing for incident $incidentId, user $userId")
                     scope.launch {
                         try {
@@ -343,6 +414,8 @@ class EscalationEngine(
                             logger.error("Failed to send SMS/call fallback for incident $incidentId", e)
                         }
                     }
+                } else {
+                    logger.info("Skipping stale SMS/call fallback for incident $incidentId, user $userId")
                 }
 
                 redisClient.zrem(SMS_FALLBACK_KEY, item)
@@ -455,7 +528,14 @@ class EscalationEngine(
         }
         
         // Notify new user
-        notifyUser(incidentId, toUserId, incident[Incidents.title], incident[Incidents.priorityLevel])
+        notifyUser(
+            incidentId,
+            toUserId,
+            incident[Incidents.title],
+            incident[Incidents.priorityLevel],
+            stepIndex = incident[Incidents.currentStep],
+            iteration = incident[Incidents.repeatIteration]
+        )
         
         logTimelineEvent(
             incidentId,
