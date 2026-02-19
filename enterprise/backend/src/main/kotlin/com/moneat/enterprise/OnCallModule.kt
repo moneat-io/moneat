@@ -21,8 +21,8 @@ import com.moneat.enterprise.services.oncall.PriorityService
 import com.moneat.enterprise.services.oncall.PushNotificationService
 import com.moneat.enterprise.services.oncall.SlackUserGroupSyncService
 import com.moneat.services.SlackService
-import io.ktor.server.application.*
-import io.ktor.server.routing.*
+import io.ktor.server.application.Application
+import io.ktor.server.routing.Route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import mu.KotlinLogging

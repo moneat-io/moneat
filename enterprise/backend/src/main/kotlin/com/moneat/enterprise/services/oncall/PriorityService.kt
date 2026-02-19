@@ -4,14 +4,13 @@
 
 package com.moneat.enterprise.services.oncall
 
-import com.moneat.enterprise.models.*
-import com.moneat.models.*
-import org.jetbrains.exposed.v1.core.*
+import com.moneat.enterprise.models.AlertPriorities
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
 class PriorityService {

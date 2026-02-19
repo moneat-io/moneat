@@ -606,7 +606,11 @@ class DashboardService {
                 val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
                 if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                    logger.error { "Failed to fetch issues for project $projectId: ${response.status} ${body.take(400)}" }
+                    logger.error {
+                        "Failed to fetch issues for project $projectId: ${response.status} ${body.take(
+                            400
+                        )}"
+                    }
                     return@cached emptyList<IssueResponse>()
                 }
                 body.lines()

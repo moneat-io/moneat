@@ -5,7 +5,7 @@
 package com.moneat.enterprise.routes
 
 import com.moneat.enterprise.models.OnCallScheduleUsergroups
-import com.moneat.enterprise.services.oncall.*
+import com.moneat.enterprise.services.oncall.OnCallScheduleService
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
@@ -16,8 +16,8 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.auth.principal
-import io.ktor.server.request.*
-import io.ktor.server.response.*
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -29,12 +29,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.LocalTime
 import kotlin.time.Clock
 import kotlin.time.Instant

@@ -5,8 +5,8 @@
 package com.moneat.enterprise
 
 import com.moneat.enterprise.routes.ssoRoutes
-import io.ktor.server.application.*
-import io.ktor.server.routing.*
+import io.ktor.server.application.Application
+import io.ktor.server.routing.Route
 
 /**
  * Enterprise module for SSO/SAML/OIDC authentication.

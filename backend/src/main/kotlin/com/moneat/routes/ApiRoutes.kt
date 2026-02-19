@@ -677,7 +677,13 @@ fun Route.apiRoutes() {
                     val period = call.request.queryParameters["period"] ?: "7d"
                     val environment = call.request.queryParameters["environment"]
                     val operation = call.request.queryParameters["operation"]
-                    val stats = dashboardService.getPerformanceStats(projectId, period, environment, operation, demoEpochMs)
+                    val stats = dashboardService.getPerformanceStats(
+                        projectId,
+                        period,
+                        environment,
+                        operation,
+                        demoEpochMs
+                    )
                     call.respond(stats)
                 }
 

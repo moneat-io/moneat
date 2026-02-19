@@ -4,7 +4,10 @@
 
 package com.moneat.enterprise.models
 
-import com.moneat.models.*
+import com.moneat.models.OnCallParticipants
+import com.moneat.models.OnCallSchedules
+import com.moneat.models.Organizations
+import com.moneat.models.Users
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind

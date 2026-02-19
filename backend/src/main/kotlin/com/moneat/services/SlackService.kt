@@ -551,7 +551,7 @@ class SlackService {
                     } else {
                         it.toString()
                     }
-                }}"
+                    }}"
                 )
             )
         }

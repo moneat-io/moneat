@@ -8,18 +8,19 @@ import com.moneat.config.EnvConfig
 import com.moneat.enterprise.models.Incidents
 import com.moneat.enterprise.models.TwilioNotificationsSent
 import com.moneat.models.Users
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.request.forms.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.util.*
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.forms.FormDataContent
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
+import io.ktor.http.Parameters
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -241,7 +242,9 @@ class TwilioService {
         if (!isEnabled()) {
             throw IllegalStateException("Twilio is not configured")
         }
-        val twiml = """<Response><Say voice="alice">This is a test call from Moneat on-call alerting. Your phone call integration is working correctly.</Say></Response>"""
+        val twiml =
+            """<Response><Say voice="alice">This is a test call from Moneat on-call alerting. """ +
+                """Your phone call integration is working correctly.</Say></Response>"""
         val response =
             httpClient.post(callsUrl) {
                 header(HttpHeaders.Authorization, basicAuthHeader())
