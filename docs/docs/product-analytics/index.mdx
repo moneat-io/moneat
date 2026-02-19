@@ -1,0 +1,99 @@
+---
+sidebar_position: 1
+title: Overview
+description: Privacy-focused, cookie-free web analytics for your projects. Track pageviews, visitors, and custom events without compromising user privacy.
+---
+
+# Product Analytics
+
+Moneat Product Analytics provides privacy-focused, cookie-free web analytics built directly into your observability platform. Track pageviews, visitors, referral sources, and custom events — all without cookies, personal data storage, or third-party scripts.
+
+:::info Enterprise Feature
+Product Analytics is available on Enterprise plans. See [Billing & Plans](/billing) for details.
+:::
+
+## Why Moneat Analytics?
+
+Most analytics tools require cookie banners, track users across sites, and send data to third-party servers. Moneat takes a different approach:
+
+| | Moneat Analytics | Traditional Analytics |
+|---|---|---|
+| **Cookies** | None | Requires cookies + consent banner |
+| **Personal data** | Never stored | Stores IP, device fingerprints, user profiles |
+| **Hosting** | Your infrastructure | Third-party servers |
+| **Script size** | ~670 bytes gzipped | 30–80 KB |
+| **GDPR/CCPA** | Compliant by design | Requires consent flows |
+| **Cross-site tracking** | Impossible | Common |
+
+## Key Features
+
+- **Cookie-free sessions** — Derived from server-side hashing (daily salt + domain + IP + User-Agent), never from client storage
+- **No personal data stored** — IP addresses and User-Agent strings are used transiently for enrichment, then discarded
+- **Sub-1 KB tracking script** — ~670 bytes gzipped, minimal performance impact
+- **SPA support** — Automatic tracking of client-side navigations via the History API
+- **Custom events** — Track conversions, signups, downloads, and any user interaction
+- **Respects Do Not Track** — Honors the browser's DNT setting by default
+- **Real-time visitors** — See active visitors using Redis HyperLogLog
+- **Funnel analysis** — Measure conversion through ordered event sequences
+- **UTM campaign tracking** — Full attribution with source, medium, campaign, term, and content
+- **Advanced filtering** — Segment data by page, source, country, browser, device, and more
+- **Comparison periods** — Compare metrics against the previous period or year-over-year
+
+## How It Works
+
+```
+Browser                   Moneat Server                        ClickHouse
+  │                            │                                    │
+  │── pageview event ─────────►│                                    │
+  │   (pathname, referrer,     │── Extract IP (from headers)        │
+  │    UTM params, etc.)       │── Parse User-Agent                 │
+  │                            │── GeoIP lookup (IP → country)      │
+  │                            │── Generate session hash:           │
+  │                            │   SHA-256(salt │ domain │ IP │ UA) │
+  │                            │                                    │
+  │                            │── DISCARD IP address               │
+  │                            │── DISCARD raw User-Agent           │
+  │                            │                                    │
+  │                            │── Store enriched event ───────────►│
+  │                            │   (session_id, country, browser,   │
+  │                            │    pathname, referrer, etc.)        │
+  │                            │                                    │
+  │◄── 202 Accepted ──────────│                                    │
+```
+
+Events are processed on ingestion: IP and User-Agent are used to derive the session ID, country, and device info, then **permanently discarded**. Only the enriched, anonymized event is stored in ClickHouse.
+
+## Quick Start
+
+Get analytics running on your site in under a minute:
+
+### 1. Get your project key
+
+Navigate to your project's **Settings** page in the Moneat dashboard. Your project's public key (the same one used for error monitoring) authenticates analytics events.
+
+### 2. Add the tracking script
+
+```html
+<script
+  defer
+  data-domain="yoursite.com"
+  data-key="your-project-public-key"
+  src="https://your-moneat-instance.com/js/m.js"
+></script>
+```
+
+### 3. View your dashboard
+
+Navigate to **Analytics** in the sidebar. Data appears within seconds of the first pageview.
+
+---
+
+**Next steps:**
+
+- [Setup & Installation](./setup) — Script tag, NPM package, and SPA configuration
+- [Dashboard Guide](./dashboard) — Understanding KPIs, charts, and breakdown tables
+- [Custom Events](./custom-events) — Track conversions and user interactions
+- [Funnels](./funnels) — Measure conversion through multi-step flows
+- [Filtering & Segmentation](./filtering) — Slice data by any dimension
+- [API Reference](./api-reference) — Full endpoint documentation
+- [Privacy Architecture](./privacy) — Technical details on how privacy is enforced

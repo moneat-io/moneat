@@ -1,0 +1,153 @@
+---
+sidebar_position: 5
+title: Funnel Analysis
+description: Measure conversion rates through multi-step user flows with funnel analysis.
+---
+
+# Funnel Analysis
+
+Funnels let you measure how users progress through a sequence of steps — like a signup flow, checkout process, or onboarding sequence. See where users drop off and identify opportunities to improve conversion.
+
+## How Funnels Work
+
+A funnel is an ordered sequence of events (pageviews or custom events). Moneat calculates how many visitors completed each step and what percentage dropped off between steps.
+
+```
+Step 1: Visit /pricing         →  1,200 visitors  (100%)
+Step 2: Click "Start Trial"    →    840 visitors   (70%)
+Step 3: Complete Signup        →    504 visitors   (42%)
+Step 4: First Project Created  →    302 visitors   (25.2%)
+```
+
+### Key Concepts
+
+- **Strict ordering** — Steps must occur in the defined order within a single session
+- **Session-scoped** — All steps must happen within the same visitor session
+- **No time limit between steps** — Steps can occur at any point during the session
+- **Pageviews and custom events** — Mix both types freely in a funnel
+
+## Creating a Funnel
+
+### Via the Dashboard
+
+1. Navigate to **Analytics** → **Funnels** tab
+2. Click **New Funnel**
+3. Add steps by selecting event names or page paths
+4. Click **Analyze** to see results
+
+### Via the API
+
+```http
+GET /v1/analytics/{projectId}/funnel?steps[]=pageview:/pricing&steps[]=Signup Start&steps[]=Signup Complete&period=30d
+```
+
+Each `steps[]` parameter defines one funnel step:
+
+| Format | Type | Example |
+|--------|------|---------|
+| `pageview:/path` | Pageview on a specific path | `pageview:/pricing` |
+| `EventName` | Custom event | `Signup Complete` |
+
+## Reading Funnel Results
+
+The funnel response contains:
+
+```json
+{
+  "steps": [
+    {
+      "name": "pageview:/pricing",
+      "visitors": 1200,
+      "conversionRate": 100.0,
+      "dropoffRate": 0.0
+    },
+    {
+      "name": "Start Trial",
+      "visitors": 840,
+      "conversionRate": 70.0,
+      "dropoffRate": 30.0
+    },
+    {
+      "name": "Signup Complete",
+      "visitors": 504,
+      "conversionRate": 42.0,
+      "dropoffRate": 28.0
+    }
+  ],
+  "overallConversionRate": 42.0
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `visitors` | Number of unique visitors who reached this step |
+| `conversionRate` | Percentage of step-1 visitors who reached this step |
+| `dropoffRate` | Percentage of previous-step visitors who did **not** reach this step |
+| `overallConversionRate` | Percentage of step-1 visitors who completed the final step |
+
+## Funnel Examples
+
+### Signup Flow
+
+```
+Step 1: pageview:/pricing
+Step 2: Start Signup
+Step 3: Complete Signup
+```
+
+Measures: How many pricing page visitors convert to signups.
+
+### E-Commerce Checkout
+
+```
+Step 1: Add to Cart
+Step 2: pageview:/checkout
+Step 3: Enter Payment
+Step 4: Purchase Complete
+```
+
+Measures: Cart-to-purchase conversion rate and where buyers abandon.
+
+### Onboarding Completion
+
+```
+Step 1: Complete Signup
+Step 2: Create Project
+Step 3: Install SDK
+Step 4: First Event Received
+```
+
+Measures: How effectively new users complete onboarding.
+
+### Content-to-Conversion
+
+```
+Step 1: pageview:/blog/getting-started
+Step 2: pageview:/pricing
+Step 3: Start Trial
+```
+
+Measures: How blog content drives trial signups.
+
+## Combining with Filters
+
+Apply any [filter](./filtering) alongside a funnel to segment results:
+
+```http
+GET /v1/analytics/{projectId}/funnel
+  ?steps[]=pageview:/pricing
+  &steps[]=Signup Complete
+  &period=30d
+  &filters[]=country_code:is:US
+  &filters[]=device_type:is:Desktop
+```
+
+This shows the funnel conversion rate for US desktop visitors only.
+
+## Best Practices
+
+- **Start broad, then narrow** — Begin with 2–3 steps and add detail once you understand the high-level flow
+- **Use meaningful step names** — Name custom events clearly so funnels are self-documenting
+- **Compare segments** — Run the same funnel with different filters to find which audience segments convert best
+- **Track both intent and completion** — Pair "started" events with "completed" events (e.g., `Start Checkout` → `Complete Purchase`)
+- **Monitor over time** — Check funnel conversion rates weekly to catch regressions after product changes

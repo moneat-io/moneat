@@ -1,0 +1,165 @@
+---
+sidebar_position: 2
+title: Setup & Installation
+description: Add Moneat Analytics to your website using a script tag or the NPM package.
+---
+
+# Setup & Installation
+
+Moneat Analytics offers two integration methods: a lightweight script tag for any website, and an NPM package for JavaScript frameworks.
+
+## Script Tag
+
+Add the following to your website's `<head>`:
+
+```html
+<script
+  defer
+  data-domain="yoursite.com"
+  data-key="your-project-public-key"
+  src="https://your-moneat-instance.com/js/m.js"
+></script>
+```
+
+That's it. The script automatically tracks pageviews, including client-side navigations in single-page applications.
+
+### Script Attributes
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `data-domain` | Yes | Your website's domain (e.g., `example.com`). Must match the domain you're tracking. |
+| `data-key` | Yes | Your Moneat project's public key. Found in **Project Settings**. |
+| `data-api` | No | Override the API host if the analytics API runs on a different domain than the script origin. |
+| `src` | Yes | URL to the tracking script served by your Moneat instance. |
+
+### Script Behavior
+
+- **Deferred loading** — The `defer` attribute ensures the script doesn't block page rendering
+- **Automatic pageview tracking** — Fires on initial load and on every History API navigation (`pushState`, `replaceState`, `popstate`)
+- **Respects Do Not Track** — If the browser has DNT enabled, no events are sent
+- **No cookies** — Zero cookies are set, ever
+- **Error-resilient** — If the script fails to load or the API is unreachable, your site is unaffected
+
+## NPM Package
+
+For SPAs and JavaScript frameworks (React, Vue, Next.js, Nuxt, SvelteKit, etc.):
+
+```bash
+npm install @moneat/analytics
+```
+
+### Initialization
+
+Initialize the tracker once, typically in your app's entry point:
+
+```typescript
+import { init } from '@moneat/analytics'
+
+init({
+  domain: 'yoursite.com',
+  apiHost: 'https://your-moneat-instance.com',
+  key: 'your-project-public-key',
+})
+```
+
+### Configuration Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `domain` | `string` | Yes | Your website's domain |
+| `apiHost` | `string` | Yes | Your Moneat instance URL |
+| `key` | `string` | Yes | Project public key |
+| `trackLocalhost` | `boolean` | No | Track events on `localhost` (default: `false`) |
+| `hashMode` | `boolean` | No | Use hash-based routing instead of History API (default: `false`) |
+
+### Framework Examples
+
+**React (Create React App / Vite)**
+
+```tsx
+// src/main.tsx
+import { init } from '@moneat/analytics'
+
+init({
+  domain: 'yoursite.com',
+  apiHost: 'https://your-moneat-instance.com',
+  key: 'your-project-public-key',
+})
+```
+
+**Next.js (App Router)**
+
+```tsx
+// app/layout.tsx
+import Script from 'next/script'
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <head>
+        <Script
+          defer
+          data-domain="yoursite.com"
+          data-key="your-project-public-key"
+          src="https://your-moneat-instance.com/js/m.js"
+          strategy="afterInteractive"
+        />
+      </head>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+**Vue / Nuxt**
+
+```typescript
+// plugins/analytics.ts
+import { init } from '@moneat/analytics'
+
+export default defineNuxtPlugin(() => {
+  init({
+    domain: 'yoursite.com',
+    apiHost: 'https://your-moneat-instance.com',
+    key: 'your-project-public-key',
+  })
+})
+```
+
+## Finding Your Project Key
+
+1. Open the Moneat dashboard
+2. Navigate to your project's **Settings** page
+3. Copy the **Public Key** (also called the Sentry key)
+
+This is the same key used for error monitoring — one key for both features.
+
+## Verifying Installation
+
+After adding the script or initializing the NPM package:
+
+1. Open your website in a browser
+2. Navigate to the **Analytics** section in the Moneat dashboard
+3. You should see your visit appear in the **Realtime** badge within seconds
+
+:::tip Debugging
+Open your browser's Network tab and look for requests to `/api/{projectId}/analytics/event`. A `202 Accepted` response confirms events are being received.
+:::
+
+## Self-Hosted Considerations
+
+If you self-host Moneat, ensure the following:
+
+- The tracking script is served from your Moneat instance at `/js/m.js`
+- The analytics ingestion endpoint (`/api/{projectId}/analytics/event`) is accessible from client browsers
+- If using a CDN or reverse proxy, ensure the client's real IP is forwarded via `X-Forwarded-For` or `X-Real-IP` headers (required for GeoIP and session hashing)
+
+### GeoIP Database
+
+Location data (country, region, city) requires a MaxMind GeoLite2-City database. Set the path via environment variable:
+
+```bash
+GEOIP_DB_PATH=/usr/share/GeoIP/GeoLite2-City.mmdb
+```
+
+If the database is not available, analytics works normally but location breakdowns will be empty.

@@ -21,7 +21,20 @@ const sidebars: SidebarsConfig = {
         'logging',
         'releases',
         'ai-observability',
-        'product-analytics',
+        {
+          type: 'category',
+          label: 'Product Analytics',
+          link: { type: 'doc', id: 'product-analytics/index' },
+          items: [
+            'product-analytics/setup',
+            'product-analytics/dashboard',
+            'product-analytics/custom-events',
+            'product-analytics/funnels',
+            'product-analytics/filtering',
+            'product-analytics/api-reference',
+            'product-analytics/privacy',
+          ],
+        },
       ],
     },
     {
