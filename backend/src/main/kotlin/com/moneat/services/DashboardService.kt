@@ -305,41 +305,88 @@ class DashboardService {
         }
     }
     
+    private suspend fun getBatchIssueCounts(projectIds: List<Long>, demoEpochMs: Long? = null): Map<Long, Long> {
+        if (projectIds.isEmpty()) return emptyMap()
+        // Use a default retention — individual retention per project would require N queries to resolve.
+        // For the dashboard overview list this is acceptable.
+        val retentionDays = getProjectRetentionDays(projectIds.first())
+        val idList = projectIds.joinToString(",")
+        val query = """
+            SELECT project_id, count(DISTINCT issue_id) as count
+            FROM $clickhouseDb.issues
+            WHERE project_id IN ($idList)
+                AND ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
+            GROUP BY project_id
+            FORMAT JSONEachRow
+        """.trimIndent()
+        
+        return try {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "Failed to batch get issue counts: ${response.status} ${body.take(400)}" }
+                return emptyMap()
+            }
+            if (body.isBlank()) return emptyMap()
+            body.lines().filter { it.isNotBlank() }.associate { line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                val pid = obj["project_id"]?.jsonPrimitive?.long ?: 0L
+                val count = obj["count"]?.jsonPrimitive?.long ?: 0L
+                pid to count
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to batch get issue counts" }
+            emptyMap()
+        }
+    }
+    
     suspend fun getProjects(userId: Int, demoEpochMs: Long? = null): List<ProjectResponse> {
         val projectsData = transaction {
             val orgIds = Memberships.selectAll().where { Memberships.user_id eq userId }
                 .map { it[Memberships.organization_id] }
             
-            Projects.selectAll().where { Projects.organization_id inList orgIds }
-                .map { row ->
-                    val projectId = row[Projects.id]
-                    val keys = ProjectKeys.selectAll().where { ProjectKeys.project_id eq projectId }
-                        .map { keyRow ->
-                            ProjectKeyResponse(
-                                platformTarget = keyRow[ProjectKeys.platform_target],
-                                dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
-                            )
-                        }
-                    
-                    Triple(
-                        projectId,
-                        ProjectResponse(
-                            id = projectId,
-                            name = row[Projects.name],
-                            slug = row[Projects.slug],
-                            framework = row[Projects.framework],
-                            keys = keys,
-                            dsn = keys.firstOrNull()?.dsn ?: "",
-                            issueCount = 0
-                        ),
-                        keys.firstOrNull()?.dsn?.substringAfter("http://")?.substringBefore("@") ?: ""
-                    )
+            val projects = Projects.selectAll().where { Projects.organization_id inList orgIds }
+                .map { row -> row[Projects.id] to row }
+            
+            val projectIds = projects.map { it.first }
+            
+            // Batch fetch all project keys in a single query
+            val keysByProject = ProjectKeys.selectAll()
+                .where { ProjectKeys.project_id inList projectIds }
+                .groupBy { it[ProjectKeys.project_id] }
+                .mapValues { (projectId, rows) ->
+                    rows.map { keyRow ->
+                        ProjectKeyResponse(
+                            platformTarget = keyRow[ProjectKeys.platform_target],
+                            dsn = "https://${keyRow[ProjectKeys.public_key]}@${backendUrl.removePrefix("http://").removePrefix("https://")}/$projectId"
+                        )
+                    }
                 }
+            
+            projects.map { (projectId, row) ->
+                val keys = keysByProject[projectId] ?: emptyList()
+                Pair(
+                    projectId,
+                    ProjectResponse(
+                        id = projectId,
+                        name = row[Projects.name],
+                        slug = row[Projects.slug],
+                        framework = row[Projects.framework],
+                        keys = keys,
+                        dsn = keys.firstOrNull()?.dsn ?: "",
+                        issueCount = 0
+                    )
+                )
+            }
         }
         
-        // Get issue counts for all projects
-        return projectsData.map { (projectId, projectResponse, _) ->
-            projectResponse.copy(issueCount = getIssueCount(projectId, demoEpochMs))
+        if (projectsData.isEmpty()) return emptyList()
+        
+        // Batch fetch all issue counts in a single ClickHouse query
+        val issueCounts = getBatchIssueCounts(projectsData.map { it.first }, demoEpochMs)
+        
+        return projectsData.map { (projectId, projectResponse) ->
+            projectResponse.copy(issueCount = issueCounts[projectId] ?: 0)
         }
     }
     

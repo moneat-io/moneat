@@ -22,6 +22,7 @@ import io.ktor.client.statement.*
 import io.ktor.server.config.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -46,6 +47,7 @@ class NotificationService(private val emailService: EmailService) {
     private val slackService = SlackService()
     private val discordService = DiscordService()
     private val incidentService = com.moneat.services.incident.IncidentService()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     // Rate limiting: track last alert time per (user, project)
     private val lastAlertTimes = ConcurrentHashMap<Pair<Int, Long>, Instant>()
@@ -143,7 +145,7 @@ class NotificationService(private val emailService: EmailService) {
             
             // Send emails asynchronously
             usersToNotify.forEach { (email, _) ->
-                CoroutineScope(Dispatchers.IO).launch {
+                scope.launch {
                     try {
                         emailService.sendErrorAlertEmail(email, emailData)
                         logger.info { "Sent issue alert to $email for issue $issueId" }
@@ -267,7 +269,7 @@ class NotificationService(private val emailService: EmailService) {
             logger.info { "Sending weekly summaries to ${usersToNotify.size} users" }
             
             usersToNotify.forEach { (userId, email, userName) ->
-                CoroutineScope(Dispatchers.IO).launch {
+                scope.launch {
                     try {
                         sendUserWeeklySummary(userId, email, userName, startDate, endDate, priorStartDate)
                     } catch (e: Exception) {

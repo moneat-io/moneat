@@ -43,6 +43,16 @@ class EventService(private val notificationService: NotificationService? = null)
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
+    private val releaseService = ReleaseService()
+    private val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    
+    // In-memory caches for hot-path lookups (project keys & org IDs rarely change)
+    private data class CachedEntry<T>(val value: T, val expiresAt: Long)
+    private val projectKeyCache = ConcurrentHashMap<String, CachedEntry<ProjectKeyVerification>>()
+    private val orgIdCache = ConcurrentHashMap<Long, CachedEntry<Int?>>()
+    private val knownIssueIds = ConcurrentHashMap.newKeySet<String>()
+    private val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+    private val MAX_KNOWN_ISSUES = 100_000
     
     // Track replay segment counters for mobile replays that lack a separate replay_event item.
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
@@ -51,7 +61,11 @@ class EventService(private val notificationService: NotificationService? = null)
     data class ProjectKeyVerification(val isValid: Boolean, val platformTarget: String?)
     
     fun verifyProjectKey(projectId: Long, publicKey: String): ProjectKeyVerification {
-        return transaction {
+        val cacheKey = "$projectId:$publicKey"
+        val now = System.currentTimeMillis()
+        projectKeyCache[cacheKey]?.let { if (it.expiresAt > now) return it.value }
+        
+        val result = transaction {
             ProjectKeys.selectAll().where {
                 (ProjectKeys.project_id eq projectId) and
                         (ProjectKeys.public_key eq publicKey) and
@@ -60,14 +74,21 @@ class EventService(private val notificationService: NotificationService? = null)
                 ProjectKeyVerification(true, row[ProjectKeys.platform_target])
             } ?: ProjectKeyVerification(false, null)
         }
+        projectKeyCache[cacheKey] = CachedEntry(result, now + CACHE_TTL_MS)
+        return result
     }
 
     fun getOrganizationIdForProject(projectId: Long): Int? {
-        return transaction {
+        val now = System.currentTimeMillis()
+        orgIdCache[projectId]?.let { if (it.expiresAt > now) return it.value }
+        
+        val result = transaction {
             Projects.selectAll().where { Projects.id eq projectId }
                 .firstOrNull()
                 ?.get(Projects.organization_id)
         }
+        orgIdCache[projectId] = CachedEntry(result, now + CACHE_TTL_MS)
+        return result
     }
     
     suspend fun processEnvelope(projectId: Long, envelope: SentryEnvelope) {
@@ -293,7 +314,7 @@ class EventService(private val notificationService: NotificationService? = null)
             
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                 try {
-                    ReleaseService().upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
+                    releaseService.upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
                 } catch (e: Exception) {
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
@@ -393,14 +414,14 @@ class EventService(private val notificationService: NotificationService? = null)
                 logger.info { "Event stored: $eventId for project $projectId" }
                 event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                     try {
-                        ReleaseService().upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
+                        releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
                     } catch (e: Exception) {
                         logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                     }
                 }
                 
                 // Check if this is a new issue and trigger notifications
-                CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                scope.launch {
                     try {
                         if (isNewIssue(projectId, issueId)) {
                             logger.info { "New issue detected: $issueId for project $projectId" }
@@ -927,7 +948,9 @@ class EventService(private val notificationService: NotificationService? = null)
     }
     
     private suspend fun isNewIssue(projectId: Long, issueId: String): Boolean {
-        // Query ClickHouse to check if any events exist with this issue_id
+        val cacheKey = "$projectId:$issueId"
+        if (cacheKey in knownIssueIds) return false
+        
         val query = """
             SELECT count() as cnt
             FROM $clickhouseDb.events
@@ -942,8 +965,16 @@ class EventService(private val notificationService: NotificationService? = null)
             val count = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
                 ?.get("cnt")?.jsonPrimitive?.longOrNull ?: 0
             
-            // If count is 1, this is the first event for this issue (the one we just inserted)
-            count <= 1
+            if (count > 1) {
+                // Evict oldest entries if cache grows too large
+                if (knownIssueIds.size > MAX_KNOWN_ISSUES) {
+                    knownIssueIds.clear()
+                }
+                knownIssueIds.add(cacheKey)
+                false
+            } else {
+                true
+            }
         } catch (e: Exception) {
             logger.error(e) { "Error checking if issue $issueId is new" }
             false

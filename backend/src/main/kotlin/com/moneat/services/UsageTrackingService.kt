@@ -71,6 +71,7 @@ class UsageTrackingService {
         Thread(r, "usage-tracking-flush").apply { isDaemon = true }
     }
     private val billingQuotaService = BillingQuotaService()
+    private val orgIdCache = ConcurrentHashMap<Long, Int?>()
 
     init {
         scheduler.scheduleAtFixedRate(
@@ -106,11 +107,13 @@ class UsageTrackingService {
     }
 
     private fun getOrganizationId(projectId: Long): Int? {
-        return transaction {
-            Projects.select(Projects.organization_id)
-                .where { Projects.id eq projectId }
-                .firstOrNull()
-                ?.get(Projects.organization_id)
+        return orgIdCache.getOrPut(projectId) {
+            transaction {
+                Projects.select(Projects.organization_id)
+                    .where { Projects.id eq projectId }
+                    .firstOrNull()
+                    ?.get(Projects.organization_id)
+            }
         }
     }
 

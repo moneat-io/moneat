@@ -240,7 +240,7 @@ class UptimeScheduler(
             
             val emailService = com.moneat.services.EmailService()
             emailRecipients.forEach { (_, email) ->
-                CoroutineScope(Dispatchers.IO).launch {
+                scope.launch {
                     try {
                         emailService.sendUptimeAlertEmail(
                             to = email,
