@@ -19,7 +19,7 @@ COPY --from=email-builder /emails/build/templates/email ./src/main/resources/ema
 ARG ENTERPRISE=false
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     if [ "$ENTERPRISE" = "true" ]; then \
-      gradle shadowJar -Penterprise --no-daemon --build-cache; \
+      gradle shadowJar -Penterprise -PenterprisePath=/enterprise/backend --no-daemon --build-cache; \
     else \
       gradle shadowJar --no-daemon --build-cache; \
     fi
