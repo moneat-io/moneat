@@ -1350,14 +1350,16 @@ object DemoDataSeeder {
                 append(",'sdk.name':'$sdkName'")
                 append(",'sdk.version':'$sdkVersion'")
                 if (random.nextBoolean()) append(",'handled':'no'")
-                if (random.nextBoolean()) append(
-                    ",'mechanism':'${listOf(
-                        "AppExceptionHandler",
-                        "UncaughtExceptionHandler",
-                        "NSException",
-                        "unhandledrejection"
-                    ).random(random)}'"
-                )
+                if (random.nextBoolean()) {
+                    append(
+                        ",'mechanism':'${listOf(
+                            "AppExceptionHandler",
+                            "UncaughtExceptionHandler",
+                            "NSException",
+                            "unhandledrejection"
+                        ).random(random)}'"
+                    )
+                }
                 append("}")
             }
 
@@ -1487,9 +1489,12 @@ object DemoDataSeeder {
             Triple(
                 "error",
                 "Failed to send notification to user {userId}: {error}",
-                mapOf("userId" to userEmails.map {
-                    it.substringBefore("@")
-                }, "error" to listOf("device_not_registered", "network_timeout", "invalid_token"))
+                mapOf(
+                    "userId" to userEmails.map {
+                        it.substringBefore("@")
+                    },
+                    "error" to listOf("device_not_registered", "network_timeout", "invalid_token")
+                )
             ),
             Triple(
                 "debug",

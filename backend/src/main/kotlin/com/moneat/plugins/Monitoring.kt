@@ -60,7 +60,8 @@ fun Application.configureMonitoring() {
 
             // Add breadcrumb for request
             SentryUtils.breadcrumb(
-                "http.request", "HTTP $method $path",
+                "http.request",
+                "HTTP $method $path",
                 mapOf(
                     "method" to method,
                     "path" to path,
@@ -85,7 +86,8 @@ fun Application.configureMonitoring() {
 
                 // Add breadcrumb for response
                 SentryUtils.breadcrumb(
-                    "http.response", "HTTP ${status?.value ?: 0}",
+                    "http.response",
+                    "HTTP ${status?.value ?: 0}",
                     mapOf(
                         "status" to (status?.value ?: 0),
                         "description" to (status?.description ?: "")

@@ -46,7 +46,8 @@ class IngestionWorker(
     fun start() {
         logger.info { "Starting IngestionWorker with $workerCount workers, queue=$queueKey" }
         SentryUtils.breadcrumb(
-            "worker", "IngestionWorker starting",
+            "worker",
+            "IngestionWorker starting",
             mapOf(
                 "worker_count" to workerCount,
                 "queue" to queueKey
@@ -63,7 +64,11 @@ class IngestionWorker(
         jobs.forEach { it.cancel() }
         scope.cancel()
         logger.info { "IngestionWorker stopped" }
-        SentryUtils.breadcrumb("worker", "IngestionWorker stopped", emptyMap())
+        SentryUtils.breadcrumb(
+            "worker",
+            "IngestionWorker stopped",
+            emptyMap()
+        )
     }
 
     private suspend fun runWorker(workerId: Int) {
@@ -93,7 +98,8 @@ class IngestionWorker(
             val (projectId, envelopeBytes) = decodeMessage(value)
 
             SentryUtils.breadcrumb(
-                "ingestion", "Processing envelope",
+                "ingestion",
+                "Processing envelope",
                 mapOf(
                     "project_id" to projectId,
                     "size_bytes" to envelopeBytes.size

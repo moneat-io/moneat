@@ -89,7 +89,10 @@ fun Route.adminRoutes() {
                                 .firstOrNull()?.get(Users.is_admin) ?: false
                         }
                         if (!isAdmin) {
-                            call.respond(HttpStatusCode.Forbidden, com.moneat.models.ErrorResponse("Admin access required"))
+                            call.respond(
+                                HttpStatusCode.Forbidden,
+                                com.moneat.models.ErrorResponse("Admin access required")
+                            )
                         }
                     }
                 }
@@ -208,9 +211,11 @@ fun Route.adminRoutes() {
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
                     val severityEnum = IncidentSeverity.fromString(request.severity) ?: IncidentSeverity.MEDIUM
-                    val sourceEnum = try { AlertSource.valueOf(
-                        request.source
-                    ) } catch (e: Exception) { AlertSource.SYSTEM_ALERT }
+                    val sourceEnum = try {
+                        AlertSource.valueOf(request.source)
+                    } catch (e: Exception) {
+                        AlertSource.SYSTEM_ALERT
+                    }
 
                     val event = IncidentEvent(
                         title = request.title,
@@ -519,7 +524,10 @@ fun Route.adminRoutes() {
                         errors = errors
                     )
 
-                    call.respond(if (emailSent || slackSent || discordSent) HttpStatusCode.OK else HttpStatusCode.BadRequest, response)
+                    call.respond(
+                        if (emailSent || slackSent || discordSent) HttpStatusCode.OK else HttpStatusCode.BadRequest,
+                        response
+                    )
                 } catch (e: Exception) {
                     call.respond(
                         HttpStatusCode.InternalServerError,

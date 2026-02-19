@@ -143,9 +143,11 @@ class PricingTierService {
                         (PricingTierConfigs.tier_name eq "FREE")
                 }.firstOrNull()
 
-            val tier = if (tierRow != null) rowToResponse(
-                tierRow
-            ) else enumFallbackToResponse(subscription[Subscriptions.plan])
+            val tier = if (tierRow != null) {
+                rowToResponse(tierRow)
+            } else {
+                enumFallbackToResponse(subscription[Subscriptions.plan])
+            }
 
             EffectiveTierContext(
                 tier = tier,

@@ -38,9 +38,13 @@ class AiChatService {
         userId: Int,
         orgId: Int,
         request: ChatRequest
-    ): ChatApiResponse = SentryUtils.withTransaction("ai.chat", "ai") { tx ->
+    ): ChatApiResponse = SentryUtils.withTransaction(
+        "ai.chat",
+        "ai"
+    ) { tx ->
         SentryUtils.breadcrumb(
-            "ai", "Chat request",
+            "ai",
+            "Chat request",
             mapOf(
                 "userId" to userId.toString(),
                 "hasConversation" to (request.conversationId != null).toString(),
@@ -72,7 +76,8 @@ class AiChatService {
         val contextDocs = AiContextResolver.loadDocs(contextDocNames)
 
         SentryUtils.breadcrumb(
-            "ai", "Context resolved",
+            "ai",
+            "Context resolved",
             mapOf(
                 "docs" to contextDocNames.joinToString(","),
                 "model" to OpenAiClient.model
@@ -84,7 +89,11 @@ class AiChatService {
         val openAiMessages = buildOpenAiMessages(systemPrompt, contextDocs, history)
 
         // 6. Call OpenAI
-        val openAiResponse = SentryUtils.withSpan(tx, "ai.openai_call", "OpenAI chat completion") {
+        val openAiResponse = SentryUtils.withSpan(
+            tx,
+            "ai.openai_call",
+            "OpenAI chat completion"
+        ) {
             OpenAiClient.chatCompletion(openAiMessages)
         }
 
@@ -92,7 +101,8 @@ class AiChatService {
         val tokensUsed = openAiResponse.usage?.total_tokens
 
         SentryUtils.breadcrumb(
-            "ai", "OpenAI response received",
+            "ai",
+            "OpenAI response received",
             mapOf(
                 "tokensUsed" to (tokensUsed?.toString() ?: "unknown"),
                 "model" to OpenAiClient.model

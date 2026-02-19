@@ -126,7 +126,8 @@ class BillingQuotaService(
 
                 if (typeLimit >= 0 && typeAfter > effectiveTypeLimit) {
                     SentryUtils.breadcrumb(
-                        "billing", "Per-type quota exceeded",
+                        "billing",
+                        "Per-type quota exceeded",
                         mapOf(
                             "organization_id" to organizationId,
                             "requested_units" to requestedUnits,
@@ -151,7 +152,8 @@ class BillingQuotaService(
             val effectiveTotalLimit = state.totalLimitUnits + state.bonusUnits
             if (totalAfter > effectiveTotalLimit) {
                 SentryUtils.breadcrumb(
-                    "billing", "Quota exceeded",
+                    "billing",
+                    "Quota exceeded",
                     mapOf(
                         "organization_id" to organizationId,
                         "requested_units" to requestedAggregate,
@@ -176,7 +178,8 @@ class BillingQuotaService(
             }
             if (state.bytesLimit > 0 && bytesAfter > effectiveBytesLimit) {
                 SentryUtils.breadcrumb(
-                    "billing", "GB quota exceeded",
+                    "billing",
+                    "GB quota exceeded",
                     mapOf(
                         "organization_id" to organizationId,
                         "requested_bytes" to requestedTotalBytes,
@@ -229,7 +232,8 @@ class BillingQuotaService(
 
             if (state.subscriptionId != null && overageDelta > 0 && state.paygRateMicrosPerUnit > 0) {
                 SentryUtils.breadcrumb(
-                    "billing", "PAYG overage incurred",
+                    "billing",
+                    "PAYG overage incurred",
                     mapOf(
                         "organization_id" to organizationId,
                         "overage_delta" to overageDelta,

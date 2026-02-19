@@ -1661,7 +1661,13 @@ class DashboardService {
                     val affectedUsersDeferred = async { executeScalarQuery(affectedUsersQuery, parentSpan) }
                     val eventsTimelineDeferred = async { executeTimelineQuery(eventsTimelineQuery, parentSpan) }
                     val eventsByLevelDeferred = async { executeMapQuery(eventsByLevelQuery, "level", parentSpan) }
-                    val eventsByPlatformDeferred = async { executeMapQuery(eventsByPlatformQuery, "platform", parentSpan) }
+                    val eventsByPlatformDeferred = async {
+                        executeMapQuery(
+                            eventsByPlatformQuery,
+                            "platform",
+                            parentSpan
+                        )
+                    }
                     val eventsByBrowserDeferred = async {
                         executeMapQuery(
                             eventsByBrowserQuery,
@@ -1984,10 +1990,14 @@ class DashboardService {
             conditions.add("transaction_op = '${escapeSql(it)}'")
         }
 
-        return if (conditions.isEmpty()) "" else conditions.joinToString(
-            separator = "\n                ",
-            prefix = "AND "
-        )
+        return if (conditions.isEmpty()) {
+            ""
+        } else {
+            conditions.joinToString(
+                separator = "\n                ",
+                prefix = "AND "
+            )
+        }
     }
 
     private fun parseStringMap(element: JsonElement?): HashMap<String, String> {
