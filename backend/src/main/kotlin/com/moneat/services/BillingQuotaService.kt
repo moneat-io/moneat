@@ -176,7 +176,7 @@ class BillingQuotaService(
             // GB/byte limit check
             val effectiveBytesLimit =
                 if (state.bytesLimit > 0) {
-                    state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes
+                    state.bytesLimit + state.bonusGbBytes
                 } else {
                     Long.MAX_VALUE
                 }
@@ -528,8 +528,8 @@ class BillingQuotaService(
             ).all { (used, limit) ->
                 limit < 0 || used <= (limit + effectivePaygHeadroom)
             }
-        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + effectivePaygHeadroom)
-        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.paygLimitBytes + state.bonusGbBytes)
+        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + state.bonusUnits)
+        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.bonusGbBytes)
 
         // Per-type overage cost estimates
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)

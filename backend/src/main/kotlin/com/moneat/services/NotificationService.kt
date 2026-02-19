@@ -81,41 +81,42 @@ class NotificationService(private val emailService: EmailService) {
             val projectName = project[Projects.name]
             val orgId = project[Projects.organization_id]
 
-            // Get users with ERROR_ALERT email enabled
-            val prefsService = AlertNotificationPreferencesService()
+            // Use project/global NotificationPreferences for issue email eligibility.
+            val orgUsers =
+                transaction {
+                    Memberships
+                        .innerJoin(Users)
+                        .selectAll()
+                        .where {
+                            (Memberships.organization_id eq orgId) and
+                                (Users.email_verified eq true)
+                        }.map {
+                            Triple(it[Users.id], it[Users.email], it[Users.name])
+                        }
+                }
             val usersToNotify =
-                prefsService
-                    .getUsersWithChannelEnabled(
-                        organizationId = orgId,
-                        alertSource = "ERROR_ALERT",
-                        channel = "email"
-                    ).mapNotNull { (userId, email) ->
-                        val user =
-                            transaction {
-                                Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                            }
-                        if (user == null || !user[Users.email_verified]) {
+                orgUsers.mapNotNull { (userId, email, userName) ->
+                    val prefs = getPreferences(userId, projectId)
+                    if (!prefs.issueAlerts || !prefs.errorAlerts) {
+                        return@mapNotNull null
+                    }
+
+                    // Check rate limiting
+                    val key = Pair(userId, projectId)
+                    val lastAlert = lastAlertTimes[key]
+                    val now = Instant.now()
+                    if (lastAlert != null) {
+                        val minutesSince = Duration.between(lastAlert, now).toMinutes()
+                        if (minutesSince < prefs.alertFrequencyMinutes) {
+                            logger.debug { "Rate limiting alert for user=$userId project=$projectId" }
                             return@mapNotNull null
                         }
-
-                        // Check rate limiting
-                        val prefs = getPreferences(userId, projectId)
-                        val key = Pair(userId, projectId)
-                        val lastAlert = lastAlertTimes[key]
-                        val now = Instant.now()
-                        if (lastAlert != null) {
-                            val minutesSince = Duration.between(lastAlert, now).toMinutes()
-                            if (minutesSince < prefs.alertFrequencyMinutes) {
-                                logger.debug { "Rate limiting alert for user=$userId project=$projectId" }
-                                return@mapNotNull null
-                            }
-                        }
-
-                        // Update last alert time
-                        lastAlertTimes[key] = now
-
-                        Pair(email, user[Users.name])
                     }
+
+                    // Update last alert time
+                    lastAlertTimes[key] = now
+                    Pair(email, userName)
+                }
 
             if (usersToNotify.isEmpty()) {
                 logger.debug { "No users to notify for issue $issueId" }
@@ -192,13 +193,19 @@ class NotificationService(private val emailService: EmailService) {
             }
 
             // Check if Slack is enabled for any user in the org
+            val prefsService = AlertNotificationPreferencesService()
             val slackEnabled =
-                prefsService
-                    .getUsersWithChannelEnabled(
-                        organizationId = orgId,
-                        alertSource = "ERROR_ALERT",
-                        channel = "slack"
-                    ).isNotEmpty()
+                runCatching {
+                    prefsService
+                        .getUsersWithChannelEnabled(
+                            organizationId = orgId,
+                            alertSource = "ERROR_ALERT",
+                            channel = "slack"
+                        ).isNotEmpty()
+                }.getOrElse { e ->
+                    logger.warn(e) { "Unable to evaluate Slack alert preferences for org=$orgId" }
+                    false
+                }
 
             if (slackEnabled) {
                 try {
@@ -223,12 +230,17 @@ class NotificationService(private val emailService: EmailService) {
 
             // Check if Discord is enabled for any user in the org
             val discordEnabled =
-                prefsService
-                    .getUsersWithChannelEnabled(
-                        organizationId = orgId,
-                        alertSource = "ERROR_ALERT",
-                        channel = "discord"
-                    ).isNotEmpty()
+                runCatching {
+                    prefsService
+                        .getUsersWithChannelEnabled(
+                            organizationId = orgId,
+                            alertSource = "ERROR_ALERT",
+                            channel = "discord"
+                        ).isNotEmpty()
+                }.getOrElse { e ->
+                    logger.warn(e) { "Unable to evaluate Discord alert preferences for org=$orgId" }
+                    false
+                }
 
             if (discordEnabled) {
                 try {

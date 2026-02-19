@@ -185,17 +185,20 @@ class RefreshTokenService {
             userId.toLong() == EnvConfig.Demo.USER_ID ||
                 email.equals(EnvConfig.Demo.USER_EMAIL, ignoreCase = true)
         val effectiveRole = if (isDemoIdentity) "viewer" else orgRole
+        val issuedAt = Date()
 
         val jwtBuilder =
             JWT
                 .create()
                 .withAudience(jwtAudience)
                 .withIssuer(jwtIssuer)
+                .withJWTId(UUID.randomUUID().toString())
+                .withIssuedAt(issuedAt)
                 .withClaim("userId", userId)
                 .withClaim("email", email)
                 .withClaim("orgId", orgId)
                 .withClaim("orgRole", effectiveRole)
-                .withExpiresAt(Date(System.currentTimeMillis() + (ACCESS_TOKEN_EXPIRY_HOURS * 3600000)))
+                .withExpiresAt(Date(issuedAt.time + (ACCESS_TOKEN_EXPIRY_HOURS * 3600000)))
 
         if (isDemoIdentity) {
             jwtBuilder

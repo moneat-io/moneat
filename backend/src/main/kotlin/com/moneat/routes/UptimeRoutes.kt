@@ -32,6 +32,10 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -79,17 +83,19 @@ fun Route.uptimeRoutes() {
                     return@post
                 }
 
-                // Parse optional payload
-                val body =
+                // Parse optional payload as raw JSON so numeric/string status formats both work.
+                val payload =
                     try {
-                        call.receive<Map<String, Any>>()
+                        call.receiveText()
+                            .takeIf { it.isNotBlank() }
+                            ?.let { Json.parseToJsonElement(it).jsonObject }
                     } catch (_: Exception) {
-                        emptyMap()
+                        null
                     }
 
-                val status = (body["status"] as? String)?.toIntOrNull() ?: 1
-                val message = body["msg"] as? String ?: "Push received"
-                val ping = (body["ping"] as? Number)?.toFloat() ?: -1f
+                val status = payload?.get("status")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
+                val message = payload?.get("msg")?.jsonPrimitive?.contentOrNull ?: "Push received"
+                val ping = payload?.get("ping")?.jsonPrimitive?.contentOrNull?.toFloatOrNull() ?: -1f
 
                 // Record heartbeat
                 val result =
