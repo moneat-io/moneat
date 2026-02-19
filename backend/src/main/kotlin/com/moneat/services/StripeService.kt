@@ -29,6 +29,7 @@ import io.ktor.server.config.*
 import io.sentry.Sentry
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
+<<<<<<< HEAD
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.*
@@ -37,12 +38,23 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 import kotlin.time.Instant
+=======
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.and
+import java.util.UUID
+>>>>>>> billing-fixes
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
 
 class StripeService(
-    private val pricingTierService: PricingTierService = PricingTierService()
+    private val pricingTierService: PricingTierService = PricingTierService(),
+    private val meterEventSender: (MeterEventCreateParams) -> Unit = { params -> MeterEvent.create(params) },
+    private val allowMeteringWhenStripeDisabled: Boolean = false
 ) {
     private val config = ApplicationConfig("application.conf")
     private val stripeEnabled = config.propertyOrNull("billing.stripeEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
@@ -115,6 +127,7 @@ class StripeService(
 
         val customerId = getOrCreateCustomer(organizationId)
 
+<<<<<<< HEAD
         val paramsBuilder =
             CheckoutSessionCreateParams
                 .builder()
@@ -141,6 +154,32 @@ class StripeService(
                         .setQuantity(1L)
                         .build()
                 )
+=======
+        val subscriptionDataBuilder = CheckoutSessionCreateParams.SubscriptionData.builder()
+            .putMetadata("organization_id", organizationId.toString())
+            .putMetadata("tier_name", tier.tierName)
+            .putMetadata("billing_interval", billingInterval)
+        if (tier.trialDays > 0) {
+            subscriptionDataBuilder.setTrialPeriodDays(tier.trialDays.toLong())
+        }
+
+        val paramsBuilder = CheckoutSessionCreateParams.builder()
+            .setMode(CheckoutSessionCreateParams.Mode.SUBSCRIPTION)
+            .setCustomer(customerId)
+            .setSuccessUrl(successUrl)
+            .setCancelUrl(cancelUrl)
+            .setAllowPromotionCodes(true)
+            .setSubscriptionData(subscriptionDataBuilder.build())
+            .putMetadata("organization_id", organizationId.toString())
+            .putMetadata("tier_name", tier.tierName)
+            .putMetadata("billing_interval", billingInterval)
+            .addLineItem(
+                CheckoutSessionCreateParams.LineItem.builder()
+                    .setPrice(basePriceId)
+                    .setQuantity(1L)
+                    .build()
+            )
+>>>>>>> billing-fixes
         if (tier.paygEnabled && !overagePriceId.isNullOrBlank()) {
             paramsBuilder.addLineItem(
                 CheckoutSessionCreateParams.LineItem
@@ -362,7 +401,10 @@ class StripeService(
 
     fun wasEventProcessed(eventId: String): Boolean {
         return transaction {
-            StripeWebhookEvents.selectAll().where { StripeWebhookEvents.event_id eq eventId }.count() > 0
+            StripeWebhookEvents.selectAll().where {
+                (StripeWebhookEvents.event_id eq eventId) and
+                    (StripeWebhookEvents.status inList TERMINAL_WEBHOOK_STATUSES)
+            }.count() > 0
         }
     }
 
@@ -372,13 +414,29 @@ class StripeService(
         errorMessage: String? = null
     ) {
         transaction {
-            StripeWebhookEvents.insertIgnore {
-                it[event_id] = event.id
+            val now = kotlinx.datetime.Clock.System.now()
+            val updated = StripeWebhookEvents.update({ StripeWebhookEvents.event_id eq event.id }) {
                 it[event_type] = event.type
+<<<<<<< HEAD
                 it[processed_at] = Clock.System.now()
                 it[StripeWebhookEvents.status] = status
                 it[this.error_message] = errorMessage
                 it[created_at] = Clock.System.now()
+=======
+                it[processed_at] = now
+                it[StripeWebhookEvents.status] = status
+                it[this.error_message] = errorMessage
+            }
+            if (updated == 0) {
+                StripeWebhookEvents.insert {
+                    it[event_id] = event.id
+                    it[event_type] = event.type
+                    it[processed_at] = now
+                    it[StripeWebhookEvents.status] = status
+                    it[this.error_message] = errorMessage
+                    it[created_at] = now
+                }
+>>>>>>> billing-fixes
             }
         }
     }
@@ -554,6 +612,7 @@ class StripeService(
                     ?: fallbackTier?.tierName?.lowercase()
                     ?: "free"
             val tierId = resolvedTier?.id?.takeIf { it > 0 }
+<<<<<<< HEAD
             val startInstant = subscription.startDate?.let { kotlin.time.Instant.fromEpochSeconds(it) }
             val endInstant = subscription.trialEnd?.let { kotlin.time.Instant.fromEpochSeconds(it) }
             val billingInterval =
@@ -566,6 +625,20 @@ class StripeService(
                 } else {
                     "monthly"
                 }
+=======
+            val periodSourceItem = if (baseItemId != null) {
+                subscription.items.data.find { it.id == baseItemId }
+            } else {
+                subscription.items.data.firstOrNull()
+            }
+            val periodStartEpoch = periodSourceItem?.currentPeriodStart ?: subscription.startDate
+            val periodEndEpoch = periodSourceItem?.currentPeriodEnd ?: subscription.trialEnd
+            val startInstant = periodStartEpoch?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
+            val endInstant = periodEndEpoch?.let { kotlinx.datetime.Instant.fromEpochSeconds(it) }
+            val billingInterval = if (baseItemId != null) {
+                 subscription.items.data.find { it.id == baseItemId }?.price?.recurring?.interval ?: "monthly"
+            } else "monthly"
+>>>>>>> billing-fixes
             val finalInterval = if (billingInterval == "year") "yearly" else "monthly"
 
             if (existing != null) {
@@ -598,6 +671,8 @@ class StripeService(
                     it[payg_used_units] = 0
                     it[payg_used_micros] = 0
                     it[pending_meter_units] = 0
+                    it[pending_meter_batch_id] = null
+                    it[pending_meter_batch_units] = 0
                     it[stripe_base_item_id] = baseItemId
                     it[stripe_overage_item_id] = overageItemId
                     it[stripe_oncall_item_id] = oncallItemId
@@ -713,6 +788,8 @@ class StripeService(
                 it[payg_used_units] = 0
                 it[payg_used_micros] = 0
                 it[pending_meter_units] = 0
+                it[pending_meter_batch_id] = null
+                it[pending_meter_batch_units] = 0
                 it[billing_grace_until] = null
             }
         }
@@ -795,13 +872,16 @@ class StripeService(
                 it[payg_used_units] = 0
                 it[payg_used_micros] = 0
                 it[pending_meter_units] = 0
+                it[pending_meter_batch_id] = null
+                it[pending_meter_batch_units] = 0
             }
         }
     }
 
     fun flushPendingMeteredUsage(limit: Int = 200): Int {
-        if (!isStripeEnabled()) return 0
+        if (!isStripeEnabled() && !allowMeteringWhenStripeDisabled) return 0
         val meterEventName = config.propertyOrNull("stripe.meterEventName")?.getString() ?: "moneat_overage_units"
+<<<<<<< HEAD
         val rows =
             transaction {
                 Subscriptions
@@ -814,13 +894,57 @@ class StripeService(
                     .limit(limit)
                     .toList()
             }
+=======
+        val subscriptionIds = transaction {
+            Subscriptions.select(Subscriptions.id).where {
+                (Subscriptions.pending_meter_units greater 0L) and
+                    (Subscriptions.stripe_customer_id.isNotNull()) and
+                    (Subscriptions.status inList listOf("active", "trialing"))
+            }
+                .orderBy(Subscriptions.id to SortOrder.ASC)
+                .limit(limit)
+                .map { it[Subscriptions.id] }
+        }
+>>>>>>> billing-fixes
 
         var flushed = 0
-        for (row in rows) {
-            val customerId = row[Subscriptions.stripe_customer_id] ?: continue
-            val units = row[Subscriptions.pending_meter_units]
-            if (units <= 0) continue
+        for (subscriptionId in subscriptionIds) {
+            val batch = transaction {
+                TransactionManager.current().exec(
+                    "SELECT id FROM subscriptions WHERE id = ? FOR UPDATE",
+                    listOf(Subscriptions.id.columnType to subscriptionId)
+                )
+                val row = Subscriptions.selectAll().where { Subscriptions.id eq subscriptionId }.firstOrNull()
+                    ?: return@transaction null
+                val customerId = row[Subscriptions.stripe_customer_id] ?: return@transaction null
+                val pendingUnits = row[Subscriptions.pending_meter_units]
+                if (pendingUnits <= 0) return@transaction null
+
+                val existingBatchId = row[Subscriptions.pending_meter_batch_id]
+                val existingBatchUnits = row[Subscriptions.pending_meter_batch_units]
+                val batchId: String
+                val batchUnits: Long
+                if (!existingBatchId.isNullOrBlank() && existingBatchUnits > 0) {
+                    batchId = existingBatchId
+                    batchUnits = existingBatchUnits.coerceAtMost(pendingUnits)
+                    if (batchUnits != existingBatchUnits) {
+                        Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                            it[pending_meter_batch_units] = batchUnits
+                        }
+                    }
+                } else {
+                    batchId = "sub-$subscriptionId-batch-${UUID.randomUUID()}"
+                    batchUnits = pendingUnits
+                    Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                        it[pending_meter_batch_id] = batchId
+                        it[pending_meter_batch_units] = batchUnits
+                    }
+                }
+                PendingMeterBatch(subscriptionId, customerId, batchId, batchUnits)
+            } ?: continue
+
             try {
+<<<<<<< HEAD
                 val params =
                     MeterEventCreateParams
                         .builder()
@@ -830,16 +954,37 @@ class StripeService(
                         .putPayload("value", units.toString())
                         .build()
                 MeterEvent.create(params)
+=======
+                val params = MeterEventCreateParams.builder()
+                    .setEventName(meterEventName)
+                    .setIdentifier(batch.batchId)
+                    .putPayload("stripe_customer_id", batch.customerId)
+                    .putPayload("value", batch.batchUnits.toString())
+                    .build()
+                meterEventSender(params)
+>>>>>>> billing-fixes
 
                 transaction {
-                    Subscriptions.update({ Subscriptions.id eq row[Subscriptions.id] }) {
-                        it[pending_meter_units] = 0
+                    TransactionManager.current().exec(
+                        "SELECT id FROM subscriptions WHERE id = ? FOR UPDATE",
+                        listOf(Subscriptions.id.columnType to batch.subscriptionId)
+                    )
+                    val current = Subscriptions.selectAll()
+                        .where { Subscriptions.id eq batch.subscriptionId }
+                        .firstOrNull()
+                    if (current != null) {
+                        val remaining = (current[Subscriptions.pending_meter_units] - batch.batchUnits).coerceAtLeast(0)
+                        Subscriptions.update({ Subscriptions.id eq batch.subscriptionId }) {
+                            it[pending_meter_units] = remaining
+                            it[pending_meter_batch_id] = null
+                            it[pending_meter_batch_units] = 0
+                        }
                     }
                 }
                 flushed++
             } catch (e: Exception) {
                 logger.error(e) {
-                    "Failed to report metered usage for subscription ${row[Subscriptions.id]} (units=$units)"
+                    "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
                 }
             }
         }
@@ -862,6 +1007,7 @@ class StripeService(
                                 (Subscriptions.billing_grace_until lessEq now)
                         }.toList()
 
+<<<<<<< HEAD
                 for (row in pastDueRows) {
                     Subscriptions.update({ Subscriptions.id eq row[Subscriptions.id] }) {
                         it[status] = "canceled"
@@ -878,6 +1024,25 @@ class StripeService(
                         it[payg_used_micros] = 0
                         it[pending_meter_units] = 0
                     }
+=======
+            for (row in pastDueRows) {
+                Subscriptions.update({ Subscriptions.id eq row[Subscriptions.id] }) {
+                    it[status] = "canceled"
+                }
+                Subscriptions.insert {
+                    it[organization_id] = row[Subscriptions.organization_id]
+                    it[plan] = "free"
+                    it[status] = "active"
+                    it[current_period_start] = now
+                    it[current_period_end] = addDays(now, 30)
+                    it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
+                    it[payg_budget_cents] = 0
+                    it[payg_used_units] = 0
+                    it[payg_used_micros] = 0
+                    it[pending_meter_units] = 0
+                    it[pending_meter_batch_id] = null
+                    it[pending_meter_batch_units] = 0
+>>>>>>> billing-fixes
                 }
                 pastDueRows.size
             }
@@ -1028,5 +1193,16 @@ class StripeService(
             .toLocalDateTime(kotlinx.datetime.TimeZone.UTC)
             .date
             .toString()
+    }
+
+    private data class PendingMeterBatch(
+        val subscriptionId: Int,
+        val customerId: String,
+        val batchId: String,
+        val batchUnits: Long
+    )
+
+    companion object {
+        private val TERMINAL_WEBHOOK_STATUSES = listOf("processed", "success", "skipped")
     }
 }

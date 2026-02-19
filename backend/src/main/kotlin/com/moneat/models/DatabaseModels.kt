@@ -275,6 +275,8 @@ object Subscriptions : Table("subscriptions") {
     val payg_used_units = long("payg_used_units").default(0)
     val payg_used_micros = long("payg_used_micros").default(0)
     val pending_meter_units = long("pending_meter_units").default(0)
+    val pending_meter_batch_id = varchar("pending_meter_batch_id", 255).nullable()
+    val pending_meter_batch_units = long("pending_meter_batch_units").default(0)
     val stripe_base_item_id = varchar("stripe_base_item_id", 255).nullable()
     val stripe_overage_item_id = varchar("stripe_overage_item_id", 255).nullable()
     val stripe_oncall_item_id = varchar("stripe_oncall_item_id", 255).nullable()
