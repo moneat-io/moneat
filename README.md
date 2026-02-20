@@ -66,9 +66,9 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
 
 ## Get Started
 
-### Self-Hosted (Recommended)
+### Self-Hosted
 
-Deploy Moneat on any VPS with Docker Compose. No Kubernetes required.
+Deploy Moneat on any VPS with Docker Compose.
 
 ```bash
 git clone https://github.com/moneat-io/moneat.git
@@ -115,19 +115,13 @@ docker-compose up -d
 # 2. Start the backend (API at localhost:8080)
 cd backend && ./gradlew run
 
-# Optional: Start backend with enterprise modules enabled (required for enterprise API/features)
-cd backend && ./gradlew run -Penterprise
-
 # 3. Start the dashboard (UI at localhost:5173)
 cd dashboard && npm install && npm run dev
-
-# Optional: Start dashboard with enterprise routes/components
-cd dashboard && npm run dev:enterprise
 ```
 
 ### Enterprise
 
-Need SSO, on-call schedules, escalation policies, or incident management? Check out the [Enterprise plan](https://moneat.io/pricing) or contact [support@moneat.io](mailto:support@moneat.io).
+Need SSO, on-call, or incident management? Check out the [Enterprise plan](https://moneat.io/pricing) or contact [support@moneat.io](mailto:support@moneat.io).
 
 ---
 
@@ -142,7 +136,7 @@ Need SSO, on-call schedules, escalation policies, or incident management? Check 
 - Issue management with resolve, unresolve, and ignore workflows
 - Source map upload and release tracking for readable JavaScript stack traces
 - Real-time alerting via email, Slack, and webhooks
-- ClickHouse-powered analytics for querying millions of events in milliseconds
+- ClickHouse-powered analytics
 
 → [Error Monitoring docs](https://moneat.io/docs)
 
@@ -293,9 +287,9 @@ moneat-enterprise/           # Separate private repo (proprietary license)
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Kotlin 1.9.22, Ktor 2.3.7, Exposed ORM |
-| Operational DB | PostgreSQL |
-| Analytics DB | ClickHouse |
+| Backend | Kotlin 2.3.x, Ktor 3.4.x, Exposed |
+| Operational DB | PostgreSQL 18 |
+| Analytics DB | ClickHouse 26 |
 | Cache & Queue | Redis |
 | Frontend | React 18, TypeScript, TanStack Router/Query, shadcn/ui, Radix, TailwindCSS, Vite |
 | Email Templates | Maizzle |
