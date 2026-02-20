@@ -20,7 +20,6 @@
 
 <p align="center">
   <a href="https://moneat.io/docs"><b>Docs</b></a> ·
-  <a href="https://moneat.io/community"><b>Community</b></a> ·
   <a href="https://github.com/moneat-io/moneat/issues/new?labels=enhancement&template=feature_request.md"><b>Feature Request</b></a> ·
   <a href="https://github.com/moneat-io/moneat/issues/new?labels=bug&template=bug_report.md"><b>Bug Report</b></a>
 </p>
