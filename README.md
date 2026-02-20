@@ -29,7 +29,7 @@
 
 # Moneat: The open-source, self-hostable observability platform.
 
-Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-compatible observability platform that runs on a single VPS. No Kubernetes, no multi-node clusters, no surprise bills. Just Docker Compose on a cost-effective server and you're up. It's fully open source (AGPLv3), with optional enterprise add-ons for teams that need on-call and incident management.
+Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-compatible observability platform.
 
 **What you get out of the box:**
 
