@@ -19,6 +19,7 @@ import { Route as ReplaysRouteImport } from './routes/replays'
 import { Route as ReleasesRouteImport } from './routes/releases'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as PricingCalculatorRouteImport } from './routes/pricing-calculator'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as OnCallRouteImport } from './routes/on-call'
@@ -128,6 +129,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingCalculatorRoute = PricingCalculatorRouteImport.update({
+  id: '/pricing-calculator',
+  path: '/pricing-calculator',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PerformanceRoute = PerformanceRouteImport.update({
@@ -451,6 +457,7 @@ export interface FileRoutesByFullPath {
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
+  '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
@@ -519,6 +526,7 @@ export interface FileRoutesByTo {
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
@@ -592,6 +600,7 @@ export interface FileRoutesById {
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
+  '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
@@ -666,6 +675,7 @@ export interface FileRouteTypes {
     | '/on-call'
     | '/onboarding'
     | '/performance'
+    | '/pricing-calculator'
     | '/privacy'
     | '/projects'
     | '/releases'
@@ -734,6 +744,7 @@ export interface FileRouteTypes {
     | '/impersonate-callback'
     | '/login'
     | '/onboarding'
+    | '/pricing-calculator'
     | '/privacy'
     | '/projects'
     | '/releases'
@@ -806,6 +817,7 @@ export interface FileRouteTypes {
     | '/on-call'
     | '/onboarding'
     | '/performance'
+    | '/pricing-calculator'
     | '/privacy'
     | '/projects'
     | '/releases'
@@ -879,6 +891,7 @@ export interface RootRouteChildren {
   OnCallRoute: typeof OnCallRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
+  PricingCalculatorRoute: typeof PricingCalculatorRoute
   PrivacyRoute: typeof PrivacyRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   ReleasesRoute: typeof ReleasesRouteWithChildren
@@ -978,6 +991,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing-calculator': {
+      id: '/pricing-calculator'
+      path: '/pricing-calculator'
+      fullPath: '/pricing-calculator'
+      preLoaderRoute: typeof PricingCalculatorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/performance': {
@@ -1595,6 +1615,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnCallRoute: OnCallRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,
+  PricingCalculatorRoute: PricingCalculatorRoute,
   PrivacyRoute: PrivacyRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   ReleasesRoute: ReleasesRouteWithChildren,

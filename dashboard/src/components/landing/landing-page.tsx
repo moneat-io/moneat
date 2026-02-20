@@ -19,6 +19,7 @@ import {Logo} from '@/components/logo'
 import {Button} from '@/components/ui/button'
 import {VariantA} from './variant-a'
 import {PricingSection} from './pricing-section'
+import {PricingCalculatorSection} from './pricing-calculator-section'
 import {Helmet} from 'react-helmet-async'
 
 export function LandingPage() {
@@ -74,6 +75,12 @@ export function LandingPage() {
               Pricing
             </a>
             <a
+              href="#pricing-calculator"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Calculator
+            </a>
+            <a
               href="/docs"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -96,6 +103,7 @@ export function LandingPage() {
       <main>
         <VariantA />
         <PricingSection />
+        <PricingCalculatorSection />
       </main>
 
       <footer className="border-t border-border/50 bg-slate-950 py-16 px-4 sm:px-6 lg:px-8">
