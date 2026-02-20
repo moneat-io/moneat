@@ -113,7 +113,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
     val response = ClickHouseClient.execute(query)
     val body = response.bodyAsText().trim()
 
-    if (!response.status.isSuccess() || body.startsWith("Code:")) {
+    if (response.status != HttpStatusCode.OK || body.startsWith("Code:")) {
         logger.warn { "Failed to query telemetry_pulses: ${body.take(200)}" }
         return ReceivedTelemetryStatus(deploymentCount = 0, lastSeenAt = null, deployments = emptyList())
     }
