@@ -24,11 +24,11 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -73,7 +73,7 @@ class UsageTrackingService {
             Thread(r, "usage-tracking-flush").apply { isDaemon = true }
         }
     private val billingQuotaService = BillingQuotaService()
-    private val orgIdCache = ConcurrentHashMap<Long, Int?>()
+    private val orgIdCache = ConcurrentHashMap<Long, Int>()
 
     init {
         scheduler.scheduleAtFixedRate(
@@ -117,7 +117,9 @@ class UsageTrackingService {
     }
 
     private fun getOrganizationId(projectId: Long): Int? {
-        return orgIdCache.getOrPut(projectId) {
+        orgIdCache[projectId]?.let { return it }
+
+        val orgId =
             transaction {
                 Projects
                     .select(Projects.organization_id)
@@ -125,7 +127,12 @@ class UsageTrackingService {
                     .firstOrNull()
                     ?.get(Projects.organization_id)
             }
+
+        if (orgId != null) {
+            orgIdCache.putIfAbsent(projectId, orgId)
         }
+
+        return orgId
     }
 
     fun flushBuffer() {

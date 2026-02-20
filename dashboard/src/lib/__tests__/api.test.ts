@@ -142,6 +142,44 @@ describe('ApiClient', () => {
       window.location = originalLocation
     })
 
+    it('attempts token refresh at most once for persistent 401 responses', async () => {
+      const mockAssign = vi.fn()
+      const originalLocation = window.location
+      // @ts-expect-error - Mocking window.location for tests
+      delete window.location
+      // @ts-expect-error - Mocking window.location for tests
+      window.location = { ...originalLocation, pathname: '/admin/infrastructure', assign: mockAssign }
+
+      sessionStorage.setItem('authenticated', 'true')
+      localStorage.setItem('refresh_token', 'refresh-token-1')
+
+      let projectCalls = 0
+      let refreshCalls = 0
+
+      server.use(
+        http.get(`${API_BASE}/v1/projects`, () => {
+          projectCalls += 1
+          return new HttpResponse(null, { status: 401 })
+        }),
+        http.post(`${API_BASE}/auth/refresh`, () => {
+          refreshCalls += 1
+          return HttpResponse.json({
+            token: 'new-token',
+            refreshToken: 'refresh-token-2',
+            user: { id: 1, email: 'test@example.com', emailVerified: true, onboardingCompleted: true },
+          })
+        })
+      )
+
+      await expect(api.getProjects()).rejects.toThrow('Unauthorized')
+      expect(projectCalls).toBe(2)
+      expect(refreshCalls).toBe(1)
+      expect(mockAssign).toHaveBeenCalledWith('/login')
+
+      // @ts-expect-error - Restoring window.location
+      window.location = originalLocation
+    })
+
     it('does not redirect if already on auth page', async () => {
       const mockAssign = vi.fn()
       const originalLocation = window.location

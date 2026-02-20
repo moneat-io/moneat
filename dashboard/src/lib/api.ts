@@ -1952,7 +1952,11 @@ class ApiClient {
     }
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    authRetryCount = 0
+  ): Promise<T> {
     const impersonateToken = this.getImpersonateToken()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -1972,6 +1976,22 @@ class ApiClient {
     }
 
     if (response.status === 401) {
+      // Never loop indefinitely on persistent auth failures.
+      if (authRetryCount >= 1) {
+        this.logout()
+
+        if (
+          !this.authRedirectInProgress &&
+          typeof window !== 'undefined' &&
+          !AUTH_PAGE_PATHS.has(window.location.pathname)
+        ) {
+          this.authRedirectInProgress = true
+          window.location.assign('/login')
+        }
+
+        throw new Error('Unauthorized')
+      }
+
       // Try to refresh the token if we have one
       if (!this.refreshPromise) {
         this.refreshPromise = this.refreshAccessToken().finally(() => {
@@ -1983,7 +2003,7 @@ class ApiClient {
 
       if (refreshed) {
         // Retry the original request with the new token
-        return this.request<T>(endpoint, options)
+        return this.request<T>(endpoint, options, authRetryCount + 1)
       }
 
       // Refresh failed, logout and redirect
