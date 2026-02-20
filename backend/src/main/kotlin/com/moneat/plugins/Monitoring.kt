@@ -18,13 +18,13 @@ package com.moneat.plugins
 
 import com.moneat.config.SentryConfig
 import com.moneat.utils.SentryUtils
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.plugins.calllogging.CallLogging
-import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.calllogging.*
+import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
-import io.ktor.util.AttributeKey
+import io.ktor.util.*
 import io.sentry.ITransaction
 import io.sentry.Sentry
 import io.sentry.SpanStatus
@@ -139,10 +139,14 @@ fun Application.configureMonitoring() {
             }
 
             cause.printStackTrace()
-            call.respond(
-                HttpStatusCode.InternalServerError,
-                mapOf("error" to "Internal server error", "message" to (cause.message ?: "Unknown error"))
-            )
+            if (!call.response.isCommitted) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    mapOf("error" to "Internal server error", "message" to (cause.message ?: "Unknown error"))
+                )
+            } else {
+                logger.debug { "Skipping error response because response is already committed for ${call.request.path()}" }
+            }
         }
     }
 

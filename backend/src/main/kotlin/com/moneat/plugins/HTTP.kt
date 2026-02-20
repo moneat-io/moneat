@@ -17,12 +17,12 @@
 package com.moneat.plugins
 
 import com.moneat.config.EnvConfig
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
+import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.plugins.cors.routing.CORS
-import io.ktor.server.response.*
+import io.ktor.server.plugins.cors.routing.*
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 fun Application.configureHTTP() {
     val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
@@ -60,14 +60,15 @@ fun Application.configureHTTP() {
 
     // Add security headers to all responses
     intercept(ApplicationCallPipeline.Plugins) {
-        call.response.headers.append("X-Content-Type-Options", "nosniff")
-        call.response.headers.append("X-Frame-Options", "DENY")
-        call.response.headers.append("Referrer-Policy", "strict-origin-when-cross-origin")
-        call.response.headers.append("X-XSS-Protection", "1; mode=block")
+        setSecurityHeader(call, "X-Content-Type-Options", "nosniff")
+        setSecurityHeader(call, "X-Frame-Options", "DENY")
+        setSecurityHeader(call, "Referrer-Policy", "strict-origin-when-cross-origin")
+        setSecurityHeader(call, "X-XSS-Protection", "1; mode=block")
 
         // Content Security Policy
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
-        call.response.headers.append(
+        setSecurityHeader(
+            call,
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' $backendUrl"
         )
@@ -78,9 +79,22 @@ fun Application.configureHTTP() {
             !call.request.local.remoteHost
                 .contains("127.0.0.1")
         ) {
-            call.response.headers.append("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+            setSecurityHeader(call, "Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         }
 
         proceed()
+    }
+}
+
+private fun setSecurityHeader(
+    call: ApplicationCall,
+    name: String,
+    value: String
+) {
+    if (call.response.isCommitted) return
+    try {
+        call.response.headers.append(name, value)
+    } catch (_: UnsupportedOperationException) {
+        logger.debug { "Skipped security header '$name' because response was already committed" }
     }
 }
