@@ -46,9 +46,6 @@ object SentryConfig {
             // Set server name
             options.serverName = EnvConfig.get("HOSTNAME", "moneat-backend")
 
-            // Enable performance monitoring for database queries
-            options.enableTracing = true
-
             // Enable breadcrumbs
             options.maxBreadcrumbs = 100
 

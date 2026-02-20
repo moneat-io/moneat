@@ -1,5 +1,6 @@
 import {defineConfig} from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import {TanStackRouterVite} from '@tanstack/router-vite-plugin'
 import path from 'path'
 import {fileURLToPath} from 'url'
@@ -11,6 +12,7 @@ const docsDir = path.join(__dirname, 'public', 'docs')
 
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     react(),
     TanStackRouterVite(),
     {

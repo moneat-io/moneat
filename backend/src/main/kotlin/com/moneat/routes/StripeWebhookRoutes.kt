@@ -24,6 +24,9 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -72,11 +75,11 @@ fun Route.stripeWebhookRoutes() {
                             // Fallback: retrieve from Stripe API using ID from raw data
                             val sessionId =
                                 event.dataObjectDeserializer.rawJson.let {
-                                    com.google.gson.JsonParser
-                                        .parseString(it)
-                                        .asJsonObject
-                                        .get("id")
-                                        .asString
+                                    Json.parseToJsonElement(it)
+                                        .jsonObject["id"]
+                                        ?.jsonPrimitive
+                                        ?.content
+                                        ?: error("Missing 'id' in Stripe webhook raw JSON")
                                 }
                             com.stripe.model.checkout.Session
                                 .retrieve(sessionId)
@@ -97,11 +100,11 @@ fun Route.stripeWebhookRoutes() {
                             // Fallback: retrieve from Stripe API using ID from raw data
                             val subscriptionId =
                                 event.dataObjectDeserializer.rawJson.let {
-                                    com.google.gson.JsonParser
-                                        .parseString(it)
-                                        .asJsonObject
-                                        .get("id")
-                                        .asString
+                                    Json.parseToJsonElement(it)
+                                        .jsonObject["id"]
+                                        ?.jsonPrimitive
+                                        ?.content
+                                        ?: error("Missing 'id' in Stripe webhook raw JSON")
                                 }
                             com.stripe.model.Subscription
                                 .retrieve(subscriptionId)

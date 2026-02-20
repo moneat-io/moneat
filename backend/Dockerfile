@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
-FROM node:20-alpine AS email-builder
+FROM node:24-alpine AS email-builder
 WORKDIR /emails
 COPY emails/package*.json ./
 RUN npm ci
 COPY emails/ ./
 RUN npm run build:production
 
-FROM gradle:8-jdk17 AS build
+FROM gradle:9-jdk17 AS build
 WORKDIR /app
 COPY backend/build.gradle.kts backend/settings.gradle.kts backend/gradle.properties ./
 COPY backend/gradle ./gradle
@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/home/gradle/.gradle \
       gradle shadowJar --no-daemon --build-cache; \
     fi
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25.0.2_10-jre
 RUN groupadd --system moneat && useradd --system --gid moneat --home /app --create-home moneat
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar

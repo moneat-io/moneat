@@ -165,10 +165,7 @@ fun Application.configureDatabases() {
                             try {
                                 configureClickHouseMigrations()
                             } catch (e: Exception) {
-                                log.error(
-                                    "Failed to run ClickHouse migrations. Make sure ClickHouse is running and accessible.",
-                                    e
-                                )
+                                log.error("Failed to run ClickHouse migrations.", e)
                                 throw e
                             }
                             // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)

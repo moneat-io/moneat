@@ -2,19 +2,19 @@
 kotlin = "2.3.10"
 ktor = "3.4.0"
 exposed = "1.0.0"
-logback = "1.4.14"
-hikari = "5.1.0"
-kotlinx-datetime = "0.7.1"
-junit = "5.10.1"
-testcontainers = "1.19.3"
+logback = "1.5.32"
+hikari = "7.0.2"
+kotlinx-datetime = "0.7.1-0.6.x-compat"
+junit = "6.0.3"
+testcontainers = "2.0.3"
 detekt = "1.23.7"
-shadow = "8.3.5"
-jacoco = "0.8.11"
-opentelemetry = "1.34.0"
+shadow = "9.3.1"
+jacoco = "0.8.14"
+opentelemetry = "1.59.0"
 opentelemetry-instrumentation = "2.1.0-alpha"
-sentry = "7.6.0"
-flyway = "10.6.0"
-h2 = "2.2.224"
+sentry = "8.33.0"
+flyway = "12.0.2"
+h2 = "2.4.240"
 
 [libraries]
 # Ktor Server
@@ -53,28 +53,28 @@ flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", versio
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 
 # Redis
-lettuce = { module = "io.lettuce:lettuce-core", version = "6.3.1.RELEASE" }
+lettuce = { module = "io.lettuce:lettuce-core", version = "7.4.0.RELEASE" }
 
 # Email
 jakarta-mail = { module = "com.sun.mail:jakarta.mail", version = "2.0.2" }
 
 # Security
 jbcrypt = { module = "org.mindrot:jbcrypt", version = "0.4" }
-commons-codec = { module = "commons-codec:commons-codec", version = "1.16.0" }
+commons-codec = { module = "commons-codec:commons-codec", version = "1.21.0" }
 
 # SSO
 java-saml-core = { module = "com.onelogin:java-saml-core", version = "2.9.0" }
-oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.10" }
+oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
 
 # Billing
 stripe-java = { module = "com.stripe:stripe-java", version = "31.3.0" }
 
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.8" }
-jsonpath = { module = "com.jayway.jsonpath:json-path", version = "2.9.0" }
+jsonpath = { module = "com.jayway.jsonpath:json-path", version = "2.10.0" }
 
 # Environment
-dotenv-kotlin = { module = "io.github.cdimascio:dotenv-kotlin", version = "6.4.1" }
+dotenv-kotlin = { module = "io.github.cdimascio:dotenv-kotlin", version = "6.5.1" }
 
 # Logging
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }

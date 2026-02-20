@@ -22,7 +22,7 @@
   "type": "module",
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",
-    "@rollup/plugin-typescript": "^11.1.6",
+    "@rollup/plugin-typescript": "^12.0.0",
     "rollup": "^4.14.0",
     "tslib": "^2.6.2",
     "typescript": "^5.4.5"
