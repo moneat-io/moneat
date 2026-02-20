@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {useEffect} from 'react'
 import {Link} from '@tanstack/react-router'
 import {Logo} from '@/components/logo'
 import {Button} from '@/components/ui/button'
@@ -23,6 +24,13 @@ import {PricingCalculatorSection} from './pricing-calculator-section'
 import {Helmet} from 'react-helmet-async'
 
 export function LandingPage() {
+  // The landing page is always dark regardless of the user's saved theme preference.
+  useEffect(() => {
+    const root = document.documentElement
+    const prev = root.className
+    root.classList.add('dark')
+    return () => { root.className = prev }
+  }, [])
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -39,7 +47,7 @@ export function LandingPage() {
   }
 
   return (
-    <article className="min-h-screen bg-background dark">
+    <article className="min-h-screen bg-background">
       <Helmet>
         <title>Moneat | Errors, Logs, Uptime, and On-Call in One Platform</title>
         <meta
