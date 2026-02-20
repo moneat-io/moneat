@@ -20,15 +20,12 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.models.ProjectKeys
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.*
-import io.ktor.server.application.call
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -44,7 +41,49 @@ import java.util.UUID
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
-fun Route.analyticsIngestRoutes() {
+data class AnalyticsEventPayload(
+    val projectId: Long,
+    val eventName: String,
+    val hostname: String,
+    val pathname: String,
+    val referrer: String,
+    val screenWidth: Int,
+    val props: Map<String, String>,
+)
+
+fun Route.analyticsIngestRoutes(
+    insertEvent: suspend (AnalyticsEventPayload) -> Unit = { payload ->
+        val esc = ClickHouseSqlUtils::escapeSql
+        val propsMap = if (payload.props.isNotEmpty()) {
+            val entries = payload.props.entries.joinToString(", ") { (k, v) ->
+                "'${esc(k)}', '${esc(v)}'"
+            }
+            "map($entries)"
+        } else {
+            "map()"
+        }
+        ClickHouseClient.execute(
+            """
+            INSERT INTO analytics_events (
+                event_id, project_id, session_id, event_name,
+                hostname, pathname, referrer, screen_width,
+                props, timestamp
+            ) VALUES (
+                generateUUIDv4(),
+                ${payload.projectId},
+                'sess-${UUID.randomUUID().toString().take(8)}',
+                '${esc(payload.eventName)}',
+                '${esc(payload.hostname)}',
+                '${esc(payload.pathname)}',
+                '${esc(payload.referrer)}',
+                ${payload.screenWidth},
+                $propsMap,
+                now64(3)
+            )
+            """.trimIndent()
+        )
+    }
+) {
     route("/api/{domain}/analytics") {
         post("/event") {
             val sentryKey = call.request.queryParameters["sentry_key"]
@@ -53,7 +92,7 @@ fun Route.analyticsIngestRoutes() {
                 return@post
             }
 
-            // Look up the project by sentry_key
+            // Look up the project by sentry_key alone (domain is for routing only)
             val projectId = transaction {
                 ProjectKeys
                     .selectAll()
@@ -80,51 +119,32 @@ fun Route.analyticsIngestRoutes() {
 
             val eventName = body["n"]?.jsonPrimitive?.contentOrNull ?: "pageview"
             val pageUrl = body["u"]?.jsonPrimitive?.contentOrNull ?: ""
-            val domain = body["d"]?.jsonPrimitive?.contentOrNull ?: ""
+            val hostname = body["d"]?.jsonPrimitive?.contentOrNull ?: ""
             val referrer = body["r"]?.jsonPrimitive?.contentOrNull ?: ""
             val screenWidth = body["w"]?.jsonPrimitive?.intOrNull ?: 0
-            val props = body["p"]?.jsonObject
+            val propsJson = body["p"]?.jsonObject
 
-            // Extract pathname from URL
             val pathname = try {
-                URI(pageUrl).path ?: "/"
+                URI(pageUrl).path?.takeIf { it.isNotBlank() } ?: "/"
             } catch (_: Exception) {
                 "/"
             }
 
-            val sessionId = "sess-${UUID.randomUUID().toString().take(8)}"
-            val esc = ClickHouseSqlUtils::escapeSql
-
-            // Build props map for ClickHouse
-            val propsMap = if (props != null && props.isNotEmpty()) {
-                val entries = props.entries.joinToString(", ") { (k, v) ->
-                    "'${esc(k)}', '${esc(v.jsonPrimitive.contentOrNull ?: "")}'"
-                }
-                "map($entries)"
-            } else {
-                "map()"
-            }
+            val props = propsJson?.entries
+                ?.associate { (k, v) -> k to (v.jsonPrimitive.contentOrNull ?: "") }
+                ?: emptyMap()
 
             try {
-                ClickHouseClient.execute(
-                    """
-                    INSERT INTO analytics_events (
-                        event_id, project_id, session_id, event_name,
-                        hostname, pathname, referrer, screen_width,
-                        props, timestamp
-                    ) VALUES (
-                        generateUUIDv4(),
-                        $projectId,
-                        '${esc(sessionId)}',
-                        '${esc(eventName)}',
-                        '${esc(domain)}',
-                        '${esc(pathname)}',
-                        '${esc(referrer)}',
-                        $screenWidth,
-                        $propsMap,
-                        now64(3)
+                insertEvent(
+                    AnalyticsEventPayload(
+                        projectId = projectId,
+                        eventName = eventName,
+                        hostname = hostname,
+                        pathname = pathname,
+                        referrer = referrer,
+                        screenWidth = screenWidth,
+                        props = props,
                     )
-                    """.trimIndent()
                 )
                 call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             } catch (e: Exception) {
