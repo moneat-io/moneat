@@ -8,76 +8,77 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as ReplaysRouteImport } from './routes/replays'
-import { Route as ReleasesRouteImport } from './routes/releases'
-import { Route as ProjectsRouteImport } from './routes/projects'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as PerformanceRouteImport } from './routes/performance'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as OnCallRouteImport } from './routes/on-call'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as FeedbackRouteImport } from './routes/feedback'
-import { Route as DemoRouteImport } from './routes/demo'
-import { Route as AnalyticsRouteImport } from './routes/analytics'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
-import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.index'
-import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
-import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
-import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
-import { Route as IssuesIndexRouteImport } from './routes/issues.index'
-import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
-import { Route as AiIndexRouteImport } from './routes/ai.index'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
-import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
-import { Route as SSlugRouteImport } from './routes/s.$slug'
-import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
-import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
-import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
-import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
-import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
-import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
-import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
-import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
-import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
-import { Route as LegalTermsRouteImport } from './routes/legal.terms'
-import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
-import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
-import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
-import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
-import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
-import { Route as AdminUsersRouteImport } from './routes/admin.users'
-import { Route as AdminUsageRouteImport } from './routes/admin.usage'
-import { Route as AdminRevenueRouteImport } from './routes/admin.revenue'
-import { Route as AdminOrganizationsRouteImport } from './routes/admin.organizations'
-import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
-import { Route as AdminInfrastructureRouteImport } from './routes/admin.infrastructure'
-import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
-import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
-import { Route as AdminBillingRouteImport } from './routes/admin.billing'
-import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
-import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
-import { Route as ProjectsProjectIdLogsRouteImport } from './routes/projects.$projectId.logs'
-import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
-import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
-import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
-import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
-import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
-import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
-import { Route as ProjectsProjectIdTracesTraceIdRouteImport } from './routes/projects.$projectId.traces.$traceId'
-import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
+import {Route as rootRouteImport} from './routes/__root'
+import {Route as VerifyEmailRequiredRouteImport} from './routes/verify-email-required'
+import {Route as VerifyEmailRouteImport} from './routes/verify-email'
+import {Route as TermsRouteImport} from './routes/terms'
+import {Route as SignupRouteImport} from './routes/signup'
+import {Route as SettingsRouteImport} from './routes/settings'
+import {Route as ResetPasswordRouteImport} from './routes/reset-password'
+import {Route as ReplaysRouteImport} from './routes/replays'
+import {Route as ReleasesRouteImport} from './routes/releases'
+import {Route as ProjectsRouteImport} from './routes/projects'
+import {Route as PrivacyRouteImport} from './routes/privacy'
+import {Route as PerformanceRouteImport} from './routes/performance'
+import {Route as OnboardingRouteImport} from './routes/onboarding'
+import {Route as OnCallRouteImport} from './routes/on-call'
+import {Route as LoginRouteImport} from './routes/login'
+import {Route as ImpersonateCallbackRouteImport} from './routes/impersonate-callback'
+import {Route as ForgotPasswordRouteImport} from './routes/forgot-password'
+import {Route as FeedbackRouteImport} from './routes/feedback'
+import {Route as DemoRouteImport} from './routes/demo'
+import {Route as AnalyticsRouteImport} from './routes/analytics'
+import {Route as AdminRouteImport} from './routes/admin'
+import {Route as AcceptInviteRouteImport} from './routes/accept-invite'
+import {Route as IndexRouteImport} from './routes/index'
+import {Route as UptimeIndexRouteImport} from './routes/uptime.index'
+import {Route as StatusPagesIndexRouteImport} from './routes/status-pages.index'
+import {Route as PerformanceIndexRouteImport} from './routes/performance.index'
+import {Route as OnCallIndexRouteImport} from './routes/on-call.index'
+import {Route as MonitoringIndexRouteImport} from './routes/monitoring.index'
+import {Route as IssuesIndexRouteImport} from './routes/issues.index'
+import {Route as AnalyticsIndexRouteImport} from './routes/analytics.index'
+import {Route as AiIndexRouteImport} from './routes/ai.index'
+import {Route as AdminIndexRouteImport} from './routes/admin.index'
+import {Route as UptimeMonitorIdRouteImport} from './routes/uptime.$monitorId'
+import {Route as StatusPagesPageIdRouteImport} from './routes/status-pages.$pageId'
+import {Route as SSlugRouteImport} from './routes/s.$slug'
+import {Route as ReplaysReplayIdRouteImport} from './routes/replays.$replayId'
+import {Route as ReleasesVersionRouteImport} from './routes/releases.$version'
+import {Route as ProjectsProjectIdRouteImport} from './routes/projects.$projectId'
+import {Route as PerformanceTransactionIdRouteImport} from './routes/performance.$transactionId'
+import {Route as OnCallSchedulesRouteImport} from './routes/on-call.schedules'
+import {Route as OnCallIncidentsRouteImport} from './routes/on-call.incidents'
+import {Route as OnCallEscalationPoliciesRouteImport} from './routes/on-call.escalation-policies'
+import {Route as OnCallDeclaredIncidentsRouteImport} from './routes/on-call.declared-incidents'
+import {Route as MonitoringSystemIdRouteImport} from './routes/monitoring.$systemId'
+import {Route as LegalTermsRouteImport} from './routes/legal.terms'
+import {Route as LegalSmsConsentRouteImport} from './routes/legal.sms-consent'
+import {Route as LegalPrivacyRouteImport} from './routes/legal.privacy'
+import {Route as IssuesIssueIdRouteImport} from './routes/issues.$issueId'
+import {Route as FeedbackFeedbackIdRouteImport} from './routes/feedback.$feedbackId'
+import {Route as AiGenerationsRouteImport} from './routes/ai.generations'
+import {Route as AdminUsersRouteImport} from './routes/admin.users'
+import {Route as AdminUsageRouteImport} from './routes/admin.usage'
+import {Route as AdminTelemetryRouteImport} from './routes/admin.telemetry'
+import {Route as AdminRevenueRouteImport} from './routes/admin.revenue'
+import {Route as AdminOrganizationsRouteImport} from './routes/admin.organizations'
+import {Route as AdminNotificationsRouteImport} from './routes/admin.notifications'
+import {Route as AdminInfrastructureRouteImport} from './routes/admin.infrastructure'
+import {Route as AdminIncidentsRouteImport} from './routes/admin.incidents'
+import {Route as AdminEmailsRouteImport} from './routes/admin.emails'
+import {Route as AdminBillingRouteImport} from './routes/admin.billing'
+import {Route as AdminAttributionRouteImport} from './routes/admin.attribution'
+import {Route as ProjectsProjectIdSettingsRouteImport} from './routes/projects.$projectId.settings'
+import {Route as ProjectsProjectIdLogsRouteImport} from './routes/projects.$projectId.logs'
+import {Route as OnCallIncidentsIncidentIdRouteImport} from './routes/on-call.incidents.$incidentId'
+import {Route as OnCallDeclaredIncidentsIncidentIdRouteImport} from './routes/on-call.declared-incidents.$incidentId'
+import {Route as AuthSsoCallbackRouteImport} from './routes/auth.sso.callback'
+import {Route as AuthOauthCallbackRouteImport} from './routes/auth.oauth.callback'
+import {Route as AiTracesTraceIdRouteImport} from './routes/ai.traces.$traceId'
+import {Route as AdminOrganizationsOrgIdRouteImport} from './routes/admin.organizations.$orgId'
+import {Route as ProjectsProjectIdTracesTraceIdRouteImport} from './routes/projects.$projectId.traces.$traceId'
+import {Route as ProjectsProjectIdSpansSpanIdRouteImport} from './routes/projects.$projectId.spans.$spanId'
 
 const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
   id: '/verify-email-required',
@@ -336,6 +337,11 @@ const AdminUsageRoute = AdminUsageRouteImport.update({
   path: '/usage',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminTelemetryRoute = AdminTelemetryRouteImport.update({
+  id: '/telemetry',
+  path: '/telemetry',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminRevenueRoute = AdminRevenueRouteImport.update({
   id: '/revenue',
   path: '/revenue',
@@ -463,6 +469,7 @@ export interface FileRoutesByFullPath {
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
+  '/admin/telemetry': typeof AdminTelemetryRoute
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
@@ -530,6 +537,7 @@ export interface FileRoutesByTo {
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
+  '/admin/telemetry': typeof AdminTelemetryRoute
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
@@ -602,6 +610,7 @@ export interface FileRoutesById {
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organizations': typeof AdminOrganizationsRouteWithChildren
   '/admin/revenue': typeof AdminRevenueRoute
+  '/admin/telemetry': typeof AdminTelemetryRoute
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
@@ -675,6 +684,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/organizations'
     | '/admin/revenue'
+    | '/admin/telemetry'
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
@@ -742,6 +752,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/organizations'
     | '/admin/revenue'
+    | '/admin/telemetry'
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
@@ -813,6 +824,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/organizations'
     | '/admin/revenue'
+    | '/admin/telemetry'
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
@@ -1255,6 +1267,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsageRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/telemetry': {
+      id: '/admin/telemetry'
+      path: '/telemetry'
+      fullPath: '/admin/telemetry'
+      preLoaderRoute: typeof AdminTelemetryRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/revenue': {
       id: '/admin/revenue'
       path: '/revenue'
@@ -1404,6 +1423,7 @@ interface AdminRouteChildren {
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrganizationsRoute: typeof AdminOrganizationsRouteWithChildren
   AdminRevenueRoute: typeof AdminRevenueRoute
+  AdminTelemetryRoute: typeof AdminTelemetryRoute
   AdminUsageRoute: typeof AdminUsageRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -1418,6 +1438,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrganizationsRoute: AdminOrganizationsRouteWithChildren,
   AdminRevenueRoute: AdminRevenueRoute,
+  AdminTelemetryRoute: AdminTelemetryRoute,
   AdminUsageRoute: AdminUsageRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,

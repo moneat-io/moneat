@@ -918,6 +918,12 @@ fun Route.adminRoutes() {
                 val analytics = attributionAnalyticsService.getAttributionMetrics(groupBy = groupBy)
                 call.respond(analytics)
             }
+
+            // Telemetry pulse status for self-hosted deployments
+            get("/telemetry") {
+                val status = com.moneat.services.PulseService.getStatus()
+                call.respond(status)
+            }
         }
     }
 }

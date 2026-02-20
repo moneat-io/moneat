@@ -3222,6 +3222,32 @@ class ApiClient {
     return this.request<AdminBillingSubscription[]>(`${API_BASE}/admin/billing/subscriptions?limit=${limit}`)
   }
 
+  async getAdminTelemetry() {
+    return this.request<{
+      enabled: boolean
+      selfHostMode: boolean
+      telemetryConfigEnabled: boolean
+      endpoint: string
+      metrics: {
+        deploymentId: string
+        cpuCount: number
+        memTotalBytes: number
+        memUsedBytes: number
+        osName: string
+        osArch: string
+        jvmVersion: string
+        projectCount: number
+        userCount: number
+        eventCount: number
+        issueCount: number
+        selfHost: boolean
+        sslEnabled: boolean
+        backendUrl: string
+        frontendUrl: string
+      } | null
+    }>(`${API_BASE}/admin/telemetry`)
+  }
+
   // Notification Preferences
   async getNotificationPreferences() {
     return this.request<NotificationPreferences>(`${API_BASE}/notification-preferences`)
