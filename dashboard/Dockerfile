@@ -13,13 +13,20 @@ COPY dashboard/package.json dashboard/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 COPY dashboard/ .
-# Copy enterprise routes and components (always included in the dashboard image)
-COPY enterprise/dashboard/src/routes/ ./src/routes/
-COPY enterprise/dashboard/src/components/ ./src/components-enterprise/
-RUN cp -r ./src/components-enterprise/analytics/ ./src/components/analytics/ && \
-    cp -r ./src/components-enterprise/on-call/ ./src/components/on-call/ && \
-    cp ./src/components-enterprise/sso-settings.tsx ./src/components/sso-settings.tsx && \
-    rm -rf ./src/components-enterprise
+# Overlay enterprise routes/components when present in build context.
+RUN --mount=type=bind,source=.,target=/repo,readonly \
+    if [ -d /repo/enterprise/dashboard/src ]; then \
+      for path in routes components/analytics components/on-call components/sso-settings.tsx; do \
+        src="/repo/enterprise/dashboard/src/${path}"; \
+        dst="./src/${path}"; \
+        case "${path}" in \
+          *.tsx) \
+            [ -f "${src}" ] && mkdir -p "$(dirname "${dst}")" && cp "${src}" "${dst}" ;; \
+          *) \
+            [ -d "${src}" ] && mkdir -p "${dst}" && cp -r "${src}/." "${dst}/" ;; \
+        esac; \
+      done; \
+    fi
 COPY --from=docs-build /app/build ./public/docs
 ARG VITE_BACKEND_URL=""
 ARG VITE_API_URL=""

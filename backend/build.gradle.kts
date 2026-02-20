@@ -21,6 +21,8 @@ tasks.shadowJar {
     archiveBaseName.set("moneat-backend")
     archiveClassifier.set("all")
     archiveVersion.set("")
+    // Required for ServiceFileTransformer to merge Flyway's plugin descriptors.
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
     mergeServiceFiles()
     manifest {
         attributes("Main-Class" to application.mainClass.get())

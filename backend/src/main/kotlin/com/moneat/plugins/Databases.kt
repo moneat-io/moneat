@@ -23,7 +23,6 @@ import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.*
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
-import org.flywaydb.core.api.MigrationVersion
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
@@ -95,13 +94,8 @@ fun Application.configureDatabases() {
                     .configure()
                     .dataSource(dataSource)
                     .locations("classpath:db/migration")
-                    .sqlMigrationPrefix("V")
-                    .repeatableSqlMigrationPrefix("R")
-                    .sqlMigrationSeparator("__")
-                    .sqlMigrationSuffixes(".sql")
+                    .validateMigrationNaming(true)
                     .baselineOnMigrate(true)
-                    // Force full migration to latest even if an external target cap is present.
-                    .target(MigrationVersion.LATEST)
                     .load()
 
             val migrationsApplied = flyway.migrate()
