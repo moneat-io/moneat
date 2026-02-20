@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {useState} from 'react'
+import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
@@ -88,6 +89,14 @@ function AdminLayout() {
   const router = useRouterState()
   const currentPath = router.location.pathname
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const isSelfHosted = useIsSelfHosted()
+
+  const navSections = isSelfHosted
+    ? adminNavSections.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => item.href !== '/admin/telemetry'),
+      }))
+    : adminNavSections
 
   return (
     <div className="flex min-h-screen">
@@ -130,7 +139,7 @@ function AdminLayout() {
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-3 space-y-4">
-          {adminNavSections.map((section) => (
+          {navSections.map((section) => (
             <div key={section.label}>
               <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 {section.label}

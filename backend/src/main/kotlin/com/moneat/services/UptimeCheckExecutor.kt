@@ -398,8 +398,12 @@ class UptimeCheckExecutor {
             DriverManager.getConnection(connectionString).use { conn ->
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
-                // Optionally run a query
+                // Optionally run a read-only query (SELECT only to prevent destructive statements)
                 monitor.dbQuery?.let { query ->
+                    val trimmed = query.trimStart()
+                    require(trimmed.startsWith("SELECT", ignoreCase = true)) {
+                        "Only SELECT queries are allowed for database health checks"
+                    }
                     conn.createStatement().use { stmt ->
                         stmt.executeQuery(query).use { rs ->
                             rs.next() // Execute query

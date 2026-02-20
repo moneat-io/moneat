@@ -71,11 +71,13 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
 Deploy Moneat on any VPS with Docker Compose.
 
 ```bash
-git clone https://github.com/moneat-io/moneat.git
+git clone -b main https://github.com/moneat-io/moneat.git
 cd moneat-deploy
 # Follow the setup guide in the repo
 docker-compose up -d
 ```
+
+> **Note:** Always use the `main` branch for self-hosting — it tracks the current production release. The `develop` branch is unstable and intended for active development only.
 
 ### Telemetry
 

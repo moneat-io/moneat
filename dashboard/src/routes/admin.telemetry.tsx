@@ -23,16 +23,16 @@ import {
   Activity,
   AlertTriangle,
   Cpu,
-  Database,
   Fingerprint,
   FolderKanban,
   HardDrive,
   Lock,
   Radio,
+  Server,
   ShieldCheck,
   Users,
 } from 'lucide-react'
-import {AdminSkeleton, formatBytes, formatNumber, MetricCard, SectionHeader} from '@/components/admin-components'
+import {AdminSkeleton, formatBytes, formatNumber, SectionHeader} from '@/components/admin-components'
 
 export const Route = createFileRoute('/admin/telemetry')({
   component: AdminTelemetryPage,
@@ -48,182 +48,133 @@ function AdminTelemetryPage() {
     return <AdminSkeleton />
   }
 
-  const m = data.metrics
+  const {deploymentCount, lastSeenAt, deployments} = data
 
   return (
     <div className="space-y-8">
       <SectionHeader
         title="Telemetry"
-        description="Anonymous usage diagnostics for self-hosted deployments."
+        description="Anonymous usage diagnostics received from self-hosted deployments."
       />
 
-      {/* Status Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Pulse Status</CardTitle>
-            <Badge variant={data.enabled ? 'default' : 'secondary'} className="text-xs">
-              {data.enabled ? 'Active' : 'Inactive'}
-            </Badge>
-          </div>
-          <CardDescription>
-            {data.enabled
-              ? 'Anonymous metrics are periodically sent to help improve Moneat for self-hosted users.'
-              : !data.selfHostMode
-                ? 'Telemetry is only active on self-hosted deployments (SELF_HOST=true).'
-                : 'Telemetry is disabled. Set TELEMETRY_ENABLED=true to opt in.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Radio className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Self-host mode:</span>
-              <span className="font-medium">{data.selfHostMode ? 'Yes' : 'No'}</span>
+      {/* Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-violet-100 dark:bg-violet-950 p-2">
+                <Server className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{formatNumber(deploymentCount)}</p>
+                <p className="text-sm text-muted-foreground">Self-hosted deployments</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Config enabled:</span>
-              <span className="font-medium">{data.telemetryConfigEnabled ? 'Yes' : 'No'}</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-emerald-100 dark:bg-emerald-950 p-2">
+                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{formatNumber(deployments.reduce((s, d) => s + d.eventCount, 0))}</p>
+                <p className="text-sm text-muted-foreground">Total events (across all)</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <Database className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground shrink-0">Endpoint:</span>
-              <span className="font-mono text-xs truncate">{data.endpoint}</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-sky-100 dark:bg-sky-950 p-2">
+                <Radio className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">{lastSeenAt ? new Date(lastSeenAt).toLocaleString() : '—'}</p>
+                <p className="text-sm text-muted-foreground">Last pulse received</p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Metrics Snapshot */}
-      {m ? (
-        <>
-          {/* Deployment Info */}
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
-              Deployment
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <MetricCard
-                title="Deployment ID"
-                value={m.deploymentId.length > 12 ? `${m.deploymentId.slice(0, 8)}…` : m.deploymentId}
-                subtitle={m.deploymentId}
-                icon={Fingerprint}
-                iconColor="text-violet-600 dark:text-violet-400"
-                iconBg="bg-violet-100 dark:bg-violet-950"
-              />
-              <MetricCard
-                title="OS"
-                value={m.osName}
-                subtitle={m.osArch}
-                icon={HardDrive}
-                iconColor="text-slate-600 dark:text-slate-400"
-                iconBg="bg-slate-100 dark:bg-slate-900"
-              />
-              <MetricCard
-                title="JVM Version"
-                value={m.jvmVersion}
-                icon={ShieldCheck}
-                iconColor="text-sky-600 dark:text-sky-400"
-                iconBg="bg-sky-100 dark:bg-sky-950"
-              />
-              <MetricCard
-                title="SSL"
-                value={m.sslEnabled ? 'Enabled' : 'Disabled'}
-                icon={Lock}
-                iconColor={
-                  m.sslEnabled
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-amber-600 dark:text-amber-400'
-                }
-                iconBg={
-                  m.sslEnabled
-                    ? 'bg-emerald-100 dark:bg-emerald-950'
-                    : 'bg-amber-100 dark:bg-amber-950'
-                }
-              />
-            </div>
-          </div>
-
-          {/* System Resources */}
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
-              System Resources
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <MetricCard
-                title="CPU Cores"
-                value={m.cpuCount}
-                icon={Cpu}
-                iconColor="text-blue-600 dark:text-blue-400"
-                iconBg="bg-blue-100 dark:bg-blue-950"
-              />
-              <MetricCard
-                title="Memory Used"
-                value={formatBytes(m.memUsedBytes)}
-                subtitle={`of ${formatBytes(m.memTotalBytes)} total`}
-                icon={HardDrive}
-                iconColor="text-orange-600 dark:text-orange-400"
-                iconBg="bg-orange-100 dark:bg-orange-950"
-              />
-              <MetricCard
-                title="Memory Usage"
-                value={`${m.memTotalBytes > 0 ? ((m.memUsedBytes / m.memTotalBytes) * 100).toFixed(1) : 0}%`}
-                icon={Activity}
-                iconColor="text-rose-600 dark:text-rose-400"
-                iconBg="bg-rose-100 dark:bg-rose-950"
-              />
-            </div>
-          </div>
-
-          {/* Usage Counts */}
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
-              Usage Counts
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <MetricCard
-                title="Projects"
-                value={formatNumber(m.projectCount)}
-                icon={FolderKanban}
-                iconColor="text-indigo-600 dark:text-indigo-400"
-                iconBg="bg-indigo-100 dark:bg-indigo-950"
-              />
-              <MetricCard
-                title="Users"
-                value={formatNumber(m.userCount)}
-                icon={Users}
-                iconColor="text-teal-600 dark:text-teal-400"
-                iconBg="bg-teal-100 dark:bg-teal-950"
-              />
-              <MetricCard
-                title="Events"
-                value={formatNumber(m.eventCount)}
-                icon={Activity}
-                iconColor="text-amber-600 dark:text-amber-400"
-                iconBg="bg-amber-100 dark:bg-amber-950"
-              />
-              <MetricCard
-                title="Issues"
-                value={formatNumber(m.issueCount)}
-                icon={AlertTriangle}
-                iconColor="text-red-600 dark:text-red-400"
-                iconBg="bg-red-100 dark:bg-red-950"
-              />
-            </div>
-          </div>
-        </>
-      ) : (
+      {/* Deployments table */}
+      {deployments.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <Radio className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">
-              {data.selfHostMode
-                ? 'Enable telemetry to see collected metrics here.'
-                : 'Telemetry is only available in self-hosted mode.'}
+              No telemetry pulses received yet. Self-hosted instances send a pulse every 4 hours when <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">TELEMETRY_ENABLED=true</code>.
             </p>
           </CardContent>
         </Card>
+      ) : (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Deployments ({deploymentCount})
+          </h3>
+          {deployments.map((d) => (
+            <Card key={d.deploymentId}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Fingerprint className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-sm font-mono">{d.deploymentId}</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={d.sslEnabled ? 'default' : 'secondary'} className="text-xs">
+                      {d.sslEnabled ? <><Lock className="h-3 w-3 mr-1" />SSL</> : 'No SSL'}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(d.receivedAt).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <CardDescription className="flex items-center gap-1">
+                  <ShieldCheck className="h-3 w-3" />
+                  {d.osName} {d.osArch} · JVM {d.jvmVersion}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <Cpu className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                    <span className="text-muted-foreground">CPU:</span>
+                    <span className="font-medium">{d.cpuCount}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <HardDrive className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                    <span className="text-muted-foreground">Mem:</span>
+                    <span className="font-medium">{formatBytes(d.memUsedBytes)}</span>
+                    <span className="text-muted-foreground">/ {formatBytes(d.memTotalBytes)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <FolderKanban className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                    <span className="text-muted-foreground">Projects:</span>
+                    <span className="font-medium">{formatNumber(d.projectCount)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5 text-teal-500 shrink-0" />
+                    <span className="text-muted-foreground">Users:</span>
+                    <span className="font-medium">{formatNumber(d.userCount)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span className="text-muted-foreground">Events:</span>
+                    <span className="font-medium">{formatNumber(d.eventCount)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                    <span className="text-muted-foreground">Issues:</span>
+                    <span className="font-medium">{formatNumber(d.issueCount)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
       {/* What We Collect */}
@@ -258,8 +209,8 @@ function AdminTelemetryPage() {
             </div>
           </div>
           <div className="mt-6 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
-            To disable telemetry, set <code className="font-mono bg-muted px-1 py-0.5 rounded">TELEMETRY_ENABLED=false</code> in
-            your <code className="font-mono bg-muted px-1 py-0.5 rounded">.env</code> file and restart the backend.
+            Self-hosted instances opt out by setting <code className="font-mono bg-muted px-1 py-0.5 rounded">TELEMETRY_ENABLED=false</code> in
+            their <code className="font-mono bg-muted px-1 py-0.5 rounded">.env</code> file.
           </div>
         </CardContent>
       </Card>

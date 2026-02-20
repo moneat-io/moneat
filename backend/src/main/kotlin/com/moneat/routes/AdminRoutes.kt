@@ -22,12 +22,14 @@ import com.moneat.models.IncidentSeverity
 import com.moneat.models.IncidentStatus
 import com.moneat.models.TriggerIncidentRequest
 import com.moneat.models.Users
+import com.moneat.config.ClickHouseClient
 import com.moneat.services.AdminOrgDetail
 import com.moneat.services.AdminOrgUsagePoint
 import com.moneat.services.AdminService
 import com.moneat.services.AuthService
 import com.moneat.services.PricingTierService
-import io.ktor.http.HttpStatusCode
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.*
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.isHandled
 import io.ktor.server.auth.AuthenticationChecked
@@ -45,13 +47,110 @@ import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
+private val adminJson = Json { ignoreUnknownKeys = true }
+
+@Serializable
+data class ReceivedPulse(
+    val deploymentId: String,
+    val receivedAt: String,
+    val cpuCount: Int,
+    val memTotalBytes: Long,
+    val memUsedBytes: Long,
+    val osName: String,
+    val osArch: String,
+    val jvmVersion: String,
+    val projectCount: Long,
+    val userCount: Long,
+    val eventCount: Long,
+    val issueCount: Long,
+    val sslEnabled: Boolean,
+)
+
+@Serializable
+data class ReceivedTelemetryStatus(
+    val deploymentCount: Int,
+    val lastSeenAt: String?,
+    val deployments: List<ReceivedPulse>,
+)
+
+private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
+    val db = ClickHouseClient.getDatabase()
+    val query = """
+        SELECT
+            deployment_id,
+            toString(argMax(received_at, received_at)) AS last_seen,
+            argMax(cpu_count, received_at)       AS cpu_count,
+            argMax(mem_total_bytes, received_at) AS mem_total_bytes,
+            argMax(mem_used_bytes, received_at)  AS mem_used_bytes,
+            argMax(os_name, received_at)         AS os_name,
+            argMax(os_arch, received_at)         AS os_arch,
+            argMax(jvm_version, received_at)     AS jvm_version,
+            argMax(project_count, received_at)   AS project_count,
+            argMax(user_count, received_at)      AS user_count,
+            argMax(event_count, received_at)     AS event_count,
+            argMax(issue_count, received_at)     AS issue_count,
+            argMax(ssl_enabled, received_at)     AS ssl_enabled
+        FROM $db.telemetry_pulses
+        GROUP BY deployment_id
+        ORDER BY last_seen DESC
+        LIMIT 500
+        FORMAT JSONEachRow
+    """.trimIndent()
+
+    val response = ClickHouseClient.execute(query)
+    val body = response.bodyAsText().trim()
+
+    if (!response.status.isSuccess() || body.startsWith("Code:")) {
+        logger.warn { "Failed to query telemetry_pulses: ${body.take(200)}" }
+        return ReceivedTelemetryStatus(deploymentCount = 0, lastSeenAt = null, deployments = emptyList())
+    }
+
+    val deployments = body.lines()
+        .filter { it.isNotBlank() }
+        .mapNotNull { line ->
+            try {
+                val obj = adminJson.parseToJsonElement(line).jsonObject
+                ReceivedPulse(
+                    deploymentId  = obj["deployment_id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
+                    receivedAt    = obj["last_seen"]?.jsonPrimitive?.contentOrNull ?: "",
+                    cpuCount      = obj["cpu_count"]?.jsonPrimitive?.intOrNull ?: 0,
+                    memTotalBytes = obj["mem_total_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
+                    memUsedBytes  = obj["mem_used_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
+                    osName        = obj["os_name"]?.jsonPrimitive?.contentOrNull ?: "",
+                    osArch        = obj["os_arch"]?.jsonPrimitive?.contentOrNull ?: "",
+                    jvmVersion    = obj["jvm_version"]?.jsonPrimitive?.contentOrNull ?: "",
+                    projectCount  = obj["project_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    userCount     = obj["user_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    eventCount    = obj["event_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    issueCount    = obj["issue_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    sslEnabled    = (obj["ssl_enabled"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
+                )
+            } catch (e: Exception) {
+                logger.warn { "Failed to parse telemetry pulse row: ${e.message}" }
+                null
+            }
+        }
+
+    return ReceivedTelemetryStatus(
+        deploymentCount = deployments.size,
+        lastSeenAt = deployments.firstOrNull()?.receivedAt,
+        deployments = deployments,
+    )
+}
 
 @Serializable
 private data class AdminUsersResponse(
@@ -919,9 +1018,9 @@ fun Route.adminRoutes() {
                 call.respond(analytics)
             }
 
-            // Telemetry pulse status for self-hosted deployments
+            // Telemetry — received pulses from self-hosted deployments (cloud platform only)
             get("/telemetry") {
-                val status = com.moneat.services.PulseService.getStatus()
+                val status = queryReceivedTelemetry()
                 call.respond(status)
             }
         }
