@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
+import {createFileRoute, isRedirect, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {
+    AlertTriangle,
     ArrowLeft,
     BarChart3,
     Bell,
@@ -25,11 +26,10 @@ import {
     DollarSign,
     LayoutDashboard,
     Mail,
+    Menu,
     Server,
     Shield,
-    AlertTriangle,
     Users,
-    Menu,
     X,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
@@ -37,17 +37,14 @@ import {useState} from 'react'
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
     try {
       const user = await api.getCurrentUser()
       if (!user.isAdmin) {
         throw redirect({to: '/'})
       }
     } catch (e) {
-      if (e instanceof Error && e.message?.includes('redirect')) throw e
-      throw redirect({to: '/'})
+      if (isRedirect(e)) throw e
+      throw redirect({to: '/login'})
     }
   },
   component: AdminLayout,

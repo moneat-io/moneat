@@ -18,31 +18,27 @@ package com.moneat.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.models.ProjectKeys
+import com.moneat.services.AnalyticsSaltService
 import com.moneat.utils.ClickHouseSqlUtils
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.post
-import io.ktor.server.routing.route
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import io.ktor.server.routing.*
+import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.net.URI
-import java.util.UUID
+import java.security.MessageDigest
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 data class AnalyticsEventPayload(
     val projectId: Long,
+    val sessionId: String,
     val eventName: String,
     val hostname: String,
     val pathname: String,
@@ -71,7 +67,7 @@ fun Route.analyticsIngestRoutes(
             ) VALUES (
                 generateUUIDv4(),
                 ${payload.projectId},
-                'sess-${UUID.randomUUID().toString().take(8)}',
+                '${esc(payload.sessionId)}',
                 '${esc(payload.eventName)}',
                 '${esc(payload.hostname)}',
                 '${esc(payload.pathname)}',
@@ -134,10 +130,23 @@ fun Route.analyticsIngestRoutes(
                 ?.associate { (k, v) -> k to (v.jsonPrimitive.contentOrNull ?: "") }
                 ?: emptyMap()
 
+            // Session ID: SHA-256(daily_salt | IP | User-Agent).
+            // The salt rotates each day via Redis, so hashes are non-reversible and
+            // reset daily without embedding PII in the hash input directly.
+            val ip = call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                ?: call.request.local.remoteHost
+            val userAgent = call.request.headers["User-Agent"] ?: ""
+            val salt = AnalyticsSaltService.getDailySalt()
+            val sessionId = MessageDigest.getInstance("SHA-256")
+                .digest("$salt|$ip|$userAgent".toByteArray())
+                .joinToString("") { "%02x".format(it) }
+                .take(32)
+
             try {
                 insertEvent(
                     AnalyticsEventPayload(
                         projectId = projectId,
+                        sessionId = sessionId,
                         eventName = eventName,
                         hostname = hostname,
                         pathname = pathname,
