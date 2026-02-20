@@ -28,38 +28,6 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
 
-private fun Application.logPostgresSchemaState(dataSource: HikariDataSource) {
-    dataSource.connection.use { connection ->
-        connection.createStatement().use { statement ->
-            statement.executeQuery(
-                "SELECT current_database(), current_user, current_schema(), current_setting('search_path')"
-            ).use { rs ->
-                if (rs.next()) {
-                    log.info(
-                        "PostgreSQL context: database=${rs.getString(1)}, user=${rs.getString(2)}, " +
-                            "schema=${rs.getString(3)}, search_path=${rs.getString(4)}"
-                    )
-                }
-            }
-
-            statement.executeQuery(
-                """
-                SELECT table_schema, table_name
-                FROM information_schema.tables
-                WHERE table_name IN ('users', 'subscriptions', 'flyway_schema_history')
-                ORDER BY table_schema, table_name
-                """.trimIndent()
-            ).use { rs ->
-                val tableLocations = mutableListOf<String>()
-                while (rs.next()) {
-                    tableLocations += "${rs.getString(1)}.${rs.getString(2)}"
-                }
-                log.info("PostgreSQL table locations: ${tableLocations.joinToString(", ")}")
-            }
-        }
-    }
-}
-
 private fun verifyCriticalColumnsPresent(dataSource: HikariDataSource) {
     val requiredColumns =
         setOf(
@@ -120,8 +88,6 @@ fun Application.configureDatabases() {
         val isTestDatabase = hikariConfig.jdbcUrl.contains("jdbc:h2:mem")
 
         if (!isTestDatabase) {
-            logPostgresSchemaState(dataSource)
-
             // Run Flyway migrations for PostgreSQL
             log.info("Running PostgreSQL migrations...")
             val flyway =
@@ -134,31 +100,12 @@ fun Application.configureDatabases() {
                     .target(MigrationVersion.LATEST)
                     .load()
 
-            val flywayConfig = flyway.configuration
-            log.info(
-                "Flyway config: sqlPrefix=${flywayConfig.sqlMigrationPrefix}, " +
-                    "repeatablePrefix=${flywayConfig.repeatableSqlMigrationPrefix}, " +
-                    "separator=${flywayConfig.sqlMigrationSeparator}, " +
-                    "suffixes=${flywayConfig.sqlMigrationSuffixes.joinToString(",")}, " +
-                    "locations=${flywayConfig.locations.joinToString(",") { it.descriptor }}, " +
-                    "target=${flywayConfig.target}"
-            )
-
             val migrationsApplied = flyway.migrate()
             log.info("Applied ${migrationsApplied.migrationsExecuted} PostgreSQL migration(s)")
 
             val flywayInfo = flyway.info()
             val resolvedMigrations = flywayInfo.all().size
             val appliedMigrations = flywayInfo.applied().size
-            val currentVersion = flywayInfo.current()?.version?.toString() ?: "none"
-            val pendingMigrations = flywayInfo.pending()
-            log.info(
-                "Flyway state: currentVersion=$currentVersion, resolved=$resolvedMigrations, " +
-                    "applied=$appliedMigrations, pending=${pendingMigrations.size}"
-            )
-            if (pendingMigrations.isNotEmpty()) {
-                log.info("Flyway pending scripts: ${pendingMigrations.joinToString(", ") { it.script }}")
-            }
             if (resolvedMigrations == 0 || appliedMigrations == 0) {
                 throw IllegalStateException(
                     "Flyway resolved=$resolvedMigrations applied=$appliedMigrations. " +
