@@ -8,7 +8,18 @@ import {
 } from './ui/dropdown-menu'
 import { useEffect, useState } from 'react'
 
-type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset'
+type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer'
+
+const VT323_FONT_ID = 'vt323-font'
+
+function loadGamerFont() {
+  if (document.getElementById(VT323_FONT_ID)) return
+  const link = document.createElement('link')
+  link.id = VT323_FONT_ID
+  link.rel = 'stylesheet'
+  link.href = 'https://fonts.googleapis.com/css2?family=VT323&display=swap'
+  document.head.appendChild(link)
+}
 
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -29,6 +40,7 @@ export function ThemeSwitcher() {
     } else {
       // For other themes, they are dark-based, so add 'dark' and the theme class
       root.classList.add('dark', `theme-${newTheme}`)
+      if (newTheme === 'gamer') loadGamerFont()
     }
   }
 
