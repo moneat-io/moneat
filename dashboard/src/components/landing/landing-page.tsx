@@ -39,7 +39,7 @@ export function LandingPage() {
   }
 
   return (
-    <article className="min-h-screen bg-background">
+    <article className="min-h-screen bg-background dark">
       <Helmet>
         <title>Moneat | Errors, Logs, Uptime, and On-Call in One Platform</title>
         <meta
