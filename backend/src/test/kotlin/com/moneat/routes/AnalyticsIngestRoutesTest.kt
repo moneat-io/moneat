@@ -156,7 +156,8 @@ class AnalyticsIngestRoutesTest {
 
             val response = client.post("/api/moneat.io/analytics/event?sentry_key=$testPublicKey") {
                 contentType(ContentType.Application.Json)
-                setBody("""{"n":"pageview","u":"https://moneat.io/pricing","d":"moneat.io","r":"https://google.com","w":1440}""")
+                setBody("""{"n":"pageview","u":"https://moneat.io/pricing",
+                    |"d":"moneat.io","r":"https://google.com","w":1440}""".trimMargin())
             }
 
             assertEquals(HttpStatusCode.Accepted, response.status)
