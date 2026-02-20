@@ -205,12 +205,9 @@ function SystemDetailPage() {
     return filtered.length > 0 ? filtered : [TIME_RANGES[0]]
   }, [retentionDays])
 
-  useEffect(() => {
-    if (!availableRanges.some((option) => option.value === timeRange)) {
-      const fallback = availableRanges[availableRanges.length - 1]?.value ?? '24h'
-      setTimeRange(fallback)
-    }
-  }, [availableRanges, timeRange, setTimeRange])
+  const effectiveTimeRange: TimeRange = availableRanges.some((option) => option.value === timeRange)
+    ? timeRange
+    : (availableRanges[availableRanges.length - 1]?.value ?? '24h') as TimeRange
 
   // Persist container view mode to localStorage
   useEffect(() => {
@@ -225,7 +222,7 @@ function SystemDetailPage() {
   })
 
   const selectedRange =
-    availableRanges.find((r) => r.value === timeRange) ??
+    availableRanges.find((r) => r.value === effectiveTimeRange) ??
     availableRanges[availableRanges.length - 1] ??
     TIME_RANGES[0]
   const now = getNowDate()
@@ -234,7 +231,7 @@ function SystemDetailPage() {
   const to = Math.floor(now.getTime() / 1000).toString()
 
   const {data: metrics} = useQuery({
-    queryKey: ['system-metrics', systemId, timeRange],
+    queryKey: ['system-metrics', systemId, effectiveTimeRange],
     queryFn: () => api.getSystemMetrics(systemId, from, to),
     refetchInterval: 30000,
   })
@@ -416,7 +413,7 @@ function SystemDetailPage() {
               </div>
             </div>
 
-            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+            <Select value={effectiveTimeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
               <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>

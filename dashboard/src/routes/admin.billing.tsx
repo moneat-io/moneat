@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useCallback, useEffect, useMemo, useState} from 'react'
+import {useMemo, useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {type AdminBillingSubscription, api, type BillingPlan, type BillingTierConfig} from '@/lib/api'
@@ -247,6 +247,48 @@ const DEFAULT_FORM: CreateFormState = {
   stripeOncallYearlyPriceId: '',
 }
 
+// ─── Standalone helper (used for computed form state) ─────────────────────────
+
+function buildCreateFormFromConfig(config: BillingTierConfig): CreateFormState {
+  return {
+    monthlyErrorLimit: config.monthlyErrorLimit,
+    monthlyTransactionLimit: config.monthlyTransactionLimit,
+    monthlyReplayLimit: config.monthlyReplayLimit,
+    monthlyFeedbackLimit: config.monthlyFeedbackLimit,
+    monthlyLlmEventLimit: config.monthlyLlmEventLimit ?? 0,
+    retentionDays: config.retentionDays,
+    logRetentionDays: config.logRetentionDays ?? config.retentionDays,
+    replayRetentionDays: config.replayRetentionDays ?? config.retentionDays,
+    llmRetentionDays: config.llmRetentionDays ?? config.retentionDays,
+    maxProjects: config.maxProjects != null ? String(config.maxProjects) : '',
+    maxSystems: config.maxSystems,
+    monitorIntervalSeconds: config.monitorIntervalSeconds,
+    monthlyPriceCents: config.monthlyPriceCents,
+    yearlyPriceCents: config.yearlyPriceCents,
+    monthlyGbLimitGb: Math.max(0, Math.round(config.monthlyGbLimit / BYTES_PER_GB)),
+    trialDays: config.trialDays,
+    paygEnabled: config.paygEnabled,
+    paygRateMicrosPerUnit: config.paygRateMicrosPerUnit,
+    overageRateCentsPerGb: config.overageRateCentsPerGb ?? 40,
+    errorOverageRateCentsPer1k: config.errorOverageRateCentsPer1k ?? 10,
+    replayOverageRateCentsPerGb: config.replayOverageRateCentsPerGb ?? 40,
+    llmOverageRateCentsPer1k: config.llmOverageRateCentsPer1k ?? 100,
+    oncallEnabled: config.oncallEnabled ?? false,
+    oncallPerUserMonthlyCents: config.oncallPerUserMonthlyCents ?? 500,
+    oncallPerUserYearlyCents: config.oncallPerUserYearlyCents ?? 5000,
+    maxAnalyticsSites: config.maxAnalyticsSites != null ? String(config.maxAnalyticsSites) : '',
+    analyticsRetentionDays: config.analyticsRetentionDays ?? 1095,
+    monthlyAnalyticsPageviewLimit: config.monthlyAnalyticsPageviewLimit ?? 0,
+    analyticsPageviewOverageRateCentsPer100k: config.analyticsPageviewOverageRateCentsPer100k ?? 0,
+    stripeBasePriceId: config.stripeBasePriceId ?? '',
+    stripeOveragePriceId: config.stripeOveragePriceId ?? '',
+    stripeYearlyBasePriceId: config.stripeYearlyBasePriceId ?? '',
+    stripeYearlyOveragePriceId: config.stripeYearlyOveragePriceId ?? '',
+    stripeOncallPriceId: config.stripeOncallPriceId ?? '',
+    stripeOncallYearlyPriceId: config.stripeOncallYearlyPriceId ?? '',
+  }
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function AdminBillingPage() {
@@ -259,15 +301,31 @@ function AdminBillingPage() {
   const [updateTier, setUpdateTier] = useState('PRO')
   const [updateVersion, setUpdateVersion] = useState<number | ''>('')
   const [targetVersion, setTargetVersion] = useState<number | ''>('')
-  const [createForm, setCreateForm] = useState<CreateFormState>(DEFAULT_FORM)
+  const [createFormState, setCreateFormState] = useState<{
+    tierVersion: string | undefined
+    data: CreateFormState
+  }>({tierVersion: undefined, data: DEFAULT_FORM})
   const [previewInterval, setPreviewInterval] = useState<BillingInterval>('monthly')
-  const [updatePriceForm, setUpdatePriceForm] = useState({
-    stripeBasePriceId: '',
-    stripeOveragePriceId: '',
-    stripeYearlyBasePriceId: '',
-    stripeYearlyOveragePriceId: '',
-    stripeOncallPriceId: '',
-    stripeOncallYearlyPriceId: '',
+  const [updatePriceFormState, setUpdatePriceFormState] = useState<{
+    tierVersion: string | undefined
+    data: {
+      stripeBasePriceId: string
+      stripeOveragePriceId: string
+      stripeYearlyBasePriceId: string
+      stripeYearlyOveragePriceId: string
+      stripeOncallPriceId: string
+      stripeOncallYearlyPriceId: string
+    }
+  }>({
+    tierVersion: undefined,
+    data: {
+      stripeBasePriceId: '',
+      stripeOveragePriceId: '',
+      stripeYearlyBasePriceId: '',
+      stripeYearlyOveragePriceId: '',
+      stripeOncallPriceId: '',
+      stripeOncallYearlyPriceId: '',
+    },
   })
   const [showCreateConfirm, setShowCreateConfirm] = useState(false)
   const [showMigrateConfirm, setShowMigrateConfirm] = useState(false)
@@ -326,6 +384,17 @@ function AdminBillingPage() {
     [createTierVersions],
   )
 
+  const currentTierVersion = currentTierConfig ? `${currentTierConfig.tier}-${currentTierConfig.version}` : undefined
+  const createForm = (createFormState.tierVersion === currentTierVersion && currentTierVersion !== undefined)
+    ? createFormState.data
+    : (currentTierConfig ? buildCreateFormFromConfig(currentTierConfig) : DEFAULT_FORM)
+  const setCreateForm = (updater: CreateFormState | ((prev: CreateFormState) => CreateFormState)) => {
+    setCreateFormState({
+      tierVersion: currentTierVersion,
+      data: typeof updater === 'function' ? updater(createForm) : updater,
+    })
+  }
+
   const targetTierConfig = useMemo(
     () => migrateTierVersions.find((v) => v.version === Number(targetVersion)),
     [migrateTierVersions, targetVersion],
@@ -345,6 +414,24 @@ function AdminBillingPage() {
     () => updateTierVersions.find((v) => v.version === Number(updateVersion)),
     [updateTierVersions, updateVersion],
   )
+
+  const currentUpdateTierVersion = selectedUpdateTierConfig ? String(selectedUpdateTierConfig.version) : undefined
+  const updatePriceForm = (updatePriceFormState.tierVersion === currentUpdateTierVersion && currentUpdateTierVersion !== undefined)
+    ? updatePriceFormState.data
+    : {
+        stripeBasePriceId: selectedUpdateTierConfig?.stripeBasePriceId ?? '',
+        stripeOveragePriceId: selectedUpdateTierConfig?.stripeOveragePriceId ?? '',
+        stripeYearlyBasePriceId: selectedUpdateTierConfig?.stripeYearlyBasePriceId ?? '',
+        stripeYearlyOveragePriceId: selectedUpdateTierConfig?.stripeYearlyOveragePriceId ?? '',
+        stripeOncallPriceId: selectedUpdateTierConfig?.stripeOncallPriceId ?? '',
+        stripeOncallYearlyPriceId: selectedUpdateTierConfig?.stripeOncallYearlyPriceId ?? '',
+      }
+  const setUpdatePriceForm = (updater: typeof updatePriceFormState.data | ((prev: typeof updatePriceFormState.data) => typeof updatePriceFormState.data)) => {
+    setUpdatePriceFormState({
+      tierVersion: currentUpdateTierVersion,
+      data: typeof updater === 'function' ? updater(updatePriceForm) : updater,
+    })
+  }
 
   const filteredSubscriptions = useMemo(() => {
     if (!subFilter) return subscriptions
@@ -414,72 +501,6 @@ function AdminBillingPage() {
       .sort((a, b) => (TIER_ORDER[a.tierName] ?? 99) - (TIER_ORDER[b.tierName] ?? 99))
       .map((tier) => buildPricingCardModel(tier, previewInterval))
   }, [createForm, createTier, currentPlans, currentTierConfig, previewInterval])
-
-  // ─── Pre-fill form from current tier config ───────────────────────────────
-
-  const prefillFromConfig = useCallback(
-    (config: BillingTierConfig) => {
-      setCreateForm({
-        monthlyErrorLimit: config.monthlyErrorLimit,
-        monthlyTransactionLimit: config.monthlyTransactionLimit,
-        monthlyReplayLimit: config.monthlyReplayLimit,
-        monthlyFeedbackLimit: config.monthlyFeedbackLimit,
-        monthlyLlmEventLimit: config.monthlyLlmEventLimit ?? 0,
-        retentionDays: config.retentionDays,
-        logRetentionDays: config.logRetentionDays ?? config.retentionDays,
-        replayRetentionDays: config.replayRetentionDays ?? config.retentionDays,
-        llmRetentionDays: config.llmRetentionDays ?? config.retentionDays,
-        maxProjects: config.maxProjects != null ? String(config.maxProjects) : '',
-        maxSystems: config.maxSystems,
-        monitorIntervalSeconds: config.monitorIntervalSeconds,
-        monthlyPriceCents: config.monthlyPriceCents,
-        yearlyPriceCents: config.yearlyPriceCents,
-        monthlyGbLimitGb: Math.max(0, Math.round(config.monthlyGbLimit / BYTES_PER_GB)),
-        trialDays: config.trialDays,
-        paygEnabled: config.paygEnabled,
-        paygRateMicrosPerUnit: config.paygRateMicrosPerUnit,
-        overageRateCentsPerGb: config.overageRateCentsPerGb ?? 40,
-        errorOverageRateCentsPer1k: config.errorOverageRateCentsPer1k ?? 10,
-        replayOverageRateCentsPerGb: config.replayOverageRateCentsPerGb ?? 40,
-        llmOverageRateCentsPer1k: config.llmOverageRateCentsPer1k ?? 100,
-        oncallEnabled: config.oncallEnabled ?? false,
-        oncallPerUserMonthlyCents: config.oncallPerUserMonthlyCents ?? 500,
-        oncallPerUserYearlyCents: config.oncallPerUserYearlyCents ?? 5000,
-        maxAnalyticsSites: config.maxAnalyticsSites != null ? String(config.maxAnalyticsSites) : '',
-        analyticsRetentionDays: config.analyticsRetentionDays ?? 1095,
-        monthlyAnalyticsPageviewLimit: config.monthlyAnalyticsPageviewLimit ?? 0,
-        analyticsPageviewOverageRateCentsPer100k: config.analyticsPageviewOverageRateCentsPer100k ?? 0,
-        stripeBasePriceId: config.stripeBasePriceId ?? '',
-        stripeOveragePriceId: config.stripeOveragePriceId ?? '',
-        stripeYearlyBasePriceId: config.stripeYearlyBasePriceId ?? '',
-        stripeYearlyOveragePriceId: config.stripeYearlyOveragePriceId ?? '',
-        stripeOncallPriceId: config.stripeOncallPriceId ?? '',
-        stripeOncallYearlyPriceId: config.stripeOncallYearlyPriceId ?? '',
-      })
-    },
-    [],
-  )
-
-  // Pre-fill when the selected tier changes
-  useEffect(() => {
-    if (currentTierConfig) {
-      prefillFromConfig(currentTierConfig)
-    }
-  }, [currentTierConfig, prefillFromConfig])
-
-  // Pre-fill update form when version is selected
-  useEffect(() => {
-    if (selectedUpdateTierConfig) {
-      setUpdatePriceForm({
-        stripeBasePriceId: selectedUpdateTierConfig.stripeBasePriceId ?? '',
-        stripeOveragePriceId: selectedUpdateTierConfig.stripeOveragePriceId ?? '',
-        stripeYearlyBasePriceId: selectedUpdateTierConfig.stripeYearlyBasePriceId ?? '',
-        stripeYearlyOveragePriceId: selectedUpdateTierConfig.stripeYearlyOveragePriceId ?? '',
-        stripeOncallPriceId: selectedUpdateTierConfig.stripeOncallPriceId ?? '',
-        stripeOncallYearlyPriceId: selectedUpdateTierConfig.stripeOncallYearlyPriceId ?? '',
-      })
-    }
-  }, [selectedUpdateTierConfig])
 
   // ─── Mutations ────────────────────────────────────────────────────────────
 

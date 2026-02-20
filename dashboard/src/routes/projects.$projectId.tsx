@@ -58,11 +58,10 @@ function CodeBlock({
   onCopy?: () => void
 }) {
   const [copied, setCopied] = useState(false)
-  const [isDark, setIsDark] = useState(true)
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
 
   useEffect(() => {
     const root = document.documentElement
-    setIsDark(root.classList.contains('dark'))
     const obs = new MutationObserver(() => setIsDark(root.classList.contains('dark')))
     obs.observe(root, { attributes: true, attributeFilter: ['class'] })
     return () => obs.disconnect()
@@ -135,7 +134,9 @@ function SetupPage() {
   })
   const sdkVersions = sdkVersionsResponse?.versions
   const platformInfo = getPlatformInfo(project.framework)
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(
+    () => project.keys.length > 0 ? (project.keys[0].platformTarget ?? 'default') : null
+  )
   const [dsnCopiedMap, setDsnCopiedMap] = useState<Record<string, boolean>>({})
   const [showAddPlatform, setShowAddPlatform] = useState(false)
 
@@ -145,13 +146,6 @@ function SetupPage() {
     projectSlug: project.slug,
     backendUrl,
   }
-
-  // Initialize selected target
-  useEffect(() => {
-    if (project.keys.length > 0 && !selectedTarget) {
-      setSelectedTarget(project.keys[0].platformTarget ?? 'default')
-    }
-  }, [project.keys, selectedTarget])
 
   const addTargetMutation = useMutation({
     mutationFn: (target: string) => api.addProjectTarget(project.id, target),

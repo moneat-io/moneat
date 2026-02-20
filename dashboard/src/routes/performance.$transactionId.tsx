@@ -78,6 +78,11 @@ function statusColor(status?: string) {
   return 'text-rose-500'
 }
 
+function renderStatusIcon(status?: string) {
+  const Icon = statusIcon(status)
+  return <Icon className={cn('h-3 w-3', statusColor(status))} />
+}
+
 /** Color code duration by severity */
 function durationColor(ms: number) {
   if (ms < 300) return 'text-emerald-600 dark:text-emerald-400'
@@ -416,7 +421,6 @@ function TransactionDetailPage() {
     }
   })()
 
-  const StatusIcon = statusIcon(transaction.status)
   const spanCount = spans.length
 
   return (
@@ -443,7 +447,7 @@ function TransactionDetailPage() {
                 </Badge>
               )}
               <Badge variant={statusBadgeVariant(transaction.status)} className="gap-1 text-[11px] px-1.5 py-0">
-                <StatusIcon className={cn('h-3 w-3', statusColor(transaction.status))} />
+                {renderStatusIcon(transaction.status)}
                 {transaction.status || 'unknown'}
               </Badge>
             </div>

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
-import {useState} from 'react'
+import {type ReactElement, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
@@ -54,7 +54,7 @@ import {
   Zap,
 } from 'lucide-react'
 
-interface StackFrame {
+interface StackFrameData {
   function?: string
   filename?: string
   module?: string
@@ -70,7 +70,7 @@ interface StackFrame {
 interface ExceptionValue {
   type?: string
   value?: string
-  stacktrace?: { frames?: StackFrame[] }
+  stacktrace?: { frames?: StackFrameData[] }
 }
 
 interface Breadcrumb {
@@ -634,7 +634,7 @@ function IssueDetailPage() {
   )
 }
 
-function formatAsStackTrace(exception: unknown): JSX.Element[] {
+function formatAsStackTrace(exception: unknown): ReactElement[] {
   try {
     const parsed = typeof exception === 'string' ? JSON.parse(exception) : exception
     const exceptions = parsed.values || [parsed]
@@ -647,7 +647,7 @@ function formatAsStackTrace(exception: unknown): JSX.Element[] {
           <div className="text-red-600 dark:text-red-400 font-semibold mb-1 break-words [overflow-wrap:anywhere]">
             {value.type}: {value.value}
           </div>
-          {frames.map((frame: StackFrame, idx: number) => {
+          {frames.map((frame: StackFrameData, idx: number) => {
             const method = frame.function || '<unknown>'
             const file = frame.filename || frame.module || '<unknown>'
             const line = frame.lineno ? `:${frame.lineno}` : ''
@@ -670,7 +670,7 @@ function formatAsStackTrace(exception: unknown): JSX.Element[] {
         </div>
       )
     })
-  } catch (e) {
+  } catch {
     const text = typeof exception === 'string' ? exception : JSON.stringify(exception, null, 2)
     return [<div key="error">{text}</div>]
   }
@@ -685,7 +685,7 @@ function formatAsStackTraceText(exception: unknown): string {
       const frames = value.stacktrace?.frames ? [...value.stacktrace.frames].reverse() : []
       let text = `${value.type}: ${value.value}\n`
       
-      frames.forEach((frame: StackFrame) => {
+      frames.forEach((frame: StackFrameData) => {
         const method = frame.function || '<unknown>'
         const file = frame.filename || frame.module || '<unknown>'
         const line = frame.lineno ? `:${frame.lineno}` : ''
@@ -699,7 +699,7 @@ function formatAsStackTraceText(exception: unknown): string {
       
       return text
     }).join('\n')
-  } catch (e) {
+  } catch {
     return typeof exception === 'string' ? exception : JSON.stringify(exception, null, 2)
   }
 }
@@ -720,60 +720,17 @@ function StackTraceViewer({ exception }: { exception: string }) {
     navigator.clipboard.writeText(stackTraceText)
     toast({ title: 'Copied', description: 'Stack trace copied to clipboard.' })
   }
-  
+
+  let parsed: { values?: ExceptionValue[] } | null = null
+  let parseError = false
   try {
-    const parsed = typeof exception === 'string' ? JSON.parse(exception) : exception
-    const exceptions = parsed.values || [parsed]
-    const stackTraceText = formatAsStackTrace(exception)
-    
-    return (
-      <Tabs defaultValue={savedView} onValueChange={handleValueChange} className="w-full">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="formatted">Formatted</TabsTrigger>
-            <TabsTrigger value="raw">Raw</TabsTrigger>
-          </TabsList>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={copyRawToClipboard}
-            className="gap-1.5"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            Copy Raw
-          </Button>
-        </div>
-        
-        <TabsContent value="formatted" className="mt-4">
-          <div className="space-y-6">
-            {exceptions.map((value: ExceptionValue, idx: number) => (
-              <div key={idx}>
-                <div className="font-semibold text-red-600 dark:text-red-400 mb-4 text-lg break-words [overflow-wrap:anywhere]">
-                  {value.type}: {value.value}
-                </div>
-                {value.stacktrace?.frames && value.stacktrace.frames.length > 0 ? (
-                  <div className="space-y-1">
-                    {value.stacktrace.frames.map((frame: StackFrame, frameIdx: number) => (
-                      <StackFrame key={frameIdx} frame={frame} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">No stack frames available</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="raw" className="mt-4">
-          <div className="text-xs bg-muted p-4 rounded overflow-auto max-h-[600px] font-mono leading-relaxed break-words [overflow-wrap:anywhere]">
-            {stackTraceText}
-          </div>
-        </TabsContent>
-      </Tabs>
-    )
+    parsed = typeof exception === 'string' ? JSON.parse(exception) : exception
   } catch (e) {
     console.error('Failed to parse stack trace:', e)
+    parseError = true
+  }
+
+  if (parseError || !parsed) {
     return (
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground mb-2">Raw stack trace:</p>
@@ -783,9 +740,59 @@ function StackTraceViewer({ exception }: { exception: string }) {
       </div>
     )
   }
+
+  const exceptions = parsed.values || [parsed]
+  const stackTraceText = formatAsStackTrace(exception)
+
+  return (
+    <Tabs defaultValue={savedView} onValueChange={handleValueChange} className="w-full">
+      <div className="flex items-center justify-between">
+        <TabsList>
+          <TabsTrigger value="formatted">Formatted</TabsTrigger>
+          <TabsTrigger value="raw">Raw</TabsTrigger>
+        </TabsList>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={copyRawToClipboard}
+          className="gap-1.5"
+        >
+          <Copy className="h-3.5 w-3.5" />
+          Copy Raw
+        </Button>
+      </div>
+      
+      <TabsContent value="formatted" className="mt-4">
+        <div className="space-y-6">
+          {(exceptions as ExceptionValue[]).map((value: ExceptionValue, idx: number) => (
+            <div key={idx}>
+              <div className="font-semibold text-red-600 dark:text-red-400 mb-4 text-lg break-words [overflow-wrap:anywhere]">
+                {value.type}: {value.value}
+              </div>
+              {value.stacktrace?.frames && value.stacktrace.frames.length > 0 ? (
+                <div className="space-y-1">
+                  {value.stacktrace.frames.map((frame: StackFrameData, frameIdx: number) => (
+                    <StackFrame key={frameIdx} frame={frame} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No stack frames available</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </TabsContent>
+      
+      <TabsContent value="raw" className="mt-4">
+        <div className="text-xs bg-muted p-4 rounded overflow-auto max-h-[600px] font-mono leading-relaxed break-words [overflow-wrap:anywhere]">
+          {stackTraceText}
+        </div>
+      </TabsContent>
+    </Tabs>
+  )
 }
 
-function StackFrame({ frame }: { frame: StackFrame }) {
+function StackFrame({ frame }: { frame: StackFrameData }) {
   const hasContext = frame.context_line
   const hasVars = frame.vars && Object.keys(frame.vars).length > 0
   
@@ -1012,64 +1019,70 @@ function formatBreadcrumbData(crumb: Breadcrumb): string {
 }
 
 function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
+  let crumbs: Breadcrumb[] = []
+  let parseError = false
   try {
     const parsed = JSON.parse(breadcrumbs)
-    const crumbs = Array.isArray(parsed) ? parsed : parsed.values || []
+    crumbs = Array.isArray(parsed) ? parsed : parsed.values || []
+  } catch {
+    parseError = true
+  }
 
-    return (
-      <div className="relative">
-        {crumbs.map((crumb: Breadcrumb, idx: number) => {
-          // Handle timestamps - they could be in seconds or milliseconds
-          let timestamp = crumb.timestamp
-          if (timestamp) {
-            // If timestamp is a small number (likely seconds), convert to ms
-            if (timestamp < 10000000000) {
-              timestamp = timestamp * 1000
-            }
-          }
-          
-          const category = crumb.category || crumb.type || 'event'
-          const formattedData = formatBreadcrumbData(crumb)
-          const colors = getBreadcrumbCategoryColor(category)
-          const isLast = idx === crumbs.length - 1
-          
-          return (
-            <div key={idx} className="relative flex gap-3 group">
-              {/* Timeline track */}
-              <div className="flex flex-col items-center flex-shrink-0 w-5">
-                {/* Dot */}
-                <div className={`relative z-10 mt-1.5 h-2.5 w-2.5 rounded-full ring-4 ${colors.dot}`} />
-                {/* Connecting line */}
-                {!isLast && (
-                  <div className={`w-0.5 flex-1 min-h-[16px] ${colors.line}`} />
-                )}
-              </div>
-              
-              {/* Content */}
-              <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
-                <div className="flex items-center gap-2">
-                  <div className={`flex-shrink-0 ${colors.icon}`}>
-                    {getBreadcrumbIcon(category, crumb.data)}
-                  </div>
-                  <span className="text-muted-foreground font-mono text-xs">
-                    {timestamp ? new Date(timestamp).toLocaleTimeString() : '--:--:--'}
-                  </span>
-                  <Badge className={`text-[10px] leading-tight px-1.5 py-0 border-0 ${colors.badge}`}>
-                    {category}
-                  </Badge>
-                </div>
-                {formattedData && (
-                  <p className="text-sm text-foreground mt-0.5 ml-6 break-words [overflow-wrap:anywhere]">
-                    {formattedData}
-                  </p>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    )
-  } catch (e) {
+  if (parseError) {
     return <pre className="text-xs bg-muted p-4 rounded overflow-auto">{breadcrumbs}</pre>
   }
+
+  return (
+    <div className="relative">
+      {crumbs.map((crumb: Breadcrumb, idx: number) => {
+        // Handle timestamps - they could be in seconds or milliseconds
+        let timestamp = crumb.timestamp
+        if (timestamp) {
+          // If timestamp is a small number (likely seconds), convert to ms
+          if (timestamp < 10000000000) {
+            timestamp = timestamp * 1000
+          }
+        }
+        
+        const category = crumb.category || crumb.type || 'event'
+        const formattedData = formatBreadcrumbData(crumb)
+        const colors = getBreadcrumbCategoryColor(category)
+        const isLast = idx === crumbs.length - 1
+        
+        return (
+          <div key={idx} className="relative flex gap-3 group">
+            {/* Timeline track */}
+            <div className="flex flex-col items-center flex-shrink-0 w-5">
+              {/* Dot */}
+              <div className={`relative z-10 mt-1.5 h-2.5 w-2.5 rounded-full ring-4 ${colors.dot}`} />
+              {/* Connecting line */}
+              {!isLast && (
+                <div className={`w-0.5 flex-1 min-h-[16px] ${colors.line}`} />
+              )}
+            </div>
+            
+            {/* Content */}
+            <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
+              <div className="flex items-center gap-2">
+                <div className={`flex-shrink-0 ${colors.icon}`}>
+                  {getBreadcrumbIcon(category, crumb.data)}
+                </div>
+                <span className="text-muted-foreground font-mono text-xs">
+                  {timestamp ? new Date(timestamp).toLocaleTimeString() : '--:--:--'}
+                </span>
+                <Badge className={`text-[10px] leading-tight px-1.5 py-0 border-0 ${colors.badge}`}>
+                  {category}
+                </Badge>
+              </div>
+              {formattedData && (
+                <p className="text-sm text-foreground mt-0.5 ml-6 break-words [overflow-wrap:anywhere]">
+                  {formattedData}
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }

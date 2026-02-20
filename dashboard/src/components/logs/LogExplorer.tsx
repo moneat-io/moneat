@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {startTransition, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {useNavigate} from '@tanstack/react-router'
 import {api, formatErrorForLogging, type LogEntry, type LogFilterOptionsWithCounts} from '@/lib/api'
 import {type FacetFilter, LEVEL_OPTIONS, LogSearchBar, TIME_PRESETS} from '@/components/logs/LogSearchBar'
@@ -182,7 +182,13 @@ export function LogExplorer({
   
   // Search / filter state
   const [query, setQuery] = useState(initialState.query)
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(initialState.facetFilters)
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => {
+    const base = initialState.facetFilters
+    if (initialContainerName && !base.some(f => f.key === 'container_name' && f.value === initialContainerName)) {
+      return [...base, {key: 'container_name', value: initialContainerName}]
+    }
+    return base
+  })
   const [levels, setLevels] = useState<string[]>(initialState.levels)
   const [timePreset, setTimePreset] = useState(initialState.timePreset)
   const [customFrom, setCustomFrom] = useState(initialState.customFrom)
@@ -202,14 +208,7 @@ export function LogExplorer({
   const [detailOpen, setDetailOpen] = useState(false)
 
   // Facets sidebar
-  const [showFacets, setShowFacets] = useState(enableFacets)
-
-  // Collapse facets on mobile by default
-  useEffect(() => {
-    if (window.innerWidth < 1024) { // lg breakpoint - collapse on smaller screens
-      setShowFacets(false)
-    }
-  }, [])
+  const [showFacets, setShowFacets] = useState(() => enableFacets && window.innerWidth >= 1024)
 
   // Visualization mode
   const [vizMode, setVizMode] = useState<LogVizMode>(initialState.vizMode)
@@ -235,16 +234,18 @@ export function LogExplorer({
     
     isHydratingRef.current = true
     
-    setQuery(urlSearch.q || '')
-    setFacetFilters(parseFacetFiltersFromUrl(urlSearch.facets))
-    setLevels(urlSearch.levels ? parseLevelsFromUrl(urlSearch.levels) : [...LEVEL_OPTIONS])
-    setTimePreset(urlSearch.timePreset || defaultTimeRange)
-    setCustomFrom(urlSearch.from || '')
-    setCustomTo(urlSearch.to || '')
-    setVizMode(urlSearch.viz || 'timeseries')
-    setGroupBy(urlSearch.groupBy || '')
-    setTopField(urlSearch.topField || 'service')
-    setCursor(urlSearch.cursor || null)
+    startTransition(() => {
+      setQuery(urlSearch.q || '')
+      setFacetFilters(parseFacetFiltersFromUrl(urlSearch.facets))
+      setLevels(urlSearch.levels ? parseLevelsFromUrl(urlSearch.levels) : [...LEVEL_OPTIONS])
+      setTimePreset(urlSearch.timePreset || defaultTimeRange)
+      setCustomFrom(urlSearch.from || '')
+      setCustomTo(urlSearch.to || '')
+      setVizMode(urlSearch.viz || 'timeseries')
+      setGroupBy(urlSearch.groupBy || '')
+      setTopField(urlSearch.topField || 'service')
+      setCursor(urlSearch.cursor || null)
+    })
     
     // Defer clearing hydration flag to avoid race conditions
     setTimeout(() => {
@@ -287,15 +288,6 @@ export function LogExplorer({
       }
     }
   }, [enableUrlSync, navigate, query, levels, facetFilters, timePreset, customFrom, customTo, vizMode, groupBy, topField, cursor, selectedLog])
-
-  useEffect(() => {
-    if (initialContainerName) {
-      setFacetFilters(prev => {
-        if (prev.some(f => f.key === 'container_name' && f.value === initialContainerName)) return prev
-        return [...prev, {key: 'container_name', value: initialContainerName}]
-      })
-    }
-  }, [initialContainerName])
 
   // Derive API params from state
   const timeRange = useMemo(
@@ -361,9 +353,11 @@ export function LogExplorer({
 
   // Reset pagination when filters change
   useEffect(() => {
-    setCursor(null)
-    setCursorHistory([])
-    setAccumulatedLogs([])
+    startTransition(() => {
+      setCursor(null)
+      setCursorHistory([])
+      setAccumulatedLogs([])
+    })
   }, [projectId, systemId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
 
   // Fetch filter options (with counts)
@@ -434,14 +428,16 @@ export function LogExplorer({
   useEffect(() => {
     if (!logPage?.logs || liveTailEnabled) return
     
-    // If cursor is null, this is the first page (or reset), so replace
-    if (cursor === null) {
-      setAccumulatedLogs(logPage.logs)
-    } else {
-      // Otherwise, append to accumulated logs
-      setAccumulatedLogs(prev => [...prev, ...logPage.logs])
-    }
-    setIsLoadingMore(false)
+    startTransition(() => {
+      // If cursor is null, this is the first page (or reset), so replace
+      if (cursor === null) {
+        setAccumulatedLogs(logPage.logs)
+      } else {
+        // Otherwise, append to accumulated logs
+        setAccumulatedLogs(prev => [...prev, ...logPage.logs])
+      }
+      setIsLoadingMore(false)
+    })
   }, [logPage, cursor, liveTailEnabled])
   
   const logs = !liveTailEnabled ? accumulatedLogs : (logPage?.logs ?? [])
@@ -576,7 +572,7 @@ export function LogExplorer({
   useEffect(() => {
     if (!liveTailEnabled || !enableLiveTail || !projectId) return
 
-    setTailStatus('connecting')
+    startTransition(() => setTailStatus('connecting'))
     const source = api.createProjectLogTailStream(projectId, {
       query: query || undefined,
       levels: hasCustomLevelFilter ? levels : undefined,
@@ -626,13 +622,6 @@ export function LogExplorer({
     )
   }
 
-  const handleNextPage = useCallback(() => {
-    if (!logPage?.nextCursor || isLoadingMore) return
-    setIsLoadingMore(true)
-    setCursorHistory((current) => [...current, cursor])
-    setCursor(logPage.nextCursor)
-  }, [logPage?.nextCursor, isLoadingMore, cursor])
-
   const handlePreviousPage = () => {
     if (cursorHistory.length === 0) return
     const previous = cursorHistory[cursorHistory.length - 1] ?? null
@@ -649,7 +638,10 @@ export function LogExplorer({
       (entries) => {
         const [entry] = entries
         if (entry.isIntersecting && logPage?.hasMore && !isLoadingMore && !isFetching) {
-          handleNextPage()
+          if (!logPage?.nextCursor || isLoadingMore) return
+          setIsLoadingMore(true)
+          setCursorHistory((current) => [...current, cursor])
+          setCursor(logPage.nextCursor)
         }
       },
       {
@@ -664,7 +656,7 @@ export function LogExplorer({
     return () => {
       observer.disconnect()
     }
-  }, [logPage?.hasMore, isLoadingMore, isFetching, liveTailEnabled, handleNextPage])
+  }, [logPage?.hasMore, logPage?.nextCursor, isLoadingMore, isFetching, liveTailEnabled, cursor])
 
   const handleToggleLiveTail = () => {
     setLiveTailEnabled((current) => {

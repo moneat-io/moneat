@@ -36,6 +36,11 @@ function formatCount(n: number): string {
 type SortField = 'value' | 'count' | 'percentage'
 type SortDir = 'asc' | 'desc'
 
+function LogSortIcon({f, sortField, sortDir}: {f: SortField, sortField: SortField, sortDir: SortDir}) {
+  if (sortField !== f) return null
+  return sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+}
+
 export function LogAggregateTable({values, totalCount, field, onValueClick}: LogAggregateTableProps) {
   const [sortField, setSortField] = useState<SortField>('count')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -55,11 +60,6 @@ export function LogAggregateTable({values, totalCount, field, onValueClick}: Log
     return dir * (a.count - b.count)
   })
 
-  const SortIcon = ({f}: {f: SortField}) => {
-    if (sortField !== f) return null
-    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-  }
-
   if (values.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -78,7 +78,7 @@ export function LogAggregateTable({values, totalCount, field, onValueClick}: Log
               onClick={() => toggleSort('value')}
             >
               <span className="flex items-center gap-1">
-                {field} <SortIcon f="value" />
+                {field} <LogSortIcon f="value" sortField={sortField} sortDir={sortDir} />
               </span>
             </th>
             <th
@@ -86,7 +86,7 @@ export function LogAggregateTable({values, totalCount, field, onValueClick}: Log
               onClick={() => toggleSort('count')}
             >
               <span className="flex items-center justify-end gap-1">
-                Count <SortIcon f="count" />
+                Count <LogSortIcon f="count" sortField={sortField} sortDir={sortDir} />
               </span>
             </th>
             <th className="whitespace-nowrap px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

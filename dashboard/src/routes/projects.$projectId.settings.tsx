@@ -75,8 +75,10 @@ function ProjectSettingsPage() {
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
 
-  const [name, setName] = useState(project.name)
-  const [framework, setFramework] = useState(getPlatformInfo(project.framework)?.id ?? 'other')
+  const [localName, setName] = useState<string | undefined>(undefined)
+  const [localFramework, setFramework] = useState<string | undefined>(undefined)
+  const name = localName ?? project.name
+  const framework = localFramework ?? getPlatformInfo(project.framework)?.id ?? 'other'
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [copiedSlug, setCopiedSlug] = useState(false)
@@ -101,11 +103,6 @@ function ProjectSettingsPage() {
 url=${backendUrl}
 org=${orgSlug}
 project=${project.slug}` : null
-
-  useEffect(() => {
-    setName(project.name)
-    setFramework(getPlatformInfo(project.framework)?.id ?? 'other')
-  }, [project.framework, project.id, project.name])
 
   const initialFramework = getPlatformInfo(project.framework)?.id ?? 'other'
   const trimmedName = name.trim()

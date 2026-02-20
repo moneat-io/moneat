@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState} from 'react'
+import {forwardRef, startTransition, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState} from 'react'
 import {Pause, Play} from 'lucide-react'
 
 export type ReplayOrientation = 'portrait' | 'landscape'
@@ -407,7 +407,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
   const shouldResumeAfterSwitchRef = useRef(false)
   const pendingSeekRef = useRef<{ segmentId: number; localTimeMs: number } | null>(null)
   const onTimeUpdateRef = useRef(onTimeUpdate)
-  onTimeUpdateRef.current = onTimeUpdate
+  useLayoutEffect(() => { onTimeUpdateRef.current = onTimeUpdate })
   const seekToGlobalTimeRef = useRef<(ms: number) => void>(() => {})
 
   const filteredVideoSegments = useMemo(() => {
@@ -576,7 +576,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
 
   const lastEmittedContextRef = useRef<{ deviceTimeMs?: number | null; batteryLevel?: number | null; isCharging?: boolean | null }>({})
   const onStatusBarContextChangeRef = useRef(onStatusBarContextChange)
-  onStatusBarContextChangeRef.current = onStatusBarContextChange
+  useLayoutEffect(() => { onStatusBarContextChangeRef.current = onStatusBarContextChange })
 
   useEffect(() => {
     if (deviceContextByTime.length === 0) return
@@ -653,8 +653,10 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
 
   useEffect(() => {
     if (selectedSegmentIdx >= filteredVideoSegments.length) {
-      setSelectedSegmentIdx(0)
-      setCurrentSegmentTimeMs(0)
+      startTransition(() => {
+        setSelectedSegmentIdx(0)
+        setCurrentSegmentTimeMs(0)
+      })
     }
   }, [selectedSegmentIdx, filteredVideoSegments.length])
 
@@ -683,7 +685,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
     setSelectedSegmentIdx(target.segmentIndex)
     setCurrentSegmentTimeMs(target.localTimeMs)
   }
-  seekToGlobalTimeRef.current = seekToGlobalTime
+  useLayoutEffect(() => { seekToGlobalTimeRef.current = seekToGlobalTime })
 
   useImperativeHandle(ref, () => ({
     seekTo(offsetMs: number) {

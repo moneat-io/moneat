@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
-import {useEffect, useMemo, useState} from 'react'
+import {useMemo, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
@@ -134,26 +134,24 @@ function PerformancePage() {
     return filtered.length > 0 ? filtered : [options[0]]
   }, [retentionDays])
 
-  useEffect(() => {
-    if (!availablePeriods.some((option) => option.value === period)) {
-      setPeriod(availablePeriods[availablePeriods.length - 1].value)
-    }
-  }, [availablePeriods, period, setPeriod])
+  const effectivePeriod = (availablePeriods.some((option) => option.value === period)
+    ? period
+    : availablePeriods[availablePeriods.length - 1]?.value ?? '7d') as '24h' | '7d' | '30d' | '90d'
 
   const filters = {
-    period,
+    period: effectivePeriod,
     environment: environment === 'all' ? undefined : environment,
     operation: operation === 'all' ? undefined : operation,
   } as const
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ['transactions', projectId, period, environment, operation],
+    queryKey: ['transactions', projectId, effectivePeriod, environment, operation],
     queryFn: () => (projectId ? api.getTransactions(projectId, filters) : []),
     enabled: !!projectId,
   })
 
   const { data: stats } = useQuery({
-    queryKey: ['performance-stats', projectId, period, environment, operation],
+    queryKey: ['performance-stats', projectId, effectivePeriod, environment, operation],
     queryFn: () => (projectId ? api.getPerformanceStats(projectId, filters) : null),
     enabled: !!projectId,
   })
@@ -226,10 +224,6 @@ function PerformancePage() {
   }
 
   // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [period, environment, operation])
-
   if (!projects || projects.length === 0) {
     return (
       <div className="p-6">
@@ -248,7 +242,7 @@ function PerformancePage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xl font-bold">Performance</h2>
             <div className="flex flex-wrap items-center gap-1.5">
-              <Select value={period} onValueChange={(value) => setPeriod(value as '24h' | '7d' | '30d' | '90d')}>
+              <Select value={effectivePeriod} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d' | '90d'); setCurrentPage(1) }}>
                 <SelectTrigger className="h-8 w-[110px] text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -261,7 +255,7 @@ function PerformancePage() {
                 </SelectContent>
               </Select>
 
-              <Select value={environment} onValueChange={setEnvironment}>
+              <Select value={environment} onValueChange={(value) => { setEnvironment(value); setCurrentPage(1) }}>
                 <SelectTrigger className="h-8 w-[130px] text-xs">
                   <SelectValue placeholder="Environment" />
                 </SelectTrigger>
@@ -273,7 +267,7 @@ function PerformancePage() {
                 </SelectContent>
               </Select>
 
-              <Select value={operation} onValueChange={setOperation}>
+              <Select value={operation} onValueChange={(value) => { setOperation(value); setCurrentPage(1) }}>
                 <SelectTrigger className="h-8 w-[140px] text-xs">
                   <SelectValue placeholder="Operation" />
                 </SelectTrigger>

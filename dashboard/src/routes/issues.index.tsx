@@ -123,7 +123,7 @@ function EventSparkline({ eventCount }: { eventCount: number }) {
   const bars = Math.min(Math.ceil(eventCount / 10), 10)
   const heights = Array.from({ length: 10 }, (_, i) => {
     if (i < bars) {
-      return 40 + Math.random() * 60 // 40-100% height for active bars
+      return 40 + ((i * 23 + 7) % 60) // 40-100% deterministic height for active bars
     }
     return 0
   })

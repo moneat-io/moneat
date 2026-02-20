@@ -8,6 +8,13 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 export default [
   { ignores: ['dist'] },
   js.configs.recommended,
+  // Node.js scripts and config files
+  {
+    files: ['scripts/**/*.mjs', 'tailwind.config.js', 'tailwind.config.ts', 'postcss.config.*'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
@@ -27,6 +34,9 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      // TypeScript handles undefined variable checking; disabling avoids false positives
+      // for React namespace, browser/Node types, and other TS-resolved globals.
+      'no-undef': 'off',
     },
   },
 ]

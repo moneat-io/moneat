@@ -1958,7 +1958,7 @@ class ApiClient {
       }
       sessionStorage.setItem('authenticated', 'true')
       return true
-    } catch (err) {
+    } catch {
       this.removeRefreshToken()
       return false
     }
@@ -1980,7 +1980,7 @@ class ApiClient {
     let response: Response
     try {
       response = await fetch(endpoint, { ...options, headers, credentials: 'include' })
-    } catch (err) {
+    } catch {
       // Create a clean error without the massive stack trace from fetch
       const networkError = new Error('NETWORK_ERROR')
       networkError.stack = undefined // Remove stack trace to keep error small
@@ -2185,7 +2185,7 @@ class ApiClient {
         method: 'POST',
         credentials: 'include',
       })
-    } catch (e) {
+    } catch {
       // Ignore errors - cookie might already be cleared
     }
   }
@@ -3236,12 +3236,11 @@ class ApiClient {
 
   async getAdminTelemetry() {
     return this.request<{
-      enabled: boolean
-      selfHostMode: boolean
-      telemetryConfigEnabled: boolean
-      endpoint: string
-      metrics: {
+      deploymentCount: number
+      lastSeenAt: string | null
+      deployments: {
         deploymentId: string
+        receivedAt: string
         cpuCount: number
         memTotalBytes: number
         memUsedBytes: number
@@ -3252,9 +3251,8 @@ class ApiClient {
         userCount: number
         eventCount: number
         issueCount: number
-        selfHost: boolean
         sslEnabled: boolean
-      } | null
+      }[]
     }>(`${API_BASE}/admin/telemetry`)
   }
 

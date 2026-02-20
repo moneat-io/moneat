@@ -19,7 +19,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
-import {useEffect, useMemo, useState} from 'react'
+import {useMemo, useState} from 'react'
 import {Card} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
@@ -159,21 +159,18 @@ function ReplaysPage() {
     return filtered.length > 0 ? filtered : [options[0]]
   }, [retentionDays])
 
-  useEffect(() => {
-    if (!availablePeriods.some((option) => option.value === period)) {
-      setPeriod(availablePeriods[availablePeriods.length - 1].value)
-      setPage(1)
-    }
-  }, [availablePeriods, period, setPeriod, setPage])
+  const effectivePeriod = (availablePeriods.some((option) => option.value === period)
+    ? period
+    : availablePeriods[availablePeriods.length - 1]?.value ?? '7d') as '24h' | '7d' | '30d' | '90d'
 
   const { data: replays = [], isLoading } = useQuery({
-    queryKey: ['replays', projectId, period, environment, page],
+    queryKey: ['replays', projectId, effectivePeriod, environment, page],
     queryFn: () =>
       projectId
         ? api.getReplays(projectId, {
             page,
             limit: 25,
-            period,
+            period: effectivePeriod,
             environment: environment === 'all' ? undefined : environment,
           })
         : [],
@@ -296,7 +293,7 @@ function ReplaysPage() {
               className="pl-10"
             />
           </div>
-          <Select value={period} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d' | '90d'); setPage(1) }}>
+          <Select value={effectivePeriod} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d' | '90d'); setPage(1) }}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>

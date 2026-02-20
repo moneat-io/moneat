@@ -64,7 +64,7 @@ function ResetPasswordPage() {
     try {
       await api.resetPassword(token, password)
       navigate({ to: '/login' })
-    } catch (err) {
+    } catch {
       setError('Invalid or expired reset link')
     } finally {
       setLoading(false)

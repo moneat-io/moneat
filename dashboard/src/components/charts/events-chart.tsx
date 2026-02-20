@@ -38,7 +38,7 @@ export function EventsChartSkeleton({
               key={i}
               className={cn("flex-1 bg-muted animate-pulse", compact ? "rounded-sm" : "rounded-t")}
               style={{
-                height: `${30 + Math.random() * 70}%`,
+                height: `${30 + ((i * 17 + 11) % 70)}%`,
                 animationDelay: `${i * 50}ms`,
               }}
             />

@@ -47,9 +47,16 @@ function AdminOrganizationsLayout() {
   return <AdminOrganizationsPage />
 }
 
+type OrgSortBy = 'events' | 'bytes' | 'quota' | 'name'
+
+function SortIndicator({column, sortBy, sortDir}: {column: OrgSortBy, sortBy: OrgSortBy, sortDir: 'asc' | 'desc'}) {
+  if (sortBy !== column) return null
+  return <span className="ml-1 text-xs">{sortDir === 'desc' ? '↓' : '↑'}</span>
+}
+
 function AdminOrganizationsPage() {
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState<'events' | 'bytes' | 'quota' | 'name'>('events')
+  const [sortBy, setSortBy] = useState<OrgSortBy>('events')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const {data: orgs, isLoading} = useQuery({
@@ -97,11 +104,6 @@ function AdminOrganizationsPage() {
       setSortBy(column)
       setSortDir('desc')
     }
-  }
-
-  const SortIndicator = ({column}: {column: typeof sortBy}) => {
-    if (sortBy !== column) return null
-    return <span className="ml-1 text-xs">{sortDir === 'desc' ? '↓' : '↑'}</span>
   }
 
   if (isLoading || !orgs) {
@@ -163,7 +165,7 @@ function AdminOrganizationsPage() {
                     onClick={() => handleSort('name')}
                   >
                     Organization
-                    <SortIndicator column="name" />
+                    <SortIndicator column="name" sortBy={sortBy} sortDir={sortDir} />
                   </TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead
@@ -171,21 +173,21 @@ function AdminOrganizationsPage() {
                     onClick={() => handleSort('events')}
                   >
                     Events (mo)
-                    <SortIndicator column="events" />
+                    <SortIndicator column="events" sortBy={sortBy} sortDir={sortDir} />
                   </TableHead>
                   <TableHead
                     className="text-right cursor-pointer select-none"
                     onClick={() => handleSort('bytes')}
                   >
                     Data Ingested
-                    <SortIndicator column="bytes" />
+                    <SortIndicator column="bytes" sortBy={sortBy} sortDir={sortDir} />
                   </TableHead>
                   <TableHead
                     className="w-[180px] cursor-pointer select-none"
                     onClick={() => handleSort('quota')}
                   >
                     Quota Usage
-                    <SortIndicator column="quota" />
+                    <SortIndicator column="quota" sortBy={sortBy} sortDir={sortDir} />
                   </TableHead>
                   <TableHead className="text-right">Members</TableHead>
                   <TableHead className="text-right">Projects</TableHead>

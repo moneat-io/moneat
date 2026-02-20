@@ -17,7 +17,7 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useState, useEffect} from 'react'
+import {useState} from 'react'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Alert, AlertDescription} from '@/components/ui/alert'
@@ -158,7 +158,7 @@ const notificationTypes: Array<{
 
 function AdminNotificationsPage() {
   const { toast } = useToast()
-  const [testEmail, setTestEmail] = useState('')
+  const [testEmail, setTestEmail] = useState(() => localStorage.getItem('moneat_test_email') || '')
   const [lastResult, setLastResult] = useState<{
     type: NotificationType
     channel: Channel
@@ -169,14 +169,6 @@ function AdminNotificationsPage() {
     queryKey: ['on-call-contact'],
     queryFn: () => api.getOnCallContact(),
   })
-
-  // Load test email from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('moneat_test_email')
-    if (saved) {
-      setTestEmail(saved)
-    }
-  }, [])
 
   // Save test email to localStorage when it changes
   const handleEmailChange = (email: string) => {

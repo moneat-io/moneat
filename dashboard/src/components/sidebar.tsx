@@ -293,7 +293,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
       .slice(0, 2)
   }
 
-  const SidebarContent = () => (
+  const renderSidebarContent = () => (
     <>
       {/* Logo */}
       <div className={cn('p-3 border-b flex items-center', isExpanded ? 'justify-start px-4' : 'justify-center')}>
@@ -665,7 +665,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
           isExpanded ? 'w-64' : 'w-16'
         )}
       >
-        <SidebarContent />
+        {renderSidebarContent()}
       </div>
 
       {/* Create Project Dialog */}

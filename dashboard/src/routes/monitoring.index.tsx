@@ -221,13 +221,12 @@ function AddSystemDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: b
   const [systemName, setSystemName] = useState('')
   const [createdSystem, setCreatedSystem] = useState<{id: string; dockerCommand: string} | null>(null)
   const [containerMonitoringEnabled, setContainerMonitoringEnabled] = useState(true)
-  const [isDark, setIsDark] = useState(true)
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [copied, setCopied] = useState(false)
   const [installType, setInstallType] = useState<'docker' | 'compose'>('docker')
 
   useEffect(() => {
     const root = document.documentElement
-    setIsDark(root.classList.contains('dark'))
     const observer = new MutationObserver(() => setIsDark(root.classList.contains('dark')))
     observer.observe(root, {attributes: true, attributeFilter: ['class']})
     return () => observer.disconnect()

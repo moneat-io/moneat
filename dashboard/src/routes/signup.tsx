@@ -66,7 +66,7 @@ function SignupPage() {
       }, inviteToken)
       trackEvent('Signup')
       setSuccess(true)
-    } catch (err) {
+    } catch {
       setError('Failed to create account. Email may already be in use.')
     }
   }
@@ -78,7 +78,7 @@ function SignupPage() {
     try {
       await api.resendVerificationEmail(email)
       setResendMessage('Verification email sent! Please check your inbox.')
-    } catch (err) {
+    } catch {
       setResendMessage('Failed to resend email. Please try again later.')
     } finally {
       setResending(false)

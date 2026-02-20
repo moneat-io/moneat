@@ -1666,7 +1666,7 @@ function PaymentMethodSetupForm({
             description: 'Your default payment method has been updated.',
           })
           onSuccess()
-        } catch (error) {
+        } catch {
           toast({
             title: 'Payment method partially saved',
             description: 'Card was added but may not be set as default. Please refresh the page.',
@@ -2369,14 +2369,9 @@ function NotificationsTab() {
     enabled: api.isAuthenticated(),
   })
 
-  const [onCallPhone, setOnCallPhone] = useState('')
+  const [localOnCallPhone, setOnCallPhone] = useState<string | undefined>(undefined)
   const [onCallConsent, setOnCallConsent] = useState(false)
-
-  useEffect(() => {
-    if (onCallContact?.phoneNumber) {
-      setOnCallPhone(onCallContact.phoneNumber)
-    }
-  }, [onCallContact?.phoneNumber])
+  const onCallPhone = localOnCallPhone ?? onCallContact?.phoneNumber ?? ''
 
   const updateOnCallContactMutation = useMutation({
     mutationFn: () => api.updateOnCallContact({
@@ -2825,6 +2820,7 @@ function SilencePeriodsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false)
+  const [now] = useState(Date.now)
 
   const { data: silencePeriods = [], isLoading } = useQuery({
     queryKey: ['silence-periods'],
@@ -2855,7 +2851,6 @@ function SilencePeriodsTab() {
   })
 
   const handleQuickSilence = (minutes: number, label: string) => {
-    const now = Date.now()
     createMutation.mutate({
       reason: `Quick silence: ${label}`,
       starts_at: now,
@@ -2878,7 +2873,6 @@ function SilencePeriodsTab() {
     createMutation.mutate({ reason, starts_at: startsAt, ends_at: endsAt })
   }
 
-  const now = Date.now()
   const activePeriods = silencePeriods.filter((p) => p.startsAt <= now && p.endsAt > now)
   const scheduledPeriods = silencePeriods.filter((p) => p.startsAt > now)
   const isCurrentlySilenced = activePeriods.length > 0
@@ -2893,7 +2887,7 @@ function SilencePeriodsTab() {
   }
 
   const formatTimeRemaining = (endsAt: number) => {
-    const diff = endsAt - Date.now()
+    const diff = endsAt - now
     if (diff <= 0) return 'Expired'
     const hours = Math.floor(diff / (1000 * 60 * 60))
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
@@ -3157,14 +3151,7 @@ function SidebarTab() {
     queryFn: () => api.getCurrentUser(),
   })
 
-  const [hiddenItems, setHiddenItems] = useState<string[]>(user?.sidebarHiddenItems || [])
-
-  // Update local state when user data changes
-  useEffect(() => {
-    if (user?.sidebarHiddenItems) {
-      setHiddenItems(user.sidebarHiddenItems)
-    }
-  }, [user?.sidebarHiddenItems])
+  const [hiddenItems, setHiddenItems] = useState<string[]>(() => user?.sidebarHiddenItems || [])
 
   const saveMutation = useMutation({
     mutationFn: (items: string[]) => api.updateSidebarPreferences(items),

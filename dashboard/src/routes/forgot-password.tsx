@@ -40,7 +40,7 @@ function ForgotPasswordPage() {
     try {
       await api.forgotPassword(email)
       setSuccess(true)
-    } catch (err) {
+    } catch {
       setError('Failed to send reset email. Please try again.')
     } finally {
       setLoading(false)

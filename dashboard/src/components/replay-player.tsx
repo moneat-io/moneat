@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {forwardRef, useEffect, useImperativeHandle, useRef} from 'react'
+import {forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef} from 'react'
 import rrwebPlayer from 'rrweb-player'
 import 'rrweb-player/dist/style.css'
 import {formatErrorForLogging} from '@/lib/api'
@@ -57,9 +57,11 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
   const onTimeUpdateRef = useRef(onTimeUpdate)
   const onDurationReadyRef = useRef(onDurationReady)
   const onPlayingChangeRef = useRef(onPlayingChange)
-  onTimeUpdateRef.current = onTimeUpdate
-  onDurationReadyRef.current = onDurationReady
-  onPlayingChangeRef.current = onPlayingChange
+  useLayoutEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate
+    onDurationReadyRef.current = onDurationReady
+    onPlayingChangeRef.current = onPlayingChange
+  })
 
   useImperativeHandle(ref, () => ({
     seekTo(offsetMs: number) {

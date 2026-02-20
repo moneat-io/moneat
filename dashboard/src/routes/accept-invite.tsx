@@ -40,15 +40,13 @@ function AcceptInvitePage() {
     expiresAt: string
     valid: boolean
   } | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !!token)
   const [accepting, setAccepting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => !token ? 'No invitation token provided' : null)
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
     if (!token) {
-      setError('No invitation token provided')
-      setLoading(false)
       return
     }
 

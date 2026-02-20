@@ -176,7 +176,7 @@ function OnboardingPage() {
       trackEvent('Onboarding Complete', { company_size: companySize })
       
       navigate({ to: '/' })
-    } catch (err) {
+    } catch {
       setError('Failed to complete onboarding. Please try again.')
       setLoading(false)
     }

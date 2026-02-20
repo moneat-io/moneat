@@ -28,7 +28,7 @@ import {
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
-import {useState, useEffect} from 'react'
+import {useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
 
 interface EditMonitorDialogProps {
@@ -40,27 +40,22 @@ interface EditMonitorDialogProps {
 export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMonitorDialogProps) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
-  const [formData, setFormData] = useState<Partial<UpdateUptimeMonitorRequest>>({})
-
-  // Initialize form data when monitor changes or dialog opens
-  useEffect(() => {
-    if (open && monitor) {
-      setFormData({
-        name: monitor.name,
-        url: monitor.url,
-        hostname: monitor.hostname,
-        port: monitor.port,
-        method: monitor.method,
-        keyword: monitor.keyword,
-        dbConnectionString: monitor.dbConnectionString,
-        dockerContainerName: monitor.dockerContainerName,
-        dockerHost: monitor.dockerHost,
-        intervalSeconds: monitor.intervalSeconds,
-        timeoutSeconds: monitor.timeoutSeconds,
-        retries: monitor.retries,
-      })
-    }
-  }, [open, monitor])
+  const serverFormData: Partial<UpdateUptimeMonitorRequest> = monitor ? {
+    name: monitor.name,
+    url: monitor.url,
+    hostname: monitor.hostname,
+    port: monitor.port,
+    method: monitor.method,
+    keyword: monitor.keyword,
+    dbConnectionString: monitor.dbConnectionString,
+    dockerContainerName: monitor.dockerContainerName,
+    dockerHost: monitor.dockerHost,
+    intervalSeconds: monitor.intervalSeconds,
+    timeoutSeconds: monitor.timeoutSeconds,
+    retries: monitor.retries,
+  } : {}
+  const [localFormData, setFormData] = useState<Partial<UpdateUptimeMonitorRequest> | undefined>(undefined)
+  const formData = (open && localFormData) ? localFormData : serverFormData
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateUptimeMonitorRequest) => api.updateUptimeMonitor(monitor.id, data),
