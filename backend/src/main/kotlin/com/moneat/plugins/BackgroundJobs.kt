@@ -26,6 +26,7 @@ import com.moneat.services.PulseService
 import com.moneat.services.RefreshTokenCleanupService
 import com.moneat.services.RetentionBackgroundService
 import com.moneat.services.UptimeScheduler
+import com.moneat.services.UsageTrackingService
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,17 @@ import kotlin.time.Duration.Companion.hours
 private val logger = KotlinLogging.logger {}
 
 fun Application.configureBackgroundJobs() {
+    val backgroundJobsEnabled =
+        environment.config
+            .propertyOrNull("backgroundJobs.enabled")
+            ?.getString()
+            ?.toBooleanStrictOrNull() ?: true
+
+    if (!backgroundJobsEnabled) {
+        logger.info { "All background jobs disabled via BACKGROUND_JOBS_ENABLED=false (API-only mode)" }
+        return
+    }
+
     val monitorAlertService = MonitorAlertService()
     val billingBackgroundService = BillingBackgroundService()
     val retentionBackgroundService = RetentionBackgroundService()
@@ -102,6 +114,13 @@ fun Application.configureBackgroundJobs() {
 
     // Register shutdown hook
     monitor.subscribe(ApplicationStopping) {
+        // Flush buffered usage data before stopping to prevent data loss
+        try {
+            UsageTrackingService.instance.flushBuffer()
+            logger.info { "Flushed usage tracking buffer on shutdown" }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
+        }
         monitorAlertService.stop()
         billingBackgroundService.stop()
         retentionBackgroundService.stop()

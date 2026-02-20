@@ -78,6 +78,8 @@ dotenv-kotlin = { module = "io.github.cdimascio:dotenv-kotlin", version = "6.4.1
 
 # Logging
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version = "7.4" }
+janino = { module = "org.codehaus.janino:janino", version = "3.1.12" }
 kotlin-logging = { module = "io.github.microutils:kotlin-logging-jvm", version = "3.0.5" }
 
 # OpenTelemetry

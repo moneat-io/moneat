@@ -113,6 +113,8 @@ dependencies {
 
     // Logging
     implementation(libs.logback.classic)
+    implementation(libs.logstash.logback.encoder)
+    implementation(libs.janino)
     implementation(libs.kotlin.logging)
 
     // OpenTelemetry for logging to Moneat

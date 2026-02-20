@@ -65,6 +65,57 @@ data class FeaturesResponse(
     val selfHost: Boolean
 )
 
+private suspend fun respondWithFullHealth(call: io.ktor.server.application.ApplicationCall) {
+    val postgresStatus =
+        try {
+            transaction {
+                exec("SELECT phone_number FROM users LIMIT 1")
+                exec("SELECT pending_meter_batch_id, pending_meter_batch_units FROM subscriptions LIMIT 1")
+            }
+            "ok"
+        } catch (_: Exception) {
+            "error"
+        }
+    val clickhouseStatus =
+        try {
+            if (ClickHouseClient.ping()) "ok" else "error"
+        } catch (_: Exception) {
+            "error"
+        }
+    val redisStatus =
+        try {
+            if (RedisConfig.isConnected()) {
+                RedisConfig.sync().ping()
+                "ok"
+            } else {
+                "error"
+            }
+        } catch (_: Exception) {
+            "error"
+        }
+    val ingestQueueDepth =
+        try {
+            if (RedisConfig.isConnected()) {
+                val queueKey =
+                    call.application.environment.config
+                        .property("ingest.queueKey")
+                        .getString()
+                RedisConfig.sync().llen(queueKey)
+            } else {
+                0L
+            }
+        } catch (_: Exception) {
+            0L
+        }
+    val status = if (postgresStatus == "ok" && clickhouseStatus == "ok" && redisStatus == "ok") "ok" else "degraded"
+    val response = HealthResponse(status, postgresStatus, clickhouseStatus, redisStatus, ingestQueueDepth)
+    if (status == "ok") {
+        call.respond(response)
+    } else {
+        call.respond(HttpStatusCode.ServiceUnavailable, response)
+    }
+}
+
 fun Application.configureRouting() {
     routing {
         get("/") {
@@ -81,56 +132,19 @@ fun Application.configureRouting() {
             )
         }
 
+        // Liveness probe: lightweight check that the JVM and HTTP server are responsive
+        get("/health/live") {
+            call.respond(mapOf("status" to "ok"))
+        }
+
+        // Readiness probe: full dependency check for routing traffic
+        get("/health/ready") {
+            respondWithFullHealth(call)
+        }
+
+        // Legacy health endpoint (backward compatible)
         get("/health") {
-            val postgresStatus =
-                try {
-                    transaction {
-                        // Validate critical schema columns used by core auth/billing paths.
-                        exec("SELECT phone_number FROM users LIMIT 1")
-                        exec("SELECT pending_meter_batch_id, pending_meter_batch_units FROM subscriptions LIMIT 1")
-                    }
-                    "ok"
-                } catch (_: Exception) {
-                    "error"
-                }
-            val clickhouseStatus =
-                try {
-                    if (ClickHouseClient.ping()) "ok" else "error"
-                } catch (_: Exception) {
-                    "error"
-                }
-            val redisStatus =
-                try {
-                    if (RedisConfig.isConnected()) {
-                        RedisConfig.sync().ping()
-                        "ok"
-                    } else {
-                        "error"
-                    }
-                } catch (_: Exception) {
-                    "error"
-                }
-            val ingestQueueDepth =
-                try {
-                    if (RedisConfig.isConnected()) {
-                        val queueKey =
-                            call.application.environment.config
-                                .property("ingest.queueKey")
-                                .getString()
-                        RedisConfig.sync().llen(queueKey)
-                    } else {
-                        0L
-                    }
-                } catch (_: Exception) {
-                    0L
-                }
-            val status = if (postgresStatus == "ok" && clickhouseStatus == "ok" && redisStatus == "ok") "ok" else "degraded"
-            val response = HealthResponse(status, postgresStatus, clickhouseStatus, redisStatus, ingestQueueDepth)
-            if (status == "ok") {
-                call.respond(response)
-            } else {
-                call.respond(HttpStatusCode.ServiceUnavailable, response)
-            }
+            respondWithFullHealth(call)
         }
 
         // Sentry-compatible ingestion endpoints (rate limited per project key)

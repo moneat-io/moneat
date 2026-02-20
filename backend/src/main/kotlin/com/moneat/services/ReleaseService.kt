@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.StorageConfig
 import com.moneat.models.*
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.and
@@ -23,7 +24,6 @@ import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
@@ -105,16 +105,12 @@ class ReleaseService {
 
             val releaseId = release[Releases.id]
 
-            // Create storage directory if it doesn't exist
-            val storageDir = File("./storage/sourcemaps/$projectId/$version")
-            storageDir.mkdirs()
-
             // Generate unique filename to prevent overwrites
             val uniqueFileName = "${UUID.randomUUID()}_${fileName.replace("/", "_")}"
-            val storagePath = "${storageDir.path}/$uniqueFileName"
+            val storageKey = "sourcemaps/$projectId/$version/$uniqueFileName"
 
-            // Write file to disk
-            File(storagePath).writeBytes(fileContent)
+            // Write file to storage
+            StorageConfig.provider.write(storageKey, fileContent)
 
             // Save file metadata to database
             val fileId =
@@ -122,7 +118,7 @@ class ReleaseService {
                     it[release_id] = releaseId
                     it[name] = fileName
                     it[file_path] = fileName
-                    it[storage_path] = storagePath
+                    it[storage_path] = storageKey
                     it[file_type] = if (fileName.endsWith(".map")) "source_map" else "source_file"
                     it[ReleaseFiles.created_at] = createdAt
                 }[ReleaseFiles.id]
@@ -334,11 +330,8 @@ class ReleaseService {
         checksum: String,
         data: ByteArray
     ) {
-        val storageDir = File("./storage/chunks")
-        storageDir.mkdirs()
-
-        val storagePath = "${storageDir.path}/$checksum"
-        File(storagePath).writeBytes(data)
+        val storageKey = "chunks/$checksum"
+        StorageConfig.provider.write(storageKey, data)
 
         transaction {
             val existing =
@@ -351,7 +344,7 @@ class ReleaseService {
                 FileBlobs.insert {
                     it[FileBlobs.checksum] = checksum
                     it[FileBlobs.size] = data.size.toLong()
-                    it[FileBlobs.storage_path] = storagePath
+                    it[FileBlobs.storage_path] = storageKey
                     it[FileBlobs.created_at] = System.currentTimeMillis()
                 }
             }
@@ -436,24 +429,20 @@ class ReleaseService {
         version: String?,
         dist: String?
     ) {
-        val storageDir = File("./storage/artifact_bundles/$orgId")
-        storageDir.mkdirs()
-        val storagePath = "${storageDir.path}/$checksum"
+        val storageKey = "artifact_bundles/$orgId/$checksum"
+        val storage = StorageConfig.provider
 
         // Concatenate all chunks
-        val outputFile = File(storagePath)
-        outputFile.outputStream().use { out ->
+        storage.openOutputStream(storageKey).use { out ->
             for (chunk in chunks) {
-                val chunkFile = File("./storage/chunks/$chunk")
-                if (chunkFile.exists()) {
-                    chunkFile.inputStream().use { it.copyTo(out) }
-                }
+                val chunkKey = "chunks/$chunk"
+                storage.openInputStream(chunkKey)?.use { it.copyTo(out) }
             }
         }
 
         // Verify checksum
         val digest = MessageDigest.getInstance("SHA-1")
-        outputFile.inputStream().use { input ->
+        storage.openInputStream(storageKey)?.use { input ->
             val buffer = ByteArray(8192)
             var read: Int
             while (input.read(buffer).also { read = it } != -1) {
@@ -478,7 +467,7 @@ class ReleaseService {
                 ) {
                     it[ArtifactBundles.state] = state
                     it[ArtifactBundles.detail] = detail
-                    it[ArtifactBundles.storage_path] = storagePath
+                    it[ArtifactBundles.storage_path] = storageKey
                 }
             } else {
                 ArtifactBundles.insert {
@@ -488,7 +477,7 @@ class ReleaseService {
                     it[ArtifactBundles.detail] = detail
                     it[ArtifactBundles.version] = version
                     it[ArtifactBundles.dist] = dist
-                    it[ArtifactBundles.storage_path] = storagePath
+                    it[ArtifactBundles.storage_path] = storageKey
                     it[ArtifactBundles.created_at] = System.currentTimeMillis()
                 }
             }

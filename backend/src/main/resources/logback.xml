@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <appender name="STDOUT_PLAIN" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Structured JSON output for container/K8s environments (enable via LOG_FORMAT=json) -->
+    <appender name="STDOUT_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
         </encoder>
     </appender>
     
@@ -16,11 +24,24 @@
         <environment>${MONEAT_LOGS_ENVIRONMENT:-development}</environment>
     </appender>
 
+    <!-- Select console appender based on LOG_FORMAT env var (default: plain) -->
+    <property name="LOG_FORMAT" value="${LOG_FORMAT:-plain}" />
+
     <!-- Default to INFO for all libraries to reduce noise -->
-    <root level="INFO">
-        <appender-ref ref="STDOUT"/>
-        <appender-ref ref="MONEAT"/>
-    </root>
+    <if condition='property("LOG_FORMAT").equals("json")'>
+        <then>
+            <root level="INFO">
+                <appender-ref ref="STDOUT_JSON"/>
+                <appender-ref ref="MONEAT"/>
+            </root>
+        </then>
+        <else>
+            <root level="INFO">
+                <appender-ref ref="STDOUT_PLAIN"/>
+                <appender-ref ref="MONEAT"/>
+            </root>
+        </else>
+    </if>
 
     <!-- Enable DEBUG only for your application code -->
     <logger name="com.moneat" level="INFO"/>
@@ -37,20 +58,20 @@
     
     <!-- Prevent telemetry feedback loops: ingestion/telemetry loggers should not emit back to OTLP -->
     <logger name="com.moneat.routes.IngestRoutesKt" level="INFO" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="STDOUT_PLAIN"/>
     </logger>
     <logger name="com.moneat.routes.LogRoutesKt" level="INFO" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="STDOUT_PLAIN"/>
     </logger>
     <logger name="com.moneat.services.IngestionWorkerKt" level="INFO" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="STDOUT_PLAIN"/>
     </logger>
     <logger name="com.moneat.services.LogIngestionWorkerKt" level="INFO" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="STDOUT_PLAIN"/>
     </logger>
 
     <!-- Prevent infinite loop: don't send Application request logs to MONEAT appender -->
     <logger name="Application" level="INFO" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="STDOUT_PLAIN"/>
     </logger>
 </configuration>

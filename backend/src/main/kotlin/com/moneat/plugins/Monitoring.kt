@@ -171,7 +171,7 @@ fun Application.configureMonitoring() {
 }
 
 private fun shouldSkipTracing(path: String): Boolean {
-    if (path == "/health" || path == "/health/") {
+    if (path == "/health" || path == "/health/" || path.startsWith("/health/")) {
         return true
     }
     if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/") {

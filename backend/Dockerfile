@@ -32,5 +32,5 @@ RUN mkdir -p /app/storage/chunks /app/storage/artifact_bundles && chown -R monea
 USER moneat
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
-  CMD wget -q -O /dev/null http://localhost:8080/health || exit 1
+  CMD wget -q -O /dev/null http://localhost:8080/health/ready || exit 1
 CMD ["java", "-jar", "app.jar"]

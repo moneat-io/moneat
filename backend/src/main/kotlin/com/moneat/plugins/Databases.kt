@@ -27,6 +27,37 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
 
+private const val CLICKHOUSE_MIGRATION_LOCK_KEY = 8675309L
+private const val CLICKHOUSE_MIGRATION_LOCK_WAIT_TIMEOUT_MS = 120_000L
+private const val CLICKHOUSE_MIGRATION_LOCK_POLL_INTERVAL_MS = 1_000L
+
+private fun tryAcquireAdvisoryLock(connection: Connection, lockKey: Long): Boolean =
+    connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT pg_try_advisory_lock($lockKey)").use { rs ->
+            rs.next() && rs.getBoolean(1)
+        }
+    }
+
+private fun releaseAdvisoryLock(connection: Connection, lockKey: Long) {
+    connection.createStatement().use { statement ->
+        statement.execute("SELECT pg_advisory_unlock($lockKey)")
+    }
+}
+
+private fun waitForAdvisoryLockRelease(connection: Connection, lockKey: Long): Boolean {
+    val startMs = System.currentTimeMillis()
+
+    while (System.currentTimeMillis() - startMs < CLICKHOUSE_MIGRATION_LOCK_WAIT_TIMEOUT_MS) {
+        if (tryAcquireAdvisoryLock(connection, lockKey)) {
+            releaseAdvisoryLock(connection, lockKey)
+            return true
+        }
+        Thread.sleep(CLICKHOUSE_MIGRATION_LOCK_POLL_INTERVAL_MS)
+    }
+
+    return false
+}
+
 private fun verifyCriticalColumnsPresent(dataSource: HikariDataSource) {
     val requiredColumns =
         setOf(
@@ -123,19 +154,44 @@ fun Application.configureDatabases() {
 
         // Run ClickHouse migrations only if ClickHouse is configured
         if (!isTestDatabase) {
-            runBlocking {
-                try {
-                    configureClickHouseMigrations()
-                } catch (e: Exception) {
-                    log.error("Failed to run ClickHouse migrations. Make sure ClickHouse is running and accessible.", e)
-                    throw e
-                }
-                // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)
-                try {
-                    com.moneat.config.DemoDataReseeder
-                        .reseedIfNeeded()
-                } catch (e: Exception) {
-                    log.warn("Demo data reseed failed (non-fatal)", e)
+            dataSource.connection.use { conn ->
+                conn.autoCommit = true
+
+                // Use PostgreSQL advisory lock to prevent concurrent ClickHouse migrations
+                // across multiple application instances (e.g. K8s pods starting simultaneously)
+                if (tryAcquireAdvisoryLock(conn, CLICKHOUSE_MIGRATION_LOCK_KEY)) {
+                    try {
+                        runBlocking {
+                            try {
+                                configureClickHouseMigrations()
+                            } catch (e: Exception) {
+                                log.error(
+                                    "Failed to run ClickHouse migrations. Make sure ClickHouse is running and accessible.",
+                                    e
+                                )
+                                throw e
+                            }
+                            // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)
+                            try {
+                                com.moneat.config.DemoDataReseeder
+                                    .reseedIfNeeded()
+                            } catch (e: Exception) {
+                                log.warn("Demo data reseed failed (non-fatal)", e)
+                            }
+                        }
+                    } finally {
+                        releaseAdvisoryLock(conn, CLICKHOUSE_MIGRATION_LOCK_KEY)
+                    }
+                } else {
+                    log.info("Another instance is running ClickHouse migrations, waiting for completion")
+                    val migrationsFinished = waitForAdvisoryLockRelease(conn, CLICKHOUSE_MIGRATION_LOCK_KEY)
+                    if (!migrationsFinished) {
+                        throw IllegalStateException(
+                            "Timed out waiting ${CLICKHOUSE_MIGRATION_LOCK_WAIT_TIMEOUT_MS}ms " +
+                                "for ClickHouse migration lock release"
+                        )
+                    }
+                    log.info("ClickHouse migrations completed by another instance")
                 }
             }
         }
