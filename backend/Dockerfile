@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/home/gradle/.gradle \
     fi
 
 FROM eclipse-temurin:17-jre
-RUN addgroup -S moneat && adduser -S moneat -G moneat
+RUN groupadd --system moneat && useradd --system --gid moneat --home /app --create-home moneat
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
 RUN mkdir -p /app/storage/chunks /app/storage/artifact_bundles && chown -R moneat:moneat /app/storage
