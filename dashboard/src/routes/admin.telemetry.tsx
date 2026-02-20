@@ -21,6 +21,7 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Badge} from '@/components/ui/badge'
 import {
   Activity,
+  AlertTriangle,
   Cpu,
   Database,
   Fingerprint,
@@ -29,7 +30,6 @@ import {
   Lock,
   Radio,
   ShieldCheck,
-  TriangleAlert,
   Users,
 } from 'lucide-react'
 import {AdminSkeleton, formatBytes, formatNumber, MetricCard, SectionHeader} from '@/components/admin-components'
@@ -206,7 +206,7 @@ function AdminTelemetryPage() {
               <MetricCard
                 title="Issues"
                 value={formatNumber(m.issueCount)}
-                icon={TriangleAlert}
+                icon={AlertTriangle}
                 iconColor="text-red-600 dark:text-red-400"
                 iconBg="bg-red-100 dark:bg-red-950"
               />

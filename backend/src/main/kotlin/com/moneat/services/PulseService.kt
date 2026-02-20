@@ -26,10 +26,9 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import io.ktor.utils.io.CancellationException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -77,7 +76,7 @@ class PulseService(
             // Delay the first pulse to let the application fully initialise
             delay(60_000)
 
-            while (isActive) {
+            while (true) {
                 try {
                     val metrics = collectMetrics()
                     sendPulse(metrics)
