@@ -95,6 +95,10 @@ fun Application.configureDatabases() {
                     .configure()
                     .dataSource(dataSource)
                     .locations("classpath:db/migration")
+                    .sqlMigrationPrefix("V")
+                    .repeatableSqlMigrationPrefix("R")
+                    .sqlMigrationSeparator("__")
+                    .sqlMigrationSuffixes(".sql")
                     .baselineOnMigrate(true)
                     // Force full migration to latest even if an external target cap is present.
                     .target(MigrationVersion.LATEST)

@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/home/gradle/.gradle \
       gradle shadowJar --no-daemon --build-cache; \
     fi
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 RUN addgroup -S moneat && adduser -S moneat -G moneat
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
