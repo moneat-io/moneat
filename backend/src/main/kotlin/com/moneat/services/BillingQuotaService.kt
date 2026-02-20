@@ -17,18 +17,31 @@
 package com.moneat.services
 
 import com.moneat.config.EnvConfig
-import com.moneat.models.*
+import com.moneat.models.BillingUsageResponse
+import com.moneat.models.OrgUsageCounters
+import com.moneat.models.PricingTier
+import com.moneat.models.PricingTierConfigResponse
+import com.moneat.models.PricingTierConfigs
+import com.moneat.models.Subscriptions
 import com.moneat.utils.SentryUtils
-import io.ktor.server.config.*
-import kotlinx.datetime.*
+import io.ktor.server.config.ApplicationConfig
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.todayIn
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.math.max
 import kotlin.time.Clock
 
@@ -309,7 +322,10 @@ class BillingQuotaService(
         val errorOverageRateCentsPer1k: Int,
         val replayOverageRateCentsPerGb: Int,
         val logOverageRateCentsPerGb: Int,
-        val llmOverageRateCentsPer1k: Int
+        val llmOverageRateCentsPer1k: Int,
+        val usedAnalyticsPageviews: Long,
+        val analyticsPageviewLimit: Long,
+        val analyticsPageviewOverageRateCentsPer100k: Int
     )
 
     private fun loadQuotaState(
@@ -432,6 +448,7 @@ class BillingQuotaService(
         val usedReplayBytes = usageRow[OrgUsageCounters.used_replay_bytes]
         val usedLogBytes = usageRow[OrgUsageCounters.used_log_bytes]
         val usedLlmBytes = usageRow[OrgUsageCounters.used_llm_bytes]
+        val usedAnalyticsPageviews = usageRow[OrgUsageCounters.used_analytics_pageviews]
         val errorLimit = tier.monthlyErrorLimit
         val llmEventLimit = tier.monthlyLlmEventLimit
         val transactionLimit = tier.monthlyTransactionLimit
@@ -513,7 +530,10 @@ class BillingQuotaService(
             errorOverageRateCentsPer1k = tier.errorOverageRateCentsPer1k,
             replayOverageRateCentsPerGb = tier.replayOverageRateCentsPerGb,
             logOverageRateCentsPerGb = tier.overageRateCentsPerGb,
-            llmOverageRateCentsPer1k = tier.llmOverageRateCentsPer1k
+            llmOverageRateCentsPer1k = tier.llmOverageRateCentsPer1k,
+            usedAnalyticsPageviews = usedAnalyticsPageviews,
+            analyticsPageviewLimit = tier.monthlyAnalyticsPageviewLimit,
+            analyticsPageviewOverageRateCentsPer100k = tier.analyticsPageviewOverageRateCentsPer100k
         )
     }
 
@@ -571,7 +591,15 @@ class BillingQuotaService(
                 0
             }
 
-        val totalOverageCents = errorOverageCents + replayOverageCents + logOverageCents + llmOverageCents
+        val analyticsPageviewOverageUnits = max(0, state.usedAnalyticsPageviews - state.analyticsPageviewLimit)
+        val analyticsPageviewOverageCents =
+            if (state.analyticsPageviewOverageRateCentsPer100k > 0 && analyticsPageviewOverageUnits > 0) {
+                ((analyticsPageviewOverageUnits * state.analyticsPageviewOverageRateCentsPer100k) / 100_000).toInt()
+            } else {
+                0
+            }
+
+        val totalOverageCents = errorOverageCents + replayOverageCents + logOverageCents + llmOverageCents + analyticsPageviewOverageCents
 
         return BillingUsageResponse(
             organizationId = state.organizationId,
@@ -618,6 +646,10 @@ class BillingQuotaService(
             oncallUsedSeats = state.oncallUsedSeats,
             oncallPerUserMonthlyCents = state.oncallPerUserMonthlyCents,
             oncallEnabled = state.oncallEnabled,
+            usedAnalyticsPageviews = state.usedAnalyticsPageviews,
+            analyticsPageviewLimit = state.analyticsPageviewLimit,
+            analyticsPageviewOverageCentsEstimate = analyticsPageviewOverageCents,
+            analyticsPageviewOverageRateCentsPer100k = state.analyticsPageviewOverageRateCentsPer100k,
             plan = state.plan,
             status = state.status,
             withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
@@ -675,6 +707,10 @@ class BillingQuotaService(
             oncallPerUserMonthlyCents = row[PricingTierConfigs.oncall_per_user_monthly_cents],
             oncallPerUserYearlyCents = row[PricingTierConfigs.oncall_per_user_yearly_cents],
             oncallEnabled = row[PricingTierConfigs.oncall_enabled],
+            maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
+            analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
+            monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
+            analyticsPageviewOverageRateCentsPer100k = row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
             isCurrent = row[PricingTierConfigs.is_current]
         )
     }
@@ -740,6 +776,23 @@ class BillingQuotaService(
             oncallPerUserMonthlyCents = 500, // Default $5
             oncallPerUserYearlyCents = 5000, // Default $50
             oncallEnabled = tier != PricingTier.FREE,
+            maxAnalyticsSites = when (tier) {
+                PricingTier.FREE -> 1
+                PricingTier.PRO -> 5
+                PricingTier.TEAM -> 10
+                PricingTier.BUSINESS -> null
+            },
+            analyticsRetentionDays = when (tier) {
+                PricingTier.FREE, PricingTier.PRO -> 1095
+                PricingTier.TEAM, PricingTier.BUSINESS -> 1825
+            },
+            monthlyAnalyticsPageviewLimit = when (tier) {
+                PricingTier.FREE -> 10_000
+                PricingTier.PRO -> 100_000
+                PricingTier.TEAM -> 1_000_000
+                PricingTier.BUSINESS -> 10_000_000
+            },
+            analyticsPageviewOverageRateCentsPer100k = if (tier == PricingTier.FREE) 0 else 1000,
             isCurrent = true
         )
     }

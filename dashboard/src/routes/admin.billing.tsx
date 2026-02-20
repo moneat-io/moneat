@@ -197,6 +197,10 @@ interface CreateFormState {
   oncallEnabled: boolean
   oncallPerUserMonthlyCents: number
   oncallPerUserYearlyCents: number
+  maxAnalyticsSites: string
+  analyticsRetentionDays: number
+  monthlyAnalyticsPageviewLimit: number
+  analyticsPageviewOverageRateCentsPer100k: number
   stripeBasePriceId: string
   stripeOveragePriceId: string
   stripeYearlyBasePriceId: string
@@ -231,6 +235,10 @@ const DEFAULT_FORM: CreateFormState = {
   oncallEnabled: true,
   oncallPerUserMonthlyCents: 500,
   oncallPerUserYearlyCents: 5000,
+  maxAnalyticsSites: '',
+  analyticsRetentionDays: 1095,
+  monthlyAnalyticsPageviewLimit: 100_000,
+  analyticsPageviewOverageRateCentsPer100k: 1000,
   stripeBasePriceId: '',
   stripeOveragePriceId: '',
   stripeYearlyBasePriceId: '',
@@ -387,6 +395,10 @@ function AdminBillingPage() {
           customRetentionEnabled: currentTierConfig.customRetentionEnabled,
           oncallEnabled: createForm.oncallEnabled,
           oncallPerUserMonthlyCents: createForm.oncallPerUserMonthlyCents,
+          maxAnalyticsSites: createForm.maxAnalyticsSites.trim() ? Number(createForm.maxAnalyticsSites) : null,
+          analyticsRetentionDays: createForm.analyticsRetentionDays,
+          monthlyAnalyticsPageviewLimit: createForm.monthlyAnalyticsPageviewLimit,
+          analyticsPageviewOverageRateCentsPer100k: createForm.analyticsPageviewOverageRateCentsPer100k,
         }
       : null
 
@@ -433,6 +445,10 @@ function AdminBillingPage() {
         oncallEnabled: config.oncallEnabled ?? false,
         oncallPerUserMonthlyCents: config.oncallPerUserMonthlyCents ?? 500,
         oncallPerUserYearlyCents: config.oncallPerUserYearlyCents ?? 5000,
+        maxAnalyticsSites: config.maxAnalyticsSites != null ? String(config.maxAnalyticsSites) : '',
+        analyticsRetentionDays: config.analyticsRetentionDays ?? 1095,
+        monthlyAnalyticsPageviewLimit: config.monthlyAnalyticsPageviewLimit ?? 0,
+        analyticsPageviewOverageRateCentsPer100k: config.analyticsPageviewOverageRateCentsPer100k ?? 0,
         stripeBasePriceId: config.stripeBasePriceId ?? '',
         stripeOveragePriceId: config.stripeOveragePriceId ?? '',
         stripeYearlyBasePriceId: config.stripeYearlyBasePriceId ?? '',
@@ -500,6 +516,10 @@ function AdminBillingPage() {
         oncallEnabled: Boolean(createForm.oncallEnabled),
         oncallPerUserMonthlyCents: Number(createForm.oncallPerUserMonthlyCents),
         oncallPerUserYearlyCents: Number(createForm.oncallPerUserYearlyCents),
+        maxAnalyticsSites: createForm.maxAnalyticsSites.trim() ? Number(createForm.maxAnalyticsSites) : null,
+        analyticsRetentionDays: Number(createForm.analyticsRetentionDays),
+        monthlyAnalyticsPageviewLimit: Number(createForm.monthlyAnalyticsPageviewLimit),
+        analyticsPageviewOverageRateCentsPer100k: Number(createForm.analyticsPageviewOverageRateCentsPer100k),
         stripeBasePriceId: createForm.stripeBasePriceId.trim() || null,
         stripeOveragePriceId: createForm.stripeOveragePriceId.trim() || null,
         stripeYearlyBasePriceId: createForm.stripeYearlyBasePriceId.trim() || null,
@@ -1187,6 +1207,79 @@ function AdminBillingPage() {
                   {validationErrors.llmOverageRateCentsPer1k && (
                     <p className="text-xs text-destructive">{validationErrors.llmOverageRateCentsPer1k}</p>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* On-Call Pricing */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-muted-foreground">Analytics</h4>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="maxAnalyticsSites">
+                    Max Analytics Sites
+                    <HelpTip text="Maximum number of analytics sites. Leave blank for unlimited." />
+                  </Label>
+                  <Input
+                    id="maxAnalyticsSites"
+                    type="number"
+                    min={1}
+                    placeholder="Unlimited"
+                    value={createForm.maxAnalyticsSites}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, maxAnalyticsSites: e.target.value}))
+                    }
+                  />
+                  <FieldHint>{createForm.maxAnalyticsSites.trim() ? `${createForm.maxAnalyticsSites} site(s)` : 'Unlimited'}</FieldHint>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="analyticsRetentionDays">
+                    Analytics Retention (days)
+                    <HelpTip text="How long analytics data is retained. 1095 = 3 years, 1825 = 5 years." />
+                  </Label>
+                  <Input
+                    id="analyticsRetentionDays"
+                    type="number"
+                    min={1}
+                    max={3650}
+                    value={createForm.analyticsRetentionDays}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, analyticsRetentionDays: Number(e.target.value)}))
+                    }
+                  />
+                  <FieldHint>{(createForm.analyticsRetentionDays / 365).toFixed(1)} year(s)</FieldHint>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="monthlyAnalyticsPageviewLimit">
+                    Monthly Pageview Limit
+                    <HelpTip text="Included monthly analytics page views before overage kicks in." />
+                  </Label>
+                  <Input
+                    id="monthlyAnalyticsPageviewLimit"
+                    type="number"
+                    min={0}
+                    value={createForm.monthlyAnalyticsPageviewLimit}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, monthlyAnalyticsPageviewLimit: Number(e.target.value)}))
+                    }
+                  />
+                  <FieldHint>{createForm.monthlyAnalyticsPageviewLimit >= 1_000_000 ? `${(createForm.monthlyAnalyticsPageviewLimit / 1_000_000).toFixed(1)}M` : `${(createForm.monthlyAnalyticsPageviewLimit / 1_000).toFixed(0)}K`} pageviews/mo</FieldHint>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="analyticsPageviewOverageRateCentsPer100k">
+                    Pageview Overage (cents/100K)
+                    <HelpTip text="Cost per 100,000 page views over the included limit. 1000 = $10/100K." />
+                  </Label>
+                  <Input
+                    id="analyticsPageviewOverageRateCentsPer100k"
+                    type="number"
+                    min={0}
+                    value={createForm.analyticsPageviewOverageRateCentsPer100k}
+                    onChange={(e) =>
+                      setCreateForm((p) => ({...p, analyticsPageviewOverageRateCentsPer100k: Number(e.target.value)}))
+                    }
+                  />
+                  <FieldHint>${(createForm.analyticsPageviewOverageRateCentsPer100k / 100).toFixed(2)}/100K pageviews</FieldHint>
                 </div>
               </div>
             </div>

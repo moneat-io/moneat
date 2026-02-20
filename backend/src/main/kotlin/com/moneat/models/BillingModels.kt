@@ -62,6 +62,10 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val oncall_per_user_monthly_cents = integer("oncall_per_user_monthly_cents").default(0)
     val oncall_per_user_yearly_cents = integer("oncall_per_user_yearly_cents").default(0)
     val oncall_enabled = bool("oncall_enabled").default(false)
+    val max_analytics_sites = integer("max_analytics_sites").nullable()
+    val analytics_retention_days = integer("analytics_retention_days").default(1095)
+    val monthly_analytics_pageview_limit = long("monthly_analytics_pageview_limit").default(0)
+    val analytics_pageview_overage_rate_cents_per_100k = integer("analytics_pageview_overage_rate_cents_per_100k").default(0)
     val stripe_base_price_id = varchar("stripe_base_price_id", 255).nullable()
     val stripe_overage_price_id = varchar("stripe_overage_price_id", 255).nullable()
     val stripe_yearly_base_price_id = varchar("stripe_yearly_base_price_id", 255).nullable()
@@ -90,6 +94,7 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_replay_bytes = long("used_replay_bytes").default(0)
     val used_log_bytes = long("used_log_bytes").default(0)
     val used_llm_bytes = long("used_llm_bytes").default(0)
+    val used_analytics_pageviews = long("used_analytics_pageviews").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -161,6 +166,10 @@ data class PricingTierConfigResponse(
     val oncallPerUserMonthlyCents: Int = 0,
     val oncallPerUserYearlyCents: Int = 0,
     val oncallEnabled: Boolean = false,
+    val maxAnalyticsSites: Int? = null,
+    val analyticsRetentionDays: Int = 1095,
+    val monthlyAnalyticsPageviewLimit: Long = 0,
+    val analyticsPageviewOverageRateCentsPer100k: Int = 0,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,
@@ -229,6 +238,10 @@ data class BillingUsageResponse(
     val oncallUsedSeats: Int = 0,
     val oncallPerUserMonthlyCents: Int = 0,
     val oncallEnabled: Boolean = false,
+    val usedAnalyticsPageviews: Long = 0,
+    val analyticsPageviewLimit: Long = 0,
+    val analyticsPageviewOverageCentsEstimate: Int = 0,
+    val analyticsPageviewOverageRateCentsPer100k: Int = 0,
     val plan: String,
     val status: String,
     val withinQuota: Boolean,
@@ -330,6 +343,10 @@ data class CreateTierVersionRequest(
     val oncallPerUserMonthlyCents: Int? = null,
     val oncallPerUserYearlyCents: Int? = null,
     val oncallEnabled: Boolean? = null,
+    val maxAnalyticsSites: Int? = null,
+    val analyticsRetentionDays: Int? = null,
+    val monthlyAnalyticsPageviewLimit: Long? = null,
+    val analyticsPageviewOverageRateCentsPer100k: Int? = null,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,

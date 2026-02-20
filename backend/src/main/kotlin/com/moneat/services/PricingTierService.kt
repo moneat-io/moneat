@@ -16,16 +16,30 @@
 
 package com.moneat.services
 
-import com.moneat.models.*
+import com.moneat.models.AdminBillingSubscriptionResponse
+import com.moneat.models.BillingPlanResponse
+import com.moneat.models.CreateTierVersionRequest
+import com.moneat.models.Memberships
+import com.moneat.models.Organizations
+import com.moneat.models.PricingTier
+import com.moneat.models.PricingTierConfigResponse
+import com.moneat.models.PricingTierConfigs
+import com.moneat.models.Subscriptions
+import com.moneat.models.TierMigrationRequest
+import com.moneat.models.TierMigrationResponse
+import com.moneat.models.UpdateStripePriceIdsRequest
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
@@ -215,6 +229,10 @@ class PricingTierService {
             val resolvedOncallPerUserMonthlyCents = request.oncallPerUserMonthlyCents ?: currentConfig?.oncallPerUserMonthlyCents ?: 0
             val resolvedOncallPerUserYearlyCents = request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
             val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
+            val resolvedMaxAnalyticsSites = request.maxAnalyticsSites ?: currentConfig?.maxAnalyticsSites
+            val resolvedAnalyticsRetentionDays = request.analyticsRetentionDays ?: currentConfig?.analyticsRetentionDays ?: 1095
+            val resolvedMonthlyAnalyticsPageviewLimit = request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
+            val resolvedAnalyticsPageviewOverageRateCentsPer100k = request.analyticsPageviewOverageRateCentsPer100k ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0
 
             val resolvedStatusPagesEnabled =
                 request.statusPagesEnabled
@@ -306,6 +324,10 @@ class PricingTierService {
                     it[oncall_per_user_monthly_cents] = resolvedOncallPerUserMonthlyCents
                     it[oncall_per_user_yearly_cents] = resolvedOncallPerUserYearlyCents
                     it[oncall_enabled] = resolvedOncallEnabled
+                    it[max_analytics_sites] = resolvedMaxAnalyticsSites
+                    it[analytics_retention_days] = resolvedAnalyticsRetentionDays
+                    it[monthly_analytics_pageview_limit] = resolvedMonthlyAnalyticsPageviewLimit
+                    it[analytics_pageview_overage_rate_cents_per_100k] = resolvedAnalyticsPageviewOverageRateCentsPer100k
                     it[stripe_base_price_id] = request.stripeBasePriceId
                     it[stripe_overage_price_id] = request.stripeOveragePriceId
                     it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
@@ -356,6 +378,15 @@ class PricingTierService {
         }
         if (request.llmOverageRateCentsPer1k != null) {
             require(request.llmOverageRateCentsPer1k >= 0) { "LLM overage rate cannot be negative" }
+        }
+        if (request.analyticsRetentionDays != null) {
+            require(request.analyticsRetentionDays in 1..3650) { "Analytics retention days must be between 1 and 3650" }
+        }
+        if (request.monthlyAnalyticsPageviewLimit != null) {
+            require(request.monthlyAnalyticsPageviewLimit >= 0) { "Monthly analytics pageview limit must be non-negative" }
+        }
+        if (request.analyticsPageviewOverageRateCentsPer100k != null) {
+            require(request.analyticsPageviewOverageRateCentsPer100k >= 0) { "Analytics pageview overage rate cannot be negative" }
         }
     }
 
@@ -594,6 +625,10 @@ class PricingTierService {
             oncallPerUserMonthlyCents = row[PricingTierConfigs.oncall_per_user_monthly_cents],
             oncallPerUserYearlyCents = row[PricingTierConfigs.oncall_per_user_yearly_cents],
             oncallEnabled = row[PricingTierConfigs.oncall_enabled],
+            maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
+            analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
+            monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
+            analyticsPageviewOverageRateCentsPer100k = row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
             stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
             stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
             stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],

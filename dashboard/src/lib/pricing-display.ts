@@ -53,6 +53,10 @@ export interface PricingCardTierInput {
   errorOverageRateCentsPer1k?: number
   replayOverageRateCentsPerGb?: number
   llmOverageRateCentsPer1k?: number
+  maxAnalyticsSites?: number | null
+  analyticsRetentionDays?: number
+  monthlyAnalyticsPageviewLimit?: number
+  analyticsPageviewOverageRateCentsPer100k?: number
 }
 
 export interface OverageItem {
@@ -168,6 +172,25 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
   limits.push(tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`)
   limits.push(`${formatMonitorLimit(tier.maxSystems)} (${tier.monitorIntervalSeconds}s interval)`)
 
+  // Analytics limits
+  const analyticsSites = tier.maxAnalyticsSites
+  if (analyticsSites != null) {
+    limits.push(`${analyticsSites} analytics site${analyticsSites === 1 ? '' : 's'}`)
+  } else if (tier.maxAnalyticsSites === null) {
+    limits.push('Unlimited analytics sites')
+  }
+
+  const analyticsPageviews = tier.monthlyAnalyticsPageviewLimit
+  if (analyticsPageviews != null && analyticsPageviews > 0) {
+    limits.push(`${formatEventLimit(analyticsPageviews)} page views/mo`)
+  }
+
+  const analyticsRet = tier.analyticsRetentionDays
+  if (analyticsRet != null && analyticsRet > 0) {
+    const years = analyticsRet / 365
+    limits.push(`${years >= 1 ? `${Math.round(years)}-year` : `${analyticsRet}-day`} analytics retention`)
+  }
+
   return limits
 }
 
@@ -207,6 +230,9 @@ function buildOverages(tier: PricingCardTierInput): OverageItem[] {
   if (replayRate != null && replayRate > 0) overages.push({label: 'Replays', rate: formatCentsRate(replayRate, 'GB')})
   if (logRate != null && logRate > 0) overages.push({label: 'Logs', rate: formatCentsRate(logRate, 'GB')})
   if (llmRate != null && llmRate > 0) overages.push({label: 'AI events', rate: formatCentsRate(llmRate, '1K')})
+
+  const analyticsRate = tier.analyticsPageviewOverageRateCentsPer100k
+  if (analyticsRate != null && analyticsRate > 0) overages.push({label: 'Page views', rate: formatCentsRate(analyticsRate, '100K')})
 
   return overages
 }

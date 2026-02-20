@@ -558,6 +558,10 @@ interface BillingTierConfig {
   oncallPerUserMonthlyCents?: number
   oncallPerUserYearlyCents?: number
   oncallEnabled?: boolean
+  maxAnalyticsSites?: number | null
+  analyticsRetentionDays?: number
+  monthlyAnalyticsPageviewLimit?: number
+  analyticsPageviewOverageRateCentsPer100k?: number
   isCurrent: boolean
 }
 
@@ -617,6 +621,10 @@ interface BillingUsage {
   oncallUsedSeats?: number
   oncallPerUserMonthlyCents?: number
   oncallEnabled?: boolean
+  usedAnalyticsPageviews?: number
+  analyticsPageviewLimit?: number
+  analyticsPageviewOverageCentsEstimate?: number
+  analyticsPageviewOverageRateCentsPer100k?: number
   plan: string
   status: string
   withinQuota: boolean
@@ -716,6 +724,10 @@ interface CreateTierVersionRequest {
   oncallPerUserMonthlyCents?: number | null
   oncallPerUserYearlyCents?: number | null
   oncallEnabled?: boolean | null
+  maxAnalyticsSites?: number | null
+  analyticsRetentionDays?: number | null
+  monthlyAnalyticsPageviewLimit?: number | null
+  analyticsPageviewOverageRateCentsPer100k?: number | null
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null
