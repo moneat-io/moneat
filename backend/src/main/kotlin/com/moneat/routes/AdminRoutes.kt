@@ -16,20 +16,20 @@
 
 package com.moneat.routes
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.models.AlertSource
 import com.moneat.models.IncidentEvent
 import com.moneat.models.IncidentSeverity
 import com.moneat.models.IncidentStatus
 import com.moneat.models.TriggerIncidentRequest
 import com.moneat.models.Users
-import com.moneat.config.ClickHouseClient
 import com.moneat.services.AdminOrgDetail
 import com.moneat.services.AdminOrgUsagePoint
 import com.moneat.services.AdminService
 import com.moneat.services.AuthService
 import com.moneat.services.PricingTierService
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.*
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.isHandled
 import io.ktor.server.auth.AuthenticationChecked
@@ -125,19 +125,19 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
             try {
                 val obj = adminJson.parseToJsonElement(line).jsonObject
                 ReceivedPulse(
-                    deploymentId  = obj["deployment_id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
-                    receivedAt    = obj["last_seen"]?.jsonPrimitive?.contentOrNull ?: "",
-                    cpuCount      = obj["cpu_count"]?.jsonPrimitive?.intOrNull ?: 0,
+                    deploymentId = obj["deployment_id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
+                    receivedAt = obj["last_seen"]?.jsonPrimitive?.contentOrNull ?: "",
+                    cpuCount = obj["cpu_count"]?.jsonPrimitive?.intOrNull ?: 0,
                     memTotalBytes = obj["mem_total_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
-                    memUsedBytes  = obj["mem_used_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
-                    osName        = obj["os_name"]?.jsonPrimitive?.contentOrNull ?: "",
-                    osArch        = obj["os_arch"]?.jsonPrimitive?.contentOrNull ?: "",
-                    jvmVersion    = obj["jvm_version"]?.jsonPrimitive?.contentOrNull ?: "",
-                    projectCount  = obj["project_count"]?.jsonPrimitive?.longOrNull ?: 0,
-                    userCount     = obj["user_count"]?.jsonPrimitive?.longOrNull ?: 0,
-                    eventCount    = obj["event_count"]?.jsonPrimitive?.longOrNull ?: 0,
-                    issueCount    = obj["issue_count"]?.jsonPrimitive?.longOrNull ?: 0,
-                    sslEnabled    = (obj["ssl_enabled"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
+                    memUsedBytes = obj["mem_used_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
+                    osName = obj["os_name"]?.jsonPrimitive?.contentOrNull ?: "",
+                    osArch = obj["os_arch"]?.jsonPrimitive?.contentOrNull ?: "",
+                    jvmVersion = obj["jvm_version"]?.jsonPrimitive?.contentOrNull ?: "",
+                    projectCount = obj["project_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    userCount = obj["user_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    eventCount = obj["event_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    issueCount = obj["issue_count"]?.jsonPrimitive?.longOrNull ?: 0,
+                    sslEnabled = (obj["ssl_enabled"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
                 )
             } catch (e: Exception) {
                 logger.warn { "Failed to parse telemetry pulse row: ${e.message}" }

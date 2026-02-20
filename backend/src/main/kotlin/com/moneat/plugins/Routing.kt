@@ -23,7 +23,6 @@ import com.moneat.config.RedisConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.routes.adminRoutes
 import com.moneat.routes.analyticsIngestRoutes
-import com.moneat.routes.telemetryIngestRoutes
 import com.moneat.routes.apiRoutes
 import com.moneat.routes.authRoutes
 import com.moneat.routes.authTokenRoutes
@@ -37,6 +36,7 @@ import com.moneat.routes.orgManagementRoutes
 import com.moneat.routes.releaseRoutes
 import com.moneat.routes.statusPageRoutes
 import com.moneat.routes.stripeWebhookRoutes
+import com.moneat.routes.telemetryIngestRoutes
 import com.moneat.routes.uptimeRoutes
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
