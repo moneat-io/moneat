@@ -44,7 +44,7 @@ exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", versio
 exposed-json = { module = "org.jetbrains.exposed:exposed-json", version.ref = "exposed" }
 
 # Database
-postgresql = { module = "org.postgresql:postgresql", version = "42.7.7" }
+postgresql = { module = "org.postgresql:postgresql", version = "42.7.10" }
 hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
