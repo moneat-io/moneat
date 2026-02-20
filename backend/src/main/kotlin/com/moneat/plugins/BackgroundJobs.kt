@@ -22,11 +22,12 @@ import com.moneat.services.IngestionWorker
 import com.moneat.services.LlmIngestionWorker
 import com.moneat.services.LogIngestionWorker
 import com.moneat.services.MonitorAlertService
+import com.moneat.services.PulseService
 import com.moneat.services.RefreshTokenCleanupService
 import com.moneat.services.RetentionBackgroundService
 import com.moneat.services.UptimeScheduler
-import io.ktor.events.*
-import io.ktor.server.application.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStopping
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -82,6 +83,16 @@ fun Application.configureBackgroundJobs() {
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
     FeatureRegistry.startBackgroundJobs(this)
 
+    // Start telemetry pulse for self-hosted deployments (opt-out via TELEMETRY_ENABLED=false)
+    val pulseService = if (PulseService.isEnabled()) {
+        PulseService().also {
+            logger.info { "Telemetry pulse enabled for self-hosted deployment" }
+            it.start(jobScope)
+        }
+    } else {
+        null
+    }
+
     // Register shutdown hook
     monitor.subscribe(ApplicationStopping) {
         monitorAlertService.stop()
@@ -92,6 +103,7 @@ fun Application.configureBackgroundJobs() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
         llmIngestionWorker.stop()
+        pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
     }
 }

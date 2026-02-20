@@ -78,6 +78,26 @@ cd moneat-deploy
 docker-compose up -d
 ```
 
+### Telemetry
+
+Self-hosted Moneat deployments collect anonymous usage telemetry to help us understand how Moneat is deployed and which features are most valuable. This data is never tied to individual users — only to a randomly-generated deployment identifier.
+
+**What we collect:**
+- System info: CPU count, memory usage, OS, JVM version
+- Aggregate counts: projects, users, events, issues
+- Deployment config: whether SSL is enabled
+
+**What we don't collect:**
+- No user emails, names, or any personal data
+- No event contents, stack traces, or session replays
+- No API keys or secrets
+
+To opt out, set the following in your `.env`:
+
+```bash
+TELEMETRY_ENABLED=false
+```
+
 ### Development Setup
 
 <details>
