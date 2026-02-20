@@ -70,6 +70,7 @@ pnpm-debug.log*
 dist/
 dist-ssr/
 *.local
+**/.tanstack/tmp/**
 
 # Database
 *.db
