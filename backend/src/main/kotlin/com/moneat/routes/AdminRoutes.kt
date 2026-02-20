@@ -27,7 +27,6 @@ import com.moneat.services.AdminOrgUsagePoint
 import com.moneat.services.AdminService
 import com.moneat.services.AuthService
 import com.moneat.services.PricingTierService
-import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
 import io.ktor.server.application.call
@@ -43,11 +42,14 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import mu.KotlinLogging
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+
+private val logger = KotlinLogging.logger {}
 
 @Serializable
 private data class AdminUsersResponse(
@@ -78,9 +80,10 @@ fun Route.adminRoutes() {
             install(
                 createRouteScopedPlugin("AdminCheck") {
                     onCall { call ->
-                        val principal = call.principal<JWTPrincipal>()
+                        val principal = call.principal<JWTPrincipal>("auth-jwt")
                         if (principal == null) {
-                            call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                            logger.warn { "Admin access denied: no JWT principal for ${call.request.path()}" }
+                            call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Authentication required"))
                             return@onCall
                         }
                         val userId = principal.payload.getClaim("userId").asInt()
@@ -93,6 +96,7 @@ fun Route.adminRoutes() {
                                     ?.get(Users.is_admin) ?: false
                             }
                         if (!isAdmin) {
+                            logger.warn { "Admin access denied: user $userId is not admin (path=${call.request.path()})" }
                             call.respond(
                                 HttpStatusCode.Forbidden,
                                 com.moneat.models.ErrorResponse("Admin access required")
@@ -606,7 +610,7 @@ fun Route.adminRoutes() {
                         return@post
                     }
 
-                @kotlinx.serialization.Serializable
+                @Serializable
                 data class TestSmsCallRequest(val channel: String)
 
                 try {

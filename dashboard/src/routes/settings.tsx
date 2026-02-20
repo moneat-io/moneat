@@ -153,14 +153,6 @@ function SettingsPage() {
 
   useEffect(() => {
     if (search.checkout === 'success') {
-      if (typeof window.gtag === 'function') {
-        window.gtag('event', 'conversion', {
-          send_to: 'AW-17961775987/zpfQCPec6vobEPPm6_RC',
-          value: 1.0,
-          currency: 'USD',
-          transaction_id: '',
-        })
-      }
       navigate({ search: (prev) => ({ ...prev, checkout: undefined }), replace: true })
     }
   }, [search.checkout, navigate])

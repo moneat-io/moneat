@@ -23,7 +23,6 @@ import {ChatWidget} from '../components/ai-chat/ChatWidget'
 import {api} from '../lib/api'
 import {setDemoEpoch} from '../lib/demo'
 import {DemoBanner} from '../components/demo/DemoBanner'
-import {ConsentBanner} from '../components/ConsentBanner'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -229,7 +228,6 @@ function RootComponent() {
         <Outlet />
       </div>
       <Toaster />
-      <ConsentBanner />
       {showSidebar && user?.isAdmin && <ChatWidget />}
     </div>
   )

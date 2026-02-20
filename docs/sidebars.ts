@@ -60,6 +60,14 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Migration',
+      collapsed: false,
+      items: [
+        'migrate-from-highlight',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Account',
       collapsed: false,
       items: [
