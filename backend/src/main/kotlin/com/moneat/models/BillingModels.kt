@@ -65,7 +65,9 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val max_analytics_sites = integer("max_analytics_sites").nullable()
     val analytics_retention_days = integer("analytics_retention_days").default(1095)
     val monthly_analytics_pageview_limit = long("monthly_analytics_pageview_limit").default(0)
-    val analytics_pageview_overage_rate_cents_per_100k = integer("analytics_pageview_overage_rate_cents_per_100k").default(0)
+    val analytics_pageview_overage_rate_cents_per_100k = integer(
+        "analytics_pageview_overage_rate_cents_per_100k"
+    ).default(0)
     val stripe_base_price_id = varchar("stripe_base_price_id", 255).nullable()
     val stripe_overage_price_id = varchar("stripe_overage_price_id", 255).nullable()
     val stripe_yearly_base_price_id = varchar("stripe_yearly_base_price_id", 255).nullable()

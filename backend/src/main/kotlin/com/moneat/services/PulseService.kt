@@ -190,7 +190,7 @@ class PulseService(
                     val newId = UUID.randomUUID().toString()
                     exec(
                         "INSERT INTO deployment_settings (key, value) " +
-                               "VALUES ('deployment_id', '$newId') ON CONFLICT (key) DO NOTHING"
+                            "VALUES ('deployment_id', '$newId') ON CONFLICT (key) DO NOTHING"
                     )
                     newId
                 }
@@ -230,7 +230,9 @@ class PulseService(
                 } catch (_: Exception) {
                     null
                 }
-            } else null
+            } else {
+                null
+            }
 
             return PulseStatus(
                 enabled = enabled,

@@ -383,10 +383,14 @@ class PricingTierService {
             require(request.analyticsRetentionDays in 1..3650) { "Analytics retention days must be between 1 and 3650" }
         }
         if (request.monthlyAnalyticsPageviewLimit != null) {
-            require(request.monthlyAnalyticsPageviewLimit >= 0) { "Monthly analytics pageview limit must be non-negative" }
+            require(
+                request.monthlyAnalyticsPageviewLimit >= 0
+            ) { "Monthly analytics pageview limit must be non-negative" }
         }
         if (request.analyticsPageviewOverageRateCentsPer100k != null) {
-            require(request.analyticsPageviewOverageRateCentsPer100k >= 0) { "Analytics pageview overage rate cannot be negative" }
+            require(
+                request.analyticsPageviewOverageRateCentsPer100k >= 0
+            ) { "Analytics pageview overage rate cannot be negative" }
         }
     }
 
