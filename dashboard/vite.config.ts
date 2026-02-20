@@ -46,7 +46,7 @@ export default defineConfig({
   },
   server: {
     host: true,
-    allowedHosts: ['moneat-frontend.bandapella.com'],
+    allowedHosts: true,
     port: 3000,
     proxy: {
       '/v1': {

@@ -1,8 +1,14 @@
 #!/bin/bash
 set -e
 
-# DSN Configuration
-MONEAT_DSN="https://414ee8498b8b4765a4a346e9d6342e11@moneat-backend.bandapella.com/4"
+# DSN Configuration - set via environment variable or .env file
+MONEAT_DSN="${MONEAT_DSN:-}"
+
+if [ -z "$MONEAT_DSN" ]; then
+  echo "❌ MONEAT_DSN environment variable is not set."
+  echo "   Export it or add it to your .env file before running this script."
+  exit 1
+fi
 
 echo "📱 Building and running Android E2E app..."
 

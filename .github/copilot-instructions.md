@@ -56,21 +56,16 @@ Built templates are in `emails/build/templates/email/` with `{{ variable }}` pla
 ### Infrastructure
 
 **IMPORTANT:** 
-- **Database services** (PostgreSQL, ClickHouse, Redis) run on remote SSH host `ubuntu1` via Docker
-- **Backend** (Kotlin/Ktor) runs **locally** on port 8080 and connects to remote databases
+- **Database services** (PostgreSQL, ClickHouse, Redis) run via Docker (see `docker-compose.yml`)
+- **Backend** (Kotlin/Ktor) runs **locally** on port 8080 and connects to the database services
 - **Frontend** (React/Vite) runs **locally** on port 5173
 
-DO NOT start Docker services locally.
+Start infrastructure with `docker-compose up -d`, then run the backend and frontend locally.
 
-To access the remote database:
-```bash
-ssh ubuntu1 "docker exec -i moneat-postgres psql -U moneat -d moneat -c 'YOUR_QUERY'"
-```
-
-Backend connects to remote services at:
-- PostgreSQL: `ubuntu1:5499`
-- ClickHouse: `ubuntu1:8123` (HTTP), `ubuntu1:9000` (native)
-- Redis: `ubuntu1:6379`
+Backend connects to services at (configurable via `.env`):
+- PostgreSQL: `localhost:5499`
+- ClickHouse: `localhost:8123` (HTTP), `localhost:9000` (native)
+- Redis: `localhost:6379`
 
 ## Architecture Overview
 

@@ -672,7 +672,7 @@ class DashboardService {
             val validStatuses = setOf("unresolved", "resolved", "ignored")
             val statusFilter =
                 if (status != null && status in validStatuses) {
-                    "AND status = '${status.replace("'", "''")}'"
+                    "AND status = '${escapeSql(status)}'"
                 } else {
                     ""
                 }
@@ -751,7 +751,7 @@ class DashboardService {
     ): IssueDetailResponse? {
         val projectId = getProjectIdForIssue(issueId) ?: return null
         val retentionDays = getProjectRetentionDays(projectId)
-        val escapedIssueId = issueId.replace("'", "''")
+        val escapedIssueId = escapeSql(issueId)
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
 
         // Query events table directly and aggregate
@@ -912,7 +912,7 @@ class DashboardService {
     ): List<EventResponse> {
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
         val retentionDays = getProjectRetentionDays(projectId)
-        val escapedIssueId = issueId.replace("'", "''")
+        val escapedIssueId = escapeSql(issueId)
         val query =
             """
             SELECT 
@@ -994,7 +994,7 @@ class DashboardService {
     ): List<IssueTransactionResponse> {
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
         val retentionDays = getProjectRetentionDays(projectId)
-        val escapedIssueId = issueId.replace("'", "''")
+        val escapedIssueId = escapeSql(issueId)
         val query =
             """
             WITH (
@@ -2471,7 +2471,7 @@ class DashboardService {
 
         val envClause =
             if (environment != null && environment.isNotBlank()) {
-                "AND environment = '${environment.replace("'", "''")}'"
+                "AND environment = '${escapeSql(environment)}'"
             } else {
                 ""
             }
@@ -3450,7 +3450,7 @@ class DashboardService {
     ): List<ReplayListItem> {
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
         val retentionDays = getProjectRetentionDays(projectId)
-        val escapedIssueId = issueId.replace("'", "''")
+        val escapedIssueId = escapeSql(issueId)
 
         val eventIdsQuery =
             """
@@ -3482,7 +3482,7 @@ class DashboardService {
 
         if (eventIds.isEmpty()) return emptyList()
 
-        val eventIdList = eventIds.joinToString(",") { "'${it.replace("'", "''")}'" }
+        val eventIdList = eventIds.joinToString(",") { "'${escapeSql(it)}'" }
         val query =
             """
             SELECT
@@ -3570,7 +3570,7 @@ class DashboardService {
         val validStatuses = setOf("unresolved", "resolved", "archived")
         val statusFilter =
             if (status != null && status in validStatuses) {
-                "AND status = '${status.replace("'", "''")}'"
+                "AND status = '${escapeSql(status)}'"
             } else {
                 ""
             }
@@ -3730,7 +3730,7 @@ class DashboardService {
                 throw IllegalArgumentException("Invalid status value")
             }
             val normalizedFeedbackId = normalizeUuid(feedbackId) ?: throw IllegalArgumentException("Invalid feedback ID")
-            val escapedStatus = update.status.replace("'", "''")
+            val escapedStatus = escapeSql(update.status)
             val query =
                 """
                 ALTER TABLE $clickhouseDb.user_feedback
@@ -3756,8 +3756,8 @@ class DashboardService {
                 throw IllegalArgumentException("Invalid status value")
             }
 
-            val escapedIssueId = issueId.replace("'", "''")
-            val escapedStatus = update.status.replace("'", "''")
+            val escapedIssueId = escapeSql(issueId)
+            val escapedStatus = escapeSql(update.status)
 
             val query =
                 """
