@@ -93,7 +93,7 @@ function calcCost(tier: PricingCardTierInput, usage: Usage): PlanCost {
     const pvLimit = tier.monthlyAnalyticsPageviewLimit ?? 0
     const exceedsFreeLimits =
       (errorLimit > 0 && usage.errors > errorLimit) ||
-      usage.logGb > logLimitGb ||
+      (logLimitGb > 0 && usage.logGb > logLimitGb) ||
       (aiLimit > 0 && usage.aiEvents > aiLimit) ||
       (pvLimit > 0 && usage.pageViews > pvLimit)
     return {base: 0, overageLines: [], total: 0, exceedsFreeLimits}
@@ -322,10 +322,10 @@ function PlanCard({tier, cost, isBest}: PlanCardProps) {
 
 export function PricingCalculatorSection({standalone = false}: {standalone?: boolean}) {
   const [usage, setUsage] = useState<Usage>({
-    errors: 50_000,
-    logGb: 5,
-    aiEvents: 10_000,
-    pageViews: 500_000,
+    errors: 0,
+    logGb: 0,
+    aiEvents: 0,
+    pageViews: 0,
   })
 
   const {data: billingPlans, isPending} = useQuery({
