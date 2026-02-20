@@ -28,24 +28,26 @@ import com.moneat.services.AdminService
 import com.moneat.services.AuthService
 import com.moneat.services.PricingTierService
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.*
-import io.ktor.server.application.call
+import io.ktor.server.application.createRouteScopedPlugin
+import io.ktor.server.application.isHandled
+import io.ktor.server.auth.AuthenticationChecked
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.config.ApplicationConfig
-import io.ktor.server.request.*
-import io.ktor.server.response.*
+import io.ktor.server.request.path
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import mu.KotlinLogging
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
-import org.jetbrains.exposed.v1.core.*
+import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
@@ -77,14 +79,22 @@ fun Route.adminRoutes() {
 
     authenticate("auth-jwt") {
         route("/v1/admin") {
+            // Use on(AuthenticationChecked) which runs in the AfterAuthentication phase,
+            // guaranteeing the JWT principal is available after auth completes.
+            // Note: createRouteScopedPlugin's onCall runs at the Plugins phase (before auth),
+            // which is why the original code always saw a null principal.
             install(
                 createRouteScopedPlugin("AdminCheck") {
-                    onCall { call ->
-                        val principal = call.principal<JWTPrincipal>("auth-jwt")
+                    on(AuthenticationChecked) { call ->
+                        if (call.isHandled) return@on
+                        val principal = call.principal<JWTPrincipal>()
                         if (principal == null) {
                             logger.warn { "Admin access denied: no JWT principal for ${call.request.path()}" }
-                            call.respond(HttpStatusCode.Unauthorized, com.moneat.models.ErrorResponse("Authentication required"))
-                            return@onCall
+                            call.respond(
+                                HttpStatusCode.Unauthorized,
+                                com.moneat.models.ErrorResponse("Authentication required")
+                            )
+                            return@on
                         }
                         val userId = principal.payload.getClaim("userId").asInt()
                         val isAdmin =
