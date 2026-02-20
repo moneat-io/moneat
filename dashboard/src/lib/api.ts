@@ -3254,8 +3254,6 @@ class ApiClient {
         issueCount: number
         selfHost: boolean
         sslEnabled: boolean
-        backendUrl: string
-        frontendUrl: string
       } | null
     }>(`${API_BASE}/admin/telemetry`)
   }

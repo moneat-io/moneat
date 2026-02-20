@@ -32,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import mu.KotlinLogging
+import kotlin.time.Duration.Companion.hours
 
 private val logger = KotlinLogging.logger {}
 
@@ -85,7 +86,13 @@ fun Application.configureBackgroundJobs() {
 
     // Start telemetry pulse for self-hosted deployments (opt-out via TELEMETRY_ENABLED=false)
     val pulseService = if (PulseService.isEnabled()) {
-        PulseService().also {
+        val telemetryIntervalHours =
+            environment.config
+                .propertyOrNull("pulse.intervalHours")
+                ?.getString()
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 } ?: 4
+        PulseService(interval = telemetryIntervalHours.hours).also {
             logger.info { "Telemetry pulse enabled for self-hosted deployment" }
             it.start(jobScope)
         }

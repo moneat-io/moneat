@@ -229,7 +229,7 @@ class PricingTierService {
             val resolvedOncallPerUserMonthlyCents = request.oncallPerUserMonthlyCents ?: currentConfig?.oncallPerUserMonthlyCents ?: 0
             val resolvedOncallPerUserYearlyCents = request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
             val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
-            val resolvedMaxAnalyticsSites = request.maxAnalyticsSites ?: currentConfig?.maxAnalyticsSites
+            val resolvedMaxAnalyticsSites = request.maxAnalyticsSites
             val resolvedAnalyticsRetentionDays = request.analyticsRetentionDays ?: currentConfig?.analyticsRetentionDays ?: 1095
             val resolvedMonthlyAnalyticsPageviewLimit = request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
             val resolvedAnalyticsPageviewOverageRateCentsPer100k = request.analyticsPageviewOverageRateCentsPer100k ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0

@@ -118,9 +118,7 @@ class PulseService(
             issueCount = usageCounts.issueCount,
             // Deployment
             selfHost = true,
-            sslEnabled = detectSsl(),
-            backendUrl = EnvConfig.get("BACKEND_URL", ""),
-            frontendUrl = EnvConfig.get("FRONTEND_URL", "")
+            sslEnabled = detectSsl()
         )
     }
 
@@ -262,9 +260,7 @@ data class PulsePayload(
     val issueCount: Long = 0,
     // Deployment info
     val selfHost: Boolean = true,
-    val sslEnabled: Boolean = false,
-    val backendUrl: String = "",
-    val frontendUrl: String = ""
+    val sslEnabled: Boolean = false
 )
 
 private data class UsageCounts(
