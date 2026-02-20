@@ -35,10 +35,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {useToast} from '@/hooks/use-toast'
 import {AdminSkeleton, PlanBadge, SectionHeader} from '@/components/admin-components'
-import {buildPricingCardModel, type BillingInterval, type PricingCardTierInput} from '@/lib/pricing-display'
+import {type BillingInterval, buildPricingCardModel, type PricingCardTierInput} from '@/lib/pricing-display'
 import {AlertTriangle, Check, HelpCircle, Info} from 'lucide-react'
 
 export const Route = createFileRoute('/admin/billing')({
@@ -710,257 +711,226 @@ function AdminBillingPage() {
             </div>
 
             {/* Form fields */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              {/* Per-type limits */}
-              <div className="space-y-1.5">
-                <Label htmlFor="monthlyErrorLimit">
-                  Error Limit (Internal)
-                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
-                </Label>
-                <Input
-                  id="monthlyErrorLimit"
-                  type="number"
-                  min={0}
-                  max={100_000_000}
-                  value={createForm.monthlyErrorLimit}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, monthlyErrorLimit: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.monthlyErrorLimit && (
-                  <p className="text-xs text-destructive">{validationErrors.monthlyErrorLimit}</p>
-                )}
-              </div>
+            <Tabs defaultValue="limits" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
+                <TabsTrigger value="limits">Limits & Retention</TabsTrigger>
+                <TabsTrigger value="pricing">Pricing & Specs</TabsTrigger>
+                <TabsTrigger value="overage">Add-ons & Overage</TabsTrigger>
+                <TabsTrigger value="stripe">Stripe IDs</TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="monthlyTransactionLimit">
-                  Transaction Limit (Internal)
-                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
-                </Label>
-                <Input
-                  id="monthlyTransactionLimit"
-                  type="number"
-                  min={0}
-                  max={100_000_000}
-                  value={createForm.monthlyTransactionLimit}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, monthlyTransactionLimit: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.monthlyTransactionLimit && (
-                  <p className="text-xs text-destructive">{validationErrors.monthlyTransactionLimit}</p>
-                )}
-              </div>
+              <TabsContent value="limits" className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Errors */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="monthlyErrorLimit">
+                      Error Limit (Internal)
+                      <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
+                    </Label>
+                    <Input
+                      id="monthlyErrorLimit"
+                      type="number"
+                      min={0}
+                      max={100_000_000}
+                      value={createForm.monthlyErrorLimit}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, monthlyErrorLimit: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.monthlyErrorLimit && (
+                      <p className="text-xs text-destructive">{validationErrors.monthlyErrorLimit}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="retentionDays">
+                      Error Retention (days)
+                      <HelpTip text="How long error/event data is stored before automatic deletion." />
+                    </Label>
+                    <Input
+                      id="retentionDays"
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={createForm.retentionDays}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, retentionDays: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.retentionDays && (
+                      <p className="text-xs text-destructive">{validationErrors.retentionDays}</p>
+                    )}
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="monthlyReplayLimit">
-                  Replay Limit (Internal)
-                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
-                </Label>
-                <Input
-                  id="monthlyReplayLimit"
-                  type="number"
-                  min={-1}
-                  max={100_000_000}
-                  value={createForm.monthlyReplayLimit}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, monthlyReplayLimit: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.monthlyReplayLimit && (
-                  <p className="text-xs text-destructive">{validationErrors.monthlyReplayLimit}</p>
-                )}
-              </div>
+                  {/* Replays */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="monthlyReplayLimit">
+                      Replay Limit (Internal)
+                      <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
+                    </Label>
+                    <Input
+                      id="monthlyReplayLimit"
+                      type="number"
+                      min={-1}
+                      max={100_000_000}
+                      value={createForm.monthlyReplayLimit}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, monthlyReplayLimit: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.monthlyReplayLimit && (
+                      <p className="text-xs text-destructive">{validationErrors.monthlyReplayLimit}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="replayRetentionDays">Replay Retention (days)</Label>
+                    <Input
+                      id="replayRetentionDays"
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={createForm.replayRetentionDays}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, replayRetentionDays: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.replayRetentionDays && (
+                      <p className="text-xs text-destructive">{validationErrors.replayRetentionDays}</p>
+                    )}
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="monthlyFeedbackLimit">
-                  Feedback Limit (Internal)
-                  <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
-                </Label>
-                <Input
-                  id="monthlyFeedbackLimit"
-                  type="number"
-                  min={0}
-                  max={100_000_000}
-                  value={createForm.monthlyFeedbackLimit}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, monthlyFeedbackLimit: Number(e.target.value)}))
-                  }
-                />
-                <FieldHint>
-                  Total base limit:{' '}
-                  {(
-                    createForm.monthlyErrorLimit +
-                    createForm.monthlyTransactionLimit +
-                    createForm.monthlyReplayLimit +
-                    createForm.monthlyFeedbackLimit
-                  ).toLocaleString()}{' '}
-                  units/month
-                </FieldHint>
-                {validationErrors.monthlyFeedbackLimit && (
-                  <p className="text-xs text-destructive">{validationErrors.monthlyFeedbackLimit}</p>
-                )}
-              </div>
+                  {/* LLM */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="monthlyLlmEventLimit">
+                      LLM Event Limit
+                      <HelpTip text="Monthly limit for AI observability events (LLM generations). Customer-facing." />
+                    </Label>
+                    <Input
+                      id="monthlyLlmEventLimit"
+                      type="number"
+                      min={0}
+                      max={1_000_000_000}
+                      value={createForm.monthlyLlmEventLimit}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, monthlyLlmEventLimit: Number(e.target.value)}))
+                      }
+                    />
+                    <FieldHint>
+                      {createForm.monthlyLlmEventLimit.toLocaleString()} AI observability events/month
+                    </FieldHint>
+                    {validationErrors.monthlyLlmEventLimit && (
+                      <p className="text-xs text-destructive">{validationErrors.monthlyLlmEventLimit}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="llmRetentionDays">LLM Retention (days)</Label>
+                    <Input
+                      id="llmRetentionDays"
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={createForm.llmRetentionDays}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, llmRetentionDays: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.llmRetentionDays && (
+                      <p className="text-xs text-destructive">{validationErrors.llmRetentionDays}</p>
+                    )}
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="monthlyLlmEventLimit">
-                  LLM Event Limit
-                  <HelpTip text="Monthly limit for AI observability events (LLM generations). Customer-facing." />
-                </Label>
-                <Input
-                  id="monthlyLlmEventLimit"
-                  type="number"
-                  min={0}
-                  max={1_000_000_000}
-                  value={createForm.monthlyLlmEventLimit}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, monthlyLlmEventLimit: Number(e.target.value)}))
-                  }
-                />
-                <FieldHint>
-                  {createForm.monthlyLlmEventLimit.toLocaleString()} AI observability events/month
-                </FieldHint>
-                {validationErrors.monthlyLlmEventLimit && (
-                  <p className="text-xs text-destructive">{validationErrors.monthlyLlmEventLimit}</p>
-                )}
-              </div>
+                  {/* Logs / Data */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="monthlyGbLimitGb">
+                      Monthly Data Limit (GB)
+                      <HelpTip text="Customer-facing monthly GB quota used in pricing cards and quota enforcement." />
+                    </Label>
+                    <Input
+                      id="monthlyGbLimitGb"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={createForm.monthlyGbLimitGb}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, monthlyGbLimitGb: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.monthlyGbLimitGb && (
+                      <p className="text-xs text-destructive">{validationErrors.monthlyGbLimitGb}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="logRetentionDays">Log Retention (days)</Label>
+                    <Input
+                      id="logRetentionDays"
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={createForm.logRetentionDays}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, logRetentionDays: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.logRetentionDays && (
+                      <p className="text-xs text-destructive">{validationErrors.logRetentionDays}</p>
+                    )}
+                  </div>
 
-              {/* Per-Type Retention */}
-              <div className="space-y-1.5">
-                <Label htmlFor="retentionDays">
-                  Error Retention (days)
-                  <HelpTip text="How long error/event data is stored before automatic deletion." />
-                </Label>
-                <Input
-                  id="retentionDays"
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={createForm.retentionDays}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, retentionDays: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.retentionDays && (
-                  <p className="text-xs text-destructive">{validationErrors.retentionDays}</p>
-                )}
-              </div>
+                  {/* Other limits */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="monthlyTransactionLimit">
+                      Transaction Limit (Internal)
+                      <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
+                    </Label>
+                    <Input
+                      id="monthlyTransactionLimit"
+                      type="number"
+                      min={0}
+                      max={100_000_000}
+                      value={createForm.monthlyTransactionLimit}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, monthlyTransactionLimit: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.monthlyTransactionLimit && (
+                      <p className="text-xs text-destructive">{validationErrors.monthlyTransactionLimit}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="monthlyFeedbackLimit">
+                      Feedback Limit (Internal)
+                      <HelpTip text="Internal abuse limit. Not advertised. Set high for paid tiers." />
+                    </Label>
+                    <Input
+                      id="monthlyFeedbackLimit"
+                      type="number"
+                      min={0}
+                      max={100_000_000}
+                      value={createForm.monthlyFeedbackLimit}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, monthlyFeedbackLimit: Number(e.target.value)}))
+                      }
+                    />
+                    <FieldHint>
+                      Total base limit:{' '}
+                      {(
+                        createForm.monthlyErrorLimit +
+                        createForm.monthlyTransactionLimit +
+                        createForm.monthlyReplayLimit +
+                        createForm.monthlyFeedbackLimit
+                      ).toLocaleString()}{' '}
+                      units/month
+                    </FieldHint>
+                    {validationErrors.monthlyFeedbackLimit && (
+                      <p className="text-xs text-destructive">{validationErrors.monthlyFeedbackLimit}</p>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="logRetentionDays">Log Retention (days)</Label>
-                <Input
-                  id="logRetentionDays"
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={createForm.logRetentionDays}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, logRetentionDays: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.logRetentionDays && (
-                  <p className="text-xs text-destructive">{validationErrors.logRetentionDays}</p>
-                )}
-              </div>
+              <TabsContent value="pricing" className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
 
-              <div className="space-y-1.5">
-                <Label htmlFor="replayRetentionDays">Replay Retention (days)</Label>
-                <Input
-                  id="replayRetentionDays"
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={createForm.replayRetentionDays}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, replayRetentionDays: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.replayRetentionDays && (
-                  <p className="text-xs text-destructive">{validationErrors.replayRetentionDays}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="llmRetentionDays">LLM Retention (days)</Label>
-                <Input
-                  id="llmRetentionDays"
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={createForm.llmRetentionDays}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, llmRetentionDays: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.llmRetentionDays && (
-                  <p className="text-xs text-destructive">{validationErrors.llmRetentionDays}</p>
-                )}
-              </div>
-
-              {/* Max Projects */}
-              <div className="space-y-1.5">
-                <Label htmlFor="maxProjects">
-                  Max Projects
-                  <HelpTip text="Maximum number of projects an organization on this tier can create. Leave blank for unlimited." />
-                </Label>
-                <Input
-                  id="maxProjects"
-                  type="text"
-                  placeholder="Unlimited"
-                  value={createForm.maxProjects}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, '')
-                    setCreateForm((p) => ({...p, maxProjects: val}))
-                  }}
-                />
-                <FieldHint>{createForm.maxProjects ? `${createForm.maxProjects} projects` : 'Unlimited projects'}</FieldHint>
-              </div>
-
-              {/* Max Systems */}
-              <div className="space-y-1.5">
-                <Label htmlFor="maxSystems">
-                  Max Systems
-                  <HelpTip text="Maximum number of monitored systems (servers, containers, etc.) allowed on this tier." />
-                </Label>
-                <Input
-                  id="maxSystems"
-                  type="number"
-                  min={1}
-                  value={createForm.maxSystems}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, maxSystems: Number(e.target.value)}))
-                  }
-                />
-                {validationErrors.maxSystems && (
-                  <p className="text-xs text-destructive">{validationErrors.maxSystems}</p>
-                )}
-              </div>
-
-              {/* Monitor Interval */}
-              <div className="space-y-1.5">
-                <Label htmlFor="monitorIntervalSeconds">
-                  Monitor Interval
-                  <HelpTip text="How frequently systems are polled for monitoring data. Lower values = more frequent checks = more unit usage." />
-                </Label>
-                <Input
-                  id="monitorIntervalSeconds"
-                  type="number"
-                  min={5}
-                  max={3600}
-                  value={createForm.monitorIntervalSeconds}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({...p, monitorIntervalSeconds: Number(e.target.value)}))
-                  }
-                />
-                <FieldHint>
-                  Checks every {formatInterval(createForm.monitorIntervalSeconds)}
-                </FieldHint>
-                {validationErrors.monitorIntervalSeconds && (
-                  <p className="text-xs text-destructive">{validationErrors.monitorIntervalSeconds}</p>
-                )}
-              </div>
-
-              {/* Monthly Price */}
+              {/* Pricing */}
               <div className="space-y-1.5">
                 <Label htmlFor="monthlyPriceCents">
                   Monthly Price
@@ -987,8 +957,6 @@ function AdminBillingPage() {
                   <p className="text-xs text-destructive">{validationErrors.monthlyPriceCents}</p>
                 )}
               </div>
-
-              {/* Yearly Price */}
               <div className="space-y-1.5">
                 <Label htmlFor="yearlyPriceCents">
                   Yearly Price
@@ -1017,28 +985,66 @@ function AdminBillingPage() {
                 )}
               </div>
 
-              {/* Monthly Data Limit */}
+              {/* Specs */}
               <div className="space-y-1.5">
-                <Label htmlFor="monthlyGbLimitGb">
-                  Monthly Data Limit (GB)
-                  <HelpTip text="Customer-facing monthly GB quota used in pricing cards and quota enforcement." />
+                <Label htmlFor="maxProjects">
+                  Max Projects
+                  <HelpTip text="Maximum number of projects an organization on this tier can create. Leave blank for unlimited." />
                 </Label>
                 <Input
-                  id="monthlyGbLimitGb"
+                  id="maxProjects"
+                  type="text"
+                  placeholder="Unlimited"
+                  value={createForm.maxProjects}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '')
+                    setCreateForm((p) => ({...p, maxProjects: val}))
+                  }}
+                />
+                <FieldHint>{createForm.maxProjects ? `${createForm.maxProjects} projects` : 'Unlimited projects'}</FieldHint>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="maxSystems">
+                  Max Systems
+                  <HelpTip text="Maximum number of monitored systems (servers, containers, etc.) allowed on this tier." />
+                </Label>
+                <Input
+                  id="maxSystems"
                   type="number"
-                  min={0}
-                  step={1}
-                  value={createForm.monthlyGbLimitGb}
+                  min={1}
+                  value={createForm.maxSystems}
                   onChange={(e) =>
-                    setCreateForm((p) => ({...p, monthlyGbLimitGb: Number(e.target.value)}))
+                    setCreateForm((p) => ({...p, maxSystems: Number(e.target.value)}))
                   }
                 />
-                {validationErrors.monthlyGbLimitGb && (
-                  <p className="text-xs text-destructive">{validationErrors.monthlyGbLimitGb}</p>
+                {validationErrors.maxSystems && (
+                  <p className="text-xs text-destructive">{validationErrors.maxSystems}</p>
                 )}
               </div>
 
-              {/* Trial Days */}
+              {/* Intervals & Trials */}
+              <div className="space-y-1.5">
+                <Label htmlFor="monitorIntervalSeconds">
+                  Monitor Interval
+                  <HelpTip text="How frequently systems are polled for monitoring data. Lower values = more frequent checks = more unit usage." />
+                </Label>
+                <Input
+                  id="monitorIntervalSeconds"
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={createForm.monitorIntervalSeconds}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({...p, monitorIntervalSeconds: Number(e.target.value)}))
+                  }
+                />
+                <FieldHint>
+                  Checks every {formatInterval(createForm.monitorIntervalSeconds)}
+                </FieldHint>
+                {validationErrors.monitorIntervalSeconds && (
+                  <p className="text-xs text-destructive">{validationErrors.monitorIntervalSeconds}</p>
+                )}
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="trialDays">
                   Trial Days
@@ -1059,11 +1065,11 @@ function AdminBillingPage() {
                 )}
               </div>
             </div>
+            </TabsContent>
 
-            <Separator />
-
-            {/* PAYG Section */}
-            <div className="space-y-4">
+            <TabsContent value="overage" className="space-y-4">
+              {/* PAYG Section */}
+              <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <Switch
                   id="paygEnabled"
@@ -1104,8 +1110,6 @@ function AdminBillingPage() {
                 </div>
               )}
             </div>
-
-            <Separator />
 
             {/* Per-Type Overage Rates */}
             <div className="space-y-4">
@@ -1187,8 +1191,6 @@ function AdminBillingPage() {
               </div>
             </div>
 
-            <Separator />
-
             {/* On-Call Pricing */}
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -1242,89 +1244,92 @@ function AdminBillingPage() {
               )}
             </div>
 
-            <Separator />
+            </TabsContent>
 
-            {/* Stripe IDs */}
-            <div className="space-y-3">
-              <p className="text-sm font-medium flex items-center gap-1">
-                Stripe Configuration
-                <HelpTip text="These IDs link this tier to Stripe products and prices. Find them in your Stripe dashboard under Products > Prices." />
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="stripeBasePriceId">Stripe Base Price ID (Monthly)</Label>
-                  <Input
-                    id="stripeBasePriceId"
-                    placeholder="price_..."
-                    value={createForm.stripeBasePriceId}
-                    onChange={(e) =>
-                      setCreateForm((p) => ({...p, stripeBasePriceId: e.target.value}))
-                    }
-                  />
-                  <FieldHint>The Stripe Price ID for the base monthly subscription</FieldHint>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="stripeOveragePriceId">Stripe Overage Price ID (Monthly)</Label>
-                  <Input
-                    id="stripeOveragePriceId"
-                    placeholder="price_..."
-                    value={createForm.stripeOveragePriceId}
-                    onChange={(e) =>
-                      setCreateForm((p) => ({...p, stripeOveragePriceId: e.target.value}))
-                    }
-                  />
-                  <FieldHint>The Stripe Price ID for metered PAYG overage charges</FieldHint>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="stripeYearlyBasePriceId">Stripe Base Price ID (Yearly)</Label>
-                  <Input
-                    id="stripeYearlyBasePriceId"
-                    placeholder="price_..."
-                    value={createForm.stripeYearlyBasePriceId}
-                    onChange={(e) =>
-                      setCreateForm((p) => ({...p, stripeYearlyBasePriceId: e.target.value}))
-                    }
-                  />
-                  <FieldHint>The Stripe Price ID for the base yearly subscription</FieldHint>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="stripeYearlyOveragePriceId">Stripe Overage Price ID (Yearly)</Label>
-                  <Input
-                    id="stripeYearlyOveragePriceId"
-                    placeholder="price_..."
-                    value={createForm.stripeYearlyOveragePriceId}
-                    onChange={(e) =>
-                      setCreateForm((p) => ({...p, stripeYearlyOveragePriceId: e.target.value}))
-                    }
-                  />
-                  <FieldHint>The Stripe Price ID for yearly metered PAYG overage charges</FieldHint>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="stripeOncallPriceId">Stripe On-Call Price ID (Monthly)</Label>
-                  <Input
-                    id="stripeOncallPriceId"
-                    placeholder="price_..."
-                    value={createForm.stripeOncallPriceId}
-                    onChange={(e) =>
-                      setCreateForm((p) => ({...p, stripeOncallPriceId: e.target.value}))
-                    }
-                  />
-                  <FieldHint>The Stripe Price ID for monthly on-call seats</FieldHint>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="stripeOncallYearlyPriceId">Stripe On-Call Price ID (Yearly)</Label>
-                  <Input
-                    id="stripeOncallYearlyPriceId"
-                    placeholder="price_..."
-                    value={createForm.stripeOncallYearlyPriceId}
-                    onChange={(e) =>
-                      setCreateForm((p) => ({...p, stripeOncallYearlyPriceId: e.target.value}))
-                    }
-                  />
-                  <FieldHint>The Stripe Price ID for yearly on-call seats</FieldHint>
+            <TabsContent value="stripe" className="space-y-4">
+              {/* Stripe IDs */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium flex items-center gap-1">
+                  Stripe Configuration
+                  <HelpTip text="These IDs link this tier to Stripe products and prices. Find them in your Stripe dashboard under Products > Prices." />
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stripeBasePriceId">Stripe Base Price ID (Monthly)</Label>
+                    <Input
+                      id="stripeBasePriceId"
+                      placeholder="price_..."
+                      value={createForm.stripeBasePriceId}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, stripeBasePriceId: e.target.value}))
+                      }
+                    />
+                    <FieldHint>The Stripe Price ID for the base monthly subscription</FieldHint>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stripeOveragePriceId">Stripe Overage Price ID (Monthly)</Label>
+                    <Input
+                      id="stripeOveragePriceId"
+                      placeholder="price_..."
+                      value={createForm.stripeOveragePriceId}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, stripeOveragePriceId: e.target.value}))
+                      }
+                    />
+                    <FieldHint>The Stripe Price ID for metered PAYG overage charges</FieldHint>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stripeYearlyBasePriceId">Stripe Base Price ID (Yearly)</Label>
+                    <Input
+                      id="stripeYearlyBasePriceId"
+                      placeholder="price_..."
+                      value={createForm.stripeYearlyBasePriceId}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, stripeYearlyBasePriceId: e.target.value}))
+                      }
+                    />
+                    <FieldHint>The Stripe Price ID for the base yearly subscription</FieldHint>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stripeYearlyOveragePriceId">Stripe Overage Price ID (Yearly)</Label>
+                    <Input
+                      id="stripeYearlyOveragePriceId"
+                      placeholder="price_..."
+                      value={createForm.stripeYearlyOveragePriceId}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, stripeYearlyOveragePriceId: e.target.value}))
+                      }
+                    />
+                    <FieldHint>The Stripe Price ID for yearly metered PAYG overage charges</FieldHint>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stripeOncallPriceId">Stripe On-Call Price ID (Monthly)</Label>
+                    <Input
+                      id="stripeOncallPriceId"
+                      placeholder="price_..."
+                      value={createForm.stripeOncallPriceId}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, stripeOncallPriceId: e.target.value}))
+                      }
+                    />
+                    <FieldHint>The Stripe Price ID for monthly on-call seats</FieldHint>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stripeOncallYearlyPriceId">Stripe On-Call Price ID (Yearly)</Label>
+                    <Input
+                      id="stripeOncallYearlyPriceId"
+                      placeholder="price_..."
+                      value={createForm.stripeOncallYearlyPriceId}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, stripeOncallYearlyPriceId: e.target.value}))
+                      }
+                    />
+                    <FieldHint>The Stripe Price ID for yearly on-call seats</FieldHint>
+                  </div>
                 </div>
               </div>
-            </div>
+            </TabsContent>
+            </Tabs>
 
             <Separator />
 
