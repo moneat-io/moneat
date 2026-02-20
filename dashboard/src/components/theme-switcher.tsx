@@ -1,4 +1,4 @@
-import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset, Check } from 'lucide-react'
+import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset, Gamepad2, Check } from 'lucide-react'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -11,25 +11,16 @@ import { useEffect, useState } from 'react'
 type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset'
 
 export function ThemeSwitcher() {
-  const [theme, setTheme] = useState<Theme>('dark')
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as Theme | null
-    
-    if (savedTheme) {
-      setTheme(savedTheme)
-      applyTheme(savedTheme)
-    } else {
-      setTheme('dark')
-      applyTheme('dark')
-    }
-  }, [])
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('theme') as Theme | null
+    return saved || 'dark'
+  })
 
   const applyTheme = (newTheme: Theme) => {
     const root = window.document.documentElement
     
     // Remove all theme classes
-    root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset')
+    root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset', 'theme-gamer')
 
     if (newTheme === 'light') {
       // No class for light mode (default)
@@ -40,6 +31,10 @@ export function ThemeSwitcher() {
       root.classList.add('dark', `theme-${newTheme}`)
     }
   }
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
 
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme)
@@ -79,6 +74,11 @@ export function ThemeSwitcher() {
           <Sunset className="mr-2 h-4 w-4" />
           <span>Sunset</span>
           {theme === 'sunset' && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleThemeChange('gamer')}>
+          <Gamepad2 className="mr-2 h-4 w-4" />
+          <span>Gamer</span>
+          {theme === 'gamer' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

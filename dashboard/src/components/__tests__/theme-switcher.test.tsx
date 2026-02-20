@@ -11,6 +11,8 @@ vi.mock('lucide-react', () => ({
     CloudMoon: () => <div data-testid="cloud-moon-icon" />,
     Leaf: () => <div data-testid="leaf-icon" />,
     Sunset: () => <div data-testid="sunset-icon" />,
+    Gamepad2: () => <div data-testid="gamepad-icon" />,
+    Check: () => <div data-testid="check-icon" />,
 }))
 
 // Mock ResizeObserver which is used by Radix UI

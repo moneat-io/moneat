@@ -121,6 +121,53 @@
     --input: 20 30% 10%;
     --ring: 20 80% 60%;
   }
+
+  .theme-gamer {
+    --background: 240 20% 4%;
+    --foreground: 180 100% 95%;
+    --card: 240 20% 6%;
+    --card-foreground: 180 100% 95%;
+    --popover: 240 20% 6%;
+    --popover-foreground: 180 100% 95%;
+    --primary: 180 100% 50%;
+    --primary-foreground: 240 20% 4%;
+    --secondary: 240 30% 12%;
+    --secondary-foreground: 180 100% 95%;
+    --muted: 240 30% 12%;
+    --muted-foreground: 240 10% 55%;
+    --accent: 300 100% 60%;
+    --accent-foreground: 240 20% 4%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 30% 15%;
+    --input: 240 30% 15%;
+    --ring: 180 100% 50%;
+    --chart-1: 160 100% 50%;
+    --chart-2: 300 100% 60%;
+    --chart-3: 180 100% 50%;
+    --chart-4: 50 100% 55%;
+    --chart-5: 30 100% 55%;
+  }
+}
+
+/* Gamer theme neon glow effects */
+.theme-gamer *:focus-visible {
+  box-shadow: 0 0 8px hsl(var(--ring) / 0.5);
+}
+
+.theme-gamer .border,
+.theme-gamer [class*="border-"] {
+  box-shadow: 0 0 4px hsl(var(--primary) / 0.1);
+}
+
+/* Gamer theme retro font for headings */
+.theme-gamer h1,
+.theme-gamer h2,
+.theme-gamer h3,
+.theme-gamer h4,
+.theme-gamer h5,
+.theme-gamer h6 {
+  font-family: 'VT323', monospace;
 }
 
 @layer base {
