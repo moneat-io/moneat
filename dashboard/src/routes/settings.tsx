@@ -14,21 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { type FormEvent, Fragment, useEffect, useMemo, useState } from 'react'
-import { createFileRoute, redirect, useSearch, Link, useNavigate } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { loadStripe } from '@stripe/stripe-js'
-import { Elements, useElements, useStripe, PaymentElement } from '@stripe/react-stripe-js'
-import { api, type AuthToken, type AlertSource, type AlertNotificationPreference } from '@/lib/api'
-import { buildPricingCardModel } from '@/lib/pricing-display'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
+import {type FormEvent, Fragment, useEffect, useMemo, useState} from 'react'
+import {createFileRoute, Link, redirect, useNavigate, useSearch} from '@tanstack/react-router'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {loadStripe} from '@stripe/stripe-js'
+import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
+import {type AlertNotificationPreference, type AlertSource, api, type AuthToken} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
+import {buildPricingCardModel} from '@/lib/pricing-display'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Label} from '@/components/ui/label'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {Badge} from '@/components/ui/badge'
+import {Checkbox} from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -37,48 +38,48 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { useToast } from '@/hooks/use-toast'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
+import {Switch} from '@/components/ui/switch'
+import {useToast} from '@/hooks/use-toast'
 import {
+  Activity,
+  AlertCircle,
   AlertTriangle,
   Bell,
   BellOff,
+  Brain,
+  Calendar,
+  Check,
   CheckCircle2,
+  Clock,
   Copy,
   CreditCard,
+  Database,
+  Download,
+  FileText,
+  Info,
   Key,
+  Layers,
   Loader2,
   Minus,
+  Phone,
+  Plug,
   Plus,
+  Receipt,
+  Server,
+  Settings,
+  Shield,
+  SlidersHorizontal,
   Trash2,
   TrendingUp,
-  Zap,
-  Activity,
-  FileText,
-  AlertCircle,
-  Download,
-  Receipt,
-  Check,
-  Clock,
-  Layers,
-  Plug,
-  Shield,
-  Phone,
-  Settings,
-  Server,
-  Info,
   Users,
-  Calendar,
-  SlidersHorizontal,
-  Brain,
-  Database,
+  Zap,
 } from 'lucide-react'
-import { SsoTab } from '@/components/sso-settings'
-import { TeamSettings } from '@/components/settings/team-settings'
-import { useAuth } from '@/hooks/useAuth'
-import { useIsSelfHosted } from '@/hooks/useEnterpriseFeatures'
-import { CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys } from '@/lib/sidebar-config'
+import {SsoTab} from '@/components/sso-settings'
+import {TeamSettings} from '@/components/settings/team-settings'
+import {useAuth} from '@/hooks/useAuth'
+import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
+import {CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys} from '@/lib/sidebar-config'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -1051,6 +1052,7 @@ function BillingTab() {
         cancelUrl: `${window.location.origin}/settings?tab=billing`,
       }),
     onSuccess: (session) => {
+      trackEvent('Subscription Upgrade')
       if (session.url) {
         window.location.href = session.url
       }
@@ -1082,6 +1084,7 @@ function BillingTab() {
   const cancelSubscriptionMutation = useMutation({
     mutationFn: () => api.cancelBillingSubscription(),
     onSuccess: () => {
+      trackEvent('Subscription Cancel')
       setShowCancelDialog(false)
       queryClient.invalidateQueries({ queryKey: ['billingUsage'] })
       queryClient.invalidateQueries({ queryKey: ['billingInvoices'] })
@@ -1760,6 +1763,7 @@ function IntegrationsTab() {
   const oauthMutation = useMutation({
     mutationFn: () => api.startSlackOAuth(),
     onSuccess: (data) => {
+      trackEvent('Integration Connect', { provider: 'slack' })
       window.location.href = data.authUrl
     },
     onError: (err: Error) => {
@@ -1840,6 +1844,7 @@ function IntegrationsTab() {
   const discordOauthMutation = useMutation({
     mutationFn: () => api.startDiscordOAuth(),
     onSuccess: (data) => {
+      trackEvent('Integration Connect', { provider: 'discord' })
       window.location.href = data.authUrl
     },
     onError: (err: Error) => {

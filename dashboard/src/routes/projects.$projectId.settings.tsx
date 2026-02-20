@@ -17,8 +17,22 @@
 import {useEffect, useMemo, useState} from 'react'
 import {createFileRoute, Link, redirect, useNavigate, useRouter} from '@tanstack/react-router'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
-import {AlertTriangle, ArrowLeft, Loader2, Save, Trash2, Layers, Smartphone, Monitor, Server, Gamepad2, Copy, Check} from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  Copy,
+  Gamepad2,
+  Layers,
+  Loader2,
+  Monitor,
+  Save,
+  Server,
+  Smartphone,
+  Trash2
+} from 'lucide-react'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
 import {useProject} from '@/contexts/project-context'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
 import {Badge} from '@/components/ui/badge'
@@ -117,6 +131,7 @@ project=${project.slug}` : null
   const updateProjectMutation = useMutation({
     mutationFn: (updates: { name?: string; framework?: string }) => api.updateProject(project.id, updates),
     onSuccess: async () => {
+      trackEvent('Project Update')
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
       await queryClient.invalidateQueries({ queryKey: ['project', project.id] })
       await router.invalidate()
@@ -137,6 +152,7 @@ project=${project.slug}` : null
   const deleteProjectMutation = useMutation({
     mutationFn: () => api.deleteProject(project.id),
     onSuccess: async () => {
+      trackEvent('Project Delete')
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
       if (selectedProjectId === project.id) {
         setSelectedProjectId(null)

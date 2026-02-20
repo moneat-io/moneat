@@ -86,6 +86,27 @@ function onNavigation(callback: () => void): void {
   window.addEventListener('popstate', callback)
 }
 
+// --- UTM capture ---
+
+function captureUtmParams(): void {
+  const params = new URLSearchParams(window.location.search)
+  const utmSource = params.get('utm_source')
+  const utmMedium = params.get('utm_medium')
+  const utmCampaign = params.get('utm_campaign')
+  const utmContent = params.get('utm_content')
+  const utmTerm = params.get('utm_term')
+
+  if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm) {
+    localStorage.setItem('utm_params', JSON.stringify({
+      utmSource: utmSource || undefined,
+      utmMedium: utmMedium || undefined,
+      utmCampaign: utmCampaign || undefined,
+      utmContent: utmContent || undefined,
+      utmTerm: utmTerm || undefined,
+    }))
+  }
+}
+
 // --- public API ---
 
 function trackPageview(): void {
@@ -107,6 +128,9 @@ export function trackEvent(name: string, props?: Record<string, string>): void {
  */
 export function initAnalytics(cfg: AnalyticsConfig): void {
   config = cfg
+
+  // Capture UTM params on any page entry
+  captureUtmParams()
 
   if ((document.visibilityState as string) === 'prerender') {
     document.addEventListener(

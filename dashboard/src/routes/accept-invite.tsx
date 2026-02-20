@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
-import { api } from '../lib/api'
-import { useAuth } from '../hooks/useAuth'
-import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Alert, AlertDescription } from '../components/ui/alert'
-import { Check, Loader2, AlertCircle, Users } from 'lucide-react'
+import {createFileRoute, useNavigate} from '@tanstack/react-router'
+import {useEffect, useState} from 'react'
+import {api} from '../lib/api'
+import {trackEvent} from '../lib/analytics'
+import {useAuth} from '../hooks/useAuth'
+import {Button} from '../components/ui/button'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '../components/ui/card'
+import {Alert, AlertDescription} from '../components/ui/alert'
+import {AlertCircle, Check, Loader2, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/accept-invite')({
   component: AcceptInvitePage,
@@ -71,6 +72,7 @@ function AcceptInvitePage() {
 
     try {
       await api.acceptInvitation(token)
+      trackEvent('Invite Accept', { role: inviteDetails?.role || 'unknown' })
       setSuccess(true)
       
       // Redirect to dashboard after a short delay

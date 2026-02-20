@@ -17,6 +17,7 @@
 import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
 import {useState} from 'react'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
 import {Logo} from '@/components/logo'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -92,6 +93,7 @@ function LoginPage() {
 
     try {
       const { token } = await api.login(email, password)
+      trackEvent('Login', { method: 'email' })
       if (inviteToken) {
         navigate({ to: '/accept-invite', search: { token: inviteToken } })
       } else if (redirectUri) {

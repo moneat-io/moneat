@@ -18,6 +18,7 @@ import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
 import {formatRelativeTime} from '@/lib/utils'
 import {useToast} from '@/hooks/use-toast'
 import {Badge} from '@/components/ui/badge'
@@ -29,28 +30,28 @@ import {SpanWaterfall} from '@/components/span-waterfall'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {EmbeddedLogs} from '@/components/logs/EmbeddedLogs'
 import {
-    Activity,
-    AlertCircle,
-    ArrowUpRight,
-    Battery,
-    CheckCircle2,
-    ChevronLeft,
-    ChevronRight,
-    Circle,
-    Clock3,
-    Copy,
-    DatabaseZap,
-    Globe,
-    Info,
-    Layers,
-    MessageSquare,
-    MousePointer,
-    Navigation,
-    Play,
-    Smartphone,
-    Tag,
-    TerminalSquare,
-    Zap,
+  Activity,
+  AlertCircle,
+  ArrowUpRight,
+  Battery,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  Clock3,
+  Copy,
+  DatabaseZap,
+  Globe,
+  Info,
+  Layers,
+  MessageSquare,
+  MousePointer,
+  Navigation,
+  Play,
+  Smartphone,
+  Tag,
+  TerminalSquare,
+  Zap,
 } from 'lucide-react'
 
 interface StackFrame {
@@ -162,6 +163,7 @@ function IssueDetailPage() {
   const resolveMutation = useMutation({
     mutationFn: (status: string) => api.updateIssue(issueId, { status }),
     onSuccess: (_, status) => {
+      trackEvent('Issue Resolve', { source: 'detail', status })
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
       toast({
         variant: 'success',

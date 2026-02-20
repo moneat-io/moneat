@@ -14,49 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type OrgMember } from '../../lib/api'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog'
-import {
-  Alert,
-  AlertDescription,
-} from '../ui/alert'
-import { Badge } from '../ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
-import { Textarea } from '../ui/textarea'
-import { Users, Mail, MoreVertical, Trash2, RefreshCw, UserMinus, Loader2, UserPlus, Upload } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu'
+import {useState} from 'react'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {api, type OrgMember} from '@/lib/api.ts'
+import {trackEvent} from '@/lib/analytics.ts'
+import {Button} from '../ui/button'
+import {Input} from '../ui/input'
+import {Label} from '../ui/label'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '../ui/select'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '../ui/table'
+import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,} from '../ui/dialog'
+import {Alert, AlertDescription,} from '../ui/alert'
+import {Badge} from '../ui/badge'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '../ui/card'
+import {Textarea} from '../ui/textarea'
+import {Loader2, Mail, MoreVertical, RefreshCw, Trash2, Upload, UserMinus, UserPlus, Users} from 'lucide-react'
+import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,} from '../ui/dropdown-menu'
 
 export function TeamSettings() {
   const queryClient = useQueryClient()
@@ -78,6 +51,7 @@ export function TeamSettings() {
     mutationFn: ({ email, role }: { email: string; role: string }) => 
       api.inviteMember(email, role),
     onSuccess: () => {
+      trackEvent('Invite Member', { method: 'single' })
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
       setInviteEmail('')
       setInviteRole('member')
@@ -88,6 +62,7 @@ export function TeamSettings() {
     mutationFn: ({ emails, role }: { emails: string[]; role: string }) => 
       api.bulkInviteMembers(emails, role),
     onSuccess: () => {
+      trackEvent('Invite Member', { method: 'bulk' })
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
       setBulkEmails('')
       setShowBulkInvite(false)
@@ -235,7 +210,7 @@ export function TeamSettings() {
           {inviteMutation.isError && (
             <Alert variant="destructive">
               <AlertDescription>
-                {inviteMutation.error instanceof Error ? inviteMutation.error.message : 'Failed to send invitation'}
+                {inviteMutation.error.message}
               </AlertDescription>
             </Alert>
           )}

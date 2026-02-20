@@ -14,6 +14,24 @@ const config: Config = {
   url: 'https://moneat.io',
   baseUrl: '/docs/',
 
+  // Inject Moneat analytics script tag only when env vars are configured.
+  // Self-hosters can omit these to disable analytics on the docs site.
+  ...(process.env.MONEAT_ANALYTICS_KEY && process.env.MONEAT_ANALYTICS_HOST
+    ? {
+        headTags: [
+          {
+            tagName: 'script',
+            attributes: {
+              defer: 'true',
+              'data-domain': process.env.MONEAT_ANALYTICS_DOMAIN || 'moneat.io',
+              'data-key': process.env.MONEAT_ANALYTICS_KEY,
+              src: `${process.env.MONEAT_ANALYTICS_HOST}/js/m.js`,
+            },
+          },
+        ],
+      }
+    : {}),
+
   organizationName: 'moneat',
   projectName: 'moneat',
 

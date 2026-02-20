@@ -23,7 +23,7 @@ import {ProjectProvider} from './contexts/project-context'
 import {TooltipProvider} from './components/ui/tooltip'
 import {HelmetProvider} from 'react-helmet-async'
 import * as Sentry from '@sentry/react'
-import { initAnalytics } from './lib/analytics'
+import {initAnalytics} from './lib/analytics'
 import './index.css'
 
 // Initialize Sentry (error monitoring)
@@ -47,6 +47,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 }
 
 // Initialize Moneat product analytics (pageviews + custom events)
+// Only enabled when VITE_ANALYTICS_KEY is set (self-hosters can omit it)
 if (import.meta.env.VITE_ANALYTICS_KEY) {
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
   initAnalytics({
