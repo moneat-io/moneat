@@ -41,6 +41,13 @@ object EscalationPolicies : IntIdTable("escalation_policies") {
     val updatedAt = timestamp("updated_at")
 }
 
+object EscalationPolicyAlertSources : IntIdTable("escalation_policy_alert_sources") {
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val alertSource = varchar("alert_source", 50)
+    val escalationPolicyId = integer("escalation_policy_id").references(EscalationPolicies.id, onDelete = ReferenceOption.CASCADE)
+    val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
+}
+
 object SlackUserMappings : IntIdTable("slack_user_mappings") {
     val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE).uniqueIndex()
     val slackUserId = varchar("slack_user_id", 100)
