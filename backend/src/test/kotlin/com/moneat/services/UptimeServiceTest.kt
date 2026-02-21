@@ -43,17 +43,17 @@ class UptimeServiceTest {
     private val service = UptimeService()
 
     companion object {
-        private var dbInitialized = false
+        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
     }
 
     @BeforeTest
     fun setupDatabase() {
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_uptime_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
+            transaction(db!!) {
                 SchemaUtils.create(
                     Organizations,
                     Users,
@@ -92,9 +92,9 @@ class UptimeServiceTest {
                     """.trimIndent()
                 )
             }
-            dbInitialized = true
         }
 
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
         transaction {
             UptimeMonitors.deleteAll()
             Subscriptions.deleteAll()

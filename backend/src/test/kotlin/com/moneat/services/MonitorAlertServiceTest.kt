@@ -37,28 +37,28 @@ class MonitorAlertServiceTest {
     private val service = MonitorAlertService()
 
     companion object {
-        private var dbInitialized = false
+        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
     }
 
     @BeforeTest
     fun setupDatabase() {
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url =
                 "jdbc:h2:mem:moneat_monitor_alert_service;MODE=PostgreSQL;" +
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
+            transaction(db!!) {
                 SchemaUtils.create(
                     Organizations,
                     Users,
                     AlertSilencePeriods
                 )
             }
-            dbInitialized = true
         }
 
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
         transaction {
             AlertSilencePeriods.deleteAll()
             Users.deleteAll()
