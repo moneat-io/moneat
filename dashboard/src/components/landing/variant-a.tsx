@@ -123,7 +123,7 @@ const primaryFeatures: Feature[] = [
     icon: FileText,
     title: 'Log management',
     description:
-      'Structured JSON logs with live tail, full-text search, and powerful filtering. Unified with your errors and traces for faster root-cause analysis.',
+      'Structured JSON logs with auto-refresh, full-text search, and powerful filtering. Unified with your errors and traces for faster root-cause analysis.',
     gradient: 'from-blue-500 to-indigo-400',
     iconBg: 'bg-blue-500/10',
     iconColor: 'text-blue-400',
