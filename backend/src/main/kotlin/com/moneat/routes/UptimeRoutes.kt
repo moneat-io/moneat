@@ -62,9 +62,9 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
 /**
  * Uptime monitoring routes.
  */
-fun Route.uptimeRoutes() {
-    val uptimeService = UptimeService()
-
+fun Route.uptimeRoutes(
+    uptimeService: UptimeService = UptimeService(),
+) {
     route("/v1/uptime") {
         /**
          * Push monitor heartbeat endpoint (no auth required).

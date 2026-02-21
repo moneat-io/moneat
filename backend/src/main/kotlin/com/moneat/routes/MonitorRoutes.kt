@@ -108,11 +108,12 @@ private fun resolveProjectForOrganization(
     }
 }
 
-fun Route.monitorRoutes() {
-    val monitorService = MonitorService()
+fun Route.monitorRoutes(
+    monitorService: MonitorService = MonitorService(),
+    logService: LogService = LogService(),
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     val usageTracking = UsageTrackingService.instance
-    val quotaService = BillingQuotaService()
-    val logService = LogService()
 
     route("/v1/monitor") {
         /**

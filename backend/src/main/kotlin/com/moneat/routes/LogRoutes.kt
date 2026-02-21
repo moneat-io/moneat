@@ -57,11 +57,12 @@ import java.util.concurrent.TimeUnit
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
-fun Route.logRoutes() {
+fun Route.logRoutes(
+    logService: LogService = LogService(),
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     val eventService = EventService()
-    val quotaService = BillingQuotaService()
     val dashboardService = DashboardService()
-    val logService = LogService()
 
     route("/v1") {
         post("/logs/otlp") {

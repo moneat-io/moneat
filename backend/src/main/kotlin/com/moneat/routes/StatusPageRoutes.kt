@@ -67,9 +67,9 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
 /**
  * Status page routes - both authenticated management and public endpoints.
  */
-fun Route.statusPageRoutes() {
-    val statusPageService = StatusPageService()
-
+fun Route.statusPageRoutes(
+    statusPageService: StatusPageService = StatusPageService(),
+) {
     // ==================== Authenticated Management Endpoints ====================
 
     route("/v1/status-pages") {

@@ -16,6 +16,7 @@
 
 package com.moneat.models
 
+import kotlin.time.Clock
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
@@ -53,7 +54,7 @@ object StatusPageMonitors : Table("status_page_monitors") {
     val monitorId = javaUUID("monitor_id").references(UptimeMonitors.id)
     val displayName = varchar("display_name", 255).nullable()
     val sortOrder = integer("sort_order").default(0)
-    val createdAt = timestamp("created_at")
+    val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
 
     override val primaryKey = PrimaryKey(id)
 }

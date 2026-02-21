@@ -34,20 +34,19 @@ import kotlin.test.assertTrue
 
 class DashboardServiceTest {
     companion object {
-        private var dbInitialized = false
+        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
     }
 
     @BeforeTest
     fun setupDatabase() {
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_dashboard_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
+            transaction(db!!) {
                 SchemaUtils.create(Projects)
             }
-            dbInitialized = true
         }
     }
 
@@ -72,6 +71,7 @@ class DashboardServiceTest {
             }.use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
                 val service = DashboardService()
                 val issues = service.getIssues(projectId = -1, page = 3, limit = 10, status = "resolved")

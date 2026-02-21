@@ -136,6 +136,7 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.h2)
+    testImplementation(libs.mockk)
 
     // Integration testing dependencies
     val integrationTestImplementation by configurations

@@ -48,6 +48,22 @@ data class DeleteOrganizationRequest(
     val confirmation: String
 )
 
+@Serializable
+data class OrgDetailsResponse(val id: Int, val name: String, val role: String)
+
+@Serializable
+data class UserDeletionValidationResponse(
+    val canDelete: Boolean,
+    val error: String? = null,
+    val organizationsAsLastOwner: List<String> = emptyList()
+)
+
+@Serializable
+data class OrgDeletionValidationResponse(val canDelete: Boolean, val error: String? = null)
+
+@Serializable
+data class CannotDeleteUserResponse(val error: String?, val organizations: List<String>)
+
 fun Route.accountDeletionRoutes() {
     val deletionService = AccountDeletionService()
 
@@ -80,10 +96,10 @@ fun Route.accountDeletionRoutes() {
         }
 
         call.respond(
-            mapOf(
-                "id" to orgId,
-                "name" to orgWithRole[Organizations.name],
-                "role" to orgWithRole[Memberships.role]
+            OrgDetailsResponse(
+                id = orgId,
+                name = orgWithRole[Organizations.name],
+                role = orgWithRole[Memberships.role]
             )
         )
     }
@@ -131,9 +147,9 @@ fun Route.accountDeletionRoutes() {
         if (!validation.canDelete) {
             call.respond(
                 HttpStatusCode.BadRequest,
-                mapOf(
-                    "error" to validation.errorMessage,
-                    "organizations" to validation.organizationsAsLastOwner
+                CannotDeleteUserResponse(
+                    error = validation.errorMessage,
+                    organizations = validation.organizationsAsLastOwner
                 )
             )
             return@delete
@@ -243,10 +259,10 @@ fun Route.accountDeletionRoutes() {
 
         val validation = deletionService.validateUserDeletion(userId)
         call.respond(
-            mapOf(
-                "canDelete" to validation.canDelete,
-                "error" to validation.errorMessage,
-                "organizationsAsLastOwner" to validation.organizationsAsLastOwner
+            UserDeletionValidationResponse(
+                canDelete = validation.canDelete,
+                error = validation.errorMessage,
+                organizationsAsLastOwner = validation.organizationsAsLastOwner
             )
         )
     }
@@ -264,9 +280,9 @@ fun Route.accountDeletionRoutes() {
 
         val validation = deletionService.validateOrganizationDeletion(orgId, userId)
         call.respond(
-            mapOf(
-                "canDelete" to validation.canDelete,
-                "error" to validation.errorMessage
+            OrgDeletionValidationResponse(
+                canDelete = validation.canDelete,
+                error = validation.errorMessage
             )
         )
     }
