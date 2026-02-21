@@ -21,7 +21,7 @@ import {type FacetFilter, LEVEL_OPTIONS, LogSearchBar, TIME_PRESETS} from '@/com
 import {TagFacets} from '@/components/logs/TagFacets'
 import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
-import {LiveTailToggle} from '@/components/logs/LiveTailToggle'
+import {AutoRefreshToggle, type RefreshInterval} from '@/components/logs/AutoRefreshToggle'
 import {LogSetupGuide} from '@/components/logs/LogSetupGuide'
 import {LogVizTabs, type LogVizMode} from '@/components/logs/LogVizTabs'
 import {LogHistogram} from '@/components/logs/LogHistogram'
@@ -29,9 +29,7 @@ import {LogTopList} from '@/components/logs/LogTopList'
 import {LogPieChart} from '@/components/logs/LogPieChart'
 import {LogAggregateTable} from '@/components/logs/LogAggregateTable'
 import {Button} from '@/components/ui/button'
-import {Badge} from '@/components/ui/badge'
 import {cn} from '@/lib/utils'
-import {stripAnsi} from '@/lib/ansi'
 import {ChevronDown, ChevronLeft, Download, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
 import {useQuery} from '@tanstack/react-query'
 import {
@@ -50,7 +48,7 @@ interface LogExplorerProps {
   dsn?: string
   sdkVersions?: Record<string, string>
   className?: string
-  enableLiveTail?: boolean
+  enableAutoRefresh?: boolean
   enableFacets?: boolean
   defaultTimeRange?: string
   initialScrollToBottom?: boolean
@@ -87,17 +85,6 @@ function computeTimeRange(
   return {}
 }
 
-function formatLiveTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const base = date.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-  const ms = String(date.getMilliseconds()).padStart(3, '0')
-  return `${base}.${ms}`
-}
 
 function formatLogCount(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`
@@ -136,7 +123,7 @@ export function LogExplorer({
   dsn,
   sdkVersions,
   className,
-  enableLiveTail = true,
+  enableAutoRefresh = true,
   enableFacets = true,
   defaultTimeRange = '7d',
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -215,16 +202,8 @@ export function LogExplorer({
   const [groupBy, setGroupBy] = useState<string>(initialState.groupBy)
   const [topField, setTopField] = useState<string>(initialState.topField)
 
-  // Live tail state
-  const [liveTailEnabled, setLiveTailEnabled] = useState(false)
-  const [tailPaused, setTailPaused] = useState(false)
-  const [tailBufferedCount, setTailBufferedCount] = useState(0)
-  const [tailStatus, setTailStatus] = useState<'connecting' | 'open' | 'closed'>('closed')
-  const [tailLogs, setTailLogs] = useState<LogEntry[]>([])
-
-  const bufferedTailLogsRef = useRef<LogEntry[]>([])
-  const pausedRef = useRef(false)
-  const tailScrollRef = useRef<HTMLDivElement>(null)
+  // Auto-refresh state
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<RefreshInterval>(null)
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isHydratingRef = useRef(false)
   
@@ -347,9 +326,6 @@ export function LogExplorer({
   const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
   const levelsKey = hasCustomLevelFilter ? levels.join(',') : '__all__'
 
-  useEffect(() => {
-    pausedRef.current = tailPaused
-  }, [tailPaused])
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -422,11 +398,12 @@ export function LogExplorer({
       throw new Error('Either projectId or systemId must be provided')
     },
     enabled: Boolean(projectId || systemId),
+    refetchInterval: autoRefreshInterval || false,
   })
 
-  // Accumulate logs when new page loads (not in live tail)
+  // Accumulate logs when new page loads
   useEffect(() => {
-    if (!logPage?.logs || liveTailEnabled) return
+    if (!logPage?.logs) return
     
     startTransition(() => {
       // If cursor is null, this is the first page (or reset), so replace
@@ -438,9 +415,9 @@ export function LogExplorer({
       }
       setIsLoadingMore(false)
     })
-  }, [logPage, cursor, liveTailEnabled])
+  }, [logPage, cursor])
   
-  const logs = !liveTailEnabled ? accumulatedLogs : (logPage?.logs ?? [])
+  const logs = accumulatedLogs
   const totalCount = logPage?.totalCount ?? null
 
   // Aggregate query for histogram - always enabled to show above all modes
@@ -568,54 +545,6 @@ export function LogExplorer({
     setDetailOpen(false)
   }, [])
 
-  // Live tail
-  useEffect(() => {
-    if (!liveTailEnabled || !enableLiveTail || !projectId) return
-
-    startTransition(() => setTailStatus('connecting'))
-    const source = api.createProjectLogTailStream(projectId, {
-      query: query || undefined,
-      levels: hasCustomLevelFilter ? levels : undefined,
-      service: derivedFilters.service,
-      environment: derivedFilters.environment,
-    })
-
-    source.onopen = () => {
-      setTailStatus('open')
-    }
-
-    source.onerror = () => {
-      setTailStatus('closed')
-    }
-
-    source.onmessage = (event) => {
-      try {
-        const next = JSON.parse(event.data) as LogEntry
-
-        if (pausedRef.current) {
-          bufferedTailLogsRef.current = [...bufferedTailLogsRef.current, next].slice(-400)
-          setTailBufferedCount(bufferedTailLogsRef.current.length)
-          return
-        }
-
-        setTailLogs((current) => [...current, next].slice(-400))
-        requestAnimationFrame(() => {
-          const node = tailScrollRef.current
-          if (node) {
-            node.scrollTop = node.scrollHeight
-          }
-        })
-      } catch (error) {
-        console.error('Failed to parse live log payload:', formatErrorForLogging(error))
-      }
-    }
-
-    return () => {
-      source.close()
-      setTailStatus('closed')
-    }
-  }, [liveTailEnabled, enableLiveTail, projectId, query, derivedFilters.service, derivedFilters.environment, levelsKey, levels, hasCustomLevelFilter])
-
   const toggleLevel = (level: string) => {
     setLevels((current) =>
       current.includes(level) ? current.filter((item) => item !== level) : [...current, level]
@@ -632,7 +561,7 @@ export function LogExplorer({
   
   // Infinite scroll with Intersection Observer
   useEffect(() => {
-    if (!scrollSentinelRef.current || liveTailEnabled) return
+    if (!scrollSentinelRef.current) return
     
     const observer = new IntersectionObserver(
       (entries) => {
@@ -656,53 +585,7 @@ export function LogExplorer({
     return () => {
       observer.disconnect()
     }
-  }, [logPage?.hasMore, logPage?.nextCursor, isLoadingMore, isFetching, liveTailEnabled, cursor])
-
-  const handleToggleLiveTail = () => {
-    setLiveTailEnabled((current) => {
-      const next = !current
-      if (next) {
-        setTailLogs([])
-        bufferedTailLogsRef.current = []
-        setTailBufferedCount(0)
-        setTailPaused(false)
-        setAccumulatedLogs([]) // Reset accumulated logs when starting live tail
-      }
-      return next
-    })
-  }
-
-  const handleTogglePause = () => {
-    if (!tailPaused) {
-      setTailPaused(true)
-      return
-    }
-
-    setTailPaused(false)
-    if (bufferedTailLogsRef.current.length > 0) {
-      setTailLogs((current) =>
-        [...current, ...bufferedTailLogsRef.current].slice(-400)
-      )
-      bufferedTailLogsRef.current = []
-      setTailBufferedCount(0)
-      requestAnimationFrame(() => {
-        const node = tailScrollRef.current
-        if (node) {
-          node.scrollTop = node.scrollHeight
-        }
-      })
-    }
-  }
-
-  const handleTailScroll = () => {
-    const node = tailScrollRef.current
-    if (!node || !liveTailEnabled) return
-
-    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight
-    if (distanceFromBottom > 48 && !tailPaused) {
-      setTailPaused(true)
-    }
-  }
+  }, [logPage?.hasMore, logPage?.nextCursor, isLoadingMore, isFetching, cursor])
 
   // Show loading state only on initial load with no accumulated logs
   const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
@@ -721,19 +604,15 @@ export function LogExplorer({
               <div>
                 <h2 className="text-lg font-semibold leading-tight">Log Explorer</h2>
                 <p className="hidden sm:block text-[11px] text-muted-foreground">
-                  Search, filter, and stream logs in real time
+                  Search, filter, and analyze logs
                 </p>
               </div>
             </div>
 
-            {enableLiveTail && (
-              <LiveTailToggle
-                enabled={liveTailEnabled}
-                paused={tailPaused}
-                bufferedCount={tailBufferedCount}
-                status={tailStatus}
-                onToggleEnabled={handleToggleLiveTail}
-                onTogglePaused={handleTogglePause}
+            {enableAutoRefresh && (
+              <AutoRefreshToggle
+                interval={autoRefreshInterval}
+                onIntervalChange={setAutoRefreshInterval}
               />
             )}
           </div>
@@ -862,7 +741,7 @@ export function LogExplorer({
               )}
 
               {/* Pagination (shown only if we have history) */}
-              {!liveTailEnabled && cursorHistory.length > 0 && (
+              {cursorHistory.length > 0 && (
                 <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
@@ -975,85 +854,24 @@ export function LogExplorer({
                   />
                   
                   {/* Infinite scroll sentinel and loading indicator */}
-                  {!liveTailEnabled && (
-                    <div ref={scrollSentinelRef} className="px-3 py-4">
-                      {(isLoadingMore || isFetching) && logPage?.hasMore ? (
-                        <div className="flex items-center justify-center gap-2 py-2">
-                          <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
-                            <div className="h-full w-1/2 animate-pulse bg-blue-500" style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}} />
-                          </div>
+                  <div ref={scrollSentinelRef} className="px-3 py-4">
+                    {(isLoadingMore || isFetching) && logPage?.hasMore ? (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+                          <div className="h-full w-1/2 animate-pulse bg-blue-500" style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}} />
                         </div>
-                      ) : logPage?.hasMore ? (
-                        <div className="text-center text-xs text-muted-foreground/50">
-                          Scroll for more
-                        </div>
-                      ) : logs.length > 150 ? (
-                        <div className="border-t pt-3 text-center text-xs text-muted-foreground/70">
-                          End of results • {logs.length} logs loaded
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
+                      </div>
+                    ) : logPage?.hasMore ? (
+                      <div className="text-center text-xs text-muted-foreground/50">
+                        Scroll for more
+                      </div>
+                    ) : logs.length > 150 ? (
+                      <div className="border-t pt-3 text-center text-xs text-muted-foreground/70">
+                        End of results • {logs.length} logs loaded
+                      </div>
+                    ) : null}
+                  </div>
                 </>
-              )}
-
-              {/* Live tail stream */}
-              {enableLiveTail && liveTailEnabled && (
-                <div className="border-t">
-                  <div className="flex items-center gap-2 border-b bg-card/50 px-4 py-2">
-                    <span className={cn('h-2 w-2 rounded-full', tailStatus === 'open' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400')} />
-                    <span className="text-xs font-medium">Live Tail Stream</span>
-                    {tailLogs.length > 0 && (
-                      <Badge variant="secondary" className="text-[10px] font-mono">{tailLogs.length} events</Badge>
-                    )}
-                  </div>
-                  <div
-                    ref={tailScrollRef}
-                    onScroll={handleTailScroll}
-                    className="max-h-[320px] overflow-auto"
-                  >
-                    {tailLogs.length === 0 ? (
-                      <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Waiting for live log events...
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-border/30">
-                        {tailLogs.map((log) => {
-                          const normalizedLevel = (log.level || 'info').toLowerCase()
-                          return (
-                            <button
-                              key={`${log.logId}-${log.timestamp}`}
-                              className="w-full px-4 py-1.5 text-left transition-colors hover:bg-accent/40"
-                              onClick={() => handleSelectLog(log)}
-                            >
-                              <div className="flex items-start gap-3">
-                                <span className="min-w-[90px] font-mono text-[11px] text-muted-foreground">
-                                  {formatLiveTime(log.timestamp)}
-                                </span>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'min-w-[44px] justify-center font-mono text-[9px] uppercase py-0 px-1',
-                                    normalizedLevel === 'error' && 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
-                                    normalizedLevel === 'warn' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-                                    normalizedLevel === 'info' && 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
-                                    normalizedLevel === 'debug' && 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20'
-                                  )}
-                                >
-                                  {normalizedLevel}
-                                </Badge>
-                                <span className="font-mono text-xs break-all text-foreground/80">
-                                  {stripAnsi(log.message)}
-                                </span>
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
               )}
             </div>
           </div>

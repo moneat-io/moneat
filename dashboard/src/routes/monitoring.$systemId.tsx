@@ -1160,7 +1160,7 @@ function SystemDetailPage() {
                   systemId={system.id}
                   initialContainerName={selectedContainer.name}
                   className="border-none rounded-none h-full"
-                  enableLiveTail={false}
+                  enableAutoRefresh={false}
                   enableFacets={true}
                   initialScrollToBottom={true}
                 />
