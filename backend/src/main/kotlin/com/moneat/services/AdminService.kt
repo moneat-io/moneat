@@ -550,10 +550,10 @@ class AdminService {
         try {
             val query =
                 """
-                SELECT table, sum(rows) as rows, sum(bytes_on_disk) as bytes
+                SELECT database, table, sum(rows) as rows, sum(bytes_on_disk) as bytes
                 FROM system.parts
-                WHERE database = '$clickhouseDb' AND active
-                GROUP BY table
+                WHERE active
+                GROUP BY database, table
                 """.trimIndent()
             val response = ClickHouseClient.execute(query)
             if (response.status.isSuccess()) {
@@ -561,10 +561,13 @@ class AdminService {
                 val lines = text.trim().split("\n").filter { it.isNotBlank() }
                 for (line in lines) {
                     val parts = line.split("\t")
-                    if (parts.size >= 3) {
-                        val tableName = parts[0]
-                        val rows = parts[1].toLongOrNull() ?: 0L
-                        val bytes = parts[2].toLongOrNull() ?: 0L
+                    if (parts.size >= 4) {
+                        val db = parts[0]
+                        val rawTable = parts[1]
+                        val rows = parts[2].toLongOrNull() ?: 0L
+                        val bytes = parts[3].toLongOrNull() ?: 0L
+                        // Prefix with database name for non-app tables to disambiguate
+                        val tableName = if (db == clickhouseDb) rawTable else "$db.$rawTable"
                         tables.add(
                             TableSize(
                                 table = tableName,
