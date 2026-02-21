@@ -186,10 +186,10 @@ class BillingQuotaService(
                 )
             }
 
-            // GB/byte limit check
+            // GB/byte limit check (includes PAYG byte headroom when applicable)
             val effectiveBytesLimit =
                 if (state.bytesLimit > 0) {
-                    state.bytesLimit + state.bonusGbBytes
+                    state.bytesLimit + state.bonusGbBytes + state.paygLimitBytes
                 } else {
                     Long.MAX_VALUE
                 }
