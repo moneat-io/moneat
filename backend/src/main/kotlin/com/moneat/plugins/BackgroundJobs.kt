@@ -17,6 +17,7 @@
 package com.moneat.plugins
 
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.services.ArtifactCleanupService
 import com.moneat.services.BillingBackgroundService
 import com.moneat.services.IngestionWorker
 import com.moneat.services.LlmIngestionWorker
@@ -53,6 +54,7 @@ fun Application.configureBackgroundJobs() {
     val billingBackgroundService = BillingBackgroundService()
     val retentionBackgroundService = RetentionBackgroundService()
     val refreshTokenCleanupService = RefreshTokenCleanupService()
+    val artifactCleanupService = ArtifactCleanupService()
     val uptimeScheduler = UptimeScheduler()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
@@ -88,6 +90,7 @@ fun Application.configureBackgroundJobs() {
     billingBackgroundService.start(jobScope)
     retentionBackgroundService.start(jobScope)
     refreshTokenCleanupService.start(jobScope)
+    artifactCleanupService.start(jobScope)
     uptimeScheduler.start()
     ingestionWorker.start()
     logIngestionWorker.start()
@@ -125,6 +128,7 @@ fun Application.configureBackgroundJobs() {
         billingBackgroundService.stop()
         retentionBackgroundService.stop()
         refreshTokenCleanupService.stop()
+        artifactCleanupService.stop()
         uptimeScheduler.stop()
         ingestionWorker.stop()
         logIngestionWorker.stop()

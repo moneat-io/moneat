@@ -765,7 +765,7 @@ class EmailService {
     }
 
     fun sendAccountDeletionConfirmation(email: String) {
-        val subject = "Your Moneat account has been deleted"
+        val subject = "Your Moneat account has been deactivated"
         val htmlBody =
             """
             <!DOCTYPE html>
@@ -776,9 +776,9 @@ class EmailService {
             </head>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: #1a1a1a; margin-bottom: 20px;">Account Deleted</h1>
-                    <p>Your Moneat account has been successfully deleted.</p>
-                    <p>All your personal data has been removed from our systems. If you had any active organization memberships, you have been removed from those organizations.</p>
+                    <h1 style="color: #1a1a1a; margin-bottom: 20px;">Account Deactivated</h1>
+                    <p>Your Moneat account has been successfully deactivated.</p>
+                    <p>Your profile and membership associations have been removed from active use. Your account record is retained in a deactivated state for potential recovery within 30 days. After that period, remaining records may be purged per our retention policy.</p>
                     <p>If you deleted your account by mistake or have any questions, please contact us at <a href="mailto:support@moneat.io">support@moneat.io</a> within 30 days for potential account recovery.</p>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Thank you for using Moneat.</p>
@@ -789,11 +789,11 @@ class EmailService {
 
         val textBody =
             """
-            Account Deleted
+            Account Deactivated
             
-            Your Moneat account has been successfully deleted.
+            Your Moneat account has been successfully deactivated.
             
-            All your personal data has been removed from our systems. If you had any active organization memberships, you have been removed from those organizations.
+            Your profile and membership associations have been removed from active use. Your account record is retained in a deactivated state for potential recovery within 30 days. After that period, remaining records may be purged per our retention policy.
             
             If you deleted your account by mistake or have any questions, please contact us at support@moneat.io within 30 days for potential account recovery.
             
@@ -820,7 +820,7 @@ class EmailService {
                 <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
                     <h1 style="color: #dc2626; margin-bottom: 20px;">Organization Deleted</h1>
                     <p>The organization <strong>$organizationName</strong> has been deleted by its owner.</p>
-                    <p>All projects, events, and associated data have been permanently removed.</p>
+                    <p>Deletion of all projects, events, LLM data, analytics, and associated data has been initiated. Data removal from storage may complete within a short period.</p>
                     <p>Your Moneat account is still active. You can <a href="$frontendUrl/organizations/new" style="color: #2563eb;">create a new organization</a> or join another organization if you have pending invitations.</p>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat</p>
@@ -835,7 +835,7 @@ class EmailService {
             
             The organization $organizationName has been deleted by its owner.
             
-            All projects, events, and associated data have been permanently removed.
+            Deletion of all projects, events, LLM data, analytics, and associated data has been initiated. Data removal from storage may complete within a short period.
             
             Your Moneat account is still active. You can create a new organization or join another organization if you have pending invitations.
             

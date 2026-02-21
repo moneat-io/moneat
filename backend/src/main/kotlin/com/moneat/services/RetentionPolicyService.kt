@@ -109,4 +109,58 @@ class RetentionPolicyService(
         }
         return logRetentionByOrg
     }
+
+    suspend fun getReplayRetentionDaysForOrganization(organizationId: Int): Int {
+        return CacheService.cached("cache:replay_retention:org:$organizationId", 300) {
+            pricingTierService.getEffectiveTierForOrganization(organizationId).tier.replayRetentionDays
+        }
+    }
+
+    suspend fun getReplayRetentionDaysByOrganization(): Map<Int, Int> {
+        val orgIds = transaction { Organizations.selectAll().map { it[Organizations.id] } }
+        if (orgIds.isEmpty()) return emptyMap()
+        val replayRetentionByOrg = LinkedHashMap<Int, Int>(orgIds.size)
+        for (orgId in orgIds) {
+            replayRetentionByOrg[orgId] =
+                runCatching { getReplayRetentionDaysForOrganization(orgId) }
+                    .getOrDefault(PricingTier.FREE.retentionDays)
+        }
+        return replayRetentionByOrg
+    }
+
+    suspend fun getLlmRetentionDaysForOrganization(organizationId: Int): Int {
+        return CacheService.cached("cache:llm_retention:org:$organizationId", 300) {
+            pricingTierService.getEffectiveTierForOrganization(organizationId).tier.llmRetentionDays
+        }
+    }
+
+    suspend fun getLlmRetentionDaysByOrganization(): Map<Int, Int> {
+        val orgIds = transaction { Organizations.selectAll().map { it[Organizations.id] } }
+        if (orgIds.isEmpty()) return emptyMap()
+        val llmRetentionByOrg = LinkedHashMap<Int, Int>(orgIds.size)
+        for (orgId in orgIds) {
+            llmRetentionByOrg[orgId] =
+                runCatching { getLlmRetentionDaysForOrganization(orgId) }
+                    .getOrDefault(PricingTier.FREE.retentionDays)
+        }
+        return llmRetentionByOrg
+    }
+
+    suspend fun getAnalyticsRetentionDaysForOrganization(organizationId: Int): Int {
+        return CacheService.cached("cache:analytics_retention:org:$organizationId", 300) {
+            pricingTierService.getEffectiveTierForOrganization(organizationId).tier.analyticsRetentionDays
+        }
+    }
+
+    suspend fun getAnalyticsRetentionDaysByOrganization(): Map<Int, Int> {
+        val orgIds = transaction { Organizations.selectAll().map { it[Organizations.id] } }
+        if (orgIds.isEmpty()) return emptyMap()
+        val analyticsRetentionByOrg = LinkedHashMap<Int, Int>(orgIds.size)
+        for (orgId in orgIds) {
+            analyticsRetentionByOrg[orgId] =
+                runCatching { getAnalyticsRetentionDaysForOrganization(orgId) }
+                    .getOrDefault(1095) // Default 3 years for analytics
+        }
+        return analyticsRetentionByOrg
+    }
 }
