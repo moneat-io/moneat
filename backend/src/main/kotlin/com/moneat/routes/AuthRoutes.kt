@@ -267,7 +267,7 @@ fun Route.authRoutes() {
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed&message=${e.message}")
             } catch (e: Exception) {
                 logger.error(e) { "GitHub OAuth callback error" }
                 val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
