@@ -590,6 +590,7 @@ jobs:
 
       - name: Commit coverage badge
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
         run: |
           if git diff --quiet -- badges/coverage-badge.json; then
             echo "Coverage badge is already up to date"
