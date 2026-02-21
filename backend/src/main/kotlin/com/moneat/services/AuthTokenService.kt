@@ -282,6 +282,19 @@ class AuthTokenService {
     }
 
     /**
+     * Delete expired auth tokens. Call periodically to prevent unbounded accumulation.
+     * Only deletes tokens that have an expires_at set and are past expiry.
+     */
+    fun cleanupExpiredTokens(): Int {
+        return transaction {
+            val now = Clock.System.now()
+            AuthTokens.deleteWhere {
+                AuthTokens.expires_at.isNotNull() and (AuthTokens.expires_at less now)
+            }
+        }
+    }
+
+    /**
      * Hash a token using SHA256
      */
     private fun hashToken(token: String): String {

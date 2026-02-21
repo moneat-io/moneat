@@ -385,4 +385,23 @@ class OrgInvitationService(
             }
             updated
         }
+
+    /**
+     * Delete old expired/revoked/accepted invitations to prevent unbounded storage growth.
+     * Keeps records for 90 days after creation for audit purposes, then purges.
+     */
+    fun purgeOldInvitations(olderThanDays: Int = 90): Int =
+        transaction {
+            val cutoff = Clock.System.now().minus(olderThanDays.days)
+            val deleted =
+                OrgInvitations.deleteWhere {
+                    (OrgInvitations.status inList listOf("expired", "revoked", "accepted")) and
+                        (OrgInvitations.created_at less cutoff)
+                }
+
+            if (deleted > 0) {
+                logger.info("Purged $deleted old invitations (status in expired/revoked/accepted, older than $olderThanDays days)")
+            }
+            deleted
+        }
 }

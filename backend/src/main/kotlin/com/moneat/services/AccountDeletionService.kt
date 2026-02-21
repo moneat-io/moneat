@@ -325,7 +325,7 @@ class AccountDeletionService(
             try {
                 val projectIdsList = projectIds.joinToString(",")
 
-                // Delete from all ClickHouse tables
+                // Delete from all ClickHouse tables (including LLM and analytics)
                 val tables =
                     listOf(
                         "events",
@@ -334,7 +334,12 @@ class AccountDeletionService(
                         "replay_events",
                         "replay_segments",
                         "user_feedback",
-                        "logs"
+                        "logs",
+                        "llm_generations",
+                        "llm_generations_hourly_mv",
+                        "analytics_events",
+                        "analytics_sessions_hourly",
+                        "issues"
                     )
 
                 tables.forEach { table ->

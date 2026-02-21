@@ -75,6 +75,9 @@ class RetentionBackgroundService(
     private suspend fun runSweep() {
         val retentionByOrg = retentionPolicyService.getRetentionDaysByOrganization()
         val logRetentionByOrg = retentionPolicyService.getLogRetentionDaysByOrganization()
+        val replayRetentionByOrg = retentionPolicyService.getReplayRetentionDaysByOrganization()
+        val llmRetentionByOrg = retentionPolicyService.getLlmRetentionDaysByOrganization()
+        val analyticsRetentionByOrg = retentionPolicyService.getAnalyticsRetentionDaysByOrganization()
 
         if (retentionByOrg.isEmpty()) {
             logger.debug { "Retention sweep skipped: no organizations found" }
@@ -90,19 +93,37 @@ class RetentionBackgroundService(
             }
 
         var tableMutationCount = 0
-        var orgGroupCount = 0
 
-        // Process event retention
+        // Core retention (events, spans, sessions, user_feedback, issues)
         val groupedOrgIds = retentionByOrg.entries.groupBy({ it.value }, { it.key })
         for ((retentionDays, orgIds) in groupedOrgIds) {
-            orgGroupCount++
             val projectIds = orgIds.flatMap { projectsByOrg[it].orEmpty() }
-
-            tableMutationCount += submitProjectScopedDeletes(projectIds, retentionDays)
+            tableMutationCount += submitCoreDeletes(projectIds, retentionDays)
             tableMutationCount += submitOrgScopedDeletes(orgIds, retentionDays)
         }
 
-        // Process log retention separately
+        // Replay retention (per-surface)
+        val groupedReplayOrgIds = replayRetentionByOrg.entries.groupBy({ it.value }, { it.key })
+        for ((replayRetentionDays, orgIds) in groupedReplayOrgIds) {
+            val projectIds = orgIds.flatMap { projectsByOrg[it].orEmpty() }
+            tableMutationCount += submitReplayDeletes(projectIds, replayRetentionDays)
+        }
+
+        // LLM retention (per-surface)
+        val groupedLlmOrgIds = llmRetentionByOrg.entries.groupBy({ it.value }, { it.key })
+        for ((llmRetentionDays, orgIds) in groupedLlmOrgIds) {
+            val projectIds = orgIds.flatMap { projectsByOrg[it].orEmpty() }
+            tableMutationCount += submitLlmDeletes(projectIds, llmRetentionDays)
+        }
+
+        // Analytics retention (per-surface)
+        val groupedAnalyticsOrgIds = analyticsRetentionByOrg.entries.groupBy({ it.value }, { it.key })
+        for ((analyticsRetentionDays, orgIds) in groupedAnalyticsOrgIds) {
+            val projectIds = orgIds.flatMap { projectsByOrg[it].orEmpty() }
+            tableMutationCount += submitAnalyticsDeletes(projectIds, analyticsRetentionDays)
+        }
+
+        // Log retention
         val groupedLogOrgIds = logRetentionByOrg.entries.groupBy({ it.value }, { it.key })
         for ((logRetentionDays, orgIds) in groupedLogOrgIds) {
             val projectIds = orgIds.flatMap { projectsByOrg[it].orEmpty() }
@@ -110,28 +131,67 @@ class RetentionBackgroundService(
         }
 
         logger.info {
-            "Retention sweep submitted $tableMutationCount delete mutation(s) " +
-                "across ${retentionByOrg.size} organization(s) in $orgGroupCount retention group(s)"
+            "Retention sweep submitted $tableMutationCount delete mutation(s) across ${retentionByOrg.size} organization(s)"
         }
     }
 
-    private suspend fun submitProjectScopedDeletes(
+    private suspend fun submitCoreDeletes(
         projectIds: List<Long>,
         retentionDays: Int
     ): Int {
         if (projectIds.isEmpty()) return 0
-
         val tables =
             listOf(
                 "events" to "timestamp",
                 "spans" to "start_timestamp",
                 "sessions" to "started",
-                "replay_events" to "timestamp",
-                "replay_segments" to "timestamp",
                 "user_feedback" to "timestamp",
                 "issues" to "last_seen"
             )
+        return submitProjectScopedDeletes(projectIds, tables, retentionDays)
+    }
 
+    private suspend fun submitReplayDeletes(
+        projectIds: List<Long>,
+        replayRetentionDays: Int
+    ): Int {
+        if (projectIds.isEmpty()) return 0
+        val tables = listOf(
+            "replay_events" to "timestamp",
+            "replay_segments" to "timestamp"
+        )
+        return submitProjectScopedDeletes(projectIds, tables, replayRetentionDays)
+    }
+
+    private suspend fun submitLlmDeletes(
+        projectIds: List<Long>,
+        llmRetentionDays: Int
+    ): Int {
+        if (projectIds.isEmpty()) return 0
+        val tables = listOf(
+            "llm_generations" to "timestamp",
+            "llm_generations_hourly_mv" to "hour"
+        )
+        return submitProjectScopedDeletes(projectIds, tables, llmRetentionDays)
+    }
+
+    private suspend fun submitAnalyticsDeletes(
+        projectIds: List<Long>,
+        analyticsRetentionDays: Int
+    ): Int {
+        if (projectIds.isEmpty()) return 0
+        val tables = listOf(
+            "analytics_events" to "timestamp",
+            "analytics_sessions_hourly" to "hour"
+        )
+        return submitProjectScopedDeletes(projectIds, tables, analyticsRetentionDays)
+    }
+
+    private suspend fun submitProjectScopedDeletes(
+        projectIds: List<Long>,
+        tables: List<Pair<String, String>>,
+        retentionDays: Int
+    ): Int {
         var mutations = 0
         for (chunk in projectIds.chunked(idChunkSize)) {
             val projectList = chunk.joinToString(",")
