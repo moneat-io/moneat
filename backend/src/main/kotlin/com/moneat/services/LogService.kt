@@ -362,12 +362,12 @@ class LogService {
                 if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
             }
 
-        // Query total count - use scope filter
+        // Query total count - use full where clause (scope + filters + time + query)
         val totalCountQuery =
             """
             SELECT count() as count
             FROM $clickhouseDb.logs
-            WHERE $totalCountFilter
+            WHERE $whereClause
             FORMAT JSONEachRow
             """.trimIndent()
 
