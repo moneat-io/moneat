@@ -410,8 +410,12 @@ export function LogExplorer({
       if (cursor === null) {
         setAccumulatedLogs(logPage.logs)
       } else {
-        // Otherwise, append to accumulated logs
-        setAccumulatedLogs(prev => [...prev, ...logPage.logs])
+        // Otherwise, append only unseen entries (prevents duplicates on refetch)
+        setAccumulatedLogs((prev) => {
+          const seen = new Set(prev.map((log) => `${log.logId}:${log.timestamp}`))
+          const next = logPage.logs.filter((log) => !seen.has(`${log.logId}:${log.timestamp}`))
+          return next.length > 0 ? [...prev, ...next] : prev
+        })
       }
       setIsLoadingMore(false)
     })
