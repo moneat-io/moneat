@@ -170,7 +170,7 @@ object ClickHouseMigrations {
         val query =
             """
             SELECT version, description, checksum, 
-                   formatDateTime(applied_at, '%Y-%m-%d %H:%i:%S') as applied_at
+                   formatDateTime(applied_at, '%Y-%m-%d %H:%i:%S', 'UTC') as applied_at
             FROM $MIGRATIONS_TABLE
             ORDER BY version
             FORMAT JSONEachRow
