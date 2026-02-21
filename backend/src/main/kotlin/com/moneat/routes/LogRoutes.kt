@@ -570,10 +570,11 @@ private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
 
 private fun authenticateTailRequest(call: ApplicationCall): Int? {
     val authHeader = call.request.header(HttpHeaders.Authorization)
+    val bearerPrefix = "Bearer "
     val bearerToken =
         authHeader
-            ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-            ?.removePrefix("Bearer ")
+            ?.takeIf { it.startsWith(bearerPrefix, ignoreCase = true) }
+            ?.substring(bearerPrefix.length)
             ?.trim()
     // Try: Authorization header → cookie → query param (legacy fallback)
     val token =

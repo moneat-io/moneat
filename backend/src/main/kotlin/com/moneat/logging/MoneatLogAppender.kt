@@ -17,9 +17,12 @@
 package com.moneat.logging
 
 import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.spi.DeferredProcessingAware
 import ch.qos.logback.core.AppenderBase
 import java.net.HttpURLConnection
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.RejectedExecutionHandler
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
@@ -28,7 +31,21 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     var serviceName: String = "moneat-backend"
     var environment: String = "development"
 
-    private val executor = Executors.newSingleThreadExecutor()
+    companion object {
+        private const val QUEUE_CAPACITY = 10_000
+    }
+
+    private val executor =
+        ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            LinkedBlockingQueue(QUEUE_CAPACITY),
+            RejectedExecutionHandler { _, _ ->
+                // Drop when queue full to avoid OOM; caller continues without blocking
+            }
+        )
 
     override fun start() {
         super.start()
@@ -44,6 +61,8 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
     override fun append(event: ILoggingEvent) {
         if (dsn.isBlank()) return
+
+        (event as? DeferredProcessingAware)?.prepareForDeferredProcessing()
 
         executor.submit {
             try {
