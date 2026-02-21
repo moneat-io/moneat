@@ -301,6 +301,18 @@ class MonitorAlertService {
 
                 // Send recovery notification
                 sendRecoveryNotification(alert, systemName, organizationId)
+                // Resolve incident for metric alerts (same dedup key used when firing)
+                val dedupKey =
+                    "moneat-system-alert-${alert.systemId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
+                try {
+                    incidentService.resolveAlert(
+                        organizationId = organizationId,
+                        source = com.moneat.models.AlertSource.SYSTEM_ALERT,
+                        deduplicationKey = dedupKey
+                    )
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
+                }
                 logger.info { "Alert ${alert.id} recovered for system ${alert.systemId}" }
             }
             return
@@ -622,16 +634,28 @@ class MonitorAlertService {
         // Fire incident alert
         try {
             val incidentSeverity =
-                transaction {
-                    SystemAlerts
-                        .selectAll()
-                        .where { SystemAlerts.id eq alert.id }
-                        .firstOrNull()
-                        ?.get(SystemAlerts.incident_severity)
-                        ?.let {
-                            com.moneat.models.IncidentSeverity
-                                .fromString(it)
-                        }
+                if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+                    transaction {
+                        OrganizationAlertTemplates
+                            .selectAll()
+                            .where { OrganizationAlertTemplates.id eq alert.templateAlertId }
+                            .firstOrNull()
+                            ?.get(OrganizationAlertTemplates.incident_severity)
+                            ?.let {
+                                com.moneat.models.IncidentSeverity.fromString(it)
+                            }
+                    }
+                } else {
+                    transaction {
+                        SystemAlerts
+                            .selectAll()
+                            .where { SystemAlerts.id eq alert.id }
+                            .firstOrNull()
+                            ?.get(SystemAlerts.incident_severity)
+                            ?.let {
+                                com.moneat.models.IncidentSeverity.fromString(it)
+                            }
+                    }
                 }
 
             if (incidentSeverity != null) {
@@ -643,7 +667,7 @@ class MonitorAlertService {
                         severity = incidentSeverity,
                         status = com.moneat.models.IncidentStatus.FIRING,
                         source = com.moneat.models.AlertSource.SYSTEM_ALERT,
-                        deduplicationKey = "moneat-system-alert-${alert.id}",
+                        deduplicationKey = "moneat-system-alert-${alert.systemId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}",
                         organizationId = organizationId,
                         metadata =
                         mapOf(

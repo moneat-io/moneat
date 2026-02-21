@@ -356,8 +356,7 @@ class IncidentService {
 
     /**
      * Get the escalation policy ID for a given alert source.
-     * This could be extended to support per-source routing rules.
-     * For now, we use a single default policy per organization.
+     * Uses per-source routing when configured, otherwise falls back to first policy.
      */
     private fun getEscalationPolicyForSource(
         organizationId: Int,
@@ -365,15 +364,25 @@ class IncidentService {
     ): Int? {
         return transaction {
             logger.debug("Resolving escalation policy for org {} source {}", organizationId, source.name)
-            // Get the first enabled escalation policy for this org
-            // TODO: Add alert_source routing to escalation_policies table
-            EscalationPolicies
-                .select(EscalationPolicies.id)
-                .where { EscalationPolicies.organizationId eq organizationId }
-                .limit(1)
-                .singleOrNull()
-                ?.get(EscalationPolicies.id)
-                ?.value
+            // Prefer source-specific routing
+            EscalationPolicyAlertSources
+                .select(EscalationPolicyAlertSources.escalationPolicyId)
+                .where {
+                    (EscalationPolicyAlertSources.organizationId eq organizationId) and
+                        (EscalationPolicyAlertSources.alertSource eq source.name)
+                }
+                .firstOrNull()
+                ?.get(EscalationPolicyAlertSources.escalationPolicyId)
+                ?: run {
+                    // Fall back to first escalation policy for this org
+                    EscalationPolicies
+                        .select(EscalationPolicies.id)
+                        .where { EscalationPolicies.organizationId eq organizationId }
+                        .limit(1)
+                        .singleOrNull()
+                        ?.get(EscalationPolicies.id)
+                        ?.value
+                }
         }
     }
 }
