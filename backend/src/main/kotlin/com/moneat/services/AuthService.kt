@@ -655,20 +655,27 @@ class AuthService {
     }
 
     /**
-     * Check if SSO is required for an email domain.
-     * Queries the SsoConfigurations table (schema in core) to see if the
-     * organization matching this email domain enforces SSO login.
+     * Check if SSO is required for this user's password login.
+     * Tenant-scoped: only blocks when the user is a member of an org that has
+     * require_sso enabled for their email domain. Prevents one org from blocking
+     * password login for users in other orgs sharing the same domain.
+     * Domain comparison is normalized (lowercase, trim) to avoid bypass.
      */
     private fun checkSsoRequired(email: String): Boolean {
-        val domain = email.substringAfter("@")
+        val normalizedDomain = email.substringAfter("@").lowercase().trim()
+        if (normalizedDomain.isBlank()) return false
         return transaction {
-            SsoConfigurations
+            (Users.innerJoin(Memberships) { Users.id eq Memberships.user_id }
+                .innerJoin(SsoConfigurations) { Memberships.organization_id eq SsoConfigurations.organizationId })
                 .selectAll()
                 .where {
-                    (SsoConfigurations.emailDomain eq domain) and
+                    (Users.email eq email.lowercase().trim()) and
+                        (SsoConfigurations.emailDomain.isNotNull()) and
+                        (SsoConfigurations.emailDomain.trim().lowerCase() eq normalizedDomain) and
                         (SsoConfigurations.isEnabled eq true) and
                         (SsoConfigurations.requireSso eq true)
-                }.firstOrNull() != null
+                }
+                .firstOrNull() != null
         }
     }
 }

@@ -991,7 +991,15 @@ class AdminService {
             // Delete alert silence periods
             AlertSilencePeriods.deleteWhere { AlertSilencePeriods.organization_id eq orgId }
 
-            // Delete SSO configurations (cascades to user_sso_links)
+            // Delete user_sso_links first (FK has no ON DELETE CASCADE in V21)
+            val ssoConfigIds =
+                SsoConfigurations
+                    .select(SsoConfigurations.id)
+                    .where { SsoConfigurations.organizationId eq orgId }
+                    .map { it[SsoConfigurations.id] }
+            if (ssoConfigIds.isNotEmpty()) {
+                UserSsoLinks.deleteWhere { UserSsoLinks.ssoConfigurationId inList ssoConfigIds }
+            }
             SsoConfigurations.deleteWhere { SsoConfigurations.organizationId eq orgId }
 
             // Delete AI conversations (cascades to ai_messages)
