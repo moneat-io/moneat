@@ -721,6 +721,9 @@ class StripeService(
 
     fun handleInvoicePaid(invoice: Invoice) {
         val organizationId = resolveOrganizationId(invoice.metadata["organization_id"], invoice.customer) ?: return
+        val billingReason = invoice.billingReason ?: ""
+        val isCycleRollover = billingReason == "subscription_cycle"
+
         transaction {
             val q =
                 Subscriptions
@@ -737,11 +740,13 @@ class StripeService(
                 it[status] = "active"
                 it[current_period_start] = start
                 it[current_period_end] = end
-                it[payg_used_units] = 0
-                it[payg_used_micros] = 0
-                it[pending_meter_units] = 0
-                it[pending_meter_batch_id] = null
-                it[pending_meter_batch_units] = 0
+                if (isCycleRollover) {
+                    it[payg_used_units] = 0
+                    it[payg_used_micros] = 0
+                    it[pending_meter_units] = 0
+                    it[pending_meter_batch_id] = null
+                    it[pending_meter_batch_units] = 0
+                }
                 it[billing_grace_until] = null
             }
         }
@@ -837,7 +842,7 @@ class StripeService(
             Subscriptions.select(Subscriptions.id).where {
                 (Subscriptions.pending_meter_units greater 0L) and
                     (Subscriptions.stripe_customer_id.isNotNull()) and
-                    (Subscriptions.status inList listOf("active", "trialing"))
+                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }
                 .orderBy(Subscriptions.id to SortOrder.ASC)
                 .limit(limit)

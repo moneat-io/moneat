@@ -594,7 +594,7 @@ class StripeServiceWebhookTest {
     }
 
     @Test
-    fun `handleInvoicePaid resets PAYG usage and marks active`() {
+    fun `handleInvoicePaid resets PAYG usage and marks active for cycle-rollover invoice`() {
         transaction {
             Subscriptions.update({ Subscriptions.id eq testSubId }) {
                 it[Subscriptions.stripe_subscription_id] = mockSubscriptionId
@@ -609,7 +609,8 @@ class StripeServiceWebhookTest {
         val invoice =
             mockInvoice(
                 customerId = mockCustomerId,
-                organizationId = testOrgId
+                organizationId = testOrgId,
+                billingReason = "subscription_cycle"
             )
 
         stripeService.handleInvoicePaid(invoice)
@@ -627,6 +628,46 @@ class StripeServiceWebhookTest {
             assertEquals(0L, record[Subscriptions.payg_used_micros])
             assertEquals(0L, record[Subscriptions.pending_meter_units])
             assertEquals(null, record[Subscriptions.billing_grace_until])
+        }
+    }
+
+    @Test
+    fun `handleInvoicePaid does NOT reset PAYG counters for non-cycle invoice`() {
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.stripe_subscription_id] = mockSubscriptionId
+                it[Subscriptions.stripe_customer_id] = mockCustomerId
+                it[Subscriptions.payg_used_units] = 500
+                it[Subscriptions.payg_used_micros] = 200000000
+                it[Subscriptions.pending_meter_units] = 100
+                it[Subscriptions.status] = "past_due"
+                it[Subscriptions.billing_grace_until] = Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
+            }
+        }
+
+        val invoice =
+            mockInvoice(
+                customerId = mockCustomerId,
+                organizationId = testOrgId,
+                billingReason = "subscription_update" // proration/off-cycle
+            )
+
+        stripeService.handleInvoicePaid(invoice)
+
+        transaction {
+            val record =
+                Subscriptions
+                    .selectAll()
+                    .where { Subscriptions.id eq testSubId }
+                    .firstOrNull()
+
+            assertNotNull(record)
+            assertEquals("active", record[Subscriptions.status])
+            assertEquals(null, record[Subscriptions.billing_grace_until])
+            // PAYG and pending must be preserved for later flush
+            assertEquals(500L, record[Subscriptions.payg_used_units])
+            assertEquals(200000000L, record[Subscriptions.payg_used_micros])
+            assertEquals(100L, record[Subscriptions.pending_meter_units])
         }
     }
 
@@ -746,6 +787,34 @@ class StripeServiceWebhookTest {
                 row[Subscriptions.pending_meter_batch_units],
                 "Batch units should clear after eventual success"
             )
+        }
+    }
+
+    @Test
+    fun `flushPendingMeteredUsage includes past_due subscriptions`() {
+        val identifiers = mutableListOf<String>()
+        val meteringService = StripeService(
+            meterEventSender = { params ->
+                identifiers += params.identifier
+            },
+            allowMeteringWhenStripeDisabled = true
+        )
+
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.stripe_customer_id] = mockCustomerId
+                it[Subscriptions.status] = "past_due"
+                it[Subscriptions.pending_meter_units] = 25
+            }
+        }
+
+        val flushed = meteringService.flushPendingMeteredUsage(limit = 1)
+
+        assertEquals(1, flushed)
+        assertTrue(identifiers.isNotEmpty())
+        transaction {
+            val row = Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
+            assertEquals(0L, row[Subscriptions.pending_meter_units])
         }
     }
 
@@ -1017,7 +1086,8 @@ class StripeServiceWebhookTest {
 
     private fun mockInvoice(
         customerId: String,
-        organizationId: Int
+        organizationId: Int,
+        billingReason: String = "subscription_cycle"
     ): Invoice {
         val invoice = Invoice()
         invoice.id = "in_test_${System.nanoTime()}"
@@ -1025,6 +1095,7 @@ class StripeServiceWebhookTest {
         invoice.status = "paid"
         invoice.periodStart = System.currentTimeMillis() / 1000
         invoice.periodEnd = (System.currentTimeMillis() / 1000) + 2592000 // 30 days
+        invoice.billingReason = billingReason
 
         invoice.metadata = mapOf("organization_id" to organizationId.toString())
 
