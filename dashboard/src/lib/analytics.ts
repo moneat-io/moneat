@@ -9,7 +9,6 @@ interface AnalyticsConfig {
   domain: string
   apiHost: string
   key: string
-  respectDnt?: boolean
 }
 
 let config: AnalyticsConfig | null = null
@@ -31,7 +30,6 @@ function isBot(): boolean {
 
 function isDnt(): boolean {
   return (
-    config?.respectDnt !== false &&
     'doNotTrack' in navigator &&
     navigator.doNotTrack === '1'
   )
@@ -70,7 +68,12 @@ function buildPayload(eventName: string, props?: Record<string, string>) {
 
 // --- SPA navigation detection ---
 
+let navigationPatched = false
+
 function onNavigation(callback: () => void): void {
+  if (navigationPatched) return
+  navigationPatched = true
+
   const origPush = history.pushState
   history.pushState = function (...args) {
     origPush.apply(this, args)
@@ -84,27 +87,6 @@ function onNavigation(callback: () => void): void {
   }
 
   window.addEventListener('popstate', callback)
-}
-
-// --- UTM capture ---
-
-function captureUtmParams(): void {
-  const params = new URLSearchParams(window.location.search)
-  const utmSource = params.get('utm_source')
-  const utmMedium = params.get('utm_medium')
-  const utmCampaign = params.get('utm_campaign')
-  const utmContent = params.get('utm_content')
-  const utmTerm = params.get('utm_term')
-
-  if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm) {
-    localStorage.setItem('utm_params', JSON.stringify({
-      utmSource: utmSource || undefined,
-      utmMedium: utmMedium || undefined,
-      utmCampaign: utmCampaign || undefined,
-      utmContent: utmContent || undefined,
-      utmTerm: utmTerm || undefined,
-    }))
-  }
 }
 
 // --- public API ---
@@ -128,9 +110,6 @@ export function trackEvent(name: string, props?: Record<string, string>): void {
  */
 export function initAnalytics(cfg: AnalyticsConfig): void {
   config = cfg
-
-  // Capture UTM params on any page entry
-  captureUtmParams()
 
   if ((document.visibilityState as string) === 'prerender') {
     document.addEventListener(

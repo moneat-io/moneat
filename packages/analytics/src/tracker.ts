@@ -1,12 +1,13 @@
 import { sendEvent } from './request';
-import { onNavigation } from './spa';
+import { onHashNavigation, onNavigation } from './spa';
 
 export interface TrackerConfig {
   domain: string;
   apiHost: string;
   key: string;
   trackSpa?: boolean;
-  respectDnt?: boolean;
+  trackLocalhost?: boolean;
+  hashMode?: boolean;
 }
 
 let config: TrackerConfig | null = null;
@@ -22,10 +23,19 @@ function isBot(): boolean {
 
 function isDnt(): boolean {
   return (
-    config?.respectDnt !== false &&
     'doNotTrack' in navigator &&
     navigator.doNotTrack === '1'
   );
+}
+
+function shouldTrack(): boolean {
+  if (!config) return false;
+  if (isBot() || isDnt()) return false;
+  if (!config.trackLocalhost && typeof window !== 'undefined') {
+    const host = window.location?.hostname ?? '';
+    if (host === 'localhost' || host === '127.0.0.1') return false;
+  }
+  return true;
 }
 
 function buildPayload(eventName: string, props?: Record<string, string>) {
@@ -40,25 +50,30 @@ function buildPayload(eventName: string, props?: Record<string, string>) {
 }
 
 function trackPageview(): void {
-  if (!config || isBot() || isDnt()) return;
-  sendEvent(config.apiHost, config.domain, config.key, buildPayload('pageview'));
+  if (!shouldTrack()) return;
+  sendEvent(config!.apiHost, config!.domain, config!.key, buildPayload('pageview'));
 }
 
 /**
  * Track a custom event.
  */
 export function trackEvent(name: string, props?: Record<string, string>): void {
-  if (!config || isBot() || isDnt()) return;
-  sendEvent(config.apiHost, config.domain, config.key, buildPayload(name, props));
+  if (!shouldTrack()) return;
+  sendEvent(config!.apiHost, config!.domain, config!.key, buildPayload(name, props));
 }
+
+let initialized = false;
 
 /**
  * Initialize the tracker. Automatically sends a pageview.
+ * Idempotent: multiple calls do not double-patch History API or duplicate pageviews.
  */
 export function init(cfg: TrackerConfig): void {
   config = cfg;
 
-  // Track initial pageview
+  if (initialized) return;
+
+  // Track initial pageview (once)
   if ((document.visibilityState as string) === 'prerender') {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') trackPageview();
@@ -67,8 +82,13 @@ export function init(cfg: TrackerConfig): void {
     trackPageview();
   }
 
-  // SPA support
+  // SPA support: History API or hash-based routing
   if (cfg.trackSpa !== false) {
-    onNavigation(trackPageview);
+    if (cfg.hashMode) {
+      onHashNavigation(trackPageview);
+    } else {
+      onNavigation(trackPageview);
+    }
   }
+  initialized = true;
 }

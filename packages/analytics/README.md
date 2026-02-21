@@ -54,12 +54,13 @@ trackEvent('Signup', { plan: 'pro' });
 | `apiHost` | `string` | — | Base URL of your Moneat instance |
 | `key` | `string` | — | Project public key from your Moneat dashboard |
 | `trackSpa` | `boolean` | `true` | Auto-track client-side navigations |
-| `respectDnt` | `boolean` | `true` | Skip tracking when the browser's Do Not Track header is set |
+| `trackLocalhost` | `boolean` | `false` | Track events on `localhost` / `127.0.0.1` |
+| `hashMode` | `boolean` | `false` | Use hash-based routing (`#/path`) instead of History API |
 
 ## Privacy
 
 - **No cookies** — sessions are not persisted across visits
-- **Do Not Track** — honoured by default (`respectDnt: true`)
+- **Do Not Track** — honoured; cannot be overridden
 - **Bot filtering** — Phantom, Nightmare, Puppeteer, and `navigator.webdriver` are ignored automatically
 
 ## Building
