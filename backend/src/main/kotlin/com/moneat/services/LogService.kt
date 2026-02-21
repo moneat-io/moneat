@@ -505,7 +505,7 @@ class LogService {
         val sql =
             if (validGroupBy != null) {
                 """
-            SELECT toStartOfInterval(timestamp, INTERVAL $chInterval) AS bucket,
+            SELECT formatDateTime(toStartOfInterval(timestamp, INTERVAL $chInterval), '%Y-%m-%dT%H:%i:%SZ', 'UTC') AS bucket,
                    $validGroupBy AS group_value,
                    count() AS cnt
             FROM $clickhouseDb.logs
@@ -516,7 +516,7 @@ class LogService {
                 """.trimIndent()
             } else {
                 """
-            SELECT toStartOfInterval(timestamp, INTERVAL $chInterval) AS bucket,
+            SELECT formatDateTime(toStartOfInterval(timestamp, INTERVAL $chInterval), '%Y-%m-%dT%H:%i:%SZ', 'UTC') AS bucket,
                    count() AS cnt
             FROM $clickhouseDb.logs
             WHERE $whereClause

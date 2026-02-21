@@ -688,8 +688,8 @@ class DashboardService {
                 any(exception_type) as culprit,
                 any(level) as level,
                 any(platform) as platform,
-                formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as last_seen,
+                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as event_count,
                 uniq(user_id) as user_count,
                 any(i.status) as status
@@ -763,8 +763,8 @@ class DashboardService {
                 any(exception_type) as culprit,
                 any(level) as level,
                 any(platform) as platform,
-                formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as last_seen,
+                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as event_count,
                 uniq(user_id) as user_count,
                 any(i.status) as status,
@@ -1172,7 +1172,8 @@ class DashboardService {
             SELECT
                 formatDateTime(
                     toStartOfInterval(e.timestamp, INTERVAL ${periodConfig.intervalMinutes} MINUTE),
-                    '%Y-%c-%dT%H:%i:%S.000Z'
+                    '%Y-%m-%dT%H:%i:%S.000Z',
+                    'UTC'
                 ) as time,
                 count() as count
             FROM $clickhouseDb.events e
@@ -1193,7 +1194,7 @@ class DashboardService {
                 e.transaction_name as name,
                 e.transaction_op as op,
                 e.duration_ms as duration,
-                formatDateTime(e.timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp_iso
+                formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp_iso
             FROM $clickhouseDb.events e
             WHERE e.project_id = $projectId
                 AND e.event_type = 'transaction'
@@ -1276,7 +1277,8 @@ class DashboardService {
                 e.duration_ms,
                 formatDateTime(
                     ifNull(parseDateTime64BestEffortOrNull(toString(e.timestamp)), now64(3)),
-                    '%Y-%c-%dT%H:%i:%S.000Z'
+                    '%Y-%m-%dT%H:%i:%S.000Z',
+                    'UTC'
                 ) as timestamp_iso,
                 e.environment,
                 e.release,
@@ -1600,7 +1602,7 @@ class DashboardService {
             """
             SELECT
                 toString(event_id) as event_id,
-                formatDateTime(timestamp, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
                 message,
                 platform,
                 level,
@@ -1748,7 +1750,7 @@ class DashboardService {
             val eventsTimelineQuery =
                 """
             SELECT 
-                toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE) as time,
+                formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%SZ', 'UTC') as time,
                 count() as count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
@@ -1857,7 +1859,7 @@ class DashboardService {
             val usersTimelineQuery =
                 """
             SELECT 
-                toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE) as time,
+                formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%SZ', 'UTC') as time,
                 uniq(user_id) as count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
@@ -1963,8 +1965,8 @@ class DashboardService {
                 """
             SELECT
                 release as version,
-                formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as last_seen,
+                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as event_count,
                 uniq(user_id) as user_count
             FROM $clickhouseDb.events
@@ -2009,8 +2011,8 @@ class DashboardService {
         val releasesQuery =
             """
             SELECT
-                formatDateTime(min(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%c-%dT%H:%i:%S.000Z') as last_seen,
+                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as total_events,
                 uniq(user_id) as user_count
             FROM $clickhouseDb.events
@@ -2039,7 +2041,7 @@ class DashboardService {
             val eventsTimelineQuery =
                 """
                 SELECT
-                    formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%c-%dT%H:%i:%S.000Z') as time,
+                    formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as time,
                     count() as count
                 FROM $clickhouseDb.events
                 WHERE project_id = $projectId AND release = '$escapedVersion'
@@ -2099,7 +2101,7 @@ class DashboardService {
     ): List<ReleaseMarker> {
         val query =
             """
-            SELECT version, formatDateTime(first_seen, '%Y-%c-%dT%H:%i:%S.000Z') as timestamp
+            SELECT version, formatDateTime(first_seen, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp
             FROM (
                 SELECT release as version, min(timestamp) as first_seen
                 FROM $clickhouseDb.events
@@ -2481,8 +2483,8 @@ class DashboardService {
             SELECT
                 toString(replay_id) as replay_id,
                 toInt64(project_id) as project_id,
-                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as started_at,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as finished_at,
+                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
                 toUnixTimestamp64Milli(min(replay_start_timestamp)) as started_ms,
                 toUnixTimestamp64Milli(max(timestamp)) as finished_ms,
                 dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
@@ -2663,8 +2665,8 @@ class DashboardService {
             SELECT
                 toString(replay_id) as replay_id,
                 toInt64(project_id) as project_id,
-                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as started_at,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as finished_at,
+                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
                 toUnixTimestamp64Milli(min(replay_start_timestamp)) as started_ms,
                 toUnixTimestamp64Milli(max(timestamp)) as finished_ms,
                 dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
@@ -2807,7 +2809,7 @@ class DashboardService {
                     """
                     SELECT
                         toString(e.event_id) as event_id,
-                        formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z') as timestamp,
+                        formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
                         toUnixTimestamp64Milli(e.timestamp) as ts_ms,
                         message,
                         level,
@@ -2883,7 +2885,7 @@ class DashboardService {
                 """
                 SELECT
                     toString(e.event_id) as event_id,
-                    formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z') as timestamp,
+                    formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
                     toUnixTimestamp64Milli(e.timestamp) as ts_ms,
                     transaction_name,
                     duration_ms,
@@ -3021,7 +3023,7 @@ class DashboardService {
             """
             SELECT
                 toString(event_id) as event_id,
-                formatDateTime(ts_col, '%Y-%m-%dT%H:%i:%S.000Z') as timestamp,
+                formatDateTime(ts_col, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
                 toUnixTimestamp64Milli(ts_col) as ts_ms,
                 message,
                 level,
@@ -3083,7 +3085,7 @@ class DashboardService {
             """
             SELECT
                 toString(event_id) as event_id,
-                formatDateTime(ts_col, '%Y-%m-%dT%H:%i:%S.000Z') as timestamp,
+                formatDateTime(ts_col, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
                 toUnixTimestamp64Milli(ts_col) as ts_ms,
                 transaction_name,
                 duration_ms,
@@ -3488,8 +3490,8 @@ class DashboardService {
             SELECT
                 toString(r.replay_id) as replay_id,
                 r.project_id,
-                formatDateTime(min(r.replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as started_at,
-                formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%i:%S.000Z') as finished_at,
+                formatDateTime(min(r.replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
+                formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
                 dateDiff('millisecond', min(r.replay_start_timestamp), max(r.timestamp)) as duration_ms,
                 arrayFlatten(groupArray(r.urls)) as urls,
                 length(arrayFlatten(groupArray(r.error_ids))) as error_count,
@@ -3584,7 +3586,7 @@ class DashboardService {
                 name,
                 url,
                 status,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z') as created_at,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as created_at,
                 environment,
                 release,
                 platform,
@@ -3657,7 +3659,7 @@ class DashboardService {
                 name,
                 url,
                 status,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z') as timestamp,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
                 environment,
                 release,
                 platform,
