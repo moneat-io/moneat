@@ -323,7 +323,6 @@ class LogService {
             """
             SELECT
                 toString(log_id) AS log_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.%fZ') AS timestamp_formatted,
                 toString(level) AS level_text,
                 message,
                 body,
@@ -1059,7 +1058,7 @@ class LogService {
                     val log =
                         LogEntryResponse(
                             logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                            timestamp = obj["timestamp_formatted"]?.jsonPrimitive?.content ?: Instant.ofEpochMilli(timestampMs).toString(),
+                            timestamp = Instant.ofEpochMilli(timestampMs).toString(),
                             level =
                             normalizeLevel(
                                 obj["level_text"]?.jsonPrimitive?.content ?: obj["level"]?.jsonPrimitive?.content
