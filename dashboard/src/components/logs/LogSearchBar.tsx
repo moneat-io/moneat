@@ -113,20 +113,6 @@ export function LogSearchBar({
   const [inputValue, setInputValue] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [showTimeDropdown, setShowTimeDropdown] = useState(false)
-  const [selectedSuggestionState, setSelectedSuggestionStateRaw] = useState<{
-    suggestions: typeof suggestions
-    index: number
-  }>({ suggestions: [], index: -1 })
-  const selectedSuggestionIndex = selectedSuggestionState.suggestions === suggestions
-    ? selectedSuggestionState.index
-    : -1
-  const setSelectedSuggestionIndex = (updater: number | ((prev: number) => number)) => {
-    setSelectedSuggestionStateRaw((prev) => {
-      const prevIndex = prev.suggestions === suggestions ? prev.index : -1
-      const newIndex = typeof updater === 'function' ? updater(prevIndex) : updater
-      return { suggestions, index: newIndex }
-    })
-  }
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
   const timeDropdownRef = useRef<HTMLDivElement>(null)
@@ -179,6 +165,21 @@ export function LogSearchBar({
 
     return []
   }, [inputValue, allFacetKeys, availableServices, availableEnvironments])
+
+  const [selectedSuggestionState, setSelectedSuggestionStateRaw] = useState<{
+    suggestions: typeof suggestions
+    index: number
+  }>({ suggestions: [], index: -1 })
+  const selectedSuggestionIndex = selectedSuggestionState.suggestions === suggestions
+    ? selectedSuggestionState.index
+    : -1
+  const setSelectedSuggestionIndex = (updater: number | ((prev: number) => number)) => {
+    setSelectedSuggestionStateRaw((prev) => {
+      const prevIndex = prev.suggestions === suggestions ? prev.index : -1
+      const newIndex = typeof updater === 'function' ? updater(prevIndex) : updater
+      return { suggestions, index: newIndex }
+    })
+  }
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
