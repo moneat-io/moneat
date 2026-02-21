@@ -9,7 +9,7 @@ RUN npm run build
 
 FROM node:20-alpine AS dashboard-build
 WORKDIR /app
-COPY dashboard/package.json dashboard/package-lock.json ./
+COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 COPY dashboard/ .
