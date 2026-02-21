@@ -22,7 +22,6 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.routes.adminRoutes
-import com.moneat.routes.analyticsIngestRoutes
 import com.moneat.routes.apiRoutes
 import com.moneat.routes.authRoutes
 import com.moneat.routes.authTokenRoutes
@@ -152,7 +151,6 @@ fun Application.configureRouting() {
         rateLimit(RateLimitName("ingestion")) {
             ingestRoutes()
             llmIngestRoutes()
-            analyticsIngestRoutes()
         }
 
         // Telemetry pulse receiver — accepts anonymous heartbeats from self-hosted instances
