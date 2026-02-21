@@ -336,7 +336,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 }
             }
 
-            logger.info { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
+            logger.debug { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
 
             // Detect ai.* spans and cross-insert into llm_generations
             val aiSpans =
