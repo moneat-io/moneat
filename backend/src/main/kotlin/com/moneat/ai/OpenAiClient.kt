@@ -30,6 +30,17 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
+/** Typed error from the OpenAI API so callers can react to specific failure modes. */
+sealed class OpenAiError(override val message: String) : Exception(message) {
+    class AuthenticationError(message: String) : OpenAiError(message)
+    class RateLimitError(message: String) : OpenAiError(message)
+    class ModelError(message: String) : OpenAiError(message)
+    class ServerError(message: String) : OpenAiError(message)
+    class NetworkError(message: String, cause: Throwable?) : OpenAiError(message) {
+        init { cause?.let { initCause(it) } }
+    }
+}
+
 object OpenAiClient {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -66,16 +77,25 @@ object OpenAiClient {
             )
 
         val response =
-            client.post("https://api.openai.com/v1/chat/completions") {
-                contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $apiKey")
-                setBody(request)
+            try {
+                client.post("https://api.openai.com/v1/chat/completions") {
+                    contentType(ContentType.Application.Json)
+                    header("Authorization", "Bearer $apiKey")
+                    setBody(request)
+                }
+            } catch (e: Exception) {
+                throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
             }
 
         val body = response.bodyAsText()
         if (response.status != HttpStatusCode.OK) {
             logger.error { "OpenAI API error (${response.status}): $body" }
-            throw RuntimeException("OpenAI API error: ${response.status}")
+            throw when (response.status.value) {
+                401 -> OpenAiError.AuthenticationError("Invalid or expired API key")
+                429 -> OpenAiError.RateLimitError("Rate limit exceeded — please try again later")
+                in 400..499 -> OpenAiError.ModelError("OpenAI request error (${response.status.value}): $body")
+                else -> OpenAiError.ServerError("OpenAI server error (${response.status.value})")
+            }
         }
 
         return json.decodeFromString(OpenAiChatResponse.serializer(), body)

@@ -40,6 +40,10 @@ object AiMessages : Table("ai_messages") {
     val page_context = varchar("page_context", 255).nullable()
     val model = varchar("model", 50).nullable()
     val tokens_used = integer("tokens_used").nullable()
+    val input_tokens = integer("input_tokens").nullable()
+    val output_tokens = integer("output_tokens").nullable()
+    val cost_usd = decimal("cost_usd", 10, 6).nullable()
+    val provider = varchar("provider", 20).nullable()
     val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
