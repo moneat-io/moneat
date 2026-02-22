@@ -19,7 +19,30 @@ package com.moneat.dashboards.models
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.Column
+import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.datetime.timestamp
+import org.postgresql.util.PGobject
+
+// Custom JSONB column type for PostgreSQL
+class JsonbColumnType : ColumnType<String>() {
+    override fun sqlType(): String = "JSONB"
+
+    override fun valueFromDB(value: Any): String = when (value) {
+        is PGobject -> value.value ?: ""
+        is String -> value
+        else -> value.toString()
+    }
+
+    override fun notNullValueToDB(value: String): Any {
+        val pgObject = PGobject()
+        pgObject.type = "jsonb"
+        pgObject.value = value
+        return pgObject
+    }
+}
+
+fun Table.jsonb(name: String): Column<String> = registerColumn(name, JsonbColumnType())
 
 // Exposed table definitions
 
@@ -47,8 +70,8 @@ object DashboardWidgets : Table("dashboard_widgets") {
     val gridY = integer("grid_y").default(0)
     val gridW = integer("grid_w").default(6)
     val gridH = integer("grid_h").default(4)
-    val queryConfig = text("query_config")
-    val displayConfig = text("display_config").default("{}")
+    val queryConfig = jsonb("query_config")
+    val displayConfig = jsonb("display_config")
     val sortOrder = integer("sort_order").default(0)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")

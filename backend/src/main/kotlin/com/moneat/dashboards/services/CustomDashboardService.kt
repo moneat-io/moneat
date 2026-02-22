@@ -129,7 +129,7 @@ class CustomDashboardService {
                     it[gridW] = widget.gridW
                     it[gridH] = widget.gridH
                     it[queryConfig] = json.encodeToString(widget.queryConfig)
-                    it[displayConfig] = json.encodeToString(widget.displayConfig)
+                    it[displayConfig] = if (widget.displayConfig.isEmpty()) "{}" else json.encodeToString(widget.displayConfig)
                     it[sortOrder] = widget.sortOrder.takeIf { so -> so > 0 } ?: index
                     it[createdAt] = now
                     it[updatedAt] = now
