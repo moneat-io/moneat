@@ -24,7 +24,6 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Subscriptions
 import com.moneat.utils.SentryUtils
-import io.ktor.server.config.ApplicationConfig
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -61,11 +60,8 @@ class BillingQuotaService(
         private const val BYTES_PER_GB = 1_073_741_824L
     }
 
-    private val config = ApplicationConfig("application.conf")
-
     fun isEnforcementEnabled(): Boolean {
-        if (EnvConfig.SelfHost.enabled) return false
-        return config.propertyOrNull("billing.enforcementEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
+        return !EnvConfig.SelfHost.enabled
     }
 
     fun getUsageForOrganization(organizationId: Int): BillingUsageResponse {
