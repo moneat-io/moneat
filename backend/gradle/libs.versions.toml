@@ -101,8 +101,8 @@ junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", vers
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
-testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
-testcontainers-clickhouse = { module = "org.testcontainers:clickhouse", version.ref = "testcontainers" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
+testcontainers-clickhouse = { module = "org.testcontainers:testcontainers-clickhouse", version.ref = "testcontainers" }
 
 # Detekt
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
