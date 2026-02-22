@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.21
 FROM node:24-alpine AS email-builder
 WORKDIR /emails
 COPY emails/package*.json ./
