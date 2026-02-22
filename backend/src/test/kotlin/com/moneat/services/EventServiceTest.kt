@@ -806,13 +806,13 @@ class EventServiceTest {
             if (exceptionType != null) {
                 ExceptionInfo(
                     values =
-                        listOf(
-                            ExceptionValue(
-                                type = exceptionType,
-                                value = exceptionMessage ?: exceptionType,
-                                stacktrace = stackTrace?.let { StackTrace(frames = it) }
-                            )
+                    listOf(
+                        ExceptionValue(
+                            type = exceptionType,
+                            value = exceptionMessage ?: exceptionType,
+                            stacktrace = stackTrace?.let { StackTrace(frames = it) }
                         )
+                    )
                 )
             } else {
                 null

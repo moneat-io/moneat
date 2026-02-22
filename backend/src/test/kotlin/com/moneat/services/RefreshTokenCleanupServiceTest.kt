@@ -39,10 +39,10 @@ class RefreshTokenCleanupServiceTest {
             val service =
                 RefreshTokenCleanupService(
                     refreshTokenCleaner =
-                        {
-                            calls.incrementAndGet()
-                            0
-                        },
+                    {
+                        calls.incrementAndGet()
+                        0
+                    },
                     cleanupInterval = 15.milliseconds
                 )
 
@@ -66,11 +66,11 @@ class RefreshTokenCleanupServiceTest {
             val service =
                 RefreshTokenCleanupService(
                     refreshTokenCleaner =
-                        {
-                            val current = calls.incrementAndGet()
-                            if (current == 1) throw IllegalStateException("boom")
-                            0
-                        },
+                    {
+                        val current = calls.incrementAndGet()
+                        if (current == 1) throw IllegalStateException("boom")
+                        0
+                    },
                     cleanupInterval = 15.milliseconds
                 )
 
