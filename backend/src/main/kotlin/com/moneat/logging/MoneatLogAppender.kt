@@ -47,9 +47,21 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             }
         )
 
+    private val isProdEndpoint get() = endpoint.contains("api.moneat.io")
+
     override fun start() {
         super.start()
-        // Log appender configuration on startup
+        if (dsn.isBlank()) {
+            dsn = System.getenv("MONEAT_LOGS_DSN") ?: System.getProperty("MONEAT_LOGS_DSN") ?: ""
+        }
+        if (endpoint.isBlank() || endpoint == "https://api.moneat.io/v1/logs/otlp") {
+            val envEndpoint = System.getenv("MONEAT_LOGS_ENDPOINT") ?: System.getProperty("MONEAT_LOGS_ENDPOINT")
+            if (!envEndpoint.isNullOrBlank()) endpoint = envEndpoint
+        }
+        if (environment == "development" && isProdEndpoint) {
+            System.err.println("[MoneatLogAppender] SAFETY: endpoint points to production but environment=development - logs will NOT be shipped. Set MONEAT_LOGS_ENDPOINT to your local instance.")
+            return
+        }
         if (dsn.isBlank()) {
             System.err.println("[MoneatLogAppender] WARNING: DSN is blank - logs will NOT be shipped to remote")
         } else {
@@ -60,7 +72,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     }
 
     override fun append(event: ILoggingEvent) {
-        if (dsn.isBlank()) return
+        if (dsn.isBlank() || (environment == "development" && isProdEndpoint)) return
 
         (event as? DeferredProcessingAware)?.prepareForDeferredProcessing()
 
@@ -68,7 +80,8 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             try {
                 sendLog(event)
             } catch (e: Exception) {
-                // Silently fail to avoid log loops
+                // Use stderr to avoid log loops
+                System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
             }
         }
     }
