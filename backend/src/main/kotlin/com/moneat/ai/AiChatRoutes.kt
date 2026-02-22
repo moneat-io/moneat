@@ -75,7 +75,10 @@ fun Route.aiChatRoutes() {
                     call.respond(response)
                 } catch (e: OpenAiError.AuthenticationError) {
                     logger.error(e) { "AI auth error for user $userId" }
-                    call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "AI service authentication failed: ${e.message}"))
+                    call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        mapOf("error" to "AI service authentication failed: ${e.message}")
+                    )
                 } catch (e: OpenAiError.RateLimitError) {
                     logger.warn(e) { "AI rate limit for user $userId" }
                     call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to e.message))
@@ -84,7 +87,10 @@ fun Route.aiChatRoutes() {
                     call.respond(HttpStatusCode.BadGateway, mapOf("error" to "AI provider error: ${e.message}"))
                 } catch (e: Exception) {
                     logger.error(e) { "AI chat error for user $userId" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to process chat message: ${e.message}"))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        mapOf("error" to "Failed to process chat message: ${e.message}")
+                    )
                 }
             }
 

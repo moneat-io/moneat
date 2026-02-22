@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
+import {useState, useRef, useEffect} from 'react'
 import {useLocation} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import type {AiChatResponse, AiChatResponseData, AiConversationSummary, AiSseEvent} from '@/lib/api'
@@ -39,14 +39,10 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   response?: AiChatResponseData
-  costUsd?: string
-  provider?: string
-  model?: string
   timestamp: Date
   // SSE aggregation state
   searchSources?: SourceStatus[]
   totalTokens?: number
-  snapshotId?: number
 }
 
 export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimize: () => void}) {
@@ -61,11 +57,15 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
   ])
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isConfirming, setIsConfirming] = useState(false)
   const [showConversations, setShowConversations] = useState(false)
   const [conversations, setConversations] = useState<AiConversationSummary[]>([])
   const [conversationsLoading, setConversationsLoading] = useState(false)
   const [useEnterpriseSse, setUseEnterpriseSse] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
+  }, [messages])
 
   const handleSend = async (text: string) => {
     const userMessage: Message = {
@@ -118,7 +118,17 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
           } else if (event.phase === 'context_ready') {
             setMessages(prev => prev.map(m =>
               m.id === progressId
-                ? {...m, totalTokens: event.totalTokens, snapshotId: event.snapshotId}
+                ? {...m, totalTokens: event.totalTokens}
+                : m
+            ))
+          } else if (event.phase === 'response' && event.done) {
+            setMessages(prev => prev.map(m =>
+              m.id === progressId
+                ? {
+                    ...m,
+                    searchSources: undefined,
+                    content: event.content,
+                  }
                 : m
             ))
           } else if (event.phase === 'error') {
@@ -144,50 +154,6 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
       ))
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handleConfirm = async (snapshotId: number) => {
-    setIsConfirming(true)
-    try {
-      await api.streamAiConfirm(snapshotId, (event: AiSseEvent) => {
-        if (event.phase === 'response' && event.done) {
-          setMessages(prev => [
-            ...prev,
-            {
-              id: `ai-${Date.now()}`,
-              role: 'assistant',
-              content: event.content,
-              costUsd: event.costUsd,
-              provider: event.provider,
-              model: event.model,
-              timestamp: new Date(),
-            },
-          ])
-        } else if (event.phase === 'error') {
-          setMessages(prev => [
-            ...prev,
-            {
-              id: `error-${Date.now()}`,
-              role: 'assistant',
-              content: event.error,
-              timestamp: new Date(),
-            },
-          ])
-        }
-      })
-    } catch (err) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          role: 'assistant',
-          content: err instanceof Error ? err.message : 'Failed to get AI response',
-          timestamp: new Date(),
-        },
-      ])
-    } finally {
-      setIsConfirming(false)
     }
   }
 
@@ -401,9 +367,6 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
                   <ContextAggregationProgress
                     sources={msg.searchSources}
                     totalTokens={msg.totalTokens}
-                    snapshotId={msg.snapshotId}
-                    onConfirm={handleConfirm}
-                    isConfirming={isConfirming}
                   />
                 )}
                 {/* Regular message content */}
@@ -411,9 +374,6 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
                   <ChatMessage
                     role={msg.role}
                     content={msg.content}
-                    costUsd={msg.costUsd}
-                    provider={msg.provider}
-                    model={msg.model}
                   />
                 )}
                 {/* Legacy response components */}
@@ -463,10 +423,11 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
-          <ChatInput onSend={handleSend} disabled={isLoading || isConfirming} />
+          <ChatInput onSend={handleSend} disabled={isLoading} />
         </>
       )}
     </div>
