@@ -76,6 +76,18 @@ object SentryUtils {
     }
 
     /**
+     * Execute a block within a Sentry transaction, providing a type-safe data setter
+     * that avoids leaking Sentry types to callers (e.g. modules that don't depend on Sentry).
+     */
+    suspend fun <T> withTransactionData(
+        name: String,
+        operation: String,
+        block: suspend (setData: (String, Any) -> Unit) -> T
+    ): T = withTransaction(name, operation) { transaction ->
+        block { key, value -> transaction?.setData(key, value) }
+    }
+
+    /**
      * Add a breadcrumb to Sentry for debugging
      */
     fun addBreadcrumb(
