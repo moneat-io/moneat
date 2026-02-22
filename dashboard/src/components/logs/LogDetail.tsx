@@ -24,6 +24,8 @@ import {stripAnsi} from '@/lib/ansi'
 import {Check, Copy, ExternalLink, Eye} from 'lucide-react'
 import {useCallback, useState} from 'react'
 import {useParams} from '@tanstack/react-router'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTimeFull} from '@/lib/date-format'
 
 interface LogDetailProps {
   log: LogEntry | null
@@ -136,23 +138,9 @@ function tryFormatJson(value: string): {isJson: boolean; formatted: string} {
   }
 }
 
-function formatTimestamp(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString(undefined, {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZoneName: 'short',
-  })
-}
-
 export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps) {
   const {projectId} = useParams({strict: false})
+  const { timezone } = useTimezone()
 
   if (!log) return null
 
@@ -189,7 +177,7 @@ export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps)
             )}
           </div>
           <SheetTitle className="text-sm font-normal leading-relaxed text-foreground/90">
-            {formatTimestamp(log.timestamp)}
+            {formatDateTimeFull(log.timestamp, timezone)}
           </SheetTitle>
           {onViewInContext && (
             <Button

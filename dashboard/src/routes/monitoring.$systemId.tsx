@@ -16,6 +16,7 @@
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
+import type {ContainerStats} from '@/lib/api'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
@@ -52,10 +53,11 @@ import {
 } from 'recharts'
 import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
-import {Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription} from '@/components/ui/sheet'
+import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/components/ui/sheet'
 import {LogExplorer} from '@/components/logs/LogExplorer'
-import { getNowDate } from '@/lib/demo'
-import type {ContainerStats} from '@/lib/api'
+import {getNowDate} from '@/lib/demo'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatTimeHM} from '@/lib/date-format'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 type ContainerViewMode = 'cards' | 'compact'
@@ -194,6 +196,7 @@ function SystemDetailPage() {
   const [containerViewMode, setContainerViewMode] = useState<ContainerViewMode>(getInitialContainerViewMode())
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedContainer, setSelectedContainer] = useState<ContainerStats | null>(null)
+  const {timezone} = useTimezone()
 
   const {data: billingUsage} = useQuery({
     queryKey: ['billing-usage'],
@@ -274,32 +277,32 @@ function SystemDetailPage() {
   // Transform metrics data for charts
   const cpuData =
     metrics?.data_points.map((point) => ({
-      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
       CPU: point.cpu_percent || 0,
     })) || []
 
   const memoryData =
     metrics?.data_points.map((point) => ({
-      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
       Memory: point.mem_percent || 0,
     })) || []
 
   const diskData =
     metrics?.data_points.map((point) => ({
-      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
       Disk: point.disk_percent || 0,
     })) || []
 
   const networkData =
     metrics?.data_points.map((point) => ({
-      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
       Received: point.net_recv_bytes || 0,
       Sent: point.net_sent_bytes || 0,
     })) || []
 
   const loadData =
     metrics?.data_points.map((point) => ({
-      time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
       '1 min': point.load_1 || 0,
       '5 min': point.load_5 || 0,
       '15 min': point.load_15 || 0,
@@ -309,7 +312,7 @@ function SystemDetailPage() {
     metrics?.data_points
       .filter((point) => point.temp_max)
       .map((point) => ({
-        time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+        time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
         Temperature: point.temp_max!,
       })) || []
 
@@ -317,7 +320,7 @@ function SystemDetailPage() {
     metrics?.data_points
       .filter((point) => point.gpu_percent)
       .map((point) => ({
-        time: new Date(point.timestamp * 1000).toLocaleTimeString(),
+        time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
         GPU: point.gpu_percent!,
       })) || []
 

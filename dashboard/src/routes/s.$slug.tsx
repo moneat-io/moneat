@@ -18,24 +18,20 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import {
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Clock,
-  Globe,
-  Activity,
-  AlertCircle,
-  Loader2,
-  ChevronRight,
+    Activity,
+    AlertCircle,
+    AlertTriangle,
+    CheckCircle2,
+    ChevronRight,
+    Clock,
+    Globe,
+    Loader2,
+    XCircle,
 } from 'lucide-react'
 import {Helmet} from 'react-helmet-async'
+import {browserTimezone, formatDateTime as formatDateTimeFn, formatMonthDay, formatTimeHM12} from '@/lib/date-format'
 
 export const Route = createFileRoute('/s/$slug')({
   component: PublicStatusPage,
@@ -199,7 +195,7 @@ function PublicStatusPage() {
               </a>
             </p>
             <p className={`text-xs ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-              Updated {new Date().toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'})}
+              Updated {formatTimeHM12(new Date(), browserTimezone())}
             </p>
           </div>
         </footer>
@@ -334,7 +330,7 @@ function MonitorRow({
                     />
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">{new Date(point.date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</p>
+                    <p className="font-medium">{formatMonthDay(new Date(point.date), browserTimezone())}</p>
                     <p className={`tabular-nums ${point.uptime >= 99 ? 'text-emerald-600 dark:text-emerald-400' : point.uptime >= 90 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
                       {point.uptime.toFixed(2)}% uptime
                     </p>
@@ -389,7 +385,7 @@ function IncidentCard({
             </div>
           </div>
           <span className={`text-[11px] flex-shrink-0 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-            {new Date(incident.createdAt).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
+            {formatMonthDay(new Date(incident.createdAt), browserTimezone())}
           </span>
         </div>
       </div>
@@ -406,12 +402,7 @@ function IncidentCard({
                 )}
                 <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{update.message}</p>
                 <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-                  {new Date(update.createdAt).toLocaleString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
+                  {formatDateTimeFn(new Date(update.createdAt), browserTimezone())}
                 </p>
               </div>
             ))}
@@ -496,10 +487,5 @@ function getImpactColor(impact: string, isDarkMode: boolean) {
 }
 
 function formatDateTime(dateStr: string) {
-  return new Date(dateStr).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  return formatDateTimeFn(new Date(dateStr), browserTimezone())
 }

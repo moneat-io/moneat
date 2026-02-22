@@ -141,7 +141,8 @@ fun Route.apiRoutes() {
                                 orgSlug,
                                 demoEpochMs,
                                 sidebarHiddenItems,
-                                user[Users.phone_number]
+                                user[Users.phone_number],
+                                user[Users.timezone]
                             )
                         )
                     }
@@ -375,6 +376,32 @@ fun Route.apiRoutes() {
                     } else {
                         call.respond(SidebarPreferencesResponse(hiddenItems!!))
                     }
+                }
+
+                put("/user/timezone") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+
+                    @kotlinx.serialization.Serializable
+                    data class UpdateTimezoneRequest(val timezone: String?)
+
+                    @kotlinx.serialization.Serializable
+                    data class UpdateTimezoneResponse(val timezone: String?)
+
+                    val request = call.receive<UpdateTimezoneRequest>()
+                    val tz = request.timezone?.trim()
+
+                    if (tz != null && tz !in java.time.ZoneId.getAvailableZoneIds()) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid timezone identifier"))
+                        return@put
+                    }
+
+                    transaction {
+                        Users.update({ Users.id eq userId }) {
+                            it[Users.timezone] = tz
+                        }
+                    }
+                    call.respond(UpdateTimezoneResponse(tz))
                 }
 
                 // SDK versions used in setup documentation

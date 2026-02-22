@@ -16,13 +16,14 @@
 
 import {type ClassValue, clsx} from "clsx"
 import {twMerge} from "tailwind-merge"
-import { getNowDate } from './demo'
+import {getNowDate} from './demo'
+import {browserTimezone, formatDate} from './date-format'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatRelativeTime(dateValue: string | number | undefined): string {
+export function formatRelativeTime(dateValue: string | number | undefined, timezone?: string): string {
   if (!dateValue) return 'unknown'
   
   // Handle ClickHouse DateTime format (YYYY-MM-DD HH:MM:SS) as UTC
@@ -42,5 +43,5 @@ export function formatRelativeTime(dateValue: string | number | undefined): stri
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`
-  return date.toLocaleDateString()
+  return formatDate(date, timezone ?? browserTimezone())
 }

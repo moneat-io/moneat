@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState, useRef, useEffect} from 'react'
+import {useEffect, useRef, useState} from 'react'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDate} from '@/lib/date-format'
 import {useLocation} from '@tanstack/react-router'
-import {api} from '@/lib/api'
 import type {AiChatResponse, AiChatResponseData, AiConversationSummary, AiSseEvent} from '@/lib/api'
+import {api} from '@/lib/api'
 import {Logo} from '@/components/logo'
 import {ChatMessage} from './ChatMessage'
 import {ActionCard} from './ActionCard'
@@ -26,7 +28,7 @@ import {DataQueryResult} from './DataQueryResult'
 import {ContextAggregationProgress} from './ContextAggregationProgress'
 import {ChatInput} from './ChatInput'
 import {cn} from '@/lib/utils'
-import {MessageSquare, Minus, X, Trash2, Plus, ChevronLeft} from 'lucide-react'
+import {ChevronLeft, MessageSquare, Minus, Plus, Trash2, X} from 'lucide-react'
 
 interface SourceStatus {
   source: string
@@ -47,6 +49,7 @@ interface Message {
 
 export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimize: () => void}) {
   const location = useLocation()
+  const { timezone } = useTimezone()
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -340,7 +343,7 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate">{c.title || 'Untitled'}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(c.updatedAt).toLocaleDateString()}
+                    {formatDate(new Date(c.updatedAt), timezone)}
                   </p>
                 </div>
                 <button

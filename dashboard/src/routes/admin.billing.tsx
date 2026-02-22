@@ -28,12 +28,12 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/c
 import {Separator} from '@/components/ui/separator'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from '@/components/ui/dialog'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -41,6 +41,8 @@ import {useToast} from '@/hooks/use-toast'
 import {AdminSkeleton, PlanBadge, SectionHeader} from '@/components/admin-components'
 import {type BillingInterval, buildPricingCardModel, type PricingCardTierInput} from '@/lib/pricing-display'
 import {AlertTriangle, Check, HelpCircle, Info} from 'lucide-react'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDate} from '@/lib/date-format'
 
 export const Route = createFileRoute('/admin/billing')({
   component: AdminBillingPage,
@@ -294,6 +296,7 @@ function buildCreateFormFromConfig(config: BillingTierConfig): CreateFormState {
 function AdminBillingPage() {
   const queryClient = useQueryClient()
   const {toast} = useToast()
+  const {timezone} = useTimezone()
 
   // Separate tier selectors for create vs. migrate sections
   const [createTier, setCreateTier] = useState('PRO')
@@ -1972,8 +1975,8 @@ function AdminBillingPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {sub.currentPeriodStart && sub.currentPeriodEnd ? (
                           <>
-                            {new Date(sub.currentPeriodStart).toLocaleDateString()} &ndash;{' '}
-                            {new Date(sub.currentPeriodEnd).toLocaleDateString()}
+                            {formatDate(new Date(sub.currentPeriodStart), timezone)} &ndash;{' '}
+                            {formatDate(new Date(sub.currentPeriodEnd), timezone)}
                           </>
                         ) : (
                           '—'

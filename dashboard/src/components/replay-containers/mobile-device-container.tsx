@@ -17,6 +17,8 @@
 import {cn} from '@/lib/utils'
 import {Signal, Wifi} from 'lucide-react'
 import type {ReplayOrientation} from '@/components/mobile-replay-viewer'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatTimeHM12} from '@/lib/date-format'
 
 export interface StatusBarContext {
   /** Device time from the replay (epoch ms) */
@@ -50,19 +52,13 @@ function BatteryIcon({ level, charging, className }: { level?: number | null; ch
   )
 }
 
-function formatDeviceTime(deviceTimeMs?: number | null): string {
-  const date = typeof deviceTimeMs === 'number' && Number.isFinite(deviceTimeMs)
-    ? new Date(deviceTimeMs)
-    : null
-  if (!date || isNaN(date.getTime())) {
-    return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  }
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-}
-
 function StatusBar({ platform, compact, context }: { platform: string; compact?: boolean; context?: StatusBarContext }) {
+  const { timezone } = useTimezone()
   const isIOS = platform === 'ios'
-  const time = formatDeviceTime(context?.deviceTimeMs)
+  const date = typeof context?.deviceTimeMs === 'number' && Number.isFinite(context?.deviceTimeMs)
+    ? new Date(context.deviceTimeMs)
+    : new Date()
+  const time = isNaN(date.getTime()) ? formatTimeHM12(new Date(), timezone) : formatTimeHM12(date, timezone)
   const batteryLevel = context?.batteryLevel
   const hasBatteryLevel = typeof batteryLevel === 'number' && Number.isFinite(batteryLevel)
 

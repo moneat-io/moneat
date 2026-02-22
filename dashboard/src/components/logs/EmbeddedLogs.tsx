@@ -17,6 +17,8 @@
 import {useQuery} from '@tanstack/react-query'
 import {useMemo, useState} from 'react'
 import {api, type LogEntry} from '@/lib/api'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime} from '@/lib/date-format'
 import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
 import {ContainerLogSetupGuide} from '@/components/logs/ContainerLogSetupGuide'
@@ -76,6 +78,7 @@ export function EmbeddedLogs({
   compact = false,
   className,
 }: EmbeddedLogsProps) {
+  const { timezone } = useTimezone()
   const [cursor, setCursor] = useState<string | null>(null)
   const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([])
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
@@ -187,13 +190,7 @@ export function EmbeddedLogs({
               {centerTimestamp ? (
                 <>
                   Logs ±{contextMinutes}min around{' '}
-                  {new Date(centerTimestamp).toLocaleString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                  })}
+                  {formatDateTime(new Date(centerTimestamp), timezone)}
                 </>
               ) : (
                 'Logs'
