@@ -16,18 +16,18 @@
 
 package com.moneat.plugins
 
+import com.moneat.auth.services.RefreshTokenCleanupService
+import com.moneat.billing.services.BillingBackgroundService
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.services.ArtifactCleanupService
-import com.moneat.services.BillingBackgroundService
-import com.moneat.services.IngestionWorker
-import com.moneat.services.LlmIngestionWorker
-import com.moneat.services.LogIngestionWorker
-import com.moneat.services.MonitorAlertService
-import com.moneat.services.PulseService
-import com.moneat.services.RefreshTokenCleanupService
-import com.moneat.services.RetentionBackgroundService
-import com.moneat.services.UptimeScheduler
-import com.moneat.services.UsageTrackingService
+import com.moneat.events.services.IngestionWorker
+import com.moneat.llm.services.LlmIngestionWorker
+import com.moneat.logs.services.LogIngestionWorker
+import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.shared.services.ArtifactCleanupService
+import com.moneat.shared.services.PulseService
+import com.moneat.shared.services.RetentionBackgroundService
+import com.moneat.shared.services.UsageTrackingService
+import com.moneat.uptime.services.UptimeScheduler
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import kotlinx.coroutines.CoroutineScope

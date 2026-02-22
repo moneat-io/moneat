@@ -18,14 +18,18 @@ package com.moneat.plugins
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.services.AuthTokenService
+import com.moneat.auth.services.AuthTokenService
 import com.moneat.utils.SentryUtils
 import io.ktor.http.auth.HttpAuthHeader
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.install
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.BearerTokenCredential
+import io.ktor.server.auth.bearer
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
 import mu.KotlinLogging
-import java.util.Base64
+import java.util.*
 
 private val logger = KotlinLogging.logger {}
 
