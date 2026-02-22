@@ -17,10 +17,12 @@
 package com.moneat.plugins
 
 import com.moneat.config.configureClickHouseMigrations
-import com.moneat.services.SystemStatusTracker
+import com.moneat.shared.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import io.ktor.server.application.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStopping
+import io.ktor.server.application.log
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database

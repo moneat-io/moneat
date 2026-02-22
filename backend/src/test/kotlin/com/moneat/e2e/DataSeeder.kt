@@ -17,7 +17,11 @@
 package com.moneat.e2e
 
 import com.moneat.config.EnvConfig
-import com.moneat.models.*
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.ProjectKeys
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert

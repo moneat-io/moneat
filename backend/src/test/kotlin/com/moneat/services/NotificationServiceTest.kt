@@ -16,13 +16,15 @@
 
 package com.moneat.services
 
-import com.moneat.models.EmailsSent
-import com.moneat.models.Memberships
-import com.moneat.models.NotificationPreferences
-import com.moneat.models.Organizations
-import com.moneat.models.Projects
-import com.moneat.models.SentryEvent
-import com.moneat.models.Users
+import com.moneat.events.models.SentryEvent
+import com.moneat.notifications.services.EmailService
+import com.moneat.notifications.services.NotificationService
+import com.moneat.shared.models.EmailsSent
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.NotificationPreferences
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Users
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils

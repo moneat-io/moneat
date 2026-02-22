@@ -16,10 +16,13 @@
 
 package com.moneat.services
 
-import com.moneat.models.EmailsSent
-import com.moneat.models.OrganizationIntegrations
-import com.moneat.models.Organizations
-import com.moneat.models.Users
+import com.moneat.notifications.services.DiscordService
+import com.moneat.notifications.services.EmailService
+import com.moneat.notifications.services.SlackService
+import com.moneat.shared.models.EmailsSent
+import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -27,7 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.UUID
+import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +38,7 @@ import kotlin.test.assertFalse
 
 class AlertChannelServicesTest {
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest

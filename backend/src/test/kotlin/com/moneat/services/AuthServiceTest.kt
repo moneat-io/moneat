@@ -1,17 +1,38 @@
 package com.moneat.services
 
-import com.moneat.models.*
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
+import com.moneat.auth.services.AuthService
+import com.moneat.events.models.LoginRequest
+import com.moneat.events.models.SignupRequest
+import com.moneat.shared.models.EmailsSent
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OrgInvitations
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.RefreshTokens
+import com.moneat.shared.models.SsoConfigurations
+import com.moneat.shared.models.UserLegalAcceptances
+import com.moneat.shared.models.Users
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
-import kotlin.test.*
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AuthServiceTest {
     private val authService = AuthService()
 
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest

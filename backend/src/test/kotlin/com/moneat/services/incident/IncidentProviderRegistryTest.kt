@@ -16,8 +16,10 @@
 
 package com.moneat.services.incident
 
-import com.moneat.models.IncidentEvent
-import com.moneat.models.ProviderConfig
+import com.moneat.incident.models.IncidentEvent
+import com.moneat.incident.models.ProviderConfig
+import com.moneat.incident.services.IncidentProvider
+import com.moneat.incident.services.IncidentProviderRegistry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

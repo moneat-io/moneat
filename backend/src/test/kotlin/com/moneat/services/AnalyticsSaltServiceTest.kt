@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.shared.services.AnalyticsSaltService
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals

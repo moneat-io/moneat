@@ -18,7 +18,13 @@
 
 package com.moneat.services
 
-import kotlin.test.*
+import com.moneat.logs.services.LogQueryParser
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Comprehensive tests for Datadog-compatible log query parser.

@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.auth.services.OAuthService
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking

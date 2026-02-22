@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.auth.services.RefreshTokenCleanupService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -37,7 +39,7 @@ class RefreshTokenCleanupServiceTest {
             val service =
                 RefreshTokenCleanupService(
                     refreshTokenCleaner =
-                    RefreshTokenCleaner {
+                    {
                         calls.incrementAndGet()
                         0
                     },
@@ -53,7 +55,7 @@ class RefreshTokenCleanupServiceTest {
             scope.cancel()
 
             assertTrue(countAtStop >= 2, "Expected at least two cleanup runs, got $countAtStop")
-            assertTrue(calls.get() == countAtStop, "Cleanup should stop running after stop()")
+            assertEquals(calls.get(), countAtStop, "Cleanup should stop running after stop()")
         }
 
     @Test
@@ -64,7 +66,7 @@ class RefreshTokenCleanupServiceTest {
             val service =
                 RefreshTokenCleanupService(
                     refreshTokenCleaner =
-                    RefreshTokenCleaner {
+                    {
                         val current = calls.incrementAndGet()
                         if (current == 1) throw IllegalStateException("boom")
                         0

@@ -17,7 +17,8 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.models.LlmGenerationIngest
+import com.moneat.llm.models.LlmGenerationIngest
+import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
@@ -111,7 +112,7 @@ class LlmIngestionWorkerTest {
         }
 
     @Test
-    fun `insertGenerations throws when clickhouse insert fails`() =
+    fun `insertGenerations throws when clickhouse insert fails`(): Unit =
         runBlocking {
             MockHttpServer { exchange ->
                 exchange.requestBodyText()

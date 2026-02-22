@@ -16,25 +16,26 @@
 
 package com.moneat.services
 
-import com.moneat.models.CreateAlertRequest
-import com.moneat.models.Memberships
-import com.moneat.models.OrganizationAlertTemplates
-import com.moneat.models.Organizations
-import com.moneat.models.PricingTierConfigs
-import com.moneat.models.Projects
-import com.moneat.models.Subscriptions
-import com.moneat.models.SystemAlertSettings
-import com.moneat.models.SystemAlertTemplateStates
-import com.moneat.models.SystemAlerts
-import com.moneat.models.Systems
-import com.moneat.models.UpdateAlertRequest
-import com.moneat.models.Users
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.monitor.models.CreateAlertRequest
+import com.moneat.monitor.models.UpdateAlertRequest
+import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OrganizationAlertTemplates
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.models.SystemAlertSettings
+import com.moneat.shared.models.SystemAlertTemplateStates
+import com.moneat.shared.models.SystemAlerts
+import com.moneat.shared.models.Systems
+import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.UUID
+import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,7 +51,7 @@ class MonitorServiceAlertTest {
     private val service = MonitorService()
 
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
         private const val ALERT_SCOPE_SYSTEM = "system"
         private const val ALERT_SCOPE_GLOBAL = "global"
     }
@@ -120,7 +121,7 @@ class MonitorServiceAlertTest {
         }
 
     private fun seedSystem(orgId: Int, name: String = "test-server"): Pair<UUID, String> {
-        val agentKey = "test-key-${UUID.randomUUID()}"
+        "test-key-${UUID.randomUUID()}"
         val (system, returnedKey) = service.createSystem(orgId, name)
         return system.id to returnedKey
     }

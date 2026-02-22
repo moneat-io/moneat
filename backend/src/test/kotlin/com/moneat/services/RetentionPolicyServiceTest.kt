@@ -16,11 +16,12 @@
 
 package com.moneat.services
 
-import com.moneat.models.Organizations
-import com.moneat.models.PricingTierConfigs
-import com.moneat.models.Projects
-import com.moneat.models.Subscriptions
-import com.moneat.models.Systems
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.models.Systems
+import com.moneat.shared.services.RetentionPolicyService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -28,7 +29,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.MessageDigest
-import java.util.UUID
+import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

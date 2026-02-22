@@ -16,12 +16,13 @@
 
 package com.moneat.services
 
-import com.moneat.models.AgentLogEntry
-import com.moneat.models.LogEntryResponse
-import com.moneat.models.LogIngestEntry
-import com.moneat.models.LogTailFilters
-import com.moneat.models.QueuedLogBatch
-import com.moneat.models.QueuedLogEntry
+import com.moneat.logs.models.AgentLogEntry
+import com.moneat.logs.models.LogEntryResponse
+import com.moneat.logs.models.LogIngestEntry
+import com.moneat.logs.models.LogTailFilters
+import com.moneat.logs.models.QueuedLogBatch
+import com.moneat.logs.models.QueuedLogEntry
+import com.moneat.logs.services.LogService
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

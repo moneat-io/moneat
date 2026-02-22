@@ -16,7 +16,7 @@
 
 package com.moneat.integration
 
-import com.moneat.services.LogQueryParser
+import com.moneat.logs.services.LogQueryParser
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*

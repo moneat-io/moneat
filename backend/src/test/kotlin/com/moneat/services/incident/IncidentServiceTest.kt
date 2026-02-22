@@ -16,11 +16,12 @@
 
 package com.moneat.services.incident
 
-import com.moneat.models.AlertSource
-import com.moneat.models.IncidentProviderConfigs
-import com.moneat.models.IncidentRoutingRules
-import com.moneat.models.IncidentSeverity
-import com.moneat.models.Organizations
+import com.moneat.incident.models.AlertSource
+import com.moneat.incident.models.IncidentProviderConfigs
+import com.moneat.incident.models.IncidentRoutingRules
+import com.moneat.incident.models.IncidentSeverity
+import com.moneat.incident.services.IncidentService
+import com.moneat.shared.models.Organizations
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll

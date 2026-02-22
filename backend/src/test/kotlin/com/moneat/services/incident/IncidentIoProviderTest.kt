@@ -16,11 +16,12 @@
 
 package com.moneat.services.incident
 
-import com.moneat.models.AlertSource
-import com.moneat.models.IncidentEvent
-import com.moneat.models.IncidentSeverity
-import com.moneat.models.IncidentStatus
-import com.moneat.models.ProviderConfig
+import com.moneat.incident.models.AlertSource
+import com.moneat.incident.models.IncidentEvent
+import com.moneat.incident.models.IncidentSeverity
+import com.moneat.incident.models.IncidentStatus
+import com.moneat.incident.models.ProviderConfig
+import com.moneat.incident.services.IncidentIoProvider
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put

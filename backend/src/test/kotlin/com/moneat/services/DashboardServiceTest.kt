@@ -17,7 +17,8 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.models.Projects
+import com.moneat.events.services.DashboardService
+import com.moneat.shared.models.Projects
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
@@ -25,7 +26,7 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.Collections
+import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -34,7 +35,7 @@ import kotlin.test.assertTrue
 
 class DashboardServiceTest {
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest

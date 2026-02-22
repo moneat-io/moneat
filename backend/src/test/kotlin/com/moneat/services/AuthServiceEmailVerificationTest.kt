@@ -16,7 +16,13 @@
 
 package com.moneat.services
 
-import com.moneat.models.*
+import com.moneat.auth.services.AuthService
+import com.moneat.shared.models.EmailsSent
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.RefreshTokens
+import com.moneat.shared.models.UserLegalAcceptances
+import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils

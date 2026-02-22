@@ -16,6 +16,7 @@
 
 package com.moneat.routes
 
+import com.moneat.llm.routes.llmIngestRoutes
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode

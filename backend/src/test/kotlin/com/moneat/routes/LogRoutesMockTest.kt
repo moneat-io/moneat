@@ -16,19 +16,20 @@
 
 package com.moneat.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.logs.services.LogService
+import com.moneat.logs.routes.logRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.models.LogAggregateResponse
-import com.moneat.models.LogFilterOptionsWithCountsResponse
-import com.moneat.models.LogQueryResponse
-import com.moneat.models.LogTagValuesResponse
-import com.moneat.models.LogTopResponse
-import com.moneat.models.Memberships
-import com.moneat.models.Organizations
-import com.moneat.models.Projects
-import com.moneat.models.Users
-import com.moneat.services.BillingQuotaService
-import com.moneat.services.LogService
+import com.moneat.logs.models.LogAggregateResponse
+import com.moneat.logs.models.LogFilterOptionsWithCountsResponse
+import com.moneat.logs.models.LogQueryResponse
+import com.moneat.logs.models.LogTagValuesResponse
+import com.moneat.logs.models.LogTopResponse
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Users
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
