@@ -28,6 +28,7 @@ class UsageTrackingServiceTest {
             )
             transaction(db!!) {
                 SchemaUtils.create(
+                    Users,
                     Organizations,
                     Projects,
                     Subscriptions,

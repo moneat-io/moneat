@@ -23,6 +23,7 @@ import com.moneat.models.MonitorAssignment
 import com.moneat.models.UpdateIncidentRequest
 import com.moneat.models.UpdateStatusPageRequest
 import com.moneat.models.CreateStatusPageRequest
+import com.moneat.models.Memberships
 import com.moneat.models.Organizations
 import com.moneat.models.StatusPageCustomDomains
 import com.moneat.models.StatusPageIncidentUpdates
@@ -30,6 +31,7 @@ import com.moneat.models.StatusPageIncidents
 import com.moneat.models.StatusPageMonitors
 import com.moneat.models.StatusPages
 import com.moneat.models.UptimeMonitors
+import com.moneat.models.Users
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -61,7 +63,9 @@ class StatusPageServiceTest {
             )
             transaction(db!!) {
                 SchemaUtils.create(
+                    Users,
                     Organizations,
+                    Memberships,
                     StatusPages,
                     UptimeMonitors,
                     StatusPageMonitors,
@@ -80,6 +84,7 @@ class StatusPageServiceTest {
             StatusPageMonitors.deleteAll()
             StatusPages.deleteAll()
             UptimeMonitors.deleteAll()
+            Memberships.deleteAll()
             Organizations.deleteAll()
 
             orgId =
