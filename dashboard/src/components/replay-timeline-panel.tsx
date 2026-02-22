@@ -403,7 +403,6 @@ function ExpandedItemPanel({
 /* ── Main component ── */
 
 export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek }: ReplayTimelinePanelProps) {
-  const { timezone } = useTimezone()
   const listRef = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<FilterValue>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)

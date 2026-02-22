@@ -20,7 +20,7 @@ import {useCallback, useMemo, useRef, useState} from 'react'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDate as formatDateUtil} from '@/lib/date-format'
+import {formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
 import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/replay-player'
 import {MobileReplayViewer, type MobileReplayViewerHandle} from '@/components/mobile-replay-viewer'
 import {ReplayTimelinePanel} from '@/components/replay-timeline-panel'
@@ -64,7 +64,7 @@ function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
   const date = new Date(isoString)
   if (isNaN(date.getTime())) return 'Invalid Date'
-  return formatDateUtil(date, timezone)
+  return formatDateTimeUtil(date, timezone)
 }
 
 /** Compute actual recording duration from events. Backend replay.durationMs uses session span and can be wrong. */
