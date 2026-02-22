@@ -327,6 +327,17 @@ fun Route.customDashboardRoutes(
                 }
             }
 
+            // Test connection (without saving) — must be before /{id} routes
+            post("/test") {
+                val request = call.receive<TestConnectionRequest>()
+                try {
+                    val result = dataSourceExecutor.testConnection(request)
+                    call.respond(result)
+                } catch (e: Exception) {
+                    call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
+                }
+            }
+
             // Get custom data source
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
@@ -377,17 +388,6 @@ fun Route.customDashboardRoutes(
                     call.respond(HttpStatusCode.NoContent, "")
                 } else {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
-                }
-            }
-
-            // Test connection (without saving)
-            post("/test") {
-                val request = call.receive<TestConnectionRequest>()
-                try {
-                    val result = dataSourceExecutor.testConnection(request)
-                    call.respond(result)
-                } catch (e: Exception) {
-                    call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
                 }
             }
 

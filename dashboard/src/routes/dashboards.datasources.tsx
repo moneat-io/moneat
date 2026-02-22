@@ -25,6 +25,7 @@ import {
 import {Plus, Database, Trash2, Power, PowerOff, FlaskConical, Check, X, Pencil} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {useState} from 'react'
+import {DataSourceTypePicker, DATA_SOURCE_TYPES} from '@/components/dashboards/DataSourceTypePicker'
 
 export const Route = createFileRoute('/dashboards/datasources')({
   component: DataSourcesPage,
@@ -175,18 +176,16 @@ function DataSourcesPage() {
               </div>
               <div>
                 <label className="text-sm font-medium">Type</label>
-                <select
-                  className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                  value={formData.source_type}
-                  onChange={(e) => {
-                    updateField('source_type', e.target.value)
-                    updateField('port', e.target.value === 'postgresql' ? 5432 : 9090)
-                  }}
-                  disabled={!!editingId}
-                >
-                  <option value="postgresql">PostgreSQL</option>
-                  <option value="prometheus">Prometheus</option>
-                </select>
+                <div className="mt-1">
+                  <DataSourceTypePicker
+                    value={formData.source_type}
+                    onChange={(val) => {
+                      updateField('source_type', val)
+                      updateField('port', val === 'postgresql' ? 5432 : 9090)
+                    }}
+                    disabled={!!editingId}
+                  />
+                </div>
               </div>
             </div>
 
@@ -348,9 +347,11 @@ function DataSourcesPage() {
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`rounded-md p-2 ${ds.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}
+                  className={`flex items-center justify-center rounded-md p-2 ${ds.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}
                 >
-                  <Database className="h-5 w-5" />
+                  {DATA_SOURCE_TYPES.find((t) => t.value === ds.source_type)?.logo || (
+                    <Database className="h-5 w-5" />
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
