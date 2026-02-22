@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Loader2, CheckCircle2, XCircle, Database, Send} from 'lucide-react'
+import {Loader2, CheckCircle2, XCircle, Database} from 'lucide-react'
 
 interface SourceStatus {
   source: string
@@ -25,25 +25,17 @@ interface SourceStatus {
 interface ContextAggregationProgressProps {
   sources: SourceStatus[]
   totalTokens?: number
-  snapshotId?: number
-  onConfirm: (snapshotId: number) => void
-  isConfirming?: boolean
 }
 
 const SOURCE_LABELS: Record<string, string> = {
   logs: 'Logs',
   spans: 'Traces / Spans',
   events: 'Error Events',
-  metrics: 'Metrics',
+  metrics: 'Server Metrics',
+  containers: 'Containers',
 }
 
-export function ContextAggregationProgress({
-  sources,
-  totalTokens,
-  snapshotId,
-  onConfirm,
-  isConfirming,
-}: ContextAggregationProgressProps) {
+export function ContextAggregationProgress({sources, totalTokens}: ContextAggregationProgressProps) {
   const allDone = sources.length > 0 && sources.every(s => s.status === 'done')
 
   return (
@@ -66,25 +58,14 @@ export function ContextAggregationProgress({
         </div>
       ))}
 
-      {allDone && totalTokens !== undefined && (
-        <div className="pt-2 border-t border-border mt-2 space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Context ready: ~{totalTokens.toLocaleString()} tokens
-          </p>
-          {snapshotId && (
-            <button
-              onClick={() => onConfirm(snapshotId)}
-              disabled={isConfirming}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {isConfirming ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Send className="h-3 w-3" />
-              )}
-              Send to AI
-            </button>
-          )}
+      {allDone && (
+        <div className="pt-2 border-t border-border mt-2">
+          {totalTokens !== undefined ? (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Analyzing with AI…</span>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

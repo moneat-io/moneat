@@ -1719,11 +1719,6 @@ interface AiSseContextReady {
 interface AiSseResponseChunk {
   phase: 'response'
   content: string
-  inputTokens?: number
-  outputTokens?: number
-  costUsd?: string
-  provider?: string
-  model?: string
   done?: boolean
 }
 

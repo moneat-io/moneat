@@ -16,16 +16,14 @@
 
 import {Logo} from '@/components/logo'
 import {cn} from '@/lib/utils'
+import ReactMarkdown from 'react-markdown'
 
 interface ChatMessageProps {
   role: 'user' | 'assistant'
   content: string
-  costUsd?: string
-  provider?: string
-  model?: string
 }
 
-export function ChatMessage({role, content, costUsd, provider, model}: ChatMessageProps) {
+export function ChatMessage({role, content}: ChatMessageProps) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -42,15 +40,9 @@ export function ChatMessage({role, content, costUsd, provider, model}: ChatMessa
         <Logo markOnly className="h-4 w-4" />
       </div>
       <div className="space-y-1 max-w-[85%]">
-        <div className={cn("bg-muted rounded-lg px-3 py-2 text-sm", "whitespace-pre-wrap")}>
-          {content}
+        <div className={cn("bg-muted rounded-lg px-3 py-2 text-sm prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:bg-background [&_pre]:border [&_pre]:rounded [&_pre]:text-xs [&_code:not(pre_code)]:bg-background [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:text-xs")}>
+          <ReactMarkdown>{content}</ReactMarkdown>
         </div>
-        {costUsd && (
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground px-1">
-            {provider && model && <span>{provider}/{model}</span>}
-            <span>${costUsd}</span>
-          </div>
-        )}
       </div>
     </div>
   )
