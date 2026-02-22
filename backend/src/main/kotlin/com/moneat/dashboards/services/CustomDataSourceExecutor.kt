@@ -58,11 +58,18 @@ class CustomDataSourceExecutor {
                 username = request.username,
                 password = request.password,
             )
-            CustomDataSourceType.PROMETHEUS -> testPrometheusConnection(
-                host = request.host,
-                port = request.port ?: 9090,
-                apiKey = request.apiKey,
-            )
+            CustomDataSourceType.PROMETHEUS -> {
+                val defaultPort = when {
+                    request.host.startsWith("https://") -> 443
+                    request.host.startsWith("http://") && request.port == null -> 9090
+                    else -> 9090
+                }
+                testPrometheusConnection(
+                    host = request.host,
+                    port = request.port ?: defaultPort,
+                    apiKey = request.apiKey,
+                )
+            }
         }
     }
 
@@ -367,7 +374,14 @@ class CustomDataSourceExecutor {
             else -> "http://"
         }
         val cleanHost = host.removePrefix("https://").removePrefix("http://").trimEnd('/')
-        return "${scheme}${cleanHost}:${port}"
+        // Don't append port if host already contains one, or if using default HTTP/HTTPS ports
+        val hostHasPort = cleanHost.contains(":")
+        val isDefaultPort = (scheme == "http://" && port == 80) || (scheme == "https://" && port == 443)
+        return if (hostHasPort || isDefaultPort) {
+            "${scheme}${cleanHost}"
+        } else {
+            "${scheme}${cleanHost}:${port}"
+        }
     }
 
     private fun resolveRelativeTimeSec(expr: String, nowSec: Long): Long {

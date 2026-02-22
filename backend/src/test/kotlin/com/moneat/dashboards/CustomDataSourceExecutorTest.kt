@@ -135,11 +135,27 @@ class CustomDataSourceExecutorTest {
     }
 
     @Test
-    fun `buildPrometheusUrl with https prefix`() {
+    fun `buildPrometheusUrl with https prefix and default port`() {
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+        method.isAccessible = true
+        val url = method.invoke(executor, "https://prometheus.example.com", 443) as String
+        assertEquals("https://prometheus.example.com", url)
+    }
+
+    @Test
+    fun `buildPrometheusUrl with https prefix and custom port`() {
         val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
         method.isAccessible = true
         val url = method.invoke(executor, "https://prometheus.example.com", 9090) as String
         assertEquals("https://prometheus.example.com:9090", url)
+    }
+
+    @Test
+    fun `buildPrometheusUrl with host already containing port`() {
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+        method.isAccessible = true
+        val url = method.invoke(executor, "prometheus.example.com:9090", 9090) as String
+        assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test

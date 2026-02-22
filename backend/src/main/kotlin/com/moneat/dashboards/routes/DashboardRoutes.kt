@@ -60,6 +60,16 @@ private fun getOrgIdForUser(userId: Int): Long? {
     }
 }
 
+private fun defaultPortForSource(sourceType: CustomDataSourceType, host: String): Int {
+    return when (sourceType) {
+        CustomDataSourceType.POSTGRESQL -> 5432
+        CustomDataSourceType.PROMETHEUS -> when {
+            host.startsWith("https://") -> 443
+            else -> 9090
+        }
+    }
+}
+
 fun Route.customDashboardRoutes(
     dashboardService: CustomDashboardService = CustomDashboardService(),
     queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
@@ -187,7 +197,8 @@ fun Route.customDashboardRoutes(
                             ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Custom data source queries require a rawQuery"))
 
                         val results = dataSourceExecutor.executeQuery(
-                            sourceId, sourceType, source.host, source.port ?: 5432,
+                            sourceId, sourceType, source.host,
+                            source.port ?: defaultPortForSource(sourceType, source.host),
                             source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
                         )
                         call.respond(results)
@@ -299,8 +310,9 @@ fun Route.customDashboardRoutes(
     }
 
     // Custom data source management routes
-    route("/v1/datasources") {
-        authenticate("auth-jwt") {
+    route("/v1") {
+        route("/datasources") {
+            authenticate("auth-jwt") {
             // List custom data sources for org
             get {
                 val principal = call.principal<JWTPrincipal>()
@@ -411,7 +423,9 @@ fun Route.customDashboardRoutes(
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
 
                 val schema = dataSourceExecutor.getSchema(
-                    sourceType, source.host, source.port ?: 5432, source.databaseName, creds
+                    sourceType, source.host,
+                    source.port ?: defaultPortForSource(sourceType, source.host),
+                    source.databaseName, creds
                 )
                 call.respond(schema)
             }
@@ -438,13 +452,15 @@ fun Route.customDashboardRoutes(
 
                 try {
                     val results = dataSourceExecutor.executeQuery(
-                        id, sourceType, source.host, source.port ?: 5432,
+                        id, sourceType, source.host,
+                        source.port ?: defaultPortForSource(sourceType, source.host),
                         source.databaseName, creds, request.query, request.limit, request.timeRange
                     )
                     call.respond(results)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid query"))
                 }
+            }
             }
         }
     }
