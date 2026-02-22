@@ -44,7 +44,9 @@ object EscalationPolicies : IntIdTable("escalation_policies") {
 object EscalationPolicyAlertSources : IntIdTable("escalation_policy_alert_sources") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val alertSource = varchar("alert_source", 50)
-    val escalationPolicyId = integer("escalation_policy_id").references(EscalationPolicies.id, onDelete = ReferenceOption.CASCADE)
+    val escalationPolicyId = integer(
+        "escalation_policy_id"
+    ).references(EscalationPolicies.id, onDelete = ReferenceOption.CASCADE)
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
 }
 

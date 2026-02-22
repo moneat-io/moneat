@@ -20,13 +20,9 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.models.Memberships
 import com.moneat.models.Organizations
-import com.moneat.models.UptimeHeartbeatResponse
 import com.moneat.models.UptimeMonitorResponse
 import com.moneat.models.Users
 import com.moneat.services.UptimeService
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -47,6 +43,9 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -192,7 +191,9 @@ class UptimeRoutesMockTest {
             val response = client.post("/v1/uptime/monitors") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
-                setBody("""{"name":"test-monitor","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30,"retries":3,"retryIntervalSeconds":10}""")
+                setBody(
+                    """{"name":"test-monitor","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30,"retries":3,"retryIntervalSeconds":10}"""
+                )
             }
             assertEquals(HttpStatusCode.Created, response.status)
             assertTrue(response.bodyAsText().contains("test-monitor"))

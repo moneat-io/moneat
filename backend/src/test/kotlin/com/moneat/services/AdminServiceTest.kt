@@ -1,8 +1,8 @@
 package com.moneat.services
 
-import com.moneat.models.*
 import com.moneat.ai.AiConversations
 import com.moneat.ai.AiMessages
+import com.moneat.models.*
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
@@ -10,8 +10,8 @@ import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.time.Clock
 import kotlin.test.*
+import kotlin.time.Clock
 
 class AdminServiceTest {
     private val service = AdminService()

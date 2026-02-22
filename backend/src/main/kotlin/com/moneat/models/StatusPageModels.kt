@@ -16,11 +16,11 @@
 
 package com.moneat.models
 
-import kotlin.time.Clock
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.time.Clock
 
 // ==================== Exposed Tables ====================
 

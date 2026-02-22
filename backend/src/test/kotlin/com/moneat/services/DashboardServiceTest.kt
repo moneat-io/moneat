@@ -71,7 +71,7 @@ class DashboardServiceTest {
             }.use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
                 val service = DashboardService()
                 val issues = service.getIssues(projectId = -1, page = 3, limit = 10, status = "resolved")

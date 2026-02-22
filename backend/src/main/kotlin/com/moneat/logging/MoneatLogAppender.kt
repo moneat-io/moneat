@@ -17,8 +17,8 @@
 package com.moneat.logging
 
 import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.spi.DeferredProcessingAware
 import ch.qos.logback.core.AppenderBase
+import ch.qos.logback.core.spi.DeferredProcessingAware
 import java.net.HttpURLConnection
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionHandler

@@ -22,7 +22,6 @@ import com.moneat.models.AlertConfigResponse
 import com.moneat.models.AlertResponse
 import com.moneat.models.ContainerStats
 import com.moneat.models.HistoricalMetricsResponse
-import com.moneat.models.LatestMetrics
 import com.moneat.models.LogQueryResponse
 import com.moneat.models.Memberships
 import com.moneat.models.Organizations
@@ -32,9 +31,6 @@ import com.moneat.models.Users
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.LogService
 import com.moneat.services.MonitorService
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -55,6 +51,9 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll

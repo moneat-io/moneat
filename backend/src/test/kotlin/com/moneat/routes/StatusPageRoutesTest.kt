@@ -47,6 +47,8 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -58,8 +60,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 class StatusPageRoutesTest {
     companion object {
@@ -169,7 +169,10 @@ class StatusPageRoutesTest {
     @Test
     fun `list status pages returns 200 empty list when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.get("/v1/status-pages") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -180,7 +183,10 @@ class StatusPageRoutesTest {
     @Test
     fun `list status pages returns 200 when org has no pages`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, _) = seedUserAndOrg()
             val response = client.get("/v1/status-pages") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -191,7 +197,10 @@ class StatusPageRoutesTest {
     @Test
     fun `list status pages returns pages when they exist`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             seedStatusPage(orgId)
             val response = client.get("/v1/status-pages") {
@@ -206,7 +215,10 @@ class StatusPageRoutesTest {
     @Test
     fun `create status page returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.post("/v1/status-pages") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -219,7 +231,10 @@ class StatusPageRoutesTest {
     @Test
     fun `create status page returns 201 with valid request`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, _) = seedUserAndOrg()
             val slug = "new-page-${System.nanoTime()}"
             val response = client.post("/v1/status-pages") {
@@ -234,7 +249,10 @@ class StatusPageRoutesTest {
     @Test
     fun `create status page returns 400 for invalid slug`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, _) = seedUserAndOrg()
             val response = client.post("/v1/status-pages") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -250,7 +268,10 @@ class StatusPageRoutesTest {
     @Test
     fun `status page detail endpoint validates UUID format`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val response = client.get("/v1/status-pages/not-a-uuid") {
                 header(HttpHeaders.Authorization, "Bearer ${token(999)}")
             }
@@ -261,7 +282,10 @@ class StatusPageRoutesTest {
     @Test
     fun `get status page returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -272,7 +296,10 @@ class StatusPageRoutesTest {
     @Test
     fun `get status page returns 404 when not found`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, _) = seedUserAndOrg()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -283,7 +310,10 @@ class StatusPageRoutesTest {
     @Test
     fun `get status page returns 200 when found`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.get("/v1/status-pages/$pageId") {
@@ -298,7 +328,10 @@ class StatusPageRoutesTest {
     @Test
     fun `update status page returns 400 for invalid uuid`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.put("/v1/status-pages/not-a-uuid") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -311,7 +344,10 @@ class StatusPageRoutesTest {
     @Test
     fun `update status page returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.put("/v1/status-pages/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -324,7 +360,10 @@ class StatusPageRoutesTest {
     @Test
     fun `update status page returns 404 when not found`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, _) = seedUserAndOrg()
             val response = client.put("/v1/status-pages/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -337,7 +376,10 @@ class StatusPageRoutesTest {
     @Test
     fun `update status page returns 200 when found`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.put("/v1/status-pages/$pageId") {
@@ -354,7 +396,10 @@ class StatusPageRoutesTest {
     @Test
     fun `delete status page returns 400 for invalid uuid`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/not-a-uuid") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -365,7 +410,10 @@ class StatusPageRoutesTest {
     @Test
     fun `delete status page returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -376,7 +424,10 @@ class StatusPageRoutesTest {
     @Test
     fun `delete status page returns 404 when not found`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, _) = seedUserAndOrg()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -387,7 +438,10 @@ class StatusPageRoutesTest {
     @Test
     fun `delete status page returns 204 when deleted`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.delete("/v1/status-pages/$pageId") {
@@ -401,7 +455,10 @@ class StatusPageRoutesTest {
     @Test
     fun `add monitor to page returns 400 for invalid page uuid`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/not-a-uuid/monitors") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -414,7 +471,10 @@ class StatusPageRoutesTest {
     @Test
     fun `add monitor to page returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/monitors") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -427,7 +487,10 @@ class StatusPageRoutesTest {
     @Test
     fun `remove monitor from page returns 400 for invalid page uuid`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/not-a-uuid/monitors/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -438,7 +501,10 @@ class StatusPageRoutesTest {
     @Test
     fun `remove monitor from page returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/monitors/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -451,7 +517,10 @@ class StatusPageRoutesTest {
     @Test
     fun `get incidents returns 400 for invalid page uuid`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/not-a-uuid/incidents") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -462,7 +531,10 @@ class StatusPageRoutesTest {
     @Test
     fun `get incidents returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}/incidents") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -475,7 +547,10 @@ class StatusPageRoutesTest {
     @Test
     fun `create incident returns 201 for valid request`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.post("/v1/status-pages/$pageId/incidents") {
@@ -490,7 +565,10 @@ class StatusPageRoutesTest {
     @Test
     fun `create incident returns 400 for invalid page uuid`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/not-a-uuid/incidents") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -503,7 +581,10 @@ class StatusPageRoutesTest {
     @Test
     fun `create incident returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/incidents") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -518,7 +599,10 @@ class StatusPageRoutesTest {
     @Test
     fun `update incident returns 200 for valid request`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
 
@@ -544,7 +628,10 @@ class StatusPageRoutesTest {
     @Test
     fun `update incident returns 404 when incident not found`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val incidentId = UUID.randomUUID()
@@ -562,7 +649,10 @@ class StatusPageRoutesTest {
     @Test
     fun `post incident update returns 201`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
 
@@ -588,7 +678,10 @@ class StatusPageRoutesTest {
     @Test
     fun `post incident update returns 400 for invalid uuids`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/not-uuid/incidents/also-not/updates") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -603,7 +696,10 @@ class StatusPageRoutesTest {
     @Test
     fun `add custom domain returns 201 for valid domain`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
 
@@ -619,7 +715,10 @@ class StatusPageRoutesTest {
     @Test
     fun `add custom domain returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/domains") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -632,7 +731,10 @@ class StatusPageRoutesTest {
     @Test
     fun `remove custom domain returns 204 when deleted`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
 
@@ -655,7 +757,10 @@ class StatusPageRoutesTest {
     @Test
     fun `remove custom domain returns 403 when user has no org`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/domains/1") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
@@ -668,7 +773,10 @@ class StatusPageRoutesTest {
     @Test
     fun `get incidents returns 200 with empty list`() =
         testApplication {
-            application { installAuth(); routing { statusPageRoutes() } }
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
 
