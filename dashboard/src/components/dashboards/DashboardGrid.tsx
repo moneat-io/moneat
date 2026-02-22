@@ -63,6 +63,21 @@ export function DashboardGrid({
   const handleLayoutChange = useCallback(
     (newLayout: Layout[]) => {
       if (!isEditing) return
+      
+      // Check if layout actually changed to avoid infinite loops
+      const hasChanges = newLayout.some((layoutItem) => {
+        const widget = widgets.find((w) => String(w.id) === layoutItem.i)
+        if (!widget) return false
+        return (
+          layoutItem.x !== widget.grid_x ||
+          layoutItem.y !== widget.grid_y ||
+          layoutItem.w !== widget.grid_w ||
+          layoutItem.h !== widget.grid_h
+        )
+      })
+      
+      if (!hasChanges) return
+      
       const updated: CreateWidgetRequest[] = widgets.map((widget) => {
         const layoutItem = newLayout.find((l) => l.i === String(widget.id))
         return {
