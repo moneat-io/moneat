@@ -57,7 +57,6 @@ import {
   Database,
   Download,
   FileText,
-  Globe,
   Info,
   Key,
   Layers,
@@ -194,18 +193,11 @@ function SettingsPage() {
                 Auth Tokens
               </TabsTrigger>
               <TabsTrigger 
-                value="sidebar" 
+                value="general" 
                 className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
                 <SlidersHorizontal className="h-4 w-4 mr-2" />
-                Sidebar
-              </TabsTrigger>
-              <TabsTrigger
-                value="display"
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                <Globe className="h-4 w-4 mr-2" />
-                Display
+                General
               </TabsTrigger>
 
               <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
@@ -304,11 +296,8 @@ function SettingsPage() {
                 <TeamSettings />
               </TabsContent>
             )}
-            <TabsContent value="sidebar" className="space-y-4 mt-0">
-              <SidebarTab />
-            </TabsContent>
-            <TabsContent value="display" className="space-y-4 mt-0">
-              <DisplayTab />
+            <TabsContent value="general" className="space-y-4 mt-0">
+              <GeneralTab />
             </TabsContent>
             {!isSelfHosted && (
             <TabsContent value="billing" className="space-y-4 mt-0">
@@ -3150,8 +3139,9 @@ function SilencePeriodsTab() {
   )
 }
 
-function DisplayTab() {
+function GeneralTab() {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const { timezone, updateTimezone } = useTimezone()
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const [saving, setSaving] = useState(false)
@@ -3160,6 +3150,8 @@ function DisplayTab() {
     queryKey: ['currentUser'],
     queryFn: () => api.getCurrentUser(),
   })
+
+  const [hiddenItems, setHiddenItems] = useState<string[]>(() => user?.sidebarHiddenItems || [])
 
   const savedTimezone = user?.timezone ?? null
   const hasCurrentTimezoneOption = TIMEZONES.some((tz) => tz.value === (savedTimezone ?? browserTz))
@@ -3175,66 +3167,6 @@ function DisplayTab() {
       setSaving(false)
     }
   }
-
-  const selectValue = savedTimezone ?? '__browser__'
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Display Preferences</CardTitle>
-          <CardDescription>
-            Choose how dates and times are displayed throughout the dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="timezone-select">Timezone</Label>
-            <Select
-              value={selectValue}
-              onValueChange={handleTimezoneChange}
-            >
-              <SelectTrigger id="timezone-select" className="max-w-md">
-                <SelectValue placeholder="Select timezone..." />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                <SelectItem value="__browser__">Browser default ({browserTz})</SelectItem>
-                {!hasCurrentTimezoneOption && savedTimezone && (
-                  <SelectItem value={savedTimezone}>{savedTimezone}</SelectItem>
-                )}
-                {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              Preview: {formatDateTimeUtil(new Date(), timezone)}
-            </p>
-          </div>
-          {saving && (
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Saving…
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function SidebarTab() {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api.getCurrentUser(),
-  })
-
-  const [hiddenItems, setHiddenItems] = useState<string[]>(() => user?.sidebarHiddenItems || [])
 
   const saveMutation = useMutation({
     mutationFn: (items: string[]) => api.updateSidebarPreferences(items),
@@ -3273,9 +3205,52 @@ function SidebarTab() {
   }
 
   const hasChanges = JSON.stringify(hiddenItems.sort()) !== JSON.stringify((user?.sidebarHiddenItems || []).sort())
+  const selectValue = savedTimezone ?? '__browser__'
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Display Settings</CardTitle>
+          <CardDescription>
+            Choose how dates and times are displayed throughout the dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="timezone-select">Timezone</Label>
+            <Select
+              value={selectValue}
+              onValueChange={handleTimezoneChange}
+            >
+              <SelectTrigger id="timezone-select" className="max-w-md">
+                <SelectValue placeholder="Select timezone..." />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                <SelectItem value="__browser__">Browser default ({browserTz})</SelectItem>
+                {!hasCurrentTimezoneOption && savedTimezone && (
+                  <SelectItem value={savedTimezone}>{savedTimezone}</SelectItem>
+                )}
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              Preview: {formatDateTimeUtil(new Date(), timezone)}
+            </p>
+          </div>
+          {saving && (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving…
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Sidebar Navigation</CardTitle>
