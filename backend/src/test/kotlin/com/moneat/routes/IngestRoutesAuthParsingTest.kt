@@ -16,6 +16,8 @@
 
 package com.moneat.routes
 
+import com.moneat.events.routes.extractPublicKey
+import com.moneat.events.routes.extractPublicKeyFromDsn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

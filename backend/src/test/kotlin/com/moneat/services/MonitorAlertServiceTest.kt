@@ -16,10 +16,10 @@
 
 package com.moneat.services
 
-import com.moneat.models.AlertSilencePeriods
-import com.moneat.models.CreateSilencePeriodRequest
-import com.moneat.models.Organizations
-import com.moneat.models.Users
+import com.moneat.shared.models.AlertSilencePeriods
+import com.moneat.monitor.models.CreateSilencePeriodRequest
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll

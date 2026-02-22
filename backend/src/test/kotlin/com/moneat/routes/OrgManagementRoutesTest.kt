@@ -16,12 +16,13 @@
 
 package com.moneat.routes
 
+import com.moneat.org.routes.orgManagementRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.models.Memberships
-import com.moneat.models.OrgInvitations
-import com.moneat.models.Organizations
-import com.moneat.models.Users
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OrgInvitations
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header

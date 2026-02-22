@@ -18,10 +18,10 @@ package com.moneat.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.models.Memberships
-import com.moneat.models.Organizations
-import com.moneat.models.RefreshTokens
-import com.moneat.models.Users
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.RefreshTokens
+import com.moneat.shared.models.Users
 import io.ktor.server.config.ApplicationConfig
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database

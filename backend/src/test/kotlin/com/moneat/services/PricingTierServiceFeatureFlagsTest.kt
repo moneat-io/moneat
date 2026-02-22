@@ -16,8 +16,8 @@
 
 package com.moneat.services
 
-import com.moneat.models.CreateTierVersionRequest
-import com.moneat.models.PricingTierConfigs
+import com.moneat.billing.models.CreateTierVersionRequest
+import com.moneat.billing.models.PricingTierConfigs
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.Database

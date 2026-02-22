@@ -18,9 +18,10 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.models.Memberships
-import com.moneat.models.Organizations
-import com.moneat.models.Users
+import com.moneat.auth.routes.authRoutes
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
 import io.ktor.client.request.cookie

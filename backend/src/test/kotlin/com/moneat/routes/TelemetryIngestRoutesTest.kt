@@ -16,7 +16,8 @@
 
 package com.moneat.routes
 
-import com.moneat.services.PulsePayload
+import com.moneat.events.routes.telemetryIngestRoutes
+import com.moneat.shared.services.PulsePayload
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText

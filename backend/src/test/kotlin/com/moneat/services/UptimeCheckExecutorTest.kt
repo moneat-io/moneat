@@ -16,7 +16,7 @@
 
 package com.moneat.services
 
-import com.moneat.models.UptimeMonitorData
+import com.moneat.uptime.models.UptimeMonitorData
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.Test

@@ -16,9 +16,9 @@
 
 package com.moneat.services
 
-import com.moneat.models.Organizations
-import com.moneat.models.PricingTierConfigs
-import com.moneat.models.Subscriptions
+import com.moneat.shared.models.Organizations
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.shared.models.Subscriptions
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll

@@ -18,11 +18,13 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.models.Memberships
-import com.moneat.models.OrganizationIntegrations
-import com.moneat.models.Organizations
-import com.moneat.models.SlackUserMappings
-import com.moneat.models.Users
+import com.moneat.org.routes.integrationCallbackRoutes
+import com.moneat.org.routes.integrationRoutes
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SlackUserMappings
+import com.moneat.shared.models.Users
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post

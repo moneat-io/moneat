@@ -16,10 +16,10 @@
 
 package com.moneat.services
 
-import com.moneat.models.AlertNotificationPreferences
-import com.moneat.models.Memberships
-import com.moneat.models.Organizations
-import com.moneat.models.Users
+import com.moneat.shared.models.AlertNotificationPreferences
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll

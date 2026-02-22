@@ -18,6 +18,8 @@
 
 package com.moneat.models
 
+import com.moneat.events.models.SentryReplayEvent
+import com.moneat.events.models.SentryTransaction
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertNotNull

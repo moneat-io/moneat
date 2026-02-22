@@ -86,3 +86,6 @@ potential-bugs:
   ImplicitDefaultLocale:
     active: false
 
+formatting:
+  ImportOrdering:
+    active: false

@@ -16,17 +16,18 @@
 
 package com.moneat.routes
 
+import com.moneat.statuspage.routes.statusPageRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.models.Memberships
-import com.moneat.models.Organizations
-import com.moneat.models.StatusPageCustomDomains
-import com.moneat.models.StatusPageIncidentUpdates
-import com.moneat.models.StatusPageIncidents
-import com.moneat.models.StatusPageMonitors
-import com.moneat.models.StatusPages
-import com.moneat.models.UptimeMonitors
-import com.moneat.models.Users
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.statuspage.models.StatusPageCustomDomains
+import com.moneat.statuspage.models.StatusPageIncidentUpdates
+import com.moneat.statuspage.models.StatusPageIncidents
+import com.moneat.statuspage.models.StatusPageMonitors
+import com.moneat.statuspage.models.StatusPages
+import com.moneat.uptime.models.UptimeMonitors
+import com.moneat.shared.models.Users
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header

@@ -18,10 +18,11 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.models.AuthTokens
-import com.moneat.models.Memberships
-import com.moneat.models.Organizations
-import com.moneat.models.Users
+import com.moneat.auth.routes.authTokenRoutes
+import com.moneat.shared.models.AuthTokens
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header

@@ -16,8 +16,8 @@
 
 package com.moneat.routes
 
-import com.moneat.models.PricingTierConfigs
-import com.moneat.services.PricingTierService
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.billing.services.PricingTierService
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll

@@ -16,19 +16,19 @@
 
 package com.moneat.integration
 
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.testcontainers.containers.GenericContainer
-import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 import kotlin.test.assertTrue
+import org.testcontainers.containers.PostgreSQLContainer as BasePostgreSQLContainer
 
 private val logger = KotlinLogging.logger {}
 
@@ -46,7 +46,13 @@ private val logger = KotlinLogging.logger {}
 class ContainerHarnessIntegrationTest {
 
     companion object {
-        lateinit var postgres: PostgreSQLContainer<*>
+        // Type alias to avoid deprecation warnings
+        @Suppress("DEPRECATION")
+        class PostgreSQLContainer(
+            dockerImageName: DockerImageName
+        ) : BasePostgreSQLContainer<PostgreSQLContainer>(dockerImageName)
+
+        lateinit var postgres: PostgreSQLContainer
         lateinit var clickhouse: GenericContainer<*>
         lateinit var redis: GenericContainer<*>
 
@@ -54,6 +60,7 @@ class ContainerHarnessIntegrationTest {
         @JvmStatic
         fun setupContainers() {
             logger.info { "Starting PostgreSQL container..." }
+            @Suppress("DEPRECATION")
             postgres =
                 PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
                     .withDatabaseName("moneat_test")

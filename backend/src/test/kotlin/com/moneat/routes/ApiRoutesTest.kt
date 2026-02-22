@@ -19,10 +19,11 @@ package com.moneat.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.ClickHouseClient
-import com.moneat.models.Memberships
-import com.moneat.models.Organizations
-import com.moneat.models.Projects
-import com.moneat.models.Users
+import com.moneat.events.routes.apiRoutes
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond

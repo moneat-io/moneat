@@ -16,10 +16,10 @@
 
 package com.moneat.services
 
-import com.moneat.models.EmailsSent
-import com.moneat.models.OrganizationIntegrations
-import com.moneat.models.Organizations
-import com.moneat.models.Users
+import com.moneat.shared.models.EmailsSent
+import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils

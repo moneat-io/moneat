@@ -16,11 +16,12 @@
 
 package com.moneat.services
 
-import com.moneat.models.CheckResult
-import com.moneat.models.Organizations
-import com.moneat.models.Subscriptions
-import com.moneat.models.UptimeMonitors
-import com.moneat.models.Users
+import com.moneat.uptime.models.CheckResult
+import com.moneat.uptime.models.CreateUptimeMonitorRequest
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Subscriptions
+import com.moneat.uptime.models.UptimeMonitors
+import com.moneat.shared.models.Users
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils

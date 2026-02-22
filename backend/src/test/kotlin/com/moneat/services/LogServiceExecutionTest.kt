@@ -17,7 +17,7 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.models.LogQueryRequest
+import com.moneat.logs.models.LogQueryRequest
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond

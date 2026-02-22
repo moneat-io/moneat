@@ -16,19 +16,19 @@
 
 package com.moneat.services
 
-import com.moneat.models.CreateAlertRequest
-import com.moneat.models.Memberships
-import com.moneat.models.OrganizationAlertTemplates
-import com.moneat.models.Organizations
-import com.moneat.models.PricingTierConfigs
-import com.moneat.models.Projects
-import com.moneat.models.Subscriptions
-import com.moneat.models.SystemAlertSettings
-import com.moneat.models.SystemAlertTemplateStates
-import com.moneat.models.SystemAlerts
-import com.moneat.models.Systems
-import com.moneat.models.UpdateAlertRequest
-import com.moneat.models.Users
+import com.moneat.monitor.models.CreateAlertRequest
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OrganizationAlertTemplates
+import com.moneat.shared.models.Organizations
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.models.SystemAlertSettings
+import com.moneat.shared.models.SystemAlertTemplateStates
+import com.moneat.shared.models.SystemAlerts
+import com.moneat.shared.models.Systems
+import com.moneat.monitor.models.UpdateAlertRequest
+import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
