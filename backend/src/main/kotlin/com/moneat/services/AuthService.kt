@@ -665,8 +665,10 @@ class AuthService {
         val normalizedDomain = email.substringAfter("@").lowercase().trim()
         if (normalizedDomain.isBlank()) return false
         return transaction {
-            (Users.innerJoin(Memberships) { Users.id eq Memberships.user_id }
-                .innerJoin(SsoConfigurations) { Memberships.organization_id eq SsoConfigurations.organizationId })
+            (
+                Users.innerJoin(Memberships) { Users.id eq Memberships.user_id }
+                    .innerJoin(SsoConfigurations) { Memberships.organization_id eq SsoConfigurations.organizationId }
+                )
                 .selectAll()
                 .where {
                     (Users.email eq email.lowercase().trim()) and

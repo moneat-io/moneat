@@ -110,7 +110,7 @@ class ReleaseRoutesTest {
                     if (credential.token == testCombinedToken) {
                         AuthTokenPrincipal(
                             userId = testUserId,
-                            scopes = listOf("project:read"),  // intentionally missing releases:write
+                            scopes = listOf("project:read"), // intentionally missing releases:write
                             tokenId = 1
                         )
                     } else {

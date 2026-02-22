@@ -252,7 +252,9 @@ class UptimeRoutesTest {
                 client.post("/v1/uptime/monitors") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
-                    setBody("""{"name":"test","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30}""")
+                    setBody(
+                        """{"name":"test","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30}"""
+                    )
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
@@ -490,7 +492,9 @@ class UptimeRoutesTest {
                 client.post("/v1/uptime/monitors") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
-                    setBody("""{"name":"","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30}""")
+                    setBody(
+                        """{"name":"","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30}"""
+                    )
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("name is required"))
@@ -532,7 +536,9 @@ class UptimeRoutesTest {
                 client.post("/v1/uptime/monitors") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
-                    setBody("""{"name":"my-monitor","type":"tcp","port":443,"intervalSeconds":60,"timeoutSeconds":30}""")
+                    setBody(
+                        """{"name":"my-monitor","type":"tcp","port":443,"intervalSeconds":60,"timeoutSeconds":30}"""
+                    )
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("Hostname is required"))
@@ -553,7 +559,9 @@ class UptimeRoutesTest {
                 client.post("/v1/uptime/monitors") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
-                    setBody("""{"name":"my-monitor","type":"http","url":"https://example.com","intervalSeconds":5,"timeoutSeconds":30}""")
+                    setBody(
+                        """{"name":"my-monitor","type":"http","url":"https://example.com","intervalSeconds":5,"timeoutSeconds":30}"""
+                    )
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("at least 10 seconds"))

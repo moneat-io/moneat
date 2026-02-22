@@ -29,8 +29,6 @@ import com.moneat.models.Projects
 import com.moneat.models.Users
 import com.moneat.services.BillingQuotaService
 import com.moneat.services.LogService
-import io.mockk.coEvery
-import io.mockk.mockk
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -45,6 +43,8 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coEvery
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -246,7 +246,9 @@ class LogRoutesMockTest {
         testApplication {
             val (userId, projectId) = seedUserAndProject()
             val aggregateResponse = LogAggregateResponse(buckets = emptyList(), totalCount = 0L, interval = "1h")
-            coEvery { mockLogService.aggregateLogs(eq(projectId), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns aggregateResponse
+            coEvery {
+                mockLogService.aggregateLogs(eq(projectId), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns aggregateResponse
 
             application {
                 installAuth()
@@ -267,7 +269,9 @@ class LogRoutesMockTest {
         testApplication {
             val (userId, projectId) = seedUserAndProject()
             val topResponse = LogTopResponse(field = "service", values = emptyList(), totalCount = 0L)
-            coEvery { mockLogService.topValues(eq(projectId), eq("service"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns topResponse
+            coEvery {
+                mockLogService.topValues(eq(projectId), eq("service"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns topResponse
 
             application {
                 installAuth()

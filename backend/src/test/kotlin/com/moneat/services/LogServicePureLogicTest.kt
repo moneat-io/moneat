@@ -16,8 +16,8 @@ class LogServicePureLogicTest {
     @Test
     fun `estimateBillableBytes sums message and body lengths`() {
         val entries = listOf(
-            LogIngestEntry(message = "Hello", body = "World"),  // 5+5=10
-            LogIngestEntry(message = "Test", body = "Log"),      // 4+3=7
+            LogIngestEntry(message = "Hello", body = "World"), // 5+5=10
+            LogIngestEntry(message = "Test", body = "Log"), // 4+3=7
         )
         assertEquals(17L, service.estimateBillableBytes(entries))
     }
@@ -49,8 +49,8 @@ class LogServicePureLogicTest {
     @Test
     fun `estimateBillableBytes agent sums message and body lengths`() {
         val entries = listOf(
-            AgentLogEntry(message = "AgentMsg", body = "AgentBody"),   // 8+9=17
-            AgentLogEntry(message = "Short", body = "Txt"),             // 5+3=8
+            AgentLogEntry(message = "AgentMsg", body = "AgentBody"), // 8+9=17
+            AgentLogEntry(message = "Short", body = "Txt"), // 5+3=8
         )
         assertEquals(25L, service.estimateBillableBytes(entries, systemId = "sys-1"))
     }
@@ -223,18 +223,28 @@ class LogServicePureLogicTest {
     @Test
     fun `matchesTailFilters combines multiple filters with AND logic`() {
         val log = makeLog(level = "error", service = "api", environment = "prod")
-        assertTrue(service.matchesTailFilters(log, LogTailFilters(
-            levels = setOf("error"),
-            service = "api",
-            environment = "prod",
-            query = "hello"
-        )))
+        assertTrue(
+            service.matchesTailFilters(
+                log,
+                LogTailFilters(
+                    levels = setOf("error"),
+                    service = "api",
+                    environment = "prod",
+                    query = "hello"
+                )
+            )
+        )
         // Fails if any single filter doesn't match
-        assertFalse(service.matchesTailFilters(log, LogTailFilters(
-            levels = setOf("error"),
-            service = "api",
-            environment = "staging" // doesn't match
-        )))
+        assertFalse(
+            service.matchesTailFilters(
+                log,
+                LogTailFilters(
+                    levels = setOf("error"),
+                    service = "api",
+                    environment = "staging" // doesn't match
+                )
+            )
+        )
     }
 
     @Test

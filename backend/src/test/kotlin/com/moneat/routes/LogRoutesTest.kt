@@ -140,7 +140,11 @@ class LogRoutesTest {
                 install(ContentNegotiation) { json() }
                 install(Authentication) {
                     jwt("auth-jwt") {
-                        verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer("moneat").withAudience("moneat-users").build())
+                        verifier(
+                            JWT.require(
+                                Algorithm.HMAC256(jwtSecret)
+                            ).withIssuer("moneat").withAudience("moneat-users").build()
+                        )
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
@@ -160,7 +164,11 @@ class LogRoutesTest {
                 install(ContentNegotiation) { json() }
                 install(Authentication) {
                     jwt("auth-jwt") {
-                        verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer("moneat").withAudience("moneat-users").build())
+                        verifier(
+                            JWT.require(
+                                Algorithm.HMAC256(jwtSecret)
+                            ).withIssuer("moneat").withAudience("moneat-users").build()
+                        )
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
@@ -180,7 +188,11 @@ class LogRoutesTest {
                 install(ContentNegotiation) { json() }
                 install(Authentication) {
                     jwt("auth-jwt") {
-                        verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer("moneat").withAudience("moneat-users").build())
+                        verifier(
+                            JWT.require(
+                                Algorithm.HMAC256(jwtSecret)
+                            ).withIssuer("moneat").withAudience("moneat-users").build()
+                        )
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
@@ -200,7 +212,11 @@ class LogRoutesTest {
                 install(ContentNegotiation) { json() }
                 install(Authentication) {
                     jwt("auth-jwt") {
-                        verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer("moneat").withAudience("moneat-users").build())
+                        verifier(
+                            JWT.require(
+                                Algorithm.HMAC256(jwtSecret)
+                            ).withIssuer("moneat").withAudience("moneat-users").build()
+                        )
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
@@ -220,7 +236,11 @@ class LogRoutesTest {
                 install(ContentNegotiation) { json() }
                 install(Authentication) {
                     jwt("auth-jwt") {
-                        verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer("moneat").withAudience("moneat-users").build())
+                        verifier(
+                            JWT.require(
+                                Algorithm.HMAC256(jwtSecret)
+                            ).withIssuer("moneat").withAudience("moneat-users").build()
+                        )
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
@@ -240,7 +260,11 @@ class LogRoutesTest {
                 install(ContentNegotiation) { json() }
                 install(Authentication) {
                     jwt("auth-jwt") {
-                        verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer("moneat").withAudience("moneat-users").build())
+                        verifier(
+                            JWT.require(
+                                Algorithm.HMAC256(jwtSecret)
+                            ).withIssuer("moneat").withAudience("moneat-users").build()
+                        )
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
@@ -260,7 +284,11 @@ class LogRoutesTest {
                 install(ContentNegotiation) { json() }
                 install(Authentication) {
                     jwt("auth-jwt") {
-                        verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer("moneat").withAudience("moneat-users").build())
+                        verifier(
+                            JWT.require(
+                                Algorithm.HMAC256(jwtSecret)
+                            ).withIssuer("moneat").withAudience("moneat-users").build()
+                        )
                         validate { JWTPrincipal(it.payload) }
                     }
                 }

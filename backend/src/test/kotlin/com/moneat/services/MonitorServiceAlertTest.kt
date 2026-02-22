@@ -292,7 +292,12 @@ class MonitorServiceAlertTest {
         val orgId = seedOrg()
         seedFreeTier()
         val (systemId, _) = seedSystem(orgId)
-        val created = service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0), ALERT_SCOPE_GLOBAL)
+        val created = service.createAlert(
+            systemId,
+            orgId,
+            CreateAlertRequest("cpu_percent", ">", 90.0),
+            ALERT_SCOPE_GLOBAL
+        )
 
         val result = service.updateAlert(
             alertId = created.id,
@@ -372,7 +377,12 @@ class MonitorServiceAlertTest {
         val orgId = seedOrg()
         seedFreeTier()
         val (systemId, _) = seedSystem(orgId)
-        val created = service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0), ALERT_SCOPE_GLOBAL)
+        val created = service.createAlert(
+            systemId,
+            orgId,
+            CreateAlertRequest("cpu_percent", ">", 90.0),
+            ALERT_SCOPE_GLOBAL
+        )
 
         val result = service.deleteAlert(created.id, systemId, orgId, ALERT_SCOPE_GLOBAL)
         assertTrue(result)

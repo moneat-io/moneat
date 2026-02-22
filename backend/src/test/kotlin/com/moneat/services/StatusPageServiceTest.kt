@@ -19,17 +19,17 @@ package com.moneat.services
 import com.moneat.models.AddMonitorsRequest
 import com.moneat.models.CreateIncidentRequest
 import com.moneat.models.CreateIncidentUpdateRequest
-import com.moneat.models.MonitorAssignment
-import com.moneat.models.UpdateIncidentRequest
-import com.moneat.models.UpdateStatusPageRequest
 import com.moneat.models.CreateStatusPageRequest
 import com.moneat.models.Memberships
+import com.moneat.models.MonitorAssignment
 import com.moneat.models.Organizations
 import com.moneat.models.StatusPageCustomDomains
 import com.moneat.models.StatusPageIncidentUpdates
 import com.moneat.models.StatusPageIncidents
 import com.moneat.models.StatusPageMonitors
 import com.moneat.models.StatusPages
+import com.moneat.models.UpdateIncidentRequest
+import com.moneat.models.UpdateStatusPageRequest
 import com.moneat.models.UptimeMonitors
 import com.moneat.models.Users
 import kotlinx.coroutines.runBlocking
@@ -241,7 +241,11 @@ class StatusPageServiceTest {
         val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Old Name", slug = "old-slug"))
         val pageId = java.util.UUID.fromString(created.id)
 
-        val updated = service.updateStatusPage(pageId, orgId, UpdateStatusPageRequest(name = "New Name", description = "Updated"))
+        val updated = service.updateStatusPage(
+            pageId,
+            orgId,
+            UpdateStatusPageRequest(name = "New Name", description = "Updated")
+        )
         assertNotNull(updated)
         assertEquals("New Name", updated.name)
         assertEquals("Updated", updated.description)
@@ -256,7 +260,10 @@ class StatusPageServiceTest {
     @Test
     fun `updateStatusPage updates isPublic flag`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Toggle", slug = "toggle", isPublic = true))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "Toggle", slug = "toggle", isPublic = true)
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
         val updated = service.updateStatusPage(pageId, orgId, UpdateStatusPageRequest(isPublic = false))
@@ -294,7 +301,10 @@ class StatusPageServiceTest {
     @Test
     fun `listIncidents returns empty when no incidents`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Incidents Page", slug = "incidents-page"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "Incidents Page", slug = "incidents-page")
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
         val incidents = service.listIncidents(pageId, orgId)
@@ -314,11 +324,15 @@ class StatusPageServiceTest {
     @Test
     fun `createIncident creates incident with initial update`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Incident Test", slug = "incident-test"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "Incident Test", slug = "incident-test")
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
         val incident = service.createIncident(
-            pageId, orgId,
+            pageId,
+            orgId,
             CreateIncidentRequest(
                 title = "API Outage",
                 status = "investigating",
@@ -337,7 +351,8 @@ class StatusPageServiceTest {
         val service = StatusPageService()
         assertFailsWith<Exception> {
             service.createIncident(
-                java.util.UUID.randomUUID(), orgId,
+                java.util.UUID.randomUUID(),
+                orgId,
                 CreateIncidentRequest(title = "Outage", status = "investigating", message = "test")
             )
         }
@@ -348,16 +363,22 @@ class StatusPageServiceTest {
     @Test
     fun `updateIncident updates incident title and status`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Update Test", slug = "update-test"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "Update Test", slug = "update-test")
+        )
         val pageId = java.util.UUID.fromString(created.id)
         val incident = service.createIncident(
-            pageId, orgId,
+            pageId,
+            orgId,
             CreateIncidentRequest(title = "Initial Outage", status = "investigating", message = "Investigating")
         )
         val incidentId = java.util.UUID.fromString(incident.id)
 
         val updated = service.updateIncident(
-            pageId, orgId, incidentId,
+            pageId,
+            orgId,
+            incidentId,
             UpdateIncidentRequest(title = "Updated Outage", status = "identified")
         )
 
@@ -369,10 +390,15 @@ class StatusPageServiceTest {
     @Test
     fun `updateIncident returns null for non-existent incident`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "No Incident Page", slug = "no-incident"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "No Incident Page", slug = "no-incident")
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
-        assertNull(service.updateIncident(pageId, orgId, java.util.UUID.randomUUID(), UpdateIncidentRequest(title = "X")))
+        assertNull(
+            service.updateIncident(pageId, orgId, java.util.UUID.randomUUID(), UpdateIncidentRequest(title = "X"))
+        )
     }
 
     // ==================== createIncidentUpdate ====================
@@ -380,16 +406,22 @@ class StatusPageServiceTest {
     @Test
     fun `createIncidentUpdate adds update and changes incident status`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Update Log Test", slug = "update-log"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "Update Log Test", slug = "update-log")
+        )
         val pageId = java.util.UUID.fromString(created.id)
         val incident = service.createIncident(
-            pageId, orgId,
+            pageId,
+            orgId,
             CreateIncidentRequest(title = "Down", status = "investigating", message = "Looking into it")
         )
         val incidentId = java.util.UUID.fromString(incident.id)
 
         val updated = service.createIncidentUpdate(
-            pageId, orgId, incidentId,
+            pageId,
+            orgId,
+            incidentId,
             CreateIncidentUpdateRequest(status = "resolved", message = "Issue is resolved")
         )
 
@@ -400,13 +432,20 @@ class StatusPageServiceTest {
     @Test
     fun `createIncidentUpdate returns null for non-existent incident`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "No Update Page", slug = "no-update-page"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "No Update Page", slug = "no-update-page")
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
-        assertNull(service.createIncidentUpdate(
-            pageId, orgId, java.util.UUID.randomUUID(),
-            CreateIncidentUpdateRequest(status = "resolved", message = "done")
-        ))
+        assertNull(
+            service.createIncidentUpdate(
+                pageId,
+                orgId,
+                java.util.UUID.randomUUID(),
+                CreateIncidentUpdateRequest(status = "resolved", message = "done")
+            )
+        )
     }
 
     // ==================== addMonitors / removeMonitor ====================
@@ -414,7 +453,10 @@ class StatusPageServiceTest {
     @Test
     fun `addMonitors adds monitors to status page`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Monitor Page", slug = "monitor-page"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "Monitor Page", slug = "monitor-page")
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
         val monitorId = java.util.UUID.randomUUID()
@@ -432,8 +474,11 @@ class StatusPageServiceTest {
         }
 
         val monitors = service.addMonitors(
-            pageId, orgId,
-            AddMonitorsRequest(monitors = listOf(MonitorAssignment(monitorId = monitorId.toString(), displayName = "API")))
+            pageId,
+            orgId,
+            AddMonitorsRequest(
+                monitors = listOf(MonitorAssignment(monitorId = monitorId.toString(), displayName = "API"))
+            )
         )
 
         assertEquals(1, monitors.size)
@@ -444,7 +489,10 @@ class StatusPageServiceTest {
     @Test
     fun `removeMonitor removes monitor from status page`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "Remove Monitor Page", slug = "remove-monitor"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "Remove Monitor Page", slug = "remove-monitor")
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
         val monitorId = java.util.UUID.randomUUID()
@@ -461,7 +509,11 @@ class StatusPageServiceTest {
             }
         }
 
-        service.addMonitors(pageId, orgId, AddMonitorsRequest(monitors = listOf(MonitorAssignment(monitorId.toString()))))
+        service.addMonitors(
+            pageId,
+            orgId,
+            AddMonitorsRequest(monitors = listOf(MonitorAssignment(monitorId.toString())))
+        )
 
         val removed = service.removeMonitor(pageId, orgId, monitorId)
         assertTrue(removed)
@@ -473,7 +525,10 @@ class StatusPageServiceTest {
     @Test
     fun `removeMonitor returns false for non-existent monitor`() {
         val service = StatusPageService()
-        val created = service.createStatusPage(orgId, CreateStatusPageRequest(name = "No Monitor Page", slug = "no-monitor"))
+        val created = service.createStatusPage(
+            orgId,
+            CreateStatusPageRequest(name = "No Monitor Page", slug = "no-monitor")
+        )
         val pageId = java.util.UUID.fromString(created.id)
 
         assertFalse(service.removeMonitor(pageId, orgId, java.util.UUID.randomUUID()))

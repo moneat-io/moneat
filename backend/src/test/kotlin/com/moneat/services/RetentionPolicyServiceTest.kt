@@ -48,7 +48,7 @@ class RetentionPolicyServiceTest {
             db =
                 Database.connect(
                     url =
-                        "jdbc:h2:mem:moneat_retention_policy;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                    "jdbc:h2:mem:moneat_retention_policy;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                     driver = "org.h2.Driver"
                 )
             transaction(db!!) {
@@ -125,7 +125,9 @@ class RetentionPolicyServiceTest {
 
     private fun seedSystem(orgId: Int, name: String = "test-server"): UUID {
         val systemId = UUID.randomUUID()
-        val keyHash = MessageDigest.getInstance("SHA-256").digest("key".toByteArray()).joinToString("") { "%02x".format(it) }
+        val keyHash = MessageDigest.getInstance(
+            "SHA-256"
+        ).digest("key".toByteArray()).joinToString("") { "%02x".format(it) }
         val now = Clock.System.now()
         transaction {
             Systems.insert {

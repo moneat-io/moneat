@@ -33,7 +33,10 @@ private val logger = KotlinLogging.logger {}
  */
 class ArtifactCleanupService(
     private val authTokenService: AuthTokenService = AuthTokenService(),
-    private val orgInvitationService: OrgInvitationService = OrgInvitationService(OrgMembershipService(), EmailService()),
+    private val orgInvitationService: OrgInvitationService = OrgInvitationService(
+        OrgMembershipService(),
+        EmailService()
+    ),
     private val cleanupInterval: kotlin.time.Duration = 24.hours
 ) {
     private var cleanupJob: Job? = null
