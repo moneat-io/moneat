@@ -196,7 +196,7 @@ function RootComponent() {
   }, [isAuthenticated, currentPath, navigate])
   
   // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
-  const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password'].includes(currentPath)
+  const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password', '/onboarding'].includes(currentPath)
   const isLandingPage = currentPath === '/' && !isAuthenticated
   const isPublicStatusPage = currentPath.startsWith('/s/')
   const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage

@@ -16,15 +16,19 @@
 
 import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
 import {useState, useEffect} from 'react'
+import {useMutation, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
+import {useProject} from '@/contexts/project-context'
+import {platforms, type PlatformType} from '@/routes/projects'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Logo} from '@/components/logo'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
-import {Copy, Check, AlertCircle, Loader2} from 'lucide-react'
+import {cn} from '@/lib/utils'
+import {Copy, Check, AlertCircle, Loader2, ArrowRight} from 'lucide-react'
 
 export const Route = createFileRoute('/onboarding')({
   beforeLoad: () => {
@@ -64,8 +68,24 @@ function generateSlug(name: string): string {
     .substring(0, 100)
 }
 
+type OnboardingStep = 'org' | 'project'
+type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
+
+const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'mobile', label: 'Mobile' },
+  { id: 'frontend', label: 'Frontend' },
+  { id: 'backend', label: 'Backend' },
+  { id: 'desktop-gaming', label: 'Desktop & Gaming' },
+]
+
 function OnboardingPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { setSelectedProjectId } = useProject()
+  const [step, setStep] = useState<OnboardingStep>('org')
+
+  // Org step state
   const [organizationName, setOrganizationName] = useState('')
   const [companySize, setCompanySize] = useState('')
   const [referralSource, setReferralSource] = useState('')
@@ -76,6 +96,13 @@ function OnboardingPage() {
   const [copied, setCopied] = useState(false)
   const [checkingSlug, setCheckingSlug] = useState(false)
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
+
+  // Project step state
+  const [projectName, setProjectName] = useState('')
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
+  const [selectedTargets, setSelectedTargets] = useState<string[]>([])
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
+  const [projectError, setProjectError] = useState('')
 
   // Auto-generate slug from org name
   useEffect(() => {
@@ -175,11 +202,214 @@ function OnboardingPage() {
       localStorage.removeItem('utm_params')
       trackEvent('Onboarding Complete', { company_size: companySize })
       
-      navigate({ to: '/' })
+      setStep('project')
     } catch {
       setError('Failed to complete onboarding. Please try again.')
       setLoading(false)
     }
+  }
+
+  const createProjectMutation = useMutation({
+    mutationFn: (data: { name: string; framework: string; targets?: string[] }) =>
+      api.createProject(data.name, data.framework, data.targets),
+    onSuccess: (project) => {
+      trackEvent('Onboarding Project Create', { framework: project.framework || 'none' })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      setSelectedProjectId(project.id)
+      navigate({ to: `/projects/${project.id}` })
+    },
+    onError: (error: Error) => {
+      if (error.message.includes('already exists')) {
+        setProjectError('A project with this name already exists. Please choose a different name.')
+      } else {
+        setProjectError(error.message || 'Failed to create project. Please try again.')
+      }
+    },
+  })
+
+  const handlePlatformSelect = (platformId: string) => {
+    setSelectedPlatform(platformId)
+    const platform = platforms.find(p => p.id === platformId)
+    if (platform?.targets && platform.defaultTargets) {
+      setSelectedTargets(platform.defaultTargets)
+    } else {
+      setSelectedTargets([])
+    }
+  }
+
+  const toggleTarget = (targetId: string) => {
+    setSelectedTargets(prev =>
+      prev.includes(targetId) ? prev.filter(t => t !== targetId) : [...prev, targetId]
+    )
+  }
+
+  const handleCreateProject = () => {
+    if (projectName && selectedPlatform) {
+      setProjectError('')
+      const platform = platforms.find(p => p.id === selectedPlatform)
+      const targets = platform?.targets && selectedTargets.length > 0 ? selectedTargets : undefined
+      createProjectMutation.mutate({
+        name: projectName,
+        framework: selectedPlatform,
+        targets,
+      })
+    }
+  }
+
+  const filteredPlatforms = platforms.filter((platform: PlatformType) => {
+    if (platform.alwaysVisible || platformFilter === 'all') return true
+    if (platformFilter === 'desktop-gaming') {
+      return platform.category === 'desktop' || platform.category === 'gaming'
+    }
+    return platform.category === platformFilter
+  })
+
+  if (step === 'project') {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4 bg-background">
+        <Card className="w-full max-w-2xl">
+          <CardHeader className="text-center space-y-4">
+            <div className="flex justify-center">
+              <Logo className="h-10" />
+            </div>
+            <div>
+              <CardTitle className="text-2xl">Create Your First Project</CardTitle>
+              <CardDescription className="mt-1">Set up a project to start tracking errors and monitoring your applications.</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {projectError && (
+                <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+                  <AlertCircle className="h-4 w-4" />
+                  {projectError}
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="projectName" className="mb-2 block">Project Name</Label>
+                <Input
+                  id="projectName"
+                  placeholder="My awesome app"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <Label className="mb-3 block">Select Platform</Label>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {platformFilterTabs.map((tab) => (
+                    <Button
+                      key={tab.id}
+                      type="button"
+                      size="sm"
+                      variant={platformFilter === tab.id ? 'default' : 'outline'}
+                      onClick={() => setPlatformFilter(tab.id)}
+                    >
+                      {tab.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="max-h-64 overflow-y-auto rounded-lg border p-3 pr-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    {filteredPlatforms.map((platform: PlatformType) => {
+                      const Icon = platform.icon
+                      return (
+                        <button
+                          key={platform.id}
+                          onClick={() => handlePlatformSelect(platform.id)}
+                          className={cn(
+                            'relative flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all',
+                            selectedPlatform === platform.id
+                              ? 'border-primary bg-primary/5 shadow-md'
+                              : 'border-border hover:border-primary/50 hover:bg-accent'
+                          )}
+                        >
+                          <div className="p-2 rounded-lg" style={{ backgroundColor: platform.color }}>
+                            <Icon className="h-5 w-5 text-white" />
+                          </div>
+                          <span className="text-xs font-medium text-center leading-tight">{platform.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Target selection for multi-platform frameworks */}
+              {selectedPlatform && platforms.find(p => p.id === selectedPlatform)?.targets && (
+                <div>
+                  <Label className="mb-3 block">Select Target Platforms</Label>
+                  <div className="rounded-lg border p-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {platforms.find(p => p.id === selectedPlatform)?.targets?.map(target => (
+                        <button
+                          key={target.id}
+                          type="button"
+                          onClick={() => toggleTarget(target.id)}
+                          className={cn(
+                            'flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium',
+                            selectedTargets.includes(target.id)
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50 hover:bg-accent'
+                          )}
+                        >
+                          <div className={cn(
+                            'w-4 h-4 rounded border-2 flex items-center justify-center',
+                            selectedTargets.includes(target.id) ? 'bg-primary border-primary' : 'border-border'
+                          )}>
+                            {selectedTargets.includes(target.id) && (
+                              <Check className="w-3 h-3 text-white" />
+                            )}
+                          </div>
+                          {target.name}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedTargets.length === 0 && (
+                      <p className="text-sm text-destructive mt-2">Please select at least one target platform</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  onClick={handleCreateProject}
+                  disabled={
+                    !projectName ||
+                    !selectedPlatform ||
+                    (platforms.find(p => p.id === selectedPlatform)?.targets && selectedTargets.length === 0) ||
+                    createProjectMutation.isPending
+                  }
+                >
+                  {createProjectMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      Create Project
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => navigate({ to: '/' })}
+                  disabled={createProjectMutation.isPending}
+                >
+                  Skip for now
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -305,7 +535,10 @@ function OnboardingPage() {
                   Setting up...
                 </>
               ) : (
-                'Complete Setup'
+                <>
+                  Continue
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
               )}
             </Button>
           </form>
