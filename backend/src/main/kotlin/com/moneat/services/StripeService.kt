@@ -854,7 +854,7 @@ class StripeService(
             val batch = transaction {
                 TransactionManager.current().exec(
                     "SELECT id FROM subscriptions WHERE id = ? FOR UPDATE",
-                    listOf(Subscriptions.id.columnType to subscriptionId)
+                    listOf(IntegerColumnType() to subscriptionId)
                 )
                 val row = Subscriptions.selectAll().where { Subscriptions.id eq subscriptionId }.firstOrNull()
                     ?: return@transaction null
@@ -898,7 +898,7 @@ class StripeService(
                 transaction {
                     TransactionManager.current().exec(
                         "SELECT id FROM subscriptions WHERE id = ? FOR UPDATE",
-                        listOf(Subscriptions.id.columnType to batch.subscriptionId)
+                        listOf(IntegerColumnType() to batch.subscriptionId)
                     )
                     val current = Subscriptions.selectAll()
                         .where { Subscriptions.id eq batch.subscriptionId }

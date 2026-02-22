@@ -63,8 +63,6 @@ class StripeServiceWebhookTest {
                 )
             }
         }
-
-        // Clean up any existing test data from previous tests
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
         transaction {
             StripeWebhookEvents.deleteAll()
