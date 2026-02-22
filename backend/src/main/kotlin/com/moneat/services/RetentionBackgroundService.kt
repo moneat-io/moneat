@@ -131,7 +131,8 @@ class RetentionBackgroundService(
         }
 
         logger.info {
-            "Retention sweep submitted $tableMutationCount delete mutation(s) across ${retentionByOrg.size} organization(s)"
+            "Retention sweep submitted $tableMutationCount delete mutation(s) " +
+                "across ${retentionByOrg.size} organization(s)"
         }
     }
 

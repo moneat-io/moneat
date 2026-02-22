@@ -253,7 +253,8 @@ class UptimeRoutesTest {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody(
-                        """{"name":"test","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30}"""
+                        """{"name":"test","type":"http","url":"https://example.com",""" +
+                            """"intervalSeconds":60,"timeoutSeconds":30}"""
                     )
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -493,7 +494,8 @@ class UptimeRoutesTest {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody(
-                        """{"name":"","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30}"""
+                        """{"name":"","type":"http","url":"https://example.com",""" +
+                            """"intervalSeconds":60,"timeoutSeconds":30}"""
                     )
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -560,7 +562,8 @@ class UptimeRoutesTest {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody(
-                        """{"name":"my-monitor","type":"http","url":"https://example.com","intervalSeconds":5,"timeoutSeconds":30}"""
+                        """{"name":"my-monitor","type":"http","url":"https://example.com",""" +
+                            """"intervalSeconds":5,"timeoutSeconds":30}"""
                     )
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)

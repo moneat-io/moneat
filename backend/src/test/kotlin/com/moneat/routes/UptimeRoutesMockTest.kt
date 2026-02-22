@@ -192,7 +192,8 @@ class UptimeRoutesMockTest {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody(
-                    """{"name":"test-monitor","type":"http","url":"https://example.com","intervalSeconds":60,"timeoutSeconds":30,"retries":3,"retryIntervalSeconds":10}"""
+                    """{"name":"test-monitor","type":"http","url":"https://example.com",""" +
+                        """"intervalSeconds":60,"timeoutSeconds":30,"retries":3,"retryIntervalSeconds":10}"""
                 )
             }
             assertEquals(HttpStatusCode.Created, response.status)
