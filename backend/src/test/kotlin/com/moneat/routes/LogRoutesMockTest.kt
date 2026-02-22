@@ -247,7 +247,10 @@ class LogRoutesMockTest {
             val (userId, projectId) = seedUserAndProject()
             val aggregateResponse = LogAggregateResponse(buckets = emptyList(), totalCount = 0L, interval = "1h")
             coEvery {
-                mockLogService.aggregateLogs(eq(projectId), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                mockLogService.aggregateLogs(
+                    eq(projectId), any(), any(), any(), any(), any(), any(),
+                    any(), any(), any(), any(), any(), any(), any()
+                )
             } returns aggregateResponse
 
             application {
@@ -270,7 +273,10 @@ class LogRoutesMockTest {
             val (userId, projectId) = seedUserAndProject()
             val topResponse = LogTopResponse(field = "service", values = emptyList(), totalCount = 0L)
             coEvery {
-                mockLogService.topValues(eq(projectId), eq("service"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                mockLogService.topValues(
+                    eq(projectId), eq("service"), any(), any(), any(), any(), any(),
+                    any(), any(), any(), any(), any(), any(), any()
+                )
             } returns topResponse
 
             application {

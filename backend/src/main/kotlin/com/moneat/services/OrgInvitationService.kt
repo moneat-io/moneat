@@ -401,7 +401,8 @@ class OrgInvitationService(
 
             if (deleted > 0) {
                 logger.info(
-                    "Purged $deleted old invitations (status in expired/revoked/accepted, older than $olderThanDays days)"
+                    "Purged $deleted old invitations " +
+                        "(status in expired/revoked/accepted, older than $olderThanDays days)"
                 )
             }
             deleted

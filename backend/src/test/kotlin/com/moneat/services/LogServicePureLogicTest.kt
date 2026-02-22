@@ -1,7 +1,33 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 package com.moneat.services
 
-import com.moneat.models.*
-import kotlin.test.*
+import com.moneat.models.AgentLogEntry
+import com.moneat.models.LogEntryResponse
+import com.moneat.models.LogIngestEntry
+import com.moneat.models.LogTailFilters
+import com.moneat.models.QueuedLogBatch
+import com.moneat.models.QueuedLogEntry
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class LogServicePureLogicTest {
     private val service = LogService()
@@ -128,7 +154,10 @@ class LogServicePureLogicTest {
 
     @Test
     fun `parseLiveLog deserializes valid LogEntryResponse`() {
-        val json = """{"log_id":"abc","timestamp":"2026-01-01T00:00:00.000Z","level":"info","message":"hello","body":"world","service":"api","environment":"prod","host":"h1","source":"sdk","container_name":"","container_id":"","container_image":"","trace_id":"","span_id":""}"""
+        val json =
+            """{"log_id":"abc","timestamp":"2026-01-01T00:00:00.000Z","level":"info","message":"hello",""" +
+                """"body":"world","service":"api","environment":"prod","host":"h1","source":"sdk",""" +
+                """"container_name":"","container_id":"","container_image":"","trace_id":"","span_id":""}"""
         val result = service.parseLiveLog(json)
         assertNotNull(result)
         assertEquals("abc", result.logId)
