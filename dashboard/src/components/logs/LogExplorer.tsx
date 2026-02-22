@@ -593,7 +593,7 @@ export function LogExplorer({
 
   // Show loading state only on initial load with no accumulated logs
   const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
-  const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && totalCount === 0
+  const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && (totalCount === 0 || totalCount === null)
   const logContainerRef = useRef<HTMLDivElement>(null)
 
   return (
