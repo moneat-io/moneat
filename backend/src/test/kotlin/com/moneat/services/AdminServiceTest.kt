@@ -39,7 +39,6 @@ import com.moneat.models.Subscriptions
 import com.moneat.models.SystemAlertSettings
 import com.moneat.models.SystemAlerts
 import com.moneat.models.Systems
-import com.moneat.models.UpdateUserRequest
 import com.moneat.models.UsageRecords
 import com.moneat.models.UserLegalAcceptances
 import com.moneat.models.Users
@@ -47,6 +46,7 @@ import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -66,7 +66,7 @@ class AdminServiceTest {
     private val service = AdminService()
 
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest
