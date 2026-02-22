@@ -22,9 +22,9 @@ import {
   type CreateCustomDataSourceRequest,
   type TestConnectionResult,
 } from '@/lib/api'
-import {Plus, Database, Trash2, Power, PowerOff, FlaskConical, Check, X, Pencil} from 'lucide-react'
+import {Plus, Database, Trash2, Power, PowerOff, FlaskConical, Check, X, Pencil, Link2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
-import {useState} from 'react'
+import {useState, useCallback} from 'react'
 import {DataSourceTypePicker, DATA_SOURCE_TYPES} from '@/components/dashboards/DataSourceTypePicker'
 
 export const Route = createFileRoute('/dashboards/datasources')({
@@ -36,6 +36,8 @@ function DataSourcesPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null)
+  const [connectionMode, setConnectionMode] = useState<'fields' | 'url'>('fields')
+  const [connectionUrl, setConnectionUrl] = useState('')
   const [formData, setFormData] = useState<CreateCustomDataSourceRequest>({
     name: '',
     source_type: 'postgresql',
@@ -99,10 +101,35 @@ function DataSourcesPage() {
     onError: () => setTestResult({success: false, message: 'Connection test failed'}),
   })
 
+  const parseConnectionUrl = useCallback(
+    (url: string) => {
+      try {
+        // Handle postgresql:// and postgres:// schemes
+        const normalized = url.replace(/^postgres:\/\//, 'postgresql://')
+        if (!normalized.startsWith('postgresql://')) return
+        // Parse using URL API with a dummy http replacement for port parsing
+        const parsed = new URL(normalized.replace('postgresql://', 'http://'))
+        setFormData((prev) => ({
+          ...prev,
+          host: parsed.hostname || prev.host,
+          port: parsed.port ? parseInt(parsed.port) : 5432,
+          database_name: parsed.pathname.replace(/^\//, '') || prev.database_name,
+          username: parsed.username ? decodeURIComponent(parsed.username) : prev.username,
+          password: parsed.password ? decodeURIComponent(parsed.password) : prev.password,
+        }))
+      } catch {
+        // Invalid URL — don't update fields
+      }
+    },
+    []
+  )
+
   function resetForm() {
     setShowForm(false)
     setEditingId(null)
     setTestResult(null)
+    setConnectionMode('fields')
+    setConnectionUrl('')
     setFormData({
       name: '',
       source_type: 'postgresql',
@@ -200,40 +227,93 @@ function DataSourcesPage() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Host</label>
-                <input
-                  type="text"
-                  required
-                  className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                  placeholder={isPostgres ? 'db.example.com' : 'prometheus.example.com'}
-                  value={formData.host}
-                  onChange={(e) => updateField('host', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Port</label>
-                <input
-                  type="number"
-                  className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                  value={formData.port ?? ''}
-                  onChange={(e) => updateField('port', parseInt(e.target.value) || undefined)}
-                />
-              </div>
-            </div>
-
             {isPostgres && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Connection</span>
+                <div className="bg-muted inline-flex rounded-md p-0.5">
+                  <button
+                    type="button"
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'fields' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setConnectionMode('fields')}
+                  >
+                    Fields
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'url' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setConnectionMode('url')}
+                  >
+                    <Link2 className="mr-1 inline h-3 w-3" />
+                    URL
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isPostgres && connectionMode === 'url' ? (
               <div>
-                <label className="text-sm font-medium">Database Name</label>
+                <label className="text-sm font-medium">Connection URL</label>
                 <input
                   type="text"
-                  className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                  placeholder="postgres"
-                  value={formData.database_name ?? ''}
-                  onChange={(e) => updateField('database_name', e.target.value || undefined)}
+                  className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 font-mono text-sm"
+                  placeholder="postgresql://user:password@host:5432/dbname"
+                  value={connectionUrl}
+                  onChange={(e) => {
+                    setConnectionUrl(e.target.value)
+                    parseConnectionUrl(e.target.value)
+                  }}
                 />
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Paste a connection URL and the fields below will auto-populate.
+                </p>
+                {connectionUrl && formData.host && (
+                  <div className="bg-muted/50 mt-2 rounded-md px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">Parsed: </span>
+                    {formData.username && <span>{formData.username}@</span>}
+                    <span className="font-medium">{formData.host}</span>
+                    {formData.port && <span>:{formData.port}</span>}
+                    {formData.database_name && <span>/{formData.database_name}</span>}
+                  </div>
+                )}
               </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2">
+                    <label className="text-sm font-medium">Host</label>
+                    <input
+                      type="text"
+                      required
+                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                      placeholder={isPostgres ? 'db.example.com' : 'prometheus.example.com'}
+                      value={formData.host}
+                      onChange={(e) => updateField('host', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Port</label>
+                    <input
+                      type="number"
+                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                      value={formData.port ?? ''}
+                      onChange={(e) => updateField('port', parseInt(e.target.value) || undefined)}
+                    />
+                  </div>
+                </div>
+
+                {isPostgres && (
+                  <div>
+                    <label className="text-sm font-medium">Database Name</label>
+                    <input
+                      type="text"
+                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                      placeholder="postgres"
+                      value={formData.database_name ?? ''}
+                      onChange={(e) => updateField('database_name', e.target.value || undefined)}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <div className="border-t pt-4">
