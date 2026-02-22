@@ -59,7 +59,9 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             if (!envEndpoint.isNullOrBlank()) endpoint = envEndpoint
         }
         if (environment == "development" && isProdEndpoint) {
-            System.err.println("[MoneatLogAppender] SAFETY: endpoint points to production but environment=development - logs will NOT be shipped. Set MONEAT_LOGS_ENDPOINT to your local instance.")
+            System.err.println(
+                "[MoneatLogAppender] SAFETY: endpoint points to production but environment=development - logs will NOT be shipped. Set MONEAT_LOGS_ENDPOINT to your local instance."
+            )
             return
         }
         if (dsn.isBlank()) {
