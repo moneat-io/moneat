@@ -14,20 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { api } from '@/lib/api'
-import { useProject } from '@/contexts/project-context'
-import { Card, CardContent } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { ChevronLeft, ChevronRight, Brain } from 'lucide-react'
-import { ProviderLogo } from '@/components/icons/ai-providers'
+import {createFileRoute, Link} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
+import {useState} from 'react'
+import {api} from '@/lib/api'
+import {useProject} from '@/contexts/project-context'
+import {Card, CardContent} from '@/components/ui/card'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
+import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog'
+import {Input} from '@/components/ui/input'
+import {Brain, ChevronLeft, ChevronRight} from 'lucide-react'
+import {ProviderLogo} from '@/components/icons/ai-providers'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime} from '@/lib/date-format'
 
 export const Route = createFileRoute('/ai/generations')({
   component: GenerationsPage,
@@ -46,6 +48,7 @@ function formatCost(usd: number): string {
 
 function GenerationsPage() {
   const { selectedProjectId } = useProject()
+  const { timezone } = useTimezone()
   const [range, setRange] = useState('24h')
   const [page, setPage] = useState(1)
   const [modelFilter, setModelFilter] = useState<string>('')
@@ -159,7 +162,7 @@ function GenerationsPage() {
                   onClick={() => setSelectedGenId(gen.generationId)}
                 >
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {new Date(gen.timestamp).toLocaleString()}
+                    {formatDateTime(new Date(gen.timestamp), timezone)}
                   </TableCell>
                   <TableCell className="font-medium text-sm max-w-48 truncate">
                     {gen.name || '-'}

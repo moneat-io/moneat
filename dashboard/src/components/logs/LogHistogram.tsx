@@ -17,6 +17,8 @@
 import {useMemo} from 'react'
 import {Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
 import type {LogAggregateBucket} from '@/lib/api'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime, formatMonthDay, formatTimeHM} from '@/lib/date-format'
 
 interface LogHistogramProps {
   buckets: LogAggregateBucket[]
@@ -54,27 +56,17 @@ function colorForGroup(key: string): string {
   return GROUP_COLORS[hash % GROUP_COLORS.length]
 }
 
-function formatAxisTime(ts: number, totalRangeMs: number): string {
-  const date = new Date(ts)
-  if (totalRangeMs <= 21_600_000) {
-    return date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})
-  }
-  if (totalRangeMs <= 172_800_000) {
-    return date.toLocaleString('en-US', {day: 'numeric', hour: '2-digit'})
-  }
-  return date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
-}
-
-function formatTooltipTime(ts: number): string {
-  return new Date(ts).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 export function LogHistogram({buckets, grouped = true, height = 120, onBucketClick}: LogHistogramProps) {
+  const { timezone } = useTimezone()
+  const formatAxisTime = (ts: number, totalRangeMs: number): string => {
+    const date = new Date(ts)
+    if (totalRangeMs <= 21_600_000) return formatTimeHM(date, timezone)
+    if (totalRangeMs <= 172_800_000) {
+      return new Intl.DateTimeFormat(undefined, { timeZone: timezone, day: 'numeric', hour: '2-digit' }).format(date)
+    }
+    return formatMonthDay(date, timezone)
+  }
+  const formatTooltipTime = (ts: number): string => formatDateTime(new Date(ts), timezone)
   const {chartData, groupKeys, totalRangeMs} = useMemo(() => {
     const keys = new Set<string>()
     const data: HistogramPoint[] = buckets.map((b) => {

@@ -26,25 +26,27 @@ import {Checkbox} from '@/components/ui/checkbox'
 import {Label} from '@/components/ui/label'
 import {SpanWaterfall} from '@/components/span-waterfall'
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowLeft,
-  Calendar,
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
-  Copy,
-  DatabaseZap,
-  ExternalLink,
-  Globe,
-  Hash,
-  Layers,
-  Network,
-  Package,
-  Tag,
-  XCircle,
+    AlertCircle,
+    AlertTriangle,
+    ArrowLeft,
+    Calendar,
+    CheckCircle2,
+    ChevronRight,
+    Clock3,
+    Copy,
+    DatabaseZap,
+    ExternalLink,
+    Globe,
+    Hash,
+    Layers,
+    Network,
+    Package,
+    Tag,
+    XCircle,
 } from 'lucide-react'
 import {getNow} from '@/lib/demo'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime, formatTime} from '@/lib/date-format'
 
 export const Route = createFileRoute('/performance/$transactionId')({
   beforeLoad: () => {
@@ -187,14 +189,14 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-function formatBreadcrumbTimestamp(raw: unknown): string {
+function formatBreadcrumbTimestamp(raw: unknown, timezone: string): string {
   if (typeof raw === 'number') {
     const millis = raw < 10_000_000_000 ? raw * 1000 : raw
-    return new Date(millis).toLocaleTimeString()
+    return formatTime(new Date(millis), timezone)
   }
   if (typeof raw === 'string') {
     const millis = Date.parse(raw)
-    if (!Number.isNaN(millis)) return new Date(millis).toLocaleTimeString()
+    if (!Number.isNaN(millis)) return formatTime(new Date(millis), timezone)
   }
   return '--:--:--'
 }
@@ -212,6 +214,7 @@ function formatBreadcrumbMessage(raw: unknown): string {
 }
 
 function BreadcrumbsTimeline({ breadcrumbs }: { breadcrumbs?: string }) {
+  const { timezone } = useTimezone()
   const items = useMemo(() => {
     if (!breadcrumbs) return []
     try {
@@ -241,7 +244,7 @@ function BreadcrumbsTimeline({ breadcrumbs }: { breadcrumbs?: string }) {
         const crumb = (item || {}) as Record<string, unknown>
         const category = String(crumb.category || crumb.type || 'event')
         const message = formatBreadcrumbMessage(crumb.message)
-        const timestamp = formatBreadcrumbTimestamp(crumb.timestamp)
+        const timestamp = formatBreadcrumbTimestamp(crumb.timestamp, timezone)
         const level = String(crumb.level || '')
 
         return (
@@ -395,6 +398,7 @@ function RequestInfoCard({ request }: { request?: string }) {
 
 function TransactionDetailPage() {
   const { transactionId } = Route.useParams()
+  const { timezone } = useTimezone()
   const [expandByDefault, setExpandByDefault] = useState(true)
   const { toast } = useToast()
 
@@ -475,7 +479,7 @@ function TransactionDetailPage() {
             </div>
             <div className="min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground">Timestamp</div>
-              <div className="text-sm font-bold leading-tight">{new Date(transaction.timestamp).toLocaleTimeString()}</div>
+              <div className="text-sm font-bold leading-tight">{formatTime(new Date(transaction.timestamp), timezone)}</div>
               <div className="text-[10px] text-muted-foreground">{formatRelativeTime(transaction.timestamp)}</div>
             </div>
           </div>
@@ -715,7 +719,7 @@ function TransactionDetailPage() {
                     <div key={error.eventId} className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 transition-colors hover:bg-rose-500/10">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
                         <Badge variant="destructive" className="text-[10px] px-1.5 py-0 uppercase">{error.level}</Badge>
-                        <span className="text-[10px] text-muted-foreground">{new Date(error.timestamp).toLocaleString()}</span>
+                        <span className="text-[10px] text-muted-foreground">{formatDateTime(new Date(error.timestamp), timezone)}</span>
                       </div>
                       <div className="text-xs font-medium text-foreground/90">{error.message || 'No message'}</div>
                       <div className="mt-1.5 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">

@@ -15,6 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatTimeWithMs} from '@/lib/date-format'
 import {Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import type {ReplayTimelineItem as BaseTimelineItem} from '@/lib/api'
@@ -24,19 +26,19 @@ import {Badge} from '@/components/ui/badge'
 import {SpanWaterfall} from '@/components/span-waterfall'
 import {cn} from '@/lib/utils'
 import {
-  Activity,
-  AlertCircle,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  DatabaseZap,
-  ExternalLink,
-  Layers,
-  Loader2,
-  MousePointerClick,
-  Navigation,
-  Network,
-  Tag,
+    Activity,
+    AlertCircle,
+    ChevronDown,
+    ChevronRight,
+    Clock,
+    DatabaseZap,
+    ExternalLink,
+    Layers,
+    Loader2,
+    MousePointerClick,
+    Navigation,
+    Network,
+    Tag,
 } from 'lucide-react'
 
 /** Extended item type that can carry raw breadcrumb payload data */
@@ -70,16 +72,11 @@ function formatDurationLabel(ms: number): string {
   return `${Math.round(ms)}ms`
 }
 
-function formatTimestamp(isoString: string): string {
+function formatTimestamp(isoString: string, timezone: string): string {
   if (!isoString) return ''
   const date = new Date(isoString)
   if (isNaN(date.getTime())) return ''
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  } as Intl.DateTimeFormatOptions) + '.' + String(date.getMilliseconds()).padStart(3, '0')
+  return formatTimeWithMs(date, timezone)
 }
 
 function findActiveIndex(items: TimelineItem[], currentOffsetMs: number): number {
@@ -199,6 +196,7 @@ const PROMOTED_KEYS: Record<string, string> = {
 }
 
 function BreadcrumbDetailPanel({ item }: { item: TimelineItem }) {
+  const { timezone } = useTimezone()
   const colors = typeColorClasses(item.type)
   const data = item.data ?? {}
 
@@ -236,7 +234,7 @@ function BreadcrumbDetailPanel({ item }: { item: TimelineItem }) {
         <div className="flex items-center gap-2 text-xs">
           <Clock className="h-3 w-3 text-muted-foreground" />
           <span className="text-muted-foreground">Time:</span>
-          <span className="font-mono">{formatTimestamp(item.timestamp)}</span>
+          <span className="font-mono">{formatTimestamp(item.timestamp, timezone)}</span>
           <span className="text-muted-foreground font-mono">({formatOffset(item.offsetMs)})</span>
         </div>
 
@@ -405,6 +403,7 @@ function ExpandedItemPanel({
 /* ── Main component ── */
 
 export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek }: ReplayTimelinePanelProps) {
+  const { timezone } = useTimezone()
   const listRef = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<FilterValue>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)

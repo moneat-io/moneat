@@ -15,8 +15,16 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
-import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type StatusPageDetail, type MonitorAssignment, type CreateIncidentRequest, type UpdateStatusPageRequest, type StatusPageIncident, type IncidentUpdate} from '@/lib/api'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {
+    api,
+    type CreateIncidentRequest,
+    type IncidentUpdate,
+    type MonitorAssignment,
+    type StatusPageDetail,
+    type StatusPageIncident,
+    type UpdateStatusPageRequest
+} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
@@ -31,39 +39,41 @@ import {Separator} from '@/components/ui/separator'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import type {LucideIcon} from 'lucide-react'
 import {
-  Globe,
-  ArrowLeft,
-  Save,
-  Trash2,
-  Plus,
-  Check,
-  Copy,
-  AlertTriangle,
-  ExternalLink,
-  Settings,
-  Layout,
-  Activity,
-  AlertCircle,
-  Clock,
-  Eye,
-  EyeOff,
-  Lock,
-  Unlock,
-  Wrench,
-  CheckCircle2,
-  XCircle,
-  ShieldCheck,
-  ShieldAlert,
-  Link2,
-  Info,
-  Palette,
-  RefreshCw,
-  CircleDot,
-  Zap,
+    Activity,
+    AlertCircle,
+    AlertTriangle,
+    ArrowLeft,
+    Check,
+    CheckCircle2,
+    CircleDot,
+    Clock,
+    Copy,
+    ExternalLink,
+    Eye,
+    EyeOff,
+    Globe,
+    Info,
+    Layout,
+    Link2,
+    Lock,
+    Palette,
+    Plus,
+    RefreshCw,
+    Save,
+    Settings,
+    ShieldAlert,
+    ShieldCheck,
+    Trash2,
+    Unlock,
+    Wrench,
+    XCircle,
+    Zap,
 } from 'lucide-react'
 import {useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
 import {StatusPagePreview} from '@/components/status-page-preview'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime} from '@/lib/date-format'
 
 export const Route = createFileRoute('/status-pages/$pageId')({
   beforeLoad: () => {
@@ -1128,6 +1138,7 @@ function IncidentsTab({pageId}: {pageId: string}) {
 }
 
 function IncidentCard({incident}: {incident: StatusPageIncident}) {
+  const { timezone } = useTimezone()
   const statusConfig = getIncidentStatusConfig(incident.status)
   const impactConfig = getIncidentImpactConfig(incident.impact)
 
@@ -1155,7 +1166,7 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
                 </Badge>
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {new Date(incident.createdAt).toLocaleString()}
+                  {formatDateTime(new Date(incident.createdAt), timezone)}
                 </span>
               </div>
             </div>
@@ -1171,7 +1182,7 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
                 <p className="text-sm text-foreground/90">{update.message}</p>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   <Clock className="h-2.5 w-2.5" />
-                  {new Date(update.createdAt).toLocaleString()}
+                  {formatDateTime(new Date(update.createdAt), timezone)}
                 </p>
               </div>
             ))}

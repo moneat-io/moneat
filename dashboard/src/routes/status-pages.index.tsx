@@ -15,19 +15,33 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
-import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {api, type CreateStatusPageRequest} from '@/lib/api'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter} from '@/components/ui/card'
+import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from '@/components/ui/card'
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Textarea} from '@/components/ui/textarea'
 import {Badge} from '@/components/ui/badge'
-import {Globe, Plus, Copy, Check, Settings, Activity, AlertTriangle, Lock, Unlock, ExternalLink, Sparkles, ArrowRight} from 'lucide-react'
+import {
+    Activity,
+    AlertTriangle,
+    ArrowRight,
+    Check,
+    Copy,
+    ExternalLink,
+    Globe,
+    Lock,
+    Plus,
+    Settings,
+    Sparkles,
+    Unlock
+} from 'lucide-react'
 import {useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
-import {type CreateStatusPageRequest} from '@/lib/api'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDate} from '@/lib/date-format'
 
 export const Route = createFileRoute('/status-pages/')({
   beforeLoad: () => {
@@ -42,6 +56,7 @@ function StatusPagesListPage() {
   const navigate = useNavigate()
   const {toast} = useToast()
   const queryClient = useQueryClient()
+  const { timezone } = useTimezone()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null)
   const [newPage, setNewPage] = useState<CreateStatusPageRequest>({
@@ -256,7 +271,7 @@ function StatusPagesListPage() {
 
                   {/* Meta info */}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>Created {new Date(page.createdAt).toLocaleDateString()}</span>
+                    <span>Created {formatDate(new Date(page.createdAt), timezone)}</span>
                   </div>
                 </CardContent>
 

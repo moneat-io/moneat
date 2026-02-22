@@ -420,6 +420,8 @@ interface RawLogResponse {
   next_cursor?: string | null
   hasMore?: boolean
   has_more?: boolean
+  totalCount?: number | null
+  total_count?: number | null
 }
 
 interface RawLogFilterResponse {
@@ -2334,7 +2336,7 @@ class ApiClient {
     })
   }
 
-  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean; organizationSlug?: string; demoEpochMs?: number; sidebarHiddenItems?: string[] }> {
+  async getCurrentUser(): Promise<{ id: number; email: string; name?: string; emailVerified: boolean; onboardingCompleted: boolean; isAdmin?: boolean; organizationSlug?: string; demoEpochMs?: number; sidebarHiddenItems?: string[]; timezone?: string | null }> {
     return this.request(`${API_BASE}/user`)
   }
 
@@ -2342,6 +2344,13 @@ class ApiClient {
     return this.request(`${API_BASE}/user/sidebar-preferences`, {
       method: 'PUT',
       body: JSON.stringify({ hiddenItems }),
+    })
+  }
+
+  async updateUserTimezone(timezone: string | null): Promise<{ timezone: string | null }> {
+    return this.request(`${API_BASE}/user/timezone`, {
+      method: 'PUT',
+      body: JSON.stringify({ timezone }),
     })
   }
 
@@ -2556,6 +2565,7 @@ class ApiClient {
       logs,
       nextCursor: response.nextCursor ?? response.next_cursor ?? null,
       hasMore: response.hasMore ?? response.has_more ?? false,
+      totalCount: response.totalCount ?? response.total_count ?? null,
     }
   }
 
@@ -2617,6 +2627,7 @@ class ApiClient {
       logs,
       nextCursor: response.nextCursor ?? response.next_cursor ?? null,
       hasMore: response.hasMore ?? response.has_more ?? false,
+      totalCount: response.totalCount ?? response.total_count ?? null,
     }
   }
 

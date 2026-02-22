@@ -94,6 +94,7 @@ object Users : Table("users") {
     val oncall_phone_consent_ip = varchar("oncall_phone_consent_ip", 45).nullable()
     val oncall_phone_consent_user_agent = text("oncall_phone_consent_user_agent").nullable()
     val oncall_phone_opted_out_at = timestamp("oncall_phone_opted_out_at").nullable()
+    val timezone = varchar("timezone", 64).nullable()
     val deletedAt = timestamp("deleted_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }

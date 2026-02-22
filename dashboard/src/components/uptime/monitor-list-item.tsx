@@ -17,11 +17,13 @@
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type UptimeMonitor} from '@/lib/api'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime, formatTime} from '@/lib/date-format'
 import {cn, formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
-import {CheckCircle2, Pause, Play, Trash2, XCircle, Clock} from 'lucide-react'
+import {CheckCircle2, Clock, Pause, Play, Trash2, XCircle} from 'lucide-react'
 import {useToast} from '@/hooks/use-toast'
 import HeartbeatBar from './heartbeat-bar'
 
@@ -63,6 +65,7 @@ function getMonitorTypeLabel(type: string): string {
 export default function MonitorListItem({monitor}: MonitorListItemProps) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
+  const { timezone } = useTimezone()
 
   const {data: heartbeats = []} = useQuery({
     queryKey: ['uptime-heartbeats', monitor.id],
@@ -136,7 +139,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
                   {monitor.url || monitor.hostname}
                 </a>
                 <span className="text-xs">•</span>
-                <span className="text-xs" title={new Date(monitor.lastCheckAt || 0).toLocaleString()}>
+                <span className="text-xs" title={formatDateTime(new Date(monitor.lastCheckAt || 0), timezone)}>
                   Checked {monitor.lastCheckAt ? formatRelativeTime(monitor.lastCheckAt) : 'never'}
                 </span>
               </div>
@@ -173,7 +176,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
           <div className="flex items-center justify-between pt-2 border-t mt-2">
             <div className="text-xs text-muted-foreground">
               {heartbeats.length > 0 ? (
-                <span>Last heartbeat: {new Date(heartbeats[heartbeats.length - 1].timestamp).toLocaleTimeString()}</span>
+                <span>Last heartbeat: {formatTime(new Date(heartbeats[heartbeats.length - 1].timestamp), timezone)}</span>
               ) : (
                 <span>No heartbeat data</span>
               )}

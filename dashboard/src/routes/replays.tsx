@@ -19,6 +19,8 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDate as formatDateUtil} from '@/lib/date-format'
 import {useMemo, useState} from 'react'
 import {Card} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
@@ -28,18 +30,18 @@ import {Button} from '@/components/ui/button'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Globe,
-  Monitor,
-  MousePointerClick,
-  Play,
-  Search,
-  Timer,
-  User,
-  Video,
+    AlertCircle,
+    ChevronLeft,
+    ChevronRight,
+    Clock,
+    Globe,
+    Monitor,
+    MousePointerClick,
+    Play,
+    Search,
+    Timer,
+    User,
+    Video,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/replays')({
@@ -72,17 +74,11 @@ function formatDuration(ms: number) {
   return `${hours}h ${minutes % 60}m`
 }
 
-function formatDate(isoString: string) {
+function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
   const date = new Date(isoString)
   if (isNaN(date.getTime())) return 'Invalid Date'
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateUtil(date, timezone)
 }
 
 function getInitials(user?: { id?: string; email?: string; username?: string }): string {
@@ -131,6 +127,7 @@ function getDurationColor(ms: number): string {
 
 function ReplaysPage() {
   const navigate = useNavigate()
+  const { timezone } = useTimezone()
   const { selectedProjectId } = useProject()
   const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
   const [environment, setEnvironment] = useState('all')
@@ -409,7 +406,7 @@ function ReplaysPage() {
                                 {formatRelativeTime(replay.startedAt)}
                               </span>
                             </TooltipTrigger>
-                            <TooltipContent>{formatDate(replay.startedAt)}</TooltipContent>
+                            <TooltipContent>{formatDate(replay.startedAt, timezone)}</TooltipContent>
                           </Tooltip>
                         </div>
 

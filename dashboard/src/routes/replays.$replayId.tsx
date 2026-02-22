@@ -19,6 +19,8 @@ import {useQuery} from '@tanstack/react-query'
 import {useCallback, useMemo, useRef, useState} from 'react'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDate as formatDateUtil} from '@/lib/date-format'
 import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/replay-player'
 import {MobileReplayViewer, type MobileReplayViewerHandle} from '@/components/mobile-replay-viewer'
 import {ReplayTimelinePanel} from '@/components/replay-timeline-panel'
@@ -27,21 +29,21 @@ import {BrowserWindowContainer} from '@/components/replay-containers/browser-win
 import {MobileDeviceContainer} from '@/components/replay-containers/mobile-device-container'
 import {Badge} from '@/components/ui/badge'
 import {
-  AlertCircle,
-  ArrowUpRight,
-  ChevronDown,
-  ChevronLeft,
-  ChevronUp,
-  Clock3,
-  DatabaseZap,
-  Globe,
-  Layers,
-  Loader2,
-  Monitor,
-  Play,
-  Smartphone,
-  Tag,
-  User,
+    AlertCircle,
+    ArrowUpRight,
+    ChevronDown,
+    ChevronLeft,
+    ChevronUp,
+    Clock3,
+    DatabaseZap,
+    Globe,
+    Layers,
+    Loader2,
+    Monitor,
+    Play,
+    Smartphone,
+    Tag,
+    User,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/replays/$replayId')({
@@ -58,18 +60,11 @@ function formatDuration(ms: number) {
   return `${ms.toFixed(0)}ms`
 }
 
-function formatDate(isoString: string) {
+function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
   const date = new Date(isoString)
   if (isNaN(date.getTime())) return 'Invalid Date'
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+  return formatDateUtil(date, timezone)
 }
 
 /** Compute actual recording duration from events. Backend replay.durationMs uses session span and can be wrong. */
@@ -300,6 +295,7 @@ function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestam
 
 function ReplayDetailPage() {
   const { replayId } = Route.useParams()
+  const { timezone } = useTimezone()
 
   const { data: replay, isLoading } = useQuery({
     queryKey: ['replay', replayId],
@@ -727,11 +723,11 @@ function ReplayDetailPage() {
                 </div>
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">Started</span>
-                  <span className="text-xs">{formatDate(replay.startedAt)}</span>
+                  <span className="text-xs">{formatDate(replay.startedAt, timezone)}</span>
                 </div>
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">Finished</span>
-                  <span className="text-xs">{formatDate(replay.finishedAt)}</span>
+                  <span className="text-xs">{formatDate(replay.finishedAt, timezone)}</span>
                 </div>
                 {replay.environment && (
                   <div className="flex justify-between gap-2">

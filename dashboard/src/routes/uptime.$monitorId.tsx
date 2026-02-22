@@ -23,13 +23,15 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Separator} from '@/components/ui/separator'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
-import {Activity, ArrowLeft, CheckCircle2, Clock, Pause, Play, Trash2, XCircle, Pencil} from 'lucide-react'
+import {Activity, ArrowLeft, CheckCircle2, Clock, Pause, Pencil, Play, Trash2, XCircle} from 'lucide-react'
 import {useToast} from '@/hooks/use-toast'
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
 import HeartbeatBar from '@/components/uptime/heartbeat-bar'
 import EditMonitorDialog from '@/components/uptime/edit-monitor-dialog'
 import {useState} from 'react'
-import { getNow } from '@/lib/demo'
+import {getNow} from '@/lib/demo'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatTimeHM} from '@/lib/date-format'
 
 export const Route = createFileRoute('/uptime/$monitorId')({
   beforeLoad: () => {
@@ -59,6 +61,7 @@ function UptimeDetailPage() {
   const {toast} = useToast()
   const queryClient = useQueryClient()
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const {timezone} = useTimezone()
 
   const {data: monitor, isLoading} = useQuery({
     queryKey: ['uptime-monitor', monitorId],
@@ -120,7 +123,7 @@ function UptimeDetailPage() {
   const chartData = heartbeats
     .filter((h) => h.responseTimeMs >= 0)
     .map((h) => ({
-      timestamp: new Date(h.timestamp).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}),
+      timestamp: formatTimeHM(new Date(h.timestamp), timezone),
       responseTime: h.responseTimeMs,
     }))
     .reverse()

@@ -30,29 +30,31 @@ import {SpanWaterfall} from '@/components/span-waterfall'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {EmbeddedLogs} from '@/components/logs/EmbeddedLogs'
 import {
-  Activity,
-  AlertCircle,
-  ArrowUpRight,
-  Battery,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Circle,
-  Clock3,
-  Copy,
-  DatabaseZap,
-  Globe,
-  Info,
-  Layers,
-  MessageSquare,
-  MousePointer,
-  Navigation,
-  Play,
-  Smartphone,
-  Tag,
-  TerminalSquare,
-  Zap,
+    Activity,
+    AlertCircle,
+    ArrowUpRight,
+    Battery,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    Circle,
+    Clock3,
+    Copy,
+    DatabaseZap,
+    Globe,
+    Info,
+    Layers,
+    MessageSquare,
+    MousePointer,
+    Navigation,
+    Play,
+    Smartphone,
+    Tag,
+    TerminalSquare,
+    Zap,
 } from 'lucide-react'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime, formatTime} from '@/lib/date-format'
 
 interface StackFrameData {
   function?: string
@@ -129,6 +131,7 @@ export const Route = createFileRoute('/issues/$issueId')({
 function IssueDetailPage() {
   const { issueId } = Route.useParams()
   const queryClient = useQueryClient()
+  const { timezone } = useTimezone()
   const { toast } = useToast()
   const [expandContextsByDefault, setExpandContextsByDefault] = useState(true)
 
@@ -383,7 +386,7 @@ function IssueDetailPage() {
                     </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-muted-foreground flex-shrink-0">Timestamp</span>
-                      <span className="text-xs">{new Date(latestEvent.timestamp).toLocaleString()}</span>
+                      <span className="text-xs">{formatDateTime(new Date(latestEvent.timestamp), timezone)}</span>
                     </div>
                     {latestEvent.environment && (
                       <div className="flex justify-between gap-2">
@@ -1019,6 +1022,7 @@ function formatBreadcrumbData(crumb: Breadcrumb): string {
 }
 
 function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
+  const { timezone } = useTimezone()
   let crumbs: Breadcrumb[] = []
   let parseError = false
   try {
@@ -1068,7 +1072,7 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
                   {getBreadcrumbIcon(category, crumb.data)}
                 </div>
                 <span className="text-muted-foreground font-mono text-xs">
-                  {timestamp ? new Date(timestamp).toLocaleTimeString() : '--:--:--'}
+                  {timestamp ? formatTime(new Date(timestamp), timezone) : '--:--:--'}
                 </span>
                 <Badge className={`text-[10px] leading-tight px-1.5 py-0 border-0 ${colors.badge}`}>
                   {category}

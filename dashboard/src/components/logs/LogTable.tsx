@@ -19,7 +19,9 @@ import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {stripAnsi} from '@/lib/ansi'
 import {groupExceptionLogs, type LogGroup} from '@/components/logs/groupExceptionLogs'
-import { getNow } from '@/lib/demo'
+import {getNow} from '@/lib/demo'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTimeWithMs, formatTimeWithMs} from '@/lib/date-format'
 
 interface LogTableProps {
   logs: LogEntry[]
@@ -49,31 +51,16 @@ const levelBorderColors: Record<string, string> = {
   fatal: 'border-l-rose-500/90',
 }
 
-function formatTimestamp(value: string): string {
+function formatTimestamp(value: string, timezone: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  const base = date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-  const ms = String(date.getMilliseconds()).padStart(3, '0')
-  return `${base}.${ms}`
+  return formatDateTimeWithMs(date, timezone)
 }
 
-function formatMobileTimestamp(value: string): string {
+function formatMobileTimestamp(value: string, timezone: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  const time = date.toLocaleTimeString(undefined, {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-  const ms = String(date.getMilliseconds()).padStart(3, '0')
-  return `${time}.${ms}`
+  return formatTimeWithMs(date, timezone)
 }
 
 function formatRelativeTime(value: string): string {
@@ -100,6 +87,7 @@ function toDisplayLog(group: LogGroup): LogEntry {
 }
 
 export function LogTable({logs, selectedLogId, onSelectLog, compact = true, groupExceptions = true}: LogTableProps) {
+  const { timezone } = useTimezone()
   if (logs.length === 0) {
     return null // Empty state is handled by parent
   }
@@ -150,13 +138,13 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                   <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
                     {compact ? (
                       <>
-                        <span className="hidden sm:inline font-mono text-[11px] text-foreground/80">{formatTimestamp(log.timestamp)}</span>
-                        <span className="sm:hidden font-mono text-[11px] text-foreground/80">{formatMobileTimestamp(log.timestamp)}</span>
+                        <span className="hidden sm:inline font-mono text-[11px] text-foreground/80">{formatTimestamp(log.timestamp, timezone)}</span>
+                        <span className="sm:hidden font-mono text-[11px] text-foreground/80">{formatMobileTimestamp(log.timestamp, timezone)}</span>
                       </>
                     ) : (
                       <div className="flex flex-col">
-                        <span className="hidden sm:inline font-mono text-xs text-foreground/80">{formatTimestamp(log.timestamp)}</span>
-                        <span className="sm:hidden font-mono text-xs text-foreground/80">{formatMobileTimestamp(log.timestamp)}</span>
+                        <span className="hidden sm:inline font-mono text-xs text-foreground/80">{formatTimestamp(log.timestamp, timezone)}</span>
+                        <span className="sm:hidden font-mono text-xs text-foreground/80">{formatMobileTimestamp(log.timestamp, timezone)}</span>
                         <span className="font-mono text-[10px] text-muted-foreground/60">{formatRelativeTime(log.timestamp)}</span>
                       </div>
                     )}

@@ -23,7 +23,7 @@ import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
 import {AutoRefreshToggle, type RefreshInterval} from '@/components/logs/AutoRefreshToggle'
 import {LogSetupGuide} from '@/components/logs/LogSetupGuide'
-import {LogVizTabs, type LogVizMode} from '@/components/logs/LogVizTabs'
+import {type LogVizMode, LogVizTabs} from '@/components/logs/LogVizTabs'
 import {LogHistogram} from '@/components/logs/LogHistogram'
 import {LogTopList} from '@/components/logs/LogTopList'
 import {LogPieChart} from '@/components/logs/LogPieChart'
@@ -33,12 +33,12 @@ import {cn} from '@/lib/utils'
 import {ChevronDown, ChevronLeft, Download, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
 import {useQuery} from '@tanstack/react-query'
 import {
-  serializeLogViewState,
+  type LogViewSearch,
   parseFacetFiltersFromUrl,
   parseLevelsFromUrl,
-  type LogViewSearch,
+  serializeLogViewState,
 } from '@/components/logs/logViewUrlState'
-import { getNowDate } from '@/lib/demo'
+import {getNowDate} from '@/lib/demo'
 
 interface LogExplorerProps {
   projectId?: number
@@ -593,7 +593,7 @@ export function LogExplorer({
 
   // Show loading state only on initial load with no accumulated logs
   const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
-  const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && totalCount === 0
+  const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && (totalCount === 0 || totalCount === null)
   const logContainerRef = useRef<HTMLDivElement>(null)
 
   return (

@@ -57,6 +57,7 @@ import {
   Database,
   Download,
   FileText,
+  Globe,
   Info,
   Key,
   Layers,
@@ -80,6 +81,9 @@ import {TeamSettings} from '@/components/settings/team-settings'
 import {useAuth} from '@/hooks/useAuth'
 import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
 import {CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys} from '@/lib/sidebar-config'
+import {useTimezone} from '@/hooks/useTimezone'
+import {TIMEZONES} from '@/lib/timezones'
+import {formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Project', scopes: ['project:read', 'project:write'] },
@@ -109,14 +113,10 @@ const EXPIRATION_OPTIONS = [
   { label: 'Custom', value: 'custom' },
 ] as const
 
-function formatDate(iso: string | null | undefined): string {
+function formatDate(iso: string | null | undefined, timezone: string): string {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
+    return formatDateUtil(new Date(iso), timezone)
   } catch {
     return iso
   }
@@ -199,6 +199,13 @@ function SettingsPage() {
               >
                 <SlidersHorizontal className="h-4 w-4 mr-2" />
                 Sidebar
+              </TabsTrigger>
+              <TabsTrigger
+                value="display"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Globe className="h-4 w-4 mr-2" />
+                Display
               </TabsTrigger>
 
               <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
@@ -300,6 +307,9 @@ function SettingsPage() {
             <TabsContent value="sidebar" className="space-y-4 mt-0">
               <SidebarTab />
             </TabsContent>
+            <TabsContent value="display" className="space-y-4 mt-0">
+              <DisplayTab />
+            </TabsContent>
             {!isSelfHosted && (
             <TabsContent value="billing" className="space-y-4 mt-0">
               <BillingTab />
@@ -326,6 +336,7 @@ function SettingsPage() {
 function AuthTokensTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { timezone } = useTimezone()
   const [createOpen, setCreateOpen] = useState(false)
   const [revokeToken, setRevokeToken] = useState<AuthToken | null>(null)
   const [createdTokenValue, setCreatedTokenValue] = useState<string | null>(null)
@@ -468,13 +479,13 @@ function AuthTokensTab() {
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {formatDate(token.lastUsedAt)}
+                        {formatDate(token.lastUsedAt, timezone)}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {token.expiresAt ? formatDate(token.expiresAt) : 'Never'}
+                        {token.expiresAt ? formatDate(token.expiresAt, timezone) : 'Never'}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {formatDate(token.createdAt)}
+                        {formatDate(token.createdAt, timezone)}
                       </TableCell>
                       <TableCell>
                         <Button
@@ -763,6 +774,7 @@ function RevokeTokenDialog({ token, onClose, onConfirm, isRevoking }: RevokeToke
 }
 
 function UsageTab() {
+  const { timezone } = useTimezone()
   const { data: usage, isLoading } = useQuery({
     queryKey: ['billingUsage'],
     queryFn: () => api.getBillingUsage(),
@@ -773,7 +785,7 @@ function UsageTab() {
     return <p className="text-sm text-muted-foreground">Loading usage data...</p>
   }
 
-  const periodLabel = `${formatDate(usage.periodStart)} – ${formatDate(usage.periodEnd)}`
+  const periodLabel = `${formatDate(usage.periodStart, timezone)} – ${formatDate(usage.periodEnd, timezone)}`
 
   const usageRows = [
     {
@@ -972,6 +984,7 @@ function UsageTab() {
 function BillingTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { timezone } = useTimezone()
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [setupClientSecret, setSetupClientSecret] = useState<string | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -1101,7 +1114,7 @@ function BillingTab() {
   const isPaidTier = usage.plan !== 'free'
   const currentPlan = plansData?.plans?.find((p) => p.tier.tierName.toLowerCase() === usage.plan.toLowerCase())
   const billablePlans = plansData?.plans?.filter((p) => p.tier.tierName !== 'FREE') ?? []
-  const periodLabel = `${formatDate(usage.periodStart)} – ${formatDate(usage.periodEnd)}`
+  const periodLabel = `${formatDate(usage.periodStart, timezone)} – ${formatDate(usage.periodEnd, timezone)}`
 
   const onPaymentMethodUpdated = () => {
     setShowPaymentForm(false)
@@ -1393,7 +1406,7 @@ function BillingTab() {
                       <TableBody>
                         {invoices.map((invoice) => (
                           <TableRow key={invoice.id}>
-                            <TableCell className="font-medium">{formatDate(invoice.date)}</TableCell>
+                            <TableCell className="font-medium">{formatDate(invoice.date, timezone)}</TableCell>
                             <TableCell>{formatCurrency(invoice.amountCents)}</TableCell>
                             <TableCell>
                               <Badge 
@@ -2263,6 +2276,7 @@ function IntegrationsTab() {
 function NotificationsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { timezone } = useTimezone()
 
   const { data: alertPrefs, isLoading: isLoadingAlertPrefs } = useQuery({
     queryKey: ['alertNotificationPreferences'],
@@ -2735,7 +2749,7 @@ function NotificationsTab() {
               </div>
               {onCallContact.onCallPhoneConsentedAt && (
                 <p className="text-xs text-muted-foreground">
-                  Consented on {new Date(onCallContact.onCallPhoneConsentedAt).toLocaleDateString()}
+                  Consented on {formatDateUtil(new Date(onCallContact.onCallPhoneConsentedAt), timezone)}
                 </p>
               )}
               <div className="flex gap-2">
@@ -2819,6 +2833,7 @@ function NotificationsTab() {
 function SilencePeriodsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { timezone } = useTimezone()
   const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false)
   const [now] = useState(Date.now)
 
@@ -2877,14 +2892,7 @@ function SilencePeriodsTab() {
   const scheduledPeriods = silencePeriods.filter((p) => p.startsAt > now)
   const isCurrentlySilenced = activePeriods.length > 0
 
-  const formatDateTime = (ms: number) => {
-    return new Date(ms).toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
+  const formatDateTime = (ms: number) => formatDateTimeUtil(new Date(ms), timezone)
 
   const formatTimeRemaining = (endsAt: number) => {
     const diff = endsAt - now
@@ -3136,6 +3144,81 @@ function SilencePeriodsTab() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function DisplayTab() {
+  const { toast } = useToast()
+  const { timezone, updateTimezone } = useTimezone()
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const [saving, setSaving] = useState(false)
+
+  const { data: user } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => api.getCurrentUser(),
+  })
+
+  const savedTimezone = user?.timezone ?? null
+  const hasCurrentTimezoneOption = TIMEZONES.some((tz) => tz.value === (savedTimezone ?? browserTz))
+
+  const handleTimezoneChange = async (value: string) => {
+    setSaving(true)
+    try {
+      await updateTimezone(value === '__browser__' ? null : value)
+      toast({ title: 'Display preferences saved', description: 'Your timezone has been updated.' })
+    } catch {
+      toast({ title: 'Error', description: 'Failed to save timezone.', variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const selectValue = savedTimezone ?? '__browser__'
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Display Preferences</CardTitle>
+          <CardDescription>
+            Choose how dates and times are displayed throughout the dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="timezone-select">Timezone</Label>
+            <Select
+              value={selectValue}
+              onValueChange={handleTimezoneChange}
+            >
+              <SelectTrigger id="timezone-select" className="max-w-md">
+                <SelectValue placeholder="Select timezone..." />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                <SelectItem value="__browser__">Browser default ({browserTz})</SelectItem>
+                {!hasCurrentTimezoneOption && savedTimezone && (
+                  <SelectItem value={savedTimezone}>{savedTimezone}</SelectItem>
+                )}
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              Preview: {formatDateTimeUtil(new Date(), timezone)}
+            </p>
+          </div>
+          {saving && (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving…
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

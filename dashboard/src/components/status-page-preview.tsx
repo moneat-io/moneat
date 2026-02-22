@@ -14,19 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Activity,
-  AlertCircle,
-} from 'lucide-react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import {Activity, AlertCircle, AlertTriangle, CheckCircle2, XCircle,} from 'lucide-react'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatMonthDay} from '@/lib/date-format'
 
 // Preview component for rendering a status page with given configuration
 export function StatusPagePreview({
@@ -212,6 +203,7 @@ function MonitorRow({
   historyDays: number
   isDarkMode: boolean
 }) {
+  const { timezone } = useTimezone()
   const statusColors = {
     operational: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
     degraded: isDarkMode ? 'text-amber-400' : 'text-amber-600',
@@ -270,7 +262,7 @@ function MonitorRow({
                     />
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">{new Date(point.date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</p>
+                    <p className="font-medium">{formatMonthDay(new Date(point.date), timezone)}</p>
                     <p className={`tabular-nums ${point.uptime >= 99 ? 'text-emerald-600 dark:text-emerald-400' : point.uptime >= 90 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
                       {point.uptime.toFixed(2)}% uptime
                     </p>

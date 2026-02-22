@@ -20,19 +20,21 @@ import {api} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {
-  Activity,
-  AlertTriangle,
-  Cpu,
-  Fingerprint,
-  FolderKanban,
-  HardDrive,
-  Lock,
-  Radio,
-  Server,
-  ShieldCheck,
-  Users,
+    Activity,
+    AlertTriangle,
+    Cpu,
+    Fingerprint,
+    FolderKanban,
+    HardDrive,
+    Lock,
+    Radio,
+    Server,
+    ShieldCheck,
+    Users,
 } from 'lucide-react'
 import {AdminSkeleton, formatBytes, formatNumber, SectionHeader} from '@/components/admin-components'
+import {useTimezone} from '@/hooks/useTimezone'
+import {formatDateTime} from '@/lib/date-format'
 
 export const Route = createFileRoute('/admin/telemetry')({
   component: AdminTelemetryPage,
@@ -43,6 +45,7 @@ function AdminTelemetryPage() {
     queryKey: ['admin-telemetry'],
     queryFn: () => api.getAdminTelemetry(),
   })
+  const {timezone} = useTimezone()
 
   if (isLoading || !data) {
     return <AdminSkeleton />
@@ -92,7 +95,7 @@ function AdminTelemetryPage() {
                 <Radio className="h-5 w-5 text-sky-600 dark:text-sky-400" />
               </div>
               <div>
-                <p className="text-sm font-medium">{lastSeenAt ? new Date(lastSeenAt).toLocaleString() : '—'}</p>
+                <p className="text-sm font-medium">{lastSeenAt ? formatDateTime(new Date(lastSeenAt), timezone) : '—'}</p>
                 <p className="text-sm text-muted-foreground">Last pulse received</p>
               </div>
             </div>
@@ -128,7 +131,7 @@ function AdminTelemetryPage() {
                       {d.sslEnabled ? <><Lock className="h-3 w-3 mr-1" />SSL</> : 'No SSL'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(d.receivedAt).toLocaleString()}
+                      {formatDateTime(new Date(d.receivedAt), timezone)}
                     </span>
                   </div>
                 </div>
