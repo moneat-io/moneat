@@ -17,22 +17,36 @@
 import {useState} from 'react'
 import {useLocation} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import type {AiChatResponse, AiChatResponseData, AiConversationSummary} from '@/lib/api'
+import type {AiChatResponse, AiChatResponseData, AiConversationSummary, AiSseEvent} from '@/lib/api'
 import {Logo} from '@/components/logo'
 import {ChatMessage} from './ChatMessage'
 import {ActionCard} from './ActionCard'
 import {ClarificationCard} from './ClarificationCard'
 import {DataQueryResult} from './DataQueryResult'
+import {ContextAggregationProgress} from './ContextAggregationProgress'
 import {ChatInput} from './ChatInput'
 import {cn} from '@/lib/utils'
 import {MessageSquare, Minus, X, Trash2, Plus, ChevronLeft} from 'lucide-react'
+
+interface SourceStatus {
+  source: string
+  status: 'pending' | 'in_progress' | 'done' | 'error'
+  count?: number
+}
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   response?: AiChatResponseData
+  costUsd?: string
+  provider?: string
+  model?: string
   timestamp: Date
+  // SSE aggregation state
+  searchSources?: SourceStatus[]
+  totalTokens?: number
+  snapshotId?: number
 }
 
 export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimize: () => void}) {
@@ -41,15 +55,17 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Hey! I\'m Moneat AI. I can help you set up monitors, query logs, investigate issues, and more. What would you like to do?',
+      content: 'Hey! I\'m Moneat AI. I can help you investigate issues, analyze logs, query traces, and more. What would you like to do?',
       timestamp: new Date(),
     },
   ])
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
   const [showConversations, setShowConversations] = useState(false)
   const [conversations, setConversations] = useState<AiConversationSummary[]>([])
   const [conversationsLoading, setConversationsLoading] = useState(false)
+  const [useEnterpriseSse, setUseEnterpriseSse] = useState(true)
 
   const handleSend = async (text: string) => {
     const userMessage: Message = {
@@ -61,6 +77,121 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
 
+    if (useEnterpriseSse) {
+      await handleSseSend(text)
+    } else {
+      await handleLegacySend(text)
+    }
+  }
+
+  const handleSseSend = async (text: string) => {
+    const progressId = `progress-${Date.now()}`
+    const sources: SourceStatus[] = []
+
+    // Add a progress message
+    setMessages(prev => [...prev, {
+      id: progressId,
+      role: 'assistant',
+      content: '',
+      searchSources: sources,
+      timestamp: new Date(),
+    }])
+
+    try {
+      await api.streamAiSearch(
+        {
+          conversationId,
+          message: text,
+          currentPage: location.pathname,
+        },
+        (event: AiSseEvent) => {
+          if (event.phase === 'searching') {
+            setMessages(prev => prev.map(m => {
+              if (m.id !== progressId) return m
+              const updatedSources = [...(m.searchSources ?? [])]
+              const idx = updatedSources.findIndex(s => s.source === event.source)
+              const entry: SourceStatus = {source: event.source, status: event.status as SourceStatus['status'], count: event.count}
+              if (idx >= 0) updatedSources[idx] = entry
+              else updatedSources.push(entry)
+              return {...m, searchSources: updatedSources}
+            }))
+          } else if (event.phase === 'context_ready') {
+            setMessages(prev => prev.map(m =>
+              m.id === progressId
+                ? {...m, totalTokens: event.totalTokens, snapshotId: event.snapshotId}
+                : m
+            ))
+          } else if (event.phase === 'error') {
+            setMessages(prev => prev.map(m =>
+              m.id === progressId
+                ? {...m, content: event.error, searchSources: undefined}
+                : m
+            ))
+          }
+        },
+      )
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Search failed'
+      // If enterprise SSE is not available, fall back to legacy
+      if (errMsg.includes('404') || errMsg.includes('405')) {
+        setUseEnterpriseSse(false)
+        setMessages(prev => prev.filter(m => m.id !== progressId))
+        await handleLegacySend(text)
+        return
+      }
+      setMessages(prev => prev.map(m =>
+        m.id === progressId ? {...m, content: errMsg, searchSources: undefined} : m
+      ))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleConfirm = async (snapshotId: number) => {
+    setIsConfirming(true)
+    try {
+      await api.streamAiConfirm(snapshotId, (event: AiSseEvent) => {
+        if (event.phase === 'response' && event.done) {
+          setMessages(prev => [
+            ...prev,
+            {
+              id: `ai-${Date.now()}`,
+              role: 'assistant',
+              content: event.content,
+              costUsd: event.costUsd,
+              provider: event.provider,
+              model: event.model,
+              timestamp: new Date(),
+            },
+          ])
+        } else if (event.phase === 'error') {
+          setMessages(prev => [
+            ...prev,
+            {
+              id: `error-${Date.now()}`,
+              role: 'assistant',
+              content: event.error,
+              timestamp: new Date(),
+            },
+          ])
+        }
+      })
+    } catch (err) {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: err instanceof Error ? err.message : 'Failed to get AI response',
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
+      setIsConfirming(false)
+    }
+  }
+
+  const handleLegacySend = async (text: string) => {
     try {
       const result: AiChatResponse = await api.sendChatMessage(
         conversationId,
@@ -77,13 +208,14 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
         timestamp: new Date(),
       }
       setMessages(prev => [...prev, aiMessage])
-    } catch {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Sorry, I encountered an error. Please try again.'
       setMessages(prev => [
         ...prev,
         {
           id: `error-${Date.now()}`,
           role: 'assistant',
-          content: 'Sorry, I encountered an error. Please try again.',
+          content: errorMessage,
           timestamp: new Date(),
         },
       ])
@@ -171,7 +303,7 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
       {
         id: 'welcome',
         role: 'assistant',
-        content: 'Hey! I\'m Moneat AI. I can help you set up monitors, query logs, investigate issues, and more. What would you like to do?',
+        content: 'Hey! I\'m Moneat AI. I can help you investigate issues, analyze logs, query traces, and more. What would you like to do?',
         timestamp: new Date(),
       },
     ])
@@ -264,7 +396,27 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.map(msg => (
               <div key={msg.id}>
-                <ChatMessage role={msg.role} content={msg.content} />
+                {/* SSE aggregation progress */}
+                {msg.searchSources && msg.searchSources.length > 0 && (
+                  <ContextAggregationProgress
+                    sources={msg.searchSources}
+                    totalTokens={msg.totalTokens}
+                    snapshotId={msg.snapshotId}
+                    onConfirm={handleConfirm}
+                    isConfirming={isConfirming}
+                  />
+                )}
+                {/* Regular message content */}
+                {msg.content && (
+                  <ChatMessage
+                    role={msg.role}
+                    content={msg.content}
+                    costUsd={msg.costUsd}
+                    provider={msg.provider}
+                    model={msg.model}
+                  />
+                )}
+                {/* Legacy response components */}
                 {msg.response?.actions?.map(action => (
                   <ActionCard
                     key={action.id}
@@ -314,7 +466,7 @@ export function ChatPanel({onClose, onMinimize}: {onClose: () => void; onMinimiz
           </div>
 
           {/* Input */}
-          <ChatInput onSend={handleSend} disabled={isLoading} />
+          <ChatInput onSend={handleSend} disabled={isLoading || isConfirming} />
         </>
       )}
     </div>

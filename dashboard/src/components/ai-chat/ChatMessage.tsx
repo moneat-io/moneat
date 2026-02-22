@@ -20,9 +20,12 @@ import {cn} from '@/lib/utils'
 interface ChatMessageProps {
   role: 'user' | 'assistant'
   content: string
+  costUsd?: string
+  provider?: string
+  model?: string
 }
 
-export function ChatMessage({role, content}: ChatMessageProps) {
+export function ChatMessage({role, content, costUsd, provider, model}: ChatMessageProps) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -38,8 +41,16 @@ export function ChatMessage({role, content}: ChatMessageProps) {
       <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
         <Logo markOnly className="h-4 w-4" />
       </div>
-      <div className={cn("bg-muted rounded-lg px-3 py-2 text-sm max-w-[85%]", "whitespace-pre-wrap")}>
-        {content}
+      <div className="space-y-1 max-w-[85%]">
+        <div className={cn("bg-muted rounded-lg px-3 py-2 text-sm", "whitespace-pre-wrap")}>
+          {content}
+        </div>
+        {costUsd && (
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground px-1">
+            {provider && model && <span>{provider}/{model}</span>}
+            <span>${costUsd}</span>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1700,6 +1700,40 @@ interface AiConversationDetail {
   updatedAt: string
 }
 
+// ── Enterprise AI SSE types ──────────────────────────────────────────────
+
+interface AiSseSearchProgress {
+  phase: 'searching'
+  source: string
+  status: string
+  count?: number
+}
+
+interface AiSseContextReady {
+  phase: 'context_ready'
+  snapshotId: number
+  totalTokens: number
+  sources: Record<string, number>
+}
+
+interface AiSseResponseChunk {
+  phase: 'response'
+  content: string
+  inputTokens?: number
+  outputTokens?: number
+  costUsd?: string
+  provider?: string
+  model?: string
+  done?: boolean
+}
+
+interface AiSseError {
+  phase: 'error'
+  error: string
+}
+
+type AiSseEvent = AiSseSearchProgress | AiSseContextReady | AiSseResponseChunk | AiSseError
+
 // --- LLM Observability types ---
 
 interface LlmTimelinePoint {
@@ -3995,6 +4029,91 @@ class ApiClient {
     return this.request<void>(`${API_BASE}/ai/conversations/${id}`, { method: 'DELETE' })
   }
 
+  /**
+   * Phase 1: Stream search progress via SSE. Calls onEvent for each SSE event.
+   * Returns when the stream ends.
+   */
+  async streamAiSearch(
+    request: { conversationId?: number | null; message: string; currentPage?: string; timeRange?: string },
+    onEvent: (event: AiSseEvent) => void,
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE}/ai/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok || !response.body) {
+      const err = await response.json().catch(() => ({ error: 'Stream failed' }))
+      throw new Error(err.error || `Stream error: ${response.status}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6)) as AiSseEvent
+            onEvent(event)
+          } catch { /* skip malformed events */ }
+        }
+      }
+    }
+  }
+
+  /**
+   * Phase 2: Confirm snapshot and stream LLM response via SSE.
+   */
+  async streamAiConfirm(
+    snapshotId: number,
+    onEvent: (event: AiSseEvent) => void,
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE}/ai/chat/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ snapshotId }),
+    })
+
+    if (!response.ok || !response.body) {
+      const err = await response.json().catch(() => ({ error: 'Confirm failed' }))
+      throw new Error(err.error || `Confirm error: ${response.status}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6)) as AiSseEvent
+            onEvent(event)
+          } catch { /* skip malformed events */ }
+        }
+      }
+    }
+  }
+
   // --- LLM Observability ---
 
   async getLlmOverview(projectId: number, range = '24h'): Promise<LlmOverviewResponse> {
@@ -4344,6 +4463,11 @@ export type {
   AiConversationSummary,
   AiConversationDetail,
   AiMessageDto,
+  AiSseSearchProgress,
+  AiSseContextReady,
+  AiSseResponseChunk,
+  AiSseError,
+  AiSseEvent,
   LlmTimelinePoint,
   LlmModelStats,
   LlmOverviewResponse,
