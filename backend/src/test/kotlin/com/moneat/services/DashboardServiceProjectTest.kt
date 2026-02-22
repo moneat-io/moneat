@@ -17,20 +17,24 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.models.CreateProjectRequest
 import com.moneat.models.Memberships
 import com.moneat.models.Organizations
 import com.moneat.models.PricingTierConfigs
 import com.moneat.models.ProjectKeys
 import com.moneat.models.Projects
 import com.moneat.models.Subscriptions
+import com.moneat.models.UpdateProjectRequest
 import com.moneat.models.Users
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -186,7 +190,7 @@ class DashboardServiceProjectTest {
         val ex = kotlin.test.assertFailsWith<IllegalStateException> {
             service.createProject(userId, CreateProjectRequest(name = "No Org Project"))
         }
-        assertTrue(ex.message?.contains("no organization") == true)
+        assertEquals(ex.message?.contains("no organization"), true)
     }
 
     @Test
@@ -202,7 +206,7 @@ class DashboardServiceProjectTest {
             service.createProject(userId, CreateProjectRequest(name = "Duplicate"))
         }
         // Service message: "A project with this name already exists"
-        assertTrue(ex.message?.contains("already exists") == true)
+        assertEquals(ex.message?.contains("already exists"), true)
     }
 
     @Test
@@ -280,7 +284,7 @@ class DashboardServiceProjectTest {
         val ex = kotlin.test.assertFailsWith<IllegalStateException> {
             service.addProjectTarget(projectId, "android")
         }
-        assertTrue(ex.message?.contains("android") == true)
+        assertEquals(ex.message?.contains("android"), true)
     }
 
     @Test
