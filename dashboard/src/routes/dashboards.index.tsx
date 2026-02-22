@@ -17,12 +17,12 @@
 import {createFileRoute, Link, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
 import {api, type CustomDashboard, type CreateDashboardRequest} from '@/lib/api'
-import {Plus, Import, MoreHorizontal, Trash2, Copy, LayoutDashboard} from 'lucide-react'
+import {Plus, Import, MoreHorizontal, Trash2, Copy, LayoutDashboard, Database} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {useState} from 'react'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 
-export const Route = createFileRoute('/custom-dashboards/')({
+export const Route = createFileRoute('/dashboards/')({
   component: DashboardListPage,
 })
 
@@ -40,7 +40,7 @@ function DashboardListPage() {
     mutationFn: (data: CreateDashboardRequest) => api.createDashboard(data),
     onSuccess: (dashboard) => {
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
-      navigate({to: '/custom-dashboards/$dashboardId', params: {dashboardId: String(dashboard.id)}, search: {edit: true}})
+      navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(dashboard.id)}, search: {edit: true}})
     },
   })
 
@@ -72,6 +72,12 @@ function DashboardListPage() {
       <div className="flex items-center justify-between">
         <div />
         <div className="flex items-center gap-2">
+          <Link to="/dashboards/datasources">
+            <Button variant="outline" size="sm">
+              <Database className="h-4 w-4 mr-1.5" />
+              Data Sources
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
             <Import className="h-4 w-4 mr-1.5" />
             Import
@@ -161,7 +167,7 @@ function DashboardCard({
 
   return (
     <Link
-      to="/custom-dashboards/$dashboardId"
+      to="/dashboards/$dashboardId"
       params={{dashboardId: String(dashboard.id)}}
       className="group relative block rounded-lg border bg-card p-4 hover:border-primary/50 transition-colors"
     >

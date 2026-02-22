@@ -298,7 +298,27 @@ class DashboardQueryEngine {
         }
     }
 
-    fun getDataSources(): List<DataSourceInfo> = listOf(
+    /**
+     * Returns all data sources: built-in ClickHouse sources + custom org-level sources.
+     */
+    fun getDataSources(customSources: List<CustomDataSourceResponse> = emptyList()): List<DataSourceInfo> {
+        val builtIn = getBuiltInDataSources()
+        val custom = customSources.filter { it.enabled }.map { src ->
+            DataSourceInfo(
+                name = "custom:${src.id}",
+                label = "${src.name} (${src.sourceType})",
+                fields = emptyList() // Fields fetched on demand via schema endpoint
+            )
+        }
+        return builtIn + custom
+    }
+
+    fun isCustomDataSource(dataSource: String): Boolean = dataSource.startsWith("custom:")
+
+    fun parseCustomDataSourceId(dataSource: String): Long? =
+        if (dataSource.startsWith("custom:")) dataSource.removePrefix("custom:").toLongOrNull() else null
+
+    private fun getBuiltInDataSources(): List<DataSourceInfo> = listOf(
         DataSourceInfo("events", "Error Events", listOf(
             DataSourceField("timestamp", "DateTime64", "Event timestamp"),
             DataSourceField("level", "String", "Error level"),

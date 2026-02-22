@@ -47,9 +47,9 @@ describe('DashboardToolbar', () => {
     expect(screen.getByText('Test Dashboard')).toBeInTheDocument()
   })
 
-  it('renders back link to custom-dashboards', () => {
+  it('renders back link to dashboards', () => {
     render(<DashboardToolbar {...defaultProps} />)
-    const backLink = document.querySelector('a[href="/custom-dashboards"]')
+    const backLink = document.querySelector('a[href="/dashboards"]')
     expect(backLink).toBeInTheDocument()
   })
 

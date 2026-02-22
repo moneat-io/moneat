@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api, type QueryDsl, type MetricDef, type GroupByDef, type FilterDef} from '@/lib/api'
 import {Button} from '@/components/ui/button'
@@ -46,6 +45,7 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
     staleTime: 60000,
   })
 
+  const isCustomSource = value.dataSource?.startsWith('custom:')
   const selectedSource = dataSources?.find((ds) => ds.name === value.dataSource)
   const fields = selectedSource?.fields ?? []
 
@@ -110,14 +110,63 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
           value={value.dataSource}
           onChange={(e) => onChange({...value, dataSource: e.target.value})}
         >
-          {dataSources?.map((ds) => (
-            <option key={ds.name} value={ds.name}>
-              {ds.label}
-            </option>
-          ))}
+          <optgroup label="Built-in">
+            {dataSources?.filter((ds) => !ds.name.startsWith('custom:')).map((ds) => (
+              <option key={ds.name} value={ds.name}>
+                {ds.label}
+              </option>
+            ))}
+          </optgroup>
+          {dataSources?.some((ds) => ds.name.startsWith('custom:')) && (
+            <optgroup label="Custom Data Sources">
+              {dataSources?.filter((ds) => ds.name.startsWith('custom:')).map((ds) => (
+                <option key={ds.name} value={ds.name}>
+                  {ds.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </div>
 
+      {isCustomSource ? (
+        /* Raw query mode for custom data sources */
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">
+            {selectedSource?.label?.includes('prometheus') ? 'PromQL Query' : 'SQL Query'}
+          </label>
+          <textarea
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm font-mono"
+            rows={4}
+            placeholder={
+              selectedSource?.label?.includes('prometheus')
+                ? 'rate(http_requests_total[5m])'
+                : 'SELECT * FROM my_table LIMIT 100'
+            }
+            value={value.rawQuery || ''}
+            onChange={(e) => onChange({...value, rawQuery: e.target.value || undefined})}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            {selectedSource?.label?.includes('prometheus')
+              ? 'Enter a PromQL query expression'
+              : 'Only SELECT queries are allowed. Read-only access is enforced.'}
+          </p>
+          {/* Limit */}
+          <div className="mt-3">
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Limit</label>
+            <input
+              type="number"
+              className="w-24 rounded-md border bg-background px-3 py-1.5 text-sm"
+              value={value.limit}
+              min={1}
+              max={10000}
+              onChange={(e) => onChange({...value, limit: parseInt(e.target.value) || 100})}
+            />
+          </div>
+        </div>
+      ) : (
+        /* Standard DSL builder for built-in sources */
+        <>
       {/* Metrics */}
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -275,6 +324,8 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
           onChange={(e) => onChange({...value, limit: parseInt(e.target.value) || 100})}
         />
       </div>
+        </>
+      )}
     </div>
   )
 }

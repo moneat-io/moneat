@@ -17,7 +17,7 @@
 import {createFileRoute, Outlet} from '@tanstack/react-router'
 import {LayoutDashboard} from 'lucide-react'
 
-export const Route = createFileRoute('/custom-dashboards')({
+export const Route = createFileRoute('/dashboards')({
   component: DashboardsLayout,
 })
 

@@ -2048,6 +2048,74 @@ interface DataSourceInfo {
   fields: DataSourceField[]
 }
 
+// Custom Data Sources types
+interface CustomDataSourceResponse {
+  id: number
+  org_id: number
+  name: string
+  description?: string
+  source_type: string
+  host: string
+  port?: number
+  database_name?: string
+  extra_config: Record<string, string>
+  enabled: boolean
+  created_by: number
+  created_at: string
+  updated_at: string
+  has_credentials: boolean
+}
+
+interface CreateCustomDataSourceRequest {
+  name: string
+  description?: string
+  source_type: string
+  host: string
+  port?: number
+  database_name?: string
+  username?: string
+  password?: string
+  api_key?: string
+  extra_config?: Record<string, string>
+}
+
+interface UpdateCustomDataSourceRequest {
+  name?: string
+  description?: string
+  host?: string
+  port?: number
+  database_name?: string
+  username?: string
+  password?: string
+  api_key?: string
+  extra_config?: Record<string, string>
+  enabled?: boolean
+}
+
+interface TestConnectionRequest {
+  source_type: string
+  host: string
+  port?: number
+  database_name?: string
+  username?: string
+  password?: string
+  api_key?: string
+}
+
+interface TestConnectionResult {
+  success: boolean
+  message: string
+  tables?: string[]
+  metrics?: string[]
+}
+
+interface CustomDataSourceQueryRequest {
+  data_source_id: number
+  query: string
+  limit?: number
+  time_range?: TimeRangeDef
+}
+
 class ApiClient {
   private authRedirectInProgress = false
   private refreshPromise: Promise<boolean> | null = null
@@ -4508,6 +4576,51 @@ class ApiClient {
   async getDashboardTemplates(): Promise<CreateDashboardRequest[]> {
     return this.request<CreateDashboardRequest[]>(`${API_BASE}/dashboards/templates`)
   }
+
+  // Custom Data Sources API
+  async listCustomDataSources(): Promise<CustomDataSourceResponse[]> {
+    return this.request<CustomDataSourceResponse[]>(`${API_BASE}/datasources`)
+  }
+
+  async getCustomDataSource(id: number): Promise<CustomDataSourceResponse> {
+    return this.request<CustomDataSourceResponse>(`${API_BASE}/datasources/${id}`)
+  }
+
+  async createCustomDataSource(request: CreateCustomDataSourceRequest): Promise<CustomDataSourceResponse> {
+    return this.request<CustomDataSourceResponse>(`${API_BASE}/datasources`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateCustomDataSource(id: number, request: UpdateCustomDataSourceRequest): Promise<CustomDataSourceResponse> {
+    return this.request<CustomDataSourceResponse>(`${API_BASE}/datasources/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteCustomDataSource(id: number): Promise<void> {
+    await this.request(`${API_BASE}/datasources/${id}`, { method: 'DELETE' })
+  }
+
+  async testDataSourceConnection(request: TestConnectionRequest): Promise<TestConnectionResult> {
+    return this.request<TestConnectionResult>(`${API_BASE}/datasources/test`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async getDataSourceSchema(id: number): Promise<DataSourceField[]> {
+    return this.request<DataSourceField[]>(`${API_BASE}/datasources/${id}/schema`)
+  }
+
+  async queryCustomDataSource(id: number, request: CustomDataSourceQueryRequest): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>(`${API_BASE}/datasources/${id}/query`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
 }
 
 export const api = new ApiClient()
@@ -4689,4 +4802,10 @@ export type {
   DashboardImportResult,
   DataSourceField,
   DataSourceInfo,
+  CustomDataSourceResponse,
+  CreateCustomDataSourceRequest,
+  UpdateCustomDataSourceRequest,
+  TestConnectionRequest,
+  TestConnectionResult,
+  CustomDataSourceQueryRequest,
 }

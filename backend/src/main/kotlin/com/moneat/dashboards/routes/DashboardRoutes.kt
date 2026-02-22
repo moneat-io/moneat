@@ -18,6 +18,8 @@ package com.moneat.dashboards.routes
 
 import com.moneat.dashboards.models.*
 import com.moneat.dashboards.services.CustomDashboardService
+import com.moneat.dashboards.services.CustomDataSourceExecutor
+import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
@@ -63,7 +65,9 @@ fun Route.customDashboardRoutes(
     queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
     retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
     dataDogTranslator: DataDogTranslator = DataDogTranslator(),
-    grafanaTranslator: GrafanaTranslator = GrafanaTranslator()
+    grafanaTranslator: GrafanaTranslator = GrafanaTranslator(),
+    dataSourceService: CustomDataSourceService = CustomDataSourceService(),
+    dataSourceExecutor: CustomDataSourceExecutor = CustomDataSourceExecutor()
 ) {
     route("/v1/dashboards") {
         authenticate("auth-jwt") {
@@ -165,8 +169,32 @@ fun Route.customDashboardRoutes(
                 }
 
                 try {
-                    val results = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
-                    call.respond(results)
+                    // Check if this is a custom data source query
+                    if (queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
+                        val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
+                            ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid custom data source ID"))
+
+                        val source = dataSourceService.getDataSource(sourceId, orgId)
+                            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+
+                        val creds = dataSourceService.getDecryptedCredentials(sourceId, orgId)
+                            ?: return@post call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials"))
+
+                        val sourceType = CustomDataSourceType.fromString(source.sourceType)
+                            ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
+
+                        val rawQuery = effectiveQuery.rawQuery
+                            ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Custom data source queries require a rawQuery"))
+
+                        val results = dataSourceExecutor.executeQuery(
+                            sourceId, sourceType, source.host, source.port ?: 5432,
+                            source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
+                        )
+                        call.respond(results)
+                    } else {
+                        val results = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
+                        call.respond(results)
+                    }
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid query"))
                 }
@@ -250,14 +278,173 @@ fun Route.customDashboardRoutes(
                 }
             }
 
-            // List available data sources and fields
+            // List available data sources and fields (built-in + custom)
             get("/datasources") {
-                call.respond(queryEngine.getDataSources())
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                if (orgId != null) {
+                    val customSources = dataSourceService.listDataSources(orgId)
+                    call.respond(queryEngine.getDataSources(customSources))
+                } else {
+                    call.respond(queryEngine.getDataSources())
+                }
             }
 
             // Get default dashboard templates
             get("/templates") {
                 call.respond(dashboardService.getDefaultDashboardTemplates())
+            }
+        }
+    }
+
+    // Custom data source management routes
+    route("/v1/datasources") {
+        authenticate("auth-jwt") {
+            // List custom data sources for org
+            get {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                call.respond(dataSourceService.listDataSources(orgId))
+            }
+
+            // Create custom data source
+            post {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val request = call.receive<CreateCustomDataSourceRequest>()
+                try {
+                    val source = dataSourceService.createDataSource(orgId, userId.toLong(), request)
+                    call.respond(HttpStatusCode.Created, source)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid request"))
+                }
+            }
+
+            // Get custom data source
+            get("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+
+                val source = dataSourceService.getDataSource(id, orgId)
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+
+                call.respond(source)
+            }
+
+            // Update custom data source
+            put("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@put call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+
+                val request = call.receive<UpdateCustomDataSourceRequest>()
+                val updated = dataSourceService.updateDataSource(id, orgId, request)
+                    ?: return@put call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+
+                // Invalidate any cached connection pool
+                dataSourceExecutor.closePool(id)
+                call.respond(updated)
+            }
+
+            // Delete custom data source
+            delete("/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@delete call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+
+                if (dataSourceService.deleteDataSource(id, orgId)) {
+                    dataSourceExecutor.closePool(id)
+                    call.respond(HttpStatusCode.NoContent, "")
+                } else {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+                }
+            }
+
+            // Test connection (without saving)
+            post("/test") {
+                val request = call.receive<TestConnectionRequest>()
+                try {
+                    val result = dataSourceExecutor.testConnection(request)
+                    call.respond(result)
+                } catch (e: Exception) {
+                    call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
+                }
+            }
+
+            // Get schema for a custom data source
+            get("/{id}/schema") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+
+                val source = dataSourceService.getDataSource(id, orgId)
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+
+                val creds = dataSourceService.getDecryptedCredentials(id, orgId)
+                    ?: return@get call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials"))
+
+                val sourceType = CustomDataSourceType.fromString(source.sourceType)
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
+
+                val schema = dataSourceExecutor.getSchema(
+                    sourceType, source.host, source.port ?: 5432, source.databaseName, creds
+                )
+                call.respond(schema)
+            }
+
+            // Execute query against custom data source
+            post("/{id}/query") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+
+                val request = call.receive<CustomDataSourceQueryRequest>()
+                val source = dataSourceService.getDataSource(id, orgId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+
+                val creds = dataSourceService.getDecryptedCredentials(id, orgId)
+                    ?: return@post call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials"))
+
+                val sourceType = CustomDataSourceType.fromString(source.sourceType)
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
+
+                try {
+                    val results = dataSourceExecutor.executeQuery(
+                        id, sourceType, source.host, source.port ?: 5432,
+                        source.databaseName, creds, request.query, request.limit, request.timeRange
+                    )
+                    call.respond(results)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid query"))
+                }
             }
         }
     }

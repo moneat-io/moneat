@@ -37,6 +37,7 @@ import {
     ChevronRight,
     Globe,
     Home,
+    LayoutDashboard,
     LogOut,
     MessageSquare,
     Package,
@@ -232,7 +233,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   }
 
   const baseNavItems = [
-    { key: 'dashboard', icon: Home, label: 'Dashboard', href: '/', requiresProject: false },
+    { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false },
     { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
@@ -245,6 +246,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
     ...(hasEnterpriseModule(features, 'analytics') ? [{ key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false }] : []),
     ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false }] : []),
+    { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false },
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { key: 'settings', icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]

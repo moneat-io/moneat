@@ -70,7 +70,7 @@ export function DashboardToolbar({
     <div className="flex items-center justify-between gap-4 flex-wrap">
       <div className="flex items-center gap-3">
         <Link
-          to="/custom-dashboards"
+          to="/dashboards"
           className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />

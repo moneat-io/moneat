@@ -29,7 +29,7 @@ export const Route = createRootRoute({
 })
 
 const STATIC_TITLES: Record<string, string> = {
-  '/': 'Dashboard',
+  '/': 'Overview',
   '/login': 'Sign In',
   '/signup': 'Create Account',
   '/terms': 'Terms of Use',

@@ -28,7 +28,7 @@ interface DashboardSearch {
   edit?: boolean
 }
 
-export const Route = createFileRoute('/custom-dashboards/$dashboardId')({
+export const Route = createFileRoute('/dashboards/$dashboardId')({
   component: DashboardViewPage,
   validateSearch: (search: Record<string, unknown>): DashboardSearch => ({
     edit: search.edit === true || search.edit === 'true',
