@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useCallback} from 'react'
+import {useMemo, useCallback, useRef, useState, useEffect} from 'react'
 import {Responsive as ResponsiveGridLayout, type Layout} from 'react-grid-layout'
 import type {DashboardWidget, CreateWidgetRequest, TimeRangeDef} from '@/lib/api'
 import {WidgetRenderer} from './WidgetRenderer'
@@ -45,6 +45,21 @@ export function DashboardGrid({
   onWidgetClick,
   onWidgetDelete,
 }: DashboardGridProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(1200)
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setWidth(containerRef.current.offsetWidth)
+      }
+    }
+    
+    updateWidth()
+    window.addEventListener('resize', updateWidth)
+    return () => window.removeEventListener('resize', updateWidth)
+  }, [])
+
   const layout = useMemo<Layout[]>(
     () =>
       widgets.map((w) => ({
@@ -106,19 +121,21 @@ export function DashboardGrid({
   }
 
   return (
-    <ResponsiveGridLayout
-      className="layout"
-      layouts={{lg: layout}}
-      breakpoints={{lg: 1200, md: 996, sm: 768, xs: 480}}
-      cols={{lg: 12, md: 12, sm: 6, xs: 4}}
-      rowHeight={80}
-      isDraggable={isEditing}
-      isResizable={isEditing}
-      onLayoutChange={handleLayoutChange}
-      draggableHandle=".drag-handle"
-      compactType="vertical"
-      margin={[12, 12]}
-    >
+    <div ref={containerRef} className="w-full">
+      <ResponsiveGridLayout
+        className="layout"
+        layouts={{lg: layout}}
+        breakpoints={{lg: 1200, md: 996, sm: 768, xs: 480}}
+        cols={{lg: 12, md: 12, sm: 6, xs: 4}}
+        rowHeight={80}
+        width={width}
+        isDraggable={isEditing}
+        isResizable={isEditing}
+        onLayoutChange={handleLayoutChange}
+        draggableHandle=".drag-handle"
+        compactType="vertical"
+        margin={[12, 12]}
+      >
       {widgets.map((widget) => (
         <div key={String(widget.id)} className="group">
           <div
@@ -177,5 +194,6 @@ export function DashboardGrid({
         </div>
       ))}
     </ResponsiveGridLayout>
+    </div>
   )
 }
