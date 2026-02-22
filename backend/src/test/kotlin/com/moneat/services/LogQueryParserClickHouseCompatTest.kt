@@ -16,7 +16,10 @@
 
 package com.moneat.services
 
-import kotlin.test.*
+import com.moneat.logs.services.LogQueryParser
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Test to verify that has() function calls are generated correctly for ClickHouse.

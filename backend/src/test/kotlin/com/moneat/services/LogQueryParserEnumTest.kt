@@ -16,7 +16,11 @@
 
 package com.moneat.services
 
-import kotlin.test.*
+import com.moneat.logs.services.LogQueryParser
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Tests to verify ClickHouse Enum8 type compatibility for level and source fields.

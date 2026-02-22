@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.shared.services.PulseService
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,7 +32,7 @@ import kotlin.test.assertTrue
 class PulseServiceTest {
 
     @Test
-    fun `getStatus returns valid PulseStatus structure`() =
+    fun `getStatus returns valid PulseStatus structure`(): Unit =
         runBlocking {
             val status = PulseService.getStatus()
 

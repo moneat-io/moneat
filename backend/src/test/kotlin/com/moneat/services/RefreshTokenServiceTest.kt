@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.auth.services.RefreshTokenService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.RefreshTokens
@@ -31,11 +32,11 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.junit.jupiter.api.assertNotNull
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -44,7 +45,7 @@ class RefreshTokenServiceTest {
     private val jwtSecret = ApplicationConfig("application.conf").property("jwt.secret").getString()
 
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest

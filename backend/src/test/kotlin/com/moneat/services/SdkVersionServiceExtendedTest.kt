@@ -1,5 +1,6 @@
 package com.moneat.services
 
+import com.moneat.shared.services.normalizeVersionTag
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

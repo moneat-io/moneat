@@ -22,6 +22,7 @@ import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.models.LogTailFilters
 import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
+import com.moneat.logs.services.LogService
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

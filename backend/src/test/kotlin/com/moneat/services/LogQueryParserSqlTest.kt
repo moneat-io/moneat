@@ -16,7 +16,11 @@
 
 package com.moneat.services
 
-import kotlin.test.*
+import com.moneat.logs.services.LogQueryParser
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Additional tests to verify SQL generation produces valid ClickHouse queries.

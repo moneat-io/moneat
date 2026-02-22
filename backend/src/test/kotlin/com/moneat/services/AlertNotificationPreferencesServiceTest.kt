@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.shared.models.AlertNotificationPreferences
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations

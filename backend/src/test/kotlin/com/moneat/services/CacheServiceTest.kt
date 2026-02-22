@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.shared.services.CacheService
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlin.test.Test

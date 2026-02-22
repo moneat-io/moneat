@@ -16,12 +16,13 @@
 
 package com.moneat.services
 
-import com.moneat.uptime.models.CheckResult
-import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
-import com.moneat.uptime.models.UptimeMonitors
 import com.moneat.shared.models.Users
+import com.moneat.uptime.models.CheckResult
+import com.moneat.uptime.models.CreateUptimeMonitorRequest
+import com.moneat.uptime.models.UptimeMonitors
+import com.moneat.uptime.services.UptimeService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -29,7 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.UUID
+import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -158,7 +159,7 @@ class UptimeServiceTest {
                 service.createMonitor(
                     organizationId = orgId,
                     request =
-                    com.moneat.models.CreateUptimeMonitorRequest(
+                    CreateUptimeMonitorRequest(
                         name = "Push Health",
                         type = "push",
                         intervalSeconds = 60,

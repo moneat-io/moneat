@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.events.services.IngestionWorker
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals

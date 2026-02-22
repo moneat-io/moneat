@@ -16,8 +16,9 @@
 
 package com.moneat.services
 
-import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.monitor.models.CreateSilencePeriodRequest
+import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils

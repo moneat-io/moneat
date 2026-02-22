@@ -18,23 +18,24 @@ package com.moneat.services
 
 import com.moneat.billing.models.CreateTierVersionRequest
 import com.moneat.billing.models.PricingTierConfigs
-import org.jetbrains.exposed.v1.core.*
+import com.moneat.billing.services.PricingTierService
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.assertNotNull
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class PricingTierServiceFeatureFlagsTest {
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest

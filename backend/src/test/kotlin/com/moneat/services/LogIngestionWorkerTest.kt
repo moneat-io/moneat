@@ -18,6 +18,8 @@ package com.moneat.services
 
 import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
+import com.moneat.logs.services.LogIngestionWorker
+import com.moneat.logs.services.LogService
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals

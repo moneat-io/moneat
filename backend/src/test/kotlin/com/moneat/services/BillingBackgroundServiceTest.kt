@@ -16,12 +16,13 @@
 
 package com.moneat.services
 
-import com.moneat.shared.models.EmailsSent
-import com.moneat.shared.models.Memberships
 import com.moneat.billing.models.OrgUsageCounters
-import com.moneat.shared.models.Organizations
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.models.QuotaNotificationsSent
+import com.moneat.billing.services.BillingBackgroundService
+import com.moneat.shared.models.EmailsSent
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import kotlinx.datetime.DatePeriod
@@ -46,7 +47,7 @@ class BillingBackgroundServiceTest {
     private var testOrgId: Int = 0
 
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest

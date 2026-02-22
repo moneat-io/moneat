@@ -19,8 +19,14 @@
 package com.moneat.services
 
 import com.moneat.events.models.EnvelopeItem
+import com.moneat.events.models.ExceptionInfo
+import com.moneat.events.models.ExceptionValue
+import com.moneat.events.models.SdkInfo
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.models.SentryEvent
+import com.moneat.events.models.StackFrame
+import com.moneat.events.models.StackTrace
+import com.moneat.events.models.UserInfo
 import com.moneat.events.services.EventService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
@@ -32,7 +38,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -40,7 +47,14 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.util.*
-import kotlin.test.*
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Comprehensive tests for EventService ingestion logic covering P0 scenarios:
@@ -58,7 +72,7 @@ class EventServiceTest {
     private var inactivePublicKey: String = "test-public-key-inactive"
 
     companion object {
-        private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private var db: Database? = null
     }
 
     @BeforeTest
@@ -792,13 +806,13 @@ class EventServiceTest {
             if (exceptionType != null) {
                 ExceptionInfo(
                     values =
-                    listOf(
-                        ExceptionValue(
-                            type = exceptionType,
-                            value = exceptionMessage ?: exceptionType,
-                            stacktrace = stackTrace?.let { StackTrace(frames = it) }
+                        listOf(
+                            ExceptionValue(
+                                type = exceptionType,
+                                value = exceptionMessage ?: exceptionType,
+                                stacktrace = stackTrace?.let { StackTrace(frames = it) }
+                            )
                         )
-                    )
                 )
             } else {
                 null
