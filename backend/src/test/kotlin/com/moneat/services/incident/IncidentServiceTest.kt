@@ -25,6 +25,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -36,21 +37,21 @@ class IncidentServiceTest {
     private var providerConfigId: Int = 0
 
     companion object {
-        private var dbInitialized = false
+        private var db: Database? = null
     }
 
     @BeforeTest
     fun setupDatabase() {
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_incident_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
+            transaction(db!!) {
                 SchemaUtils.create(Organizations, IncidentProviderConfigs, IncidentRoutingRules)
             }
-            dbInitialized = true
         }
+        TransactionManager.defaultDatabase = db
 
         transaction {
             IncidentRoutingRules.deleteAll()
