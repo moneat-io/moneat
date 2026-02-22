@@ -1,0 +1,153 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.dashboards.models
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.datetime.timestamp
+
+// Exposed table definitions
+
+object Dashboards : Table("dashboards") {
+    val id = long("id").autoIncrement()
+    val orgId = long("org_id")
+    val projectId = long("project_id").nullable()
+    val title = varchar("title", 255)
+    val description = text("description").nullable()
+    val layoutType = varchar("layout_type", 20).default("grid")
+    val isDefault = bool("is_default").default(false)
+    val createdBy = long("created_by")
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+object DashboardWidgets : Table("dashboard_widgets") {
+    val id = long("id").autoIncrement()
+    val dashboardId = long("dashboard_id").references(Dashboards.id)
+    val title = varchar("title", 255).nullable()
+    val widgetType = varchar("widget_type", 50)
+    val gridX = integer("grid_x").default(0)
+    val gridY = integer("grid_y").default(0)
+    val gridW = integer("grid_w").default(6)
+    val gridH = integer("grid_h").default(4)
+    val queryConfig = text("query_config")
+    val displayConfig = text("display_config").default("{}")
+    val sortOrder = integer("sort_order").default(0)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+// API response/request data classes
+
+@Serializable
+data class DashboardResponse(
+    val id: Long,
+    @SerialName("org_id") val orgId: Long,
+    @SerialName("project_id") val projectId: Long? = null,
+    val title: String,
+    val description: String? = null,
+    @SerialName("layout_type") val layoutType: String = "grid",
+    @SerialName("is_default") val isDefault: Boolean = false,
+    @SerialName("created_by") val createdBy: Long,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+    val widgets: List<WidgetResponse> = emptyList()
+)
+
+@Serializable
+data class WidgetResponse(
+    val id: Long,
+    @SerialName("dashboard_id") val dashboardId: Long,
+    val title: String? = null,
+    @SerialName("widget_type") val widgetType: String,
+    @SerialName("grid_x") val gridX: Int = 0,
+    @SerialName("grid_y") val gridY: Int = 0,
+    @SerialName("grid_w") val gridW: Int = 6,
+    @SerialName("grid_h") val gridH: Int = 4,
+    @SerialName("query_config") val queryConfig: QueryDsl,
+    @SerialName("display_config") val displayConfig: Map<String, String> = emptyMap(),
+    @SerialName("sort_order") val sortOrder: Int = 0
+)
+
+@Serializable
+data class CreateDashboardRequest(
+    val title: String,
+    val description: String? = null,
+    @SerialName("project_id") val projectId: Long? = null,
+    @SerialName("layout_type") val layoutType: String = "grid",
+    @SerialName("is_default") val isDefault: Boolean = false,
+    val widgets: List<CreateWidgetRequest> = emptyList()
+)
+
+@Serializable
+data class UpdateDashboardRequest(
+    val title: String? = null,
+    val description: String? = null,
+    @SerialName("layout_type") val layoutType: String? = null,
+    @SerialName("is_default") val isDefault: Boolean? = null,
+    val widgets: List<UpdateWidgetRequest>? = null
+)
+
+@Serializable
+data class CreateWidgetRequest(
+    val title: String? = null,
+    @SerialName("widget_type") val widgetType: String,
+    @SerialName("grid_x") val gridX: Int = 0,
+    @SerialName("grid_y") val gridY: Int = 0,
+    @SerialName("grid_w") val gridW: Int = 6,
+    @SerialName("grid_h") val gridH: Int = 4,
+    @SerialName("query_config") val queryConfig: QueryDsl,
+    @SerialName("display_config") val displayConfig: Map<String, String> = emptyMap(),
+    @SerialName("sort_order") val sortOrder: Int = 0
+)
+
+@Serializable
+data class UpdateWidgetRequest(
+    val id: Long? = null,
+    val title: String? = null,
+    @SerialName("widget_type") val widgetType: String? = null,
+    @SerialName("grid_x") val gridX: Int? = null,
+    @SerialName("grid_y") val gridY: Int? = null,
+    @SerialName("grid_w") val gridW: Int? = null,
+    @SerialName("grid_h") val gridH: Int? = null,
+    @SerialName("query_config") val queryConfig: QueryDsl? = null,
+    @SerialName("display_config") val displayConfig: Map<String, String>? = null,
+    @SerialName("sort_order") val sortOrder: Int? = null
+)
+
+@Serializable
+data class ExecuteQueryRequest(
+    @SerialName("query_config") val queryConfig: QueryDsl,
+    @SerialName("time_range") val timeRange: TimeRangeDef? = null
+)
+
+@Serializable
+data class ImportDashboardRequest(
+    val format: String,
+    val json: String
+)
+
+@Serializable
+data class DashboardImportResult(
+    val dashboard: DashboardResponse,
+    val warnings: List<String> = emptyList()
+)

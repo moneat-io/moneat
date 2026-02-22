@@ -1927,6 +1927,127 @@ interface AnalyticsRealtimeApiResponse {
   visitors?: number
 }
 
+// Custom Dashboards types
+
+interface MetricDef {
+  function: string
+  field?: string | null
+  alias?: string | null
+}
+
+interface GroupByDef {
+  field: string
+  type: 'field' | 'time'
+  interval?: string | null
+}
+
+interface FilterDef {
+  field: string
+  op: string
+  value?: string | null
+  values?: string[] | null
+}
+
+interface OrderByDef {
+  field: string
+  direction: string
+}
+
+interface TimeRangeDef {
+  from: string
+  to: string
+}
+
+interface QueryDsl {
+  dataSource: string
+  metrics: MetricDef[]
+  groupBy: GroupByDef[]
+  filters: FilterDef[]
+  orderBy?: OrderByDef | null
+  limit: number
+  timeRange: TimeRangeDef
+  rawQuery?: string | null
+}
+
+interface DashboardWidget {
+  id: number
+  dashboard_id: number
+  title?: string | null
+  widget_type: string
+  grid_x: number
+  grid_y: number
+  grid_w: number
+  grid_h: number
+  query_config: QueryDsl
+  display_config: Record<string, string>
+  sort_order: number
+}
+
+interface CustomDashboard {
+  id: number
+  org_id: number
+  project_id?: number | null
+  title: string
+  description?: string | null
+  layout_type: string
+  is_default: boolean
+  created_by: number
+  created_at: string
+  updated_at: string
+  widgets: DashboardWidget[]
+}
+
+interface CreateDashboardRequest {
+  title: string
+  description?: string | null
+  project_id?: number | null
+  layout_type?: string
+  is_default?: boolean
+  widgets: CreateWidgetRequest[]
+}
+
+interface CreateWidgetRequest {
+  title?: string | null
+  widget_type: string
+  grid_x: number
+  grid_y: number
+  grid_w: number
+  grid_h: number
+  query_config: QueryDsl
+  display_config?: Record<string, string>
+  sort_order?: number
+}
+
+interface UpdateDashboardRequest {
+  title?: string | null
+  description?: string | null
+  layout_type?: string | null
+  is_default?: boolean | null
+  widgets?: CreateWidgetRequest[] | null
+}
+
+interface ExecuteQueryRequest {
+  query_config: QueryDsl
+  time_range?: TimeRangeDef | null
+}
+
+interface DashboardImportResult {
+  dashboard: CustomDashboard
+  warnings: string[]
+}
+
+interface DataSourceField {
+  name: string
+  type: string
+  description: string
+}
+
+interface DataSourceInfo {
+  name: string
+  label: string
+  fields: DataSourceField[]
+}
+
 class ApiClient {
   private authRedirectInProgress = false
   private refreshPromise: Promise<boolean> | null = null
@@ -4328,6 +4449,65 @@ class ApiClient {
     const stepsParam = steps.map(s => `steps[]=${encodeURIComponent(s)}`).join('&')
     return this.request<AnalyticsFunnelResponse>(`${API_BASE}/analytics/${projectId}/funnel${qs}${sep}${stepsParam}`)
   }
+
+  // Custom Dashboards API
+
+  async getDashboards(projectId?: number): Promise<CustomDashboard[]> {
+    const qs = projectId ? `?projectId=${projectId}` : ''
+    return this.request<CustomDashboard[]>(`${API_BASE}/dashboards${qs}`)
+  }
+
+  async getDashboard(id: number): Promise<CustomDashboard> {
+    return this.request<CustomDashboard>(`${API_BASE}/dashboards/${id}`)
+  }
+
+  async createDashboard(data: CreateDashboardRequest): Promise<CustomDashboard> {
+    return this.request<CustomDashboard>(`${API_BASE}/dashboards`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateDashboard(id: number, data: UpdateDashboardRequest): Promise<CustomDashboard> {
+    return this.request<CustomDashboard>(`${API_BASE}/dashboards/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteDashboard(id: number): Promise<void> {
+    await this.request<void>(`${API_BASE}/dashboards/${id}`, { method: 'DELETE' })
+  }
+
+  async executeWidgetQuery(dashboardId: number, queryConfig: QueryDsl, projectId: number, timeRange?: TimeRangeDef): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>(`${API_BASE}/dashboards/${dashboardId}/query?projectId=${projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query_config: queryConfig, time_range: timeRange }),
+    })
+  }
+
+  async importDashboard(format: string, json: string): Promise<DashboardImportResult> {
+    return this.request<DashboardImportResult>(`${API_BASE}/dashboards/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ format, json }),
+    })
+  }
+
+  async exportDashboard(id: number, format: string): Promise<unknown> {
+    return this.request<unknown>(`${API_BASE}/dashboards/${id}/export/${format}`)
+  }
+
+  async getDataSources(): Promise<DataSourceInfo[]> {
+    return this.request<DataSourceInfo[]>(`${API_BASE}/dashboards/datasources`)
+  }
+
+  async getDashboardTemplates(): Promise<CreateDashboardRequest[]> {
+    return this.request<CreateDashboardRequest[]>(`${API_BASE}/dashboards/templates`)
+  }
 }
 
 export const api = new ApiClient()
@@ -4494,4 +4674,19 @@ export type {
   AnalyticsRealtimeResponse,
   AnalyticsFunnelStep,
   AnalyticsFunnelResponse,
+  MetricDef,
+  GroupByDef,
+  FilterDef,
+  OrderByDef,
+  TimeRangeDef,
+  QueryDsl,
+  DashboardWidget,
+  CustomDashboard,
+  CreateDashboardRequest,
+  CreateWidgetRequest,
+  UpdateDashboardRequest,
+  ExecuteQueryRequest,
+  DashboardImportResult,
+  DataSourceField,
+  DataSourceInfo,
 }
