@@ -155,8 +155,12 @@ class GrafanaTranslator : DashboardTranslator {
 
         val firstTarget = targets.first().jsonObject
         
-        // Check if datasource was pre-mapped by frontend (e.g., "custom:Prometheus")
-        val datasource = firstTarget["datasource"]
+        // Check for pre-mapped datasource (frontend replaces with strings like "custom:Prometheus")
+        // Check target-level datasource first, then fall back to panel-level
+        val targetDs = firstTarget["datasource"]
+        val panelDs = panelJson["datasource"]
+        val datasource = targetDs ?: panelDs
+        
         val preMappedDataSource = when {
             datasource is JsonPrimitive && datasource.isString -> {
                 logger.info("Panel $panelIndex: found pre-mapped string datasource: ${datasource.content}")
