@@ -20,12 +20,14 @@ import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend,
+  CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import {useVirtualizer} from '@tanstack/react-virtual'
 import {TopListWidget} from './TopListWidget'
 import {HeatmapWidget} from './HeatmapWidget'
 import ReactMarkdown from 'react-markdown'
+import {formatValue} from './formatValue'
+import type {ValueMapping} from './formatValue'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -102,13 +104,41 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   timeRange,
   autoRefresh,
 }: WidgetRendererProps) {
+  const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
+  const isBatch = queries.length > 1
+
   const {data, isLoading, error} = useQuery({
-    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange],
-    queryFn: () =>
-      projectId
-        ? api.executeWidgetQuery(dashboardId, widget.query_config, projectId, timeRange)
-        : Promise.resolve([]),
-    enabled: !!projectId && widget.widget_type !== 'text',
+    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queries.length],
+    queryFn: async () => {
+      if (!projectId) return []
+      if (isBatch) {
+        const result = await api.executeBatchQuery(dashboardId, queries, projectId, timeRange)
+        // Merge batch results: prefix series keys with refId
+        const merged: Record<string, unknown>[] = []
+        for (const [refId, rows] of Object.entries(result.results)) {
+          if (queries.length === 1) {
+            merged.push(...rows)
+          } else {
+            for (const row of rows) {
+              const prefixed: Record<string, unknown> = {}
+              for (const [k, v] of Object.entries(row)) {
+                if (TIME_KEYS.has(k)) {
+                  prefixed[k] = v
+                } else {
+                  prefixed[`${refId}: ${k}`] = v
+                }
+              }
+              merged.push(prefixed)
+            }
+          }
+        }
+        return merged
+      }
+      return queries[0]
+        ? api.executeWidgetQuery(dashboardId, queries[0], projectId, timeRange)
+        : []
+    },
+    enabled: !!projectId && widget.widget_type !== 'text' && queries.length > 0,
     refetchInterval: autoRefresh ? 30000 : false,
   })
 
@@ -133,18 +163,19 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   }
 
   const chartData = data as Record<string, unknown>[]
+  const dc = widget.display_config || {}
 
   switch (widget.widget_type) {
     case 'timeseries':
-      return <TimeseriesChart data={chartData} timeRange={timeRange} />
+      return <TimeseriesChart data={chartData} timeRange={timeRange} displayConfig={dc} />
     case 'bar':
-      return <BarChartWidget data={chartData} timeRange={timeRange} />
+      return <BarChartWidget data={chartData} timeRange={timeRange} displayConfig={dc} />
     case 'donut':
-      return <DonutChartWidget data={chartData} />
+      return <DonutChartWidget data={chartData} displayConfig={dc} />
     case 'stat':
-      return <StatWidget data={chartData} widget={widget} timeRange={timeRange} />
+      return <StatWidget data={chartData} widget={widget} timeRange={timeRange} displayConfig={dc} />
     case 'table':
-      return <TableWidget data={chartData} />
+      return <TableWidget data={chartData} displayConfig={dc} />
     case 'toplist':
       return <TopListWidget data={chartData} />
     case 'heatmap':
@@ -198,6 +229,56 @@ function formatTooltipValue(value: number | string) {
   if (typeof value !== 'number') return value
   if (Number.isInteger(value)) return value.toLocaleString()
   return value.toLocaleString(undefined, {maximumFractionDigits: 2})
+}
+
+type DisplayConfig = Record<string, string>
+
+function parseThresholds(dc: DisplayConfig): {value: number; color: string; label?: string}[] {
+  try { return dc.thresholds ? JSON.parse(dc.thresholds) : [] }
+  catch { return [] }
+}
+
+function parseValueMappings(dc: DisplayConfig): ValueMapping[] {
+  try { return dc.valueMappings ? JSON.parse(dc.valueMappings) : [] }
+  catch { return [] }
+}
+
+function getYAxisDomain(dc: DisplayConfig): [string | number, string | number] {
+  const min = dc.yAxisMin && dc.yAxisMin !== 'auto' ? parseFloat(dc.yAxisMin) : 'auto'
+  const max = dc.yAxisMax && dc.yAxisMax !== 'auto' ? parseFloat(dc.yAxisMax) : 'auto'
+  return [
+    typeof min === 'number' && !isNaN(min) ? min : 'auto',
+    typeof max === 'number' && !isNaN(max) ? max : 'auto',
+  ]
+}
+
+function getLegendProps(dc: DisplayConfig) {
+  const mode = dc.legendMode || 'list'
+  if (mode === 'hidden') return null
+  const placement = dc.legendPlacement || 'bottom'
+  return {
+    wrapperStyle: {fontSize: '10px', paddingTop: '4px'},
+    iconType: 'line' as const,
+    iconSize: 8,
+    layout: (placement === 'right' ? 'vertical' : 'horizontal') as 'vertical' | 'horizontal',
+    verticalAlign: (placement === 'right' ? 'middle' : 'bottom') as 'top' | 'middle' | 'bottom',
+    align: (placement === 'right' ? 'right' : 'center') as 'left' | 'center' | 'right',
+  }
+}
+
+function getDotProp(showPoints: string | undefined) {
+  if (showPoints === 'always') return {r: 2}
+  if (showPoints === 'auto') return {r: 0}
+  return false
+}
+
+function getThresholdColor(value: number, thresholds: {value: number; color: string}[]): string | undefined {
+  if (thresholds.length === 0) return undefined
+  const sorted = [...thresholds].sort((a, b) => b.value - a.value)
+  for (const t of sorted) {
+    if (value >= t.value) return t.color
+  }
+  return undefined
 }
 
 function formatStatValue(value: unknown): string {
@@ -273,7 +354,7 @@ const TOOLTIP_STYLE = {
 }
 const TOOLTIP_WRAPPER_STYLE = {zIndex: 1000}
 
-const TimeseriesChart = memo(function TimeseriesChart({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
+const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayConfig: dc}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef; displayConfig: DisplayConfig}) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const xKey = timeKey || 'time_bucket'
   const spanMs = getTimeSpanMs(timeRange)
@@ -284,11 +365,31 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange}: {data: 
     [data, xKey, labelKeys, valueKeys, hasLabels]
   )
 
+  const thresholds = parseThresholds(dc)
+  const legendProps = getLegendProps(dc)
+  const yDomain = getYAxisDomain(dc)
+  const lineWidth = parseFloat(dc.lineWidth || '1.5')
+  const fillOpacity = parseFloat(dc.fillOpacity || '0')
+  const interpolation = (dc.lineInterpolation || 'monotone') as 'linear' | 'monotone' | 'step'
+  const dotProp = getDotProp(dc.showPoints)
+  const stackMode = dc.stackMode || 'none'
+  const showGrid = dc.showGrid !== 'false'
+  const unit = dc.unit
+  const decimals = dc.decimals
+  const tickFormatter = unit && unit !== 'none'
+    ? (v: number) => formatValue(v, unit, decimals)
+    : undefined
+  const tooltipFormatter = unit && unit !== 'none'
+    ? (v: number | string) => typeof v === 'number' ? formatValue(v, unit, decimals) : v
+    : formatTooltipValue
+
+  const useArea = fillOpacity > 0 || stackMode !== 'none'
+
   return (
     <DebouncedChartContainer>
-      {(w, h) => (
-        <LineChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+      {(w, h) => useArea ? (
+        <AreaChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
+          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
           <XAxis
             dataKey={xKey}
             tick={{fontSize: 10}}
@@ -297,26 +398,77 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange}: {data: 
             domain={['dataMin', 'dataMax']}
             scale="time"
           />
-          <YAxis tick={{fontSize: 10}} width={50} />
+          <YAxis
+            tick={{fontSize: 10}}
+            width={50}
+            domain={yDomain}
+            scale={dc.yAxisScale === 'log' ? 'log' : 'auto'}
+            label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
+            tickFormatter={tickFormatter}
+          />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={formatTooltipLabel}
-            formatter={formatTooltipValue}
+            formatter={tooltipFormatter}
           />
-          <Legend
-            wrapperStyle={{fontSize: '10px', paddingTop: '4px'}}
-            iconType="line"
-            iconSize={8}
+          {legendProps && <Legend {...legendProps} />}
+          {thresholds.map((t, i) => (
+            <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
+          ))}
+          {seriesKeys.map((key, i) => (
+            <Area
+              key={key}
+              type={interpolation}
+              dataKey={key}
+              stroke={COLORS[i % COLORS.length]}
+              strokeWidth={lineWidth}
+              fill={COLORS[i % COLORS.length]}
+              fillOpacity={fillOpacity || 0.3}
+              dot={dotProp}
+              activeDot={{r: 3}}
+              connectNulls
+              stackId={stackMode !== 'none' ? 'stack' : undefined}
+            />
+          ))}
+        </AreaChart>
+      ) : (
+        <LineChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
+          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
+          <XAxis
+            dataKey={xKey}
+            tick={{fontSize: 10}}
+            tickFormatter={(v) => formatXAxisTick(v, spanMs)}
+            type="number"
+            domain={['dataMin', 'dataMax']}
+            scale="time"
           />
+          <YAxis
+            tick={{fontSize: 10}}
+            width={50}
+            domain={yDomain}
+            scale={dc.yAxisScale === 'log' ? 'log' : 'auto'}
+            label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
+            tickFormatter={tickFormatter}
+          />
+          <Tooltip
+            contentStyle={TOOLTIP_STYLE}
+            wrapperStyle={TOOLTIP_WRAPPER_STYLE}
+            labelFormatter={formatTooltipLabel}
+            formatter={tooltipFormatter}
+          />
+          {legendProps && <Legend {...legendProps} />}
+          {thresholds.map((t, i) => (
+            <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
+          ))}
           {seriesKeys.map((key, i) => (
             <Line
               key={key}
-              type="monotone"
+              type={interpolation}
               dataKey={key}
               stroke={COLORS[i % COLORS.length]}
-              strokeWidth={1.5}
-              dot={false}
+              strokeWidth={lineWidth}
+              dot={dotProp}
               activeDot={{r: 3}}
               connectNulls
             />
@@ -327,10 +479,24 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange}: {data: 
   )
 })
 
-const BarChartWidget = memo(function BarChartWidget({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
+const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayConfig: dc}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef; displayConfig: DisplayConfig}) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const spanMs = getTimeSpanMs(timeRange)
   const hasTime = !!timeKey
+
+  const thresholds = parseThresholds(dc)
+  const legendProps = getLegendProps(dc)
+  const yDomain = getYAxisDomain(dc)
+  const showGrid = dc.showGrid !== 'false'
+  const barMode = dc.barMode || 'grouped'
+  const unit = dc.unit
+  const decimals = dc.decimals
+  const tickFormatter = unit && unit !== 'none'
+    ? (v: number) => formatValue(v, unit, decimals)
+    : undefined
+  const tooltipFormatter = unit && unit !== 'none'
+    ? (v: number | string) => typeof v === 'number' ? formatValue(v, unit, decimals) : v
+    : formatTooltipValue
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
     const {pivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
@@ -338,7 +504,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange}: {data: Re
       <DebouncedChartContainer>
         {(w, h) => (
           <BarChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
             <XAxis
               dataKey={timeKey}
               tick={{fontSize: 10}}
@@ -347,16 +513,26 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange}: {data: Re
               domain={['dataMin', 'dataMax']}
               scale="time"
             />
-            <YAxis tick={{fontSize: 10}} width={50} />
+            <YAxis
+              tick={{fontSize: 10}}
+              width={50}
+              domain={yDomain}
+              scale={dc.yAxisScale === 'log' ? 'log' : 'auto'}
+              label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
+              tickFormatter={tickFormatter}
+            />
             <Tooltip
               contentStyle={TOOLTIP_STYLE}
               wrapperStyle={TOOLTIP_WRAPPER_STYLE}
               labelFormatter={formatTooltipLabel}
-              formatter={formatTooltipValue}
+              formatter={tooltipFormatter}
             />
-            <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
+            {legendProps && <Legend {...legendProps} iconSize={8} />}
+            {thresholds.map((t, i) => (
+              <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
+            ))}
             {seriesKeys.map((key, i) => (
-              <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} stackId="stack" />
+              <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} stackId={barMode === 'stacked' ? 'stack' : undefined} />
             ))}
           </BarChart>
         )}
@@ -373,13 +549,22 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange}: {data: Re
     <DebouncedChartContainer>
       {(w, h) => (
         <BarChart width={w} height={h} data={data} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
           <XAxis dataKey={xKey} tick={{fontSize: 10}} />
-          <YAxis tick={{fontSize: 10}} width={50} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} />
-          <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
+          <YAxis
+            tick={{fontSize: 10}}
+            width={50}
+            domain={yDomain}
+            label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
+            tickFormatter={tickFormatter}
+          />
+          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter} />
+          {legendProps && <Legend {...legendProps} iconSize={8} />}
+          {thresholds.map((t, i) => (
+            <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
+          ))}
           {barKeys.map((key, i) => (
-            <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
+            <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} stackId={barMode === 'stacked' ? 'stack' : undefined} />
           ))}
         </BarChart>
       )}
@@ -387,10 +572,11 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange}: {data: Re
   )
 })
 
-const DonutChartWidget = memo(function DonutChartWidget({data}: {data: Record<string, unknown>[]}) {
+const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc}: {data: Record<string, unknown>[]; displayConfig: DisplayConfig}) {
   const {labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const labelKey = labelKeys[0]
   const valueKey = valueKeys[0]
+  const legendProps = getLegendProps(dc)
 
   if (!labelKey || !valueKey) return <div className="text-xs text-muted-foreground">Invalid data</div>
 
@@ -415,12 +601,13 @@ const DonutChartWidget = memo(function DonutChartWidget({data}: {data: Record<st
             ))}
           </Pie>
           <Tooltip wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
-          <Legend
-            wrapperStyle={{fontSize: '11px'}}
-            layout="horizontal"
-            verticalAlign="bottom"
-            iconSize={10}
-          />
+          {legendProps && (
+            <Legend
+              {...legendProps}
+              wrapperStyle={{fontSize: '11px'}}
+              iconSize={10}
+            />
+          )}
         </PieChart>
       )}
     </DebouncedChartContainer>
@@ -456,13 +643,25 @@ const StatWidget = memo(function StatWidget({
   data,
   widget,
   timeRange,
+  displayConfig: dc,
 }: {
   data: Record<string, unknown>[]
   widget: DashboardWidget
   timeRange: TimeRangeDef
+  displayConfig: DisplayConfig
 }) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const gradientId = `stat-${useId().replace(/:/g, '-')}`
+  const thresholds = parseThresholds(dc)
+  const valueMappings = parseValueMappings(dc)
+  const unit = dc.unit
+  const decimals = dc.decimals
+
+  const fmtStat = (v: unknown) => {
+    if (unit && unit !== 'none') return formatValue(v, unit, decimals, valueMappings)
+    if (valueMappings.length > 0) return formatValue(v, undefined, undefined, valueMappings)
+    return formatStatValue(v)
+  }
 
   // Categorical data (e.g. App Rating 1–5 with counts): show horizontal bars like Grafana
   const isCategorical = labelKeys.length > 0 && valueKeys.length > 0 && data.length > 1
@@ -485,7 +684,7 @@ const StatWidget = memo(function StatWidget({
               <div className="relative flex items-center justify-between px-2 py-1 text-xs">
                 <span className="truncate font-medium">{label}</span>
                 <span className="tabular-nums text-muted-foreground ml-2 shrink-0">
-                  {formatStatValue(value)}
+                  {fmtStat(value)}
                 </span>
               </div>
             </div>
@@ -506,6 +705,7 @@ const StatWidget = memo(function StatWidget({
     })
     const lastRow = sorted[sorted.length - 1]
     const mainValue = lastRow?.[valueKey]
+    const thresholdColor = typeof mainValue === 'number' ? getThresholdColor(mainValue, thresholds) : undefined
     const sparklineData = sorted.map((r) => ({
       t: r[timeKey!],
       v: Number(r[valueKey]) ?? 0,
@@ -514,8 +714,8 @@ const StatWidget = memo(function StatWidget({
     return (
       <div className="h-full flex flex-col">
         <div className="flex-1 flex flex-col items-center justify-center gap-0.5 shrink-0">
-          <div className="text-2xl font-bold tabular-nums text-primary">
-            {formatStatValue(mainValue)}
+          <div className="text-2xl font-bold tabular-nums" style={thresholdColor ? {color: thresholdColor} : undefined}>
+            {fmtStat(mainValue)}
           </div>
           <div className="text-xs text-muted-foreground">{widget.title || valueKey?.replace(/_/g, ' ')}</div>
         </div>
@@ -561,22 +761,38 @@ const StatWidget = memo(function StatWidget({
 
   return (
     <div className="h-full flex flex-col items-center justify-center gap-1">
-      {displayKeys.map((key) => (
-        <div key={key} className="text-center">
-          <div className="text-2xl font-bold tabular-nums">
-            {formatStatValue(row[key])}
+      {displayKeys.map((key) => {
+        const val = row[key]
+        const tColor = typeof val === 'number' ? getThresholdColor(val, thresholds) : undefined
+        return (
+          <div key={key} className="text-center">
+            <div className="text-2xl font-bold tabular-nums" style={tColor ? {color: tColor} : undefined}>
+              {fmtStat(val)}
+            </div>
+            <div className="text-xs text-muted-foreground">{widget.title || key.replace(/_/g, ' ')}</div>
           </div>
-          <div className="text-xs text-muted-foreground">{widget.title || key.replace(/_/g, ' ')}</div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 })
 
 const ROW_HEIGHT = 28
 
-const TableWidget = memo(function TableWidget({data}: {data: Record<string, unknown>[]}) {
+const TableWidget = memo(function TableWidget({data, displayConfig: dc}: {data: Record<string, unknown>[]; displayConfig: DisplayConfig}) {
   const columns = data.length > 0 ? Object.keys(data[0]) : []
+  const valueMappings = parseValueMappings(dc)
+  const unit = dc.unit
+  const decimals = dc.decimals
+
+  const fmtCell = (v: unknown) => {
+    if (valueMappings.length > 0) {
+      const mapped = formatValue(v, unit, decimals, valueMappings)
+      if (mapped !== String(v)) return mapped
+    }
+    if (unit && unit !== 'none' && typeof v === 'number') return formatValue(v, unit, decimals)
+    return String(v ?? '')
+  }
 
   const parentRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -620,7 +836,7 @@ const TableWidget = memo(function TableWidget({data}: {data: Record<string, unkn
               >
                 {columns.map((col) => (
                   <td key={col} className="px-2 py-1 truncate max-w-[200px]">
-                    {String(row[col] ?? '')}
+                    {fmtCell(row[col])}
                   </td>
                 ))}
               </tr>

@@ -28,14 +28,14 @@ const makeWidget = (overrides: Partial<DashboardWidget> = {}): DashboardWidget =
   grid_y: 0,
   grid_w: 6,
   grid_h: 4,
-  query_config: {
+  query_configs: [{
     dataSource: 'events',
     metrics: [{function: 'count', alias: 'count'}],
     groupBy: [],
     filters: [],
     limit: 100,
     timeRange: {from: 'now-24h', to: 'now'},
-  },
+  }],
   display_config: {},
   sort_order: 0,
   ...overrides,
@@ -190,9 +190,9 @@ describe('useWidgetClipboard', () => {
     expect(onDatasourceMapping).toHaveBeenCalledWith(
       expect.objectContaining({
         widget_type: 'stat',
-        query_config: expect.objectContaining({
+        query_configs: expect.arrayContaining([expect.objectContaining({
           dataSource: '__unmapped:mysql',
-        }),
+        })]),
       }),
       ['mysql']
     )
@@ -207,7 +207,7 @@ describe('useWidgetClipboard', () => {
       grid_y: 0,
       grid_w: 4,
       grid_h: 3,
-      query_config: {dataSource: 'logs', metrics: [], groupBy: [], filters: [], limit: 50, timeRange: {from: 'now-1h', to: 'now'}},
+      query_configs: [{dataSource: 'logs', metrics: [], groupBy: [], filters: [], limit: 50, timeRange: {from: 'now-1h', to: 'now'}}],
       display_config: {},
     })
     mockClipboard.readText.mockResolvedValue(moneatWidget)

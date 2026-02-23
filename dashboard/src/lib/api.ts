@@ -1967,6 +1967,7 @@ interface QueryDsl {
   limit: number
   timeRange: TimeRangeDef
   rawQuery?: string | null
+  ref_id?: string | null
 }
 
 interface DashboardWidget {
@@ -1978,9 +1979,13 @@ interface DashboardWidget {
   grid_y: number
   grid_w: number
   grid_h: number
-  query_config: QueryDsl
+  query_configs: QueryDsl[]
   display_config: Record<string, string>
   sort_order: number
+}
+
+interface BatchQueryResult {
+  results: Record<string, Record<string, unknown>[]>
 }
 
 interface CustomDashboard {
@@ -2013,7 +2018,7 @@ interface CreateWidgetRequest {
   grid_y: number
   grid_w: number
   grid_h: number
-  query_config: QueryDsl
+  query_configs: QueryDsl[]
   display_config?: Record<string, string>
   sort_order?: number
 }
@@ -4554,6 +4559,14 @@ class ApiClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query_config: queryConfig, time_range: timeRange }),
+    })
+  }
+
+  async executeBatchQuery(dashboardId: number, queries: QueryDsl[], projectId: number, timeRange?: TimeRangeDef): Promise<BatchQueryResult> {
+    return this.request<BatchQueryResult>(`${API_BASE}/dashboards/${dashboardId}/query/batch?projectId=${projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ queries, time_range: timeRange }),
     })
   }
 

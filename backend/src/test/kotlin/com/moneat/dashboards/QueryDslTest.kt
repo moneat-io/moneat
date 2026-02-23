@@ -194,4 +194,62 @@ class QueryDslTest {
         assertContains(serialized, "Error Events")
         assertContains(serialized, "timestamp")
     }
+
+    // --- refId ---
+
+    @Test
+    fun `QueryDsl refId serializes correctly`() {
+        val dsl = QueryDsl(dataSource = "events", refId = "B")
+        val serialized = json.encodeToString(dsl)
+        assertContains(serialized, "\"ref_id\":\"B\"")
+        val deserialized = json.decodeFromString<QueryDsl>(serialized)
+        assertEquals("B", deserialized.refId)
+    }
+
+    @Test
+    fun `QueryDsl refId defaults to null`() {
+        val dsl = QueryDsl(dataSource = "events")
+        assertNull(dsl.refId)
+    }
+
+    @Test
+    fun `QueryDsl refId deserializes from JSON`() {
+        val jsonStr = """{"dataSource":"spans","metrics":[],"groupBy":[],"filters":[],"limit":100,"timeRange":{"from":"now-1h","to":"now"},"ref_id":"C"}"""
+        val dsl = json.decodeFromString<QueryDsl>(jsonStr)
+        assertEquals("C", dsl.refId)
+    }
+
+    // --- queryConfigs list ---
+
+    @Test
+    fun `queryConfigs list serializes and deserializes correctly`() {
+        val queries = listOf(
+            QueryDsl(dataSource = "events", refId = "A", metrics = listOf(MetricDef(AggFunction.COUNT, alias = "errors"))),
+            QueryDsl(dataSource = "spans", refId = "B", metrics = listOf(MetricDef(AggFunction.P95, "duration_ms", "p95")))
+        )
+        val serialized = json.encodeToString(queries)
+        val deserialized = json.decodeFromString<List<QueryDsl>>(serialized)
+        assertEquals(2, deserialized.size)
+        assertEquals("A", deserialized[0].refId)
+        assertEquals("events", deserialized[0].dataSource)
+        assertEquals("B", deserialized[1].refId)
+        assertEquals("spans", deserialized[1].dataSource)
+    }
+
+    @Test
+    fun `ExecuteBatchQueryRequest serializes correctly`() {
+        val request = ExecuteBatchQueryRequest(
+            queries = listOf(
+                QueryDsl(dataSource = "events", refId = "A"),
+                QueryDsl(dataSource = "logs", refId = "B")
+            ),
+            timeRange = TimeRangeDef("now-6h", "now")
+        )
+        val serialized = json.encodeToString(request)
+        assertContains(serialized, "\"ref_id\":\"A\"")
+        assertContains(serialized, "\"ref_id\":\"B\"")
+        val deserialized = json.decodeFromString<ExecuteBatchQueryRequest>(serialized)
+        assertEquals(2, deserialized.queries.size)
+        assertEquals("now-6h", deserialized.timeRange?.from)
+    }
 }

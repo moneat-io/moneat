@@ -32,14 +32,14 @@ const mockWidget: CreateWidgetRequest = {
   grid_y: 0,
   grid_w: 6,
   grid_h: 4,
-  query_config: {
+  query_configs: [{
     dataSource: '__unmapped:mysql',
     metrics: [{function: 'count', alias: 'count'}],
     groupBy: [],
     filters: [],
     limit: 100,
     timeRange: {from: 'now-24h', to: 'now'},
-  },
+  }],
   display_config: {},
 }
 
@@ -124,9 +124,9 @@ describe('DataSourceMapperModal', () => {
     fireEvent.click(screen.getByText('Paste Widget'))
     expect(onConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
-        query_config: expect.objectContaining({
+        query_configs: expect.arrayContaining([expect.objectContaining({
           dataSource: '__unmapped:mysql',  // Should remain unmapped when skipped
-        }),
+        })]),
       })
     )
   })

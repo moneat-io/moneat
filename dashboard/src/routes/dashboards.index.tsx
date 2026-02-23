@@ -114,7 +114,7 @@ function DashboardListPage() {
                       grid_y: w.grid_y,
                       grid_w: w.grid_w,
                       grid_h: w.grid_h,
-                      query_config: w.query_config,
+                      query_configs: w.query_configs,
                       display_config: w.display_config,
                       sort_order: w.sort_order,
                     })),

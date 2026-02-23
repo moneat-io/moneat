@@ -89,7 +89,7 @@ function DashboardViewPage() {
         grid_y: w.grid_y,
         grid_w: w.grid_w,
         grid_h: w.grid_h,
-        query_config: w.query_config,
+        query_configs: w.query_configs,
         display_config: w.display_config,
         sort_order: w.sort_order,
       }))
@@ -159,14 +159,14 @@ function DashboardViewPage() {
         : 0),
       grid_w: 6,
       grid_h: 4,
-      query_config: {
+      query_configs: [{
         dataSource: 'events',
         metrics: [{function: 'count', alias: 'count'}],
         groupBy: [{field: 'timestamp', type: 'time', interval: 'auto'}],
         filters: [],
         limit: 100,
         timeRange: {from: 'now-24h', to: 'now'},
-      },
+      }],
       display_config: {},
       sort_order: dashboard.widgets.length,
     }
@@ -188,7 +188,7 @@ function DashboardViewPage() {
                 grid_y: widget.grid_y,
                 grid_w: widget.grid_w,
                 grid_h: widget.grid_h,
-                query_config: widget.query_config,
+                query_configs: widget.query_configs,
                 display_config: widget.display_config,
                 sort_order: widget.sort_order,
               }
@@ -199,7 +199,7 @@ function DashboardViewPage() {
                 grid_y: w.grid_y,
                 grid_w: w.grid_w,
                 grid_h: w.grid_h,
-                query_config: w.query_config,
+                query_configs: w.query_configs,
                 display_config: w.display_config,
                 sort_order: w.sort_order,
               }
@@ -213,7 +213,7 @@ function DashboardViewPage() {
             grid_y: w.grid_y,
             grid_w: w.grid_w,
             grid_h: w.grid_h,
-            query_config: w.query_config,
+            query_configs: w.query_configs,
             display_config: w.display_config,
             sort_order: w.sort_order,
           })),
@@ -224,7 +224,7 @@ function DashboardViewPage() {
             grid_y: widget.grid_y,
             grid_w: widget.grid_w,
             grid_h: widget.grid_h,
-            query_config: widget.query_config,
+            query_configs: widget.query_configs,
             display_config: widget.display_config,
             sort_order: widget.sort_order,
           },
@@ -248,7 +248,7 @@ function DashboardViewPage() {
           grid_y: w.grid_y,
           grid_w: w.grid_w,
           grid_h: w.grid_h,
-          query_config: w.query_config,
+          query_configs: w.query_configs,
           display_config: w.display_config,
           sort_order: w.sort_order,
         }))

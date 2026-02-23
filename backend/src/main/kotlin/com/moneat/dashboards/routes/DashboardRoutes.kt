@@ -200,6 +200,63 @@ fun Route.customDashboardRoutes(
                 }
             }
 
+            // Execute batch query (multiple queries keyed by refId)
+            post("/{id}/query/batch") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val request = call.receive<ExecuteBatchQueryRequest>()
+                val demoEpochMs = call.getDemoEpochMs()
+
+                val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required"))
+                    return@post
+                }
+
+                if (request.queries.size > 10) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Maximum 10 queries per batch"))
+                    return@post
+                }
+
+                val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+                val results = mutableMapOf<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>()
+
+                for ((index, query) in request.queries.withIndex()) {
+                    val refId = query.refId ?: ('A' + index).toString()
+                    val effectiveQuery = if (request.timeRange != null) {
+                        query.copy(timeRange = request.timeRange)
+                    } else {
+                        query
+                    }
+
+                    try {
+                        if (queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
+                            val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
+                                ?: continue
+                            val source = dataSourceService.getDataSource(sourceId, orgId) ?: continue
+                            val creds = dataSourceService.getDecryptedCredentials(sourceId, orgId) ?: continue
+                            val sourceType = CustomDataSourceType.fromString(source.sourceType) ?: continue
+                            val rawQuery = effectiveQuery.rawQuery ?: continue
+
+                            results[refId] = dataSourceExecutor.executeQuery(
+                                sourceId, sourceType, source.host, source.port,
+                                source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
+                            )
+                        } else {
+                            results[refId] = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
+                        }
+                    } catch (e: Exception) {
+                        logger.warn(e) { "Batch query $refId failed" }
+                        results[refId] = emptyList()
+                    }
+                }
+
+                call.respond(BatchQueryResult(results))
+            }
+
             // Import dashboard from DataDog/Grafana JSON
             post("/import") {
                 val principal = call.principal<JWTPrincipal>()
@@ -237,7 +294,7 @@ fun Route.customDashboardRoutes(
                                 gridY = w.gridY,
                                 gridW = w.gridW,
                                 gridH = w.gridH,
-                                queryConfig = w.queryConfig,
+                                queryConfigs = w.queryConfigs,
                                 displayConfig = w.displayConfig,
                                 sortOrder = w.sortOrder
                             )

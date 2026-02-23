@@ -259,11 +259,11 @@ class GrafanaTranslatorTest {
                     id = 1, dashboardId = 1, title = "CPU",
                     widgetType = "timeseries",
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
-                    queryConfig = QueryDsl(
+                    queryConfigs = listOf(QueryDsl(
                         dataSource = "system_metrics",
                         metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu")),
                         groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR"))
-                    )
+                    )),
                 )
             )
         )
@@ -284,7 +284,7 @@ class GrafanaTranslatorTest {
                     id = 1, dashboardId = 1,
                     widgetType = "stat",
                     gridX = 3, gridY = 0, gridW = 6, gridH = 4,
-                    queryConfig = QueryDsl(dataSource = "events")
+                    queryConfigs = listOf(QueryDsl(dataSource = "events")),
                 )
             )
         )
@@ -302,7 +302,7 @@ class GrafanaTranslatorTest {
             widgets = listOf(
                 WidgetResponse(
                     id = 1, dashboardId = 1, widgetType = "toplist",
-                    queryConfig = QueryDsl(dataSource = "events")
+                    queryConfigs = listOf(QueryDsl(dataSource = "events")),
                 )
             )
         )
@@ -597,12 +597,12 @@ class GrafanaTranslatorTest {
         // Panel 2 (nested table from collapsed row) - SQL with custom table name preserved
         assertEquals("table", result.dashboard.widgets[2].widgetType)
         assertEquals("Slow Queries", result.dashboard.widgets[2].title)
-        assertTrue(result.dashboard.widgets[2].queryConfig.rawQuery?.contains("duration_ms") == true)
-        assertEquals("app_queries", result.dashboard.widgets[2].queryConfig.dataSource)
+        assertTrue(result.dashboard.widgets[2].queryConfigs.first().rawQuery?.contains("duration_ms") == true)
+        assertEquals("app_queries", result.dashboard.widgets[2].queryConfigs.first().dataSource)
 
         // Panel 3 (table with SQL from custom app_sessions table - name preserved)
         assertEquals("table", result.dashboard.widgets[3].widgetType)
-        assertEquals("app_sessions", result.dashboard.widgets[3].queryConfig.dataSource)
+        assertEquals("app_sessions", result.dashboard.widgets[3].queryConfigs.first().dataSource)
 
         // Warnings: SQL queries stored as rawQuery, but no "unknown table" warnings
         assertTrue(result.warnings.any { it.contains("rawQuery") })

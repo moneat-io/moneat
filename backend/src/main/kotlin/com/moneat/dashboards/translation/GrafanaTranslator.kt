@@ -138,7 +138,7 @@ class GrafanaTranslator : DashboardTranslator {
             gridY = gridY,
             gridW = gridW.coerceIn(1, 12),
             gridH = gridH.coerceIn(minH, 12),
-            queryConfig = queryConfig,
+            queryConfigs = listOf(queryConfig),
             displayConfig = displayConfig,
             sortOrder = index
         )
@@ -357,7 +357,7 @@ class GrafanaTranslator : DashboardTranslator {
                 put("targets", buildJsonArray {
                     add(buildJsonObject {
                         put("refId", "A")
-                        put("rawSql", buildGrafanaSql(widget.queryConfig))
+                        put("rawSql", buildGrafanaSql(widget.queryConfigs.firstOrNull() ?: QueryDsl(dataSource = "events")))
                         put("format", "time_series")
                     })
                 })

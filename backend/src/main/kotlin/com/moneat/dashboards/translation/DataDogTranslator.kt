@@ -122,7 +122,7 @@ class DataDogTranslator : DashboardTranslator {
             gridY = gridY,
             gridW = gridW.coerceIn(1, 12),
             gridH = gridH.coerceIn(1, 12),
-            queryConfig = queryConfig,
+            queryConfigs = listOf(queryConfig),
             sortOrder = index
         )
     }
@@ -254,7 +254,7 @@ class DataDogTranslator : DashboardTranslator {
                     widget.title?.let { put("title", it) }
                     put("requests", buildJsonArray {
                         add(buildJsonObject {
-                            put("q", buildDdQueryString(widget.queryConfig))
+                            put("q", buildDdQueryString(widget.queryConfigs.firstOrNull() ?: QueryDsl(dataSource = "events")))
                             put("display_type", widget.widgetType)
                         })
                     })

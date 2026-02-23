@@ -131,7 +131,8 @@ data class QueryDsl(
     val orderBy: OrderByDef? = null,
     val limit: Int = 100,
     val timeRange: TimeRangeDef = TimeRangeDef(),
-    val rawQuery: String? = null
+    val rawQuery: String? = null,
+    @SerialName("ref_id") val refId: String? = null
 )
 
 @Serializable

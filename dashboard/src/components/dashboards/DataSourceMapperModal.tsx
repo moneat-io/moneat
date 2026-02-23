@@ -72,18 +72,16 @@ export function DataSourceMapperModal({
       onMapped(actualMappings)
     } else if (widget && onConfirm) {
       // Widget paste mode: apply mappings to widget
-      let dataSource = widget.query_config.dataSource
+      let dataSource = widget.query_configs[0]?.dataSource
       for (const [source, target] of Object.entries(mappings)) {
         if (target !== '__skip__' && dataSource === `__unmapped:${source}`) {
           dataSource = target
         }
       }
+      const updatedFirstQuery = {...widget.query_configs[0], dataSource}
       onConfirm({
         ...widget,
-        query_config: {
-          ...widget.query_config,
-          dataSource,
-        },
+        query_configs: [updatedFirstQuery, ...widget.query_configs.slice(1)],
       })
     }
   }

@@ -223,10 +223,10 @@ class DataDogTranslatorTest {
                     id = 1, dashboardId = 1, title = "CPU",
                     widgetType = "timeseries",
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
-                    queryConfig = QueryDsl(
+                    queryConfigs = listOf(QueryDsl(
                         dataSource = "system_metrics",
                         metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu"))
-                    )
+                    )),
                 )
             )
         )
@@ -244,9 +244,9 @@ class DataDogTranslatorTest {
             createdAt = "", updatedAt = "",
             widgets = listOf(
                 WidgetResponse(id = 1, dashboardId = 1, widgetType = "stat",
-                    queryConfig = QueryDsl(dataSource = "events")),
+                    queryConfigs = listOf(QueryDsl(dataSource = "events"))),
                 WidgetResponse(id = 2, dashboardId = 1, widgetType = "donut",
-                    queryConfig = QueryDsl(dataSource = "events"))
+                    queryConfigs = listOf(QueryDsl(dataSource = "events")))
             )
         )
         val exported = translator.export(dashboard)

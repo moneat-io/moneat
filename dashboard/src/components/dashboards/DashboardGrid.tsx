@@ -118,7 +118,7 @@ export function DashboardGrid({
           grid_y: layoutItem?.y ?? widget.grid_y,
           grid_w: layoutItem?.w ?? widget.grid_w,
           grid_h: layoutItem?.h ?? widget.grid_h,
-          query_config: widget.query_config,
+          query_configs: widget.query_configs,
           display_config: widget.display_config,
           sort_order: widget.sort_order,
         }

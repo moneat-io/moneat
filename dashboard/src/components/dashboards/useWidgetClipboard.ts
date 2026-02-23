@@ -66,8 +66,8 @@ function detectFormat(data: unknown): 'grafana-panel' | 'moneat-widget' | 'unkno
     return 'grafana-panel'
   }
 
-  // Moneat widget: has "widget_type" + "query_config"
-  if (obj.widget_type && obj.query_config) {
+  // Moneat widget: has "widget_type" + "query_configs" (or legacy "query_config")
+  if (obj.widget_type && (obj.query_configs || obj.query_config)) {
     return 'moneat-widget'
   }
 
@@ -154,7 +154,7 @@ function convertGrafanaPanel(panel: GrafanaPanel, yOffset: number): PastedWidget
       grid_y: yOffset,
       grid_w: Math.min(gridW, 12),
       grid_h: gridH,
-      query_config: queryConfig,
+      query_configs: [queryConfig],
       display_config: {},
     },
     unknownDatasources,
@@ -170,14 +170,14 @@ function createDefaultWidget(yOffset: number): CreateWidgetRequest {
     grid_y: yOffset,
     grid_w: 6,
     grid_h: 4,
-    query_config: {
+    query_configs: [{
       dataSource: 'events',
       metrics: [{function: 'count', alias: 'count'}],
       groupBy: [{field: 'timestamp', type: 'time', interval: 'auto'}],
       filters: [],
       limit: 100,
       timeRange: {from: 'now-24h', to: 'now'},
-    },
+    }],
     display_config: {},
   }
 }
@@ -193,7 +193,7 @@ function duplicateWidget(widget: DashboardWidget, yOffset: number): CreateWidget
     grid_y: yOffset,
     grid_w: widget.grid_w,
     grid_h: widget.grid_h,
-    query_config: {...widget.query_config},
+    query_configs: widget.query_configs.map(q => ({...q})),
     display_config: {...widget.display_config},
   }
 }
@@ -272,7 +272,7 @@ export function useWidgetClipboard({
             grid_y: yOffset,
             grid_w: w.grid_w ?? 6,
             grid_h: w.grid_h ?? 4,
-            query_config: w.query_config,
+            query_configs: w.query_configs,
             display_config: w.display_config ?? {},
           }
           onPasteWidget(pasted)

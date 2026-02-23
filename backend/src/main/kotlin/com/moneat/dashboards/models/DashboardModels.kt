@@ -71,6 +71,7 @@ object DashboardWidgets : Table("dashboard_widgets") {
     val gridW = integer("grid_w").default(6)
     val gridH = integer("grid_h").default(4)
     val queryConfig = jsonb("query_config")
+    val queryConfigs = jsonb("query_configs")
     val displayConfig = jsonb("display_config")
     val sortOrder = integer("sort_order").default(0)
     val createdAt = timestamp("created_at")
@@ -106,7 +107,7 @@ data class WidgetResponse(
     @SerialName("grid_y") val gridY: Int = 0,
     @SerialName("grid_w") val gridW: Int = 6,
     @SerialName("grid_h") val gridH: Int = 4,
-    @SerialName("query_config") val queryConfig: QueryDsl,
+    @SerialName("query_configs") val queryConfigs: List<QueryDsl> = emptyList(),
     @SerialName("display_config") val displayConfig: Map<String, String> = emptyMap(),
     @SerialName("sort_order") val sortOrder: Int = 0
 )
@@ -138,7 +139,7 @@ data class CreateWidgetRequest(
     @SerialName("grid_y") val gridY: Int = 0,
     @SerialName("grid_w") val gridW: Int = 6,
     @SerialName("grid_h") val gridH: Int = 4,
-    @SerialName("query_config") val queryConfig: QueryDsl,
+    @SerialName("query_configs") val queryConfigs: List<QueryDsl> = emptyList(),
     @SerialName("display_config") val displayConfig: Map<String, String> = emptyMap(),
     @SerialName("sort_order") val sortOrder: Int = 0
 )
@@ -152,7 +153,7 @@ data class UpdateWidgetRequest(
     @SerialName("grid_y") val gridY: Int? = null,
     @SerialName("grid_w") val gridW: Int? = null,
     @SerialName("grid_h") val gridH: Int? = null,
-    @SerialName("query_config") val queryConfig: QueryDsl? = null,
+    @SerialName("query_configs") val queryConfigs: List<QueryDsl>? = null,
     @SerialName("display_config") val displayConfig: Map<String, String>? = null,
     @SerialName("sort_order") val sortOrder: Int? = null
 )
@@ -161,6 +162,17 @@ data class UpdateWidgetRequest(
 data class ExecuteQueryRequest(
     @SerialName("query_config") val queryConfig: QueryDsl,
     @SerialName("time_range") val timeRange: TimeRangeDef? = null
+)
+
+@Serializable
+data class ExecuteBatchQueryRequest(
+    val queries: List<QueryDsl>,
+    @SerialName("time_range") val timeRange: TimeRangeDef? = null
+)
+
+@Serializable
+data class BatchQueryResult(
+    val results: Map<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>
 )
 
 @Serializable
