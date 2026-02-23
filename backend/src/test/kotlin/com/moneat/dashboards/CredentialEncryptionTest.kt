@@ -17,6 +17,7 @@
 package com.moneat.dashboards
 
 import com.moneat.dashboards.services.CredentialEncryption
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -24,6 +25,12 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
 class CredentialEncryptionTest {
+
+    @BeforeTest
+    fun setup() {
+        // Set a test encryption key for the tests
+        System.setProperty("JWT_SECRET", "test-encryption-key-for-credential-tests-32chars-minimum")
+    }
 
     @Test
     fun `encrypt and decrypt roundtrip`() {
