@@ -104,6 +104,32 @@ dashboard/src/
 
 ## Key Conventions
 
+### Detekt Code Style Guidelines
+**CRITICAL:** Follow detekt rules to maintain code quality. The project enforces these via CI:
+
+- ❌ **NEVER use wildcard imports**: `import com.moneat.models.*`
+- ✅ **ALWAYS use explicit imports**: `import com.moneat.models.User`
+
+- ❌ **NEVER exceed 120 characters per line**
+- ✅ **Keep lines under 120 characters** - break long lines appropriately
+
+- ❌ **Don't use magic numbers**: `if (count > 5)`
+- ✅ **Use named constants**: `const val MAX_RETRIES = 5`
+
+- **Run detekt before committing:**
+  ```bash
+  cd backend
+  ./gradlew detekt          # Check for issues
+  ./gradlew detektFormat    # Auto-fix formatting
+  ```
+
+While some rules are currently disabled in `detekt.yml`, always follow best practices for new code:
+- Use explicit imports (no wildcards)
+- Keep lines ≤ 120 characters
+- Extract complex conditions into named variables
+- Limit function parameters (prefer data classes)
+- Use descriptive variable/function names
+
 ### Exposed DSL (Kotlin Database ORM)
 **CRITICAL:** Always use the current Exposed DSL syntax to avoid deprecation warnings:
 
