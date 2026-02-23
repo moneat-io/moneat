@@ -421,7 +421,31 @@ class GrafanaTranslatorTest {
         assertEquals("Nested Panel", result.dashboard.widgets[0].title)
     }
 
-    // --- PromQL with range vectors ---
+    @Test
+    fun `parseGrafanaSql preserves custom table names`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parseGrafanaSql(
+            "SELECT count() FROM video_recordings WHERE quality = 'hd' GROUP BY created_at",
+            warnings,
+            0
+        )
+        assertEquals("video_recordings", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("unknown table") })
+        assertTrue(warnings.any { it.contains("rawQuery") })
+    }
+
+    @Test
+    fun `parseGrafanaSql maps known Moneat tables`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parseGrafanaSql(
+            "SELECT count() FROM events WHERE level = 'error'",
+            warnings,
+            0
+        )
+        assertEquals("events", dsl.dataSource)
+    }
+
+    // --- parsePromQL with range vectors ---
 
     @Test
     fun `parsePromQL with range vector duration`() {
@@ -562,16 +586,19 @@ class GrafanaTranslatorTest {
         assertEquals("timeseries", result.dashboard.widgets[1].widgetType)
         assertEquals("Request Rate", result.dashboard.widgets[1].title)
 
-        // Panel 2 (nested table from collapsed row) - SQL with custom table
+        // Panel 2 (nested table from collapsed row) - SQL with custom table name preserved
         assertEquals("table", result.dashboard.widgets[2].widgetType)
         assertEquals("Slow Queries", result.dashboard.widgets[2].title)
         assertTrue(result.dashboard.widgets[2].queryConfig.rawQuery?.contains("duration_ms") == true)
+        assertEquals("app_queries", result.dashboard.widgets[2].queryConfig.dataSource)
 
-        // Panel 3 (table with SQL from custom app_sessions table)
+        // Panel 3 (table with SQL from custom app_sessions table - name preserved)
         assertEquals("table", result.dashboard.widgets[3].widgetType)
+        assertEquals("app_sessions", result.dashboard.widgets[3].queryConfig.dataSource)
 
-        // Warnings: SQL queries and unknown tables
+        // Warnings: SQL queries stored as rawQuery, but no "unknown table" warnings
         assertTrue(result.warnings.any { it.contains("rawQuery") })
         assertTrue(result.warnings.none { it.contains("row") })
+        assertTrue(result.warnings.none { it.contains("unknown table") })
     }
 }

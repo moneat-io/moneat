@@ -191,13 +191,10 @@ class GrafanaTranslator : DashboardTranslator {
         // Best-effort parse of SQL SELECT statements
         val sql = rawSql.trim().lowercase()
 
-        // Try to identify the table (data source)
+        // Extract the table name but preserve it as-is — it may refer to a custom data source
         val tableMatch = Regex("""from\s+(\w+)""").find(sql)
         val tableName = tableMatch?.groupValues?.get(1) ?: "events"
-        val dataSource = DataSource.fromString(tableName)?.tableName ?: run {
-            warnings.add("Panel $panelIndex: unknown table '$tableName', defaulting to 'events'")
-            "events"
-        }
+        val dataSource = DataSource.fromString(tableName)?.tableName ?: tableName
 
         // Store as rawQuery since full SQL parsing is complex
         warnings.add("Panel $panelIndex: SQL query imported as rawQuery for manual review")
