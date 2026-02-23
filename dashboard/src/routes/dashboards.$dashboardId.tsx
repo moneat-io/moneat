@@ -24,7 +24,7 @@ import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperModal'
 import {VariableSettingsDialog} from '@/components/dashboards/VariableSettingsDialog'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
-import {useCallback, useRef, useState} from 'react'
+import {useCallback, useEffect, useRef, useState} from 'react'
 import {useProject} from '@/contexts/project-context'
 
 interface DashboardSearch {
@@ -76,6 +76,25 @@ function DashboardViewPage() {
     queryFn: () => api.getDashboard(id),
     enabled: !isNaN(id),
   })
+
+  // Initialize variable values from dashboard variable defaults on first load
+  useEffect(() => {
+    if (!dashboard?.variables?.length) return
+    setVariableValues((prev) => {
+      const next = {...prev}
+      let changed = false
+      for (const v of dashboard.variables) {
+        if (!(v.name in next)) {
+          const defaultVal = v.current ?? v.default_value ?? (v.options.length > 0 ? v.options[0] : '')
+          if (defaultVal) {
+            next[v.name] = defaultVal
+            changed = true
+          }
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [dashboard?.variables])
 
   const updateMutation = useMutation({
     mutationFn: (data: Parameters<typeof api.updateDashboard>[1]) => api.updateDashboard(id, data),

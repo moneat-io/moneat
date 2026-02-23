@@ -20,7 +20,7 @@ import {Button} from '@/components/ui/button'
 import {QueryBuilderForm} from './QueryBuilderForm'
 import {WidgetRenderer} from './WidgetRenderer'
 import {AlertConfigForm} from './AlertConfigForm'
-import {X, BarChart3, LineChart, PieChart, Hash, Table2, List, Grid3X3, Type, Plus, Trash2} from 'lucide-react'
+import {X, BarChart3, LineChart, PieChart, Hash, Table2, List, Grid3X3, Type, Plus, Trash2, Gauge} from 'lucide-react'
 import type {ValueMapping} from './formatValue'
 
 const WIDGET_TYPES = [
@@ -28,6 +28,7 @@ const WIDGET_TYPES = [
   {value: 'bar', label: 'Bar Chart', icon: BarChart3},
   {value: 'donut', label: 'Donut', icon: PieChart},
   {value: 'stat', label: 'Stat', icon: Hash},
+  {value: 'gauge', label: 'Gauge', icon: Gauge},
   {value: 'table', label: 'Table', icon: Table2},
   {value: 'toplist', label: 'Top List', icon: List},
   {value: 'heatmap', label: 'Heatmap', icon: Grid3X3},
@@ -278,8 +279,8 @@ function DisplayConfigForm({
   const supportsLegend = isChart || wt === 'donut'
   const supportsAxis = isChart
   const supportsStyle = isChart
-  const supportsThresholds = isChart || wt === 'stat'
-  const supportsMappings = wt === 'stat' || wt === 'table' || wt === 'toplist'
+  const supportsThresholds = isChart || wt === 'stat' || wt === 'gauge'
+  const supportsMappings = wt === 'stat' || wt === 'gauge' || wt === 'table' || wt === 'toplist'
 
   // Parse thresholds from JSON string
   const thresholds: {value: number; color: string; label?: string}[] = (() => {
@@ -446,7 +447,7 @@ function DisplayConfigForm({
       )}
 
       {/* Unit Formatting */}
-      {(supportsAxis || wt === 'stat') && (
+      {(supportsAxis || wt === 'stat' || wt === 'gauge') && (
         <fieldset className="space-y-2">
           <legend className="text-xs font-medium text-muted-foreground">Unit</legend>
           <div>
@@ -464,6 +465,8 @@ function DisplayConfigForm({
               <option value="s">Seconds (s)</option>
               <option value="reqps">Requests/sec</option>
               <option value="ops">Operations/sec</option>
+              <option value="locale">Locale Number</option>
+              <option value="dateTimeAsIso">DateTime (ISO)</option>
             </select>
           </div>
           <div>

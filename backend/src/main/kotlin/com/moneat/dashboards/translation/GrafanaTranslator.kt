@@ -40,8 +40,14 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
+import kotlin.math.roundToInt
 
 private val logger = KotlinLogging.logger {}
+
+private const val GRAFANA_COLS = 24
+private const val MONEAT_COLS = 12
+private const val GRAFANA_ROW_PX = 30.0
+private const val MONEAT_ROW_PX = 80.0
 
 class GrafanaTranslator : DashboardTranslator {
 
@@ -53,7 +59,7 @@ class GrafanaTranslator : DashboardTranslator {
         "table" to "table",
         "heatmap" to "heatmap",
         "text" to "text",
-        "gauge" to "stat",
+        "gauge" to "gauge",
         "bargauge" to "bar",
         "graph" to "timeseries",
         "logs" to "table"
@@ -64,10 +70,12 @@ class GrafanaTranslator : DashboardTranslator {
         "bar" to "barchart",
         "donut" to "piechart",
         "stat" to "stat",
+        "gauge" to "gauge",
         "table" to "table",
         "heatmap" to "heatmap",
         "text" to "text",
-        "toplist" to "table"
+        "toplist" to "table",
+        "section" to "row"
     )
 
     override fun import(json: JsonObject): DashboardImportResult {
@@ -127,23 +135,24 @@ class GrafanaTranslator : DashboardTranslator {
     ): WidgetResponse? {
         val grafanaType = panelJson["type"]?.jsonPrimitive?.contentOrNull ?: "timeseries"
 
-        // Row panels become full-width text section headers
+        // Row panels become full-width collapsible section headers
         if (grafanaType == "row") {
             val rowTitle = panelJson["title"]?.jsonPrimitive?.contentOrNull ?: "Section"
             val gridPos = panelJson["gridPos"]?.jsonObject
             val grafanaY = gridPos?.get("y")?.jsonPrimitive?.intOrNull ?: 0
-            val gridY = (grafanaY + 2) / 3
+            val gridY = scaleGridValue(grafanaY)
+            val collapsed = panelJson["collapsed"]?.jsonPrimitive?.contentOrNull == "true"
             return WidgetResponse(
                 id = 0,
                 dashboardId = 0,
                 title = rowTitle,
-                widgetType = "text",
+                widgetType = "section",
                 gridX = 0,
                 gridY = gridY,
                 gridW = 12,
                 gridH = 1,
                 queryConfigs = emptyList(),
-                displayConfig = mapOf("content" to "## $rowTitle"),
+                displayConfig = mapOf("collapsed" to collapsed.toString()),
                 sortOrder = index
             )
         }
@@ -155,21 +164,23 @@ class GrafanaTranslator : DashboardTranslator {
 
         val panelTitle = panelJson["title"]?.jsonPrimitive?.contentOrNull
 
-        // Grafana uses 24-col grid, Moneat uses 12-col
-        // Grafana height units are also larger (1 = ~30px), scale down by ~3
-        // Y positions must be scaled by the same factor as height to keep panels packed
         val gridPos = panelJson["gridPos"]?.jsonObject
-        val gridX = (gridPos?.get("x")?.jsonPrimitive?.intOrNull ?: 0) / 2
+        val grafanaX = gridPos?.get("x")?.jsonPrimitive?.intOrNull ?: 0
         val grafanaY = gridPos?.get("y")?.jsonPrimitive?.intOrNull ?: 0
-        val gridY = (grafanaY + 2) / 3
-        val gridW = ((gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: 12) + 1) / 2
+        val grafanaW = gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: 12
         val grafanaH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: 4
-        val gridH = (grafanaH + 2) / 3 // Scale down: 9 → 3, 12 → 4, 6 → 2
+
+        // Grafana uses a 24-col grid, Moneat uses 12-col. Scale x/w by 0.5.
+        // Grafana row height ≈ 30px, Moneat row height = 80px. Scale y/h by 30/80.
+        val gridX = scaleGridColumn(grafanaX)
+        val gridY = scaleGridValue(grafanaY)
+        val gridW = scaleGridColumn(grafanaW).coerceAtLeast(1)
+        val gridH = scaleGridValue(grafanaH)
 
         val queryConfig = parseGrafanaTargets(panelJson, warnings, index)
         val displayConfig = extractDisplayConfig(panelJson)
 
-        val minH = if (moneatType == "stat") 2 else 3
+        val minH = if (moneatType == "stat" || moneatType == "gauge") 2 else 3
         return WidgetResponse(
             id = 0,
             dashboardId = 0,
@@ -185,26 +196,115 @@ class GrafanaTranslator : DashboardTranslator {
         )
     }
 
+    private fun scaleGridColumn(grafanaCol: Int): Int =
+        (grafanaCol.toDouble() * MONEAT_COLS / GRAFANA_COLS).roundToInt()
+
+    private fun scaleGridValue(grafanaUnits: Int): Int =
+        (grafanaUnits * GRAFANA_ROW_PX / MONEAT_ROW_PX).roundToInt()
+
     private fun extractDisplayConfig(panelJson: JsonObject): Map<String, String> {
         val config = mutableMapOf<String, String>()
 
-        val defaults = panelJson["fieldConfig"]?.jsonObject
-            ?.get("defaults")?.jsonObject
-            ?.get("custom")?.jsonObject
+        val fieldConfig = panelJson["fieldConfig"]?.jsonObject
+        val fieldDefaults = fieldConfig?.get("defaults")?.jsonObject
+        val defaults = fieldDefaults?.get("custom")?.jsonObject
 
+        // Unit and decimals from fieldConfig.defaults
+        fieldDefaults?.get("unit")?.jsonPrimitive?.contentOrNull?.let { config["unit"] = it }
+        fieldDefaults?.get("decimals")?.jsonPrimitive?.intOrNull?.let { config["decimals"] = it.toString() }
+
+        // Thresholds from fieldConfig.defaults.thresholds
+        fieldDefaults?.get("thresholds")?.jsonObject?.let { thresholds ->
+            val steps = thresholds["steps"]?.jsonArray
+            if (steps != null && steps.size > 0) {
+                val moneatThresholds = steps.mapNotNull { step ->
+                    val stepObj = step.jsonObject
+                    val valuePrim = stepObj["value"]?.jsonPrimitive
+                    val value = valuePrim?.intOrNull ?: if (valuePrim?.contentOrNull == null) 0 else return@mapNotNull null
+                    val color = stepObj["color"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    buildJsonObject {
+                        put("value", value)
+                        put("color", color)
+                    }
+                }
+                if (moneatThresholds.isNotEmpty()) {
+                    config["thresholds"] = JsonArray(moneatThresholds).toString()
+                }
+            }
+        }
+
+        // Value mappings from fieldConfig.defaults.mappings
+        fieldDefaults?.get("mappings")?.jsonArray?.let { mappings ->
+            val moneatMappings = mappings.mapNotNull { mapping ->
+                val mapObj = mapping.jsonObject
+                val type = mapObj["type"]?.jsonPrimitive?.contentOrNull
+                when (type) {
+                    "special" -> {
+                        val opts = mapObj["options"]?.jsonObject ?: return@mapNotNull null
+                        val match = opts["match"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                        val text = opts["result"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+                            ?: return@mapNotNull null
+                        val color = opts["result"]?.jsonObject?.get("color")?.jsonPrimitive?.contentOrNull
+                        buildJsonObject {
+                            put("value", match)
+                            put("text", text)
+                            color?.let { put("color", it) }
+                        }
+                    }
+                    "value" -> {
+                        val opts = mapObj["options"]?.jsonObject ?: return@mapNotNull null
+                        opts.entries.firstOrNull()?.let { (key, entry) ->
+                            val result = entry.jsonObject["result"]?.jsonObject ?: return@let null
+                            val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return@let null
+                            val color = result["color"]?.jsonPrimitive?.contentOrNull
+                            buildJsonObject {
+                                put("value", key)
+                                put("text", text)
+                                color?.let { put("color", it) }
+                            }
+                        }
+                    }
+                    else -> null
+                }
+            }
+            if (moneatMappings.isNotEmpty()) {
+                config["valueMappings"] = JsonArray(moneatMappings).toString()
+            }
+        }
+
+        // Draw style and line width from custom config
         defaults?.get("drawStyle")?.jsonPrimitive?.contentOrNull?.let { config["drawStyle"] = it }
-        defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull?.let { config["fillOpacity"] = it.toString() }
+        defaults?.get("lineWidth")?.jsonPrimitive?.intOrNull?.let { config["lineWidth"] = it.toString() }
+
+        // fillOpacity: Grafana uses 0-100 scale, Moneat uses 0-1
+        defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull?.let {
+            config["fillOpacity"] = (it / 100.0).toString()
+        }
+
+        // Stacking → stackMode (frontend key)
         defaults?.get(
             "stacking"
-        )?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull?.let { config["stacking"] = it }
+        )?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull?.let { config["stackMode"] = it }
+
         defaults?.get(
             "scaleDistribution"
         )?.jsonObject?.get("type")?.jsonPrimitive?.contentOrNull?.let { config["scaleType"] = it }
 
         val options = panelJson["options"]?.jsonObject
-        options?.get(
-            "legend"
-        )?.jsonObject?.get("placement")?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
+        options?.get("legend")?.jsonObject?.let { legend ->
+            legend["placement"]?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
+            legend["displayMode"]?.jsonPrimitive?.contentOrNull?.let { mode ->
+                config["legendMode"] = when (mode) {
+                    "hidden" -> "hidden"
+                    "table" -> "table"
+                    else -> "list"
+                }
+            }
+        }
+
+        // Gauge-specific: min/max range
+        fieldDefaults?.get("min")?.jsonPrimitive?.intOrNull?.let { config["gaugeMin"] = it.toString() }
+        fieldDefaults?.get("max")?.jsonPrimitive?.intOrNull?.let { config["gaugeMax"] = it.toString() }
 
         return config
     }

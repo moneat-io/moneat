@@ -29,7 +29,7 @@ const GRAFANA_TYPE_MAP: Record<string, string> = {
   table: 'table',
   heatmap: 'heatmap',
   text: 'text',
-  row: '',
+  row: 'section',
 }
 
 interface GrafanaPanel {
@@ -84,12 +84,20 @@ function convertGrafanaPanel(panel: GrafanaPanel, yOffset: number): PastedWidget
   // Map widget type
   const grafanaType = panel.type || 'timeseries'
   let widgetType = GRAFANA_TYPE_MAP[grafanaType]
-  if (widgetType === '') {
-    // Skip row panels
+  if (widgetType === 'section') {
     return {
-      widget: createDefaultWidget(yOffset),
+      widget: {
+        title: panel.title || 'Section',
+        widget_type: 'section',
+        grid_x: 0,
+        grid_y: yOffset,
+        grid_w: 12,
+        grid_h: 1,
+        query_configs: [],
+        display_config: {collapsed: 'false'},
+      },
       unknownDatasources: [],
-      warnings: [`Skipped Grafana row panel`],
+      warnings: [],
     }
   }
   if (!widgetType) {
@@ -159,26 +167,6 @@ function convertGrafanaPanel(panel: GrafanaPanel, yOffset: number): PastedWidget
     },
     unknownDatasources,
     warnings,
-  }
-}
-
-function createDefaultWidget(yOffset: number): CreateWidgetRequest {
-  return {
-    title: 'Pasted Widget',
-    widget_type: 'timeseries',
-    grid_x: 0,
-    grid_y: yOffset,
-    grid_w: 6,
-    grid_h: 4,
-    query_configs: [{
-      dataSource: 'events',
-      metrics: [{function: 'count', alias: 'count'}],
-      groupBy: [{field: 'timestamp', type: 'time', interval: 'auto'}],
-      filters: [],
-      limit: 100,
-      timeRange: {from: 'now-24h', to: 'now'},
-    }],
-    display_config: {},
   }
 }
 

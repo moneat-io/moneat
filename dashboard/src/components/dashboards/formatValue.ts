@@ -30,6 +30,8 @@ export type UnitType =
   | 's'
   | 'reqps'
   | 'ops'
+  | 'dateTimeAsIso'
+  | 'locale'
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 const SHORT_SUFFIXES = ['', 'K', 'M', 'B', 'T']
@@ -71,20 +73,21 @@ function formatShort(value: number, decimals: string | undefined): string {
 
 function formatMs(value: number, decimals: string | undefined): string {
   const dec = resolveDecimals(decimals, 1)
-  if (Math.abs(value) >= 1000) {
-    return `${(value / 1000).toFixed(dec)} s`
-  }
+  const abs = Math.abs(value)
+  if (abs >= 604800000) return `${(value / 604800000).toFixed(dec)} weeks`
+  if (abs >= 86400000) return `${(value / 86400000).toFixed(dec)} days`
+  if (abs >= 3600000) return `${(value / 3600000).toFixed(dec)} h`
+  if (abs >= 1000) return `${(value / 1000).toFixed(dec)} s`
   return `${value.toFixed(dec)} ms`
 }
 
 function formatSeconds(value: number, decimals: string | undefined): string {
   const dec = resolveDecimals(decimals, 1)
-  if (Math.abs(value) >= 3600) {
-    return `${(value / 3600).toFixed(dec)} h`
-  }
-  if (Math.abs(value) >= 60) {
-    return `${(value / 60).toFixed(dec)} m`
-  }
+  const abs = Math.abs(value)
+  if (abs >= 604800) return `${(value / 604800).toFixed(dec)} weeks`
+  if (abs >= 86400) return `${(value / 86400).toFixed(dec)} days`
+  if (abs >= 3600) return `${(value / 3600).toFixed(dec)} h`
+  if (abs >= 60) return `${(value / 60).toFixed(dec)} m`
   return `${value.toFixed(dec)} s`
 }
 
@@ -106,6 +109,22 @@ function formatOps(value: number, decimals: string | undefined): string {
 function formatNone(value: number, decimals: string | undefined): string {
   const dec = resolveDecimals(decimals, Number.isInteger(value) ? 0 : 2)
   return value.toFixed(dec)
+}
+
+function formatDateTimeAsIso(value: number): string {
+  // Grafana stores epoch seconds (or milliseconds); detect and convert
+  const ts = value < 1e12 ? value * 1000 : value
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return String(value)
+  return d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')
+}
+
+function formatLocale(value: number, decimals: string | undefined): string {
+  const dec = resolveDecimals(decimals, Number.isInteger(value) ? 0 : 2)
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
+  })
 }
 
 /**
@@ -145,6 +164,10 @@ export function formatValue(
       return formatReqps(value, decimals)
     case 'ops':
       return formatOps(value, decimals)
+    case 'dateTimeAsIso':
+      return formatDateTimeAsIso(value)
+    case 'locale':
+      return formatLocale(value, decimals)
     case 'none':
     default:
       return formatNone(value, decimals)

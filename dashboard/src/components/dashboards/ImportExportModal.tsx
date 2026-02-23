@@ -36,7 +36,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [jsonInput, setJsonInput] = useState('')
-  const [format, setFormat] = useState<string>('datadog')
+  const format = 'grafana' // Only support Grafana for now
   const [warnings, setWarnings] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState(false)
   const [importedDashboardId, setImportedDashboardId] = useState<number | null>(null)
@@ -97,18 +97,6 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
     reader.onload = (event) => {
       const content = event.target?.result as string
       setJsonInput(content)
-
-      // Auto-detect format
-      try {
-        const parsed = JSON.parse(content)
-        if (parsed.widgets && parsed.layout_type) {
-          setFormat('datadog')
-        } else if (parsed.panels) {
-          setFormat('grafana')
-        }
-      } catch {
-        // Keep current format
-      }
     }
     reader.readAsText(file)
   }
@@ -314,7 +302,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {mode === 'import'
-              ? 'Import a dashboard from DataDog or Grafana JSON format'
+              ? 'Import a dashboard from Grafana JSON format'
               : 'Export this dashboard in various formats'}
           </p>
         </div>
@@ -323,26 +311,16 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         <div className="flex-1 overflow-auto px-5 py-4 space-y-4">
           {mode === 'import' ? (
             <>
-              {/* Format selector */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Format</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setFormat('datadog')}
-                    className={`flex-1 px-3 py-2 rounded-md border text-sm ${
-                      format === 'datadog' ? 'border-primary bg-primary/5' : 'hover:bg-muted'
-                    }`}
-                  >
-                    DataDog
-                  </button>
-                  <button
-                    onClick={() => setFormat('grafana')}
-                    className={`flex-1 px-3 py-2 rounded-md border text-sm ${
-                      format === 'grafana' ? 'border-primary bg-primary/5' : 'hover:bg-muted'
-                    }`}
-                  >
-                    Grafana
-                  </button>
+              {/* Grafana logo/info */}
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                <svg className="h-8 w-8" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M57.9 13.4c-.7-2.2-1.8-4.3-3.3-6.1-.8-.9-1.6-1.7-2.6-2.4-1.3-1-2.7-1.8-4.2-2.4-2.2-.9-4.5-1.4-6.9-1.4-2 0-4 .3-5.9.9-1.6.5-3.2 1.2-4.6 2.1-1.1.7-2.1 1.5-3 2.4-1.3 1.3-2.4 2.7-3.3 4.3-1 1.7-1.7 3.6-2.1 5.5-.3 1.3-.4 2.7-.3 4 .1 1.6.4 3.1.9 4.6.6 1.7 1.4 3.3 2.5 4.7.9 1.2 2 2.3 3.2 3.2 1.5 1.2 3.2 2.1 5 2.7 2.1.7 4.3 1 6.5.9 2-.1 3.9-.5 5.7-1.2 1.5-.6 2.9-1.4 4.2-2.4 1-.8 1.9-1.7 2.7-2.7 1.2-1.5 2.1-3.2 2.8-4.9.7-1.9 1.1-3.9 1.1-5.9 0-2-.3-4-.9-5.9z" fill="#F05A28"/>
+                  <path d="M41.2 32c-5.5 0-10-4.5-10-10s4.5-10 10-10 10 4.5 10 10-4.5 10-10 10zm0-17c-3.9 0-7 3.1-7 7s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7z" fill="#FFF"/>
+                  <circle cx="41.2" cy="22" r="3" fill="#FFF"/>
+                </svg>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Grafana Dashboard Import</div>
+                  <div className="text-xs text-muted-foreground">Upload or paste your Grafana JSON export</div>
                 </div>
               </div>
 
@@ -361,7 +339,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full"
                 >
-                  <Upload className="h-4 w-4 mr-2" /> Upload JSON File
+                  <Upload className="h-4 w-4 mr-2" /> Upload Grafana JSON File
                 </Button>
               </div>
 
@@ -424,12 +402,16 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
               <Button variant="outline" className="w-full justify-start" onClick={() => handleExport('moneat')}>
                 <Download className="h-4 w-4 mr-2" /> Export as Moneat JSON
               </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => handleExport('datadog')}>
-                <Download className="h-4 w-4 mr-2" /> Export as DataDog JSON
-              </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => handleExport('grafana')}>
-                <Download className="h-4 w-4 mr-2" /> Export as Grafana JSON
-              </Button>
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                <svg className="h-6 w-6 flex-shrink-0" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M57.9 13.4c-.7-2.2-1.8-4.3-3.3-6.1-.8-.9-1.6-1.7-2.6-2.4-1.3-1-2.7-1.8-4.2-2.4-2.2-.9-4.5-1.4-6.9-1.4-2 0-4 .3-5.9.9-1.6.5-3.2 1.2-4.6 2.1-1.1.7-2.1 1.5-3 2.4-1.3 1.3-2.4 2.7-3.3 4.3-1 1.7-1.7 3.6-2.1 5.5-.3 1.3-.4 2.7-.3 4 .1 1.6.4 3.1.9 4.6.6 1.7 1.4 3.3 2.5 4.7.9 1.2 2 2.3 3.2 3.2 1.5 1.2 3.2 2.1 5 2.7 2.1.7 4.3 1 6.5.9 2-.1 3.9-.5 5.7-1.2 1.5-.6 2.9-1.4 4.2-2.4 1-.8 1.9-1.7 2.7-2.7 1.2-1.5 2.1-3.2 2.8-4.9.7-1.9 1.1-3.9 1.1-5.9 0-2-.3-4-.9-5.9z" fill="#F05A28"/>
+                  <path d="M41.2 32c-5.5 0-10-4.5-10-10s4.5-10 10-10 10 4.5 10 10-4.5 10-10 10zm0-17c-3.9 0-7 3.1-7 7s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7z" fill="#FFF"/>
+                  <circle cx="41.2" cy="22" r="3" fill="#FFF"/>
+                </svg>
+                <Button variant="outline" className="flex-1 justify-start" onClick={() => handleExport('grafana')}>
+                  <Download className="h-4 w-4 mr-2" /> Export as Grafana JSON
+                </Button>
+              </div>
 
               {exportData && (
                 <div>

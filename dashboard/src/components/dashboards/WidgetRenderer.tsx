@@ -153,9 +153,13 @@ export const WidgetRenderer = memo(function WidgetRenderer({
         ? api.executeWidgetQuery(dashboardId, queries[0], projectId, timeRange, variables)
         : []
     },
-    enabled: !!projectId && widget.widget_type !== 'text' && queries.length > 0,
+    enabled: !!projectId && widget.widget_type !== 'text' && widget.widget_type !== 'section' && queries.length > 0,
     refetchInterval: autoRefresh ? 30000 : false,
   })
+
+  if (widget.widget_type === 'section') {
+    return null
+  }
 
   if (widget.widget_type === 'text') {
     return (
@@ -189,6 +193,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({
       return <DonutChartWidget data={chartData} displayConfig={dc} />
     case 'stat':
       return <StatWidget data={chartData} widget={widget} displayConfig={dc} />
+    case 'gauge':
+      return <GaugeWidget data={chartData} widget={widget} displayConfig={dc} />
     case 'table':
       return <TableWidget data={chartData} displayConfig={dc} />
     case 'toplist':
@@ -248,8 +254,24 @@ function formatTooltipValue(value: number | string) {
 
 type DisplayConfig = Record<string, string>
 
+const GRAFANA_COLORS: Record<string, string> = {
+  green: '#73BF69', 'semi-dark-green': '#56A64B', 'dark-green': '#37872D', 'light-green': '#96D98D', 'super-light-green': '#C8F2C2',
+  red: '#F2495C', 'semi-dark-red': '#E02F44', 'dark-red': '#C4162A', 'light-red': '#FF7383', 'super-light-red': '#FFA6B0',
+  orange: '#FF9830', 'semi-dark-orange': '#FA6400', 'dark-orange': '#E55400',
+  yellow: '#FADE2A', 'semi-dark-yellow': '#F2CC0C', 'dark-yellow': '#CC9D00',
+  blue: '#5794F2', 'semi-dark-blue': '#3274D9', 'dark-blue': '#1F60C4', 'light-blue': '#8AB8FF', 'super-light-blue': '#C0D8FF',
+  purple: '#B877D9', 'semi-dark-purple': '#8F3BB8', 'dark-purple': '#6C2796',
+}
+
+function resolveColor(color: string): string {
+  return GRAFANA_COLORS[color] || color
+}
+
 function parseThresholds(dc: DisplayConfig): {value: number; color: string; label?: string}[] {
-  try { return dc.thresholds ? JSON.parse(dc.thresholds) : [] }
+  try {
+    const raw: {value: number; color: string; label?: string}[] = dc.thresholds ? JSON.parse(dc.thresholds) : []
+    return raw.map(t => ({...t, color: resolveColor(t.color)}))
+  }
   catch { return [] }
 }
 
@@ -678,24 +700,51 @@ const StatWidget = memo(function StatWidget({
   // Categorical data (e.g. App Rating 1–5 with counts): show horizontal bars like Grafana
   const isCategorical = labelKeys.length > 0 && valueKeys.length > 0 && data.length > 1
   if (isCategorical) {
-    const deduped = deduplicateStatData(data, labelKeys, valueKeys)
+    const deduped = deduplicateStatData(data, labelKeys)
     const valueKey = valueKeys[0]
+
+    if (deduped.length <= 3) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center gap-2">
+          {deduped.map((row, i) => {
+            const val = row[valueKey]
+            const label = labelKeys.map((k) => String(row[k] ?? '')).join(' ')
+            const tColor = typeof val === 'number' ? getThresholdColor(val as number, thresholds) : undefined
+            return (
+              <div key={i} className="text-center max-w-full px-2">
+                <div
+                  className="text-3xl font-bold tabular-nums truncate"
+                  style={tColor ? {color: tColor} : undefined}
+                >
+                  {fmtStat(val)}
+                </div>
+                {deduped.length > 1 && (
+                  <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{label}</div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )
+    }
+
     const maxValue = Math.max(...deduped.map((r) => Number(r[valueKey]) || 0), 1)
     return (
       <div className="h-full overflow-auto space-y-1.5 p-2">
         {deduped.slice(0, 20).map((row, i) => {
           const label = labelKeys.map((k) => String(row[k] ?? '')).join(' ')
           const value = Number(row[valueKey]) || 0
-          const pct = (value / maxValue) * 100
+          const pctWidth = (value / maxValue) * 100
+          const barColor = getThresholdColor(value, thresholds) || COLORS[i % COLORS.length]
           return (
             <div key={i} className="relative">
               <div
-                className="absolute inset-0 rounded bg-primary/20"
-                style={{width: `${pct}%`}}
+                className="absolute inset-0 rounded"
+                style={{width: `${pctWidth}%`, backgroundColor: barColor, opacity: 0.15}}
               />
               <div className="relative flex items-center justify-between px-2 py-1 text-xs">
                 <span className="truncate font-medium">{label}</span>
-                <span className="tabular-nums text-muted-foreground ml-2 shrink-0">
+                <span className="tabular-nums ml-2 shrink-0 font-semibold" style={{color: barColor}}>
                   {fmtStat(value)}
                 </span>
               </div>
@@ -718,6 +767,7 @@ const StatWidget = memo(function StatWidget({
     const lastRow = sorted[sorted.length - 1]
     const mainValue = lastRow?.[valueKey]
     const thresholdColor = typeof mainValue === 'number' ? getThresholdColor(mainValue, thresholds) : undefined
+    const sparkColor = thresholdColor || 'hsl(var(--primary))'
     const sparklineData = sorted.map((r) => ({
       t: r[timeKey!],
       v: Number(r[valueKey] ?? 0),
@@ -726,7 +776,7 @@ const StatWidget = memo(function StatWidget({
     return (
       <div className="h-full flex flex-col">
         <div className="flex-1 flex flex-col items-center justify-center gap-0.5 shrink-0">
-          <div className="text-2xl font-bold tabular-nums" style={thresholdColor ? {color: thresholdColor} : undefined}>
+          <div className="text-3xl font-bold tabular-nums" style={thresholdColor ? {color: thresholdColor} : undefined}>
             {fmtStat(mainValue)}
           </div>
           <div className="text-xs text-muted-foreground">{widget.title || valueKey?.replace(/_/g, ' ')}</div>
@@ -737,14 +787,14 @@ const StatWidget = memo(function StatWidget({
               <AreaChart width={w} height={h} data={sparklineData} margin={{top: 2, right: 2, left: 2, bottom: 2}}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    <stop offset="0%" stopColor={sparkColor} stopOpacity={0.4} />
+                    <stop offset="100%" stopColor={sparkColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <Area
                   type="monotone"
                   dataKey="v"
-                  stroke="hsl(var(--primary))"
+                  stroke={sparkColor}
                   strokeWidth={1.5}
                   fill={`url(#${gradientId})`}
                   isAnimationActive={false}
@@ -778,13 +828,139 @@ const StatWidget = memo(function StatWidget({
         const tColor = typeof val === 'number' ? getThresholdColor(val, thresholds) : undefined
         return (
           <div key={key} className="text-center">
-            <div className="text-2xl font-bold tabular-nums" style={tColor ? {color: tColor} : undefined}>
+            <div className="text-3xl font-bold tabular-nums" style={tColor ? {color: tColor} : undefined}>
               {fmtStat(val)}
             </div>
             <div className="text-xs text-muted-foreground">{widget.title || key.replace(/_/g, ' ')}</div>
           </div>
         )
       })}
+    </div>
+  )
+})
+
+const GAUGE_ARC_START = Math.PI
+const GAUGE_ARC_END = 0
+
+const DEFAULT_GAUGE_STOPS = [
+  {pct: 0, color: '#73BF69'},
+  {pct: 0.7, color: '#FF9830'},
+  {pct: 0.9, color: '#F2495C'},
+]
+
+const GaugeWidget = memo(function GaugeWidget({
+  data,
+  widget,
+  displayConfig: dc,
+}: {
+  data: Record<string, unknown>[]
+  widget: DashboardWidget
+  displayConfig: DisplayConfig
+}) {
+  const {valueKeys} = useMemo(() => classifyColumns(data), [data])
+  const thresholds = parseThresholds(dc)
+  const valueMappings = parseValueMappings(dc)
+  const unit = dc.unit
+  const decimals = dc.decimals
+
+  const row = data[data.length - 1] || data[0] || {}
+  const valueKey = valueKeys[0] || Object.keys(row).find(k => typeof row[k] === 'number' && !isTimeKey(k))
+  const rawValue = valueKey ? (row[valueKey] as number) : 0
+  const value = typeof rawValue === 'number' ? rawValue : 0
+
+  const min = parseFloat(dc.gaugeMin || '0')
+  const max = parseFloat(dc.gaugeMax || (unit === 'percent' ? '100' : '100'))
+  const pct = Math.max(0, Math.min(1, (value - min) / (max - min)))
+
+  const fmtVal = unit && unit !== 'none'
+    ? formatValue(value, unit, decimals, valueMappings)
+    : formatStatValue(value)
+
+  const cx = 100, cy = 94, r = 84, strokeW = 26
+  const describeArc = (startAngle: number, endAngle: number) => {
+    const x1 = cx + r * Math.cos(startAngle)
+    const y1 = cy - r * Math.sin(startAngle)
+    const x2 = cx + r * Math.cos(endAngle)
+    const y2 = cy - r * Math.sin(endAngle)
+    const sweep = startAngle > endAngle ? 1 : 0
+    return `M ${x1} ${y1} A ${r} ${r} 0 0 ${sweep} ${x2} ${y2}`
+  }
+
+  const valueAngle = GAUGE_ARC_START - pct * (GAUGE_ARC_START - GAUGE_ARC_END)
+
+  const gaugeArcs = useMemo(() => {
+    if (thresholds.length > 0) {
+      const sorted = [...thresholds].sort((a, b) => a.value - b.value)
+      const arcs: {startAngle: number; endAngle: number; color: string}[] = []
+      for (let i = 0; i <= sorted.length; i++) {
+        const fromVal = i === 0 ? min : sorted[i - 1].value
+        const toVal = i === sorted.length ? max : sorted[i].value
+        const color = i === 0 ? '#73BF69' : sorted[i - 1].color
+        if (toVal <= fromVal) continue
+        const fromPct = (fromVal - min) / (max - min)
+        const toPct = (toVal - min) / (max - min)
+        arcs.push({
+          startAngle: GAUGE_ARC_START - fromPct * Math.PI,
+          endAngle: GAUGE_ARC_START - toPct * Math.PI,
+          color,
+        })
+      }
+      return arcs
+    }
+    return DEFAULT_GAUGE_STOPS.map((stop, i, arr) => {
+      const nextPct = i < arr.length - 1 ? arr[i + 1].pct : 1
+      return {
+        startAngle: GAUGE_ARC_START - stop.pct * Math.PI,
+        endAngle: GAUGE_ARC_START - nextPct * Math.PI,
+        color: stop.color,
+      }
+    })
+  }, [thresholds, min, max])
+
+  const activeColor = useMemo(() => {
+    if (thresholds.length > 0) {
+      return getThresholdColor(value, thresholds) || '#73BF69'
+    }
+    if (pct >= 0.9) return '#F2495C'
+    if (pct >= 0.7) return '#FF9830'
+    return '#73BF69'
+  }, [value, pct, thresholds])
+
+  return (
+    <div className="h-full w-full flex items-center justify-center p-1">
+      <svg viewBox="0 -4 200 128" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+        {gaugeArcs.map((arc, i) => (
+          <path
+            key={`bg-${i}`}
+            d={describeArc(arc.startAngle, arc.endAngle)}
+            fill="none"
+            stroke={arc.color}
+            strokeWidth={strokeW}
+            strokeLinecap="butt"
+            opacity={0.3}
+          />
+        ))}
+        {pct > 0 && gaugeArcs.map((arc, i) => {
+          if (valueAngle >= arc.startAngle) return null
+          const fillEnd = Math.max(arc.endAngle, valueAngle)
+          return (
+            <path
+              key={`fill-${i}`}
+              d={describeArc(arc.startAngle, fillEnd)}
+              fill="none"
+              stroke={arc.color}
+              strokeWidth={strokeW}
+              strokeLinecap="butt"
+            />
+          )
+        })}
+        <text x={cx} y={cy + 2} textAnchor="middle" className="font-bold" style={{fontSize: '22px', fill: activeColor}}>
+          {fmtVal}
+        </text>
+        <text x={cx} y={cy + 20} textAnchor="middle" className="fill-muted-foreground" style={{fontSize: '11px'}}>
+          {widget.title}
+        </text>
+      </svg>
     </div>
   )
 })

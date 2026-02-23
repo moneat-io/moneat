@@ -145,7 +145,7 @@ class GrafanaTranslatorTest {
     }
 
     @Test
-    fun `import maps gauge to stat`() {
+    fun `import maps gauge to gauge`() {
         val json = buildJsonObject {
             put("title", "Test")
             put(
@@ -161,7 +161,7 @@ class GrafanaTranslatorTest {
             )
         }
         val result = translator.import(json)
-        assertEquals("stat", result.dashboard.widgets[0].widgetType)
+        assertEquals("gauge", result.dashboard.widgets[0].widgetType)
     }
 
     @Test
@@ -212,10 +212,10 @@ class GrafanaTranslatorTest {
         }
         val result = translator.import(json)
         val w = result.dashboard.widgets[0]
-        assertEquals(6, w.gridX) // 12/2 = 6
-        assertEquals(6, w.gridW) // (12+1)/2 = 6
+        assertEquals(6, w.gridX) // 12 * 12/24 = 6
+        assertEquals(6, w.gridW) // 12 * 12/24 = 6
         assertEquals(0, w.gridY)
-        assertEquals(3, w.gridH) // (9+2)/3 = 3 (height scaled down)
+        assertEquals(3, w.gridH) // round(9 * 30/80) = 3 (height scaled down, clamped to minH=2)
     }
 
     @Test
@@ -359,6 +359,16 @@ class GrafanaTranslatorTest {
         assertEquals("__prometheus", dsl.dataSource)
         assertTrue(warnings.none { it.contains("couldn't parse") })
         assertEquals(expr, dsl.rawQuery)
+    }
+
+    @Test
+    fun `parsePromQL with dollar-sign template variables`() {
+        val warnings = mutableListOf<String>()
+        val expr = """process_uptime_seconds{application="${'$'}application", instance="${'$'}instance"}"""
+        val dsl = translator.parsePromQL(expr, warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("couldn't parse") }, "Warnings: $warnings")
+        assertEquals(2, dsl.filters.size)
     }
 
     // --- Export ---
@@ -526,7 +536,7 @@ class GrafanaTranslatorTest {
     // --- Row panel handling ---
 
     @Test
-    fun `import converts row panels to text widgets`() {
+    fun `import converts row panels to section widgets`() {
         val json = buildJsonObject {
             put("title", "Test")
             put(
@@ -549,10 +559,11 @@ class GrafanaTranslatorTest {
         }
         val result = translator.import(json)
         assertEquals(2, result.dashboard.widgets.size)
-        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        assertEquals("section", result.dashboard.widgets[0].widgetType)
         assertEquals("Section Header", result.dashboard.widgets[0].title)
         assertEquals(12, result.dashboard.widgets[0].gridW)
         assertEquals(1, result.dashboard.widgets[0].gridH)
+        assertEquals("false", result.dashboard.widgets[0].displayConfig["collapsed"])
         assertEquals("stat", result.dashboard.widgets[1].widgetType)
     }
 
@@ -632,7 +643,7 @@ class GrafanaTranslatorTest {
         }
         val result = translator.import(json)
         assertEquals(2, result.dashboard.widgets.size)
-        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        assertEquals("section", result.dashboard.widgets[0].widgetType)
         assertEquals("Collapsed Section", result.dashboard.widgets[0].title)
         assertEquals("timeseries", result.dashboard.widgets[1].widgetType)
         assertEquals("Nested Panel", result.dashboard.widgets[1].title)
@@ -879,22 +890,22 @@ class GrafanaTranslatorTest {
         // 3 row text widgets + stat + timeseries + table (nested) + table = 7
         assertEquals(7, result.dashboard.widgets.size)
 
-        // Panel 0 (row text) - "Overview"
-        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        // Panel 0 (section) - "Overview"
+        assertEquals("section", result.dashboard.widgets[0].widgetType)
         assertEquals("Overview", result.dashboard.widgets[0].title)
 
         // Panel 1 (stat) - should parse PromQL with range vector
         assertEquals("stat", result.dashboard.widgets[1].widgetType)
         assertEquals("Feedback Rate", result.dashboard.widgets[1].title)
         assertEquals(0, result.dashboard.widgets[1].gridX)
-        assertEquals(3, result.dashboard.widgets[1].gridW) // 6/2 = 3
+        assertEquals(3, result.dashboard.widgets[1].gridW) // round(6 * 12/24) = 3
 
         // Panel 2 (timeseries) - PromQL with range vector
         assertEquals("timeseries", result.dashboard.widgets[2].widgetType)
         assertEquals("Request Rate", result.dashboard.widgets[2].title)
 
-        // Panel 3 (row text) - "Database"
-        assertEquals("text", result.dashboard.widgets[3].widgetType)
+        // Panel 3 (section) - "Database"
+        assertEquals("section", result.dashboard.widgets[3].widgetType)
         assertEquals("Database", result.dashboard.widgets[3].title)
 
         // Panel 4 (nested table from collapsed row) - SQL with custom table name preserved
@@ -903,8 +914,8 @@ class GrafanaTranslatorTest {
         assertEquals(result.dashboard.widgets[4].queryConfigs.first().rawQuery?.contains("duration_ms"), true)
         assertEquals("app_queries", result.dashboard.widgets[4].queryConfigs.first().dataSource)
 
-        // Panel 5 (row text) - "Infrastructure"
-        assertEquals("text", result.dashboard.widgets[5].widgetType)
+        // Panel 5 (section) - "Infrastructure"
+        assertEquals("section", result.dashboard.widgets[5].widgetType)
         assertEquals("Infrastructure", result.dashboard.widgets[5].title)
 
         // Panel 6 (table with SQL from custom app_sessions table - name preserved)
@@ -995,5 +1006,92 @@ class GrafanaTranslatorTest {
         assertEquals(1, list.size)
         assertEquals("env", list[0].jsonObject["name"]!!.jsonPrimitive.content)
         assertEquals("custom", list[0].jsonObject["type"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `import extracts display config with units thresholds and mappings`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                            put(
+                                "fieldConfig",
+                                buildJsonObject {
+                                    put(
+                                        "defaults",
+                                        buildJsonObject {
+                                            put("unit", "percent")
+                                            put("decimals", 1)
+                                            put(
+                                                "thresholds",
+                                                buildJsonObject {
+                                                    put("mode", "absolute")
+                                                    put(
+                                                        "steps",
+                                                        buildJsonArray {
+                                                            add(buildJsonObject { put("color", "green") })
+                                                            add(buildJsonObject { put("color", "red"); put("value", 80) })
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "mappings",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("type", "special")
+                                                            put(
+                                                                "options",
+                                                                buildJsonObject {
+                                                                    put("match", "null")
+                                                                    put(
+                                                                        "result",
+                                                                        buildJsonObject { put("text", "N/A") }
+                                                                    )
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "custom",
+                                                buildJsonObject {
+                                                    put("fillOpacity", 10)
+                                                    put("lineWidth", 2)
+                                                    put(
+                                                        "stacking",
+                                                        buildJsonObject { put("mode", "normal") }
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val dc = result.dashboard.widgets[0].displayConfig
+        assertEquals("percent", dc["unit"])
+        assertEquals("1", dc["decimals"])
+        assertEquals("0.1", dc["fillOpacity"])
+        assertEquals("2", dc["lineWidth"])
+        assertEquals("normal", dc["stackMode"])
+        assertTrue(dc["thresholds"]!!.contains("\"value\":0"))
+        assertTrue(dc["thresholds"]!!.contains("\"color\":\"green\""))
+        assertTrue(dc["thresholds"]!!.contains("\"value\":80"))
+        assertTrue(dc["thresholds"]!!.contains("\"color\":\"red\""))
+        assertTrue(dc["valueMappings"]!!.contains("\"value\":\"null\""))
+        assertTrue(dc["valueMappings"]!!.contains("\"text\":\"N/A\""))
     }
 }
