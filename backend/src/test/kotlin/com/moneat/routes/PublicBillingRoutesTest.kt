@@ -46,13 +46,8 @@ class PublicBillingRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(PricingTierConfigs)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(PricingTierConfigs)
+            SchemaUtils.create(PricingTierConfigs)
         }
 
         transaction {

@@ -76,21 +76,8 @@ class UptimeRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Users,
-                    Organizations,
-                    Memberships,
-                    UptimeMonitors
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            UptimeMonitors.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(UptimeMonitors, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, UptimeMonitors)
         }
     }
 

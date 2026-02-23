@@ -55,21 +55,8 @@ class AlertChannelServicesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    EmailsSent,
-                    OrganizationIntegrations
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            OrganizationIntegrations.deleteAll()
-            EmailsSent.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(OrganizationIntegrations, EmailsSent, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, EmailsSent, OrganizationIntegrations)
         }
     }
 

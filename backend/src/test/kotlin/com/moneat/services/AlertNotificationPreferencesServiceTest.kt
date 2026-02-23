@@ -52,21 +52,8 @@ class AlertNotificationPreferencesServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    AlertNotificationPreferences
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            AlertNotificationPreferences.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(AlertNotificationPreferences, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, AlertNotificationPreferences)
         }
     }
 

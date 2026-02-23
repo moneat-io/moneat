@@ -90,16 +90,8 @@ class MonitorRoutesMockTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Users, Organizations, Memberships, Systems)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Systems.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(Systems, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Systems)
         }
     }
 

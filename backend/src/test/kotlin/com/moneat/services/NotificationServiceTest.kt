@@ -56,25 +56,8 @@ class NotificationServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    NotificationPreferences,
-                    EmailsSent
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            EmailsSent.deleteAll()
-            NotificationPreferences.deleteAll()
-            Memberships.deleteAll()
-            Projects.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(EmailsSent, NotificationPreferences, Projects, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Projects, NotificationPreferences, EmailsSent)
         }
     }
 

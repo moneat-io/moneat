@@ -63,25 +63,8 @@ class StripeServiceWebhookTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Subscriptions,
-                    StripeWebhookEvents,
-                    PricingTierConfigs,
-                    Memberships,
-                    Users
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            StripeWebhookEvents.deleteAll()
-            Subscriptions.deleteAll()
-            Memberships.deleteAll()
-            Organizations.deleteAll()
-            Users.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(PricingTierConfigs, StripeWebhookEvents, Subscriptions, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, StripeWebhookEvents, PricingTierConfigs)
         }
 
         // Setup test data

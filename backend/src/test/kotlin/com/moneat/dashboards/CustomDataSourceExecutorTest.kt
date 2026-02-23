@@ -354,7 +354,7 @@ class CustomDataSourceExecutorTest {
         )
         method.isAccessible = true
         val body = """{"status":"success","data":{"resultType":"matrix",""" +
-            """result":[{"metric":{"__name__":"m"},"values":[[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"]]}]}}"""
+            """"result":[{"metric":{"__name__":"m"},"values":[[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"]]}]}}"""
 
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 3) as List<Map<String, Any>>

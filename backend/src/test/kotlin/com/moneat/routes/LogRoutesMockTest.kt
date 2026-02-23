@@ -77,16 +77,8 @@ class LogRoutesMockTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Users, Organizations, Memberships, Projects)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Projects.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(Projects, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Projects)
         }
     }
 

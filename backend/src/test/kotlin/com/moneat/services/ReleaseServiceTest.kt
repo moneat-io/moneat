@@ -33,29 +33,8 @@ class ReleaseServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    Releases,
-                    ReleaseFiles,
-                    FileBlobs,
-                    ArtifactBundles
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            ArtifactBundles.deleteAll()
-            FileBlobs.deleteAll()
-            ReleaseFiles.deleteAll()
-            Releases.deleteAll()
-            Memberships.deleteAll()
-            Projects.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(ArtifactBundles, FileBlobs, ReleaseFiles, Releases, Projects, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Projects, Releases, ReleaseFiles, FileBlobs, ArtifactBundles)
         }
     }
 

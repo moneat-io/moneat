@@ -60,16 +60,8 @@ class RefreshTokenServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Users, Organizations, Memberships, RefreshTokens)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            RefreshTokens.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(RefreshTokens, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, RefreshTokens)
         }
     }
 

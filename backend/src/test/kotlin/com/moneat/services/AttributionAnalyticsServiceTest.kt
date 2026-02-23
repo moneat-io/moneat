@@ -50,19 +50,8 @@ class AttributionAnalyticsServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Subscriptions,
-                    PricingTierConfigs
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            Subscriptions.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(PricingTierConfigs, Subscriptions, Organizations)
+            SchemaUtils.create(Organizations, Subscriptions, PricingTierConfigs)
         }
     }
 

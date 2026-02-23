@@ -55,19 +55,8 @@ class MonitorAlertServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    AlertSilencePeriods
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            AlertSilencePeriods.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(AlertSilencePeriods, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, AlertSilencePeriods)
         }
     }
 

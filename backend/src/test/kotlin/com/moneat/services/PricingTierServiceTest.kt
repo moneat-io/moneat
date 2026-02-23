@@ -31,17 +31,8 @@ class PricingTierServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(PricingTierConfigs, Users, Organizations, Memberships, Subscriptions)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            Subscriptions.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(PricingTierConfigs, Subscriptions, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, PricingTierConfigs)
         }
     }
 

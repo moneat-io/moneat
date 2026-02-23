@@ -47,29 +47,8 @@ class AuthServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Users,
-                    Organizations,
-                    Memberships,
-                    UserLegalAcceptances,
-                    RefreshTokens,
-                    SsoConfigurations,
-                    OrgInvitations,
-                    EmailsSent,
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            RefreshTokens.deleteAll()
-            UserLegalAcceptances.deleteAll()
-            EmailsSent.deleteAll()
-            Memberships.deleteAll()
-            SsoConfigurations.deleteAll()
-            OrgInvitations.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(OrgInvitations, SsoConfigurations, EmailsSent, RefreshTokens, UserLegalAcceptances, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens, EmailsSent, SsoConfigurations, OrgInvitations)
         }
     }
 

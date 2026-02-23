@@ -83,65 +83,8 @@ class AdminServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    ProjectKeys,
-                    Releases,
-                    ReleaseFiles,
-                    Subscriptions,
-                    UsageRecords,
-                    PromotionalCreditGrants,
-                    EmailsSent,
-                    PricingTierConfigs,
-                    NotificationPreferences,
-                    AlertNotificationPreferences,
-                    AuthTokens,
-                    UserLegalAcceptances,
-                    OrgInvitations,
-                    OrganizationIntegrations,
-                    AlertSilencePeriods,
-                    SsoConfigurations,
-                    AiConversations,
-                    AiMessages,
-                    OrganizationAlertTemplates,
-                    Systems,
-                    SystemAlerts,
-                    SystemAlertSettings
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            OrgInvitations.deleteAll()
-            OrganizationIntegrations.deleteAll()
-            SystemAlertSettings.deleteAll()
-            SystemAlerts.deleteAll()
-            Systems.deleteAll()
-            OrganizationAlertTemplates.deleteAll()
-            AlertSilencePeriods.deleteAll()
-            AiMessages.deleteAll()
-            AiConversations.deleteAll()
-            SsoConfigurations.deleteAll()
-            ReleaseFiles.deleteAll()
-            Releases.deleteAll()
-            ProjectKeys.deleteAll()
-            Projects.deleteAll()
-            AlertNotificationPreferences.deleteAll()
-            NotificationPreferences.deleteAll()
-            UserLegalAcceptances.deleteAll()
-            AuthTokens.deleteAll()
-            PromotionalCreditGrants.deleteAll()
-            EmailsSent.deleteAll()
-            UsageRecords.deleteAll()
-            Subscriptions.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(SystemAlertSettings, SystemAlerts, Systems, OrganizationAlertTemplates, AiMessages, AiConversations, AlertSilencePeriods, OrganizationIntegrations, PricingTierConfigs, OrgInvitations, SsoConfigurations, PromotionalCreditGrants, EmailsSent, AlertNotificationPreferences, NotificationPreferences, Subscriptions, UsageRecords, ReleaseFiles, Releases, AuthTokens, UserLegalAcceptances, ProjectKeys, Projects, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Projects, ProjectKeys, UserLegalAcceptances, AuthTokens, Releases, ReleaseFiles, UsageRecords, Subscriptions, NotificationPreferences, AlertNotificationPreferences, EmailsSent, PromotionalCreditGrants, SsoConfigurations, OrgInvitations, PricingTierConfigs, OrganizationIntegrations, AlertSilencePeriods, AiConversations, AiMessages, OrganizationAlertTemplates, Systems, SystemAlerts, SystemAlertSettings)
         }
     }
 

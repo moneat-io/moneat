@@ -57,23 +57,8 @@ class RetentionPolicyServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Projects,
-                    Systems,
-                    PricingTierConfigs,
-                    Subscriptions
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            Subscriptions.deleteAll()
-            Systems.deleteAll()
-            Projects.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(PricingTierConfigs, Systems, Subscriptions, Projects, Organizations)
+            SchemaUtils.create(Organizations, Projects, Subscriptions, Systems, PricingTierConfigs)
         }
     }
 

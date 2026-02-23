@@ -69,24 +69,8 @@ class BillingQuotaServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Subscriptions,
-                    OrgUsageCounters,
-                    PricingTierConfigs,
-                    Users,
-                    OnCallSchedules,
-                    OnCallParticipants
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            OrgUsageCounters.deleteAll()
-            Subscriptions.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(OnCallParticipants, OnCallSchedules, PricingTierConfigs, OrgUsageCounters, Subscriptions, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Subscriptions, OrgUsageCounters, PricingTierConfigs, OnCallSchedules, OnCallParticipants)
         }
 
         // Setup test data

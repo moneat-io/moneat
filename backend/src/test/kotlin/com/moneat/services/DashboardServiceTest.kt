@@ -51,13 +51,8 @@ class DashboardServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Projects)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            Projects.deleteAll()
+            SchemaUtils.drop(Projects)
+            SchemaUtils.create(Projects)
         }
     }
 

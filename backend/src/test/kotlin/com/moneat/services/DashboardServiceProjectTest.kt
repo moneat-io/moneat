@@ -96,27 +96,29 @@ class DashboardServiceProjectTest {
                 url = "jdbc:h2:mem:moneat_dashboard_project;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    ProjectKeys,
-                    Subscriptions,
-                    PricingTierConfigs
-                )
-            }
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        // Clean between tests
+        
+        // Drop and recreate schema for clean state
         transaction {
-            ProjectKeys.deleteAll()
-            Projects.deleteAll()
-            Subscriptions.deleteAll()
-            Memberships.deleteAll()
-            Organizations.deleteAll()
-            Users.deleteAll()
+            SchemaUtils.drop(
+                ProjectKeys,
+                Projects,
+                Subscriptions,
+                Memberships,
+                Organizations,
+                Users,
+                PricingTierConfigs
+            )
+            SchemaUtils.create(
+                Organizations,
+                Users,
+                Memberships,
+                Projects,
+                ProjectKeys,
+                Subscriptions,
+                PricingTierConfigs
+            )
         }
     }
 

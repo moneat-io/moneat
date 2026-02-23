@@ -53,15 +53,8 @@ class IncidentServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Organizations, IncidentProviderConfigs, IncidentRoutingRules)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            IncidentRoutingRules.deleteAll()
-            IncidentProviderConfigs.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(IncidentRoutingRules, IncidentProviderConfigs, Organizations)
+            SchemaUtils.create(Organizations, IncidentProviderConfigs, IncidentRoutingRules)
 
             val orgId =
                 Organizations.insert {

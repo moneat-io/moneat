@@ -67,15 +67,8 @@ class IngestRoutesEnvelopeTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Organizations, Projects, ProjectKeys)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            ProjectKeys.deleteAll()
-            Projects.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(ProjectKeys, Projects, Organizations)
+            SchemaUtils.create(Organizations, Projects, ProjectKeys)
         }
 
         transaction {

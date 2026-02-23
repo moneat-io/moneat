@@ -58,26 +58,8 @@ class UsageTrackingServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Users,
-                    Organizations,
-                    Projects,
-                    Subscriptions,
-                    UsageRecords,
-                    PricingTierConfigs,
-                    OrgUsageCounters
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            OrgUsageCounters.deleteAll()
-            UsageRecords.deleteAll()
-            Subscriptions.deleteAll()
-            Projects.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(OrgUsageCounters, PricingTierConfigs, Subscriptions, UsageRecords, Projects, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Projects, UsageRecords, Subscriptions, PricingTierConfigs, OrgUsageCounters)
         }
     }
 

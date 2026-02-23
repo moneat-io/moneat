@@ -30,23 +30,8 @@ class AdminBillingServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Subscriptions,
-                    PromotionalCreditGrants
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            PromotionalCreditGrants.deleteAll()
-            Subscriptions.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(PromotionalCreditGrants, Subscriptions, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, PromotionalCreditGrants)
         }
     }
 

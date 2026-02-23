@@ -80,31 +80,8 @@ class StatusPageRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Users,
-                    Organizations,
-                    Memberships,
-                    UptimeMonitors,
-                    StatusPages,
-                    StatusPageMonitors,
-                    StatusPageCustomDomains,
-                    StatusPageIncidents,
-                    StatusPageIncidentUpdates
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            StatusPageIncidentUpdates.deleteAll()
-            StatusPageIncidents.deleteAll()
-            StatusPageMonitors.deleteAll()
-            StatusPageCustomDomains.deleteAll()
-            StatusPages.deleteAll()
-            UptimeMonitors.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(StatusPageIncidentUpdates, StatusPageCustomDomains, StatusPageMonitors, UptimeMonitors, StatusPageIncidents, StatusPages, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, StatusPages, StatusPageIncidents, UptimeMonitors, StatusPageMonitors, StatusPageCustomDomains, StatusPageIncidentUpdates)
         }
     }
 

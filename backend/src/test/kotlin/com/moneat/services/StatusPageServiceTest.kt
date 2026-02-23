@@ -67,30 +67,8 @@ class StatusPageServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Users,
-                    Organizations,
-                    Memberships,
-                    StatusPages,
-                    UptimeMonitors,
-                    StatusPageMonitors,
-                    StatusPageIncidents,
-                    StatusPageIncidentUpdates,
-                    StatusPageCustomDomains
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            StatusPageCustomDomains.deleteAll()
-            StatusPageIncidentUpdates.deleteAll()
-            StatusPageIncidents.deleteAll()
-            StatusPageMonitors.deleteAll()
-            StatusPages.deleteAll()
-            UptimeMonitors.deleteAll()
-            Memberships.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(StatusPageCustomDomains, StatusPageIncidentUpdates, StatusPageMonitors, UptimeMonitors, StatusPageIncidents, StatusPages, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, StatusPages, StatusPageIncidents, UptimeMonitors, StatusPageMonitors, StatusPageIncidentUpdates, StatusPageCustomDomains)
 
             orgId =
                 Organizations.insert {

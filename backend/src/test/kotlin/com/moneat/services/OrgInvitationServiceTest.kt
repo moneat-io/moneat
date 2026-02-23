@@ -46,24 +46,8 @@ class OrgInvitationServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    OrgInvitations,
-                    SsoConfigurations,
-                    EmailsSent,
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            OrgInvitations.deleteAll()
-            EmailsSent.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(OrgInvitations, SsoConfigurations, EmailsSent, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, EmailsSent, SsoConfigurations, OrgInvitations)
         }
     }
 

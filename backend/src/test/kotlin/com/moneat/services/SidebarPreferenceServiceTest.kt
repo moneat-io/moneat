@@ -27,16 +27,8 @@ class SidebarPreferenceServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Organizations, Users, Memberships, SidebarPreferenceEvents)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            SidebarPreferenceEvents.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(SidebarPreferenceEvents, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, SidebarPreferenceEvents)
         }
     }
 

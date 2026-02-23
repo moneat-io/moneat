@@ -55,18 +55,8 @@ class AuthServicePasswordResetTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens, EmailsSent)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            RefreshTokens.deleteAll()
-            EmailsSent.deleteAll()
-            UserLegalAcceptances.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(EmailsSent, RefreshTokens, UserLegalAcceptances, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens, EmailsSent)
         }
     }
 

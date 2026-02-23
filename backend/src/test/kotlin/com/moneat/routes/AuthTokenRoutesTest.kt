@@ -74,16 +74,8 @@ class AuthTokenRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(Users, Organizations, Memberships, AuthTokens)
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            AuthTokens.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(AuthTokens, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, AuthTokens)
         }
     }
 

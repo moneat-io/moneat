@@ -60,14 +60,12 @@ class AiChatRoutesTest {
                 url = "jdbc:h2:mem:moneat_ai_routes;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
-                SchemaUtils.create(Users)
-            }
             dbInitialized = true
         }
 
         transaction {
-            Users.deleteAll()
+            SchemaUtils.drop(Users)
+            SchemaUtils.create(Users)
             Users.insert {
                 it[id] = 101
                 it[email] = "non-admin@test.com"

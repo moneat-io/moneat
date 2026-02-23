@@ -68,35 +68,8 @@ class MonitorServiceAlertTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    Systems,
-                    SystemAlerts,
-                    OrganizationAlertTemplates,
-                    SystemAlertSettings,
-                    SystemAlertTemplateStates,
-                    PricingTierConfigs,
-                    Subscriptions
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            SystemAlertTemplateStates.deleteAll()
-            SystemAlertSettings.deleteAll()
-            SystemAlerts.deleteAll()
-            OrganizationAlertTemplates.deleteAll()
-            Subscriptions.deleteAll()
-            Systems.deleteAll()
-            Memberships.deleteAll()
-            Projects.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(PricingTierConfigs, SystemAlertTemplateStates, SystemAlertSettings, OrganizationAlertTemplates, SystemAlerts, Systems, Subscriptions, Projects, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Projects, Subscriptions, Systems, SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings, SystemAlertTemplateStates, PricingTierConfigs)
         }
     }
 

@@ -74,23 +74,8 @@ class IntegrationRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Users,
-                    Organizations,
-                    Memberships,
-                    OrganizationIntegrations,
-                    SlackUserMappings,
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            SlackUserMappings.deleteAll()
-            OrganizationIntegrations.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            SchemaUtils.drop(SlackUserMappings, OrganizationIntegrations, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, OrganizationIntegrations, SlackUserMappings)
         }
     }
 

@@ -62,29 +62,8 @@ class BillingBackgroundServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            try {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    PricingTierConfigs,
-                    Subscriptions,
-                    OrgUsageCounters,
-                    QuotaNotificationsSent,
-                    EmailsSent
-                )
-            } catch (_: Exception) {
-                // Tables already exist, which is fine
-            }
-
-            QuotaNotificationsSent.deleteAll()
-            OrgUsageCounters.deleteAll()
-            Subscriptions.deleteAll()
-            Memberships.deleteAll()
-            EmailsSent.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
+            SchemaUtils.drop(QuotaNotificationsSent, OrgUsageCounters, PricingTierConfigs, EmailsSent, Subscriptions, Memberships, Organizations, Users)
+            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, EmailsSent, PricingTierConfigs, OrgUsageCounters, QuotaNotificationsSent)
         }
 
         transaction {
