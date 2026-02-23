@@ -131,7 +131,7 @@ function DashboardListPage() {
           </div>
           <h3 className="text-lg font-medium mb-1">No dashboards yet</h3>
           <p className="text-muted-foreground text-sm mb-4">
-            Create a custom dashboard or import from DataDog/Grafana
+            Create a custom dashboard or import from DataDog/Grafana <span className="text-xs opacity-70">(experimental)</span>
           </p>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleCreateFromTemplate}>

@@ -302,8 +302,13 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       <div className="relative bg-background border rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b">
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
             {mode === 'import' ? 'Import Dashboard' : 'Export Dashboard'}
+            {mode === 'import' && (
+              <span className="text-xs font-normal px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                Experimental
+              </span>
+            )}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {mode === 'import'

@@ -233,20 +233,25 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   }
 
   const baseNavItems = [
+    // Core Observability (most used)
     { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false },
-    { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
+    { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
-    { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
-    { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
-    { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
-    { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
+    { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false, badge: 'Beta' },
+    // Monitoring & Uptime
+    { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
     { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
-    { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
+    // User Insights
+    { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
+    { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
     ...(hasEnterpriseModule(features, 'analytics') ? [{ key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false }] : []),
+    // Additional Features
+    { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
+    { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
     ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false }] : []),
-    { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false },
+    // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
     { key: 'settings', icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]
@@ -515,7 +520,16 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                 )}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
-                {isExpanded && <span className="text-sm font-medium">{item.label}</span>}
+                {isExpanded && (
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="text-sm font-medium">{item.label}</span>
+                    {(item as any).badge && (
+                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-medium">
+                        {(item as any).badge}
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </Link>
             )
 
