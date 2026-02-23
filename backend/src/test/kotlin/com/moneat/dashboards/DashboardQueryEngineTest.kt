@@ -30,6 +30,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DashboardQueryEngineTest {
@@ -441,5 +442,73 @@ class DashboardQueryEngineTest {
         sources.forEach { ds ->
             assertTrue(ds.fields.isNotEmpty(), "Data source ${ds.name} should have fields")
         }
+    }
+
+    // --- applyVariables ---
+
+    @Test
+    fun `applyVariables substitutes dollar-name in filter value`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "environment", op = FilterOp.EQ, value = "\$env"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("env" to "production"))
+        assertEquals("production", result.filters[0].value)
+    }
+
+    @Test
+    fun `applyVariables substitutes braced variable in filter value`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "environment", op = FilterOp.EQ, value = "\${env}"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("env" to "staging"))
+        assertEquals("staging", result.filters[0].value)
+    }
+
+    @Test
+    fun `applyVariables substitutes in rawQuery`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            rawQuery = "SELECT * FROM events WHERE env = '\$environment'"
+        )
+        val result = engine.applyVariables(dsl, mapOf("environment" to "production"))
+        assertEquals("SELECT * FROM events WHERE env = 'production'", result.rawQuery)
+    }
+
+    @Test
+    fun `applyVariables substitutes in filter values list`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "env", op = FilterOp.IN, values = listOf("\$e1", "\$e2")))
+        )
+        val result = engine.applyVariables(dsl, mapOf("e1" to "prod", "e2" to "staging"))
+        assertEquals(listOf("prod", "staging"), result.filters[0].values)
+    }
+
+    @Test
+    fun `applyVariables returns unchanged dsl when variables empty`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "env", op = FilterOp.EQ, value = "\$env")),
+            rawQuery = "SELECT \$env"
+        )
+        val result = engine.applyVariables(dsl, emptyMap())
+        assertEquals("\$env", result.filters[0].value)
+        assertEquals("SELECT \$env", result.rawQuery)
+    }
+
+    @Test
+    fun `applyVariables escapes SQL injection in values`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "env", op = FilterOp.EQ, value = "\$env"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("env" to "'; DROP TABLE events; --"))
+        // Single quotes should be escaped with backslash
+        val value = result.filters[0].value!!
+        assertContains(value, "\\'")
+        // The raw unescaped single quote should not appear without a preceding backslash
+        assertFalse(value.startsWith("';"), "Value should not start with unescaped quote")
     }
 }

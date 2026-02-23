@@ -19,6 +19,7 @@ package com.moneat.dashboards.translation
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.DashboardImportResult
 import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.DashboardVariable
 import com.moneat.dashboards.models.FilterDef
 import com.moneat.dashboards.models.FilterOp
 import com.moneat.dashboards.models.GroupByDef
@@ -28,6 +29,7 @@ import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -101,7 +103,9 @@ class DataDogTranslator : DashboardTranslator {
             widgets = widgets
         )
 
-        return DashboardImportResult(dashboard, warnings)
+        val variables = parseDataDogVariables(json)
+
+        return DashboardImportResult(dashboard, warnings, variables)
     }
 
     private fun importWidget(
@@ -261,6 +265,34 @@ class DataDogTranslator : DashboardTranslator {
         }
     }
 
+    internal fun parseDataDogVariables(json: JsonObject): List<DashboardVariable> {
+        val templateVars = json["template_variables"]?.jsonArray ?: return emptyList()
+
+        return templateVars.mapNotNull { element ->
+            try {
+                val varObj = element.jsonObject
+                val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val defaultValue = varObj["default"]?.jsonPrimitive?.contentOrNull
+                val prefix = varObj["prefix"]?.jsonPrimitive?.contentOrNull
+                val availableValues = varObj["available_values"]?.jsonArray?.mapNotNull {
+                    it.jsonPrimitive.contentOrNull
+                } ?: emptyList()
+
+                DashboardVariable(
+                    name = name,
+                    label = prefix?.let { "$it:$name" },
+                    type = if (availableValues.isNotEmpty()) "custom" else "textbox",
+                    defaultValue = defaultValue,
+                    current = defaultValue,
+                    options = availableValues,
+                    datasource = null
+                )
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
     override fun export(dashboard: DashboardResponse): JsonObject {
         val widgets = dashboard.widgets.map { widget ->
             buildJsonObject {
@@ -304,6 +336,25 @@ class DataDogTranslator : DashboardTranslator {
             dashboard.description?.let { put("description", it) }
             put("layout_type", "ordered")
             put("widgets", JsonArray(widgets))
+            if (dashboard.variables.isNotEmpty()) {
+                put("template_variables", buildJsonArray {
+                    dashboard.variables.forEach { v ->
+                        add(buildJsonObject {
+                            put("name", v.name)
+                            v.defaultValue?.let { put("default", it) }
+                            v.label?.let { label ->
+                                val prefix = label.substringBefore(":", label)
+                                put("prefix", prefix)
+                            }
+                            if (v.options.isNotEmpty()) {
+                                put("available_values", buildJsonArray {
+                                    v.options.forEach { opt -> add(JsonPrimitive(opt)) }
+                                })
+                            }
+                        })
+                    }
+                })
+            }
         }
     }
 

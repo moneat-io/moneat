@@ -35,6 +35,7 @@ interface DashboardGridProps {
   projectId?: number
   timeRange: TimeRangeDef
   autoRefresh: boolean
+  variableValues?: Record<string, string>
   onLayoutChange: (widgets: CreateWidgetRequest[]) => void
   onWidgetClick: (widget: DashboardWidget) => void
   onWidgetDelete: (widgetId: number) => void
@@ -47,6 +48,7 @@ export function DashboardGrid({
   projectId,
   timeRange,
   autoRefresh,
+  variableValues,
   onLayoutChange,
   onWidgetClick,
   onWidgetDelete,
@@ -233,6 +235,7 @@ export function DashboardGrid({
                 projectId={projectId}
                 timeRange={timeRange}
                 autoRefresh={autoRefresh}
+                variables={variableValues}
               />
             </div>
           </div>

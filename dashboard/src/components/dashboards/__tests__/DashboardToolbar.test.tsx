@@ -39,6 +39,8 @@ const defaultProps = {
   onTimeRangeChange: vi.fn(),
   autoRefresh: false,
   onAutoRefreshChange: vi.fn(),
+  variableValues: {},
+  onVariableChange: vi.fn(),
 }
 
 describe('DashboardToolbar', () => {

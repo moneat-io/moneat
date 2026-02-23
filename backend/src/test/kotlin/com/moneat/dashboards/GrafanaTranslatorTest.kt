@@ -486,7 +486,7 @@ class GrafanaTranslatorTest {
     // --- Row panel handling ---
 
     @Test
-    fun `import skips row panels without warnings`() {
+    fun `import converts row panels to text widgets`() {
         val json = buildJsonObject {
             put("title", "Test")
             put(
@@ -508,9 +508,12 @@ class GrafanaTranslatorTest {
             )
         }
         val result = translator.import(json)
-        assertEquals(1, result.dashboard.widgets.size)
-        assertEquals("stat", result.dashboard.widgets[0].widgetType)
-        assertTrue(result.warnings.none { it.contains("row") })
+        assertEquals(2, result.dashboard.widgets.size)
+        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        assertEquals("Section Header", result.dashboard.widgets[0].title)
+        assertEquals(12, result.dashboard.widgets[0].gridW)
+        assertEquals(1, result.dashboard.widgets[0].gridH)
+        assertEquals("stat", result.dashboard.widgets[1].widgetType)
     }
 
     @Test
@@ -560,9 +563,11 @@ class GrafanaTranslatorTest {
             )
         }
         val result = translator.import(json)
-        assertEquals(1, result.dashboard.widgets.size)
-        assertEquals("timeseries", result.dashboard.widgets[0].widgetType)
-        assertEquals("Nested Panel", result.dashboard.widgets[0].title)
+        assertEquals(2, result.dashboard.widgets.size)
+        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        assertEquals("Collapsed Section", result.dashboard.widgets[0].title)
+        assertEquals("timeseries", result.dashboard.widgets[1].widgetType)
+        assertEquals("Nested Panel", result.dashboard.widgets[1].title)
     }
 
     @Test
@@ -802,32 +807,125 @@ class GrafanaTranslatorTest {
         }
         val result = translator.import(json)
 
-        // Row panels skipped, nested panels flattened
-        assertEquals(4, result.dashboard.widgets.size)
+        // Row panels imported as text, nested panels flattened
+        // 3 row text widgets + stat + timeseries + table (nested) + table = 7
+        assertEquals(7, result.dashboard.widgets.size)
 
-        // Panel 0 (stat) - should parse PromQL with range vector
-        assertEquals("stat", result.dashboard.widgets[0].widgetType)
-        assertEquals("Feedback Rate", result.dashboard.widgets[0].title)
-        assertEquals(0, result.dashboard.widgets[0].gridX)
-        assertEquals(3, result.dashboard.widgets[0].gridW) // 6/2 = 3
+        // Panel 0 (row text) - "Overview"
+        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        assertEquals("Overview", result.dashboard.widgets[0].title)
 
-        // Panel 1 (timeseries) - PromQL with range vector
-        assertEquals("timeseries", result.dashboard.widgets[1].widgetType)
-        assertEquals("Request Rate", result.dashboard.widgets[1].title)
+        // Panel 1 (stat) - should parse PromQL with range vector
+        assertEquals("stat", result.dashboard.widgets[1].widgetType)
+        assertEquals("Feedback Rate", result.dashboard.widgets[1].title)
+        assertEquals(0, result.dashboard.widgets[1].gridX)
+        assertEquals(3, result.dashboard.widgets[1].gridW) // 6/2 = 3
 
-        // Panel 2 (nested table from collapsed row) - SQL with custom table name preserved
-        assertEquals("table", result.dashboard.widgets[2].widgetType)
-        assertEquals("Slow Queries", result.dashboard.widgets[2].title)
-        assertEquals(result.dashboard.widgets[2].queryConfigs.first().rawQuery?.contains("duration_ms"), true)
-        assertEquals("app_queries", result.dashboard.widgets[2].queryConfigs.first().dataSource)
+        // Panel 2 (timeseries) - PromQL with range vector
+        assertEquals("timeseries", result.dashboard.widgets[2].widgetType)
+        assertEquals("Request Rate", result.dashboard.widgets[2].title)
 
-        // Panel 3 (table with SQL from custom app_sessions table - name preserved)
-        assertEquals("table", result.dashboard.widgets[3].widgetType)
-        assertEquals("app_sessions", result.dashboard.widgets[3].queryConfigs.first().dataSource)
+        // Panel 3 (row text) - "Database"
+        assertEquals("text", result.dashboard.widgets[3].widgetType)
+        assertEquals("Database", result.dashboard.widgets[3].title)
+
+        // Panel 4 (nested table from collapsed row) - SQL with custom table name preserved
+        assertEquals("table", result.dashboard.widgets[4].widgetType)
+        assertEquals("Slow Queries", result.dashboard.widgets[4].title)
+        assertEquals(result.dashboard.widgets[4].queryConfigs.first().rawQuery?.contains("duration_ms"), true)
+        assertEquals("app_queries", result.dashboard.widgets[4].queryConfigs.first().dataSource)
+
+        // Panel 5 (row text) - "Infrastructure"
+        assertEquals("text", result.dashboard.widgets[5].widgetType)
+        assertEquals("Infrastructure", result.dashboard.widgets[5].title)
+
+        // Panel 6 (table with SQL from custom app_sessions table - name preserved)
+        assertEquals("table", result.dashboard.widgets[6].widgetType)
+        assertEquals("app_sessions", result.dashboard.widgets[6].queryConfigs.first().dataSource)
 
         // Warnings: SQL queries stored as rawQuery, but no "unknown table" warnings
         assertTrue(result.warnings.any { it.contains("rawQuery") })
-        assertTrue(result.warnings.none { it.contains("row") })
         assertTrue(result.warnings.none { it.contains("unknown table") })
+    }
+
+    // --- Variable import ---
+
+    @Test
+    fun `import parses Grafana templating variables`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("panels", JsonArray(emptyList()))
+            put("templating", buildJsonObject {
+                put("list", buildJsonArray {
+                    add(buildJsonObject {
+                        put("name", "environment")
+                        put("label", "Environment")
+                        put("type", "custom")
+                        put("current", buildJsonObject { put("value", "production") })
+                        put("options", buildJsonArray {
+                            add(buildJsonObject { put("value", "production") })
+                            add(buildJsonObject { put("value", "staging") })
+                        })
+                    })
+                    add(buildJsonObject {
+                        put("name", "host")
+                        put("type", "query")
+                        put("query", "SELECT DISTINCT host FROM logs")
+                        put("datasource", "clickhouse")
+                    })
+                    add(buildJsonObject {
+                        put("name", "search")
+                        put("type", "textbox")
+                        put("current", buildJsonObject { put("value", "") })
+                    })
+                })
+            })
+        }
+        val result = translator.import(json)
+        assertEquals(3, result.variables.size)
+
+        assertEquals("environment", result.variables[0].name)
+        assertEquals("Environment", result.variables[0].label)
+        assertEquals("custom", result.variables[0].type)
+        assertEquals("production", result.variables[0].current)
+        assertEquals(listOf("production", "staging"), result.variables[0].options)
+
+        assertEquals("host", result.variables[1].name)
+        assertEquals("query", result.variables[1].type)
+        assertEquals("SELECT DISTINCT host FROM logs", result.variables[1].query)
+        assertEquals("clickhouse", result.variables[1].datasource)
+
+        assertEquals("search", result.variables[2].name)
+        assertEquals("textbox", result.variables[2].type)
+    }
+
+    @Test
+    fun `import returns empty variables when no templating`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("panels", JsonArray(emptyList()))
+        }
+        val result = translator.import(json)
+        assertTrue(result.variables.isEmpty())
+    }
+
+    @Test
+    fun `export includes variables in templating`() {
+        val dashboard = DashboardResponse(
+            id = 1, orgId = 1, title = "Test", createdBy = 1,
+            createdAt = "", updatedAt = "",
+            variables = listOf(
+                com.moneat.dashboards.models.DashboardVariable(
+                    name = "env", label = "Environment", type = "custom",
+                    current = "prod", options = listOf("prod", "staging")
+                )
+            )
+        )
+        val exported = translator.export(dashboard)
+        val templating = exported["templating"]!!.jsonObject
+        val list = templating["list"]!!.jsonArray
+        assertEquals(1, list.size)
+        assertEquals("env", list[0].jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("custom", list[0].jsonObject["type"]!!.jsonPrimitive.content)
     }
 }

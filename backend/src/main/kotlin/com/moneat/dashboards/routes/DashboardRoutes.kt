@@ -29,9 +29,12 @@ import com.moneat.dashboards.models.ExecuteQueryRequest
 import com.moneat.dashboards.models.ImportDashboardRequest
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
+import com.moneat.dashboards.models.CreateFolderRequest
 import com.moneat.dashboards.models.UpdateCustomDataSourceRequest
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
 import com.moneat.dashboards.models.UpdateDashboardRequest
+import com.moneat.dashboards.models.MoveToFolderRequest
+import com.moneat.dashboards.models.UpdateFolderRequest
 import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
@@ -123,7 +126,7 @@ fun Route.customDashboardRoutes(
                     ?: return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
 
                 val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                val dashboards = dashboardService.listDashboards(orgId, projectId)
+                val dashboards = dashboardService.listDashboards(orgId, projectId, userId)
                 call.respond(dashboards)
             }
 
@@ -139,6 +142,52 @@ fun Route.customDashboardRoutes(
                 call.respond(HttpStatusCode.Created, dashboard)
             }
 
+            // Folder management (must be before /{id} to avoid "folders" matching as id)
+            route("/folders") {
+                get {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val orgId = getOrgIdForUser(userId)
+                        ?: return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+                    val folders = dashboardService.listFolders(orgId)
+                    call.respond(folders)
+                }
+                post {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val orgId = getOrgIdForUser(userId)
+                        ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+                    val request = call.receive<CreateFolderRequest>()
+                    val folder = dashboardService.createFolder(orgId, request)
+                    call.respond(HttpStatusCode.Created, folder)
+                }
+                put("/{folderId}") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val orgId = getOrgIdForUser(userId)
+                        ?: return@put call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+                    val folderId = call.parameters["folderId"]?.toLongOrNull()
+                        ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
+                    val request = call.receive<UpdateFolderRequest>()
+                    val folder = dashboardService.updateFolder(folderId, orgId, request)
+                        ?: return@put call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+                    call.respond(folder)
+                }
+                delete("/{folderId}") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val orgId = getOrgIdForUser(userId)
+                        ?: return@delete call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+                    val folderId = call.parameters["folderId"]?.toLongOrNull()
+                        ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
+                    if (dashboardService.deleteFolder(folderId, orgId)) {
+                        call.respond(HttpStatusCode.NoContent, "")
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+                    }
+                }
+            }
+
             // Get dashboard with widgets
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
@@ -149,10 +198,42 @@ fun Route.customDashboardRoutes(
                 val id = call.parameters["id"]?.toLongOrNull()
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
 
-                val dashboard = dashboardService.getDashboard(id, orgId)
+                val dashboard = dashboardService.getDashboard(id, orgId, userId)
                     ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
 
                 call.respond(dashboard)
+            }
+
+            // Toggle favorite
+            post("/{id}/favorite") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+
+                val isFavorited = dashboardService.toggleFavorite(userId, id, orgId)
+                call.respond(HttpStatusCode.OK, mapOf("is_favorited" to isFavorited))
+            }
+
+            // Move dashboard to folder
+            put("/{id}/folder") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@put call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+
+                val request = call.receive<MoveToFolderRequest>()
+                if (dashboardService.moveDashboardToFolder(id, orgId, request.folderId)) {
+                    call.respond(HttpStatusCode.OK, mapOf("folder_id" to request.folderId))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+                }
             }
 
             // Update dashboard
@@ -220,11 +301,12 @@ fun Route.customDashboardRoutes(
                 }
 
                 val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
-                val effectiveQuery = if (request.timeRange != null) {
+                val withTimeRange = if (request.timeRange != null) {
                     request.queryConfig.copy(timeRange = request.timeRange)
                 } else {
                     request.queryConfig
                 }
+                val effectiveQuery = queryEngine.applyVariables(withTimeRange, request.variables)
 
                 try {
                     // Check if this is a custom data source query
@@ -305,11 +387,12 @@ fun Route.customDashboardRoutes(
 
                 for ((index, query) in request.queries.withIndex()) {
                     val refId = query.refId ?: ('A' + index).toString()
-                    val effectiveQuery = if (request.timeRange != null) {
+                    val withTimeRange = if (request.timeRange != null) {
                         query.copy(timeRange = request.timeRange)
                     } else {
                         query
                     }
+                    val effectiveQuery = queryEngine.applyVariables(withTimeRange, request.variables)
 
                     try {
                         if (queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
@@ -370,6 +453,7 @@ fun Route.customDashboardRoutes(
                         title = importResult.dashboard.title,
                         description = importResult.dashboard.description,
                         layoutType = importResult.dashboard.layoutType,
+                        variables = importResult.variables,
                         widgets = importResult.dashboard.widgets.map { w ->
                             CreateWidgetRequest(
                                 title = w.title,
@@ -385,7 +469,7 @@ fun Route.customDashboardRoutes(
                         }
                     )
                     val created = dashboardService.createDashboard(orgId, userId.toLong(), createRequest)
-                    call.respond(HttpStatusCode.Created, DashboardImportResult(created, importResult.warnings))
+                    call.respond(HttpStatusCode.Created, DashboardImportResult(created, importResult.warnings, importResult.variables))
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to import dashboard" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
@@ -505,6 +589,21 @@ fun Route.customDashboardRoutes(
             // Get default dashboard templates
             get("/templates") {
                 call.respond(dashboardService.getDefaultDashboardTemplates())
+            }
+        }
+    }
+
+    // Global search (dashboards, projects)
+    route("/v1/search") {
+        authenticate("auth-jwt") {
+            get {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+                val query = call.request.queryParameters["q"]?.trim().orEmpty()
+                val result = dashboardService.search(orgId, userId, query)
+                call.respond(result)
             }
         }
     }

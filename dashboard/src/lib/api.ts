@@ -1929,6 +1929,17 @@ interface AnalyticsRealtimeApiResponse {
 
 // Custom Dashboards types
 
+interface DashboardVariable {
+  name: string
+  label?: string | null
+  type: string
+  query?: string | null
+  default_value?: string | null
+  current?: string | null
+  options: string[]
+  datasource?: string | null
+}
+
 interface MetricDef {
   function: string
   field?: string | null
@@ -2039,23 +2050,50 @@ interface CustomDashboard {
   id: number
   org_id: number
   project_id?: number | null
+  folder_id?: number | null
   title: string
   description?: string | null
   layout_type: string
   is_default: boolean
+  is_favorited?: boolean
+  variables?: DashboardVariable[]
   created_by: number
   created_at: string
   updated_at: string
   widgets: DashboardWidget[]
 }
 
+interface DashboardFolder {
+  id: number
+  org_id: number
+  name: string
+  color?: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 interface CreateDashboardRequest {
   title: string
   description?: string | null
   project_id?: number | null
+  folder_id?: number | null
   layout_type?: string
   is_default?: boolean
+  variables?: DashboardVariable[]
   widgets: CreateWidgetRequest[]
+}
+
+interface CreateFolderRequest {
+  name: string
+  color?: string | null
+  sort_order?: number
+}
+
+interface UpdateFolderRequest {
+  name?: string | null
+  color?: string | null
+  sort_order?: number | null
 }
 
 interface CreateWidgetRequest {
@@ -2074,19 +2112,33 @@ interface CreateWidgetRequest {
 interface UpdateDashboardRequest {
   title?: string | null
   description?: string | null
+  folder_id?: number | null
   layout_type?: string | null
   is_default?: boolean | null
+  variables?: DashboardVariable[] | null
   widgets?: CreateWidgetRequest[] | null
+}
+
+interface SearchResponse {
+  dashboards: CustomDashboard[]
+  projects: SearchProjectResponse[]
+}
+
+interface SearchProjectResponse {
+  id: number
+  name: string
 }
 
 interface ExecuteQueryRequest {
   query_config: QueryDsl
   time_range?: TimeRangeDef | null
+  variables?: Record<string, string>
 }
 
 interface DashboardImportResult {
   dashboard: CustomDashboard
   warnings: string[]
+  variables?: DashboardVariable[]
 }
 
 interface DataSourceField {
@@ -4602,19 +4654,62 @@ class ApiClient {
     await this.request<void>(`${API_BASE}/dashboards/${id}`, { method: 'DELETE' })
   }
 
-  async executeWidgetQuery(dashboardId: number, queryConfig: QueryDsl, projectId: number, timeRange?: TimeRangeDef): Promise<Record<string, unknown>[]> {
-    return this.request<Record<string, unknown>[]>(`${API_BASE}/dashboards/${dashboardId}/query?projectId=${projectId}`, {
+  async toggleDashboardFavorite(id: number): Promise<{ is_favorited: boolean }> {
+    return this.request<{ is_favorited: boolean }>(`${API_BASE}/dashboards/${id}/favorite`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query_config: queryConfig, time_range: timeRange }),
     })
   }
 
-  async executeBatchQuery(dashboardId: number, queries: QueryDsl[], projectId: number, timeRange?: TimeRangeDef): Promise<BatchQueryResult> {
+  async moveDashboardToFolder(id: number, folderId: number | null): Promise<{ folder_id: number | null }> {
+    return this.request<{ folder_id: number | null }>(`${API_BASE}/dashboards/${id}/folder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder_id: folderId }),
+    })
+  }
+
+  async getDashboardFolders(): Promise<DashboardFolder[]> {
+    return this.request<DashboardFolder[]>(`${API_BASE}/dashboards/folders`)
+  }
+
+  async createDashboardFolder(data: CreateFolderRequest): Promise<DashboardFolder> {
+    return this.request<DashboardFolder>(`${API_BASE}/dashboards/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateDashboardFolder(id: number, data: UpdateFolderRequest): Promise<DashboardFolder> {
+    return this.request<DashboardFolder>(`${API_BASE}/dashboards/folders/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteDashboardFolder(id: number): Promise<void> {
+    await this.request<void>(`${API_BASE}/dashboards/folders/${id}`, { method: 'DELETE' })
+  }
+
+  async search(query: string): Promise<SearchResponse> {
+    const qs = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ''
+    return this.request<SearchResponse>(`${API_BASE}/search${qs}`)
+  }
+
+  async executeWidgetQuery(dashboardId: number, queryConfig: QueryDsl, projectId: number, timeRange?: TimeRangeDef, variables?: Record<string, string>): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>(`${API_BASE}/dashboards/${dashboardId}/query?projectId=${projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query_config: queryConfig, time_range: timeRange, variables }),
+    })
+  }
+
+  async executeBatchQuery(dashboardId: number, queries: QueryDsl[], projectId: number, timeRange?: TimeRangeDef, variables?: Record<string, string>): Promise<BatchQueryResult> {
     return this.request<BatchQueryResult>(`${API_BASE}/dashboards/${dashboardId}/query/batch?projectId=${projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ queries, time_range: timeRange }),
+      body: JSON.stringify({ queries, time_range: timeRange, variables }),
     })
   }
 
@@ -4873,6 +4968,7 @@ export type {
   AnalyticsRealtimeResponse,
   AnalyticsFunnelStep,
   AnalyticsFunnelResponse,
+  DashboardVariable,
   MetricDef,
   GroupByDef,
   FilterDef,
@@ -4885,11 +4981,16 @@ export type {
   CreateDashboardAlertRequest,
   UpdateDashboardAlertRequest,
   CustomDashboard,
+  DashboardFolder,
   CreateDashboardRequest,
+  CreateFolderRequest,
+  UpdateFolderRequest,
   CreateWidgetRequest,
   UpdateDashboardRequest,
   ExecuteQueryRequest,
   DashboardImportResult,
+  SearchResponse,
+  SearchProjectResponse,
   DataSourceField,
   DataSourceInfo,
   CustomDataSourceResponse,

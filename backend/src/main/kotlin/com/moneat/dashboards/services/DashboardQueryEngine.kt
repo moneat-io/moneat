@@ -99,6 +99,35 @@ class DashboardQueryEngine {
         }
     }
 
+    /**
+     * Substitutes $varName and ${varName} patterns in a QueryDsl with sanitized variable values.
+     */
+    fun applyVariables(dsl: QueryDsl, variables: Map<String, String>): QueryDsl {
+        if (variables.isEmpty()) return dsl
+
+        fun substituteVars(input: String?): String? {
+            if (input == null) return null
+            var result = input
+            for ((name, value) in variables) {
+                val escaped = ClickHouseSqlUtils.escapeSql(value)
+                result = result!!
+                    .replace("\${$name}", escaped)
+                    .replace("\$$name", escaped)
+            }
+            return result
+        }
+
+        return dsl.copy(
+            filters = dsl.filters.map { f ->
+                f.copy(
+                    value = substituteVars(f.value),
+                    values = f.values?.map { substituteVars(it) ?: it }
+                )
+            },
+            rawQuery = substituteVars(dsl.rawQuery)
+        )
+    }
+
     fun buildQuery(
         dsl: QueryDsl,
         projectId: Long,

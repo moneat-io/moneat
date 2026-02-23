@@ -19,6 +19,7 @@ package com.moneat.dashboards.translation
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.DashboardImportResult
 import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.DashboardVariable
 import com.moneat.dashboards.models.DataSource
 import com.moneat.dashboards.models.FilterDef
 import com.moneat.dashboards.models.FilterOp
@@ -76,12 +77,13 @@ class GrafanaTranslator : DashboardTranslator {
 
         val panels = json["panels"]?.jsonArray ?: JsonArray(emptyList())
 
-        // Flatten: row panels may contain nested panels
+        // Flatten: row panels may contain nested panels; import rows as text widgets
         val allPanels = mutableListOf<JsonObject>()
         panels.forEach { element ->
             val panel = element.jsonObject
             val type = panel["type"]?.jsonPrimitive?.contentOrNull
             if (type == "row") {
+                allPanels.add(panel)
                 // Extract nested panels from collapsed rows
                 panel["panels"]?.jsonArray?.forEach { nested ->
                     allPanels.add(nested.jsonObject)
@@ -112,7 +114,9 @@ class GrafanaTranslator : DashboardTranslator {
             widgets = widgets
         )
 
-        return DashboardImportResult(dashboard, warnings)
+        val variables = parseGrafanaVariables(json)
+
+        return DashboardImportResult(dashboard, warnings, variables)
     }
 
     private fun importPanel(
@@ -122,9 +126,25 @@ class GrafanaTranslator : DashboardTranslator {
     ): WidgetResponse? {
         val grafanaType = panelJson["type"]?.jsonPrimitive?.contentOrNull ?: "timeseries"
 
-        // Skip row panels — they're layout separators, not actual widgets
+        // Row panels become full-width text section headers
         if (grafanaType == "row") {
-            return null
+            val rowTitle = panelJson["title"]?.jsonPrimitive?.contentOrNull ?: "Section"
+            val gridPos = panelJson["gridPos"]?.jsonObject
+            val grafanaY = gridPos?.get("y")?.jsonPrimitive?.intOrNull ?: 0
+            val gridY = (grafanaY + 2) / 3
+            return WidgetResponse(
+                id = 0,
+                dashboardId = 0,
+                title = rowTitle,
+                widgetType = "text",
+                gridX = 0,
+                gridY = gridY,
+                gridW = 12,
+                gridH = 1,
+                queryConfigs = emptyList(),
+                displayConfig = mapOf("content" to "## $rowTitle"),
+                sortOrder = index
+            )
         }
 
         val moneatType = widgetTypeMap[grafanaType]
@@ -361,6 +381,59 @@ class GrafanaTranslator : DashboardTranslator {
         else -> null
     }
 
+    internal fun parseGrafanaVariables(json: JsonObject): List<DashboardVariable> {
+        val templating = json["templating"]?.jsonObject ?: return emptyList()
+        val list = templating["list"]?.jsonArray ?: return emptyList()
+
+        return list.mapNotNull { element ->
+            try {
+                val varObj = element.jsonObject
+                val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val type = varObj["type"]?.jsonPrimitive?.contentOrNull ?: "custom"
+                val label = varObj["label"]?.jsonPrimitive?.contentOrNull
+                val query = varObj["query"]?.let { q ->
+                    when (q) {
+                        is JsonPrimitive -> q.contentOrNull
+                        is JsonObject -> q["query"]?.jsonPrimitive?.contentOrNull
+                        else -> null
+                    }
+                }
+                val current = varObj["current"]?.jsonObject?.get("value")?.let { v ->
+                    when (v) {
+                        is JsonPrimitive -> v.contentOrNull
+                        else -> null
+                    }
+                }
+                val options = varObj["options"]?.jsonArray?.mapNotNull { opt ->
+                    opt.jsonObject["value"]?.jsonPrimitive?.contentOrNull
+                } ?: emptyList()
+
+                val datasource = varObj["datasource"]?.let { ds ->
+                    when (ds) {
+                        is JsonPrimitive -> ds.contentOrNull
+                        is JsonObject -> ds["type"]?.jsonPrimitive?.contentOrNull
+                        else -> null
+                    }
+                }
+
+                val supportedTypes = setOf("query", "custom", "textbox", "constant")
+                DashboardVariable(
+                    name = name,
+                    label = label,
+                    type = if (type in supportedTypes) type else "custom",
+                    query = query,
+                    defaultValue = current,
+                    current = current,
+                    options = options.filter { it != "\$__all" },
+                    datasource = datasource
+                )
+            } catch (e: Exception) {
+                logger.warn { "Failed to parse Grafana variable: ${e.message}" }
+                null
+            }
+        }
+    }
+
     override fun export(dashboard: DashboardResponse): JsonObject {
         val panels = dashboard.widgets.mapIndexed { index, widget ->
             buildJsonObject {
@@ -407,6 +480,34 @@ class GrafanaTranslator : DashboardTranslator {
             put("title", dashboard.title)
             dashboard.description?.let { put("description", it) }
             put("panels", JsonArray(panels))
+            if (dashboard.variables.isNotEmpty()) {
+                put("templating", buildJsonObject {
+                    put("list", buildJsonArray {
+                        dashboard.variables.forEach { v ->
+                            add(buildJsonObject {
+                                put("name", v.name)
+                                v.label?.let { put("label", it) }
+                                put("type", v.type)
+                                v.query?.let { put("query", it) }
+                                v.current?.let { cur ->
+                                    put("current", buildJsonObject {
+                                        put("value", cur)
+                                        put("text", cur)
+                                    })
+                                }
+                                put("options", buildJsonArray {
+                                    v.options.forEach { opt ->
+                                        add(buildJsonObject {
+                                            put("value", opt)
+                                            put("text", opt)
+                                        })
+                                    }
+                                })
+                            })
+                        }
+                    })
+                })
+            }
             put("schemaVersion", 39)
             put("version", 1)
             put("timezone", "browser")

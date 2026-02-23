@@ -15,30 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Outlet} from '@tanstack/react-router'
-import {LayoutDashboard} from 'lucide-react'
 
 export const Route = createFileRoute('/dashboards')({
   component: DashboardsLayout,
 })
 
 function DashboardsLayout() {
-  return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600">
-            <LayoutDashboard className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold leading-tight">Dashboards</h1>
-            <p className="text-muted-foreground text-xs">
-              Build custom dashboards with drag-and-drop widgets
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Outlet />
-    </div>
-  )
+  return <Outlet />
 }

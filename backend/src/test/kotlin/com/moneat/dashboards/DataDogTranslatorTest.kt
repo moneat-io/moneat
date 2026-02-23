@@ -427,4 +427,71 @@ class DataDogTranslatorTest {
         val exported = translator.export(imported.dashboard)
         assertEquals("Roundtrip Test", exported["title"]?.jsonPrimitive?.content)
     }
+
+    // --- Variable import ---
+
+    @Test
+    fun `import parses DataDog template variables`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("widgets", JsonArray(emptyList()))
+            put("template_variables", buildJsonArray {
+                add(buildJsonObject {
+                    put("name", "environment")
+                    put("prefix", "env")
+                    put("default", "production")
+                    put("available_values", buildJsonArray {
+                        add(kotlinx.serialization.json.JsonPrimitive("production"))
+                        add(kotlinx.serialization.json.JsonPrimitive("staging"))
+                    })
+                })
+                add(buildJsonObject {
+                    put("name", "host")
+                    put("prefix", "host")
+                    put("default", "*")
+                })
+            })
+        }
+        val result = translator.import(json)
+        assertEquals(2, result.variables.size)
+
+        assertEquals("environment", result.variables[0].name)
+        assertEquals("env:environment", result.variables[0].label)
+        assertEquals("custom", result.variables[0].type)
+        assertEquals("production", result.variables[0].defaultValue)
+        assertEquals(listOf("production", "staging"), result.variables[0].options)
+
+        assertEquals("host", result.variables[1].name)
+        assertEquals("textbox", result.variables[1].type)
+        assertEquals("*", result.variables[1].defaultValue)
+    }
+
+    @Test
+    fun `import returns empty variables when no template_variables`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("widgets", JsonArray(emptyList()))
+        }
+        val result = translator.import(json)
+        assertTrue(result.variables.isEmpty())
+    }
+
+    @Test
+    fun `export includes template_variables`() {
+        val dashboard = com.moneat.dashboards.models.DashboardResponse(
+            id = 1, orgId = 1, title = "Test", createdBy = 1,
+            createdAt = "", updatedAt = "",
+            variables = listOf(
+                com.moneat.dashboards.models.DashboardVariable(
+                    name = "env", label = "host:env", type = "custom",
+                    defaultValue = "prod", options = listOf("prod", "staging")
+                )
+            )
+        )
+        val exported = translator.export(dashboard)
+        val vars = exported["template_variables"]!!.jsonArray
+        assertEquals(1, vars.size)
+        assertEquals("env", vars[0].jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("host", vars[0].jsonObject["prefix"]!!.jsonPrimitive.content)
+    }
 }

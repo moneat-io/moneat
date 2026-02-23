@@ -16,11 +16,12 @@
 
 package com.moneat.dashboards.models
 
+import com.moneat.shared.models.Users
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
+import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.postgresql.util.PGobject
 
@@ -44,21 +45,57 @@ class JsonbColumnType : ColumnType<String>() {
 
 fun Table.jsonb(name: String): Column<String> = registerColumn(name, JsonbColumnType())
 
+// Dashboard variable model
+
+@Serializable
+data class DashboardVariable(
+    val name: String,
+    val label: String? = null,
+    val type: String = "custom",
+    val query: String? = null,
+    @SerialName("default_value") val defaultValue: String? = null,
+    val current: String? = null,
+    val options: List<String> = emptyList(),
+    val datasource: String? = null
+)
+
 // Exposed table definitions
+
+object DashboardFolders : Table("dashboard_folders") {
+    val id = long("id").autoIncrement()
+    val orgId = long("org_id")
+    val name = varchar("name", 100)
+    val color = varchar("color", 7).nullable()
+    val sortOrder = integer("sort_order").default(0)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
 
 object Dashboards : Table("dashboards") {
     val id = long("id").autoIncrement()
     val orgId = long("org_id")
     val projectId = long("project_id").nullable()
+    val folderId = long("folder_id").references(DashboardFolders.id).nullable()
     val title = varchar("title", 255)
     val description = text("description").nullable()
     val layoutType = varchar("layout_type", 20).default("grid")
     val isDefault = bool("is_default").default(false)
+    val variables = jsonb("variables").default("[]")
     val createdBy = long("created_by")
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 
     override val primaryKey = PrimaryKey(id)
+}
+
+object DashboardFavorites : Table("dashboard_favorites") {
+    val userId = integer("user_id").references(Users.id)
+    val dashboardId = long("dashboard_id").references(Dashboards.id)
+    val createdAt = timestamp("created_at")
+
+    override val primaryKey = PrimaryKey(userId, dashboardId)
 }
 
 object DashboardWidgets : Table("dashboard_widgets") {
@@ -87,10 +124,13 @@ data class DashboardResponse(
     val id: Long,
     @SerialName("org_id") val orgId: Long,
     @SerialName("project_id") val projectId: Long? = null,
+    @SerialName("folder_id") val folderId: Long? = null,
     val title: String,
     val description: String? = null,
     @SerialName("layout_type") val layoutType: String = "grid",
     @SerialName("is_default") val isDefault: Boolean = false,
+    @SerialName("is_favorited") val isFavorited: Boolean = false,
+    val variables: List<DashboardVariable> = emptyList(),
     @SerialName("created_by") val createdBy: Long,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
@@ -117,8 +157,10 @@ data class CreateDashboardRequest(
     val title: String,
     val description: String? = null,
     @SerialName("project_id") val projectId: Long? = null,
+    @SerialName("folder_id") val folderId: Long? = null,
     @SerialName("layout_type") val layoutType: String = "grid",
     @SerialName("is_default") val isDefault: Boolean = false,
+    val variables: List<DashboardVariable> = emptyList(),
     val widgets: List<CreateWidgetRequest> = emptyList()
 )
 
@@ -126,9 +168,53 @@ data class CreateDashboardRequest(
 data class UpdateDashboardRequest(
     val title: String? = null,
     val description: String? = null,
+    @SerialName("folder_id") val folderId: Long? = null,
     @SerialName("layout_type") val layoutType: String? = null,
     @SerialName("is_default") val isDefault: Boolean? = null,
+    val variables: List<DashboardVariable>? = null,
     val widgets: List<UpdateWidgetRequest>? = null
+)
+
+@Serializable
+data class FolderResponse(
+    val id: Long,
+    @SerialName("org_id") val orgId: Long,
+    val name: String,
+    val color: String? = null,
+    @SerialName("sort_order") val sortOrder: Int = 0,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class CreateFolderRequest(
+    val name: String,
+    val color: String? = null,
+    @SerialName("sort_order") val sortOrder: Int = 0
+)
+
+@Serializable
+data class UpdateFolderRequest(
+    val name: String? = null,
+    val color: String? = null,
+    @SerialName("sort_order") val sortOrder: Int? = null
+)
+
+@Serializable
+data class SearchResponse(
+    val dashboards: List<DashboardResponse> = emptyList(),
+    val projects: List<SearchProjectResponse> = emptyList()
+)
+
+@Serializable
+data class SearchProjectResponse(
+    val id: Long,
+    val name: String
+)
+
+@Serializable
+data class MoveToFolderRequest(
+    @SerialName("folder_id") val folderId: Long? = null
 )
 
 @Serializable
@@ -161,13 +247,15 @@ data class UpdateWidgetRequest(
 @Serializable
 data class ExecuteQueryRequest(
     @SerialName("query_config") val queryConfig: QueryDsl,
-    @SerialName("time_range") val timeRange: TimeRangeDef? = null
+    @SerialName("time_range") val timeRange: TimeRangeDef? = null,
+    val variables: Map<String, String> = emptyMap()
 )
 
 @Serializable
 data class ExecuteBatchQueryRequest(
     val queries: List<QueryDsl>,
-    @SerialName("time_range") val timeRange: TimeRangeDef? = null
+    @SerialName("time_range") val timeRange: TimeRangeDef? = null,
+    val variables: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -184,5 +272,6 @@ data class ImportDashboardRequest(
 @Serializable
 data class DashboardImportResult(
     val dashboard: DashboardResponse,
-    val warnings: List<String> = emptyList()
+    val warnings: List<String> = emptyList(),
+    val variables: List<DashboardVariable> = emptyList()
 )

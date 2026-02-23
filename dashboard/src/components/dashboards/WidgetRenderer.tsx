@@ -108,6 +108,7 @@ interface WidgetRendererProps {
   projectId?: number
   timeRange: TimeRangeDef
   autoRefresh: boolean
+  variables?: Record<string, string>
 }
 
 export const WidgetRenderer = memo(function WidgetRenderer({
@@ -116,16 +117,17 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   projectId,
   timeRange,
   autoRefresh,
+  variables,
 }: WidgetRendererProps) {
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
 
   const {data, isLoading, error} = useQuery({
-    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queries.length],
+    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queries.length, variables],
     queryFn: async () => {
       if (!projectId) return []
       if (isBatch) {
-        const result = await api.executeBatchQuery(dashboardId, queries, projectId, timeRange)
+        const result = await api.executeBatchQuery(dashboardId, queries, projectId, timeRange, variables)
         // Merge batch results: prefix series keys with refId
         const merged: Record<string, unknown>[] = []
         for (const [refId, rows] of Object.entries(result.results)) {
@@ -148,7 +150,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
         return merged
       }
       return queries[0]
-        ? api.executeWidgetQuery(dashboardId, queries[0], projectId, timeRange)
+        ? api.executeWidgetQuery(dashboardId, queries[0], projectId, timeRange, variables)
         : []
     },
     enabled: !!projectId && widget.widget_type !== 'text' && queries.length > 0,

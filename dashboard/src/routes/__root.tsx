@@ -18,6 +18,9 @@ import {createRootRoute, Outlet, useRouterState, useNavigate} from '@tanstack/re
 import {useEffect, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
+import {CommandPalette} from '../components/CommandPalette'
+import {AppTopBar} from '../components/AppTopBar'
+import {CommandPaletteProvider} from '../contexts/command-palette-context'
 import {Toaster} from '../components/ui/toaster'
 import {ChatWidget} from '../components/ai-chat/ChatWidget'
 import {api} from '../lib/api'
@@ -215,20 +218,33 @@ function RootComponent() {
   return (
     <div className="min-h-screen bg-background">
       {showSidebar && (
-        <Sidebar 
-          isExpanded={isSidebarExpanded} 
-          onExpandedChange={setIsSidebarExpanded}
-        />
+        <CommandPaletteProvider>
+          <Sidebar
+            isExpanded={isSidebarExpanded}
+            onExpandedChange={setIsSidebarExpanded}
+          />
+          <div
+            className="transition-[margin-left] duration-300"
+            style={{ marginLeft: sidebarWidth }}
+          >
+            <DemoBanner />
+            <AppTopBar />
+            <Outlet />
+          </div>
+          <CommandPalette />
+          {user?.isAdmin && <ChatWidget />}
+        </CommandPaletteProvider>
       )}
-      <div
-        className="transition-[margin-left] duration-300"
-        style={{ marginLeft: showSidebar ? sidebarWidth : 0 }}
-      >
-        <DemoBanner />
-        <Outlet />
-      </div>
+      {!showSidebar && (
+        <div
+          className="transition-[margin-left] duration-300"
+          style={{ marginLeft: 0 }}
+        >
+          <DemoBanner />
+          <Outlet />
+        </div>
+      )}
       <Toaster />
-      {showSidebar && user?.isAdmin && <ChatWidget />}
     </div>
   )
 }

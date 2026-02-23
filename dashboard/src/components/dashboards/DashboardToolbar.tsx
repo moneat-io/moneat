@@ -16,7 +16,7 @@
 
 import {useState} from 'react'
 import {Button} from '@/components/ui/button'
-import type {TimeRangeDef} from '@/lib/api'
+import type {DashboardVariable, TimeRangeDef} from '@/lib/api'
 import {Pencil, Plus, Save, Download, Clock, RefreshCw, ArrowLeft} from 'lucide-react'
 import {Link} from '@tanstack/react-router'
 
@@ -32,6 +32,9 @@ interface DashboardToolbarProps {
   onTimeRangeChange: (range: TimeRangeDef) => void
   autoRefresh: boolean
   onAutoRefreshChange: (enabled: boolean) => void
+  variables?: DashboardVariable[]
+  variableValues: Record<string, string>
+  onVariableChange: (name: string, value: string) => void
 }
 
 const TIME_RANGE_PRESETS = [
@@ -55,6 +58,9 @@ export function DashboardToolbar({
   onTimeRangeChange,
   autoRefresh,
   onAutoRefreshChange,
+  variables,
+  variableValues,
+  onVariableChange,
 }: DashboardToolbarProps) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState(title)
@@ -94,6 +100,43 @@ export function DashboardToolbar({
           </h2>
         )}
       </div>
+
+      {/* Variable selectors */}
+      {variables && variables.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {variables.map((v) => (
+            <div key={v.name} className="flex items-center gap-1">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">
+                {v.label || v.name}:
+              </label>
+              {v.type === 'textbox' ? (
+                <input
+                  className="h-7 px-2 text-xs border rounded-md bg-background w-24"
+                  value={variableValues[v.name] ?? v.current ?? v.default_value ?? ''}
+                  onChange={(e) => onVariableChange(v.name, e.target.value)}
+                  placeholder={v.name}
+                />
+              ) : (
+                <select
+                  className="h-7 px-2 text-xs border rounded-md bg-background"
+                  value={variableValues[v.name] ?? v.current ?? v.default_value ?? ''}
+                  onChange={(e) => onVariableChange(v.name, e.target.value)}
+                >
+                  {v.options.length > 0 ? (
+                    v.options.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))
+                  ) : (
+                    <option value={variableValues[v.name] ?? v.current ?? ''}>
+                      {variableValues[v.name] ?? v.current ?? '(none)'}
+                    </option>
+                  )}
+                </select>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         {/* Time range selector */}
