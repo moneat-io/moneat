@@ -27,11 +27,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.engine.cio.endpoint
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
-import jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -294,7 +294,7 @@ class CustomDataSourceExecutor {
         return try {
             val baseUrl = buildPrometheusUrl(host, port)
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
+                apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                 parameter("limit", 20)
             }
             if (response.status.isSuccess()) {
@@ -329,7 +329,7 @@ class CustomDataSourceExecutor {
                 val step = resolvePrometheusStep(toSec - fromSec)
 
                 httpClient.get("$baseUrl/api/v1/query_range") {
-                    credentials.apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
+                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                     parameter("query", query)
                     parameter("start", fromSec)
                     parameter("end", toSec)
@@ -337,7 +337,7 @@ class CustomDataSourceExecutor {
                 }
             } else {
                 httpClient.get("$baseUrl/api/v1/query") {
-                    credentials.apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
+                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                     parameter("query", query)
                 }
             }
@@ -362,7 +362,7 @@ class CustomDataSourceExecutor {
         val baseUrl = buildPrometheusUrl(host, port)
         return try {
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                credentials.apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
+                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject

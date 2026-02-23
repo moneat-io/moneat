@@ -16,8 +16,7 @@
 
 package com.moneat.dashboards.services
 
-import com.moneat.dashboards.models.CreateWidgetRequest
-import com.moneat.dashboards.models.UpdateDashboardRequest
+import com.moneat.dashboards.models.*
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
