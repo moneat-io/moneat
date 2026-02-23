@@ -115,11 +115,13 @@ class GrafanaTranslator : DashboardTranslator {
         val panelTitle = panelJson["title"]?.jsonPrimitive?.contentOrNull
 
         // Grafana uses 24-col grid, Moneat uses 12-col
+        // Grafana height units are also larger (1 = ~30px), scale down by ~3
         val gridPos = panelJson["gridPos"]?.jsonObject
         val gridX = (gridPos?.get("x")?.jsonPrimitive?.intOrNull ?: 0) / 2
         val gridY = gridPos?.get("y")?.jsonPrimitive?.intOrNull ?: 0
         val gridW = ((gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: 12) + 1) / 2
-        val gridH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: 4
+        val grafanaH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: 4
+        val gridH = (grafanaH + 2) / 3  // Scale down: 9 → 3, 12 → 4, 6 → 2
 
         val queryConfig = parseGrafanaTargets(panelJson, warnings, index)
 

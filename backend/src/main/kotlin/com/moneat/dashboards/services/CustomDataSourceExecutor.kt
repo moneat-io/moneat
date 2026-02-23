@@ -330,9 +330,8 @@ class CustomDataSourceExecutor {
                     for (point in values) {
                         val arr = point.jsonArray
                         val row = mutableMapOf<String, JsonElement>()
-                        row["timestamp"] = arr[0] // epoch seconds
-                        row["value"] = arr[1]
-                        row["metric"] = JsonPrimitive(metricName)
+                        row["time_bucket"] = arr[0] // epoch seconds - use time_bucket for chart compatibility
+                        row[metricName] = arr[1]  // use metric name as field name for chart series
                         // Include label dimensions
                         for ((k, v) in metric) {
                             if (k != "__name__") row[k] = v
@@ -345,9 +344,8 @@ class CustomDataSourceExecutor {
                     val value = result.jsonObject["value"]?.jsonArray
                     if (value != null) {
                         val row = mutableMapOf<String, JsonElement>()
-                        row["timestamp"] = value[0]
-                        row["value"] = value[1]
-                        row["metric"] = JsonPrimitive(metricName)
+                        row["time_bucket"] = value[0]
+                        row[metricName] = value[1]  // use metric name as field name
                         for ((k, v) in metric) {
                             if (k != "__name__") row[k] = v
                         }

@@ -143,7 +143,10 @@ class GrafanaTranslatorTest {
                     put("type", "stat")
                     put("targets", JsonArray(emptyList()))
                     put("gridPos", buildJsonObject {
-                        put("x", 12); put("y", 0); put("w", 12); put("h", 6)
+                        put("x", 12)
+                        put("y", 0)
+                        put("w", 12)
+                        put("h", 9)
                     })
                 })
             })
@@ -153,7 +156,7 @@ class GrafanaTranslatorTest {
         assertEquals(6, w.gridX)  // 12/2 = 6
         assertEquals(6, w.gridW)  // (12+1)/2 = 6
         assertEquals(0, w.gridY)
-        assertEquals(6, w.gridH)
+        assertEquals(3, w.gridH)  // (9+2)/3 = 3 (height scaled down)
     }
 
     @Test
