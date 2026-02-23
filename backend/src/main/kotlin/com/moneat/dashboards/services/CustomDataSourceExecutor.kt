@@ -58,18 +58,11 @@ class CustomDataSourceExecutor {
                 username = request.username,
                 password = request.password,
             )
-            CustomDataSourceType.PROMETHEUS -> {
-                val defaultPort = when {
-                    request.host.startsWith("https://") -> 443
-                    request.host.startsWith("http://") && request.port == null -> 9090
-                    else -> 9090
-                }
-                testPrometheusConnection(
-                    host = request.host,
-                    port = request.port ?: defaultPort,
-                    apiKey = request.apiKey,
-                )
-            }
+            CustomDataSourceType.PROMETHEUS -> testPrometheusConnection(
+                host = request.host,
+                port = request.port,
+                apiKey = request.apiKey,
+            )
         }
     }
 
@@ -80,7 +73,7 @@ class CustomDataSourceExecutor {
         sourceId: Long,
         sourceType: CustomDataSourceType,
         host: String,
-        port: Int,
+        port: Int?,
         databaseName: String?,
         credentials: DataSourceCredentials,
         query: String,
@@ -89,7 +82,7 @@ class CustomDataSourceExecutor {
     ): List<Map<String, JsonElement>> {
         return when (sourceType) {
             CustomDataSourceType.POSTGRESQL -> executePostgresQuery(
-                sourceId, host, port, databaseName ?: "postgres", credentials, query, limit
+                sourceId, host, port ?: 5432, databaseName ?: "postgres", credentials, query, limit
             )
             CustomDataSourceType.PROMETHEUS -> executePrometheusQuery(
                 host, port, credentials, query, timeRange, limit
@@ -103,12 +96,12 @@ class CustomDataSourceExecutor {
     suspend fun getSchema(
         sourceType: CustomDataSourceType,
         host: String,
-        port: Int,
+        port: Int?,
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         return when (sourceType) {
-            CustomDataSourceType.POSTGRESQL -> getPostgresSchema(host, port, databaseName ?: "postgres", credentials)
+            CustomDataSourceType.POSTGRESQL -> getPostgresSchema(host, port ?: 5432, databaseName ?: "postgres", credentials)
             CustomDataSourceType.PROMETHEUS -> getPrometheusMetrics(host, port, credentials)
         }
     }
@@ -239,7 +232,7 @@ class CustomDataSourceExecutor {
     // --- Prometheus ---
 
     private suspend fun testPrometheusConnection(
-        host: String, port: Int, apiKey: String?,
+        host: String, port: Int?, apiKey: String?,
     ): TestConnectionResult {
         return try {
             val baseUrl = buildPrometheusUrl(host, port)
@@ -261,7 +254,7 @@ class CustomDataSourceExecutor {
     }
 
     private suspend fun executePrometheusQuery(
-        host: String, port: Int, credentials: DataSourceCredentials,
+        host: String, port: Int?, credentials: DataSourceCredentials,
         query: String, timeRange: TimeRangeDef?, limit: Int,
     ): List<Map<String, JsonElement>> {
         val baseUrl = buildPrometheusUrl(host, port)
@@ -301,7 +294,7 @@ class CustomDataSourceExecutor {
     }
 
     private suspend fun getPrometheusMetrics(
-        host: String, port: Int, credentials: DataSourceCredentials,
+        host: String, port: Int?, credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val baseUrl = buildPrometheusUrl(host, port)
         return try {
@@ -367,17 +360,18 @@ class CustomDataSourceExecutor {
         return rows
     }
 
-    private fun buildPrometheusUrl(host: String, port: Int): String {
+    private fun buildPrometheusUrl(host: String, port: Int?): String {
         val scheme = when {
             host.startsWith("https://") -> "https://"
             host.startsWith("http://") -> "http://"
             else -> "http://"
         }
         val cleanHost = host.removePrefix("https://").removePrefix("http://").trimEnd('/')
-        // Don't append port if host already contains one, or if using default HTTP/HTTPS ports
+        // Don't append port if: none specified, host already has one, or it's the default for the scheme
         val hostHasPort = cleanHost.contains(":")
+        if (port == null || hostHasPort) return "${scheme}${cleanHost}"
         val isDefaultPort = (scheme == "http://" && port == 80) || (scheme == "https://" && port == 443)
-        return if (hostHasPort || isDefaultPort) {
+        return if (isDefaultPort) {
             "${scheme}${cleanHost}"
         } else {
             "${scheme}${cleanHost}:${port}"

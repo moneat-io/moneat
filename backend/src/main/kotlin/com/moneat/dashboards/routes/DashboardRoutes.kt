@@ -60,16 +60,6 @@ private fun getOrgIdForUser(userId: Int): Long? {
     }
 }
 
-private fun defaultPortForSource(sourceType: CustomDataSourceType, host: String): Int {
-    return when (sourceType) {
-        CustomDataSourceType.POSTGRESQL -> 5432
-        CustomDataSourceType.PROMETHEUS -> when {
-            host.startsWith("https://") -> 443
-            else -> 9090
-        }
-    }
-}
-
 fun Route.customDashboardRoutes(
     dashboardService: CustomDashboardService = CustomDashboardService(),
     queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
@@ -197,8 +187,7 @@ fun Route.customDashboardRoutes(
                             ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Custom data source queries require a rawQuery"))
 
                         val results = dataSourceExecutor.executeQuery(
-                            sourceId, sourceType, source.host,
-                            source.port ?: defaultPortForSource(sourceType, source.host),
+                            sourceId, sourceType, source.host, source.port,
                             source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
                         )
                         call.respond(results)
@@ -423,9 +412,7 @@ fun Route.customDashboardRoutes(
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
 
                 val schema = dataSourceExecutor.getSchema(
-                    sourceType, source.host,
-                    source.port ?: defaultPortForSource(sourceType, source.host),
-                    source.databaseName, creds
+                    sourceType, source.host, source.port, source.databaseName, creds
                 )
                 call.respond(schema)
             }
@@ -452,8 +439,7 @@ fun Route.customDashboardRoutes(
 
                 try {
                     val results = dataSourceExecutor.executeQuery(
-                        id, sourceType, source.host,
-                        source.port ?: defaultPortForSource(sourceType, source.host),
+                        id, sourceType, source.host, source.port,
                         source.databaseName, creds, request.query, request.limit, request.timeRange
                     )
                     call.respond(results)

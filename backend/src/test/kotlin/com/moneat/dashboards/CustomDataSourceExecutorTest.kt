@@ -119,16 +119,24 @@ class CustomDataSourceExecutorTest {
     // --- Prometheus URL building ---
 
     @Test
-    fun `buildPrometheusUrl with plain host`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+    fun `buildPrometheusUrl with plain host and explicit port`() {
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
         method.isAccessible = true
         val url = method.invoke(executor, "prometheus.example.com", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test
+    fun `buildPrometheusUrl with plain host and null port`() {
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        method.isAccessible = true
+        val url = method.invoke(executor, "prometheus.example.com", null) as String
+        assertEquals("http://prometheus.example.com", url)
+    }
+
+    @Test
     fun `buildPrometheusUrl with http prefix`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
         method.isAccessible = true
         val url = method.invoke(executor, "http://prometheus.example.com", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
@@ -136,7 +144,7 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with https prefix and default port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
         method.isAccessible = true
         val url = method.invoke(executor, "https://prometheus.example.com", 443) as String
         assertEquals("https://prometheus.example.com", url)
@@ -144,7 +152,7 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with https prefix and custom port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
         method.isAccessible = true
         val url = method.invoke(executor, "https://prometheus.example.com", 9090) as String
         assertEquals("https://prometheus.example.com:9090", url)
@@ -152,7 +160,7 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with host already containing port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
         method.isAccessible = true
         val url = method.invoke(executor, "prometheus.example.com:9090", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
@@ -160,7 +168,7 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl strips trailing slash`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
         method.isAccessible = true
         val url = method.invoke(executor, "prometheus.example.com/", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
