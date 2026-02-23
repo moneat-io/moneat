@@ -316,9 +316,49 @@ class GrafanaTranslatorTest {
     @Test
     fun `parsePromQL with unparseable expression stores rawQuery`() {
         val warnings = mutableListOf<String>()
-        val dsl = translator.parsePromQL("some_complex_expression", warnings, 0)
+        val dsl = translator.parsePromQL("123 + + invalid{{{", warnings, 0)
         assertTrue(dsl.rawQuery != null)
         assertTrue(warnings.any { it.contains("couldn't parse") })
+    }
+
+    @Test
+    fun `parsePromQL with bare metric and labels`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("""process_uptime_seconds{application="myapp", instance="host1"}""", warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals(2, dsl.filters.size)
+        assertEquals("application", dsl.filters[0].field)
+        assertEquals("myapp", dsl.filters[0].value)
+        assertTrue(warnings.none { it.contains("couldn't parse") })
+    }
+
+    @Test
+    fun `parsePromQL with bare metric math expression`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("""system_cpu_usage{instance="host1"}*100""", warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals(1, dsl.filters.size)
+        assertEquals("instance", dsl.filters[0].field)
+        assertTrue(warnings.none { it.contains("couldn't parse") })
+    }
+
+    @Test
+    fun `parsePromQL with regex label matcher`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("""http_requests_total{method=~"GET|POST"}""", warnings, 0)
+        assertEquals(1, dsl.filters.size)
+        assertEquals(FilterOp.LIKE, dsl.filters[0].op)
+        assertEquals("GET|POST", dsl.filters[0].value)
+    }
+
+    @Test
+    fun `parsePromQL with sum by aggregation`() {
+        val warnings = mutableListOf<String>()
+        val expr = """sum by (uri, method, status) ( increase( http_server_requests_seconds_count{ instance=~"host", application=~"app" }[5m] ) )"""
+        val dsl = translator.parsePromQL(expr, warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("couldn't parse") })
+        assertEquals(expr, dsl.rawQuery)
     }
 
     // --- Export ---

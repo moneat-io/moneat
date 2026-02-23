@@ -322,32 +322,60 @@ class GrafanaTranslator : DashboardTranslator {
     ): QueryDsl {
         // PromQL queries need to be executed against Prometheus, not ClickHouse
         // Always store the original expression as rawQuery and use a marker datasource
-        val promMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^]]*)])?\)""").find(expr)
 
-        if (promMatch == null) {
-            warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
-            return QueryDsl(
-                dataSource = "__prometheus",
-                metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
-                rawQuery = expr,
-                limit = 5000
-            )
+        // Try function-wrapped: rate(metric{labels}[5m])
+        val funcMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^]]*)])?\)""").find(expr)
+        // Try bare metric: metric_name{labels} possibly with math (*100, /other_metric{})
+        val bareMatch = Regex("""^([a-zA-Z_]\w[\w.:]+)(?:\{([^}]*)\})?(.*)$""").find(expr.trim())
+        // Try aggregation with by/without: sum by (labels) (inner_expr)
+        val aggByMatch = Regex("""^(\w+)\s+(?:by|without)\s*\(([^)]*)\)\s*\((.+)\)$""").find(expr.trim())
+
+        val (metricName, labelStr, aggFunction) = when {
+            aggByMatch != null -> {
+                // Parse inner expression recursively for metric name
+                val innerExpr = aggByMatch.groupValues[3].trim()
+                val innerFunc = Regex("""(\w+)\(([^{(]+?)(?:\{[^}]*\})?(?:\[[^]]*])?.*\)""").find(innerExpr)
+                val metric = innerFunc?.groupValues?.getOrNull(2)?.trim() ?: "unknown"
+                val innerLabels = Regex("""\{([^}]*)\}""").find(innerExpr)?.groupValues?.get(1) ?: ""
+                Triple(metric, innerLabels, mapPromFunction(aggByMatch.groupValues[1]))
+            }
+            funcMatch != null -> {
+                Triple(
+                    funcMatch.groupValues[2].trim(),
+                    funcMatch.groupValues[3],
+                    mapPromFunction(funcMatch.groupValues[1])
+                )
+            }
+            bareMatch != null -> {
+                Triple(
+                    bareMatch.groupValues[1].trim(),
+                    bareMatch.groupValues[2],
+                    AggFunction.AVG
+                )
+            }
+            else -> {
+                warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
+                return QueryDsl(
+                    dataSource = "__prometheus",
+                    metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
+                    rawQuery = expr,
+                    limit = 5000
+                )
+            }
         }
-
-        val fn = promMatch.groupValues[1]
-        val metricName = promMatch.groupValues[2].trim()
-        val labelStr = promMatch.groupValues[3]
-
-        val aggFunction = mapPromFunction(fn)
 
         val filters = mutableListOf<FilterDef>()
         if (labelStr.isNotBlank()) {
-            labelStr.split(",").forEach { label ->
-                val parts = label.trim().split("=", limit = 2)
-                if (parts.size == 2) {
-                    val value = parts[1].trim().removeSurrounding("\"")
-                    filters.add(FilterDef(parts[0].trim(), FilterOp.EQ, value))
+            // Parse label matchers: key="val", key=~"val", key!="val", key!~"val"
+            Regex("""(\w+)\s*(=~|!=|!~|=)\s*"([^"]*?)"""").findAll(labelStr).forEach { m ->
+                val key = m.groupValues[1]
+                val op = when (m.groupValues[2]) {
+                    "=~" -> FilterOp.LIKE
+                    "!~" -> FilterOp.NOT_LIKE
+                    "!=" -> FilterOp.NEQ
+                    else -> FilterOp.EQ
                 }
+                filters.add(FilterDef(key, op, m.groupValues[3]))
             }
         }
 

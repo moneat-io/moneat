@@ -17,6 +17,7 @@
 import {useQuery} from '@tanstack/react-query'
 import {api, type QueryDsl, type MetricDef, type GroupByDef, type FilterDef} from '@/lib/api'
 import {Button} from '@/components/ui/button'
+import {CodeEditor} from '@/components/ui/code-editor'
 import {Plus, Trash2, AlertTriangle} from 'lucide-react'
 import {DataSourcePicker} from './DataSourcePicker'
 
@@ -133,8 +134,8 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {selectedSource?.label?.includes('prometheus') ? 'PromQL Query' : 'SQL Query'}
           </label>
-          <textarea
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm font-mono"
+          <CodeEditor
+            language={selectedSource?.label?.includes('prometheus') ? 'promql' : 'sql'}
             rows={4}
             placeholder={
               selectedSource?.label?.includes('prometheus')
@@ -142,7 +143,7 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
                 : 'SELECT * FROM my_table LIMIT 100'
             }
             value={value.rawQuery || ''}
-            onChange={(e) => onChange({...value, rawQuery: e.target.value || undefined})}
+            onChange={(v) => onChange({...value, rawQuery: v || undefined})}
           />
           <p className="text-xs text-muted-foreground mt-1">
             {selectedSource?.label?.includes('prometheus')

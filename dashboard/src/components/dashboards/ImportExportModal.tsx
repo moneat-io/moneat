@@ -19,6 +19,8 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {useNavigate} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
+import {CodeEditor} from '@/components/ui/code-editor'
+import {CopyBlock} from '@/components/ui/copy-block'
 import {AlertTriangle, Check, Download, Upload} from 'lucide-react'
 import {DataSourceMapperModal} from './DataSourceMapperModal'
 
@@ -368,10 +370,11 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   Or paste JSON
                 </label>
-                <textarea
-                  className="w-full rounded-md border bg-background px-3 py-2 text-xs font-mono min-h-[200px]"
+                <CodeEditor
+                  language="json"
+                  rows={10}
                   value={jsonInput}
-                  onChange={(e) => setJsonInput(e.target.value)}
+                  onChange={setJsonInput}
                   placeholder='{"title": "My Dashboard", "widgets": [...]}'
                 />
               </div>
@@ -431,9 +434,12 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
               {exportData && (
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">Preview</label>
-                  <pre className="rounded-md border bg-muted/30 p-3 text-xs font-mono max-h-[200px] overflow-auto">
-                    {exportData.slice(0, 1000)}{exportData.length > 1000 ? '...' : ''}
-                  </pre>
+                  <div className="max-h-[200px] overflow-auto rounded-md border">
+                    <CopyBlock
+                      code={exportData.slice(0, 2000)}
+                      language="json"
+                    />
+                  </div>
                 </div>
               )}
             </div>
