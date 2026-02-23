@@ -20,6 +20,7 @@ import com.moneat.dashboards.models.*
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
@@ -67,7 +68,8 @@ fun Route.customDashboardRoutes(
     dataDogTranslator: DataDogTranslator = DataDogTranslator(),
     grafanaTranslator: GrafanaTranslator = GrafanaTranslator(),
     dataSourceService: CustomDataSourceService = CustomDataSourceService(),
-    dataSourceExecutor: CustomDataSourceExecutor = CustomDataSourceExecutor()
+    dataSourceExecutor: CustomDataSourceExecutor = CustomDataSourceExecutor(),
+    dashboardAlertService: DashboardAlertService = DashboardAlertService()
 ) {
     route("/v1/dashboards") {
         authenticate("auth-jwt") {
@@ -332,6 +334,76 @@ fun Route.customDashboardRoutes(
                         HttpStatusCode.BadRequest,
                         ErrorResponse("Unsupported format: $format. Use 'moneat', 'datadog', or 'grafana'")
                     )
+                }
+            }
+
+            // Dashboard alert CRUD routes
+            get("/{id}/alerts") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@get call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+
+                call.respond(dashboardAlertService.listAlerts(id, orgId))
+            }
+
+            post("/{id}/alerts") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+
+                val request = call.receive<CreateDashboardAlertRequest>()
+                try {
+                    val alert = dashboardAlertService.createAlert(id, orgId, userId.toLong(), request)
+                    call.respond(HttpStatusCode.Created, alert)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid request"))
+                }
+            }
+
+            put("/{id}/alerts/{alertId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@put call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+                val alertId = call.parameters["alertId"]?.toLongOrNull()
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
+
+                val request = call.receive<UpdateDashboardAlertRequest>()
+                try {
+                    val updated = dashboardAlertService.updateAlert(alertId, id, orgId, request)
+                        ?: return@put call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+                    call.respond(updated)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid request"))
+                }
+            }
+
+            delete("/{id}/alerts/{alertId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@delete call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+                val alertId = call.parameters["alertId"]?.toLongOrNull()
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
+
+                if (dashboardAlertService.deleteAlert(alertId, id, orgId)) {
+                    call.respond(HttpStatusCode.NoContent, "")
+                } else {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                 }
             }
 

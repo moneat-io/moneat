@@ -328,7 +328,7 @@ interface NotificationPreferences {
   projects: ProjectNotificationPreference[]
 }
 
-export type AlertSource = 'SYSTEM_ALERT' | 'SYSTEM_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT'
+export type AlertSource = 'SYSTEM_ALERT' | 'SYSTEM_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT' | 'DASHBOARD_ALERT'
 
 export interface AlertNotificationPreference {
   alertSource: AlertSource
@@ -1982,6 +1982,53 @@ interface DashboardWidget {
   query_configs: QueryDsl[]
   display_config: Record<string, string>
   sort_order: number
+}
+
+interface DashboardWidgetAlertNotificationChannels {
+  email: boolean
+  slack: boolean
+  discord: boolean
+}
+
+interface DashboardWidgetAlert {
+  id: number
+  widget_id: number
+  dashboard_id: number
+  name: string
+  condition: '>' | '<' | '>=' | '<=' | '=='
+  threshold: number
+  metric_index: number
+  duration_seconds: number
+  incident_severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+  enabled: boolean
+  notification_channels: DashboardWidgetAlertNotificationChannels
+  last_triggered_at: string | null
+  last_value: number | null
+  created_at: string
+  updated_at: string
+}
+
+interface CreateDashboardAlertRequest {
+  widget_id: number
+  name: string
+  condition: '>' | '<' | '>=' | '<=' | '=='
+  threshold: number
+  metric_index?: number
+  duration_seconds?: number
+  incident_severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+  enabled?: boolean
+  notification_channels?: DashboardWidgetAlertNotificationChannels
+}
+
+interface UpdateDashboardAlertRequest {
+  name?: string
+  condition?: '>' | '<' | '>=' | '<=' | '=='
+  threshold?: number
+  metric_index?: number
+  duration_seconds?: number
+  incident_severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+  enabled?: boolean
+  notification_channels?: DashboardWidgetAlertNotificationChannels
 }
 
 interface BatchQueryResult {
@@ -4590,6 +4637,31 @@ class ApiClient {
     return this.request<CreateDashboardRequest[]>(`${API_BASE}/dashboards/templates`)
   }
 
+  // Dashboard Widget Alerts API
+  async listDashboardAlerts(dashboardId: number): Promise<DashboardWidgetAlert[]> {
+    return this.request<DashboardWidgetAlert[]>(`${API_BASE}/dashboards/${dashboardId}/alerts`)
+  }
+
+  async createDashboardAlert(dashboardId: number, data: CreateDashboardAlertRequest): Promise<DashboardWidgetAlert> {
+    return this.request<DashboardWidgetAlert>(`${API_BASE}/dashboards/${dashboardId}/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateDashboardAlert(dashboardId: number, alertId: number, data: UpdateDashboardAlertRequest): Promise<DashboardWidgetAlert> {
+    return this.request<DashboardWidgetAlert>(`${API_BASE}/dashboards/${dashboardId}/alerts/${alertId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteDashboardAlert(dashboardId: number, alertId: number): Promise<void> {
+    await this.request<void>(`${API_BASE}/dashboards/${dashboardId}/alerts/${alertId}`, { method: 'DELETE' })
+  }
+
   // Custom Data Sources API
   async listCustomDataSources(): Promise<CustomDataSourceResponse[]> {
     return this.request<CustomDataSourceResponse[]>(`${API_BASE}/datasources`)
@@ -4807,6 +4879,10 @@ export type {
   TimeRangeDef,
   QueryDsl,
   DashboardWidget,
+  DashboardWidgetAlert,
+  DashboardWidgetAlertNotificationChannels,
+  CreateDashboardAlertRequest,
+  UpdateDashboardAlertRequest,
   CustomDashboard,
   CreateDashboardRequest,
   CreateWidgetRequest,

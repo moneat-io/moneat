@@ -19,6 +19,7 @@ import type {DashboardWidget, QueryDsl} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {QueryBuilderForm} from './QueryBuilderForm'
 import {WidgetRenderer} from './WidgetRenderer'
+import {AlertConfigForm} from './AlertConfigForm'
 import {X, BarChart3, LineChart, PieChart, Hash, Table2, List, Grid3X3, Type, Plus, Trash2} from 'lucide-react'
 import type {ValueMapping} from './formatValue'
 
@@ -62,7 +63,7 @@ export function WidgetConfigPanel({
   projectId,
 }: WidgetConfigPanelProps) {
   const [editedWidget, setEditedWidget] = useState<DashboardWidget>({...widget})
-  const [activeTab, setActiveTab] = useState<'query' | 'display'>('query')
+  const [activeTab, setActiveTab] = useState<'query' | 'display' | 'alerts'>('query')
   const [activeQueryIndex, setActiveQueryIndex] = useState(0)
 
   const queries = editedWidget.query_configs?.length > 0
@@ -159,6 +160,16 @@ export function WidgetConfigPanel({
           >
             Display
           </button>
+          <button
+            onClick={() => setActiveTab('alerts')}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'alerts'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Alerts
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -204,6 +215,16 @@ export function WidgetConfigPanel({
               onChange={(q) => handleQueryChange(activeQueryIndex, q)}
             />
           </div>
+        ) : activeTab === 'alerts' ? (
+          editedWidget.id ? (
+            <AlertConfigForm
+              dashboardId={dashboardId}
+              widgetId={editedWidget.id}
+              queryConfigs={queries}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">Save the widget first to configure alerts.</p>
+          )
         ) : (
           <DisplayConfigForm
             widget={editedWidget}

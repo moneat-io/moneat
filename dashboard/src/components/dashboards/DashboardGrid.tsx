@@ -15,10 +15,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useMemo, useCallback, useRef, useState, useEffect} from 'react'
+import {useQuery} from '@tanstack/react-query'
 import {Responsive as ResponsiveGridLayout, type Layout} from 'react-grid-layout'
 import type {DashboardWidget, CreateWidgetRequest, TimeRangeDef} from '@/lib/api'
+import {api} from '@/lib/api'
 import {WidgetRenderer} from './WidgetRenderer'
-import {Trash2, GripVertical} from 'lucide-react'
+import {Trash2, GripVertical, Bell} from 'lucide-react'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
@@ -51,6 +53,12 @@ export function DashboardGrid({
 }: DashboardGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(1200)
+
+  const {data: alerts = []} = useQuery({
+    queryKey: ['dashboard-alerts', dashboardId],
+    queryFn: () => api.listDashboardAlerts(dashboardId),
+    refetchInterval: 60000,
+  })
 
   useEffect(() => {
     const el = containerRef.current
@@ -173,6 +181,21 @@ export function DashboardGrid({
                   </div>
                 )}
                 <span className="text-xs font-medium truncate">{widget.title || 'Untitled'}</span>
+                {(() => {
+                  const widgetAlerts = alerts.filter((a) => a.widget_id === widget.id && a.enabled)
+                  if (widgetAlerts.length === 0) return null
+                  const firing = widgetAlerts.some((a) => a.last_triggered_at)
+                  const severity = widgetAlerts.find((a) => a.last_triggered_at)?.incident_severity
+                  const dotColor = firing
+                    ? severity === 'CRITICAL' || severity === 'HIGH' ? 'bg-red-500' : 'bg-orange-500'
+                    : 'bg-muted-foreground/40'
+                  return (
+                    <span className="relative shrink-0" title={firing ? `Alert firing` : `${widgetAlerts.length} alert(s) configured`}>
+                      <Bell className="h-3 w-3 text-muted-foreground" />
+                      <span className={`absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                    </span>
+                  )
+                })()}
               </div>
               {isEditing && (
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

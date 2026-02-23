@@ -37,7 +37,8 @@ class AlertNotificationPreferencesService {
         SYSTEM_ALERT("SYSTEM_ALERT"),
         SYSTEM_DOWN("SYSTEM_DOWN"),
         UPTIME_MONITOR("UPTIME_MONITOR"),
-        ERROR_ALERT("ERROR_ALERT");
+        ERROR_ALERT("ERROR_ALERT"),
+        DASHBOARD_ALERT("DASHBOARD_ALERT");
 
         companion object {
             fun fromString(value: String): AlertSource? {
