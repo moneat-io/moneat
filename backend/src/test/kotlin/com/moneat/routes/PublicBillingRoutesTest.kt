@@ -41,14 +41,17 @@ class PublicBillingRoutesTest {
                 url = "jdbc:h2:mem:moneat_public_billing;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
-                SchemaUtils.create(PricingTierConfigs)
-            }
             dbInitialized = true
         }
 
-        // Clean up any existing test data from previous tests
+        // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
+            try {
+                SchemaUtils.create(PricingTierConfigs)
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
+            }
+
             PricingTierConfigs.deleteAll()
         }
 

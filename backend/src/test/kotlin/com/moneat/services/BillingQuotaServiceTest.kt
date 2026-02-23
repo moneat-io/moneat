@@ -62,7 +62,14 @@ class BillingQuotaServiceTest {
                 url = "jdbc:h2:mem:moneat_billing_quota;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
+        }
+
+        // Clean up any existing test data from previous tests
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        transaction {
+            try {
                 SchemaUtils.create(
                     Organizations,
                     Subscriptions,
@@ -72,12 +79,10 @@ class BillingQuotaServiceTest {
                     OnCallSchedules,
                     OnCallParticipants
                 )
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
             }
-        }
-
-        // Clean up any existing test data from previous tests
-        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
+            
             OrgUsageCounters.deleteAll()
             Subscriptions.deleteAll()
             Organizations.deleteAll()

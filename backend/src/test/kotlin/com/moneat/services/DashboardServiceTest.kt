@@ -25,6 +25,7 @@ import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
 import kotlin.test.BeforeTest
@@ -45,9 +46,18 @@ class DashboardServiceTest {
                 url = "jdbc:h2:mem:moneat_dashboard_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
+        }
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        transaction {
+            try {
                 SchemaUtils.create(Projects)
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
             }
+            
+            Projects.deleteAll()
         }
     }
 

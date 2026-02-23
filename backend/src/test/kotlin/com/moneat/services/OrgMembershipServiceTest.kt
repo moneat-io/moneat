@@ -24,13 +24,17 @@ class OrgMembershipServiceTest {
                 url = "jdbc:h2:mem:moneat_org_membership;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(Users, Organizations, Memberships)
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
+            try {
+                SchemaUtils.create(Users, Organizations, Memberships)
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
+            }
+            
             Memberships.deleteAll()
             Users.deleteAll()
             Organizations.deleteAll()

@@ -22,13 +22,17 @@ class SidebarPreferenceServiceTest {
                 url = "jdbc:h2:mem:moneat_sidebar_pref;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(Organizations, Users, Memberships, SidebarPreferenceEvents)
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
+            try {
+                SchemaUtils.create(Organizations, Users, Memberships, SidebarPreferenceEvents)
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
+            }
+            
             SidebarPreferenceEvents.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

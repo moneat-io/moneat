@@ -71,18 +71,22 @@ class UptimeRoutesTest {
                 url = "jdbc:h2:mem:moneat_uptime_routes;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
+            dbInitialized = true
+        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        transaction {
+            try {
                 SchemaUtils.create(
                     Users,
                     Organizations,
                     Memberships,
                     UptimeMonitors
                 )
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
             }
-            dbInitialized = true
-        }
 
-        transaction {
             UptimeMonitors.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

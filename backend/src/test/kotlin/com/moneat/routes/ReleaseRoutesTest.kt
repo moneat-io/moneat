@@ -68,13 +68,17 @@ class ReleaseRoutesTest {
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
-                SchemaUtils.create(Users, Organizations, Memberships, AuthTokens)
-            }
             dbInitialized = true
         }
 
+        // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
+            try {
+                SchemaUtils.create(Users, Organizations, Memberships, AuthTokens)
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
+            }
+
             AuthTokens.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

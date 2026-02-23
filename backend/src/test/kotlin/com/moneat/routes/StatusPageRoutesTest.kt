@@ -75,7 +75,12 @@ class StatusPageRoutesTest {
                 url = "jdbc:h2:mem:moneat_status_pages;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
+            dbInitialized = true
+        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        transaction {
+            try {
                 SchemaUtils.create(
                     Users,
                     Organizations,
@@ -87,10 +92,10 @@ class StatusPageRoutesTest {
                     StatusPageIncidents,
                     StatusPageIncidentUpdates
                 )
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
             }
-            dbInitialized = true
-        }
-        transaction {
+
             StatusPageIncidentUpdates.deleteAll()
             StatusPageIncidents.deleteAll()
             StatusPageMonitors.deleteAll()

@@ -68,13 +68,17 @@ class AccountDeletionRoutesTest {
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
-                SchemaUtils.create(Users, Organizations, Memberships, Subscriptions)
-            }
             dbInitialized = true
         }
 
+        // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
+            try {
+                SchemaUtils.create(Users, Organizations, Memberships, Subscriptions)
+            } catch (_: Exception) {
+                // Tables already exist, which is fine
+            }
+
             Subscriptions.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()
