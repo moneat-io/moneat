@@ -64,7 +64,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
     ]
     
     const custom = (customDataSourcesData || []).map(ds => ({
-      name: `custom:${ds.name}`,
+      name: `custom:${ds.id}`,
       label: `${ds.name} (${ds.source_type})`,
       fields: [],
     }))
