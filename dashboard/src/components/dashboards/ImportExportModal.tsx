@@ -137,25 +137,17 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       
       const unmapped: string[] = []
       for (const ds of foundDataSources) {
-        // Check if it's a built-in source
+        // Check if it's a built-in source - these don't need mapping
         if (builtInSources.has(ds)) {
-          console.log(`  ${ds} -> matched built-in`)
+          console.log(`  ${ds} -> matched built-in, no mapping needed`)
           continue
         }
         
-        // Check if it's a custom data source
-        const matchedCustom = dataSourcesData?.find(custom => 
-          custom.name === ds || 
-          custom.source_type.toLowerCase() === ds.toLowerCase() ||
-          `custom:${custom.name}` === ds
-        )
-        
-        if (matchedCustom) {
-          console.log(`  ${ds} -> matched custom: ${matchedCustom.name} (${matchedCustom.source_type})`)
-        } else {
-          console.log(`  ${ds} -> NOT MATCHED, adding to unmapped`)
-          unmapped.push(ds)
-        }
+        // Everything else is external and needs to be mapped to a custom datasource
+        // Even if we have a matching source_type, we can't assume which specific
+        // custom datasource the user wants (they might have multiple Prometheus sources)
+        console.log(`  ${ds} -> external datasource, needs mapping`)
+        unmapped.push(ds)
       }
       
       if (unmapped.length > 0) {
@@ -166,7 +158,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         setShowDataSourceMapper(true)
         return
       } else {
-        console.log('All datasources matched, proceeding with import')
+        console.log('All datasources are built-in, proceeding with import')
       }
     } catch (err) {
       console.error('Failed to parse JSON for datasource detection:', err)
