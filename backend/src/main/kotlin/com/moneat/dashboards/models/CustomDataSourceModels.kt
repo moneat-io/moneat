@@ -32,7 +32,7 @@ object CustomDataSources : Table("custom_data_sources") {
     val host = varchar("host", 512)
     val port = integer("port").nullable()
     val databaseName = varchar("database_name", 255).nullable()
-    val encryptedCredentials = jsonb("encrypted_credentials")
+    val encryptedCredentials = text("encrypted_credentials")
     val extraConfig = jsonb("extra_config")
     val enabled = bool("enabled").default(true)
     val createdBy = long("created_by")
