@@ -200,33 +200,50 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       const parsed = JSON.parse(pendingImport.json)
       
       if (pendingImport.format === 'grafana' && parsed.panels) {
+        const mapDatasource = (ds: any): any => {
+          if (!ds) return ds
+          
+          // Handle different datasource formats
+          if (typeof ds === 'string') {
+            // String datasource name
+            if (mapping[ds]) {
+              console.log(`  Mapped string datasource: ${ds} → ${mapping[ds]}`)
+              return mapping[ds]
+            }
+          } else if (ds.type) {
+            // Object with type field - check if we have a mapping for this type
+            if (mapping[ds.type]) {
+              console.log(`  Mapped datasource by type: ${ds.type} → ${mapping[ds.type]}`)
+              // Replace with mapped custom datasource
+              return mapping[ds.type]
+            }
+          } else if (ds.uid) {
+            // Object with UID
+            if (mapping[ds.uid]) {
+              console.log(`  Mapped datasource by uid: ${ds.uid} → ${mapping[ds.uid]}`)
+              return mapping[ds.uid]
+            }
+          }
+          
+          return ds
+        }
+        
         const applyMapping = (panel: any) => {
+          // Map panel-level datasource
+          if (panel.datasource) {
+            const originalDs = JSON.stringify(panel.datasource)
+            panel.datasource = mapDatasource(panel.datasource)
+            if (originalDs !== JSON.stringify(panel.datasource)) {
+              console.log(`  Panel datasource mapped`)
+            }
+          }
+          
+          // Map target-level datasources
           if (panel.targets) {
             for (const target of panel.targets) {
               if (target.datasource) {
                 const originalDs = JSON.stringify(target.datasource)
-                // Handle different datasource formats
-                if (typeof target.datasource === 'string') {
-                  // String datasource name
-                  if (mapping[target.datasource]) {
-                    console.log(`  Mapped string datasource: ${target.datasource} → ${mapping[target.datasource]}`)
-                    target.datasource = mapping[target.datasource]
-                  }
-                } else if (target.datasource.type) {
-                  // Object with type field - check if we have a mapping for this type
-                  if (mapping[target.datasource.type]) {
-                    console.log(`  Mapped datasource by type: ${target.datasource.type} → ${mapping[target.datasource.type]}`)
-                    // Replace with mapped custom datasource
-                    target.datasource = mapping[target.datasource.type]
-                  }
-                } else if (target.datasource.uid) {
-                  // Object with UID
-                  if (mapping[target.datasource.uid]) {
-                    console.log(`  Mapped datasource by uid: ${target.datasource.uid} → ${mapping[target.datasource.uid]}`)
-                    target.datasource = mapping[target.datasource.uid]
-                  }
-                }
-                
+                target.datasource = mapDatasource(target.datasource)
                 if (originalDs === JSON.stringify(target.datasource)) {
                   console.log(`  No mapping applied for datasource: ${originalDs}`)
                 }
