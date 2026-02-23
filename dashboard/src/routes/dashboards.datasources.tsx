@@ -25,7 +25,8 @@ import {
 import {Plus, Database, Trash2, Power, PowerOff, FlaskConical, Check, X, Pencil, Link2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {useState, useCallback} from 'react'
-import {DataSourceTypePicker, DATA_SOURCE_TYPES} from '@/components/dashboards/DataSourceTypePicker'
+import {DataSourceTypePicker} from '@/components/dashboards/DataSourceTypePicker'
+import {DATA_SOURCE_TYPES} from '@/components/dashboards/dataSourceTypes'
 
 export const Route = createFileRoute('/dashboards/datasources')({
   component: DataSourcesPage,
