@@ -15,11 +15,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useState, useRef} from 'react'
-import {useMutation, useQueryClient} from '@tanstack/react-query'
+import {useMutation, useQueryClient, useQuery} from '@tanstack/react-query'
 import {useNavigate} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Upload, Download, AlertTriangle, Check} from 'lucide-react'
+import {DataSourceMapperModal} from './DataSourceMapperModal'
 
 interface ImportExportModalProps {
   open: boolean
@@ -38,6 +39,16 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const [importSuccess, setImportSuccess] = useState(false)
   const [importedDashboardId, setImportedDashboardId] = useState<number | null>(null)
   const [exportData, setExportData] = useState<string>('')
+  const [showDataSourceMapper, setShowDataSourceMapper] = useState(false)
+  const [unmappedDataSources, setUnmappedDataSources] = useState<string[]>([])
+  const [pendingImport, setPendingImport] = useState<{format: string; json: string} | null>(null)
+  
+  // Fetch data sources for mapping
+  const {data: dataSourcesData} = useQuery({
+    queryKey: ['custom-data-sources'],
+    queryFn: () => api.listCustomDataSources(),
+    enabled: open && mode === 'import',
+  })
 
   const importMutation = useMutation({
     mutationFn: ({format, json}: {format: string; json: string}) => api.importDashboard(format, json),
@@ -79,7 +90,91 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   }
 
   const handleImport = () => {
+    // Detect unmapped datasources before import
+    try {
+      const parsed = JSON.parse(jsonInput)
+      const unmapped = new Set<string>()
+      
+      if (format === 'grafana' && parsed.panels) {
+        // Check all panels for unmapped datasources
+        const checkPanel = (panel: any) => {
+          if (panel.targets) {
+            for (const target of panel.targets) {
+              // Check for Prometheus datasource marker
+              if (target.datasource?.uid === '__prometheus' || target.datasource === '__prometheus') {
+                unmapped.add('__prometheus')
+              }
+              // Could add other markers here (e.g., __mysql, __postgres)
+            }
+          }
+        }
+        
+        for (const panel of parsed.panels) {
+          checkPanel(panel)
+          // Check nested panels in collapsed rows
+          if (panel.panels) {
+            for (const nested of panel.panels) {
+              checkPanel(nested)
+            }
+          }
+        }
+      }
+      
+      if (unmapped.size > 0) {
+        // Show mapper modal
+        setUnmappedDataSources(Array.from(unmapped))
+        setPendingImport({format, json: jsonInput})
+        setShowDataSourceMapper(true)
+        return
+      }
+    } catch (err) {
+      console.error('Failed to parse JSON for datasource detection:', err)
+    }
+    
+    // No unmapped datasources, proceed with import
     importMutation.mutate({format, json: jsonInput})
+  }
+  
+  const handleDataSourceMapped = (mapping: Record<string, string>) => {
+    if (!pendingImport) return
+    
+    // Apply mappings to the JSON
+    try {
+      const parsed = JSON.parse(pendingImport.json)
+      
+      if (pendingImport.format === 'grafana' && parsed.panels) {
+        const applyMapping = (panel: any) => {
+          if (panel.targets) {
+            for (const target of panel.targets) {
+              if (target.datasource?.uid && mapping[target.datasource.uid]) {
+                target.datasource.uid = mapping[target.datasource.uid]
+              } else if (typeof target.datasource === 'string' && mapping[target.datasource]) {
+                target.datasource = mapping[target.datasource]
+              }
+            }
+          }
+        }
+        
+        for (const panel of parsed.panels) {
+          applyMapping(panel)
+          if (panel.panels) {
+            for (const nested of panel.panels) {
+              applyMapping(nested)
+            }
+          }
+        }
+      }
+      
+      // Import with mapped datasources
+      const mappedJson = JSON.stringify(parsed)
+      importMutation.mutate({format: pendingImport.format, json: mappedJson})
+      
+      setShowDataSourceMapper(false)
+      setPendingImport(null)
+      setUnmappedDataSources([])
+    } catch (err) {
+      console.error('Failed to apply datasource mappings:', err)
+    }
   }
 
   const handleExport = async (exportFormat: string) => {
@@ -259,6 +354,15 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           )}
         </div>
       </div>
+      
+      {/* DataSource Mapper Modal */}
+      <DataSourceMapperModal
+        open={showDataSourceMapper}
+        onOpenChange={setShowDataSourceMapper}
+        unmappedDataSources={unmappedDataSources}
+        dataSources={dataSourcesData || []}
+        onMapped={handleDataSourceMapped}
+      />
     </div>
   )
 }

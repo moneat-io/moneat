@@ -22,46 +22,72 @@ import type {CreateWidgetRequest, DataSourceInfo} from '@/lib/api'
 
 interface DataSourceMapperModalProps {
   open: boolean
-  widget: CreateWidgetRequest | null
-  unknownSources: string[]
-  dataSources: DataSourceInfo[]
-  onConfirm: (widget: CreateWidgetRequest) => void
-  onCancel: () => void
+  onOpenChange?: (open: boolean) => void
+  // For widget paste flow
+  widget?: CreateWidgetRequest | null
+  unknownSources?: string[]
+  dataSources?: DataSourceInfo[]
+  onConfirm?: (widget: CreateWidgetRequest) => void
+  onCancel?: () => void
+  // For import flow
+  unmappedDataSources?: string[]
+  onMapped?: (mapping: Record<string, string>) => void
 }
 
 export function DataSourceMapperModal({
   open,
+  onOpenChange,
   widget,
-  unknownSources,
-  dataSources,
+  unknownSources = [],
+  dataSources = [],
   onConfirm,
   onCancel,
+  unmappedDataSources = [],
+  onMapped,
 }: DataSourceMapperModalProps) {
+  // Import mode uses unmappedDataSources, widget paste mode uses unknownSources
+  const isImportMode = unmappedDataSources.length > 0 && !widget
+  const sourcesToMap = isImportMode ? unmappedDataSources : unknownSources
+  
   const [mappings, setMappings] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
-    unknownSources.forEach((s) => {
+    sourcesToMap.forEach((s) => {
       initial[s] = dataSources[0]?.name || 'events'
     })
     return initial
   })
 
-  if (!open || !widget) return null
+  if (!open) return null
+  if (!isImportMode && !widget) return null
 
   const handleConfirm = () => {
-    // Apply the mappings to the widget's query config
-    let dataSource = widget.query_config.dataSource
-    for (const [source, target] of Object.entries(mappings)) {
-      if (dataSource === `__unmapped:${source}`) {
-        dataSource = target
+    if (isImportMode && onMapped) {
+      // Import mode: just return the mappings
+      onMapped(mappings)
+    } else if (widget && onConfirm) {
+      // Widget paste mode: apply mappings to widget
+      let dataSource = widget.query_config.dataSource
+      for (const [source, target] of Object.entries(mappings)) {
+        if (dataSource === `__unmapped:${source}`) {
+          dataSource = target
+        }
       }
+      onConfirm({
+        ...widget,
+        query_config: {
+          ...widget.query_config,
+          dataSource,
+        },
+      })
     }
-    onConfirm({
-      ...widget,
-      query_config: {
-        ...widget.query_config,
-        dataSource,
-      },
-    })
+  }
+  
+  const handleCancel = () => {
+    if (onOpenChange) {
+      onOpenChange(false)
+    } else if (onCancel) {
+      onCancel()
+    }
   }
 
   return (
@@ -72,33 +98,41 @@ export function DataSourceMapperModal({
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
           </div>
           <div>
-            <h3 className="font-semibold">Unknown Data Source</h3>
+            <h3 className="font-semibold">
+              {isImportMode ? 'Map Data Sources' : 'Unknown Data Source'}
+            </h3>
             <p className="text-muted-foreground text-sm">
-              The pasted widget uses data sources that don&apos;t exist in Moneat.
-              Map them to an available source.
+              {isImportMode
+                ? 'The imported dashboard uses data sources that need to be mapped to your sources.'
+                : "The pasted widget uses data sources that don't exist in Moneat. Map them to an available source."}
             </p>
           </div>
         </div>
 
         <div className="space-y-4">
-          {unknownSources.map((source) => (
-            <div key={source}>
-              <label className="text-sm font-medium">
-                <code className="bg-muted rounded px-1.5 py-0.5 text-xs">{source}</code>
-                <span className="text-muted-foreground ml-2">→</span>
-              </label>
-              <div className="mt-1.5">
-                <DataSourcePicker
-                  dataSources={dataSources}
-                  value={mappings[source] || 'events'}
-                  onChange={(val) => setMappings((prev) => ({...prev, [source]: val}))}
-                />
+          {sourcesToMap.map((source) => {
+            // Show a human-friendly label for known markers
+            const sourceLabel = source === '__prometheus' ? 'Prometheus' : source
+            
+            return (
+              <div key={source}>
+                <label className="text-sm font-medium">
+                  <code className="bg-muted rounded px-1.5 py-0.5 text-xs">{sourceLabel}</code>
+                  <span className="text-muted-foreground ml-2">→</span>
+                </label>
+                <div className="mt-1.5">
+                  <DataSourcePicker
+                    dataSources={dataSources}
+                    value={mappings[source] || 'events'}
+                    onChange={(val) => setMappings((prev) => ({...prev, [source]: val}))}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
-        {widget.title && (
+        {widget?.title && (
           <div className="mt-4 rounded-md bg-muted/50 px-3 py-2">
             <span className="text-muted-foreground text-xs">Widget: </span>
             <span className="text-sm font-medium">{widget.title}</span>
@@ -107,11 +141,11 @@ export function DataSourceMapperModal({
         )}
 
         <div className="mt-6 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel}>
+          <Button variant="ghost" onClick={handleCancel}>
             Cancel
           </Button>
           <Button onClick={handleConfirm}>
-            Paste Widget
+            {isImportMode ? 'Continue Import' : 'Paste Widget'}
           </Button>
         </div>
       </div>
