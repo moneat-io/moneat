@@ -24,9 +24,13 @@ import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
 import com.moneat.dashboards.translation.DataDogTranslator
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
