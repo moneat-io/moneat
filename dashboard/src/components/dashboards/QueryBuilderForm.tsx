@@ -18,6 +18,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api, type QueryDsl, type MetricDef, type GroupByDef, type FilterDef} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Plus, Trash2} from 'lucide-react'
+import {DataSourcePicker} from './DataSourcePicker'
 
 const AGG_FUNCTIONS = ['count', 'avg', 'sum', 'min', 'max', 'p50', 'p75', 'p90', 'p95', 'p99', 'uniq']
 const FILTER_OPS = [
@@ -105,28 +106,11 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
       {/* Data Source */}
       <div>
         <label className="text-xs font-medium text-muted-foreground mb-1 block">Data Source</label>
-        <select
-          className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+        <DataSourcePicker
+          dataSources={dataSources ?? []}
           value={value.dataSource}
-          onChange={(e) => onChange({...value, dataSource: e.target.value})}
-        >
-          <optgroup label="Built-in">
-            {dataSources?.filter((ds) => !ds.name.startsWith('custom:')).map((ds) => (
-              <option key={ds.name} value={ds.name}>
-                {ds.label}
-              </option>
-            ))}
-          </optgroup>
-          {dataSources?.some((ds) => ds.name.startsWith('custom:')) && (
-            <optgroup label="Custom Data Sources">
-              {dataSources?.filter((ds) => ds.name.startsWith('custom:')).map((ds) => (
-                <option key={ds.name} value={ds.name}>
-                  {ds.label}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
+          onChange={(ds) => onChange({...value, dataSource: ds})}
+        />
       </div>
 
       {isCustomSource ? (
