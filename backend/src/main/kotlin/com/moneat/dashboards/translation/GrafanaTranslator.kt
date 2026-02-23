@@ -154,17 +154,38 @@ class GrafanaTranslator : DashboardTranslator {
         }
 
         val firstTarget = targets.first().jsonObject
+        
+        // Check if datasource was pre-mapped by frontend (e.g., "custom:Prometheus")
+        val datasource = firstTarget["datasource"]
+        val preMappedDataSource = when {
+            datasource is JsonPrimitive && datasource.isString -> datasource.content
+            datasource is JsonObject && datasource["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true -> 
+                datasource["type"]?.jsonPrimitive?.content
+            else -> null
+        }
 
         // Try to parse SQL-style query (common with ClickHouse datasource)
         val rawSql = firstTarget["rawSql"]?.jsonPrimitive?.contentOrNull
         if (rawSql != null) {
-            return parseGrafanaSql(rawSql, warnings, panelIndex)
+            val parsed = parseGrafanaSql(rawSql, warnings, panelIndex)
+            // Use pre-mapped datasource if available
+            return if (preMappedDataSource != null) {
+                parsed.copy(dataSource = preMappedDataSource)
+            } else {
+                parsed
+            }
         }
 
         // Try to parse PromQL expression
         val expr = firstTarget["expr"]?.jsonPrimitive?.contentOrNull
         if (expr != null) {
-            return parsePromQL(expr, warnings, panelIndex)
+            val parsed = parsePromQL(expr, warnings, panelIndex)
+            // Use pre-mapped datasource if available
+            return if (preMappedDataSource != null) {
+                parsed.copy(dataSource = preMappedDataSource)
+            } else {
+                parsed
+            }
         }
 
         // Try generic query field
@@ -172,7 +193,7 @@ class GrafanaTranslator : DashboardTranslator {
         if (query != null) {
             warnings.add("Panel $panelIndex: generic query stored as rawQuery")
             return QueryDsl(
-                dataSource = "events",
+                dataSource = preMappedDataSource ?: "events",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
                 rawQuery = query
             )
@@ -180,7 +201,7 @@ class GrafanaTranslator : DashboardTranslator {
 
         warnings.add("Panel $panelIndex: no recognizable query target")
         return QueryDsl(
-            dataSource = "events",
+            dataSource = preMappedDataSource ?: "events",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
         )
     }
