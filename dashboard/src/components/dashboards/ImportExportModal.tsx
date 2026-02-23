@@ -132,19 +132,28 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       const builtInSources = new Set(['events', 'spans', 'logs', 'system_metrics', 
         'container_metrics', 'uptime_heartbeats', 'llm_generations', 'analytics_events'])
       
+      console.log('Found datasources in import:', Array.from(foundDataSources))
+      console.log('Available custom datasources:', dataSourcesData?.map(d => ({name: d.name, type: d.source_type})))
+      
       const unmapped: string[] = []
       for (const ds of foundDataSources) {
         // Check if it's a built-in source
-        if (builtInSources.has(ds)) continue
+        if (builtInSources.has(ds)) {
+          console.log(`  ${ds} -> matched built-in`)
+          continue
+        }
         
         // Check if it's a custom data source
-        const exists = dataSourcesData?.some(custom => 
+        const matchedCustom = dataSourcesData?.find(custom => 
           custom.name === ds || 
           custom.source_type.toLowerCase() === ds.toLowerCase() ||
           `custom:${custom.name}` === ds
         )
         
-        if (!exists) {
+        if (matchedCustom) {
+          console.log(`  ${ds} -> matched custom: ${matchedCustom.name} (${matchedCustom.source_type})`)
+        } else {
+          console.log(`  ${ds} -> NOT MATCHED, adding to unmapped`)
           unmapped.push(ds)
         }
       }
@@ -156,6 +165,8 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         setPendingImport({format, json: jsonInput})
         setShowDataSourceMapper(true)
         return
+      } else {
+        console.log('All datasources matched, proceeding with import')
       }
     } catch (err) {
       console.error('Failed to parse JSON for datasource detection:', err)
