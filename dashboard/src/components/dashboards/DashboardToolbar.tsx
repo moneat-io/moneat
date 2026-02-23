@@ -17,7 +17,7 @@
 import {useState} from 'react'
 import {Button} from '@/components/ui/button'
 import type {DashboardVariable, TimeRangeDef} from '@/lib/api'
-import {Pencil, Plus, Save, Download, Clock, RefreshCw, ArrowLeft} from 'lucide-react'
+import {Pencil, Plus, Save, Download, Clock, RefreshCw, ArrowLeft, Settings2} from 'lucide-react'
 import {Link} from '@tanstack/react-router'
 
 interface DashboardToolbarProps {
@@ -35,6 +35,7 @@ interface DashboardToolbarProps {
   variables?: DashboardVariable[]
   variableValues: Record<string, string>
   onVariableChange: (name: string, value: string) => void
+  onVariableSettings?: () => void
 }
 
 const TIME_RANGE_PRESETS = [
@@ -61,6 +62,7 @@ export function DashboardToolbar({
   variables,
   variableValues,
   onVariableChange,
+  onVariableSettings,
 }: DashboardToolbarProps) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState(title)
@@ -135,6 +137,11 @@ export function DashboardToolbar({
               )}
             </div>
           ))}
+          {isEditing && onVariableSettings && (
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onVariableSettings} title="Edit variables">
+              <Settings2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       )}
 
@@ -172,6 +179,11 @@ export function DashboardToolbar({
         {/* Action buttons */}
         {isEditing ? (
           <>
+            {onVariableSettings && (
+              <Button variant="outline" size="sm" onClick={onVariableSettings} className="h-7">
+                <Settings2 className="h-3 w-3 mr-1" /> Variables
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={onAddWidget} className="h-7">
               <Plus className="h-3 w-3 mr-1" /> Widget
             </Button>

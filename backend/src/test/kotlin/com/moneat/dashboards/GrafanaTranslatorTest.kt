@@ -517,6 +517,34 @@ class GrafanaTranslatorTest {
     }
 
     @Test
+    fun `import maps logs panel type to table`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "logs")
+                            put("title", "Application Logs")
+                            put("targets", buildJsonArray {
+                                add(buildJsonObject {
+                                    put("expr", "{compose_service=~\"app-.*\"}")
+                                })
+                            })
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(1, result.dashboard.widgets.size)
+        assertEquals("table", result.dashboard.widgets[0].widgetType)
+        assertEquals("Application Logs", result.dashboard.widgets[0].title)
+        assertTrue(result.warnings.none { it.contains("unsupported type") })
+    }
+
+    @Test
     fun `import flattens nested panels from collapsed rows`() {
         val json = buildJsonObject {
             put("title", "Test")

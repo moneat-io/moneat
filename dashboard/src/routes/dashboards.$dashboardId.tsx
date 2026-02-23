@@ -16,12 +16,13 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type CreateWidgetRequest, type DashboardWidget} from '@/lib/api'
+import {api, type CreateWidgetRequest, type DashboardVariable, type DashboardWidget} from '@/lib/api'
 import {DashboardGrid} from '@/components/dashboards/DashboardGrid'
 import {DashboardToolbar} from '@/components/dashboards/DashboardToolbar'
 import {WidgetConfigPanel} from '@/components/dashboards/WidgetConfigPanel'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperModal'
+import {VariableSettingsDialog} from '@/components/dashboards/VariableSettingsDialog'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useCallback, useRef, useState} from 'react'
 import {useProject} from '@/contexts/project-context'
@@ -50,6 +51,7 @@ function DashboardViewPage() {
   const [timeRange, setTimeRange] = useState({from: 'now-24h', to: 'now'})
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [variableValues, setVariableValues] = useState<Record<string, string>>({})
+  const [showVariableSettings, setShowVariableSettings] = useState(false)
   const [mapperState, setMapperState] = useState<{
     widget: CreateWidgetRequest
     sources: string[]
@@ -145,6 +147,13 @@ function DashboardViewPage() {
   const handleTitleChange = useCallback(
     (title: string) => {
       updateMutation.mutate({title})
+    },
+    [updateMutation]
+  )
+
+  const handleVariablesSave = useCallback(
+    (variables: DashboardVariable[]) => {
+      updateMutation.mutate({variables})
     },
     [updateMutation]
   )
@@ -265,6 +274,7 @@ function DashboardViewPage() {
         variables={dashboard.variables}
         variableValues={variableValues}
         onVariableChange={(name, value) => setVariableValues(prev => ({...prev, [name]: value}))}
+        onVariableSettings={() => setShowVariableSettings(true)}
       />
 
       <DashboardGrid
@@ -307,6 +317,13 @@ function DashboardViewPage() {
           setMapperState(null)
         }}
         onCancel={() => setMapperState(null)}
+      />
+
+      <VariableSettingsDialog
+        open={showVariableSettings}
+        onOpenChange={setShowVariableSettings}
+        variables={dashboard.variables ?? []}
+        onSave={handleVariablesSave}
       />
     </div>
   )

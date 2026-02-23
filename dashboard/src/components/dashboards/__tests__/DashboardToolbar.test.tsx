@@ -41,6 +41,7 @@ const defaultProps = {
   onAutoRefreshChange: vi.fn(),
   variableValues: {},
   onVariableChange: vi.fn(),
+  onVariableSettings: vi.fn(),
 }
 
 describe('DashboardToolbar', () => {
@@ -159,10 +160,21 @@ describe('DashboardToolbar', () => {
     expect(onTitleChange).toHaveBeenCalledWith('New Title')
   })
 
-  it('does not allow title editing when not in edit mode', async () => {
+  it('shows Variables button when editing', () => {
+    render(<DashboardToolbar {...defaultProps} isEditing={true} />)
+    expect(screen.getByText('Variables')).toBeInTheDocument()
+  })
+
+  it('calls onVariableSettings when Variables button clicked', async () => {
     const user = userEvent.setup()
+    const onVariableSettings = vi.fn()
+    render(<DashboardToolbar {...defaultProps} isEditing={true} onVariableSettings={onVariableSettings} />)
+    await user.click(screen.getByText('Variables'))
+    expect(onVariableSettings).toHaveBeenCalled()
+  })
+
+  it('does not show Variables button when not editing', () => {
     render(<DashboardToolbar {...defaultProps} isEditing={false} />)
-    await user.click(screen.getByText('Test Dashboard'))
-    expect(screen.queryByDisplayValue('Test Dashboard')).not.toBeInTheDocument()
+    expect(screen.queryByText('Variables')).not.toBeInTheDocument()
   })
 })

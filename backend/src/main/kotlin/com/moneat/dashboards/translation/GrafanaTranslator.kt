@@ -55,7 +55,8 @@ class GrafanaTranslator : DashboardTranslator {
         "text" to "text",
         "gauge" to "stat",
         "bargauge" to "bar",
-        "graph" to "timeseries"
+        "graph" to "timeseries",
+        "logs" to "table"
     )
 
     private val reverseWidgetTypeMap = mapOf(
