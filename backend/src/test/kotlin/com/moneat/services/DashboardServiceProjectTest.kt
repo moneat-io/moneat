@@ -33,7 +33,6 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -98,7 +97,7 @@ class DashboardServiceProjectTest {
             )
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        
+
         // Drop and recreate schema for clean state
         transaction {
             SchemaUtils.drop(

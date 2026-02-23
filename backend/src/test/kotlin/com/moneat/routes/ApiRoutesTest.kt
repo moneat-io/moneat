@@ -44,7 +44,6 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.Collections
 import kotlin.test.BeforeTest

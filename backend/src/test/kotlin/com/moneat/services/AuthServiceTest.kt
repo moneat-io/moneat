@@ -14,7 +14,6 @@ import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -47,8 +46,26 @@ class AuthServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(OrgInvitations, SsoConfigurations, EmailsSent, RefreshTokens, UserLegalAcceptances, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens, EmailsSent, SsoConfigurations, OrgInvitations)
+            SchemaUtils.drop(
+                OrgInvitations,
+                SsoConfigurations,
+                EmailsSent,
+                RefreshTokens,
+                UserLegalAcceptances,
+                Memberships,
+                Organizations,
+                Users
+            )
+            SchemaUtils.create(
+                Users,
+                Organizations,
+                Memberships,
+                UserLegalAcceptances,
+                RefreshTokens,
+                EmailsSent,
+                SsoConfigurations,
+                OrgInvitations
+            )
         }
     }
 

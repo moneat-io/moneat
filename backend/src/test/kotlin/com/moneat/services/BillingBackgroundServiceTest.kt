@@ -32,7 +32,6 @@ import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -62,8 +61,26 @@ class BillingBackgroundServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(QuotaNotificationsSent, OrgUsageCounters, PricingTierConfigs, EmailsSent, Subscriptions, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, EmailsSent, PricingTierConfigs, OrgUsageCounters, QuotaNotificationsSent)
+            SchemaUtils.drop(
+                QuotaNotificationsSent,
+                OrgUsageCounters,
+                PricingTierConfigs,
+                EmailsSent,
+                Subscriptions,
+                Memberships,
+                Organizations,
+                Users
+            )
+            SchemaUtils.create(
+                Users,
+                Organizations,
+                Memberships,
+                Subscriptions,
+                EmailsSent,
+                PricingTierConfigs,
+                OrgUsageCounters,
+                QuotaNotificationsSent
+            )
         }
 
         transaction {

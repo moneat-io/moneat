@@ -36,7 +36,6 @@ import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -67,8 +66,14 @@ class StatusPageServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(StatusPageCustomDomains, StatusPageIncidentUpdates, StatusPageMonitors, UptimeMonitors, StatusPageIncidents, StatusPages, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, StatusPages, StatusPageIncidents, UptimeMonitors, StatusPageMonitors, StatusPageIncidentUpdates, StatusPageCustomDomains)
+            SchemaUtils.drop(
+                StatusPageCustomDomains, StatusPageIncidentUpdates, StatusPageMonitors,
+                UptimeMonitors, StatusPageIncidents, StatusPages, Memberships, Organizations, Users
+            )
+            SchemaUtils.create(
+                Users, Organizations, Memberships, StatusPages, StatusPageIncidents,
+                UptimeMonitors, StatusPageMonitors, StatusPageIncidentUpdates, StatusPageCustomDomains
+            )
 
             orgId =
                 Organizations.insert {

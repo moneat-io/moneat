@@ -33,8 +33,26 @@ class ReleaseServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(ArtifactBundles, FileBlobs, ReleaseFiles, Releases, Projects, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Projects, Releases, ReleaseFiles, FileBlobs, ArtifactBundles)
+            SchemaUtils.drop(
+                ArtifactBundles,
+                FileBlobs,
+                ReleaseFiles,
+                Releases,
+                Projects,
+                Memberships,
+                Organizations,
+                Users
+            )
+            SchemaUtils.create(
+                Users,
+                Organizations,
+                Memberships,
+                Projects,
+                Releases,
+                ReleaseFiles,
+                FileBlobs,
+                ArtifactBundles
+            )
         }
     }
 

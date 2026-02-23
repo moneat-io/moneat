@@ -30,7 +30,6 @@ import io.ktor.server.config.*
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
@@ -58,8 +57,24 @@ class AuthServiceLegalConsentTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(OrgInvitations, EmailsSent, RefreshTokens, UserLegalAcceptances, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens, EmailsSent, OrgInvitations)
+            SchemaUtils.drop(
+                OrgInvitations,
+                EmailsSent,
+                RefreshTokens,
+                UserLegalAcceptances,
+                Memberships,
+                Organizations,
+                Users
+            )
+            SchemaUtils.create(
+                Users,
+                Organizations,
+                Memberships,
+                UserLegalAcceptances,
+                RefreshTokens,
+                EmailsSent,
+                OrgInvitations
+            )
         }
     }
 

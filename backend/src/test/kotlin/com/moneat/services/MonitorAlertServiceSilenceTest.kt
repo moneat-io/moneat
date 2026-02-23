@@ -22,7 +22,6 @@ import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest

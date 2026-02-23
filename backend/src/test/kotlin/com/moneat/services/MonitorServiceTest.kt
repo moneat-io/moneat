@@ -39,8 +39,16 @@ class MonitorServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(PricingTierConfigs, SystemAlertTemplateStates, SystemAlertSettings, OrganizationAlertTemplates, SystemAlerts, Systems, Subscriptions, Projects, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Projects, Subscriptions, Systems, SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings, SystemAlertTemplateStates, PricingTierConfigs)
+            SchemaUtils.drop(
+                PricingTierConfigs, SystemAlertTemplateStates, SystemAlertSettings,
+                OrganizationAlertTemplates, SystemAlerts, Systems, Subscriptions, Projects,
+                Memberships, Organizations, Users
+            )
+            SchemaUtils.create(
+                Users, Organizations, Memberships, Projects, Subscriptions, Systems,
+                SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
+                SystemAlertTemplateStates, PricingTierConfigs
+            )
         }
     }
 

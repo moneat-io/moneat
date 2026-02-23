@@ -64,7 +64,14 @@ class StripeServiceWebhookTest {
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
             SchemaUtils.drop(PricingTierConfigs, StripeWebhookEvents, Subscriptions, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, StripeWebhookEvents, PricingTierConfigs)
+            SchemaUtils.create(
+                Users,
+                Organizations,
+                Memberships,
+                Subscriptions,
+                StripeWebhookEvents,
+                PricingTierConfigs
+            )
         }
 
         // Setup test data

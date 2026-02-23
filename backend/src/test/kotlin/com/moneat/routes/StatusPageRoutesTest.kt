@@ -52,7 +52,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
@@ -80,8 +79,14 @@ class StatusPageRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(StatusPageIncidentUpdates, StatusPageCustomDomains, StatusPageMonitors, UptimeMonitors, StatusPageIncidents, StatusPages, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, StatusPages, StatusPageIncidents, UptimeMonitors, StatusPageMonitors, StatusPageCustomDomains, StatusPageIncidentUpdates)
+            SchemaUtils.drop(
+                StatusPageIncidentUpdates, StatusPageCustomDomains, StatusPageMonitors,
+                UptimeMonitors, StatusPageIncidents, StatusPages, Memberships, Organizations, Users
+            )
+            SchemaUtils.create(
+                Users, Organizations, Memberships, StatusPages, StatusPageIncidents,
+                UptimeMonitors, StatusPageMonitors, StatusPageCustomDomains, StatusPageIncidentUpdates
+            )
         }
     }
 

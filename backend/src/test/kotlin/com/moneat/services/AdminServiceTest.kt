@@ -51,7 +51,6 @@ import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -83,8 +82,22 @@ class AdminServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
-            SchemaUtils.drop(SystemAlertSettings, SystemAlerts, Systems, OrganizationAlertTemplates, AiMessages, AiConversations, AlertSilencePeriods, OrganizationIntegrations, PricingTierConfigs, OrgInvitations, SsoConfigurations, PromotionalCreditGrants, EmailsSent, AlertNotificationPreferences, NotificationPreferences, Subscriptions, UsageRecords, ReleaseFiles, Releases, AuthTokens, UserLegalAcceptances, ProjectKeys, Projects, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Projects, ProjectKeys, UserLegalAcceptances, AuthTokens, Releases, ReleaseFiles, UsageRecords, Subscriptions, NotificationPreferences, AlertNotificationPreferences, EmailsSent, PromotionalCreditGrants, SsoConfigurations, OrgInvitations, PricingTierConfigs, OrganizationIntegrations, AlertSilencePeriods, AiConversations, AiMessages, OrganizationAlertTemplates, Systems, SystemAlerts, SystemAlertSettings)
+            SchemaUtils.drop(
+                SystemAlertSettings, SystemAlerts, Systems, OrganizationAlertTemplates, AiMessages,
+                AiConversations, AlertSilencePeriods, OrganizationIntegrations, PricingTierConfigs,
+                OrgInvitations, SsoConfigurations, PromotionalCreditGrants, EmailsSent,
+                AlertNotificationPreferences, NotificationPreferences, Subscriptions, UsageRecords,
+                ReleaseFiles, Releases, AuthTokens, UserLegalAcceptances, ProjectKeys, Projects,
+                Memberships, Organizations, Users
+            )
+            SchemaUtils.create(
+                Users, Organizations, Memberships, Projects, ProjectKeys, UserLegalAcceptances,
+                AuthTokens, Releases, ReleaseFiles, UsageRecords, Subscriptions,
+                NotificationPreferences, AlertNotificationPreferences, EmailsSent,
+                PromotionalCreditGrants, SsoConfigurations, OrgInvitations, PricingTierConfigs,
+                OrganizationIntegrations, AlertSilencePeriods, AiConversations, AiMessages,
+                OrganizationAlertTemplates, Systems, SystemAlerts, SystemAlertSettings
+            )
         }
     }
 

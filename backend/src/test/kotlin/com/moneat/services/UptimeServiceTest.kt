@@ -17,7 +17,6 @@
 package com.moneat.services
 
 import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
@@ -26,7 +25,6 @@ import com.moneat.uptime.services.UptimeService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -64,7 +62,7 @@ class UptimeServiceTest {
             exec("DROP TABLE IF EXISTS subscriptions")
             exec("DROP TABLE IF EXISTS users")
             exec("DROP TABLE IF EXISTS organizations")
-            
+
             SchemaUtils.create(Organizations, Users, UptimeMonitors)
             exec(
                 """

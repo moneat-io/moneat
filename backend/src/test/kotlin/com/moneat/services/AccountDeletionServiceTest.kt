@@ -34,7 +34,15 @@ class AccountDeletionServiceTest {
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
             SchemaUtils.drop(OrgInvitations, Subscriptions, RefreshTokens, Projects, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Projects, RefreshTokens, Subscriptions, OrgInvitations)
+            SchemaUtils.create(
+                Users,
+                Organizations,
+                Memberships,
+                Projects,
+                RefreshTokens,
+                Subscriptions,
+                OrgInvitations
+            )
         }
     }
 
