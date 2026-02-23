@@ -21,6 +21,8 @@ import {DashboardGrid} from '@/components/dashboards/DashboardGrid'
 import {DashboardToolbar} from '@/components/dashboards/DashboardToolbar'
 import {WidgetConfigPanel} from '@/components/dashboards/WidgetConfigPanel'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
+import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperModal'
+import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useState, useCallback} from 'react'
 import {useProject} from '@/contexts/project-context'
 
@@ -43,9 +45,14 @@ function DashboardViewPage() {
 
   const [isEditing, setIsEditing] = useState(edit ?? false)
   const [selectedWidget, setSelectedWidget] = useState<DashboardWidget | null>(null)
+  const [selectedWidgetId, setSelectedWidgetId] = useState<number | null>(null)
   const [showExport, setShowExport] = useState(false)
   const [timeRange, setTimeRange] = useState({from: 'now-24h', to: 'now'})
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [mapperState, setMapperState] = useState<{
+    widget: CreateWidgetRequest
+    sources: string[]
+  } | null>(null)
 
   const id = parseInt(dashboardId, 10)
 
@@ -61,6 +68,42 @@ function DashboardViewPage() {
       queryClient.invalidateQueries({queryKey: ['custom-dashboard', id]})
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
     },
+  })
+
+  const {data: availableDataSources} = useQuery({
+    queryKey: ['datasources'],
+    queryFn: () => api.getDataSources(),
+    staleTime: 60000,
+  })
+
+  const handlePasteWidget = useCallback(
+    (widget: CreateWidgetRequest) => {
+      if (!dashboard) return
+      const widgets: CreateWidgetRequest[] = [
+        ...dashboard.widgets.map((w) => ({
+          title: w.title,
+          widget_type: w.widget_type,
+          grid_x: w.grid_x,
+          grid_y: w.grid_y,
+          grid_w: w.grid_w,
+          grid_h: w.grid_h,
+          query_config: w.query_config,
+          display_config: w.display_config,
+          sort_order: w.sort_order,
+        })),
+        {...widget, sort_order: dashboard.widgets.length},
+      ]
+      updateMutation.mutate({widgets})
+    },
+    [dashboard, updateMutation]
+  )
+
+  useWidgetClipboard({
+    isEditing,
+    widgets: dashboard?.widgets ?? [],
+    selectedWidgetId,
+    onPasteWidget: handlePasteWidget,
+    onDatasourceMapping: (widget, sources) => setMapperState({widget, sources}),
   })
 
   const handleSave = useCallback(() => {
@@ -234,7 +277,12 @@ function DashboardViewPage() {
         timeRange={timeRange}
         autoRefresh={autoRefresh}
         onLayoutChange={handleLayoutChange}
-        onWidgetClick={(widget) => isEditing && setSelectedWidget(widget)}
+        onWidgetClick={(widget) => {
+          if (isEditing) {
+            setSelectedWidgetId(widget.id)
+            setSelectedWidget(widget)
+          }
+        }}
         onWidgetDelete={handleDeleteWidget}
       />
 
@@ -253,6 +301,18 @@ function DashboardViewPage() {
         onOpenChange={setShowExport}
         mode="export"
         dashboardId={id}
+      />
+
+      <DataSourceMapperModal
+        open={mapperState !== null}
+        widget={mapperState?.widget ?? null}
+        unknownSources={mapperState?.sources ?? []}
+        dataSources={availableDataSources ?? []}
+        onConfirm={(widget) => {
+          handlePasteWidget(widget)
+          setMapperState(null)
+        }}
+        onCancel={() => setMapperState(null)}
       />
     </div>
   )
