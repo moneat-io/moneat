@@ -55,6 +55,18 @@ function DashboardViewPage() {
   } | null>(null)
 
   const id = parseInt(dashboardId, 10)
+  const toWidgetUpdateRequest = useCallback((w: DashboardWidget): CreateWidgetRequest => ({
+    ...(w.id > 0 ? {id: w.id} : {}),
+    title: w.title,
+    widget_type: w.widget_type,
+    grid_x: w.grid_x,
+    grid_y: w.grid_y,
+    grid_w: w.grid_w,
+    grid_h: w.grid_h,
+    query_configs: w.query_configs,
+    display_config: w.display_config,
+    sort_order: w.sort_order,
+  }), [])
 
   const {data: dashboard, isLoading} = useQuery({
     queryKey: ['custom-dashboard', id],
@@ -82,24 +94,14 @@ function DashboardViewPage() {
     (widget: CreateWidgetRequest) => {
       if (!dashboard) return
       // Save current state for undo
-      prePasteWidgetsRef.current = dashboard.widgets.map((w) => ({
-        title: w.title,
-        widget_type: w.widget_type,
-        grid_x: w.grid_x,
-        grid_y: w.grid_y,
-        grid_w: w.grid_w,
-        grid_h: w.grid_h,
-        query_configs: w.query_configs,
-        display_config: w.display_config,
-        sort_order: w.sort_order,
-      }))
+      prePasteWidgetsRef.current = dashboard.widgets.map((w) => toWidgetUpdateRequest(w))
       const widgets: CreateWidgetRequest[] = [
         ...prePasteWidgetsRef.current,
         {...widget, sort_order: dashboard.widgets.length},
       ]
       updateMutation.mutate({widgets})
     },
-    [dashboard, updateMutation]
+    [dashboard, updateMutation, toWidgetUpdateRequest]
   )
 
   const handleUndoPaste = useCallback(() => {
@@ -182,6 +184,7 @@ function DashboardViewPage() {
         widgets = dashboard.widgets.map((w, i) =>
           i === existingIndex
             ? {
+                ...(widget.id > 0 ? {id: widget.id} : {}),
                 title: widget.title,
                 widget_type: widget.widget_type,
                 grid_x: widget.grid_x,
@@ -192,31 +195,11 @@ function DashboardViewPage() {
                 display_config: widget.display_config,
                 sort_order: widget.sort_order,
               }
-            : {
-                title: w.title,
-                widget_type: w.widget_type,
-                grid_x: w.grid_x,
-                grid_y: w.grid_y,
-                grid_w: w.grid_w,
-                grid_h: w.grid_h,
-                query_configs: w.query_configs,
-                display_config: w.display_config,
-                sort_order: w.sort_order,
-              }
+            : toWidgetUpdateRequest(w)
         )
       } else {
         widgets = [
-          ...dashboard.widgets.map((w) => ({
-            title: w.title,
-            widget_type: w.widget_type,
-            grid_x: w.grid_x,
-            grid_y: w.grid_y,
-            grid_w: w.grid_w,
-            grid_h: w.grid_h,
-            query_configs: w.query_configs,
-            display_config: w.display_config,
-            sort_order: w.sort_order,
-          })),
+          ...dashboard.widgets.map((w) => toWidgetUpdateRequest(w)),
           {
             title: widget.title,
             widget_type: widget.widget_type,
@@ -233,7 +216,7 @@ function DashboardViewPage() {
       updateMutation.mutate({widgets})
       setSelectedWidget(null)
     },
-    [dashboard, updateMutation]
+    [dashboard, updateMutation, toWidgetUpdateRequest]
   )
 
   const handleDeleteWidget = useCallback(
@@ -241,20 +224,10 @@ function DashboardViewPage() {
       if (!dashboard) return
       const widgets = dashboard.widgets
         .filter((w) => w.id !== widgetId)
-        .map((w) => ({
-          title: w.title,
-          widget_type: w.widget_type,
-          grid_x: w.grid_x,
-          grid_y: w.grid_y,
-          grid_w: w.grid_w,
-          grid_h: w.grid_h,
-          query_configs: w.query_configs,
-          display_config: w.display_config,
-          sort_order: w.sort_order,
-        }))
+        .map((w) => toWidgetUpdateRequest(w))
       updateMutation.mutate({widgets})
     },
-    [dashboard, updateMutation]
+    [dashboard, updateMutation, toWidgetUpdateRequest]
   )
 
   if (isLoading) {

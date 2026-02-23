@@ -120,6 +120,7 @@ export function DashboardGrid({
       const updated: CreateWidgetRequest[] = widgets.map((widget) => {
         const layoutItem = newLayout.find((l) => l.i === String(widget.id))
         return {
+          ...(widget.id > 0 ? {id: widget.id} : {}),
           title: widget.title,
           widget_type: widget.widget_type,
           grid_x: layoutItem?.x ?? widget.grid_x,

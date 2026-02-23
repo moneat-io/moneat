@@ -2059,6 +2059,7 @@ interface CreateDashboardRequest {
 }
 
 interface CreateWidgetRequest {
+  id?: number
   title?: string | null
   widget_type: string
   grid_x: number

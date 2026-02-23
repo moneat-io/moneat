@@ -36,6 +36,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -246,26 +247,68 @@ class CustomDashboardService {
                 it[updatedAt] = now
             }
 
-            // Replace all widgets if provided
+            // Update widgets in place to preserve IDs and dependent records (e.g. alerts)
             if (request.widgets != null) {
-                DashboardWidgets.deleteWhere { dashboardId eq id }
+                val existingById = DashboardWidgets.selectAll()
+                    .where { DashboardWidgets.dashboardId eq id }
+                    .associateBy { it[DashboardWidgets.id] }
+
+                val keptIds = mutableSetOf<Long>()
+
                 request.widgets.forEachIndexed { index, widget ->
-                    DashboardWidgets.insert {
-                        it[dashboardId] = id
-                        it[title] = widget.title
-                        it[widgetType] = widget.widgetType ?: "timeseries"
-                        it[gridX] = widget.gridX ?: 0
-                        it[gridY] = widget.gridY ?: 0
-                        it[gridW] = widget.gridW ?: 6
-                        it[gridH] = widget.gridH ?: 4
-                        it[queryConfig] = widget.queryConfigs?.firstOrNull()?.let { qc ->
-                            json.encodeToString(qc)
-                        } ?: "{}"
-                        it[queryConfigs] = widget.queryConfigs?.let { qcs -> json.encodeToString(qcs) } ?: "[]"
-                        it[displayConfig] = widget.displayConfig?.let { dc -> json.encodeToString(dc) } ?: "{}"
-                        it[sortOrder] = widget.sortOrder ?: index
-                        it[createdAt] = now
-                        it[updatedAt] = now
+                    val requestedId = widget.id
+                    val existingWidget = requestedId?.let { existingById[it] }
+
+                    if (existingWidget != null) {
+                        DashboardWidgets.update({
+                            (DashboardWidgets.id eq requestedId) and (DashboardWidgets.dashboardId eq id)
+                        }) {
+                            widget.title?.let { v -> it[title] = v }
+                            widget.widgetType?.let { v -> it[widgetType] = v }
+                            widget.gridX?.let { v -> it[gridX] = v }
+                            widget.gridY?.let { v -> it[gridY] = v }
+                            widget.gridW?.let { v -> it[gridW] = v }
+                            widget.gridH?.let { v -> it[gridH] = v }
+                            widget.queryConfigs?.let { qcs ->
+                                it[queryConfig] = if (qcs.isNotEmpty()) json.encodeToString(qcs.first()) else "{}"
+                                it[queryConfigs] = json.encodeToString(qcs)
+                            }
+                            widget.displayConfig?.let { dc ->
+                                it[displayConfig] = if (dc.isEmpty()) "{}" else json.encodeToString(dc)
+                            }
+                            widget.sortOrder?.let { v -> it[sortOrder] = v } ?: run { it[sortOrder] = index }
+                            it[updatedAt] = now
+                        }
+                        keptIds.add(requestedId)
+                    } else {
+                        val newId = DashboardWidgets.insert {
+                            it[dashboardId] = id
+                            it[title] = widget.title
+                            it[widgetType] = widget.widgetType ?: "timeseries"
+                            it[gridX] = widget.gridX ?: 0
+                            it[gridY] = widget.gridY ?: 0
+                            it[gridW] = widget.gridW ?: 6
+                            it[gridH] = widget.gridH ?: 4
+                            it[queryConfig] = widget.queryConfigs?.firstOrNull()?.let { qc ->
+                                json.encodeToString(qc)
+                            } ?: "{}"
+                            it[queryConfigs] = widget.queryConfigs?.let { qcs -> json.encodeToString(qcs) } ?: "[]"
+                            it[displayConfig] = widget.displayConfig?.let { dc ->
+                                if (dc.isEmpty()) "{}" else json.encodeToString(dc)
+                            } ?: "{}"
+                            it[sortOrder] = widget.sortOrder ?: index
+                            it[createdAt] = now
+                            it[updatedAt] = now
+                        } get DashboardWidgets.id
+                        keptIds.add(newId)
+                    }
+                }
+
+                if (keptIds.isEmpty()) {
+                    DashboardWidgets.deleteWhere { dashboardId eq id }
+                } else {
+                    DashboardWidgets.deleteWhere {
+                        (dashboardId eq id) and (DashboardWidgets.id notInList keptIds.toList())
                     }
                 }
             }
