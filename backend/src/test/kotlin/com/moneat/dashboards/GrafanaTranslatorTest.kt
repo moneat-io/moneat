@@ -184,8 +184,9 @@ class GrafanaTranslatorTest {
         }
         val warnings = mutableListOf<String>()
         val dsl = translator.parseGrafanaTargets(panel, warnings, 0)
-        assertEquals("system_metrics", dsl.dataSource)
+        assertEquals("__prometheus", dsl.dataSource)
         assertEquals("cpu_percent", dsl.metrics[0].field)
+        assertEquals("rate(node_cpu_seconds_total{mode=\"idle\"})", dsl.rawQuery)
     }
 
     @Test
@@ -220,17 +221,19 @@ class GrafanaTranslatorTest {
     fun `parsePromQL with rate function`() {
         val warnings = mutableListOf<String>()
         val dsl = translator.parsePromQL("rate(http_requests_total{status=\"200\"})", warnings, 0)
-        assertEquals("spans", dsl.dataSource)
+        assertEquals("__prometheus", dsl.dataSource)
         assertEquals(AggFunction.AVG, dsl.metrics[0].function)
         assertTrue(dsl.filters.any { it.field == "status" && it.value == "200" })
+        assertEquals("rate(http_requests_total{status=\"200\"})", dsl.rawQuery)
     }
 
     @Test
     fun `parsePromQL with sum function`() {
         val warnings = mutableListOf<String>()
         val dsl = translator.parsePromQL("sum(container_memory_usage_bytes{})", warnings, 0)
-        assertEquals("container_metrics", dsl.dataSource)
+        assertEquals("__prometheus", dsl.dataSource)
         assertEquals(AggFunction.SUM, dsl.metrics[0].function)
+        assertEquals("sum(container_memory_usage_bytes{})", dsl.rawQuery)
     }
 
     @Test
@@ -470,8 +473,9 @@ class GrafanaTranslatorTest {
             0
         )
         assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
-        assertEquals("spans", dsl.dataSource)
+        assertEquals("__prometheus", dsl.dataSource)
         assertEquals(AggFunction.AVG, dsl.metrics[0].function)
+        assertEquals("rate(http_requests_total{status=\"200\"}[5m])", dsl.rawQuery)
     }
 
     @Test
@@ -483,8 +487,9 @@ class GrafanaTranslatorTest {
             0
         )
         assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
-        assertEquals("system_metrics", dsl.dataSource)
+        assertEquals("__prometheus", dsl.dataSource)
         assertEquals("net_recv_bytes", dsl.metrics[0].field)
+        assertEquals("irate(node_network_receive_bytes_total{device=\"eth0\"}[5m])", dsl.rawQuery)
     }
 
     // --- Complex real-world dashboard ---

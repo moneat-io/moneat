@@ -211,14 +211,14 @@ class GrafanaTranslator : DashboardTranslator {
         warnings: MutableList<String>,
         panelIndex: Int
     ): QueryDsl {
-        // Best-effort parse of PromQL: function(metric_name{label=value}[duration])
-        // Also handles nested like rate(metric{labels}[5m])
+        // PromQL queries need to be executed against Prometheus, not ClickHouse
+        // Always store the original expression as rawQuery and use a marker datasource
         val promMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^\]]*)\])?\)""").find(expr)
 
         if (promMatch == null) {
             warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
             return QueryDsl(
-                dataSource = "system_metrics",
+                dataSource = "__prometheus",
                 metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
                 rawQuery = expr
             )
@@ -229,7 +229,6 @@ class GrafanaTranslator : DashboardTranslator {
         val labelStr = promMatch.groupValues[3]
 
         val aggFunction = mapPromFunction(fn)
-        val dataSource = resolveDataSourceFromPromMetric(metricName)
 
         val filters = mutableListOf<FilterDef>()
         if (!labelStr.isNullOrBlank()) {
@@ -242,11 +241,13 @@ class GrafanaTranslator : DashboardTranslator {
             }
         }
 
+        // Always store original PromQL and use marker datasource
         return QueryDsl(
-            dataSource = dataSource,
+            dataSource = "__prometheus",
             metrics = listOf(MetricDef(aggFunction, mapPromMetricField(metricName), "value")),
             groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto")),
-            filters = filters
+            filters = filters,
+            rawQuery = expr
         )
     }
 
