@@ -22,6 +22,10 @@ import {Trash2, GripVertical} from 'lucide-react'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
+const GRID_BREAKPOINTS = {lg: 1200, md: 996, sm: 768, xs: 480}
+const GRID_COLS = {lg: 12, md: 12, sm: 6, xs: 4}
+const GRID_MARGIN: [number, number] = [12, 12]
+
 interface DashboardGridProps {
   widgets: DashboardWidget[]
   isEditing: boolean
@@ -49,15 +53,26 @@ export function DashboardGrid({
   const [width, setWidth] = useState(1200)
 
   useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        setWidth(containerRef.current.offsetWidth)
-      }
+    const el = containerRef.current
+    if (!el) return
+
+    let rafId: number | null = null
+    const observer = new ResizeObserver(() => {
+      if (rafId != null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (containerRef.current) {
+          setWidth(containerRef.current.offsetWidth)
+        }
+      })
+    })
+
+    setWidth(el.offsetWidth)
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      if (rafId != null) cancelAnimationFrame(rafId)
     }
-    
-    updateWidth()
-    window.addEventListener('resize', updateWidth)
-    return () => window.removeEventListener('resize', updateWidth)
   }, [])
 
   const layout = useMemo<Layout[]>(
@@ -126,8 +141,8 @@ export function DashboardGrid({
       <ResponsiveGridLayout
         className="layout"
         layouts={{lg: layout}}
-        breakpoints={{lg: 1200, md: 996, sm: 768, xs: 480}}
-        cols={{lg: 12, md: 12, sm: 6, xs: 4}}
+        breakpoints={GRID_BREAKPOINTS}
+        cols={GRID_COLS}
         rowHeight={80}
         width={width}
         isDraggable={isEditing}
@@ -135,14 +150,19 @@ export function DashboardGrid({
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         compactType="vertical"
-        margin={[12, 12]}
+        margin={GRID_MARGIN}
       >
       {widgets.map((widget) => (
-        <div key={String(widget.id)} className="group">
+        <div
+          key={String(widget.id)}
+          className="group"
+          style={{contentVisibility: 'auto', containIntrinsicSize: 'auto 300px'}}
+        >
           <div
-            className={`h-full rounded-lg border bg-card overflow-hidden flex flex-col ${
+            className={`h-full rounded-lg border bg-card overflow-visible flex flex-col ${
               isEditing ? 'ring-1 ring-transparent hover:ring-primary/30 cursor-pointer' : ''
             }`}
+            style={{contain: 'layout style'}}
           >
             {/* Widget header */}
             <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 min-h-[36px]">
@@ -180,7 +200,7 @@ export function DashboardGrid({
 
             {/* Widget body */}
             <div
-              className="flex-1 p-2 overflow-hidden"
+              className="flex-1 p-2 overflow-visible min-h-0"
               onClick={() => isEditing && onWidgetClick(widget)}
             >
               <WidgetRenderer

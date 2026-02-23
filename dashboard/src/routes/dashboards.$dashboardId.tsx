@@ -108,6 +108,16 @@ function DashboardViewPage() {
     prePasteWidgetsRef.current = null
   }, [updateMutation])
 
+  const handleWidgetClick = useCallback(
+    (widget: DashboardWidget) => {
+      if (isEditing) {
+        setSelectedWidgetId(widget.id)
+        setSelectedWidget(widget)
+      }
+    },
+    [isEditing]
+  )
+
   useWidgetClipboard({
     isEditing,
     widgets: dashboard?.widgets ?? [],
@@ -288,12 +298,7 @@ function DashboardViewPage() {
         timeRange={timeRange}
         autoRefresh={autoRefresh}
         onLayoutChange={handleLayoutChange}
-        onWidgetClick={(widget) => {
-          if (isEditing) {
-            setSelectedWidgetId(widget.id)
-            setSelectedWidget(widget)
-          }
-        }}
+        onWidgetClick={handleWidgetClick}
         onWidgetDelete={handleDeleteWidget}
       />
 

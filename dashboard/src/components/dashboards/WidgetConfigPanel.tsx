@@ -55,7 +55,7 @@ export function WidgetConfigPanel({
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[480px] bg-background border-l shadow-xl z-50 flex flex-col">
+    <div className="fixed inset-y-0 right-0 w-[880px] bg-background border-l shadow-xl z-50 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="font-medium text-sm">Configure Widget</h3>
@@ -144,7 +144,7 @@ export function WidgetConfigPanel({
               widget={editedWidget}
               dashboardId={dashboardId}
               projectId={projectId}
-              timeRange={editedWidget.query_config.timeRange}
+              timeRange={editedWidget.query_config?.timeRange ?? {from: 'now-24h', to: 'now'}}
               autoRefresh={false}
             />
           </div>

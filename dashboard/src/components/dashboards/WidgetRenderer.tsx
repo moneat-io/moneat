@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {memo, useMemo, useRef, useState, useEffect, useId, type ReactNode} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend,
 } from 'recharts'
+import {useVirtualizer} from '@tanstack/react-virtual'
 import {TopListWidget} from './TopListWidget'
 import {HeatmapWidget} from './HeatmapWidget'
 import ReactMarkdown from 'react-markdown'
@@ -37,6 +39,54 @@ const COLORS = [
 
 const TIME_KEYS = new Set(['time_bucket', 'timestamp', 'time', 'Time', 'day', 'Day'])
 
+/**
+ * Lightweight replacement for Recharts' ResponsiveContainer.
+ * Uses a single ResizeObserver per instance and debounces size updates
+ * so charts freeze at their current size during resize and only re-render
+ * once after it settles. This avoids the N-independent-observer problem
+ * that makes ResponsiveContainer so expensive on dashboard grids.
+ */
+function DebouncedChartContainer({children, debounceMs = 150}: {
+  children: (width: number, height: number) => ReactNode
+  debounceMs?: number
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState<{w: number; h: number} | null>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let isFirstMeasure = true
+
+    const observer = new ResizeObserver(() => {
+      if (isFirstMeasure) {
+        isFirstMeasure = false
+        setSize({w: el.clientWidth, h: el.clientHeight})
+        return
+      }
+      if (timer != null) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        setSize({w: el.clientWidth, h: el.clientHeight})
+      }, debounceMs)
+    })
+
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      if (timer != null) clearTimeout(timer)
+    }
+  }, [debounceMs])
+
+  return (
+    <div ref={ref} style={{width: '100%', height: '100%'}}>
+      {size != null && size.w > 0 && size.h > 0 && children(size.w, size.h)}
+    </div>
+  )
+}
+
 interface WidgetRendererProps {
   widget: DashboardWidget
   dashboardId: number
@@ -45,7 +95,7 @@ interface WidgetRendererProps {
   autoRefresh: boolean
 }
 
-export function WidgetRenderer({
+export const WidgetRenderer = memo(function WidgetRenderer({
   widget,
   dashboardId,
   projectId,
@@ -92,7 +142,7 @@ export function WidgetRenderer({
     case 'donut':
       return <DonutChartWidget data={chartData} />
     case 'stat':
-      return <StatWidget data={chartData} widget={widget} />
+      return <StatWidget data={chartData} widget={widget} timeRange={timeRange} />
     case 'table':
       return <TableWidget data={chartData} />
     case 'toplist':
@@ -106,7 +156,7 @@ export function WidgetRenderer({
         </div>
       )
   }
-}
+})
 
 function isTimeKey(key: string): boolean {
   return TIME_KEYS.has(key)
@@ -214,74 +264,33 @@ function pivotData(data: Record<string, unknown>[], timeKey: string, labelKeys: 
   return {pivoted, seriesKeys: Array.from(seriesSet)}
 }
 
-function TimeseriesChart({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
-  const {timeKey, labelKeys, valueKeys} = classifyColumns(data)
+const CHART_MARGIN = {top: 4, right: 4, left: 0, bottom: 0}
+const TOOLTIP_STYLE = {
+  backgroundColor: 'hsl(var(--popover))',
+  border: '1px solid hsl(var(--border))',
+  borderRadius: '6px',
+  fontSize: '11px',
+}
+const TOOLTIP_WRAPPER_STYLE = {zIndex: 1000}
+
+const TimeseriesChart = memo(function TimeseriesChart({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
+  const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const xKey = timeKey || 'time_bucket'
   const spanMs = getTimeSpanMs(timeRange)
 
   const hasLabels = labelKeys.length > 0 && valueKeys.length > 0
-  const {pivoted, seriesKeys} = hasLabels
-    ? pivotData(data, xKey, labelKeys, valueKeys)
-    : {pivoted: data, seriesKeys: valueKeys}
+  const {pivoted, seriesKeys} = useMemo(
+    () => hasLabels ? pivotData(data, xKey, labelKeys, valueKeys) : {pivoted: data, seriesKeys: valueKeys},
+    [data, xKey, labelKeys, valueKeys, hasLabels]
+  )
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={pivoted} margin={{top: 4, right: 4, left: 0, bottom: 0}}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis
-          dataKey={xKey}
-          tick={{fontSize: 10}}
-          tickFormatter={(v) => formatXAxisTick(v, spanMs)}
-          type="number"
-          domain={['dataMin', 'dataMax']}
-          scale="time"
-        />
-        <YAxis tick={{fontSize: 10}} width={50} />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: '6px',
-            fontSize: '11px',
-          }}
-          labelFormatter={formatTooltipLabel}
-          formatter={formatTooltipValue}
-        />
-        <Legend
-          wrapperStyle={{fontSize: '10px', paddingTop: '4px'}}
-          iconType="line"
-          iconSize={8}
-        />
-        {seriesKeys.map((key, i) => (
-          <Line
-            key={key}
-            type="monotone"
-            dataKey={key}
-            stroke={COLORS[i % COLORS.length]}
-            strokeWidth={1.5}
-            dot={false}
-            activeDot={{r: 3}}
-            connectNulls
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
-  )
-}
-
-function BarChartWidget({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
-  const {timeKey, labelKeys, valueKeys} = classifyColumns(data)
-  const spanMs = getTimeSpanMs(timeRange)
-  const hasTime = !!timeKey
-
-  if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
-    const {pivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
-    return (
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={pivoted} margin={{top: 4, right: 4, left: 0, bottom: 0}}>
+    <DebouncedChartContainer>
+      {(w, h) => (
+        <LineChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
-            dataKey={timeKey}
+            dataKey={xKey}
             tick={{fontSize: 10}}
             tickFormatter={(v) => formatXAxisTick(v, spanMs)}
             type="number"
@@ -290,21 +299,68 @@ function BarChartWidget({data, timeRange}: {data: Record<string, unknown>[]; tim
           />
           <YAxis tick={{fontSize: 10}} width={50} />
           <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '6px',
-              fontSize: '11px',
-            }}
+            contentStyle={TOOLTIP_STYLE}
+            wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={formatTooltipLabel}
             formatter={formatTooltipValue}
           />
-          <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
+          <Legend
+            wrapperStyle={{fontSize: '10px', paddingTop: '4px'}}
+            iconType="line"
+            iconSize={8}
+          />
           {seriesKeys.map((key, i) => (
-            <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} stackId="stack" />
+            <Line
+              key={key}
+              type="monotone"
+              dataKey={key}
+              stroke={COLORS[i % COLORS.length]}
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={{r: 3}}
+              connectNulls
+            />
           ))}
-        </BarChart>
-      </ResponsiveContainer>
+        </LineChart>
+      )}
+    </DebouncedChartContainer>
+  )
+})
+
+const BarChartWidget = memo(function BarChartWidget({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
+  const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
+  const spanMs = getTimeSpanMs(timeRange)
+  const hasTime = !!timeKey
+
+  if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
+    const {pivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    return (
+      <DebouncedChartContainer>
+        {(w, h) => (
+          <BarChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis
+              dataKey={timeKey}
+              tick={{fontSize: 10}}
+              tickFormatter={(v) => formatXAxisTick(v, spanMs)}
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              scale="time"
+            />
+            <YAxis tick={{fontSize: 10}} width={50} />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              wrapperStyle={TOOLTIP_WRAPPER_STYLE}
+              labelFormatter={formatTooltipLabel}
+              formatter={formatTooltipValue}
+            />
+            <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
+            {seriesKeys.map((key, i) => (
+              <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} stackId="stack" />
+            ))}
+          </BarChart>
+        )}
+      </DebouncedChartContainer>
     )
   }
 
@@ -314,65 +370,62 @@ function BarChartWidget({data, timeRange}: {data: Record<string, unknown>[]; tim
   )
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{top: 4, right: 4, left: 0, bottom: 0}}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis dataKey={xKey} tick={{fontSize: 10}} />
-        <YAxis tick={{fontSize: 10}} width={50} />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: '6px',
-            fontSize: '11px',
-          }}
-        />
-        <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
-        {barKeys.map((key, i) => (
-          <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
-        ))}
-      </BarChart>
-    </ResponsiveContainer>
+    <DebouncedChartContainer>
+      {(w, h) => (
+        <BarChart width={w} height={h} data={data} margin={CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          <XAxis dataKey={xKey} tick={{fontSize: 10}} />
+          <YAxis tick={{fontSize: 10}} width={50} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} />
+          <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
+          {barKeys.map((key, i) => (
+            <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
+          ))}
+        </BarChart>
+      )}
+    </DebouncedChartContainer>
   )
-}
+})
 
-function DonutChartWidget({data}: {data: Record<string, unknown>[]}) {
-  const {labelKeys, valueKeys} = classifyColumns(data)
+const DonutChartWidget = memo(function DonutChartWidget({data}: {data: Record<string, unknown>[]}) {
+  const {labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const labelKey = labelKeys[0]
   const valueKey = valueKeys[0]
 
   if (!labelKey || !valueKey) return <div className="text-xs text-muted-foreground">Invalid data</div>
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey={valueKey}
-          nameKey={labelKey}
-          cx="50%"
-          cy="45%"
-          innerRadius="35%"
-          outerRadius="65%"
-          paddingAngle={2}
-          label={({percent}) => `${(percent * 100).toFixed(0)}%`}
-          labelLine={false}
-        >
-          {data.map((_, i) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip />
-        <Legend
-          wrapperStyle={{fontSize: '11px'}}
-          layout="horizontal"
-          verticalAlign="bottom"
-          iconSize={10}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+    <DebouncedChartContainer>
+      {(w, h) => (
+        <PieChart width={w} height={h}>
+          <Pie
+            data={data}
+            dataKey={valueKey}
+            nameKey={labelKey}
+            cx="50%"
+            cy="45%"
+            innerRadius="35%"
+            outerRadius="65%"
+            paddingAngle={2}
+            label={({percent}) => `${(percent * 100).toFixed(0)}%`}
+            labelLine={false}
+          >
+            {data.map((_, i) => (
+              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
+          <Legend
+            wrapperStyle={{fontSize: '11px'}}
+            layout="horizontal"
+            verticalAlign="bottom"
+            iconSize={10}
+          />
+        </PieChart>
+      )}
+    </DebouncedChartContainer>
   )
-}
+})
 
 function deduplicateStatData(
   data: Record<string, unknown>[],
@@ -399,22 +452,41 @@ function deduplicateStatData(
   return Array.from(latest.values())
 }
 
-function StatWidget({data, widget}: {data: Record<string, unknown>[]; widget: DashboardWidget}) {
-  const {labelKeys, valueKeys} = classifyColumns(data)
+const StatWidget = memo(function StatWidget({
+  data,
+  widget,
+  timeRange,
+}: {
+  data: Record<string, unknown>[]
+  widget: DashboardWidget
+  timeRange: TimeRangeDef
+}) {
+  const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
+  const gradientId = `stat-${useId().replace(/:/g, '-')}`
 
-  if (labelKeys.length > 0 && valueKeys.length > 0 && data.length > 1) {
+  // Categorical data (e.g. App Rating 1–5 with counts): show horizontal bars like Grafana
+  const isCategorical = labelKeys.length > 0 && valueKeys.length > 0 && data.length > 1
+  if (isCategorical) {
     const deduped = deduplicateStatData(data, labelKeys, valueKeys)
-    const fontSize = deduped.length <= 5 ? 'text-2xl' : deduped.length <= 10 ? 'text-lg' : 'text-sm'
+    const valueKey = valueKeys[0]
+    const maxValue = Math.max(...deduped.map((r) => Number(r[valueKey]) || 0), 1)
     return (
-      <div className="h-full flex flex-wrap items-center justify-center gap-x-6 gap-y-2 p-2 overflow-auto">
-        {deduped.map((row, i) => {
-          const label = labelKeys.map(k => String(row[k] ?? '')).join(' ')
-          const val = row[valueKeys[0]]
+      <div className="h-full overflow-auto space-y-1.5 p-2">
+        {deduped.slice(0, 20).map((row, i) => {
+          const label = labelKeys.map((k) => String(row[k] ?? '')).join(' ')
+          const value = Number(row[valueKey]) || 0
+          const pct = (value / maxValue) * 100
           return (
-            <div key={i} className="text-center min-w-[48px]">
-              <div className="text-xs text-muted-foreground truncate">{label}</div>
-              <div className={`${fontSize} font-bold tabular-nums`}>
-                {formatStatValue(val)}
+            <div key={i} className="relative">
+              <div
+                className="absolute inset-0 rounded bg-primary/20"
+                style={{width: `${pct}%`}}
+              />
+              <div className="relative flex items-center justify-between px-2 py-1 text-xs">
+                <span className="truncate font-medium">{label}</span>
+                <span className="tabular-nums text-muted-foreground ml-2 shrink-0">
+                  {formatStatValue(value)}
+                </span>
               </div>
             </div>
           )
@@ -423,9 +495,60 @@ function StatWidget({data, widget}: {data: Record<string, unknown>[]; widget: Da
     )
   }
 
+  // Time series data (single series): show main value + sparkline (Grafana-style stat with graph)
+  const hasTimeSeries = !!timeKey && valueKeys.length > 0 && data.length > 1 && labelKeys.length === 0
+  if (hasTimeSeries) {
+    const valueKey = valueKeys[0]
+    const sorted = [...data].sort((a, b) => {
+      const ta = (a[timeKey!] as number) ?? 0
+      const tb = (b[timeKey!] as number) ?? 0
+      return ta - tb
+    })
+    const lastRow = sorted[sorted.length - 1]
+    const mainValue = lastRow?.[valueKey]
+    const sparklineData = sorted.map((r) => ({
+      t: r[timeKey!],
+      v: Number(r[valueKey]) ?? 0,
+    }))
+
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-center gap-0.5 shrink-0">
+          <div className="text-2xl font-bold tabular-nums text-primary">
+            {formatStatValue(mainValue)}
+          </div>
+          <div className="text-xs text-muted-foreground">{widget.title || valueKey?.replace(/_/g, ' ')}</div>
+        </div>
+        <div className="h-12 shrink-0 mt-1 -mb-1">
+          <DebouncedChartContainer>
+            {(w, h) => (
+              <AreaChart width={w} height={h} data={sparklineData} margin={{top: 2, right: 2, left: 2, bottom: 2}}>
+                <defs>
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={1.5}
+                  fill={`url(#${gradientId})`}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            )}
+          </DebouncedChartContainer>
+        </div>
+      </div>
+    )
+  }
+
+  // Single value (no time, no multiple categories)
   const row = data[data.length - 1] || data[0] || {}
   const displayKeys = valueKeys.length > 0 ? valueKeys : Object.keys(row).filter(
-    k => typeof row[k] === 'number' && !isTimeKey(k)
+    (k) => typeof row[k] === 'number' && !isTimeKey(k)
   )
 
   if (displayKeys.length === 0) {
@@ -448,16 +571,28 @@ function StatWidget({data, widget}: {data: Record<string, unknown>[]; widget: Da
       ))}
     </div>
   )
-}
+})
 
-function TableWidget({data}: {data: Record<string, unknown>[]}) {
+const ROW_HEIGHT = 28
+
+const TableWidget = memo(function TableWidget({data}: {data: Record<string, unknown>[]}) {
+  const columns = data.length > 0 ? Object.keys(data[0]) : []
+
+  const parentRef = useRef<HTMLDivElement>(null)
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: data.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  })
+
   if (data.length === 0) return null
-  const columns = Object.keys(data[0])
 
   return (
-    <div className="h-full overflow-auto">
+    <div ref={parentRef} className="h-full overflow-auto">
       <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-muted/50">
+        <thead className="sticky top-0 bg-muted/50 z-10">
           <tr>
             {columns.map((col) => (
               <th key={col} className="text-left px-2 py-1.5 font-medium">
@@ -466,18 +601,33 @@ function TableWidget({data}: {data: Record<string, unknown>[]}) {
             ))}
           </tr>
         </thead>
-        <tbody>
-          {data.map((row, i) => (
-            <tr key={i} className="border-t border-muted/30">
-              {columns.map((col) => (
-                <td key={col} className="px-2 py-1 truncate max-w-[200px]">
-                  {String(row[col] ?? '')}
-                </td>
-              ))}
-            </tr>
-          ))}
+        <tbody style={{height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative'}}>
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const row = data[virtualRow.index]
+            return (
+              <tr
+                key={virtualRow.index}
+                className="border-t border-muted/30"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                  display: 'table-row',
+                }}
+              >
+                {columns.map((col) => (
+                  <td key={col} className="px-2 py-1 truncate max-w-[200px]">
+                    {String(row[col] ?? '')}
+                  </td>
+                ))}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
   )
-}
+})

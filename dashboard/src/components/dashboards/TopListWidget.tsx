@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {memo} from 'react'
+
 interface TopListWidgetProps {
   data: Record<string, unknown>[]
 }
 
-export function TopListWidget({data}: TopListWidgetProps) {
+export const TopListWidget = memo(function TopListWidget({data}: TopListWidgetProps) {
   if (data.length === 0) return null
 
   const columns = Object.keys(data[0])
@@ -49,4 +51,4 @@ export function TopListWidget({data}: TopListWidgetProps) {
       })}
     </div>
   )
-}
+})

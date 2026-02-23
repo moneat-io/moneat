@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo} from 'react'
+import {memo, useMemo} from 'react'
 
 interface HeatmapWidgetProps {
   data: Record<string, unknown>[]
@@ -29,7 +29,7 @@ const HEAT_COLORS = [
   'bg-emerald-600 dark:bg-emerald-500',
 ]
 
-export function HeatmapWidget({data}: HeatmapWidgetProps) {
+export const HeatmapWidget = memo(function HeatmapWidget({data}: HeatmapWidgetProps) {
   const {grid, xLabels, yLabels} = useMemo(() => {
     if (data.length === 0) return {grid: [] as number[][], xLabels: [] as string[], yLabels: [] as string[]}
 
@@ -100,4 +100,4 @@ export function HeatmapWidget({data}: HeatmapWidgetProps) {
       </div>
     </div>
   )
-}
+})

@@ -19,7 +19,7 @@ import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
 import {api, type CustomDashboard, type CreateDashboardRequest} from '@/lib/api'
 import {Plus, Import, MoreHorizontal, Trash2, Copy, LayoutDashboard, Database} from 'lucide-react'
 import {Button} from '@/components/ui/button'
-import {useState} from 'react'
+import {useState, memo} from 'react'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 
 export const Route = createFileRoute('/dashboards/')({
@@ -154,7 +154,7 @@ function DashboardListPage() {
   )
 }
 
-function DashboardCard({
+const DashboardCard = memo(function DashboardCard({
   dashboard,
   onDelete,
   onDuplicate,
@@ -224,4 +224,4 @@ function DashboardCard({
       </div>
     </Link>
   )
-}
+})
