@@ -49,7 +49,7 @@ class AuthServiceLegalConsentTest {
         // Initialize DB connection and schema once per test class
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_legal;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_legal;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
         }

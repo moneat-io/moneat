@@ -64,7 +64,7 @@ class AuthTokenRoutesTest {
         if (!dbInitialized) {
             Database.connect(
                 url =
-                "jdbc:h2:mem:moneat_auth_token_routes;MODE=PostgreSQL;" +
+                "jdbc:h2:mem:moneat_auth_token_routes;" +
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )

@@ -63,7 +63,7 @@ class ReleaseRoutesTest {
         if (!dbInitialized) {
             Database.connect(
                 url =
-                "jdbc:h2:mem:moneat_release_routes;MODE=PostgreSQL;" +
+                "jdbc:h2:mem:moneat_release_routes;" +
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )

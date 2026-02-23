@@ -48,7 +48,7 @@ class RetentionPolicyServiceTest {
             db =
                 Database.connect(
                     url =
-                    "jdbc:h2:mem:moneat_retention_policy;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                    "jdbc:h2:mem:moneat_retention_policy;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                     driver = "org.h2.Driver"
                 )
         }
