@@ -204,6 +204,7 @@ export interface UseWidgetClipboardOptions {
   selectedWidgetId: number | null
   onPasteWidget: (widget: CreateWidgetRequest) => void
   onDatasourceMapping: (widget: CreateWidgetRequest, unknownSources: string[]) => void
+  onUndo: () => void
 }
 
 export function useWidgetClipboard({
@@ -212,8 +213,10 @@ export function useWidgetClipboard({
   selectedWidgetId,
   onPasteWidget,
   onDatasourceMapping,
+  onUndo,
 }: UseWidgetClipboardOptions) {
   const copiedWidgetRef = useRef<DashboardWidget | null>(null)
+  const canUndoRef = useRef(false)
 
   const getNextY = useCallback(() => {
     if (widgets.length === 0) return 0
@@ -240,6 +243,7 @@ export function useWidgetClipboard({
     if (!isEditing) return
 
     const yOffset = getNextY()
+    canUndoRef.current = true
 
     // Try reading from system clipboard first (may contain Grafana/external JSON)
     try {
@@ -300,11 +304,18 @@ export function useWidgetClipboard({
         e.preventDefault()
         handlePaste()
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (canUndoRef.current) {
+          e.preventDefault()
+          canUndoRef.current = false
+          onUndo()
+        }
+      }
     }
 
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [isEditing, handleCopy, handlePaste])
+  }, [isEditing, handleCopy, handlePaste, onUndo])
 
   return {
     copiedWidget: copiedWidgetRef.current,

@@ -56,9 +56,24 @@ class GrafanaTranslator : DashboardTranslator {
 
         val panels = json["panels"]?.jsonArray ?: JsonArray(emptyList())
 
-        val widgets = panels.mapIndexedNotNull { index, element ->
+        // Flatten: row panels may contain nested panels
+        val allPanels = mutableListOf<JsonObject>()
+        panels.forEach { element ->
+            val panel = element.jsonObject
+            val type = panel["type"]?.jsonPrimitive?.contentOrNull
+            if (type == "row") {
+                // Extract nested panels from collapsed rows
+                panel["panels"]?.jsonArray?.forEach { nested ->
+                    allPanels.add(nested.jsonObject)
+                }
+            } else {
+                allPanels.add(panel)
+            }
+        }
+
+        val widgets = allPanels.mapIndexedNotNull { index, panel ->
             try {
-                importPanel(element.jsonObject, index, warnings)
+                importPanel(panel, index, warnings)
             } catch (e: Exception) {
                 warnings.add("Panel $index: failed to import - ${e.message}")
                 null
@@ -84,8 +99,14 @@ class GrafanaTranslator : DashboardTranslator {
         panelJson: JsonObject,
         index: Int,
         warnings: MutableList<String>
-    ): WidgetResponse {
+    ): WidgetResponse? {
         val grafanaType = panelJson["type"]?.jsonPrimitive?.contentOrNull ?: "timeseries"
+
+        // Skip row panels — they're layout separators, not actual widgets
+        if (grafanaType == "row") {
+            return null
+        }
+
         val moneatType = widgetTypeMap[grafanaType]
         if (moneatType == null) {
             warnings.add("Panel $index: unsupported type '$grafanaType', imported as 'text'")
@@ -193,8 +214,9 @@ class GrafanaTranslator : DashboardTranslator {
         warnings: MutableList<String>,
         panelIndex: Int
     ): QueryDsl {
-        // Best-effort parse of PromQL: function(metric_name{label=value})
-        val promMatch = Regex("""(\w+)\(([^{]+)(?:\{([^}]*)\})?\)""").find(expr)
+        // Best-effort parse of PromQL: function(metric_name{label=value}[duration])
+        // Also handles nested like rate(metric{labels}[5m])
+        val promMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^\]]*)\])?\)""").find(expr)
 
         if (promMatch == null) {
             warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")

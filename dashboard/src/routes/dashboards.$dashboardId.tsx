@@ -23,7 +23,7 @@ import {WidgetConfigPanel} from '@/components/dashboards/WidgetConfigPanel'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperModal'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
-import {useState, useCallback} from 'react'
+import {useState, useCallback, useRef} from 'react'
 import {useProject} from '@/contexts/project-context'
 
 interface DashboardSearch {
@@ -76,21 +76,25 @@ function DashboardViewPage() {
     staleTime: 60000,
   })
 
+  const prePasteWidgetsRef = useRef<CreateWidgetRequest[] | null>(null)
+
   const handlePasteWidget = useCallback(
     (widget: CreateWidgetRequest) => {
       if (!dashboard) return
+      // Save current state for undo
+      prePasteWidgetsRef.current = dashboard.widgets.map((w) => ({
+        title: w.title,
+        widget_type: w.widget_type,
+        grid_x: w.grid_x,
+        grid_y: w.grid_y,
+        grid_w: w.grid_w,
+        grid_h: w.grid_h,
+        query_config: w.query_config,
+        display_config: w.display_config,
+        sort_order: w.sort_order,
+      }))
       const widgets: CreateWidgetRequest[] = [
-        ...dashboard.widgets.map((w) => ({
-          title: w.title,
-          widget_type: w.widget_type,
-          grid_x: w.grid_x,
-          grid_y: w.grid_y,
-          grid_w: w.grid_w,
-          grid_h: w.grid_h,
-          query_config: w.query_config,
-          display_config: w.display_config,
-          sort_order: w.sort_order,
-        })),
+        ...prePasteWidgetsRef.current,
         {...widget, sort_order: dashboard.widgets.length},
       ]
       updateMutation.mutate({widgets})
@@ -98,12 +102,19 @@ function DashboardViewPage() {
     [dashboard, updateMutation]
   )
 
+  const handleUndoPaste = useCallback(() => {
+    if (!prePasteWidgetsRef.current) return
+    updateMutation.mutate({widgets: prePasteWidgetsRef.current})
+    prePasteWidgetsRef.current = null
+  }, [updateMutation])
+
   useWidgetClipboard({
     isEditing,
     widgets: dashboard?.widgets ?? [],
     selectedWidgetId,
     onPasteWidget: handlePasteWidget,
     onDatasourceMapping: (widget, sources) => setMapperState({widget, sources}),
+    onUndo: handleUndoPaste,
   })
 
   const handleSave = useCallback(() => {

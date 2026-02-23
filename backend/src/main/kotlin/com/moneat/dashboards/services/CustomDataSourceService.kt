@@ -63,7 +63,7 @@ class CustomDataSourceService {
                 it[description] = request.description
                 it[CustomDataSources.sourceType] = sourceType.name.lowercase()
                 it[host] = request.host
-                it[port] = request.port ?: defaultPort(sourceType)
+                it[port] = request.port
                 it[databaseName] = request.databaseName
                 it[CustomDataSources.encryptedCredentials] = encryptedCreds
                 it[extraConfig] = json.encodeToString(request.extraConfig)
@@ -147,11 +147,6 @@ class CustomDataSourceService {
         )
         val credsJson = json.encodeToString(DataSourceCredentials.serializer(), creds)
         return CredentialEncryption.encrypt(credsJson)
-    }
-
-    private fun defaultPort(sourceType: CustomDataSourceType): Int = when (sourceType) {
-        CustomDataSourceType.POSTGRESQL -> 5432
-        CustomDataSourceType.PROMETHEUS -> 9090
     }
 
     private fun ResultRow.toResponse() = CustomDataSourceResponse(

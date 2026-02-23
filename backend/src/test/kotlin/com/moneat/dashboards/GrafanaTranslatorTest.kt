@@ -366,4 +366,212 @@ class GrafanaTranslatorTest {
         val exported = translator.export(imported.dashboard)
         assertEquals("Roundtrip Test", exported["title"]?.jsonPrimitive?.content)
     }
+
+    // --- Row panel handling ---
+
+    @Test
+    fun `import skips row panels without warnings`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("panels", buildJsonArray {
+                add(buildJsonObject {
+                    put("type", "row")
+                    put("title", "Section Header")
+                })
+                add(buildJsonObject {
+                    put("type", "stat")
+                    put("targets", JsonArray(emptyList()))
+                })
+            })
+        }
+        val result = translator.import(json)
+        assertEquals(1, result.dashboard.widgets.size)
+        assertEquals("stat", result.dashboard.widgets[0].widgetType)
+        assertTrue(result.warnings.none { it.contains("row") })
+    }
+
+    @Test
+    fun `import flattens nested panels from collapsed rows`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("panels", buildJsonArray {
+                add(buildJsonObject {
+                    put("type", "row")
+                    put("title", "Collapsed Section")
+                    put("panels", buildJsonArray {
+                        add(buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "Nested Panel")
+                            put("targets", buildJsonArray {
+                                add(buildJsonObject {
+                                    put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
+                                })
+                            })
+                            put("gridPos", buildJsonObject {
+                                put("x", 0); put("y", 0); put("w", 24); put("h", 8)
+                            })
+                        })
+                    })
+                })
+            })
+        }
+        val result = translator.import(json)
+        assertEquals(1, result.dashboard.widgets.size)
+        assertEquals("timeseries", result.dashboard.widgets[0].widgetType)
+        assertEquals("Nested Panel", result.dashboard.widgets[0].title)
+    }
+
+    // --- PromQL with range vectors ---
+
+    @Test
+    fun `parsePromQL with range vector duration`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL(
+            "rate(app_quality_feedback_total{response=\"good\"}[1h])",
+            warnings,
+            0
+        )
+        // Should parse successfully, not fall through to rawQuery
+        assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
+        assertEquals(AggFunction.AVG, dsl.metrics[0].function) // rate → AVG
+        assertTrue(dsl.filters.any { it.field == "response" && it.value == "good" })
+    }
+
+    @Test
+    fun `parsePromQL with rate and 5m range vector`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL(
+            "rate(http_requests_total{status=\"200\"}[5m])",
+            warnings,
+            0
+        )
+        assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
+        assertEquals("spans", dsl.dataSource)
+        assertEquals(AggFunction.AVG, dsl.metrics[0].function)
+    }
+
+    @Test
+    fun `parsePromQL with irate`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL(
+            "irate(node_network_receive_bytes_total{device=\"eth0\"}[5m])",
+            warnings,
+            0
+        )
+        assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
+        assertEquals("system_metrics", dsl.dataSource)
+        assertEquals("net_recv_bytes", dsl.metrics[0].field)
+    }
+
+    // --- Complex real-world dashboard ---
+
+    @Test
+    fun `import complex dashboard with mixed panel types`() {
+        val json = buildJsonObject {
+            put("title", "Application Overview")
+            put("description", "Real-time application monitoring")
+            put("panels", buildJsonArray {
+                // Row panel (should be skipped)
+                add(buildJsonObject {
+                    put("type", "row")
+                    put("title", "Overview")
+                    put("gridPos", buildJsonObject {
+                        put("x", 0); put("y", 0); put("w", 24); put("h", 1)
+                    })
+                })
+                // Stat panel with PromQL + range vector
+                add(buildJsonObject {
+                    put("type", "stat")
+                    put("title", "Feedback Rate")
+                    put("targets", buildJsonArray {
+                        add(buildJsonObject {
+                            put("expr", "rate(app_quality_feedback_total{response=\"good\"}[1h])")
+                            put("datasource", buildJsonObject {
+                                put("type", "prometheus"); put("uid", "prom-1")
+                            })
+                        })
+                    })
+                    put("gridPos", buildJsonObject {
+                        put("x", 0); put("y", 1); put("w", 6); put("h", 4)
+                    })
+                })
+                // Timeseries with simple PromQL
+                add(buildJsonObject {
+                    put("type", "timeseries")
+                    put("title", "Request Rate")
+                    put("targets", buildJsonArray {
+                        add(buildJsonObject {
+                            put("expr", "rate(http_requests_total{method=\"GET\"}[5m])")
+                        })
+                    })
+                    put("gridPos", buildJsonObject {
+                        put("x", 6); put("y", 1); put("w", 18); put("h", 8)
+                    })
+                })
+                // Row panel with collapsed nested panels
+                add(buildJsonObject {
+                    put("type", "row")
+                    put("title", "Database")
+                    put("panels", buildJsonArray {
+                        add(buildJsonObject {
+                            put("type", "table")
+                            put("title", "Slow Queries")
+                            put("targets", buildJsonArray {
+                                add(buildJsonObject {
+                                    put("rawSql", "SELECT query, avg(duration_ms) as avg_duration FROM app_queries WHERE duration_ms > 1000 GROUP BY query ORDER BY avg_duration DESC LIMIT 20")
+                                })
+                            })
+                            put("gridPos", buildJsonObject {
+                                put("x", 0); put("y", 10); put("w", 24); put("h", 8)
+                            })
+                        })
+                    })
+                })
+                // Another row (should be skipped)
+                add(buildJsonObject {
+                    put("type", "row")
+                    put("title", "Infrastructure")
+                })
+                // Table with custom data source SQL
+                add(buildJsonObject {
+                    put("type", "table")
+                    put("title", "Session Data")
+                    put("targets", buildJsonArray {
+                        add(buildJsonObject {
+                            put("rawSql", "SELECT user_id, count() as sessions FROM app_sessions GROUP BY user_id ORDER BY sessions DESC LIMIT 50")
+                        })
+                    })
+                    put("gridPos", buildJsonObject {
+                        put("x", 0); put("y", 20); put("w", 24); put("h", 6)
+                    })
+                })
+            })
+        }
+        val result = translator.import(json)
+
+        // Row panels skipped, nested panels flattened
+        assertEquals(4, result.dashboard.widgets.size)
+
+        // Panel 0 (stat) - should parse PromQL with range vector
+        assertEquals("stat", result.dashboard.widgets[0].widgetType)
+        assertEquals("Feedback Rate", result.dashboard.widgets[0].title)
+        assertEquals(0, result.dashboard.widgets[0].gridX)
+        assertEquals(3, result.dashboard.widgets[0].gridW)  // 6/2 = 3
+
+        // Panel 1 (timeseries) - PromQL with range vector
+        assertEquals("timeseries", result.dashboard.widgets[1].widgetType)
+        assertEquals("Request Rate", result.dashboard.widgets[1].title)
+
+        // Panel 2 (nested table from collapsed row) - SQL with custom table
+        assertEquals("table", result.dashboard.widgets[2].widgetType)
+        assertEquals("Slow Queries", result.dashboard.widgets[2].title)
+        assertTrue(result.dashboard.widgets[2].queryConfig.rawQuery?.contains("duration_ms") == true)
+
+        // Panel 3 (table with SQL from custom app_sessions table)
+        assertEquals("table", result.dashboard.widgets[3].widgetType)
+
+        // Warnings: SQL queries and unknown tables
+        assertTrue(result.warnings.any { it.contains("rawQuery") })
+        assertTrue(result.warnings.none { it.contains("row") })
+    }
 }

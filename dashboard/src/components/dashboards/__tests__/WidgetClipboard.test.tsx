@@ -55,6 +55,7 @@ Object.defineProperty(navigator, 'clipboard', {
 describe('useWidgetClipboard', () => {
   const onPasteWidget = vi.fn()
   const onDatasourceMapping = vi.fn()
+  const onUndo = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -67,6 +68,7 @@ describe('useWidgetClipboard', () => {
     selectedWidgetId: 1,
     onPasteWidget,
     onDatasourceMapping,
+    onUndo,
   }
 
   it('copies selected widget to clipboard on Ctrl+C', () => {
@@ -253,5 +255,49 @@ describe('useWidgetClipboard', () => {
 
     expect(onPasteWidget).not.toHaveBeenCalled()
     expect(onDatasourceMapping).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+Z undoes a paste', async () => {
+    mockClipboard.readText.mockRejectedValue(new Error('denied'))
+
+    renderHook(() => useWidgetClipboard(defaultOpts))
+
+    // Copy first
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {key: 'c', ctrlKey: true, bubbles: true})
+      )
+    })
+
+    // Paste
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {key: 'v', ctrlKey: true, bubbles: true})
+      )
+      await new Promise((r) => setTimeout(r, 10))
+    })
+
+    expect(onPasteWidget).toHaveBeenCalledTimes(1)
+
+    // Undo
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {key: 'z', ctrlKey: true, bubbles: true})
+      )
+    })
+
+    expect(onUndo).toHaveBeenCalledTimes(1)
+  })
+
+  it('Ctrl+Z does nothing without a prior paste', () => {
+    renderHook(() => useWidgetClipboard(defaultOpts))
+
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {key: 'z', ctrlKey: true, bubbles: true})
+      )
+    })
+
+    expect(onUndo).not.toHaveBeenCalled()
   })
 })
