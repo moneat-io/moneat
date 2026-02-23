@@ -61,7 +61,7 @@ class AuthServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             RefreshTokens.deleteAll()
             UserLegalAcceptances.deleteAll()
             EmailsSent.deleteAll()

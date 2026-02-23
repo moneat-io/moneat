@@ -82,7 +82,7 @@ class StatusPageServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             StatusPageCustomDomains.deleteAll()
             StatusPageIncidentUpdates.deleteAll()
             StatusPageIncidents.deleteAll()

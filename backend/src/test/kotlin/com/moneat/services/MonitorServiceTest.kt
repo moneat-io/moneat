@@ -49,7 +49,7 @@ class MonitorServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             SystemAlertTemplateStates.deleteAll()
             SystemAlerts.deleteAll()
             SystemAlertSettings.deleteAll()

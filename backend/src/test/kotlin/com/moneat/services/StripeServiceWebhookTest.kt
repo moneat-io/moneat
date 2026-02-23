@@ -75,7 +75,7 @@ class StripeServiceWebhookTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             StripeWebhookEvents.deleteAll()
             Subscriptions.deleteAll()
             Memberships.deleteAll()

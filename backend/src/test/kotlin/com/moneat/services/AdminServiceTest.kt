@@ -115,7 +115,7 @@ class AdminServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             OrgInvitations.deleteAll()
             OrganizationIntegrations.deleteAll()
             SystemAlertSettings.deleteAll()

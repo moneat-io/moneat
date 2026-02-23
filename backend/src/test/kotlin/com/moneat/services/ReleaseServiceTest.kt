@@ -47,7 +47,7 @@ class ReleaseServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             ArtifactBundles.deleteAll()
             FileBlobs.deleteAll()
             ReleaseFiles.deleteAll()

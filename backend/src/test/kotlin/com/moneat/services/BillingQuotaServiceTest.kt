@@ -82,7 +82,7 @@ class BillingQuotaServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             OrgUsageCounters.deleteAll()
             Subscriptions.deleteAll()
             Organizations.deleteAll()

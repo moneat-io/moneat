@@ -101,7 +101,7 @@ class UptimeServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             UptimeMonitors.deleteAll()
             Subscriptions.deleteAll()
             Users.deleteAll()

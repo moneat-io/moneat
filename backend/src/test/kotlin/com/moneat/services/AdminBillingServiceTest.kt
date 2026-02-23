@@ -41,7 +41,7 @@ class AdminBillingServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             PromotionalCreditGrants.deleteAll()
             Subscriptions.deleteAll()
             Memberships.deleteAll()

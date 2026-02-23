@@ -65,7 +65,7 @@ class MonitorServiceAlertTest {
             )
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        
+
         // Ensure schema exists (idempotent in H2) and clean between tests
         transaction {
             try {
@@ -85,7 +85,7 @@ class MonitorServiceAlertTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             SystemAlertTemplateStates.deleteAll()
             SystemAlertSettings.deleteAll()
             SystemAlerts.deleteAll()

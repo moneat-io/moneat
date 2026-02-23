@@ -97,7 +97,7 @@ class EventServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             ProjectKeys.deleteAll()
             Projects.deleteAll()
             Organizations.deleteAll()

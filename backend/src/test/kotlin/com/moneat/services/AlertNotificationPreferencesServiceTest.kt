@@ -62,7 +62,7 @@ class AlertNotificationPreferencesServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             AlertNotificationPreferences.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

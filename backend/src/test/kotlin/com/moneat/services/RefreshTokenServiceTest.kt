@@ -65,7 +65,7 @@ class RefreshTokenServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             RefreshTokens.deleteAll()
             Memberships.deleteAll()
             Users.deleteAll()

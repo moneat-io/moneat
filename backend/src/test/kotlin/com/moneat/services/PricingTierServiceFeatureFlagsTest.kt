@@ -58,7 +58,7 @@ class PricingTierServiceFeatureFlagsTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             PricingTierConfigs.deleteAll()
         }
     }

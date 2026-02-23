@@ -58,7 +58,7 @@ class OrgInvitationServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             OrgInvitations.deleteAll()
             EmailsSent.deleteAll()
             Memberships.deleteAll()

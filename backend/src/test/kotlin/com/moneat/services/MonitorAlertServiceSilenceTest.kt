@@ -77,7 +77,7 @@ class MonitorAlertServiceSilenceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             AlertSilencePeriods.deleteAll()
             Users.deleteAll()
             Organizations.deleteAll()

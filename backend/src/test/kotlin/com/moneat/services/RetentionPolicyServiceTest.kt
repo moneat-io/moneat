@@ -68,7 +68,7 @@ class RetentionPolicyServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             Subscriptions.deleteAll()
             Systems.deleteAll()
             Projects.deleteAll()

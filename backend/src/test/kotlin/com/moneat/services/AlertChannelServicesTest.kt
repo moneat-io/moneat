@@ -65,7 +65,7 @@ class AlertChannelServicesTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             OrganizationIntegrations.deleteAll()
             EmailsSent.deleteAll()
             Users.deleteAll()

@@ -71,7 +71,7 @@ class AuthServiceLegalConsentTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             OrgInvitations.deleteAll()
             RefreshTokens.deleteAll()
             EmailsSent.deleteAll()

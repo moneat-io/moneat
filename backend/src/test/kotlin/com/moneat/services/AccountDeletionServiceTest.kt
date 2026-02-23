@@ -46,7 +46,7 @@ class AccountDeletionServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             OrgInvitations.deleteAll()
             RefreshTokens.deleteAll()
             Subscriptions.deleteAll()

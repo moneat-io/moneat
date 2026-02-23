@@ -58,7 +58,7 @@ class IncidentServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             IncidentRoutingRules.deleteAll()
             IncidentProviderConfigs.deleteAll()
             Organizations.deleteAll()

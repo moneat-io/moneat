@@ -71,7 +71,7 @@ class UsageTrackingServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             OrgUsageCounters.deleteAll()
             UsageRecords.deleteAll()
             Subscriptions.deleteAll()

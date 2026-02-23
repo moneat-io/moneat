@@ -59,7 +59,7 @@ class AttributionAnalyticsServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             Subscriptions.deleteAll()
             Organizations.deleteAll()
             PricingTierConfigs.deleteAll()

@@ -34,7 +34,7 @@ class OrgMembershipServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             Memberships.deleteAll()
             Users.deleteAll()
             Organizations.deleteAll()

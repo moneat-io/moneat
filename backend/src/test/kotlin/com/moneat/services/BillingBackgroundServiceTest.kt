@@ -76,7 +76,7 @@ class BillingBackgroundServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             QuotaNotificationsSent.deleteAll()
             OrgUsageCounters.deleteAll()
             Subscriptions.deleteAll()

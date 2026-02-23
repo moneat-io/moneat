@@ -56,7 +56,7 @@ class DashboardServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             Projects.deleteAll()
         }
     }

@@ -68,7 +68,7 @@ class NotificationServiceTest {
             } catch (_: Exception) {
                 // Tables already exist, which is fine
             }
-            
+
             EmailsSent.deleteAll()
             NotificationPreferences.deleteAll()
             Memberships.deleteAll()
