@@ -15,15 +15,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute} from '@tanstack/react-router'
-import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type DashboardWidget, type CreateWidgetRequest} from '@/lib/api'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {api, type CreateWidgetRequest, type DashboardWidget} from '@/lib/api'
 import {DashboardGrid} from '@/components/dashboards/DashboardGrid'
 import {DashboardToolbar} from '@/components/dashboards/DashboardToolbar'
 import {WidgetConfigPanel} from '@/components/dashboards/WidgetConfigPanel'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperModal'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
-import {useState, useCallback, useRef} from 'react'
+import {useCallback, useRef, useState} from 'react'
 import {useProject} from '@/contexts/project-context'
 
 interface DashboardSearch {

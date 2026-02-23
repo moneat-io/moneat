@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useCallback, useRef, useState, useEffect} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
-import {Responsive as ResponsiveGridLayout, type Layout} from 'react-grid-layout'
-import type {DashboardWidget, CreateWidgetRequest, TimeRangeDef} from '@/lib/api'
+import {type Layout, Responsive as ResponsiveGridLayout} from 'react-grid-layout'
+import type {CreateWidgetRequest, DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {WidgetRenderer} from './WidgetRenderer'
-import {Trash2, GripVertical, Bell} from 'lucide-react'
+import {Bell, GripVertical, Trash2} from 'lucide-react'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
