@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useCallback, useState} from 'react'
+import {useEffect, useState} from 'react'
 import type {DashboardVariable} from '@/lib/api'
 import {
   Dialog,
@@ -57,17 +57,14 @@ export function VariableSettingsDialog({
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   const [optionInput, setOptionInput] = useState('')
 
-  const handleOpen = useCallback(
-    (isOpen: boolean) => {
-      if (isOpen) {
-        setDraft(variables.map((v) => ({...v, options: [...v.options]})))
-        setExpandedIndex(variables.length > 0 ? 0 : null)
-        setOptionInput('')
-      }
-      onOpenChange(isOpen)
-    },
-    [variables, onOpenChange]
-  )
+  // Initialize draft when dialog opens
+  useEffect(() => {
+    if (open) {
+      setDraft(variables.map((v) => ({...v, options: [...(v.options ?? [])]})))
+      setExpandedIndex(variables.length > 0 ? 0 : null)
+      setOptionInput('')
+    }
+  }, [open, variables])
 
   const updateVar = (index: number, patch: Partial<DashboardVariable>) => {
     setDraft((prev) => prev.map((v, i) => (i === index ? {...v, ...patch} : v)))
@@ -109,7 +106,7 @@ export function VariableSettingsDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px] max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Dashboard Variables</DialogTitle>
