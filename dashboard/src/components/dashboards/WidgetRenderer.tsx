@@ -18,8 +18,8 @@ import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import {TopListWidget} from './TopListWidget'
 import {HeatmapWidget} from './HeatmapWidget'
@@ -32,7 +32,10 @@ const COLORS = [
   'hsl(var(--chart-4))',
   'hsl(var(--chart-5))',
   '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00C49F',
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
 ]
+
+const TIME_KEYS = new Set(['time_bucket', 'timestamp', 'time', 'Time', 'day', 'Day'])
 
 interface WidgetRendererProps {
   widget: DashboardWidget
@@ -83,9 +86,9 @@ export function WidgetRenderer({
 
   switch (widget.widget_type) {
     case 'timeseries':
-      return <TimeseriesChart data={chartData} />
+      return <TimeseriesChart data={chartData} timeRange={timeRange} />
     case 'bar':
-      return <BarChartWidget data={chartData} />
+      return <BarChartWidget data={chartData} timeRange={timeRange} />
     case 'donut':
       return <DonutChartWidget data={chartData} />
     case 'stat':
@@ -105,70 +108,228 @@ export function WidgetRenderer({
   }
 }
 
-function TimeseriesChart({data}: {data: Record<string, unknown>[]}) {
-  const keys = Object.keys(data[0] || {}).filter((k) => k !== 'time_bucket' && k !== 'timestamp')
+function isTimeKey(key: string): boolean {
+  return TIME_KEYS.has(key)
+}
+
+function getTimeSpanMs(timeRange: TimeRangeDef): number {
+  const match = /^now-(\d+)([smhdwMy])$/.exec(timeRange.from)
+  if (!match) return 86400000
+  const amount = parseInt(match[1])
+  const unit = match[2]
+  const ms: Record<string, number> = {s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000, M: 2592000000, y: 31536000000}
+  return amount * (ms[unit] || 86400000)
+}
+
+function formatXAxisTick(v: string | number, spanMs: number) {
+  const ts = typeof v === 'number' ? v : Date.parse(v)
+  if (isNaN(ts)) return String(v)
+  const d = new Date(ts)
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  if (spanMs >= 86400000) return `${month}/${day}`
+  const hours = String(d.getHours()).padStart(2, '0')
+  const mins = String(d.getMinutes()).padStart(2, '0')
+  return `${hours}:${mins}`
+}
+
+function formatTooltipLabel(v: string | number) {
+  const ts = typeof v === 'number' ? v : Date.parse(v)
+  if (isNaN(ts)) return String(v)
+  const d = new Date(ts)
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const mins = String(d.getMinutes()).padStart(2, '0')
+  return `${month}/${day} ${hours}:${mins}`
+}
+
+function formatTooltipValue(value: number | string) {
+  if (typeof value !== 'number') return value
+  if (Number.isInteger(value)) return value.toLocaleString()
+  return value.toLocaleString(undefined, {maximumFractionDigits: 2})
+}
+
+function formatStatValue(value: unknown): string {
+  if (typeof value !== 'number') return String(value ?? 0)
+  if (Number.isInteger(value)) return value.toLocaleString()
+  return value.toLocaleString(undefined, {maximumFractionDigits: 2})
+}
+
+function classifyColumns(data: Record<string, unknown>[]) {
+  const sample = data[0] || {}
+  const timeKey = Object.keys(sample).find(isTimeKey)
+  const labelKeys: string[] = []
+  const valueKeys: string[] = []
+
+  for (const key of Object.keys(sample)) {
+    if (isTimeKey(key)) continue
+    const sampleVal = sample[key]
+    if (typeof sampleVal === 'number') {
+      valueKeys.push(key)
+    } else if (typeof sampleVal === 'string') {
+      labelKeys.push(key)
+    }
+  }
+
+  return {timeKey, labelKeys, valueKeys}
+}
+
+/**
+ * Pivots flat multi-series data into one-row-per-timestamp format for recharts.
+ * Input:  [{time_bucket: 100, platform: "android", value: 5}, {time_bucket: 100, platform: "ios", value: 3}]
+ * Output: [{time_bucket: 100, "android": 5, "ios": 3}]
+ */
+function pivotData(data: Record<string, unknown>[], timeKey: string, labelKeys: string[], valueKeys: string[]) {
+  if (labelKeys.length === 0 || valueKeys.length === 0) {
+    return {pivoted: data, seriesKeys: valueKeys}
+  }
+
+  const grouped = new Map<string | number, Record<string, unknown>>()
+  const seriesSet = new Set<string>()
+
+  for (const row of data) {
+    const t = row[timeKey] as string | number
+    if (!grouped.has(t)) {
+      grouped.set(t, {[timeKey]: t})
+    }
+    const entry = grouped.get(t)!
+
+    const labelParts = labelKeys.map(k => String(row[k] ?? '')).filter(Boolean)
+    const seriesLabel = labelParts.join(', ') || 'value'
+
+    for (const vk of valueKeys) {
+      const key = valueKeys.length > 1 ? `${seriesLabel} (${vk})` : seriesLabel
+      entry[key] = row[vk]
+      seriesSet.add(key)
+    }
+  }
+
+  const pivoted = Array.from(grouped.values()).sort((a, b) => {
+    const ta = a[timeKey] as number
+    const tb = b[timeKey] as number
+    return ta - tb
+  })
+
+  return {pivoted, seriesKeys: Array.from(seriesSet)}
+}
+
+function TimeseriesChart({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
+  const {timeKey, labelKeys, valueKeys} = classifyColumns(data)
+  const xKey = timeKey || 'time_bucket'
+  const spanMs = getTimeSpanMs(timeRange)
+
+  const hasLabels = labelKeys.length > 0 && valueKeys.length > 0
+  const {pivoted, seriesKeys} = hasLabels
+    ? pivotData(data, xKey, labelKeys, valueKeys)
+    : {pivoted: data, seriesKeys: valueKeys}
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{top: 4, right: 4, left: 0, bottom: 0}}>
+      <LineChart data={pivoted} margin={{top: 4, right: 4, left: 0, bottom: 0}}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis
-          dataKey="time_bucket"
+          dataKey={xKey}
           tick={{fontSize: 10}}
-          tickFormatter={(v) => {
-            const d = new Date(v)
-            return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-          }}
+          tickFormatter={(v) => formatXAxisTick(v, spanMs)}
+          type="number"
+          domain={['dataMin', 'dataMax']}
+          scale="time"
         />
-        <YAxis tick={{fontSize: 10}} width={40} />
+        <YAxis tick={{fontSize: 10}} width={50} />
         <Tooltip
           contentStyle={{
             backgroundColor: 'hsl(var(--popover))',
             border: '1px solid hsl(var(--border))',
             borderRadius: '6px',
-            fontSize: '12px',
+            fontSize: '11px',
           }}
+          labelFormatter={formatTooltipLabel}
+          formatter={formatTooltipValue}
         />
-        {keys.map((key, i) => (
-          <Area
+        <Legend
+          wrapperStyle={{fontSize: '10px', paddingTop: '4px'}}
+          iconType="line"
+          iconSize={8}
+        />
+        {seriesKeys.map((key, i) => (
+          <Line
             key={key}
             type="monotone"
             dataKey={key}
             stroke={COLORS[i % COLORS.length]}
-            fill={COLORS[i % COLORS.length]}
-            fillOpacity={0.15}
             strokeWidth={1.5}
+            dot={false}
+            activeDot={{r: 3}}
+            connectNulls
           />
         ))}
-      </AreaChart>
+      </LineChart>
     </ResponsiveContainer>
   )
 }
 
-function BarChartWidget({data}: {data: Record<string, unknown>[]}) {
-  const keys = Object.keys(data[0] || {}).filter(
-    (k) => k !== 'time_bucket' && k !== 'timestamp' && typeof data[0][k] === 'number'
+function BarChartWidget({data, timeRange}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef}) {
+  const {timeKey, labelKeys, valueKeys} = classifyColumns(data)
+  const spanMs = getTimeSpanMs(timeRange)
+  const hasTime = !!timeKey
+
+  if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
+    const {pivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={pivoted} margin={{top: 4, right: 4, left: 0, bottom: 0}}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          <XAxis
+            dataKey={timeKey}
+            tick={{fontSize: 10}}
+            tickFormatter={(v) => formatXAxisTick(v, spanMs)}
+            type="number"
+            domain={['dataMin', 'dataMax']}
+            scale="time"
+          />
+          <YAxis tick={{fontSize: 10}} width={50} />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: 'hsl(var(--popover))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: '6px',
+              fontSize: '11px',
+            }}
+            labelFormatter={formatTooltipLabel}
+            formatter={formatTooltipValue}
+          />
+          <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
+          {seriesKeys.map((key, i) => (
+            <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} stackId="stack" />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  const xKey = labelKeys[0] || timeKey || 'category'
+  const barKeys = valueKeys.length > 0 ? valueKeys : Object.keys(data[0] || {}).filter(
+    k => !isTimeKey(k) && typeof data[0][k] === 'number'
   )
-  const labelKey = Object.keys(data[0] || {}).find(
-    (k) => typeof data[0][k] === 'string'
-  ) || keys[0]
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout="vertical" margin={{top: 4, right: 4, left: 0, bottom: 0}}>
+      <BarChart data={data} margin={{top: 4, right: 4, left: 0, bottom: 0}}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis type="number" tick={{fontSize: 10}} />
-        <YAxis dataKey={labelKey} type="category" tick={{fontSize: 10}} width={80} />
+        <XAxis dataKey={xKey} tick={{fontSize: 10}} />
+        <YAxis tick={{fontSize: 10}} width={50} />
         <Tooltip
           contentStyle={{
             backgroundColor: 'hsl(var(--popover))',
             border: '1px solid hsl(var(--border))',
             borderRadius: '6px',
-            fontSize: '12px',
+            fontSize: '11px',
           }}
         />
-        {keys.map((key, i) => (
-          <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[0, 4, 4, 0]} />
+        <Legend wrapperStyle={{fontSize: '10px', paddingTop: '4px'}} iconSize={8} />
+        {barKeys.map((key, i) => (
+          <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />
         ))}
       </BarChart>
     </ResponsiveContainer>
@@ -176,8 +337,9 @@ function BarChartWidget({data}: {data: Record<string, unknown>[]}) {
 }
 
 function DonutChartWidget({data}: {data: Record<string, unknown>[]}) {
-  const labelKey = Object.keys(data[0] || {}).find((k) => typeof data[0][k] === 'string')
-  const valueKey = Object.keys(data[0] || {}).find((k) => typeof data[0][k] === 'number')
+  const {labelKeys, valueKeys} = classifyColumns(data)
+  const labelKey = labelKeys[0]
+  const valueKey = valueKeys[0]
 
   if (!labelKey || !valueKey) return <div className="text-xs text-muted-foreground">Invalid data</div>
 
@@ -189,11 +351,11 @@ function DonutChartWidget({data}: {data: Record<string, unknown>[]}) {
           dataKey={valueKey}
           nameKey={labelKey}
           cx="50%"
-          cy="50%"
-          innerRadius="45%"
-          outerRadius="75%"
+          cy="45%"
+          innerRadius="35%"
+          outerRadius="65%"
           paddingAngle={2}
-          label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
+          label={({percent}) => `${(percent * 100).toFixed(0)}%`}
           labelLine={false}
         >
           {data.map((_, i) => (
@@ -201,25 +363,87 @@ function DonutChartWidget({data}: {data: Record<string, unknown>[]}) {
           ))}
         </Pie>
         <Tooltip />
+        <Legend
+          wrapperStyle={{fontSize: '11px'}}
+          layout="horizontal"
+          verticalAlign="bottom"
+          iconSize={10}
+        />
       </PieChart>
     </ResponsiveContainer>
   )
 }
 
-function StatWidget({data}: {data: Record<string, unknown>[]; widget: DashboardWidget}) {
-  const row = data[0] || {}
-  const numericKeys = Object.keys(row).filter((k) => typeof row[k] === 'number')
+function deduplicateStatData(
+  data: Record<string, unknown>[],
+  labelKeys: string[],
+  valueKeys: string[],
+) {
+  if (labelKeys.length === 0) return data
+
+  const latest = new Map<string, Record<string, unknown>>()
+  const timeKey = Object.keys(data[0] || {}).find(isTimeKey)
+
+  for (const row of data) {
+    const key = labelKeys.map(k => String(row[k] ?? '')).join('|')
+    const existing = latest.get(key)
+    if (!existing) {
+      latest.set(key, row)
+    } else if (timeKey) {
+      const existingTime = existing[timeKey] as number
+      const rowTime = row[timeKey] as number
+      if (rowTime > existingTime) latest.set(key, row)
+    }
+  }
+
+  return Array.from(latest.values())
+}
+
+function StatWidget({data, widget}: {data: Record<string, unknown>[]; widget: DashboardWidget}) {
+  const {labelKeys, valueKeys} = classifyColumns(data)
+
+  if (labelKeys.length > 0 && valueKeys.length > 0 && data.length > 1) {
+    const deduped = deduplicateStatData(data, labelKeys, valueKeys)
+    const fontSize = deduped.length <= 5 ? 'text-2xl' : deduped.length <= 10 ? 'text-lg' : 'text-sm'
+    return (
+      <div className="h-full flex flex-wrap items-center justify-center gap-x-6 gap-y-2 p-2 overflow-auto">
+        {deduped.map((row, i) => {
+          const label = labelKeys.map(k => String(row[k] ?? '')).join(' ')
+          const val = row[valueKeys[0]]
+          return (
+            <div key={i} className="text-center min-w-[48px]">
+              <div className="text-xs text-muted-foreground truncate">{label}</div>
+              <div className={`${fontSize} font-bold tabular-nums`}>
+                {formatStatValue(val)}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const row = data[data.length - 1] || data[0] || {}
+  const displayKeys = valueKeys.length > 0 ? valueKeys : Object.keys(row).filter(
+    k => typeof row[k] === 'number' && !isTimeKey(k)
+  )
+
+  if (displayKeys.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+        No numeric data
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col items-center justify-center gap-1">
-      {numericKeys.map((key) => (
+      {displayKeys.map((key) => (
         <div key={key} className="text-center">
           <div className="text-2xl font-bold tabular-nums">
-            {typeof row[key] === 'number'
-              ? Number(row[key]).toLocaleString(undefined, {maximumFractionDigits: 2})
-              : String(row[key])}
+            {formatStatValue(row[key])}
           </div>
-          <div className="text-xs text-muted-foreground">{key.replace(/_/g, ' ')}</div>
+          <div className="text-xs text-muted-foreground">{widget.title || key.replace(/_/g, ' ')}</div>
         </div>
       ))}
     </div>

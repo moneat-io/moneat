@@ -18,6 +18,9 @@ package com.moneat.dashboards
 
 import com.moneat.dashboards.models.*
 import com.moneat.dashboards.services.CustomDataSourceExecutor
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.long
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertContains
@@ -255,7 +258,13 @@ class CustomDataSourceExecutorTest {
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 100) as List<Map<String, Any>>
         assertEquals(1, rows.size)
-        assertEquals("up", rows[0]["metric"].toString().removeSurrounding("\""))
+        // Metric name "up" is used as the value column key; value is parsed to numeric
+        assertTrue(rows[0].containsKey("up"))
+        assertEquals(1.0, (rows[0]["up"] as kotlinx.serialization.json.JsonPrimitive).double)
+        // Timestamp is converted to milliseconds
+        assertEquals(1700000000000L, (rows[0]["time_bucket"] as kotlinx.serialization.json.JsonPrimitive).long)
+        // Labels are preserved
+        assertEquals("api", (rows[0]["job"] as kotlinx.serialization.json.JsonPrimitive).content)
     }
 
     @Test
@@ -266,6 +275,10 @@ class CustomDataSourceExecutorTest {
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 100) as List<Map<String, Any>>
         assertEquals(2, rows.size)
+        // Values are numeric, timestamps are in ms
+        assertEquals(100.0, (rows[0]["http_requests_total"] as kotlinx.serialization.json.JsonPrimitive).double)
+        assertEquals(1700000000000L, (rows[0]["time_bucket"] as kotlinx.serialization.json.JsonPrimitive).long)
+        assertEquals(105.0, (rows[1]["http_requests_total"] as kotlinx.serialization.json.JsonPrimitive).double)
     }
 
     @Test

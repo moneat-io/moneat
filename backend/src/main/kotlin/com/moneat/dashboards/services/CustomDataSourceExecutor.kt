@@ -84,9 +84,10 @@ class CustomDataSourceExecutor {
             CustomDataSourceType.POSTGRESQL -> executePostgresQuery(
                 sourceId, host, port ?: 5432, databaseName ?: "postgres", credentials, query, limit
             )
-            CustomDataSourceType.PROMETHEUS -> executePrometheusQuery(
-                host, port, credentials, query, timeRange, limit
-            )
+            CustomDataSourceType.PROMETHEUS -> {
+                val promLimit = if (timeRange != null) limit.coerceAtLeast(5000) else limit
+                executePrometheusQuery(host, port, credentials, query, timeRange, promLimit)
+            }
         }
     }
 
@@ -330,9 +331,8 @@ class CustomDataSourceExecutor {
                     for (point in values) {
                         val arr = point.jsonArray
                         val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = arr[0] // epoch seconds - use time_bucket for chart compatibility
-                        row[metricName] = arr[1]  // use metric name as field name for chart series
-                        // Include label dimensions
+                        row["time_bucket"] = promTimestampToMs(arr[0])
+                        row[metricName] = promValueToNumber(arr[1])
                         for ((k, v) in metric) {
                             if (k != "__name__") row[k] = v
                         }
@@ -344,8 +344,8 @@ class CustomDataSourceExecutor {
                     val value = result.jsonObject["value"]?.jsonArray
                     if (value != null) {
                         val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = value[0]
-                        row[metricName] = value[1]  // use metric name as field name
+                        row["time_bucket"] = promTimestampToMs(value[0])
+                        row[metricName] = promValueToNumber(value[1])
                         for ((k, v) in metric) {
                             if (k != "__name__") row[k] = v
                         }
@@ -356,6 +356,17 @@ class CustomDataSourceExecutor {
             if (rows.size >= limit) break
         }
         return rows
+    }
+
+    private fun promTimestampToMs(element: JsonElement): JsonElement {
+        val sec = element.jsonPrimitive.doubleOrNull ?: return element
+        return JsonPrimitive((sec * 1000).toLong())
+    }
+
+    private fun promValueToNumber(element: JsonElement): JsonElement {
+        val str = element.jsonPrimitive.contentOrNull ?: return element
+        if (str == "NaN" || str == "+Inf" || str == "-Inf") return JsonNull
+        return str.toDoubleOrNull()?.let { JsonPrimitive(it) } ?: element
     }
 
     private fun buildPrometheusUrl(host: String, port: Int?): String {

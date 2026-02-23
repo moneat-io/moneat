@@ -116,15 +116,19 @@ class GrafanaTranslator : DashboardTranslator {
 
         // Grafana uses 24-col grid, Moneat uses 12-col
         // Grafana height units are also larger (1 = ~30px), scale down by ~3
+        // Y positions must be scaled by the same factor as height to keep panels packed
         val gridPos = panelJson["gridPos"]?.jsonObject
         val gridX = (gridPos?.get("x")?.jsonPrimitive?.intOrNull ?: 0) / 2
-        val gridY = gridPos?.get("y")?.jsonPrimitive?.intOrNull ?: 0
+        val grafanaY = gridPos?.get("y")?.jsonPrimitive?.intOrNull ?: 0
+        val gridY = (grafanaY + 2) / 3
         val gridW = ((gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: 12) + 1) / 2
         val grafanaH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: 4
         val gridH = (grafanaH + 2) / 3  // Scale down: 9 → 3, 12 → 4, 6 → 2
 
         val queryConfig = parseGrafanaTargets(panelJson, warnings, index)
+        val displayConfig = extractDisplayConfig(panelJson)
 
+        val minH = if (moneatType == "stat") 2 else 3
         return WidgetResponse(
             id = 0,
             dashboardId = 0,
@@ -133,10 +137,29 @@ class GrafanaTranslator : DashboardTranslator {
             gridX = gridX.coerceIn(0, 11),
             gridY = gridY,
             gridW = gridW.coerceIn(1, 12),
-            gridH = gridH.coerceIn(1, 12),
+            gridH = gridH.coerceIn(minH, 12),
             queryConfig = queryConfig,
+            displayConfig = displayConfig,
             sortOrder = index
         )
+    }
+
+    private fun extractDisplayConfig(panelJson: JsonObject): Map<String, String> {
+        val config = mutableMapOf<String, String>()
+
+        val defaults = panelJson["fieldConfig"]?.jsonObject
+            ?.get("defaults")?.jsonObject
+            ?.get("custom")?.jsonObject
+
+        defaults?.get("drawStyle")?.jsonPrimitive?.contentOrNull?.let { config["drawStyle"] = it }
+        defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull?.let { config["fillOpacity"] = it.toString() }
+        defaults?.get("stacking")?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull?.let { config["stacking"] = it }
+        defaults?.get("scaleDistribution")?.jsonObject?.get("type")?.jsonPrimitive?.contentOrNull?.let { config["scaleType"] = it }
+
+        val options = panelJson["options"]?.jsonObject
+        options?.get("legend")?.jsonObject?.get("placement")?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
+
+        return config
     }
 
     internal fun parseGrafanaTargets(
@@ -238,7 +261,8 @@ class GrafanaTranslator : DashboardTranslator {
             dataSource = dataSource,
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
             groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto")),
-            rawQuery = rawSql
+            rawQuery = rawSql,
+            limit = 5000
         )
     }
 
@@ -256,7 +280,8 @@ class GrafanaTranslator : DashboardTranslator {
             return QueryDsl(
                 dataSource = "__prometheus",
                 metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
-                rawQuery = expr
+                rawQuery = expr,
+                limit = 5000
             )
         }
 
@@ -277,13 +302,13 @@ class GrafanaTranslator : DashboardTranslator {
             }
         }
 
-        // Always store original PromQL and use marker datasource
         return QueryDsl(
             dataSource = "__prometheus",
             metrics = listOf(MetricDef(aggFunction, mapPromMetricField(metricName), "value")),
             groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto")),
             filters = filters,
-            rawQuery = expr
+            rawQuery = expr,
+            limit = 5000
         )
     }
 
