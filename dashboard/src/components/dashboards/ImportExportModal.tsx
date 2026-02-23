@@ -193,6 +193,8 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const handleDataSourceMapped = (mapping: Record<string, string>) => {
     if (!pendingImport) return
     
+    console.log('Applying mappings:', mapping)
+    
     // Apply mappings to the JSON
     try {
       const parsed = JSON.parse(pendingImport.json)
@@ -202,23 +204,31 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           if (panel.targets) {
             for (const target of panel.targets) {
               if (target.datasource) {
+                const originalDs = JSON.stringify(target.datasource)
                 // Handle different datasource formats
                 if (typeof target.datasource === 'string') {
                   // String datasource name
                   if (mapping[target.datasource]) {
+                    console.log(`  Mapped string datasource: ${target.datasource} → ${mapping[target.datasource]}`)
                     target.datasource = mapping[target.datasource]
                   }
                 } else if (target.datasource.type) {
-                  // Object with type field
+                  // Object with type field - check if we have a mapping for this type
                   if (mapping[target.datasource.type]) {
+                    console.log(`  Mapped datasource by type: ${target.datasource.type} → ${mapping[target.datasource.type]}`)
                     // Replace with mapped custom datasource
                     target.datasource = mapping[target.datasource.type]
                   }
                 } else if (target.datasource.uid) {
                   // Object with UID
                   if (mapping[target.datasource.uid]) {
+                    console.log(`  Mapped datasource by uid: ${target.datasource.uid} → ${mapping[target.datasource.uid]}`)
                     target.datasource = mapping[target.datasource.uid]
                   }
+                }
+                
+                if (originalDs === JSON.stringify(target.datasource)) {
+                  console.log(`  No mapping applied for datasource: ${originalDs}`)
                 }
               }
             }
