@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState, useRef} from 'react'
+import {useState, useRef, useMemo} from 'react'
 import {useMutation, useQueryClient, useQuery} from '@tanstack/react-query'
 import {useNavigate} from '@tanstack/react-router'
 import {api} from '@/lib/api'
@@ -43,12 +43,34 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const [unmappedDataSources, setUnmappedDataSources] = useState<string[]>([])
   const [pendingImport, setPendingImport] = useState<{format: string; json: string} | null>(null)
   
-  // Fetch data sources for mapping
-  const {data: dataSourcesData} = useQuery({
+  // Fetch custom data sources for mapping
+  const {data: customDataSourcesData} = useQuery({
     queryKey: ['custom-data-sources'],
     queryFn: () => api.listCustomDataSources(),
     enabled: open && mode === 'import',
   })
+  
+  // Build complete DataSourceInfo array (built-in + custom)
+  const allDataSources = useMemo(() => {
+    const builtIn = [
+      {name: 'events', label: 'Events', fields: []},
+      {name: 'spans', label: 'Spans', fields: []},
+      {name: 'logs', label: 'Logs', fields: []},
+      {name: 'system_metrics', label: 'System Metrics', fields: []},
+      {name: 'container_metrics', label: 'Container Metrics', fields: []},
+      {name: 'uptime_heartbeats', label: 'Uptime Heartbeats', fields: []},
+      {name: 'llm_generations', label: 'LLM Generations', fields: []},
+      {name: 'analytics_events', label: 'Analytics Events', fields: []},
+    ]
+    
+    const custom = (customDataSourcesData || []).map(ds => ({
+      name: `custom:${ds.name}`,
+      label: `${ds.name} (${ds.source_type})`,
+      fields: [],
+    }))
+    
+    return [...builtIn, ...custom]
+  }, [customDataSourcesData])
 
   const importMutation = useMutation({
     mutationFn: ({format, json}: {format: string; json: string}) => api.importDashboard(format, json),
@@ -133,7 +155,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         'container_metrics', 'uptime_heartbeats', 'llm_generations', 'analytics_events'])
       
       console.log('Found datasources in import:', Array.from(foundDataSources))
-      console.log('Available custom datasources:', dataSourcesData?.map(d => ({name: d.name, type: d.source_type})))
+      console.log('Available custom datasources:', customDataSourcesData?.map(d => ({name: d.name, type: d.source_type})))
       
       const unmapped: string[] = []
       for (const ds of foundDataSources) {
@@ -408,7 +430,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         open={showDataSourceMapper}
         onOpenChange={setShowDataSourceMapper}
         unmappedDataSources={unmappedDataSources}
-        dataSources={dataSourcesData || []}
+        dataSources={allDataSources}
         onMapped={handleDataSourceMapped}
       />
     </div>
