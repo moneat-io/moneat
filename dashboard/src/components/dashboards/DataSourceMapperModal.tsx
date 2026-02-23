@@ -52,7 +52,7 @@ export function DataSourceMapperModal({
   const [mappings, setMappings] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
     sourcesToMap.forEach((s) => {
-      initial[s] = dataSources[0]?.name || 'events'
+      initial[s] = '__skip__'  // Default to skip
     })
     return initial
   })
@@ -62,13 +62,19 @@ export function DataSourceMapperModal({
 
   const handleConfirm = () => {
     if (isImportMode && onMapped) {
-      // Import mode: just return the mappings
-      onMapped(mappings)
+      // Import mode: filter out skipped mappings
+      const actualMappings: Record<string, string> = {}
+      for (const [source, target] of Object.entries(mappings)) {
+        if (target !== '__skip__') {
+          actualMappings[source] = target
+        }
+      }
+      onMapped(actualMappings)
     } else if (widget && onConfirm) {
       // Widget paste mode: apply mappings to widget
       let dataSource = widget.query_config.dataSource
       for (const [source, target] of Object.entries(mappings)) {
-        if (dataSource === `__unmapped:${source}`) {
+        if (target !== '__skip__' && dataSource === `__unmapped:${source}`) {
           dataSource = target
         }
       }
@@ -103,7 +109,7 @@ export function DataSourceMapperModal({
             </h3>
             <p className="text-muted-foreground text-sm">
               {isImportMode
-                ? 'The imported dashboard uses data sources that need to be mapped to your sources.'
+                ? 'Map external datasources to your Moneat sources, or skip to configure later.'
                 : "The pasted widget uses data sources that don't exist in Moneat. Map them to an available source."}
             </p>
           </div>
@@ -114,6 +120,12 @@ export function DataSourceMapperModal({
             // Show a human-friendly label for known markers
             const sourceLabel = source === '__prometheus' ? 'Prometheus' : source
             
+            // Add "Skip" option to datasources for this picker
+            const dataSourcesWithSkip = [
+              {name: '__skip__', label: '⊘ Skip / None (configure later)', fields: []},
+              ...dataSources,
+            ]
+            
             return (
               <div key={source}>
                 <label className="text-sm font-medium">
@@ -122,8 +134,8 @@ export function DataSourceMapperModal({
                 </label>
                 <div className="mt-1.5">
                   <DataSourcePicker
-                    dataSources={dataSources}
-                    value={mappings[source] || 'events'}
+                    dataSources={dataSourcesWithSkip}
+                    value={mappings[source] || '__skip__'}
                     onChange={(val) => setMappings((prev) => ({...prev, [source]: val}))}
                   />
                 </div>

@@ -107,7 +107,7 @@ describe('DataSourceMapperModal', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onConfirm with mapped datasource when paste button clicked', () => {
+  it('calls onConfirm with unmapped datasource when skipped', () => {
     const onConfirm = vi.fn()
     render(
       <DataSourceMapperModal
@@ -120,12 +120,12 @@ describe('DataSourceMapperModal', () => {
       />
     )
 
-    // Default mapping should be first datasource
+    // Default is to skip, so datasource should remain unmapped
     fireEvent.click(screen.getByText('Paste Widget'))
     expect(onConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
         query_config: expect.objectContaining({
-          dataSource: 'events',
+          dataSource: '__unmapped:mysql',  // Should remain unmapped when skipped
         }),
       })
     )
