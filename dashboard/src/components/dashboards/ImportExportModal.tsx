@@ -16,6 +16,7 @@
 
 import {useState, useRef} from 'react'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
+import {useNavigate} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Upload, Download, AlertTriangle, Check} from 'lucide-react'
@@ -29,11 +30,13 @@ interface ImportExportModalProps {
 
 export function ImportExportModal({open, onOpenChange, mode, dashboardId}: ImportExportModalProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [jsonInput, setJsonInput] = useState('')
   const [format, setFormat] = useState<string>('datadog')
   const [warnings, setWarnings] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState(false)
+  const [importedDashboardId, setImportedDashboardId] = useState<number | null>(null)
   const [exportData, setExportData] = useState<string>('')
 
   const importMutation = useMutation({
@@ -41,7 +44,13 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
     onSuccess: (result) => {
       setWarnings(result.warnings)
       setImportSuccess(true)
+      setImportedDashboardId(result.dashboard.id)
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+      // Navigate immediately if no warnings to review
+      if (result.warnings.length === 0) {
+        onOpenChange(false)
+        navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(result.dashboard.id)}})
+      }
     },
   })
 
@@ -186,11 +195,26 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
 
               {/* Success */}
               {importSuccess && (
-                <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950 p-3 flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                  <span className="text-xs text-green-700 dark:text-green-300">
-                    Dashboard imported successfully!
-                  </span>
+                <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950 p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <span className="text-xs text-green-700 dark:text-green-300">
+                      Dashboard imported successfully!
+                    </span>
+                  </div>
+                  {importedDashboardId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        onOpenChange(false)
+                        navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(importedDashboardId)}})
+                      }}
+                    >
+                      View Dashboard
+                    </Button>
+                  )}
                 </div>
               )}
             </>

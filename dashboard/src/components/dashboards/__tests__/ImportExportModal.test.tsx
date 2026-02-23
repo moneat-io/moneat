@@ -21,6 +21,11 @@ import userEvent from '@testing-library/user-event'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {ImportExportModal} from '../ImportExportModal'
 
+const mockNavigate = vi.fn()
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => mockNavigate,
+}))
+
 vi.mock('@/lib/api', () => ({
   api: {
     importDashboard: vi.fn().mockResolvedValue({warnings: []}),
