@@ -158,10 +158,19 @@ class GrafanaTranslator : DashboardTranslator {
         // Check if datasource was pre-mapped by frontend (e.g., "custom:Prometheus")
         val datasource = firstTarget["datasource"]
         val preMappedDataSource = when {
-            datasource is JsonPrimitive && datasource.isString -> datasource.content
-            datasource is JsonObject && datasource["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true -> 
-                datasource["type"]?.jsonPrimitive?.content
-            else -> null
+            datasource is JsonPrimitive && datasource.isString -> {
+                logger.info("Panel $panelIndex: found pre-mapped string datasource: ${datasource.content}")
+                datasource.content
+            }
+            datasource is JsonObject && datasource["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true -> {
+                val dsType = datasource["type"]?.jsonPrimitive?.content
+                logger.info("Panel $panelIndex: found pre-mapped object datasource: $dsType")
+                dsType
+            }
+            else -> {
+                logger.info("Panel $panelIndex: no pre-mapped datasource found, datasource=$datasource")
+                null
+            }
         }
 
         // Try to parse SQL-style query (common with ClickHouse datasource)
