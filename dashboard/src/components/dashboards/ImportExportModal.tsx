@@ -93,18 +93,25 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
     // Detect unmapped datasources before import
     try {
       const parsed = JSON.parse(jsonInput)
-      const unmapped = new Set<string>()
+      const foundDataSources = new Set<string>()
       
       if (format === 'grafana' && parsed.panels) {
-        // Check all panels for unmapped datasources
+        // Check all panels for datasources
         const checkPanel = (panel: any) => {
           if (panel.targets) {
             for (const target of panel.targets) {
-              // Check for Prometheus datasource marker
-              if (target.datasource?.uid === '__prometheus' || target.datasource === '__prometheus') {
-                unmapped.add('__prometheus')
+              // Grafana datasources can be:
+              // - {uid: "...", type: "prometheus"}
+              // - "datasource-name"
+              // - null (default datasource)
+              if (target.datasource) {
+                if (typeof target.datasource === 'string') {
+                  foundDataSources.add(target.datasource)
+                } else if (target.datasource.type) {
+                  // Use the type as identifier (e.g., "prometheus", "postgres", "mysql")
+                  foundDataSources.add(target.datasource.type)
+                }
               }
-              // Could add other markers here (e.g., __mysql, __postgres)
             }
           }
         }
@@ -120,9 +127,32 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         }
       }
       
-      if (unmapped.size > 0) {
+      // Check which datasources don't exist in Moneat
+      // Built-in datasources that always exist
+      const builtInSources = new Set(['events', 'spans', 'logs', 'system_metrics', 
+        'container_metrics', 'uptime_heartbeats', 'llm_generations', 'analytics_events'])
+      
+      const unmapped: string[] = []
+      for (const ds of foundDataSources) {
+        // Check if it's a built-in source
+        if (builtInSources.has(ds)) continue
+        
+        // Check if it's a custom data source
+        const exists = dataSourcesData?.some(custom => 
+          custom.name === ds || 
+          custom.source_type.toLowerCase() === ds.toLowerCase() ||
+          `custom:${custom.name}` === ds
+        )
+        
+        if (!exists) {
+          unmapped.push(ds)
+        }
+      }
+      
+      if (unmapped.length > 0) {
         // Show mapper modal
-        setUnmappedDataSources(Array.from(unmapped))
+        console.log('Unmapped datasources detected:', unmapped)
+        setUnmappedDataSources(unmapped)
         setPendingImport({format, json: jsonInput})
         setShowDataSourceMapper(true)
         return
@@ -146,10 +176,25 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         const applyMapping = (panel: any) => {
           if (panel.targets) {
             for (const target of panel.targets) {
-              if (target.datasource?.uid && mapping[target.datasource.uid]) {
-                target.datasource.uid = mapping[target.datasource.uid]
-              } else if (typeof target.datasource === 'string' && mapping[target.datasource]) {
-                target.datasource = mapping[target.datasource]
+              if (target.datasource) {
+                // Handle different datasource formats
+                if (typeof target.datasource === 'string') {
+                  // String datasource name
+                  if (mapping[target.datasource]) {
+                    target.datasource = mapping[target.datasource]
+                  }
+                } else if (target.datasource.type) {
+                  // Object with type field
+                  if (mapping[target.datasource.type]) {
+                    // Replace with mapped custom datasource
+                    target.datasource = mapping[target.datasource.type]
+                  }
+                } else if (target.datasource.uid) {
+                  // Object with UID
+                  if (mapping[target.datasource.uid]) {
+                    target.datasource = mapping[target.datasource.uid]
+                  }
+                }
               }
             }
           }
