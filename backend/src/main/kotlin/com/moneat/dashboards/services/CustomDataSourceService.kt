@@ -16,10 +16,13 @@
 
 package com.moneat.dashboards.services
 
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.CreateCustomDataSourceRequest
+import com.moneat.dashboards.models.CustomDataSourceResponse
+import com.moneat.dashboards.models.CustomDataSourceType
+import com.moneat.dashboards.models.CustomDataSources
+import com.moneat.dashboards.models.UpdateCustomDataSourceRequest
 import kotlin.time.Clock
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
@@ -51,7 +54,9 @@ class CustomDataSourceService {
 
     fun createDataSource(orgId: Long, userId: Long, request: CreateCustomDataSourceRequest): CustomDataSourceResponse {
         val sourceType = CustomDataSourceType.fromString(request.sourceType)
-            ?: throw IllegalArgumentException("Unsupported source type: ${request.sourceType}. Use 'postgresql' or 'prometheus'")
+            ?: throw IllegalArgumentException(
+                "Unsupported source type: ${request.sourceType}. Use 'postgresql' or 'prometheus'"
+            )
 
         val encryptedCreds = encryptCredentials(request.username, request.password, request.apiKey)
         val now = Clock.System.now()
@@ -88,7 +93,9 @@ class CustomDataSourceService {
                 .firstOrNull() ?: return@transaction null
 
             // Only re-encrypt credentials if new values are provided
-            val newEncryptedCreds = if (request.username != null || request.password != null || request.apiKey != null) {
+            val newEncryptedCreds = if (
+                request.username != null || request.password != null || request.apiKey != null
+            ) {
                 encryptCredentials(request.username, request.password, request.apiKey)
             } else {
                 null

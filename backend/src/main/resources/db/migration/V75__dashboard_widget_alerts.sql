@@ -27,8 +27,8 @@ CREATE INDEX idx_dwa_org_enabled ON dashboard_widget_alerts(org_id, enabled);
 
 -- Add DASHBOARD_ALERT to the alert_notification_preferences CHECK constraint
 ALTER TABLE alert_notification_preferences
-    DROP CONSTRAINT IF EXISTS alert_notification_preferences_check,
-    ADD CONSTRAINT alert_notification_preferences_check
+    DROP CONSTRAINT IF EXISTS alert_notification_preferences_alert_source_check,
+    ADD CONSTRAINT alert_notification_preferences_alert_source_check
         CHECK (alert_source IN ('SYSTEM_ALERT', 'SYSTEM_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT', 'DASHBOARD_ALERT'));
 
 -- Add DASHBOARD_ALERT to escalation_policy_alert_sources CHECK constraint

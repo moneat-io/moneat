@@ -46,8 +46,11 @@ object CustomDataSources : Table("custom_data_sources") {
 
 @Serializable
 enum class CustomDataSourceType {
-    @SerialName("postgresql") POSTGRESQL,
-    @SerialName("prometheus") PROMETHEUS;
+    @SerialName("postgresql")
+    POSTGRESQL,
+
+    @SerialName("prometheus")
+    PROMETHEUS;
 
     companion object {
         fun fromString(value: String): CustomDataSourceType? =

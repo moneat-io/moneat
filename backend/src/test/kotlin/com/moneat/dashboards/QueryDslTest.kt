@@ -16,18 +16,31 @@
 
 package com.moneat.dashboards
 
-import com.moneat.dashboards.models.*
-import kotlinx.serialization.encodeToString
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.DataSource
+import com.moneat.dashboards.models.DataSourceField
+import com.moneat.dashboards.models.DataSourceInfo
+import com.moneat.dashboards.models.ExecuteBatchQueryRequest
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByDef
+import com.moneat.dashboards.models.GroupByType
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.OrderByDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.TimeRangeDef
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertContains
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class QueryDslTest {
 
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
     // --- DataSource ---
 
@@ -214,7 +227,8 @@ class QueryDslTest {
 
     @Test
     fun `QueryDsl refId deserializes from JSON`() {
-        val jsonStr = """{"dataSource":"spans","metrics":[],"groupBy":[],"filters":[],"limit":100,"timeRange":{"from":"now-1h","to":"now"},"ref_id":"C"}"""
+        val jsonStr = """{"dataSource":"spans","metrics":[],"groupBy":[],"filters":[],"limit":100,""" +
+            """"timeRange":{"from":"now-1h","to":"now"},"ref_id":"C"}"""
         val dsl = json.decodeFromString<QueryDsl>(jsonStr)
         assertEquals("C", dsl.refId)
     }
@@ -224,8 +238,16 @@ class QueryDslTest {
     @Test
     fun `queryConfigs list serializes and deserializes correctly`() {
         val queries = listOf(
-            QueryDsl(dataSource = "events", refId = "A", metrics = listOf(MetricDef(AggFunction.COUNT, alias = "errors"))),
-            QueryDsl(dataSource = "spans", refId = "B", metrics = listOf(MetricDef(AggFunction.P95, "duration_ms", "p95")))
+            QueryDsl(
+                dataSource = "events",
+                refId = "A",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "errors"))
+            ),
+            QueryDsl(
+                dataSource = "spans",
+                refId = "B",
+                metrics = listOf(MetricDef(AggFunction.P95, "duration_ms", "p95"))
+            )
         )
         val serialized = json.encodeToString(queries)
         val deserialized = json.decodeFromString<List<QueryDsl>>(serialized)

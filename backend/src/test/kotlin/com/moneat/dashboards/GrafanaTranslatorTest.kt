@@ -16,9 +16,24 @@
 
 package com.moneat.dashboards
 
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByDef
+import com.moneat.dashboards.models.GroupByType.TIME
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.WidgetResponse
 import com.moneat.dashboards.translation.GrafanaTranslator
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertContains
@@ -53,20 +68,36 @@ class GrafanaTranslatorTest {
     fun `import maps timeseries panel type`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "timeseries")
-                    put("title", "CPU Over Time")
-                    put("targets", buildJsonArray {
-                        add(buildJsonObject {
-                            put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
-                        })
-                    })
-                    put("gridPos", buildJsonObject {
-                        put("x", 0); put("y", 0); put("w", 12); put("h", 8)
-                    })
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "CPU Over Time")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 12)
+                                    put("h", 8)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(1, result.dashboard.widgets.size)
@@ -77,12 +108,17 @@ class GrafanaTranslatorTest {
     fun `import maps barchart to bar`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "barchart")
-                    put("targets", JsonArray(emptyList()))
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "barchart")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals("bar", result.dashboard.widgets[0].widgetType)
@@ -92,12 +128,17 @@ class GrafanaTranslatorTest {
     fun `import maps piechart to donut`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "piechart")
-                    put("targets", JsonArray(emptyList()))
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "piechart")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals("donut", result.dashboard.widgets[0].widgetType)
@@ -107,12 +148,17 @@ class GrafanaTranslatorTest {
     fun `import maps gauge to stat`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "gauge")
-                    put("targets", JsonArray(emptyList()))
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "gauge")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals("stat", result.dashboard.widgets[0].widgetType)
@@ -122,12 +168,17 @@ class GrafanaTranslatorTest {
     fun `import unsupported type produces warning`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "flamegraph")
-                    put("targets", JsonArray(emptyList()))
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "flamegraph")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals("text", result.dashboard.widgets[0].widgetType)
@@ -138,37 +189,50 @@ class GrafanaTranslatorTest {
     fun `import scales 24-col grid to 12-col`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "stat")
-                    put("targets", JsonArray(emptyList()))
-                    put("gridPos", buildJsonObject {
-                        put("x", 12)
-                        put("y", 0)
-                        put("w", 12)
-                        put("h", 9)
-                    })
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 12)
+                                    put("y", 0)
+                                    put("w", 12)
+                                    put("h", 9)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         val w = result.dashboard.widgets[0]
-        assertEquals(6, w.gridX)  // 12/2 = 6
-        assertEquals(6, w.gridW)  // (12+1)/2 = 6
+        assertEquals(6, w.gridX) // 12/2 = 6
+        assertEquals(6, w.gridW) // (12+1)/2 = 6
         assertEquals(0, w.gridY)
-        assertEquals(3, w.gridH)  // (9+2)/3 = 3 (height scaled down)
+        assertEquals(3, w.gridH) // (9+2)/3 = 3 (height scaled down)
     }
 
     @Test
     fun `import handles missing gridPos`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "stat")
-                    put("targets", JsonArray(emptyList()))
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(0, result.dashboard.widgets[0].gridX)
@@ -179,11 +243,16 @@ class GrafanaTranslatorTest {
     @Test
     fun `parseGrafanaTargets with PromQL expr`() {
         val panel = buildJsonObject {
-            put("targets", buildJsonArray {
-                add(buildJsonObject {
-                    put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
-                })
-            })
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
+                        }
+                    )
+                }
+            )
         }
         val warnings = mutableListOf<String>()
         val dsl = translator.parseGrafanaTargets(panel, warnings, 0)
@@ -195,11 +264,16 @@ class GrafanaTranslatorTest {
     @Test
     fun `parseGrafanaTargets with rawSql`() {
         val panel = buildJsonObject {
-            put("targets", buildJsonArray {
-                add(buildJsonObject {
-                    put("rawSql", "SELECT count() FROM events WHERE level = 'error'")
-                })
-            })
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("rawSql", "SELECT count() FROM events WHERE level = 'error'")
+                        }
+                    )
+                }
+            )
         }
         val warnings = mutableListOf<String>()
         val dsl = translator.parseGrafanaTargets(panel, warnings, 0)
@@ -252,18 +326,24 @@ class GrafanaTranslatorTest {
     @Test
     fun `export generates valid Grafana JSON structure`() {
         val dashboard = DashboardResponse(
-            id = 1, orgId = 1, title = "Test", createdBy = 1,
-            createdAt = "", updatedAt = "",
+            id = 1,
+            orgId = 1,
+            title = "Test",
+            createdBy = 1,
+            createdAt = "",
+            updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
                     id = 1, dashboardId = 1, title = "CPU",
                     widgetType = "timeseries",
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
-                    queryConfigs = listOf(QueryDsl(
-                        dataSource = "system_metrics",
-                        metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu")),
-                        groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR"))
-                    )),
+                    queryConfigs = listOf(
+                        QueryDsl(
+                            dataSource = "system_metrics",
+                            metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu")),
+                            groupBy = listOf(GroupByDef("timestamp", TIME, "1 HOUR"))
+                        )
+                    ),
                 )
             )
         )
@@ -277,31 +357,45 @@ class GrafanaTranslatorTest {
     @Test
     fun `export scales 12-col grid to 24-col`() {
         val dashboard = DashboardResponse(
-            id = 1, orgId = 1, title = "Test", createdBy = 1,
-            createdAt = "", updatedAt = "",
+            id = 1,
+            orgId = 1,
+            title = "Test",
+            createdBy = 1,
+            createdAt = "",
+            updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = 1, dashboardId = 1,
+                    id = 1,
+                    dashboardId = 1,
                     widgetType = "stat",
-                    gridX = 3, gridY = 0, gridW = 6, gridH = 4,
+                    gridX = 3,
+                    gridY = 0,
+                    gridW = 6,
+                    gridH = 4,
                     queryConfigs = listOf(QueryDsl(dataSource = "events")),
                 )
             )
         )
         val exported = translator.export(dashboard)
         val gridPos = exported["panels"]!!.jsonArray[0].jsonObject["gridPos"]!!.jsonObject
-        assertEquals(6, gridPos["x"]!!.jsonPrimitive.int)   // 3 * 2
-        assertEquals(12, gridPos["w"]!!.jsonPrimitive.int)   // 6 * 2
+        assertEquals(6, gridPos["x"]!!.jsonPrimitive.int) // 3 * 2
+        assertEquals(12, gridPos["w"]!!.jsonPrimitive.int) // 6 * 2
     }
 
     @Test
     fun `export maps toplist to table in Grafana`() {
         val dashboard = DashboardResponse(
-            id = 1, orgId = 1, title = "Test", createdBy = 1,
-            createdAt = "", updatedAt = "",
+            id = 1,
+            orgId = 1,
+            title = "Test",
+            createdBy = 1,
+            createdAt = "",
+            updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = 1, dashboardId = 1, widgetType = "toplist",
+                    id = 1,
+                    dashboardId = 1,
+                    widgetType = "toplist",
                     queryConfigs = listOf(QueryDsl(dataSource = "events")),
                 )
             )
@@ -318,7 +412,7 @@ class GrafanaTranslatorTest {
         val dsl = QueryDsl(
             dataSource = "events",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-            groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR"))
+            groupBy = listOf(GroupByDef("timestamp", TIME, "1 HOUR"))
         )
         val sql = translator.buildGrafanaSql(dsl)
         assertContains(sql, "toStartOfInterval")
@@ -353,20 +447,36 @@ class GrafanaTranslatorTest {
     fun `import and export roundtrip preserves title`() {
         val original = buildJsonObject {
             put("title", "Roundtrip Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "stat")
-                    put("title", "Request Count")
-                    put("targets", buildJsonArray {
-                        add(buildJsonObject {
-                            put("expr", "sum(http_requests_total{})")
-                        })
-                    })
-                    put("gridPos", buildJsonObject {
-                        put("x", 0); put("y", 0); put("w", 24); put("h", 8)
-                    })
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Request Count")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "sum(http_requests_total{})")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val imported = translator.import(original)
         val exported = translator.export(imported.dashboard)
@@ -379,16 +489,23 @@ class GrafanaTranslatorTest {
     fun `import skips row panels without warnings`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "row")
-                    put("title", "Section Header")
-                })
-                add(buildJsonObject {
-                    put("type", "stat")
-                    put("targets", JsonArray(emptyList()))
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Section Header")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(1, result.dashboard.widgets.size)
@@ -400,26 +517,47 @@ class GrafanaTranslatorTest {
     fun `import flattens nested panels from collapsed rows`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("panels", buildJsonArray {
-                add(buildJsonObject {
-                    put("type", "row")
-                    put("title", "Collapsed Section")
-                    put("panels", buildJsonArray {
-                        add(buildJsonObject {
-                            put("type", "timeseries")
-                            put("title", "Nested Panel")
-                            put("targets", buildJsonArray {
-                                add(buildJsonObject {
-                                    put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
-                                })
-                            })
-                            put("gridPos", buildJsonObject {
-                                put("x", 0); put("y", 0); put("w", 24); put("h", 8)
-                            })
-                        })
-                    })
-                })
-            })
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Collapsed Section")
+                            put(
+                                "panels",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("type", "timeseries")
+                                            put("title", "Nested Panel")
+                                            put(
+                                                "targets",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "gridPos",
+                                                buildJsonObject {
+                                                    put("x", 0)
+                                                    put("y", 0)
+                                                    put("w", 24)
+                                                    put("h", 8)
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(1, result.dashboard.widgets.size)
@@ -502,82 +640,165 @@ class GrafanaTranslatorTest {
         val json = buildJsonObject {
             put("title", "Application Overview")
             put("description", "Real-time application monitoring")
-            put("panels", buildJsonArray {
-                // Row panel (should be skipped)
-                add(buildJsonObject {
-                    put("type", "row")
-                    put("title", "Overview")
-                    put("gridPos", buildJsonObject {
-                        put("x", 0); put("y", 0); put("w", 24); put("h", 1)
-                    })
-                })
-                // Stat panel with PromQL + range vector
-                add(buildJsonObject {
-                    put("type", "stat")
-                    put("title", "Feedback Rate")
-                    put("targets", buildJsonArray {
-                        add(buildJsonObject {
-                            put("expr", "rate(app_quality_feedback_total{response=\"good\"}[1h])")
-                            put("datasource", buildJsonObject {
-                                put("type", "prometheus"); put("uid", "prom-1")
-                            })
-                        })
-                    })
-                    put("gridPos", buildJsonObject {
-                        put("x", 0); put("y", 1); put("w", 6); put("h", 4)
-                    })
-                })
-                // Timeseries with simple PromQL
-                add(buildJsonObject {
-                    put("type", "timeseries")
-                    put("title", "Request Rate")
-                    put("targets", buildJsonArray {
-                        add(buildJsonObject {
-                            put("expr", "rate(http_requests_total{method=\"GET\"}[5m])")
-                        })
-                    })
-                    put("gridPos", buildJsonObject {
-                        put("x", 6); put("y", 1); put("w", 18); put("h", 8)
-                    })
-                })
-                // Row panel with collapsed nested panels
-                add(buildJsonObject {
-                    put("type", "row")
-                    put("title", "Database")
-                    put("panels", buildJsonArray {
-                        add(buildJsonObject {
+            put(
+                "panels",
+                buildJsonArray {
+                    // Row panel (should be skipped)
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Overview")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 1)
+                                }
+                            )
+                        }
+                    )
+                    // Stat panel with PromQL + range vector
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Feedback Rate")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(app_quality_feedback_total{response=\"good\"}[1h])")
+                                            put(
+                                                "datasource",
+                                                buildJsonObject {
+                                                    put("type", "prometheus")
+                                                    put("uid", "prom-1")
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 1)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                        }
+                    )
+                    // Timeseries with simple PromQL
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "Request Rate")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(http_requests_total{method=\"GET\"}[5m])")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 6)
+                                    put("y", 1)
+                                    put("w", 18)
+                                    put("h", 8)
+                                }
+                            )
+                        }
+                    )
+                    // Row panel with collapsed nested panels
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Database")
+                            put(
+                                "panels",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("type", "table")
+                                            put("title", "Slow Queries")
+                                            put(
+                                                "targets",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put(
+                                                                "rawSql",
+                                                                "SELECT query, avg(duration_ms) as avg_duration " +
+                                                                    "FROM app_queries WHERE duration_ms > 1000 " +
+                                                                    "GROUP BY query ORDER BY avg_duration DESC LIMIT 20"
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "gridPos",
+                                                buildJsonObject {
+                                                    put("x", 0)
+                                                    put("y", 10)
+                                                    put("w", 24)
+                                                    put("h", 8)
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                    // Another row (should be skipped)
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Infrastructure")
+                        }
+                    )
+                    // Table with custom data source SQL
+                    add(
+                        buildJsonObject {
                             put("type", "table")
-                            put("title", "Slow Queries")
-                            put("targets", buildJsonArray {
-                                add(buildJsonObject {
-                                    put("rawSql", "SELECT query, avg(duration_ms) as avg_duration FROM app_queries WHERE duration_ms > 1000 GROUP BY query ORDER BY avg_duration DESC LIMIT 20")
-                                })
-                            })
-                            put("gridPos", buildJsonObject {
-                                put("x", 0); put("y", 10); put("w", 24); put("h", 8)
-                            })
-                        })
-                    })
-                })
-                // Another row (should be skipped)
-                add(buildJsonObject {
-                    put("type", "row")
-                    put("title", "Infrastructure")
-                })
-                // Table with custom data source SQL
-                add(buildJsonObject {
-                    put("type", "table")
-                    put("title", "Session Data")
-                    put("targets", buildJsonArray {
-                        add(buildJsonObject {
-                            put("rawSql", "SELECT user_id, count() as sessions FROM app_sessions GROUP BY user_id ORDER BY sessions DESC LIMIT 50")
-                        })
-                    })
-                    put("gridPos", buildJsonObject {
-                        put("x", 0); put("y", 20); put("w", 24); put("h", 6)
-                    })
-                })
-            })
+                            put("title", "Session Data")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put(
+                                                "rawSql",
+                                                "SELECT user_id, count() as sessions FROM app_sessions " +
+                                                    "GROUP BY user_id ORDER BY sessions DESC LIMIT 50"
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 20)
+                                    put("w", 24)
+                                    put("h", 6)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
 
@@ -588,7 +809,7 @@ class GrafanaTranslatorTest {
         assertEquals("stat", result.dashboard.widgets[0].widgetType)
         assertEquals("Feedback Rate", result.dashboard.widgets[0].title)
         assertEquals(0, result.dashboard.widgets[0].gridX)
-        assertEquals(3, result.dashboard.widgets[0].gridW)  // 6/2 = 3
+        assertEquals(3, result.dashboard.widgets[0].gridW) // 6/2 = 3
 
         // Panel 1 (timeseries) - PromQL with range vector
         assertEquals("timeseries", result.dashboard.widgets[1].widgetType)
@@ -597,7 +818,7 @@ class GrafanaTranslatorTest {
         // Panel 2 (nested table from collapsed row) - SQL with custom table name preserved
         assertEquals("table", result.dashboard.widgets[2].widgetType)
         assertEquals("Slow Queries", result.dashboard.widgets[2].title)
-        assertTrue(result.dashboard.widgets[2].queryConfigs.first().rawQuery?.contains("duration_ms") == true)
+        assertEquals(result.dashboard.widgets[2].queryConfigs.first().rawQuery?.contains("duration_ms"), true)
         assertEquals("app_queries", result.dashboard.widgets[2].queryConfigs.first().dataSource)
 
         // Panel 3 (table with SQL from custom app_sessions table - name preserved)

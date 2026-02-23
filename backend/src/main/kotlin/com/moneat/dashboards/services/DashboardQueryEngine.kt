@@ -17,12 +17,23 @@
 package com.moneat.dashboards.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.CustomDataSourceResponse
+import com.moneat.dashboards.models.DataSource
+import com.moneat.dashboards.models.DataSourceField
+import com.moneat.dashboards.models.DataSourceInfo
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByType
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
+import kotlin.collections.filter
 
 private val logger = KotlinLogging.logger {}
 
@@ -31,9 +42,14 @@ class DashboardQueryEngine {
     private val json = Json { ignoreUnknownKeys = true }
 
     private val allowedTables = setOf(
-        "events", "spans", "logs", "system_metrics",
-        "container_metrics", "uptime_heartbeats",
-        "llm_generations", "analytics_events"
+        "events",
+        "spans",
+        "logs",
+        "system_metrics",
+        "container_metrics",
+        "uptime_heartbeats",
+        "llm_generations",
+        "analytics_events"
     )
 
     companion object {
@@ -101,7 +117,7 @@ class DashboardQueryEngine {
 
         val selectClauses = buildSelectClauses(dsl, tsCol)
         val whereClauses = buildWhereClauses(dsl, projectId, tsCol, demoEpochMs, retentionDays)
-        val groupByClauses = buildGroupByClauses(dsl, tsCol)
+        val groupByClauses = buildGroupByClauses(dsl)
         val orderByClause = buildOrderByClause(dsl)
 
         return buildString {
@@ -242,7 +258,7 @@ class DashboardQueryEngine {
         }
     }
 
-    internal fun buildGroupByClauses(dsl: QueryDsl, tsCol: String): List<String> {
+    internal fun buildGroupByClauses(dsl: QueryDsl): List<String> {
         return dsl.groupBy.map { gb ->
             when (gb.type) {
                 GroupByType.TIME -> "time_bucket"
@@ -319,68 +335,100 @@ class DashboardQueryEngine {
         if (dataSource.startsWith("custom:")) dataSource.removePrefix("custom:").toLongOrNull() else null
 
     private fun getBuiltInDataSources(): List<DataSourceInfo> = listOf(
-        DataSourceInfo("events", "Error Events", listOf(
-            DataSourceField("timestamp", "DateTime64", "Event timestamp"),
-            DataSourceField("level", "String", "Error level"),
-            DataSourceField("environment", "String", "Environment"),
-            DataSourceField("release", "String", "Release version"),
-            DataSourceField("user_id", "String", "User identifier"),
-            DataSourceField("transaction", "String", "Transaction name"),
-            DataSourceField("platform", "String", "Platform"),
-        )),
-        DataSourceInfo("spans", "Trace Spans", listOf(
-            DataSourceField("timestamp", "DateTime64", "Span start time"),
-            DataSourceField("duration_ms", "Float64", "Duration in milliseconds"),
-            DataSourceField("op", "String", "Operation name"),
-            DataSourceField("description", "String", "Span description"),
-            DataSourceField("status", "String", "Span status"),
-            DataSourceField("environment", "String", "Environment"),
-        )),
-        DataSourceInfo("logs", "Log Entries", listOf(
-            DataSourceField("timestamp", "DateTime64", "Log timestamp"),
-            DataSourceField("level", "String", "Log level"),
-            DataSourceField("message", "String", "Log message"),
-            DataSourceField("service", "String", "Service name"),
-            DataSourceField("environment", "String", "Environment"),
-            DataSourceField("host", "String", "Hostname"),
-        )),
-        DataSourceInfo("system_metrics", "System Metrics", listOf(
-            DataSourceField("timestamp", "DateTime64", "Metric timestamp"),
-            DataSourceField("cpu_percent", "Float32", "CPU usage percent"),
-            DataSourceField("mem_used", "UInt64", "Memory used bytes"),
-            DataSourceField("disk_used", "UInt64", "Disk used bytes"),
-            DataSourceField("load_1", "Float32", "1-minute load average"),
-            DataSourceField("net_recv_bytes", "UInt64", "Network bytes received"),
-            DataSourceField("net_sent_bytes", "UInt64", "Network bytes sent"),
-        )),
-        DataSourceInfo("container_metrics", "Container Metrics", listOf(
-            DataSourceField("timestamp", "DateTime64", "Metric timestamp"),
-            DataSourceField("name", "String", "Container name"),
-            DataSourceField("cpu_percent", "Float32", "CPU usage percent"),
-            DataSourceField("mem_used", "UInt64", "Memory used bytes"),
-        )),
-        DataSourceInfo("uptime_heartbeats", "Uptime Heartbeats", listOf(
-            DataSourceField("timestamp", "DateTime64", "Check timestamp"),
-            DataSourceField("status", "String", "Check status"),
-            DataSourceField("response_time_ms", "Float64", "Response time ms"),
-        )),
-        DataSourceInfo("llm_generations", "LLM Generations", listOf(
-            DataSourceField("timestamp", "DateTime64", "Generation timestamp"),
-            DataSourceField("model", "String", "Model name"),
-            DataSourceField("provider", "String", "Provider"),
-            DataSourceField("prompt_tokens", "UInt32", "Prompt token count"),
-            DataSourceField("completion_tokens", "UInt32", "Completion token count"),
-            DataSourceField("duration_ms", "Float64", "Duration in milliseconds"),
-            DataSourceField("cost", "Float64", "Estimated cost"),
-        )),
-        DataSourceInfo("analytics_events", "Product Analytics", listOf(
-            DataSourceField("timestamp", "DateTime64", "Event timestamp"),
-            DataSourceField("event_name", "String", "Event name"),
-            DataSourceField("page_path", "String", "Page URL path"),
-            DataSourceField("referrer_source", "String", "Traffic source"),
-            DataSourceField("country", "String", "Country code"),
-            DataSourceField("browser", "String", "Browser"),
-            DataSourceField("os", "String", "Operating system"),
-        ))
+        DataSourceInfo(
+            "events",
+            "Error Events",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Event timestamp"),
+                DataSourceField("level", "String", "Error level"),
+                DataSourceField("environment", "String", "Environment"),
+                DataSourceField("release", "String", "Release version"),
+                DataSourceField("user_id", "String", "User identifier"),
+                DataSourceField("transaction", "String", "Transaction name"),
+                DataSourceField("platform", "String", "Platform"),
+            )
+        ),
+        DataSourceInfo(
+            "spans",
+            "Trace Spans",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Span start time"),
+                DataSourceField("duration_ms", "Float64", "Duration in milliseconds"),
+                DataSourceField("op", "String", "Operation name"),
+                DataSourceField("description", "String", "Span description"),
+                DataSourceField("status", "String", "Span status"),
+                DataSourceField("environment", "String", "Environment"),
+            )
+        ),
+        DataSourceInfo(
+            "logs",
+            "Log Entries",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Log timestamp"),
+                DataSourceField("level", "String", "Log level"),
+                DataSourceField("message", "String", "Log message"),
+                DataSourceField("service", "String", "Service name"),
+                DataSourceField("environment", "String", "Environment"),
+                DataSourceField("host", "String", "Hostname"),
+            )
+        ),
+        DataSourceInfo(
+            "system_metrics",
+            "System Metrics",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Metric timestamp"),
+                DataSourceField("cpu_percent", "Float32", "CPU usage percent"),
+                DataSourceField("mem_used", "UInt64", "Memory used bytes"),
+                DataSourceField("disk_used", "UInt64", "Disk used bytes"),
+                DataSourceField("load_1", "Float32", "1-minute load average"),
+                DataSourceField("net_recv_bytes", "UInt64", "Network bytes received"),
+                DataSourceField("net_sent_bytes", "UInt64", "Network bytes sent"),
+            )
+        ),
+        DataSourceInfo(
+            "container_metrics",
+            "Container Metrics",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Metric timestamp"),
+                DataSourceField("name", "String", "Container name"),
+                DataSourceField("cpu_percent", "Float32", "CPU usage percent"),
+                DataSourceField("mem_used", "UInt64", "Memory used bytes"),
+            )
+        ),
+        DataSourceInfo(
+            "uptime_heartbeats",
+            "Uptime Heartbeats",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Check timestamp"),
+                DataSourceField("status", "String", "Check status"),
+                DataSourceField("response_time_ms", "Float64", "Response time ms"),
+            )
+        ),
+        DataSourceInfo(
+            "llm_generations",
+            "LLM Generations",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Generation timestamp"),
+                DataSourceField("model", "String", "Model name"),
+                DataSourceField("provider", "String", "Provider"),
+                DataSourceField("prompt_tokens", "UInt32", "Prompt token count"),
+                DataSourceField("completion_tokens", "UInt32", "Completion token count"),
+                DataSourceField("duration_ms", "Float64", "Duration in milliseconds"),
+                DataSourceField("cost", "Float64", "Estimated cost"),
+            )
+        ),
+        DataSourceInfo(
+            "analytics_events",
+            "Product Analytics",
+            listOf(
+                DataSourceField("timestamp", "DateTime64", "Event timestamp"),
+                DataSourceField("event_name", "String", "Event name"),
+                DataSourceField("page_path", "String", "Page URL path"),
+                DataSourceField("referrer_source", "String", "Traffic source"),
+                DataSourceField("country", "String", "Country code"),
+                DataSourceField("browser", "String", "Browser"),
+                DataSourceField("os", "String", "Operating system"),
+            )
+        )
     )
 }

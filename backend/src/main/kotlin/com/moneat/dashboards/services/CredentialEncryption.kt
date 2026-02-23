@@ -38,7 +38,9 @@ object CredentialEncryption {
     private val secretKey: SecretKey by lazy {
         val keyStr = EnvConfig.get("DATA_SOURCE_ENCRYPTION_KEY")
             ?: EnvConfig.get("JWT_SECRET")
-            ?: throw IllegalStateException("No encryption key configured. Set DATA_SOURCE_ENCRYPTION_KEY or JWT_SECRET.")
+            ?: throw IllegalStateException(
+                "No encryption key configured. Set DATA_SOURCE_ENCRYPTION_KEY or JWT_SECRET."
+            )
 
         // Derive a 256-bit key from the secret using SHA-256
         val hash = java.security.MessageDigest.getInstance("SHA-256").digest(keyStr.toByteArray())

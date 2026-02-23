@@ -17,7 +17,14 @@
 package com.moneat.dashboards.services
 
 import com.moneat.config.RedisConfig
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.CreateDashboardAlertRequest
+import com.moneat.dashboards.models.DashboardAlertResponse
+import com.moneat.dashboards.models.DashboardWidgetAlerts
+import com.moneat.dashboards.models.DashboardWidgets
+import com.moneat.dashboards.models.Dashboards
+import com.moneat.dashboards.models.NotificationChannels
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.UpdateDashboardAlertRequest
 import com.moneat.incident.models.AlertSource
 import com.moneat.incident.models.IncidentEvent
 import com.moneat.incident.models.IncidentSeverity
@@ -43,11 +50,13 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.innerJoin
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import kotlin.collections.firstOrNull
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -126,9 +135,11 @@ class DashboardAlertService {
                 it[DashboardWidgetAlerts.updatedAt] = now
             } get DashboardWidgetAlerts.id
 
-            toResponse(DashboardWidgetAlerts.selectAll().where {
-                DashboardWidgetAlerts.id eq id
-            }.first())
+            toResponse(
+                DashboardWidgetAlerts.selectAll().where {
+                    DashboardWidgetAlerts.id eq id
+                }.first()
+            )
         }
     }
 
@@ -173,9 +184,11 @@ class DashboardAlertService {
                 it[updatedAt] = now
             }
 
-            toResponse(DashboardWidgetAlerts.selectAll().where {
-                DashboardWidgetAlerts.id eq alertId
-            }.first())
+            toResponse(
+                DashboardWidgetAlerts.selectAll().where {
+                    DashboardWidgetAlerts.id eq alertId
+                }.first()
+            )
         }
     }
 
@@ -212,7 +225,9 @@ class DashboardAlertService {
 
     private suspend fun evaluateAlerts() {
         val alerts = transaction {
-            (DashboardWidgetAlerts innerJoin DashboardWidgets innerJoin Dashboards)
+            DashboardWidgetAlerts
+                .innerJoin(DashboardWidgets) { DashboardWidgetAlerts.widgetId eq DashboardWidgets.id }
+                .innerJoin(Dashboards) { DashboardWidgets.dashboardId eq Dashboards.id }
                 .selectAll()
                 .where { DashboardWidgetAlerts.enabled eq true }
                 .map { row ->
@@ -289,7 +304,9 @@ class DashboardAlertService {
             val wasTriggered = try {
                 if (RedisConfig.isConnected()) {
                     RedisConfig.sync().get(alertKey) == "TRIGGERED"
-                } else false
+                } else {
+                    false
+                }
             } catch (_: Exception) { false }
 
             if (wasTriggered) {
@@ -325,7 +342,8 @@ class DashboardAlertService {
         }
 
         logger.info {
-            "Dashboard alert ${alert.alertId} triggered: ${alert.name} ${alert.condition} ${alert.threshold} (current: $currentValue)"
+            "Dashboard alert ${alert.alertId} triggered: " +
+                "${alert.name} ${alert.condition} ${alert.threshold} (current: $currentValue)"
         }
 
         try {
@@ -409,7 +427,11 @@ class DashboardAlertService {
         }
 
         if (channels.discord) {
-            val discordEnabled = prefsService.getUsersWithChannelEnabled(orgId, "DASHBOARD_ALERT", "discord").isNotEmpty()
+            val discordEnabled = prefsService.getUsersWithChannelEnabled(
+                orgId,
+                "DASHBOARD_ALERT",
+                "discord"
+            ).isNotEmpty()
             if (discordEnabled) {
                 try {
                     discordService.sendDashboardAlert(
@@ -432,7 +454,8 @@ class DashboardAlertService {
                     incidentService.fireAlert(
                         IncidentEvent(
                             title = "Dashboard Alert: ${alert.name}",
-                            description = "${alert.widgetTitle} on ${alert.dashboardTitle}: value $formattedValue ${alert.condition} $formattedThreshold",
+                            description = "${alert.widgetTitle} on ${alert.dashboardTitle}:" +
+                                " value $formattedValue ${alert.condition} $formattedThreshold",
                             severity = severity,
                             status = IncidentStatus.FIRING,
                             source = AlertSource.DASHBOARD_ALERT,
@@ -448,7 +471,7 @@ class DashboardAlertService {
         }
     }
 
-    private suspend fun sendRecoveryNotification(alert: AlertContext, currentValue: Double) {
+    private fun sendRecoveryNotification(alert: AlertContext, currentValue: Double) {
         val orgId = alert.orgId.toInt()
         val channels = alert.notificationChannels
         val baseUrl = config.property("email.frontendUrl").getString()
@@ -472,7 +495,9 @@ class DashboardAlertService {
                             </div>
                         </div>
                     """.trimIndent()
-                    val textBody = "✅ Dashboard Alert Resolved: ${alert.name}\nDashboard: ${alert.dashboardTitle}\nWidget: ${alert.widgetTitle}\nCurrent Value: $formattedValue\nView: $baseUrl/dashboards/${alert.dashboardId}"
+                    val textBody = "✅ Dashboard Alert Resolved: ${alert.name}\n" +
+                        "Dashboard: ${alert.dashboardTitle}\nWidget: ${alert.widgetTitle}\n" +
+                        "Current Value: $formattedValue\nView: $baseUrl/dashboards/${alert.dashboardId}"
                     emailService.sendEmail(email, subject, htmlBody, textBody, "dashboard_alert_recovery")
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to send dashboard alert recovery email to $email" }

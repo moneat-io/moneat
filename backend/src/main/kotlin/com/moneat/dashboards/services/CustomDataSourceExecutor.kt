@@ -16,15 +16,32 @@
 
 package com.moneat.dashboards.services
 
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.CustomDataSourceType
+import com.moneat.dashboards.models.DataSourceField
+import com.moneat.dashboards.models.TestConnectionRequest
+import com.moneat.dashboards.models.TestConnectionResult
+import com.moneat.dashboards.models.TimeRangeDef
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import kotlinx.serialization.json.*
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.cio.endpoint
+import io.ktor.client.request.get
+import io.ktor.client.request.parameter
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
+import io.ktor.http.isSuccess
+import jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import java.sql.ResultSet
 import java.util.concurrent.ConcurrentHashMap
@@ -82,7 +99,13 @@ class CustomDataSourceExecutor {
     ): List<Map<String, JsonElement>> {
         return when (sourceType) {
             CustomDataSourceType.POSTGRESQL -> executePostgresQuery(
-                sourceId, host, port ?: 5432, databaseName ?: "postgres", credentials, query, limit
+                sourceId,
+                host,
+                port ?: 5432,
+                databaseName ?: "postgres",
+                credentials,
+                query,
+                limit
             )
             CustomDataSourceType.PROMETHEUS -> {
                 val promLimit = if (timeRange != null) limit.coerceAtLeast(5000) else limit
@@ -102,7 +125,12 @@ class CustomDataSourceExecutor {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         return when (sourceType) {
-            CustomDataSourceType.POSTGRESQL -> getPostgresSchema(host, port ?: 5432, databaseName ?: "postgres", credentials)
+            CustomDataSourceType.POSTGRESQL -> getPostgresSchema(
+                host,
+                port ?: 5432,
+                databaseName ?: "postgres",
+                credentials
+            )
             CustomDataSourceType.PROMETHEUS -> getPrometheusMetrics(host, port, credentials)
         }
     }
@@ -110,8 +138,11 @@ class CustomDataSourceExecutor {
     // --- PostgreSQL ---
 
     private fun testPostgresConnection(
-        host: String, port: Int, database: String,
-        username: String?, password: String?,
+        host: String,
+        port: Int,
+        database: String,
+        username: String?,
+        password: String?,
     ): TestConnectionResult {
         return try {
             val ds = createTempPgDataSource(host, port, database, username, password)
@@ -119,7 +150,8 @@ class CustomDataSourceExecutor {
                 val tables = mutableListOf<String>()
                 conn.createStatement().use { stmt ->
                     stmt.executeQuery(
-                        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name LIMIT 50"
+                        """SELECT table_name FROM information_schema.tables 
+                           WHERE table_schema = 'public' ORDER BY table_name LIMIT 50"""
                     ).use { rs ->
                         while (rs.next()) tables.add(rs.getString(1))
                     }
@@ -133,8 +165,13 @@ class CustomDataSourceExecutor {
     }
 
     private fun executePostgresQuery(
-        sourceId: Long, host: String, port: Int, database: String,
-        credentials: DataSourceCredentials, query: String, limit: Int,
+        sourceId: Long,
+        host: String,
+        port: Int,
+        database: String,
+        credentials: DataSourceCredentials,
+        query: String,
+        limit: Int,
     ): List<Map<String, JsonElement>> {
         validateSqlQuery(query)
         val ds = getOrCreatePgPool(sourceId, host, port, database, credentials)
@@ -148,19 +185,24 @@ class CustomDataSourceExecutor {
     }
 
     private fun getPostgresSchema(
-        host: String, port: Int, database: String, credentials: DataSourceCredentials,
+        host: String,
+        port: Int,
+        database: String,
+        credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val ds = createTempPgDataSource(host, port, database, credentials.username, credentials.password)
         return ds.connection.use { conn ->
             val fields = mutableListOf<DataSourceField>()
             conn.createStatement().use { stmt ->
-                stmt.executeQuery("""
+                stmt.executeQuery(
+                    """
                     SELECT table_name || '.' || column_name, data_type, '' 
                     FROM information_schema.columns 
                     WHERE table_schema = 'public' 
                     ORDER BY table_name, ordinal_position 
                     LIMIT 500
-                """.trimIndent()).use { rs ->
+                    """.trimIndent()
+                ).use { rs ->
                     while (rs.next()) {
                         fields.add(DataSourceField(rs.getString(1), rs.getString(2), rs.getString(3)))
                     }
@@ -171,7 +213,11 @@ class CustomDataSourceExecutor {
     }
 
     private fun getOrCreatePgPool(
-        sourceId: Long, host: String, port: Int, database: String, credentials: DataSourceCredentials,
+        sourceId: Long,
+        host: String,
+        port: Int,
+        database: String,
+        credentials: DataSourceCredentials,
     ): HikariDataSource {
         return pgPools.computeIfAbsent(sourceId) {
             createPgPool(host, port, database, credentials.username, credentials.password)
@@ -179,7 +225,11 @@ class CustomDataSourceExecutor {
     }
 
     private fun createPgPool(
-        host: String, port: Int, database: String, username: String?, password: String?,
+        host: String,
+        port: Int,
+        database: String,
+        username: String?,
+        password: String?,
     ): HikariDataSource {
         val config = HikariConfig().apply {
             jdbcUrl = "jdbc:postgresql://$host:$port/$database"
@@ -197,7 +247,11 @@ class CustomDataSourceExecutor {
     }
 
     private fun createTempPgDataSource(
-        host: String, port: Int, database: String, username: String?, password: String?,
+        host: String,
+        port: Int,
+        database: String,
+        username: String?,
+        password: String?,
     ): HikariDataSource {
         val config = HikariConfig().apply {
             jdbcUrl = "jdbc:postgresql://$host:$port/$database"
@@ -233,12 +287,14 @@ class CustomDataSourceExecutor {
     // --- Prometheus ---
 
     private suspend fun testPrometheusConnection(
-        host: String, port: Int?, apiKey: String?,
+        host: String,
+        port: Int?,
+        apiKey: String?,
     ): TestConnectionResult {
         return try {
             val baseUrl = buildPrometheusUrl(host, port)
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
                 parameter("limit", 20)
             }
             if (response.status.isSuccess()) {
@@ -255,8 +311,12 @@ class CustomDataSourceExecutor {
     }
 
     private suspend fun executePrometheusQuery(
-        host: String, port: Int?, credentials: DataSourceCredentials,
-        query: String, timeRange: TimeRangeDef?, limit: Int,
+        host: String,
+        port: Int?,
+        credentials: DataSourceCredentials,
+        query: String,
+        timeRange: TimeRangeDef?,
+        limit: Int,
     ): List<Map<String, JsonElement>> {
         val baseUrl = buildPrometheusUrl(host, port)
 
@@ -269,7 +329,7 @@ class CustomDataSourceExecutor {
                 val step = resolvePrometheusStep(toSec - fromSec)
 
                 httpClient.get("$baseUrl/api/v1/query_range") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                    credentials.apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
                     parameter("query", query)
                     parameter("start", fromSec)
                     parameter("end", toSec)
@@ -277,7 +337,7 @@ class CustomDataSourceExecutor {
                 }
             } else {
                 httpClient.get("$baseUrl/api/v1/query") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                    credentials.apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
                     parameter("query", query)
                 }
             }
@@ -295,19 +355,23 @@ class CustomDataSourceExecutor {
     }
 
     private suspend fun getPrometheusMetrics(
-        host: String, port: Int?, credentials: DataSourceCredentials,
+        host: String,
+        port: Int?,
+        credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val baseUrl = buildPrometheusUrl(host, port)
         return try {
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                credentials.apiKey?.let { HtmlStyle.header(HttpHeaders.Authorization, "Bearer $it") }
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
                 body["data"]?.jsonArray?.map {
                     DataSourceField(it.jsonPrimitive.content, "gauge", "Prometheus metric")
                 } ?: emptyList()
-            } else emptyList()
+            } else {
+                emptyList()
+            }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch Prometheus metrics" }
             emptyList()
@@ -378,12 +442,12 @@ class CustomDataSourceExecutor {
         val cleanHost = host.removePrefix("https://").removePrefix("http://").trimEnd('/')
         // Don't append port if: none specified, host already has one, or it's the default for the scheme
         val hostHasPort = cleanHost.contains(":")
-        if (port == null || hostHasPort) return "${scheme}${cleanHost}"
+        if (port == null || hostHasPort) return "${scheme}$cleanHost"
         val isDefaultPort = (scheme == "http://" && port == 80) || (scheme == "https://" && port == 443)
         return if (isDefaultPort) {
-            "${scheme}${cleanHost}"
+            "${scheme}$cleanHost"
         } else {
-            "${scheme}${cleanHost}:${port}"
+            "${scheme}$cleanHost:$port"
         }
     }
 
@@ -419,7 +483,8 @@ class CustomDataSourceExecutor {
     private fun validateSqlQuery(query: String) {
         val trimmed = query.trim().uppercase()
         require(trimmed.startsWith("SELECT")) { "Only SELECT queries are allowed" }
-        val forbidden = listOf("INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE", "EXEC")
+        val forbidden =
+            listOf("INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE", "EXEC")
         for (keyword in forbidden) {
             require(!Regex("""\b$keyword\b""").containsMatchIn(trimmed)) {
                 "$keyword statements are not allowed"

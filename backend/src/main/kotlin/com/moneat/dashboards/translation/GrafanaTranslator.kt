@@ -16,8 +16,28 @@
 
 package com.moneat.dashboards.translation
 
-import com.moneat.dashboards.models.*
-import kotlinx.serialization.json.*
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.DashboardImportResult
+import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.DataSource
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByDef
+import com.moneat.dashboards.models.GroupByType
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.WidgetResponse
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -123,7 +143,7 @@ class GrafanaTranslator : DashboardTranslator {
         val gridY = (grafanaY + 2) / 3
         val gridW = ((gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: 12) + 1) / 2
         val grafanaH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: 4
-        val gridH = (grafanaH + 2) / 3  // Scale down: 9 → 3, 12 → 4, 6 → 2
+        val gridH = (grafanaH + 2) / 3 // Scale down: 9 → 3, 12 → 4, 6 → 2
 
         val queryConfig = parseGrafanaTargets(panelJson, warnings, index)
         val displayConfig = extractDisplayConfig(panelJson)
@@ -153,11 +173,17 @@ class GrafanaTranslator : DashboardTranslator {
 
         defaults?.get("drawStyle")?.jsonPrimitive?.contentOrNull?.let { config["drawStyle"] = it }
         defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull?.let { config["fillOpacity"] = it.toString() }
-        defaults?.get("stacking")?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull?.let { config["stacking"] = it }
-        defaults?.get("scaleDistribution")?.jsonObject?.get("type")?.jsonPrimitive?.contentOrNull?.let { config["scaleType"] = it }
+        defaults?.get(
+            "stacking"
+        )?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull?.let { config["stacking"] = it }
+        defaults?.get(
+            "scaleDistribution"
+        )?.jsonObject?.get("type")?.jsonPrimitive?.contentOrNull?.let { config["scaleType"] = it }
 
         val options = panelJson["options"]?.jsonObject
-        options?.get("legend")?.jsonObject?.get("placement")?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
+        options?.get(
+            "legend"
+        )?.jsonObject?.get("placement")?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
 
         return config
     }
@@ -177,23 +203,25 @@ class GrafanaTranslator : DashboardTranslator {
         }
 
         val firstTarget = targets.first().jsonObject
-        
+
         // Check for pre-mapped datasource (frontend replaces with strings like "custom:Prometheus")
         // Check target-level datasource first, then fall back to panel-level
         val targetDs = firstTarget["datasource"]
         val panelDs = panelJson["datasource"]
         val datasource = targetDs ?: panelDs
-        
-        val preMappedDataSource = when {
-            datasource is JsonPrimitive && datasource.isString -> {
+
+        val preMappedDataSource = when (datasource) {
+            is JsonPrimitive if datasource.isString -> {
                 logger.info("Panel $panelIndex: found pre-mapped string datasource: ${datasource.content}")
                 datasource.content
             }
-            datasource is JsonObject && datasource["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true -> {
+
+            is JsonObject if datasource["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true -> {
                 val dsType = datasource["type"]?.jsonPrimitive?.content
                 logger.info("Panel $panelIndex: found pre-mapped object datasource: $dsType")
                 dsType
             }
+
             else -> {
                 logger.info("Panel $panelIndex: no pre-mapped datasource found, datasource=$datasource")
                 null
@@ -273,7 +301,7 @@ class GrafanaTranslator : DashboardTranslator {
     ): QueryDsl {
         // PromQL queries need to be executed against Prometheus, not ClickHouse
         // Always store the original expression as rawQuery and use a marker datasource
-        val promMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^\]]*)\])?\)""").find(expr)
+        val promMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^]]*)])?\)""").find(expr)
 
         if (promMatch == null) {
             warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
@@ -292,7 +320,7 @@ class GrafanaTranslator : DashboardTranslator {
         val aggFunction = mapPromFunction(fn)
 
         val filters = mutableListOf<FilterDef>()
-        if (!labelStr.isNullOrBlank()) {
+        if (labelStr.isNotBlank()) {
             labelStr.split(",").forEach { label ->
                 val parts = label.trim().split("=", limit = 2)
                 if (parts.size == 2) {
@@ -323,15 +351,6 @@ class GrafanaTranslator : DashboardTranslator {
         else -> AggFunction.AVG
     }
 
-    private fun resolveDataSourceFromPromMetric(metricName: String): String = when {
-        metricName.contains("container") -> "container_metrics"
-        metricName.contains("cpu") || metricName.contains("mem") ||
-            metricName.contains("disk") || metricName.contains("node_") -> "system_metrics"
-        metricName.contains("http") || metricName.contains("request") -> "spans"
-        metricName.contains("log") -> "logs"
-        else -> "system_metrics"
-    }
-
     private fun mapPromMetricField(metricName: String): String? = when {
         metricName.contains("cpu") -> "cpu_percent"
         metricName.contains("memory") || metricName.contains("mem") -> "mem_used"
@@ -348,23 +367,39 @@ class GrafanaTranslator : DashboardTranslator {
                 put("id", index + 1)
                 put("type", reverseWidgetTypeMap[widget.widgetType] ?: "timeseries")
                 widget.title?.let { put("title", it) }
-                put("gridPos", buildJsonObject {
-                    put("x", widget.gridX * 2)
-                    put("y", widget.gridY)
-                    put("w", widget.gridW * 2)
-                    put("h", widget.gridH)
-                })
-                put("targets", buildJsonArray {
-                    add(buildJsonObject {
-                        put("refId", "A")
-                        put("rawSql", buildGrafanaSql(widget.queryConfigs.firstOrNull() ?: QueryDsl(dataSource = "events")))
-                        put("format", "time_series")
-                    })
-                })
-                put("datasource", buildJsonObject {
-                    put("type", "clickhouse")
-                    put("uid", "moneat-clickhouse")
-                })
+                put(
+                    "gridPos",
+                    buildJsonObject {
+                        put("x", widget.gridX * 2)
+                        put("y", widget.gridY)
+                        put("w", widget.gridW * 2)
+                        put("h", widget.gridH)
+                    }
+                )
+                put(
+                    "targets",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("refId", "A")
+                                put(
+                                    "rawSql",
+                                    buildGrafanaSql(
+                                        widget.queryConfigs.firstOrNull() ?: QueryDsl(dataSource = "events")
+                                    )
+                                )
+                                put("format", "time_series")
+                            }
+                        )
+                    }
+                )
+                put(
+                    "datasource",
+                    buildJsonObject {
+                        put("type", "clickhouse")
+                        put("uid", "moneat-clickhouse")
+                    }
+                )
             }
         }
 

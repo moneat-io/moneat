@@ -16,9 +16,9 @@
 
 package com.moneat.dashboards
 
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.CustomDataSourceResponse
+import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.services.CustomDataSourceExecutor
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.long
 import kotlin.test.Test
@@ -98,7 +98,9 @@ class CustomDataSourceExecutorTest {
         val ex = assertFailsWith<Exception> {
             method.invoke(executor, "TRUNCATE TABLE users")
         }
-        assertTrue(ex.cause?.message?.contains("TRUNCATE") == true || ex.cause?.message?.contains("Only SELECT") == true)
+        assertTrue(
+            ex.cause?.message?.contains("TRUNCATE") == true || ex.cause?.message?.contains("Only SELECT") == true
+        )
     }
 
     @Test
@@ -106,7 +108,11 @@ class CustomDataSourceExecutorTest {
         val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
         method.isAccessible = true
         // Should not throw
-        method.invoke(executor, "SELECT a.*, b.count FROM users a JOIN (SELECT user_id, count(*) as count FROM orders GROUP BY user_id) b ON a.id = b.user_id")
+        method.invoke(
+            executor,
+            "SELECT a.*, b.count FROM users a JOIN (SELECT user_id, count(*) as count FROM orders GROUP BY user_id) b" +
+                " ON a.id = b.user_id"
+        )
     }
 
     @Test
@@ -123,7 +129,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with plain host and explicit port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        val method = executor.javaClass.getDeclaredMethod(
+            "buildPrometheusUrl",
+            String::class.java,
+            Int::class.javaObjectType
+        )
         method.isAccessible = true
         val url = method.invoke(executor, "prometheus.example.com", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
@@ -131,7 +141,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with plain host and null port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        val method = executor.javaClass.getDeclaredMethod(
+            "buildPrometheusUrl",
+            String::class.java,
+            Int::class.javaObjectType
+        )
         method.isAccessible = true
         val url = method.invoke(executor, "prometheus.example.com", null) as String
         assertEquals("http://prometheus.example.com", url)
@@ -139,7 +153,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with http prefix`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        val method = executor.javaClass.getDeclaredMethod(
+            "buildPrometheusUrl",
+            String::class.java,
+            Int::class.javaObjectType
+        )
         method.isAccessible = true
         val url = method.invoke(executor, "http://prometheus.example.com", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
@@ -147,7 +165,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with https prefix and default port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        val method = executor.javaClass.getDeclaredMethod(
+            "buildPrometheusUrl",
+            String::class.java,
+            Int::class.javaObjectType
+        )
         method.isAccessible = true
         val url = method.invoke(executor, "https://prometheus.example.com", 443) as String
         assertEquals("https://prometheus.example.com", url)
@@ -155,7 +177,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with https prefix and custom port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        val method = executor.javaClass.getDeclaredMethod(
+            "buildPrometheusUrl",
+            String::class.java,
+            Int::class.javaObjectType
+        )
         method.isAccessible = true
         val url = method.invoke(executor, "https://prometheus.example.com", 9090) as String
         assertEquals("https://prometheus.example.com:9090", url)
@@ -163,7 +189,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with host already containing port`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        val method = executor.javaClass.getDeclaredMethod(
+            "buildPrometheusUrl",
+            String::class.java,
+            Int::class.javaObjectType
+        )
         method.isAccessible = true
         val url = method.invoke(executor, "prometheus.example.com:9090", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
@@ -171,7 +201,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl strips trailing slash`() {
-        val method = executor.javaClass.getDeclaredMethod("buildPrometheusUrl", String::class.java, Int::class.javaObjectType)
+        val method = executor.javaClass.getDeclaredMethod(
+            "buildPrometheusUrl",
+            String::class.java,
+            Int::class.javaObjectType
+        )
         method.isAccessible = true
         val url = method.invoke(executor, "prometheus.example.com/", 9090) as String
         assertEquals("http://prometheus.example.com:9090", url)
@@ -218,7 +252,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `resolveRelativeTimeSec for now`() {
-        val method = executor.javaClass.getDeclaredMethod("resolveRelativeTimeSec", String::class.java, Long::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "resolveRelativeTimeSec",
+            String::class.java,
+            Long::class.java
+        )
         method.isAccessible = true
         val nowSec = 1700000000L
         assertEquals(nowSec, method.invoke(executor, "now", nowSec))
@@ -226,7 +264,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `resolveRelativeTimeSec for now-1h`() {
-        val method = executor.javaClass.getDeclaredMethod("resolveRelativeTimeSec", String::class.java, Long::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "resolveRelativeTimeSec",
+            String::class.java,
+            Long::class.java
+        )
         method.isAccessible = true
         val nowSec = 1700000000L
         assertEquals(nowSec - 3600, method.invoke(executor, "now-1h", nowSec))
@@ -234,7 +276,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `resolveRelativeTimeSec for now-24h`() {
-        val method = executor.javaClass.getDeclaredMethod("resolveRelativeTimeSec", String::class.java, Long::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "resolveRelativeTimeSec",
+            String::class.java,
+            Long::class.java
+        )
         method.isAccessible = true
         val nowSec = 1700000000L
         assertEquals(nowSec - 86400, method.invoke(executor, "now-24h", nowSec))
@@ -242,7 +288,11 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `resolveRelativeTimeSec for now-7d`() {
-        val method = executor.javaClass.getDeclaredMethod("resolveRelativeTimeSec", String::class.java, Long::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "resolveRelativeTimeSec",
+            String::class.java,
+            Long::class.java
+        )
         method.isAccessible = true
         val nowSec = 1700000000L
         assertEquals(nowSec - 604800, method.invoke(executor, "now-7d", nowSec))
@@ -252,9 +302,16 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `parsePrometheusResponse handles vector result`() {
-        val method = executor.javaClass.getDeclaredMethod("parsePrometheusResponse", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "parsePrometheusResponse",
+            String::class.java,
+            Int::class.java
+        )
         method.isAccessible = true
-        val body = """{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","job":"api"},"value":[1700000000,"1"]}]}}"""
+        val body = """{"status":"success","data":{"resultType":"vector","result":
+            |[{"metric":{"__name__":"up","job":"api"},"value":[1700000000,"1"]}]}}
+        """.trimMargin()
+
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 100) as List<Map<String, Any>>
         assertEquals(1, rows.size)
@@ -269,9 +326,16 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `parsePrometheusResponse handles matrix result`() {
-        val method = executor.javaClass.getDeclaredMethod("parsePrometheusResponse", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "parsePrometheusResponse",
+            String::class.java,
+            Int::class.java
+        )
         method.isAccessible = true
-        val body = """{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"http_requests_total"},"values":[[1700000000,"100"],[1700000060,"105"]]}]}}"""
+        val body = """{"status":"success","data":{"resultType":"matrix","result":
+            |[{"metric":{"__name__":"http_requests_total"},"values":[[1700000000,"100"],[1700000060,"105"]]}]}}
+        """.trimMargin()
+
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 100) as List<Map<String, Any>>
         assertEquals(2, rows.size)
@@ -283,9 +347,15 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `parsePrometheusResponse respects limit`() {
-        val method = executor.javaClass.getDeclaredMethod("parsePrometheusResponse", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "parsePrometheusResponse",
+            String::class.java,
+            Int::class.java
+        )
         method.isAccessible = true
-        val body = """{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"m"},"values":[[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"]]}]}}"""
+        val body = """{"status":"success","data":{"resultType":"matrix",""" +
+            """result":[{"metric":{"__name__":"m"},"values":[[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"]]}]}}"""
+
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 3) as List<Map<String, Any>>
         assertEquals(3, rows.size)
@@ -293,9 +363,14 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `parsePrometheusResponse handles empty result`() {
-        val method = executor.javaClass.getDeclaredMethod("parsePrometheusResponse", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "parsePrometheusResponse",
+            String::class.java,
+            Int::class.java
+        )
         method.isAccessible = true
         val body = """{"status":"success","data":{"resultType":"vector","result":[]}}"""
+
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 100) as List<Map<String, Any>>
         assertEquals(0, rows.size)
@@ -303,9 +378,16 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `parsePrometheusResponse includes label dimensions`() {
-        val method = executor.javaClass.getDeclaredMethod("parsePrometheusResponse", String::class.java, Int::class.java)
+        val method = executor.javaClass.getDeclaredMethod(
+            "parsePrometheusResponse",
+            String::class.java,
+            Int::class.java
+        )
         method.isAccessible = true
-        val body = """{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"cpu","host":"web01","region":"us-east"},"value":[1700000000,"0.85"]}]}}"""
+        val body = """{"status":"success","data":{"resultType":"vector","result":
+            |[{"metric":{"__name__":"cpu","host":"web01","region":"us-east"},"value":[1700000000,"0.85"]}]}}
+        """.trimMargin()
+
         @Suppress("UNCHECKED_CAST")
         val rows = method.invoke(executor, body, 100) as List<Map<String, Any>>
         assertEquals(1, rows.size)

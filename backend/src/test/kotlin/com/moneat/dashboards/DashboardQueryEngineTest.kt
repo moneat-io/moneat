@@ -16,7 +16,15 @@
 
 package com.moneat.dashboards
 
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByDef
+import com.moneat.dashboards.models.GroupByType
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.OrderByDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DashboardQueryEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -205,7 +213,7 @@ class DashboardQueryEngineTest {
             dataSource = "events",
             groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR"))
         )
-        val clauses = engine.buildGroupByClauses(dsl, "timestamp")
+        val clauses = engine.buildGroupByClauses(dsl)
         assertEquals(listOf("time_bucket"), clauses)
     }
 
@@ -215,7 +223,7 @@ class DashboardQueryEngineTest {
             dataSource = "events",
             groupBy = listOf(GroupByDef("environment", GroupByType.FIELD))
         )
-        val clauses = engine.buildGroupByClauses(dsl, "timestamp")
+        val clauses = engine.buildGroupByClauses(dsl)
         assertEquals(listOf("environment"), clauses)
     }
 
@@ -228,7 +236,7 @@ class DashboardQueryEngineTest {
                 GroupByDef("environment", GroupByType.FIELD)
             )
         )
-        val clauses = engine.buildGroupByClauses(dsl, "timestamp")
+        val clauses = engine.buildGroupByClauses(dsl)
         assertEquals(2, clauses.size)
         assertEquals("time_bucket", clauses[0])
         assertEquals("environment", clauses[1])

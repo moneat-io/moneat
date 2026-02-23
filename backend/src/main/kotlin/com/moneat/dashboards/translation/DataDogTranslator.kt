@@ -16,11 +16,26 @@
 
 package com.moneat.dashboards.translation
 
-import com.moneat.dashboards.models.*
-import kotlinx.serialization.json.*
-import mu.KotlinLogging
-
-private val logger = KotlinLogging.logger {}
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.DashboardImportResult
+import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByDef
+import com.moneat.dashboards.models.GroupByType
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.WidgetResponse
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 class DataDogTranslator : DashboardTranslator {
 
@@ -249,22 +264,38 @@ class DataDogTranslator : DashboardTranslator {
     override fun export(dashboard: DashboardResponse): JsonObject {
         val widgets = dashboard.widgets.map { widget ->
             buildJsonObject {
-                put("definition", buildJsonObject {
-                    put("type", reverseWidgetTypeMap[widget.widgetType] ?: "timeseries")
-                    widget.title?.let { put("title", it) }
-                    put("requests", buildJsonArray {
-                        add(buildJsonObject {
-                            put("q", buildDdQueryString(widget.queryConfigs.firstOrNull() ?: QueryDsl(dataSource = "events")))
-                            put("display_type", widget.widgetType)
-                        })
-                    })
-                })
-                put("layout", buildJsonObject {
-                    put("x", widget.gridX)
-                    put("y", widget.gridY)
-                    put("width", widget.gridW)
-                    put("height", widget.gridH)
-                })
+                put(
+                    "definition",
+                    buildJsonObject {
+                        put("type", reverseWidgetTypeMap[widget.widgetType] ?: "timeseries")
+                        widget.title?.let { put("title", it) }
+                        put(
+                            "requests",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put(
+                                            "q",
+                                            buildDdQueryString(
+                                                widget.queryConfigs.firstOrNull() ?: QueryDsl(dataSource = "events")
+                                            )
+                                        )
+                                        put("display_type", widget.widgetType)
+                                    }
+                                )
+                            }
+                        )
+                    }
+                )
+                put(
+                    "layout",
+                    buildJsonObject {
+                        put("x", widget.gridX)
+                        put("y", widget.gridY)
+                        put("width", widget.gridW)
+                        put("height", widget.gridH)
+                    }
+                )
             }
         }
 

@@ -16,12 +16,19 @@
 
 package com.moneat.dashboards
 
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.WidgetResponse
 import com.moneat.dashboards.translation.DataDogTranslator
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertContains
 import kotlin.test.assertTrue
 
 class DataDogTranslatorTest {
@@ -53,19 +60,36 @@ class DataDogTranslatorTest {
     fun `import maps timeseries widget type`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("widgets", buildJsonArray {
-                add(buildJsonObject {
-                    put("definition", buildJsonObject {
-                        put("type", "timeseries")
-                        put("requests", buildJsonArray {
-                            add(buildJsonObject { put("q", "avg:system.cpu.user{*}") })
-                        })
-                    })
-                    put("layout", buildJsonObject {
-                        put("x", 0); put("y", 0); put("width", 6); put("height", 4)
-                    })
-                })
-            })
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "timeseries")
+                                    put(
+                                        "requests",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("q", "avg:system.cpu.user{*}") })
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "layout",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("width", 6)
+                                    put("height", 4)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(1, result.dashboard.widgets.size)
@@ -76,16 +100,27 @@ class DataDogTranslatorTest {
     fun `import maps query_value to stat`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("widgets", buildJsonArray {
-                add(buildJsonObject {
-                    put("definition", buildJsonObject {
-                        put("type", "query_value")
-                        put("requests", buildJsonArray {
-                            add(buildJsonObject { put("q", "count:events{*}") })
-                        })
-                    })
-                })
-            })
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "query_value")
+                                    put(
+                                        "requests",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("q", "count:events{*}") })
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals("stat", result.dashboard.widgets[0].widgetType)
@@ -95,16 +130,27 @@ class DataDogTranslatorTest {
     fun `import maps pie to donut`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("widgets", buildJsonArray {
-                add(buildJsonObject {
-                    put("definition", buildJsonObject {
-                        put("type", "pie")
-                        put("requests", buildJsonArray {
-                            add(buildJsonObject { put("q", "count:events{*}") })
-                        })
-                    })
-                })
-            })
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "pie")
+                                    put(
+                                        "requests",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("q", "count:events{*}") })
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals("donut", result.dashboard.widgets[0].widgetType)
@@ -114,16 +160,27 @@ class DataDogTranslatorTest {
     fun `import unsupported widget type produces warning and text type`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("widgets", buildJsonArray {
-                add(buildJsonObject {
-                    put("definition", buildJsonObject {
-                        put("type", "unknown_type")
-                        put("requests", buildJsonArray {
-                            add(buildJsonObject { put("q", "count:events{*}") })
-                        })
-                    })
-                })
-            })
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "unknown_type")
+                                    put(
+                                        "requests",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("q", "count:events{*}") })
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals("text", result.dashboard.widgets[0].widgetType)
@@ -134,19 +191,36 @@ class DataDogTranslatorTest {
     fun `import extracts grid layout`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("widgets", buildJsonArray {
-                add(buildJsonObject {
-                    put("definition", buildJsonObject {
-                        put("type", "timeseries")
-                        put("requests", buildJsonArray {
-                            add(buildJsonObject { put("q", "count:events{*}") })
-                        })
-                    })
-                    put("layout", buildJsonObject {
-                        put("x", 3); put("y", 5); put("width", 8); put("height", 3)
-                    })
-                })
-            })
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "timeseries")
+                                    put(
+                                        "requests",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("q", "count:events{*}") })
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "layout",
+                                buildJsonObject {
+                                    put("x", 3)
+                                    put("y", 5)
+                                    put("width", 8)
+                                    put("height", 3)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         val w = result.dashboard.widgets[0]
@@ -160,16 +234,27 @@ class DataDogTranslatorTest {
     fun `import handles missing layout gracefully`() {
         val json = buildJsonObject {
             put("title", "Test")
-            put("widgets", buildJsonArray {
-                add(buildJsonObject {
-                    put("definition", buildJsonObject {
-                        put("type", "timeseries")
-                        put("requests", buildJsonArray {
-                            add(buildJsonObject { put("q", "count:events{*}") })
-                        })
-                    })
-                })
-            })
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "timeseries")
+                                    put(
+                                        "requests",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("q", "count:events{*}") })
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(0, result.dashboard.widgets[0].gridX)
@@ -216,17 +301,23 @@ class DataDogTranslatorTest {
     @Test
     fun `export generates valid DataDog JSON structure`() {
         val dashboard = DashboardResponse(
-            id = 1, orgId = 1, title = "Test", createdBy = 1,
-            createdAt = "", updatedAt = "",
+            id = 1,
+            orgId = 1,
+            title = "Test",
+            createdBy = 1,
+            createdAt = "",
+            updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
                     id = 1, dashboardId = 1, title = "CPU",
                     widgetType = "timeseries",
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
-                    queryConfigs = listOf(QueryDsl(
-                        dataSource = "system_metrics",
-                        metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu"))
-                    )),
+                    queryConfigs = listOf(
+                        QueryDsl(
+                            dataSource = "system_metrics",
+                            metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu"))
+                        )
+                    ),
                 )
             )
         )
@@ -240,13 +331,25 @@ class DataDogTranslatorTest {
     @Test
     fun `export maps widget types correctly`() {
         val dashboard = DashboardResponse(
-            id = 1, orgId = 1, title = "Test", createdBy = 1,
-            createdAt = "", updatedAt = "",
+            id = 1,
+            orgId = 1,
+            title = "Test",
+            createdBy = 1,
+            createdAt = "",
+            updatedAt = "",
             widgets = listOf(
-                WidgetResponse(id = 1, dashboardId = 1, widgetType = "stat",
-                    queryConfigs = listOf(QueryDsl(dataSource = "events"))),
-                WidgetResponse(id = 2, dashboardId = 1, widgetType = "donut",
-                    queryConfigs = listOf(QueryDsl(dataSource = "events")))
+                WidgetResponse(
+                    id = 1,
+                    dashboardId = 1,
+                    widgetType = "stat",
+                    queryConfigs = listOf(QueryDsl(dataSource = "events"))
+                ),
+                WidgetResponse(
+                    id = 2,
+                    dashboardId = 1,
+                    widgetType = "donut",
+                    queryConfigs = listOf(QueryDsl(dataSource = "events"))
+                )
             )
         )
         val exported = translator.export(dashboard)
@@ -285,19 +388,36 @@ class DataDogTranslatorTest {
         val original = buildJsonObject {
             put("title", "Roundtrip Test")
             put("layout_type", "ordered")
-            put("widgets", buildJsonArray {
-                add(buildJsonObject {
-                    put("definition", buildJsonObject {
-                        put("type", "timeseries")
-                        put("requests", buildJsonArray {
-                            add(buildJsonObject { put("q", "count:events{*}") })
-                        })
-                    })
-                    put("layout", buildJsonObject {
-                        put("x", 0); put("y", 0); put("width", 12); put("height", 4)
-                    })
-                })
-            })
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "timeseries")
+                                    put(
+                                        "requests",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("q", "count:events{*}") })
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "layout",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("width", 12)
+                                    put("height", 4)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val imported = translator.import(original)
         val exported = translator.export(imported.dashboard)

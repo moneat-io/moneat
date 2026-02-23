@@ -21,14 +21,29 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class DataSource(val tableName: String) {
-    @SerialName("events") EVENTS("events"),
-    @SerialName("spans") SPANS("spans"),
-    @SerialName("logs") LOGS("logs"),
-    @SerialName("system_metrics") SYSTEM_METRICS("system_metrics"),
-    @SerialName("container_metrics") CONTAINER_METRICS("container_metrics"),
-    @SerialName("uptime_heartbeats") UPTIME_HEARTBEATS("uptime_heartbeats"),
-    @SerialName("llm_generations") LLM_GENERATIONS("llm_generations"),
-    @SerialName("analytics_events") ANALYTICS_EVENTS("analytics_events");
+    @SerialName("events")
+    EVENTS("events"),
+
+    @SerialName("spans")
+    SPANS("spans"),
+
+    @SerialName("logs")
+    LOGS("logs"),
+
+    @SerialName("system_metrics")
+    SYSTEM_METRICS("system_metrics"),
+
+    @SerialName("container_metrics")
+    CONTAINER_METRICS("container_metrics"),
+
+    @SerialName("uptime_heartbeats")
+    UPTIME_HEARTBEATS("uptime_heartbeats"),
+
+    @SerialName("llm_generations")
+    LLM_GENERATIONS("llm_generations"),
+
+    @SerialName("analytics_events")
+    ANALYTICS_EVENTS("analytics_events");
 
     companion object {
         fun fromString(value: String): DataSource? = entries.find { it.tableName == value }
@@ -37,18 +52,41 @@ enum class DataSource(val tableName: String) {
 
 @Serializable
 enum class AggFunction(val value: String) {
-    @SerialName("count") COUNT("count"),
-    @SerialName("avg") AVG("avg"),
-    @SerialName("sum") SUM("sum"),
-    @SerialName("min") MIN("min"),
-    @SerialName("max") MAX("max"),
-    @SerialName("p50") P50("p50"),
-    @SerialName("p75") P75("p75"),
-    @SerialName("p90") P90("p90"),
-    @SerialName("p95") P95("p95"),
-    @SerialName("p99") P99("p99"),
-    @SerialName("uniq") UNIQ("uniq"),
-    @SerialName("countIf") COUNT_IF("countIf");
+    @SerialName("count")
+    COUNT("count"),
+
+    @SerialName("avg")
+    AVG("avg"),
+
+    @SerialName("sum")
+    SUM("sum"),
+
+    @SerialName("min")
+    MIN("min"),
+
+    @SerialName("max")
+    MAX("max"),
+
+    @SerialName("p50")
+    P50("p50"),
+
+    @SerialName("p75")
+    P75("p75"),
+
+    @SerialName("p90")
+    P90("p90"),
+
+    @SerialName("p95")
+    P95("p95"),
+
+    @SerialName("p99")
+    P99("p99"),
+
+    @SerialName("uniq")
+    UNIQ("uniq"),
+
+    @SerialName("countIf")
+    COUNT_IF("countIf");
 
     fun toClickHouse(field: String?): String = when (this) {
         COUNT -> "count()"
@@ -68,24 +106,50 @@ enum class AggFunction(val value: String) {
 
 @Serializable
 enum class FilterOp(val value: String) {
-    @SerialName("eq") EQ("="),
-    @SerialName("neq") NEQ("!="),
-    @SerialName("gt") GT(">"),
-    @SerialName("gte") GTE(">="),
-    @SerialName("lt") LT("<"),
-    @SerialName("lte") LTE("<="),
-    @SerialName("like") LIKE("LIKE"),
-    @SerialName("not_like") NOT_LIKE("NOT LIKE"),
-    @SerialName("in") IN("IN"),
-    @SerialName("not_in") NOT_IN("NOT IN"),
-    @SerialName("is_null") IS_NULL("IS NULL"),
-    @SerialName("is_not_null") IS_NOT_NULL("IS NOT NULL");
+    @SerialName("eq")
+    EQ("="),
+
+    @SerialName("neq")
+    NEQ("!="),
+
+    @SerialName("gt")
+    GT(">"),
+
+    @SerialName("gte")
+    GTE(">="),
+
+    @SerialName("lt")
+    LT("<"),
+
+    @SerialName("lte")
+    LTE("<="),
+
+    @SerialName("like")
+    LIKE("LIKE"),
+
+    @SerialName("not_like")
+    NOT_LIKE("NOT LIKE"),
+
+    @SerialName("in")
+    IN("IN"),
+
+    @SerialName("not_in")
+    NOT_IN("NOT IN"),
+
+    @SerialName("is_null")
+    IS_NULL("IS NULL"),
+
+    @SerialName("is_not_null")
+    IS_NOT_NULL("IS NOT NULL")
 }
 
 @Serializable
 enum class GroupByType {
-    @SerialName("field") FIELD,
-    @SerialName("time") TIME;
+    @SerialName("field")
+    FIELD,
+
+    @SerialName("time")
+    TIME
 }
 
 @Serializable
