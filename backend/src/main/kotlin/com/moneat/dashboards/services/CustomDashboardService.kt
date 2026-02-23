@@ -16,9 +16,23 @@
 
 package com.moneat.dashboards.services
 
-import com.moneat.dashboards.models.*
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.CreateDashboardRequest
+import com.moneat.dashboards.models.CreateWidgetRequest
+import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.DashboardWidgets
+import com.moneat.dashboards.models.Dashboards
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByDef
+import com.moneat.dashboards.models.GroupByType
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.OrderByDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.TimeRangeDef
+import com.moneat.dashboards.models.UpdateDashboardRequest
+import com.moneat.dashboards.models.WidgetResponse
 import kotlinx.serialization.json.Json
-import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -29,7 +43,6 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
-private val logger = KotlinLogging.logger {}
 private val json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
@@ -71,7 +84,9 @@ class CustomDashboardService {
                         queryConfigs = queryConfigs,
                         displayConfig = try {
                             json.decodeFromString(wr[DashboardWidgets.displayConfig])
-                        } catch (_: Exception) { emptyMap() },
+                        } catch (_: Exception) {
+                            emptyMap()
+                        },
                         sortOrder = wr[DashboardWidgets.sortOrder]
                     )
                 }
@@ -122,7 +137,9 @@ class CustomDashboardService {
                     queryConfigs = queryConfigs,
                     displayConfig = try {
                         json.decodeFromString(wr[DashboardWidgets.displayConfig])
-                    } catch (_: Exception) { emptyMap() },
+                    } catch (_: Exception) {
+                        emptyMap()
+                    },
                     sortOrder = wr[DashboardWidgets.sortOrder]
                 )
             }

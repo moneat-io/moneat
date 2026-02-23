@@ -146,17 +146,21 @@ class CustomDataSourceExecutor {
     ): TestConnectionResult {
         return try {
             val ds = createTempPgDataSource(host, port, database, username, password)
-            ds.connection.use { conn ->
-                val tables = mutableListOf<String>()
-                conn.createStatement().use { stmt ->
-                    stmt.executeQuery(
-                        """SELECT table_name FROM information_schema.tables 
-                           WHERE table_schema = 'public' ORDER BY table_name LIMIT 50"""
-                    ).use { rs ->
-                        while (rs.next()) tables.add(rs.getString(1))
+            try {
+                ds.connection.use { conn ->
+                    val tables = mutableListOf<String>()
+                    conn.createStatement().use { stmt ->
+                        stmt.executeQuery(
+                            """SELECT table_name FROM information_schema.tables 
+                               WHERE table_schema = 'public' ORDER BY table_name LIMIT 50"""
+                        ).use { rs ->
+                            while (rs.next()) tables.add(rs.getString(1))
+                        }
                     }
+                    TestConnectionResult(true, "Connected successfully", tables = tables)
                 }
-                TestConnectionResult(true, "Connected successfully", tables = tables)
+            } finally {
+                ds.close()
             }
         } catch (e: Exception) {
             logger.warn(e) { "PostgreSQL connection test failed" }
@@ -191,24 +195,28 @@ class CustomDataSourceExecutor {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val ds = createTempPgDataSource(host, port, database, credentials.username, credentials.password)
-        return ds.connection.use { conn ->
-            val fields = mutableListOf<DataSourceField>()
-            conn.createStatement().use { stmt ->
-                stmt.executeQuery(
-                    """
-                    SELECT table_name || '.' || column_name, data_type, '' 
-                    FROM information_schema.columns 
-                    WHERE table_schema = 'public' 
-                    ORDER BY table_name, ordinal_position 
-                    LIMIT 500
-                    """.trimIndent()
-                ).use { rs ->
-                    while (rs.next()) {
-                        fields.add(DataSourceField(rs.getString(1), rs.getString(2), rs.getString(3)))
+        return try {
+            ds.connection.use { conn ->
+                val fields = mutableListOf<DataSourceField>()
+                conn.createStatement().use { stmt ->
+                    stmt.executeQuery(
+                        """
+                        SELECT table_name || '.' || column_name, data_type, '' 
+                        FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        ORDER BY table_name, ordinal_position 
+                        LIMIT 500
+                        """.trimIndent()
+                    ).use { rs ->
+                        while (rs.next()) {
+                            fields.add(DataSourceField(rs.getString(1), rs.getString(2), rs.getString(3)))
+                        }
                     }
                 }
+                fields
             }
-            fields
+        } finally {
+            ds.close()
         }
     }
 

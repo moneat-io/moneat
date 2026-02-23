@@ -32,6 +32,7 @@ import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.UpdateCustomDataSourceRequest
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
 import com.moneat.dashboards.models.UpdateDashboardRequest
+import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
@@ -41,6 +42,7 @@ import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
@@ -58,6 +60,7 @@ import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -72,6 +75,31 @@ private fun getOrgIdForUser(userId: Int): Long? {
             .firstOrNull()
             ?.get(Memberships.organization_id)
             ?.toLong()
+    }
+}
+
+private data class DashboardScope(
+    val projectId: Long?
+)
+
+private fun hasProjectAccess(orgId: Long, projectId: Long): Boolean {
+    return transaction {
+        Projects.selectAll()
+            .where { (Projects.id eq projectId) and (Projects.organization_id eq orgId.toInt()) }
+            .firstOrNull() != null
+    }
+}
+
+private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
+    return transaction {
+        Dashboards.selectAll()
+            .where { (Dashboards.id eq dashboardId) and (Dashboards.orgId eq orgId) }
+            .firstOrNull()
+            ?.let { row ->
+                DashboardScope(
+                    projectId = row[Dashboards.projectId]
+                )
+            }
     }
 }
 
@@ -168,6 +196,11 @@ fun Route.customDashboardRoutes(
                 val orgId = getOrgIdForUser(userId)
                     ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
 
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+                val dashboardScope = getDashboardScope(id, orgId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+
                 val request = call.receive<ExecuteQueryRequest>()
                 val demoEpochMs = call.getDemoEpochMs()
 
@@ -175,6 +208,15 @@ fun Route.customDashboardRoutes(
                 if (projectId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required"))
                     return@post
+                }
+                if (!hasProjectAccess(orgId, projectId)) {
+                    return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("Project access denied"))
+                }
+                if (dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse("Dashboard is scoped to project ${dashboardScope.projectId}")
+                    )
                 }
 
                 val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
@@ -230,6 +272,11 @@ fun Route.customDashboardRoutes(
                 val orgId = getOrgIdForUser(userId)
                     ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
 
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+                val dashboardScope = getDashboardScope(id, orgId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+
                 val request = call.receive<ExecuteBatchQueryRequest>()
                 val demoEpochMs = call.getDemoEpochMs()
 
@@ -237,6 +284,15 @@ fun Route.customDashboardRoutes(
                 if (projectId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required"))
                     return@post
+                }
+                if (!hasProjectAccess(orgId, projectId)) {
+                    return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("Project access denied"))
+                }
+                if (dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse("Dashboard is scoped to project ${dashboardScope.projectId}")
+                    )
                 }
 
                 if (request.queries.size > 10) {

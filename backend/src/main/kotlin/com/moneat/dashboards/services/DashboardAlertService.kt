@@ -56,6 +56,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.firstOrNull
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -74,6 +75,7 @@ class DashboardAlertService {
     private val queryEngine = DashboardQueryEngine()
     private val retentionPolicyService = RetentionPolicyService()
     private val json = Json { ignoreUnknownKeys = true }
+    private val pendingSinceFallback = ConcurrentHashMap<Long, Instant>()
 
     private var evaluationJob: Job? = null
 
@@ -269,6 +271,7 @@ class DashboardAlertService {
 
     private suspend fun evaluateAlert(alert: AlertContext) {
         val alertKey = "dashboard_alert_state:${alert.alertId}"
+        val pendingKey = "dashboard_alert_pending:${alert.alertId}"
 
         val queryConfigs: List<QueryDsl> = try {
             json.decodeFromString(alert.queryConfigsJson)
@@ -276,7 +279,8 @@ class DashboardAlertService {
             return
         }
         if (queryConfigs.isEmpty()) return
-        val queryDsl = queryConfigs.firstOrNull() ?: return
+        val (queryIndex, metricIndexInQuery) = resolveMetricTarget(queryConfigs, alert.metricIndex) ?: return
+        val queryDsl = queryConfigs.getOrNull(queryIndex) ?: return
 
         val projectId = alert.projectId ?: return
         val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
@@ -288,7 +292,7 @@ class DashboardAlertService {
             return
         }
 
-        val currentValue = extractMetricValue(results, alert.metricIndex) ?: return
+        val currentValue = extractMetricValue(results, queryDsl, metricIndexInQuery) ?: return
 
         // Update last_value
         transaction {
@@ -308,6 +312,8 @@ class DashboardAlertService {
                     false
                 }
             } catch (_: Exception) { false }
+
+            clearPendingState(pendingKey, alert.alertId)
 
             if (wasTriggered) {
                 try {
@@ -330,8 +336,18 @@ class DashboardAlertService {
             return
         }
 
-        // Throttle check
         val now = Clock.System.now()
+        if (alert.durationSeconds > 0) {
+            val pendingSince = getOrSetPendingStart(pendingKey, alert.alertId, now)
+            if ((now - pendingSince) < alert.durationSeconds.seconds) {
+                return
+            }
+            clearPendingState(pendingKey, alert.alertId)
+        } else {
+            clearPendingState(pendingKey, alert.alertId)
+        }
+
+        // Throttle check
         if (alert.lastTriggeredAt != null) {
             if ((now - alert.lastTriggeredAt) < MIN_ALERT_INTERVAL_MINUTES.minutes) {
                 try {
@@ -362,18 +378,72 @@ class DashboardAlertService {
         sendAlertNotification(alert, currentValue)
     }
 
-    private fun extractMetricValue(results: List<Map<String, JsonElement>>, metricIndex: Int): Double? {
+    private fun resolveMetricTarget(queryConfigs: List<QueryDsl>, globalMetricIndex: Int): Pair<Int, Int>? {
+        if (globalMetricIndex < 0) return null
+        var remaining = globalMetricIndex
+        queryConfigs.forEachIndexed { queryIndex, query ->
+            val count = if (query.metrics.isEmpty()) 1 else query.metrics.size
+            if (remaining < count) return queryIndex to remaining
+            remaining -= count
+        }
+        return null
+    }
+
+    private fun extractMetricValue(
+        results: List<Map<String, JsonElement>>,
+        queryDsl: QueryDsl,
+        metricIndexInQuery: Int
+    ): Double? {
         if (results.isEmpty()) return null
         val row = results.last()
+        val metricAliases = metricAliases(queryDsl)
+        val targetAlias = metricAliases.getOrNull(metricIndexInQuery)
+        val targetByAlias = targetAlias?.let { row[it] }
+        if (targetByAlias is JsonPrimitive) {
+            return targetByAlias.doubleOrNull ?: targetByAlias.content.toDoubleOrNull()
+        }
         val metricValues = row.entries
             .filter { (k, _) -> k !in setOf("time_bucket", "timestamp", "time", "day") }
             .map { it.value }
 
-        val target = metricValues.getOrNull(metricIndex) ?: metricValues.firstOrNull() ?: return null
+        val target = metricValues.getOrNull(metricIndexInQuery) ?: metricValues.firstOrNull() ?: return null
         return when (target) {
             is JsonPrimitive -> target.doubleOrNull ?: target.content.toDoubleOrNull()
             else -> null
         }
+    }
+
+    private fun metricAliases(queryDsl: QueryDsl): List<String> {
+        if (queryDsl.metrics.isEmpty()) return listOf("total")
+        return queryDsl.metrics.map { metric ->
+            metric.alias ?: "${metric.function.value}_${metric.field ?: "all"}"
+        }
+    }
+
+    private fun getOrSetPendingStart(pendingKey: String, alertId: Long, now: Instant): Instant {
+        if (RedisConfig.isConnected()) {
+            try {
+                val redis = RedisConfig.sync()
+                val existing = redis.get(pendingKey)?.toLongOrNull()
+                if (existing != null) return Instant.fromEpochMilliseconds(existing * 1000)
+                redis.set(pendingKey, (now.toEpochMilliseconds() / 1000).toString())
+                return now
+            } catch (_: Exception) {
+                // fallback below
+            }
+        }
+        return pendingSinceFallback.computeIfAbsent(alertId) { now }
+    }
+
+    private fun clearPendingState(pendingKey: String, alertId: Long) {
+        if (RedisConfig.isConnected()) {
+            try {
+                RedisConfig.sync().del(pendingKey)
+            } catch (_: Exception) {
+                // best effort
+            }
+        }
+        pendingSinceFallback.remove(alertId)
     }
 
     private fun isThresholdTriggered(condition: String, currentValue: Double, threshold: Double): Boolean {
