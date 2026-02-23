@@ -17,7 +17,7 @@
 import {useQuery} from '@tanstack/react-query'
 import {api, type QueryDsl, type MetricDef, type GroupByDef, type FilterDef} from '@/lib/api'
 import {Button} from '@/components/ui/button'
-import {Plus, Trash2} from 'lucide-react'
+import {Plus, Trash2, AlertTriangle} from 'lucide-react'
 import {DataSourcePicker} from './DataSourcePicker'
 
 const AGG_FUNCTIONS = ['count', 'avg', 'sum', 'min', 'max', 'p50', 'p75', 'p90', 'p95', 'p99', 'uniq']
@@ -46,7 +46,8 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
     staleTime: 60000,
   })
 
-  const isCustomSource = value.dataSource?.startsWith('custom:')
+  const isCustomSource = value.dataSource?.startsWith('custom:') || value.dataSource?.startsWith('__')
+  const isUnmappedSource = value.dataSource?.startsWith('__')
   const selectedSource = dataSources?.find((ds) => ds.name === value.dataSource)
   const fields = selectedSource?.fields ?? []
 
@@ -112,6 +113,19 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
           onChange={(ds) => onChange({...value, dataSource: ds})}
         />
       </div>
+
+      {/* Unmapped source warning */}
+      {isUnmappedSource && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3">
+          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-medium mb-1">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Unmapped Data Source
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            This widget references a Prometheus datasource from Grafana. Select your custom Prometheus datasource above to execute this query.
+          </p>
+        </div>
+      )}
 
       {isCustomSource ? (
         /* Raw query mode for custom data sources */
