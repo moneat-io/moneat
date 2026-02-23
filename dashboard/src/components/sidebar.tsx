@@ -232,7 +232,16 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     }
   }
 
-  const baseNavItems = [
+  interface NavItem {
+    key: string
+    icon: React.ComponentType<{className?: string}>
+    label: string
+    href: string
+    requiresProject: boolean
+    badge?: string
+  }
+
+  const baseNavItems: NavItem[] = [
     // Core Observability (most used)
     { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
@@ -523,9 +532,9 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
                 {isExpanded && (
                   <div className="flex items-center gap-2 flex-1">
                     <span className="text-sm font-medium">{item.label}</span>
-                    {(item as any).badge && (
+                    {item.badge && (
                       <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-medium">
-                        {(item as any).badge}
+                        {item.badge}
                       </Badge>
                     )}
                   </div>

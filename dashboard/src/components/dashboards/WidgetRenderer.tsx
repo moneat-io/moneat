@@ -14,20 +14,33 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {memo, useMemo, useRef, useState, useEffect, useId, type ReactNode} from 'react'
+import {memo, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, ReferenceLine,
+    Area,
+    AreaChart,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Legend,
+    Line,
+    LineChart,
+    Pie,
+    PieChart,
+    ReferenceLine,
+    Tooltip,
+    XAxis,
+    YAxis,
 } from 'recharts'
 import {useVirtualizer} from '@tanstack/react-virtual'
 import {TopListWidget} from './TopListWidget'
 import {HeatmapWidget} from './HeatmapWidget'
 import ReactMarkdown from 'react-markdown'
-import {formatValue} from './formatValue'
 import type {ValueMapping} from './formatValue'
+import {formatValue} from './formatValue'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -173,7 +186,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
     case 'donut':
       return <DonutChartWidget data={chartData} displayConfig={dc} />
     case 'stat':
-      return <StatWidget data={chartData} widget={widget} timeRange={timeRange} displayConfig={dc} />
+      return <StatWidget data={chartData} widget={widget} displayConfig={dc} />
     case 'table':
       return <TableWidget data={chartData} displayConfig={dc} />
     case 'toplist':
@@ -617,7 +630,6 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
 function deduplicateStatData(
   data: Record<string, unknown>[],
   labelKeys: string[],
-  valueKeys: string[],
 ) {
   if (labelKeys.length === 0) return data
 
@@ -642,12 +654,10 @@ function deduplicateStatData(
 const StatWidget = memo(function StatWidget({
   data,
   widget,
-  timeRange,
   displayConfig: dc,
 }: {
   data: Record<string, unknown>[]
   widget: DashboardWidget
-  timeRange: TimeRangeDef
   displayConfig: DisplayConfig
 }) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
@@ -708,7 +718,7 @@ const StatWidget = memo(function StatWidget({
     const thresholdColor = typeof mainValue === 'number' ? getThresholdColor(mainValue, thresholds) : undefined
     const sparklineData = sorted.map((r) => ({
       t: r[timeKey!],
-      v: Number(r[valueKey]) ?? 0,
+      v: Number(r[valueKey] ?? 0),
     }))
 
     return (

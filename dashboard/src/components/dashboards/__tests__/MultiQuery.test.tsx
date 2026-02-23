@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import React from 'react'
-import {describe, it, expect, vi} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 import {render, screen} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
@@ -207,7 +207,6 @@ describe('MultiQuery', () => {
   })
 
   it('limits to 10 queries maximum', async () => {
-    const user = userEvent.setup()
     const manyQueries = Array.from({length: 10}, (_, i) => ({
       ...baseWidget.query_configs[0],
       ref_id: String.fromCharCode(65 + i),

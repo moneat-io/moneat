@@ -16,10 +16,10 @@
 
 import {useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import type {CreateDashboardAlertRequest, QueryDsl} from '@/lib/api'
 import {api} from '@/lib/api'
-import type {DashboardWidgetAlert, CreateDashboardAlertRequest, QueryDsl} from '@/lib/api'
 import {Button} from '@/components/ui/button'
-import {Trash2, Plus, Bell, BellOff} from 'lucide-react'
+import {Bell, BellOff, Plus, Trash2} from 'lucide-react'
 
 const CONDITIONS = [
   {value: '>', label: '>'},
@@ -70,7 +70,7 @@ export function AlertConfigForm({dashboardId, widgetId, queryConfigs}: AlertConf
     notification_channels: {email: true, slack: true, discord: true},
   })
 
-  const {data: alerts = [], isLoading} = useQuery({
+  const {data: alerts = []} = useQuery({
     queryKey: ['dashboard-alerts', dashboardId],
     queryFn: () => api.listDashboardAlerts(dashboardId),
   })

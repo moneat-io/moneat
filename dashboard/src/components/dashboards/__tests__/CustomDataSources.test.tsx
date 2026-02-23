@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {render, screen, fireEvent, waitFor} from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {api} from '@/lib/api'
 import React from 'react'
 
@@ -35,20 +32,12 @@ vi.mock('@/lib/api', () => ({
 // Mock tanstack router
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => () => ({component: () => null}),
-  Link: ({children, ...props}: any) => <a {...props}>{children}</a>,
+  Link: ({children, ...props}: {children: React.ReactNode}) => <a {...props}>{children}</a>,
 }))
 
-// Since the route component isn't easily importable, we test the form behavior patterns
-// by testing what the API methods expect and ensuring our types are correct.
-
 describe('Custom Data Sources', () => {
-  let queryClient: QueryClient
-
   beforeEach(() => {
     vi.clearAllMocks()
-    queryClient = new QueryClient({
-      defaultOptions: {queries: {retry: false}},
-    })
   })
 
   describe('API contract', () => {
@@ -217,7 +206,7 @@ describe('Custom Data Sources', () => {
       ])
 
       const result = await api.listCustomDataSources()
-      const ds = result[0] as any
+      const ds = result[0] as Record<string, unknown>
       expect(ds.password).toBeUndefined()
       expect(ds.username).toBeUndefined()
       expect(ds.api_key).toBeUndefined()

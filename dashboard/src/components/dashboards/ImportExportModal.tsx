@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState, useRef, useMemo} from 'react'
-import {useMutation, useQueryClient, useQuery} from '@tanstack/react-query'
+import {useMemo, useRef, useState} from 'react'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {useNavigate} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
-import {Upload, Download, AlertTriangle, Check} from 'lucide-react'
+import {AlertTriangle, Check, Download, Upload} from 'lucide-react'
 import {DataSourceMapperModal} from './DataSourceMapperModal'
 
 interface ImportExportModalProps {
@@ -119,7 +119,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       
       if (format === 'grafana' && parsed.panels) {
         // Check all panels for datasources
-        const checkPanel = (panel: any) => {
+        const checkPanel = (panel: Record<string, unknown>) => {
           if (panel.targets) {
             for (const target of panel.targets) {
               // Grafana datasources can be:
@@ -200,7 +200,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       const parsed = JSON.parse(pendingImport.json)
       
       if (pendingImport.format === 'grafana' && parsed.panels) {
-        const mapDatasource = (ds: any): any => {
+        const mapDatasource = (ds: unknown): unknown => {
           if (!ds) return ds
           
           // Handle different datasource formats
@@ -228,7 +228,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           return ds
         }
         
-        const applyMapping = (panel: any) => {
+        const applyMapping = (panel: Record<string, unknown>) => {
           // Map panel-level datasource
           if (panel.datasource) {
             const originalDs = JSON.stringify(panel.datasource)

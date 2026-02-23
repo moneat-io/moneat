@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useCallback, useEffect, useRef} from 'react'
-import type {DashboardWidget, CreateWidgetRequest} from '@/lib/api'
+import {useCallback, useEffect, useRef, useState} from 'react'
+import type {CreateWidgetRequest, DashboardWidget} from '@/lib/api'
 
 // Grafana panel type → Moneat widget type
 const GRAFANA_TYPE_MAP: Record<string, string> = {
@@ -216,6 +216,7 @@ export function useWidgetClipboard({
   onUndo,
 }: UseWidgetClipboardOptions) {
   const copiedWidgetRef = useRef<DashboardWidget | null>(null)
+  const [copiedWidget, setCopiedWidget] = useState<DashboardWidget | null>(null)
   const canUndoRef = useRef(false)
 
   const getNextY = useCallback(() => {
@@ -229,6 +230,7 @@ export function useWidgetClipboard({
     if (!widget) return
 
     copiedWidgetRef.current = widget
+    setCopiedWidget(widget)
     // Also put Moneat JSON in clipboard for cross-tab paste
     const json = JSON.stringify({
       _moneat_widget: true,
@@ -318,7 +320,7 @@ export function useWidgetClipboard({
   }, [isEditing, handleCopy, handlePaste, onUndo])
 
   return {
-    copiedWidget: copiedWidgetRef.current,
+    copiedWidget,
     copy: handleCopy,
     paste: handlePaste,
   }
