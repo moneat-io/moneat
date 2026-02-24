@@ -41,6 +41,7 @@ function SignupPage() {
   
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [name, setName] = useState('')
   const [acceptedLegal, setAcceptedLegal] = useState(false)
   const [error, setError] = useState('')
@@ -57,6 +58,17 @@ function SignupPage() {
       return
     }
 
+    // Client-side validation
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
     try {
       await api.signup(email, password, name || undefined, {
         acceptTerms: true,
@@ -66,8 +78,12 @@ function SignupPage() {
       }, inviteToken)
       trackEvent('Signup')
       setSuccess(true)
-    } catch {
-      setError('Failed to create account. Email may already be in use.')
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('Failed to create account. Please try again.')
+      }
     }
   }
 
@@ -186,6 +202,21 @@ function SignupPage() {
                       placeholder="Create a password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Must be at least 8 characters
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="Confirm your password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                     />
                   </div>

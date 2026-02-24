@@ -163,6 +163,44 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `signup rejects password shorter than 8 characters`() {
+        val exception =
+            assertFailsWith<IllegalArgumentException> {
+                authService.signup(
+                    SignupRequest(
+                        email = "newuser@test.com",
+                        password = "short",
+                        name = "Test User",
+                        acceptTerms = true,
+                        acceptPrivacy = true,
+                        termsVersion = "2026-02-08",
+                        privacyVersion = "2026-02-08"
+                    )
+                )
+            }
+        assertEquals("Password must be at least 8 characters", exception.message)
+    }
+
+    @Test
+    fun `signup rejects blank email`() {
+        val exception =
+            assertFailsWith<IllegalArgumentException> {
+                authService.signup(
+                    SignupRequest(
+                        email = "",
+                        password = "validpassword",
+                        name = "Test User",
+                        acceptTerms = true,
+                        acceptPrivacy = true,
+                        termsVersion = "2026-02-08",
+                        privacyVersion = "2026-02-08"
+                    )
+                )
+            }
+        assertEquals("Email is required", exception.message)
+    }
+
+    @Test
     fun `verifyEmail returns false for invalid token`() {
         val result = authService.verifyEmail("nonexistent-token")
         assertFalse(result)

@@ -74,8 +74,11 @@ class AuthService {
         context: SignupRequestContext = SignupRequestContext(),
         inviteToken: String? = null
     ): AuthResponse {
-        if (request.email.isBlank() || request.password.length < 8) {
-            throw IllegalArgumentException("Invalid email or password too short")
+        if (request.email.isBlank()) {
+            throw IllegalArgumentException("Email is required")
+        }
+        if (request.password.length < 8) {
+            throw IllegalArgumentException("Password must be at least 8 characters")
         }
         validateSignupLegalConsent(request)
 
