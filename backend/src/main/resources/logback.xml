@@ -60,16 +60,16 @@
     <!-- Use STDOUT_JSON or STDOUT_PLAIN based on LOG_FORMAT for consistent output -->
     <if condition='property("LOG_FORMAT").equals("json")'>
         <then>
-            <logger name="com.moneat.routes.IngestRoutesKt" level="INFO" additivity="false">
+            <logger name="com.moneat.events.routes.IngestRoutesKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_JSON"/>
             </logger>
-            <logger name="com.moneat.routes.LogRoutesKt" level="INFO" additivity="false">
+            <logger name="com.moneat.logs.routes.LogRoutesKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_JSON"/>
             </logger>
-            <logger name="com.moneat.services.IngestionWorkerKt" level="INFO" additivity="false">
+            <logger name="com.moneat.events.services.IngestionWorkerKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_JSON"/>
             </logger>
-            <logger name="com.moneat.services.LogIngestionWorkerKt" level="INFO" additivity="false">
+            <logger name="com.moneat.logs.services.LogIngestionWorkerKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_JSON"/>
             </logger>
             <logger name="Application" level="INFO" additivity="false">
@@ -77,16 +77,16 @@
             </logger>
         </then>
         <else>
-            <logger name="com.moneat.routes.IngestRoutesKt" level="INFO" additivity="false">
+            <logger name="com.moneat.events.routes.IngestRoutesKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_PLAIN"/>
             </logger>
-            <logger name="com.moneat.routes.LogRoutesKt" level="INFO" additivity="false">
+            <logger name="com.moneat.logs.routes.LogRoutesKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_PLAIN"/>
             </logger>
-            <logger name="com.moneat.services.IngestionWorkerKt" level="INFO" additivity="false">
+            <logger name="com.moneat.events.services.IngestionWorkerKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_PLAIN"/>
             </logger>
-            <logger name="com.moneat.services.LogIngestionWorkerKt" level="INFO" additivity="false">
+            <logger name="com.moneat.logs.services.LogIngestionWorkerKt" level="INFO" additivity="false">
                 <appender-ref ref="STDOUT_PLAIN"/>
             </logger>
             <logger name="Application" level="INFO" additivity="false">

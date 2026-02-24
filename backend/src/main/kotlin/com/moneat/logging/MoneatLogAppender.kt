@@ -124,7 +124,11 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             connection.readTimeout = 1000
 
             connection.outputStream.use { it.write(payload.toByteArray()) }
-            connection.responseCode // Trigger request
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                val body = runCatching { connection.errorStream?.bufferedReader()?.readText() }.getOrNull()
+                System.err.println("[MoneatLogAppender] Non-2xx response: $responseCode${if (body != null) " - $body" else ""}")
+            }
         } finally {
             connection.disconnect()
         }
