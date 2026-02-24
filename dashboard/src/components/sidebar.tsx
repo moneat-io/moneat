@@ -38,27 +38,21 @@ import {
     Globe,
     Home,
     LayoutDashboard,
-    LogOut,
     MessageSquare,
     Package,
     Play,
-    Plus,
     ScrollText,
     Server,
-    Settings,
     Shield,
     Timer,
-    User,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
-import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu'
-import {Avatar, AvatarFallback} from '@/components/ui/avatar'
+import {platforms, type PlatformType} from '@/routes/projects'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {Logo} from '@/components/logo'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
-import {hasEnterpriseModule, useEnterpriseFeatures, useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
+import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
@@ -86,7 +80,6 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const { data: features } = useEnterpriseFeatures()
-  const isSelfHosted = useIsSelfHosted()
 
   // Create project dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -107,27 +100,8 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     enabled: api.isAuthenticated(),
   })
 
-  const { data: billingPlans } = useQuery({
-    queryKey: ['billing-plans'],
-    queryFn: () => api.getBillingPlans(),
-    enabled: api.isAuthenticated(),
-  })
-
-  const { data: billingUsage } = useQuery({
-    queryKey: ['billing-usage'],
-    queryFn: () => api.getBillingUsage(),
-    enabled: api.isAuthenticated(),
-  })
-
   const activeProject = projects?.find((project) => project.id === selectedProjectId) ?? projects?.[0] ?? null
   const activeProjectId = activeProject?.id ?? null
-  const isDemoUser = Boolean(user?.demoEpochMs)
-
-  // Get current tier from billing usage
-  const currentPlan = billingPlans?.plans?.find((p) => p.tier.tierName === billingUsage?.plan?.toUpperCase())
-  const maxProjects = isSelfHosted ? null : currentPlan?.tier.maxProjects
-  const projectCount = projects?.length ?? 0
-  const isAtProjectLimit = !isSelfHosted && maxProjects != null && projectCount >= maxProjects
 
   const createProjectMutation = useMutation({
     mutationFn: (data: { name: string; framework: string; targets?: string[] }) =>
@@ -216,22 +190,6 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     return platform.category === platformFilter
   })
 
-  const handleProjectSelect = (projectId: number) => {
-    setSelectedProjectId(projectId)
-    // Keep users on the same project subpage when switching projects.
-    if (/^\/projects\/[^/]+\/settings\/?$/.test(currentPath)) {
-      navigate({ to: '/projects/$projectId/settings', params: { projectId: String(projectId) } })
-      return
-    }
-    if (/^\/projects\/[^/]+\/logs\/?$/.test(currentPath)) {
-      navigate({ to: '/projects/$projectId/logs', params: { projectId: String(projectId) } })
-      return
-    }
-    if (/^\/projects\/[^/]+\/?$/.test(currentPath) || currentPath === '/projects') {
-      navigate({ to: '/projects/$projectId', params: { projectId: String(projectId) } })
-    }
-  }
-
   interface NavItem {
     key: string
     icon: React.ComponentType<{className?: string}>
@@ -262,52 +220,15 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false }] : []),
     // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
-    { key: 'settings', icon: Settings, label: 'Settings', href: '/settings', requiresProject: false },
   ]
 
   const navItems = baseNavItems.filter(item => {
-    if (isDemoUser && item.key === 'settings') {
-      return true
-    }
     return isSidebarItemVisible(item.key, user?.sidebarHiddenItems || [])
   })
 
   const projectNavItems = activeProjectId ? [
     { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` },
   ] : []
-
-  const getProjectPlatform = (project: { keys?: { platformTarget?: string | null }[]; framework?: string }) => {
-    return project?.keys?.[0]?.platformTarget || project?.framework || undefined
-  }
-
-  const renderProjectPlatformIcon = (
-    project: { keys?: { platformTarget?: string | null }[]; framework?: string },
-    iconClassName = 'h-3.5 w-3.5',
-    containerClassName = 'h-5 w-5'
-  ) => {
-    const platformId = getProjectPlatform(project)
-    const platformInfo = getPlatformInfo(platformId) || getPlatformInfo('other')
-    const PlatformIcon = platformInfo?.icon || Package
-
-    return (
-      <div
-        className={cn('rounded flex items-center justify-center flex-shrink-0', containerClassName)}
-        style={{ backgroundColor: platformInfo?.color || '#4b5563' }}
-      >
-        <PlatformIcon className={cn(iconClassName, 'text-white')} />
-      </div>
-    )
-  }
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'U'
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-  }
 
   const renderSidebarContent = () => (
     <>
@@ -446,39 +367,6 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
             </Tooltip>
           )}
         </div>
-
-        {/* Logout Button */}
-        {isExpanded ? (
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground"
-            onClick={async () => {
-              await api.logout()
-              window.location.href = '/login'
-            }}
-          >
-            <LogOut className="h-5 w-5 flex-shrink-0" />
-            <span className="text-sm">Logout</span>
-          </Button>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-center px-0 text-muted-foreground hover:text-foreground"
-                onClick={async () => {
-                  await api.logout()
-                  window.location.href = '/login'
-                }}
-              >
-                <LogOut className="h-5 w-5 flex-shrink-0" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Logout</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
 
         {/* Expand/Collapse Button */}
         <Button

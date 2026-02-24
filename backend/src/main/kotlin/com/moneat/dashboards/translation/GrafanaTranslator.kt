@@ -29,6 +29,7 @@ import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -170,34 +171,33 @@ class GrafanaTranslator : DashboardTranslator {
         val grafanaW = gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: 12
         val grafanaH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: 4
 
-        // Grafana uses a 24-col grid, Moneat uses 12-col. Scale x/w by 0.5.
-        // Grafana row height ≈ 30px, Moneat row height = 80px. Scale y/h by 30/80.
-        val gridX = scaleGridColumn(grafanaX)
+        // Grafana uses a 24-col grid, Moneat uses 12-col.
+        // Use floor-aligned scaling: x = floor(gx*12/24), w = floor((gx+gw)*12/24) - x
+        // This guarantees adjacent panels share exact column boundaries with no gaps or overflow.
+        val gridX = (grafanaX * MONEAT_COLS / GRAFANA_COLS).coerceIn(0, 11)
         val gridY = scaleGridValue(grafanaY)
-        val gridW = scaleGridColumn(grafanaW).coerceAtLeast(1)
+        val gridXEnd = ((grafanaX + grafanaW) * MONEAT_COLS / GRAFANA_COLS).coerceAtMost(MONEAT_COLS)
+        val gridW = (gridXEnd - gridX).coerceAtLeast(1)
         val gridH = scaleGridValue(grafanaH)
 
-        val queryConfig = parseGrafanaTargets(panelJson, warnings, index)
+        val queryConfigs = parseGrafanaTargets(panelJson, warnings, index)
         val displayConfig = extractDisplayConfig(panelJson)
 
-        val minH = if (moneatType == "stat" || moneatType == "gauge") 2 else 3
+        val minH = if (moneatType == "stat" || moneatType == "gauge") 1 else 3
         return WidgetResponse(
             id = 0,
             dashboardId = 0,
             title = panelTitle,
             widgetType = moneatType ?: "text",
-            gridX = gridX.coerceIn(0, 11),
+            gridX = gridX,
             gridY = gridY,
-            gridW = gridW.coerceIn(1, 12),
+            gridW = gridW,
             gridH = gridH.coerceIn(minH, 12),
-            queryConfigs = listOf(queryConfig),
+            queryConfigs = queryConfigs,
             displayConfig = displayConfig,
             sortOrder = index
         )
     }
-
-    private fun scaleGridColumn(grafanaCol: Int): Int =
-        (grafanaCol.toDouble() * MONEAT_COLS / GRAFANA_COLS).roundToInt()
 
     private fun scaleGridValue(grafanaUnits: Int): Int =
         (grafanaUnits * GRAFANA_ROW_PX / MONEAT_ROW_PX).roundToInt()
@@ -313,80 +313,82 @@ class GrafanaTranslator : DashboardTranslator {
         panelJson: JsonObject,
         warnings: MutableList<String>,
         panelIndex: Int
-    ): QueryDsl {
+    ): List<QueryDsl> {
         val targets = panelJson["targets"]?.jsonArray
 
         if (targets.isNullOrEmpty()) {
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+            return listOf(
+                QueryDsl(
+                    dataSource = "events",
+                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+                )
             )
         }
 
-        val firstTarget = targets.first().jsonObject
-
-        // Check for pre-mapped datasource (frontend replaces with strings like "custom:Prometheus")
-        // Check target-level datasource first, then fall back to panel-level
-        val targetDs = firstTarget["datasource"]
+        // Resolve datasource: check panel-level, then fall back per-target
         val panelDs = panelJson["datasource"]
-        val datasource = targetDs ?: panelDs
+        val preMappedDataSource = resolveDatasource(panelDs, panelIndex)
 
-        val preMappedDataSource = when (datasource) {
-            is JsonPrimitive if datasource.isString -> {
-                logger.info("Panel $panelIndex: found pre-mapped string datasource: ${datasource.content}")
-                datasource.content
-            }
+        return targets.mapIndexed { idx, targetEl ->
+            val target = targetEl.jsonObject
+            val refId = target["refId"]?.jsonPrimitive?.contentOrNull ?: ('A' + idx).toString()
+            val legendFormat = target["legendFormat"]?.jsonPrimitive?.contentOrNull
 
-            is JsonObject if datasource["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true -> {
-                val dsType = datasource["type"]?.jsonPrimitive?.content
-                logger.info("Panel $panelIndex: found pre-mapped object datasource: $dsType")
-                dsType
-            }
+            // Per-target datasource overrides panel-level
+            val targetDs = target["datasource"]
+            val effectiveDs = resolveDatasource(targetDs, panelIndex) ?: preMappedDataSource
 
-            else -> {
-                logger.info("Panel $panelIndex: no pre-mapped datasource found, datasource=$datasource")
-                null
-            }
+            val parsed = parseTarget(target, warnings, panelIndex, legendFormat)
+            val withDs = if (effectiveDs != null) parsed.copy(dataSource = effectiveDs) else parsed
+            withDs.copy(refId = refId)
         }
+    }
 
-        // Try to parse SQL-style query (common with ClickHouse datasource)
-        val rawSql = firstTarget["rawSql"]?.jsonPrimitive?.contentOrNull
-        if (rawSql != null) {
-            val parsed = parseGrafanaSql(rawSql, warnings, panelIndex)
-            // Use pre-mapped datasource if available
-            return if (preMappedDataSource != null) {
-                parsed.copy(dataSource = preMappedDataSource)
-            } else {
-                parsed
-            }
-        }
+    private fun resolveDatasource(ds: JsonElement?, panelIndex: Int): String? = when (ds) {
+        is JsonPrimitive if ds.isString -> ds.content
+        is JsonObject if ds["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true ->
+            ds["type"]?.jsonPrimitive?.content
+        else -> null
+    }
 
-        // Try to parse PromQL expression
-        val expr = firstTarget["expr"]?.jsonPrimitive?.contentOrNull
-        if (expr != null) {
+    private fun parseTarget(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int,
+        legendFormat: String?
+    ): QueryDsl {
+        // Try PromQL first (takes priority — rawSql may be a Grafana default template)
+        val expr = target["expr"]?.jsonPrimitive?.contentOrNull
+        if (!expr.isNullOrBlank()) {
             val parsed = parsePromQL(expr, warnings, panelIndex)
-            // Use pre-mapped datasource if available
-            return if (preMappedDataSource != null) {
-                parsed.copy(dataSource = preMappedDataSource)
+            // Apply legendFormat as the metric alias so the chart uses it as series name
+            return if (legendFormat != null && parsed.metrics.isNotEmpty()) {
+                parsed.copy(metrics = parsed.metrics.map { it.copy(alias = legendFormat) })
             } else {
                 parsed
             }
         }
 
-        // Try generic query field
-        val query = firstTarget["query"]?.jsonPrimitive?.contentOrNull
+        // Try SQL
+        val rawSql = target["rawSql"]?.jsonPrimitive?.contentOrNull
+        if (rawSql != null) {
+            return parseGrafanaSql(rawSql, warnings, panelIndex)
+        }
+
+        // Try generic query
+        val query = target["query"]?.jsonPrimitive?.contentOrNull
         if (query != null) {
             warnings.add("Panel $panelIndex: generic query stored as rawQuery")
             return QueryDsl(
-                dataSource = preMappedDataSource ?: "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
                 rawQuery = query
             )
         }
 
         warnings.add("Panel $panelIndex: no recognizable query target")
         return QueryDsl(
-            dataSource = preMappedDataSource ?: "events",
+            dataSource = "events",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
         )
     }
@@ -423,12 +425,15 @@ class GrafanaTranslator : DashboardTranslator {
         // PromQL queries need to be executed against Prometheus, not ClickHouse
         // Always store the original expression as rawQuery and use a marker datasource
 
+        // Normalize whitespace (collapse newlines and runs of spaces into single space)
+        val normalized = expr.trim().replace(Regex("""\s+"""), " ")
+
         // Try function-wrapped: rate(metric{labels}[5m])
-        val funcMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^]]*)])?\)""").find(expr)
+        val funcMatch = Regex("""(\w+)\(([^{(]+?)(?:\{([^}]*)\})?(?:\[([^]]*)])?\)""").find(normalized)
         // Try bare metric: metric_name{labels} possibly with math (*100, /other_metric{})
-        val bareMatch = Regex("""^([a-zA-Z_]\w[\w.:]+)(?:\{([^}]*)\})?(.*)$""").find(expr.trim())
+        val bareMatch = Regex("""^([a-zA-Z_]\w[\w.:]+)(?:\{([^}]*)\})?(.*)$""").find(normalized)
         // Try aggregation with by/without: sum by (labels) (inner_expr)
-        val aggByMatch = Regex("""^(\w+)\s+(?:by|without)\s*\(([^)]*)\)\s*\((.+)\)$""").find(expr.trim())
+        val aggByMatch = Regex("""^(\w+)\s+(?:by|without)\s*\(([^)]*)\)\s*\((.+)\)$""").find(normalized)
 
         val (metricName, labelStr, aggFunction) = when {
             aggByMatch != null -> {

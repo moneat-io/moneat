@@ -51,6 +51,7 @@ function DashboardViewPage() {
   const [timeRange, setTimeRange] = useState({from: 'now-24h', to: 'now'})
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [variableValues, setVariableValues] = useState<Record<string, string>>({})
+  const [resolvedOptions, setResolvedOptions] = useState<Record<string, string[]>>({})
   const [showVariableSettings, setShowVariableSettings] = useState(false)
   const [mapperState, setMapperState] = useState<{
     widget: CreateWidgetRequest
@@ -85,7 +86,13 @@ function DashboardViewPage() {
       let changed = false
       for (const v of dashboard.variables) {
         if (!(v.name in next)) {
-          const defaultVal = v.current ?? v.default_value ?? (v.options.length > 0 ? v.options[0] : '')
+          let defaultVal = v.current ?? v.default_value ?? (v.options.length > 0 ? v.options[0] : '')
+          // Grafana's $__all means "match all" — keep it so the backend can handle it
+          if (defaultVal === '$__all' && v.options.length > 0) {
+            // Prefer first real option; keep $__all if no alternatives
+            const realOption = v.options.find((o: string) => o !== '$__all')
+            defaultVal = realOption ?? '$__all'
+          }
           if (defaultVal) {
             next[v.name] = defaultVal
             changed = true
@@ -95,6 +102,25 @@ function DashboardViewPage() {
       return changed ? next : prev
     })
   }, [dashboard?.variables])
+
+  // Resolve dynamic variable options (e.g., Grafana label_values queries) from Prometheus
+  const [resolveKey, setResolveKey] = useState(0)
+  useEffect(() => {
+    if (!dashboard?.variables?.length) return
+    const hasQueryVars = dashboard.variables.some(v => v.query?.startsWith('label_values('))
+    if (!hasQueryVars) return
+    // Wait until variable values are populated before resolving
+    if (Object.keys(variableValues).length === 0) return
+
+    api.resolveVariableOptions(id, variableValues).then(resolved => {
+      if (Object.keys(resolved).length > 0) {
+        setResolvedOptions(prev => {
+          const same = Object.keys(resolved).every(k => JSON.stringify(prev[k]) === JSON.stringify(resolved[k]))
+          return same ? prev : resolved
+        })
+      }
+    }).catch(() => {})
+  }, [dashboard?.variables, id, resolveKey, variableValues])
 
   const updateMutation = useMutation({
     mutationFn: (data: Parameters<typeof api.updateDashboard>[1]) => api.updateDashboard(id, data),
@@ -290,9 +316,15 @@ function DashboardViewPage() {
         onTimeRangeChange={setTimeRange}
         autoRefresh={autoRefresh}
         onAutoRefreshChange={setAutoRefresh}
-        variables={dashboard.variables}
+        variables={dashboard.variables?.map(v => ({
+          ...v,
+          options: resolvedOptions[v.name]?.length ? resolvedOptions[v.name] : v.options,
+        }))}
         variableValues={variableValues}
-        onVariableChange={(name, value) => setVariableValues(prev => ({...prev, [name]: value}))}
+        onVariableChange={(name, value) => {
+          setVariableValues(prev => ({...prev, [name]: value}))
+          setResolveKey(k => k + 1)
+        }}
         onVariableSettings={() => setShowVariableSettings(true)}
       />
 

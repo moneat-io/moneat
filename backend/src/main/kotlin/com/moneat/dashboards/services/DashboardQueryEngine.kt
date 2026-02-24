@@ -105,14 +105,25 @@ class DashboardQueryEngine {
     fun applyVariables(dsl: QueryDsl, variables: Map<String, String>): QueryDsl {
         if (variables.isEmpty()) return dsl
 
+        // Sort by name length descending to prevent greedy matching
+        // (e.g., $instance matching inside $instance_id)
+        val sortedVars = variables.entries.sortedByDescending { it.key.length }
+
         fun substituteVars(input: String?): String? {
             if (input == null) return null
-            var result = input
-            for ((name, value) in variables) {
-                val escaped = ClickHouseSqlUtils.escapeSql(value)
-                result = result!!
-                    .replace("\${$name}", escaped)
-                    .replace("\$$name", escaped)
+            var result: String = input
+            for ((name, value) in sortedVars) {
+                // Grafana's $__all means "match all" — use regex wildcard in PromQL
+                val substitution = if (value == "\$__all") ".*" else ClickHouseSqlUtils.escapeSql(value)
+                result = result
+                    .replace("\${$name}", substitution)
+                // Use word-boundary-aware replacement for bare $name
+                result = Regex("""\$${Regex.escape(name)}(?![a-zA-Z0-9_])""")
+                    .replace(result, Regex.escapeReplacement(substitution))
+            }
+            // When $__all produced .*, upgrade exact match to regex match in PromQL label selectors
+            if (result.contains("=\".*\"")) {
+                result = result.replace("=\".*\"", "=~\".*\"")
             }
             return result
         }

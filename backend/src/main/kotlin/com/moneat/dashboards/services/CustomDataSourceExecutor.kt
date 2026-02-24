@@ -351,13 +351,62 @@ class CustomDataSourceExecutor {
             }
 
             if (!response.status.isSuccess()) {
-                logger.error { "Prometheus query failed: ${response.status}" }
+                val body = response.bodyAsText()
+                logger.error { "Prometheus query failed: ${response.status} | query=$query | response=$body" }
                 return emptyList()
             }
 
             parsePrometheusResponse(response.bodyAsText(), limit)
         } catch (e: Exception) {
             logger.error(e) { "Failed to execute Prometheus query" }
+            emptyList()
+        }
+    }
+
+    /**
+     * Execute a Grafana-style label_values() query against Prometheus.
+     * Parses: label_values(metric{filters}, labelName)
+     */
+    suspend fun executeLabelValuesQuery(
+        host: String,
+        port: Int?,
+        credentials: DataSourceCredentials,
+        query: String,
+    ): List<String> {
+        // label_values(metric{filters}, label) or label_values(label)
+        val twoArgMatch = Regex("""label_values\((.+),\s*(\w+)\)""").find(query)
+        val oneArgMatch = if (twoArgMatch == null) Regex("""label_values\((\w+)\)""").find(query) else null
+
+        val matcher: String?
+        val labelName: String
+        if (twoArgMatch != null) {
+            matcher = twoArgMatch.groupValues[1].trim()
+            labelName = twoArgMatch.groupValues[2].trim()
+        } else if (oneArgMatch != null) {
+            matcher = null
+            labelName = oneArgMatch.groupValues[1].trim()
+        } else {
+            return emptyList()
+        }
+
+        val baseUrl = buildPrometheusUrl(host, port)
+
+        return try {
+            val response = httpClient.get("$baseUrl/api/v1/label/$labelName/values") {
+                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                if (!matcher.isNullOrEmpty()) {
+                    parameter("match[]", matcher)
+                }
+            }
+            if (response.status.isSuccess()) {
+                val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
+                body["data"]?.jsonArray?.map { it.jsonPrimitive.content }?.sorted() ?: emptyList()
+            } else {
+                logger.warn { "Prometheus label_values query failed: ${response.status}" }
+                emptyList()
+            }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to execute label_values query" }
             emptyList()
         }
     }

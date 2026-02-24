@@ -141,9 +141,14 @@ export function DashboardToolbar({
                       </SelectTrigger>
                       <SelectContent>
                         {v.options.length > 0 ? (
-                          v.options.map((opt) => (
-                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                          ))
+                          <>
+                            {(v.current === '$__all' || v.default_value === '$__all') && (
+                              <SelectItem value="$__all">All</SelectItem>
+                            )}
+                            {v.options.map((opt) => (
+                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            ))}
+                          </>
                         ) : (
                           <SelectItem value={variableValues[v.name] ?? v.current ?? '__none__'}>
                             {variableValues[v.name] ?? v.current ?? '(none)'}

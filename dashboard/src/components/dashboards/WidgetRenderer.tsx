@@ -128,26 +128,40 @@ export const WidgetRenderer = memo(function WidgetRenderer({
       if (!projectId) return []
       if (isBatch) {
         const result = await api.executeBatchQuery(dashboardId, queries, projectId, timeRange, variables)
-        // Merge batch results: prefix series keys with refId
-        const merged: Record<string, unknown>[] = []
+        // Merge batch results: use legendFormat alias as series name, group by timestamp
+        const mergedByTime = new Map<unknown, Record<string, unknown>>()
         for (const [refId, rows] of Object.entries(result.results)) {
           if (queries.length === 1) {
-            merged.push(...rows)
-          } else {
             for (const row of rows) {
-              const prefixed: Record<string, unknown> = {}
+              const timeVal = Object.entries(row).find(([k]) => TIME_KEYS.has(k))
+              const key = timeVal ? timeVal[1] : rows.indexOf(row)
+              if (!mergedByTime.has(key)) mergedByTime.set(key, {})
+              Object.assign(mergedByTime.get(key)!, row)
+            }
+          } else {
+            const queryIdx = queries.findIndex(q => q.ref_id === refId)
+            const query = queryIdx >= 0 ? queries[queryIdx] : queries[refId.charCodeAt(0) - 65]
+            const alias = query?.metrics?.[0]?.alias
+            for (const row of rows) {
+              let timeKey: string | undefined
+              let timeVal: unknown
+              const values: Record<string, unknown> = {}
               for (const [k, v] of Object.entries(row)) {
                 if (TIME_KEYS.has(k)) {
-                  prefixed[k] = v
-                } else {
-                  prefixed[`${refId}: ${k}`] = v
+                  timeKey = k
+                  timeVal = v
+                } else if (typeof v === 'number') {
+                  values[alias || `${refId}: ${k}`] = v
                 }
               }
-              merged.push(prefixed)
+              if (timeKey != null) {
+                if (!mergedByTime.has(timeVal)) mergedByTime.set(timeVal, {[timeKey]: timeVal})
+                Object.assign(mergedByTime.get(timeVal)!, values)
+              }
             }
           }
         }
-        return merged
+        return Array.from(mergedByTime.values())
       }
       return queries[0]
         ? api.executeWidgetQuery(dashboardId, queries[0], projectId, timeRange, variables)

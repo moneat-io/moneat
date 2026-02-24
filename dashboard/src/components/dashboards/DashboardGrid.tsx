@@ -25,7 +25,7 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
 const GRID_BREAKPOINTS = {lg: 1200, md: 996, sm: 768, xs: 480}
-const GRID_COLS = {lg: 12, md: 12, sm: 6, xs: 4}
+const GRID_COLS = {lg: 12, md: 12, sm: 12, xs: 6}
 const GRID_MARGIN: [number, number] = [12, 12]
 
 interface DashboardGridProps {
@@ -141,9 +141,10 @@ export function DashboardGrid({
         isDraggable: isEditing,
         isResizable: isEditing && w.widget_type !== 'section',
         minW: w.widget_type === 'section' ? 12 : 2,
-        minH: w.widget_type === 'section' ? 1 : 2,
+        minH: w.widget_type === 'section' || w.widget_type === 'stat' || w.widget_type === 'gauge' ? 1 : 2,
         maxH: w.widget_type === 'section' ? 1 : undefined,
-        static: !isEditing && w.widget_type === 'section',
+        // Sections must NOT be static — static items act as compaction barriers,
+        // which can push sibling widgets below the next section header visually.
       })),
     [visibleWidgets, isEditing]
   )
@@ -212,10 +213,10 @@ export function DashboardGrid({
       {visibleWidgets.map((widget) => (
         <div
           key={String(widget.id)}
-          className="group"
+          className="group [&:hover]:z-50"
           style={widget.widget_type === 'section'
             ? undefined
-            : {contentVisibility: 'auto', containIntrinsicSize: 'auto 300px'}
+            : {overflow: 'visible'}
           }
         >
           {widget.widget_type === 'section' ? (
@@ -321,7 +322,7 @@ function WidgetCard({
       className={`h-full rounded-lg border bg-card overflow-visible flex flex-col ${
         isEditing ? 'ring-1 ring-transparent hover:ring-primary/30 cursor-pointer' : ''
       }`}
-      style={{contain: 'layout style'}}
+      style={{contain: 'style'}}
     >
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 min-h-[36px]">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -330,7 +331,17 @@ function WidgetCard({
               <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           )}
-          <span className="text-xs font-medium truncate">{widget.title || 'Untitled'}</span>
+          <span className="text-xs font-medium truncate">{
+            variableValues
+              ? Object.entries(variableValues).reduce(
+                  (t, [k, v]) => {
+                    const display = v === '$__all' ? 'All' : v
+                    return t.replace(`$${k}`, display).replace(`\${${k}}`, display)
+                  },
+                  widget.title || 'Untitled'
+                )
+              : widget.title || 'Untitled'
+          }</span>
           {(() => {
             const widgetAlerts = alerts.filter((a) => a.widget_id === widget.id && a.enabled)
             if (widgetAlerts.length === 0) return null

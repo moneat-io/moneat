@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useQuery} from '@tanstack/react-query'
-import {ChevronDown, Search} from 'lucide-react'
+import {ChevronDown, Search, Plus, Settings, LogOut} from 'lucide-react'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {useCommandPalette} from '@/contexts/command-palette-context'
@@ -26,9 +26,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import {Button} from '@/components/ui/button'
 import {getPlatformInfo} from '@/routes/projects'
 import {Package} from 'lucide-react'
+import {useNavigate} from '@tanstack/react-router'
 
 function getInitials(name?: string) {
   if (!name) return 'U'
@@ -47,6 +50,7 @@ function getProjectPlatform(project: { keys?: { platformTarget?: string | null }
 export function AppTopBar() {
   const {openPalette} = useCommandPalette() ?? {}
   const {selectedProjectId, setSelectedProjectId} = useProject()
+  const navigate = useNavigate()
 
   const {data: user} = useQuery({
     queryKey: ['currentUser'],
@@ -65,6 +69,11 @@ export function AppTopBar() {
   const platformId = activeProject ? getProjectPlatform(activeProject) : 'other'
   const platformInfo = getPlatformInfo(platformId) || getPlatformInfo('other')
   const PlatformIcon = platformInfo?.icon || Package
+
+  const handleLogout = async () => {
+    await api.logout()
+    window.location.href = '/login'
+  }
 
   return (
     <div
@@ -130,11 +139,42 @@ export function AppTopBar() {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Avatar className="h-7 w-7">
-          <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">
-            {getInitials(user?.name)}
-          </AvatarFallback>
-        </Avatar>
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => navigate({to: '/projects'})}
+          className="gap-1.5"
+        >
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">New Project</span>
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="focus:outline-none focus:ring-2 focus:ring-ring rounded-full"
+            >
+              <Avatar className="h-7 w-7 cursor-pointer">
+                <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">
+                  {getInitials(user?.name)}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => navigate({to: '/settings'})}>
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )

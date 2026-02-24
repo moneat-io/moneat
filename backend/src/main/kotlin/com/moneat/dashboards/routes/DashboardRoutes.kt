@@ -27,6 +27,7 @@ import com.moneat.dashboards.models.DashboardImportResult
 import com.moneat.dashboards.models.ExecuteBatchQueryRequest
 import com.moneat.dashboards.models.ExecuteQueryRequest
 import com.moneat.dashboards.models.ImportDashboardRequest
+import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.CreateFolderRequest
@@ -116,6 +117,19 @@ fun Route.customDashboardRoutes(
     dataSourceExecutor: CustomDataSourceExecutor = CustomDataSourceExecutor(),
     dashboardAlertService: DashboardAlertService = DashboardAlertService()
 ) {
+    // Resolve __prometheus marker to the org's first Prometheus custom datasource
+    fun resolvePrometheusDataSource(dsl: QueryDsl, orgId: Long): QueryDsl {
+        if (dsl.dataSource != "__prometheus") return dsl
+        val sources = dataSourceService.listDataSources(orgId)
+        val promSource = sources.firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
+        if (promSource == null) {
+            logger.warn { "No Prometheus datasource found for org $orgId (${sources.size} sources: ${sources.map { "${it.id}:${it.sourceType}" }}), cannot resolve __prometheus for rawQuery=${dsl.rawQuery?.take(80)}" }
+            return dsl
+        }
+        logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=${dsl.rawQuery?.take(80)}" }
+        return dsl.copy(dataSource = "custom:${promSource.id}")
+    }
+
     route("/v1/dashboards") {
         authenticate("auth-jwt") {
             // List dashboards for org
@@ -306,7 +320,9 @@ fun Route.customDashboardRoutes(
                 } else {
                     request.queryConfig
                 }
-                val effectiveQuery = queryEngine.applyVariables(withTimeRange, request.variables)
+                val effectiveQuery = resolvePrometheusDataSource(
+                    queryEngine.applyVariables(withTimeRange, request.variables), orgId
+                )
 
                 try {
                     // Check if this is a custom data source query
@@ -392,7 +408,9 @@ fun Route.customDashboardRoutes(
                     } else {
                         query
                     }
-                    val effectiveQuery = queryEngine.applyVariables(withTimeRange, request.variables)
+                    val effectiveQuery = resolvePrometheusDataSource(
+                        queryEngine.applyVariables(withTimeRange, request.variables), orgId
+                    )
 
                     try {
                         if (queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
@@ -422,6 +440,54 @@ fun Route.customDashboardRoutes(
                 }
 
                 call.respond(BatchQueryResult(results))
+            }
+
+            // Resolve variable options (e.g., Grafana label_values queries)
+            post("/{id}/variables/resolve") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = getOrgIdForUser(userId)
+                    ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+
+                val id = call.parameters["id"]?.toLongOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+                getDashboardScope(id, orgId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+
+                val dashboard = dashboardService.getDashboard(id, orgId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+
+                val variables = dashboard.variables
+                val currentValues = call.receive<Map<String, String>>()
+
+                // Find the org's Prometheus datasource
+                val promSource = dataSourceService.listDataSources(orgId)
+                    .firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
+
+                val resolved = mutableMapOf<String, List<String>>()
+                for (v in variables) {
+                    val query = v.query ?: continue
+                    if (!query.startsWith("label_values(")) continue
+                    if (promSource == null) continue
+
+                    // Substitute variable references in the query
+                    var substituted = query
+                    for ((name, value) in currentValues) {
+                        substituted = substituted
+                            .replace("\${$name}", value)
+                            .replace("\$$name", value)
+                    }
+
+                    val creds = dataSourceService.getDecryptedCredentials(promSource.id, orgId) ?: continue
+                    val options = dataSourceExecutor.executeLabelValuesQuery(
+                        promSource.host, promSource.port, creds, substituted
+                    )
+                    if (options.isNotEmpty()) {
+                        resolved[v.name] = options
+                    }
+                }
+
+                call.respond(resolved)
             }
 
             // Import dashboard from DataDog/Grafana JSON

@@ -255,7 +255,9 @@ class GrafanaTranslatorTest {
             )
         }
         val warnings = mutableListOf<String>()
-        val dsl = translator.parseGrafanaTargets(panel, warnings, 0)
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(1, dsls.size)
+        val dsl = dsls[0]
         assertEquals("__prometheus", dsl.dataSource)
         assertEquals("cpu_percent", dsl.metrics[0].field)
         assertEquals("rate(node_cpu_seconds_total{mode=\"idle\"})", dsl.rawQuery)
@@ -276,7 +278,9 @@ class GrafanaTranslatorTest {
             )
         }
         val warnings = mutableListOf<String>()
-        val dsl = translator.parseGrafanaTargets(panel, warnings, 0)
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(1, dsls.size)
+        val dsl = dsls[0]
         assertEquals("events", dsl.dataSource)
         assertTrue(dsl.rawQuery != null)
     }
@@ -287,9 +291,39 @@ class GrafanaTranslatorTest {
             put("targets", JsonArray(emptyList()))
         }
         val warnings = mutableListOf<String>()
-        val dsl = translator.parseGrafanaTargets(panel, warnings, 0)
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(1, dsls.size)
+        val dsl = dsls[0]
         assertEquals("events", dsl.dataSource)
         assertEquals(AggFunction.COUNT, dsl.metrics[0].function)
+    }
+
+    @Test
+    fun `parseGrafanaTargets with multiple targets preserves legendFormat`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(buildJsonObject {
+                        put("expr", "system_cpu_usage{instance=\"host\"}")
+                        put("legendFormat", "System CPU Usage")
+                        put("refId", "A")
+                    })
+                    add(buildJsonObject {
+                        put("expr", "process_cpu_usage{instance=\"host\"}")
+                        put("legendFormat", "Process CPU Usage")
+                        put("refId", "B")
+                    })
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(2, dsls.size)
+        assertEquals("A", dsls[0].refId)
+        assertEquals("B", dsls[1].refId)
+        assertEquals("System CPU Usage", dsls[0].metrics[0].alias)
+        assertEquals("Process CPU Usage", dsls[1].metrics[0].alias)
     }
 
     // --- parsePromQL ---
@@ -359,6 +393,16 @@ class GrafanaTranslatorTest {
         assertEquals("__prometheus", dsl.dataSource)
         assertTrue(warnings.none { it.contains("couldn't parse") })
         assertEquals(expr, dsl.rawQuery)
+    }
+
+    @Test
+    fun `parsePromQL with multiline sum by aggregation`() {
+        val warnings = mutableListOf<String>()
+        val expr = "sum by (uri, method, status) (\n  increase(\n    http_server_requests_seconds_count{\n      instance=~\"host\",\n      application=~\"app\"\n    }[5m]\n  )\n)"
+        val dsl = translator.parsePromQL(expr, warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("couldn't parse") }, "Warnings: $warnings")
+        assertEquals(expr, dsl.rawQuery) // rawQuery preserves original with newlines
     }
 
     @Test

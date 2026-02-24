@@ -571,7 +571,7 @@ const FolderSidebarItem = memo(function FolderSidebarItem({
         <span className="truncate">{folder.name}</span>
       </button>
       <span className="shrink-0 min-w-[1.5rem] text-right tabular-nums text-xs text-muted-foreground group-hover:invisible">{count}</span>
-      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center">
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -581,7 +581,7 @@ const FolderSidebarItem = memo(function FolderSidebarItem({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
+          <DropdownMenuContent align="end" className="w-48" side="bottom">
             <DropdownMenuItem onClick={() => setIsEditing(true)}>
               <Pencil className="h-3.5 w-3.5 mr-2" />
               Rename

@@ -4713,6 +4713,14 @@ class ApiClient {
     })
   }
 
+  async resolveVariableOptions(dashboardId: number, currentValues: Record<string, string>): Promise<Record<string, string[]>> {
+    return this.request<Record<string, string[]>>(`${API_BASE}/dashboards/${dashboardId}/variables/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentValues),
+    })
+  }
+
   async importDashboard(format: string, json: string): Promise<DashboardImportResult> {
     return this.request<DashboardImportResult>(`${API_BASE}/dashboards/import`, {
       method: 'POST',
