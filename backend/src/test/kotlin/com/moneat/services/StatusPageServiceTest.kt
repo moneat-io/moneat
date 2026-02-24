@@ -35,8 +35,6 @@ import com.moneat.statuspage.services.StatusPageService
 import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -47,6 +45,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class StatusPageServiceTest {
     private var orgId: Int = 0
@@ -59,35 +58,18 @@ class StatusPageServiceTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_status_pages;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_status_pages;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Users,
-                    Organizations,
-                    Memberships,
-                    StatusPages,
-                    UptimeMonitors,
-                    StatusPageMonitors,
-                    StatusPageIncidents,
-                    StatusPageIncidentUpdates,
-                    StatusPageCustomDomains
-                )
-            }
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, StatusPages, StatusPageIncidents,
+            UptimeMonitors, StatusPageMonitors, StatusPageIncidentUpdates, StatusPageCustomDomains
+        )
         transaction {
-            StatusPageCustomDomains.deleteAll()
-            StatusPageIncidentUpdates.deleteAll()
-            StatusPageIncidents.deleteAll()
-            StatusPageMonitors.deleteAll()
-            StatusPages.deleteAll()
-            UptimeMonitors.deleteAll()
-            Memberships.deleteAll()
-            Organizations.deleteAll()
-
             orgId =
                 Organizations.insert {
                     it[name] = "Status Org"

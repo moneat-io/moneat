@@ -27,6 +27,7 @@ RUN --mount=type=bind,source=.,target=/repo,readonly \
     fi
 
 FROM eclipse-temurin:25.0.2_10-jre
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system moneat && useradd --system --gid moneat --home /app --create-home moneat
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar

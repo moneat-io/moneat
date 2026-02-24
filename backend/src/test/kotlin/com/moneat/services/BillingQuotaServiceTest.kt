@@ -30,8 +30,6 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -43,6 +41,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.testsupport.TestDatabaseHelper
 
 class BillingQuotaServiceTest {
     private val billingQuotaService = BillingQuotaService()
@@ -59,30 +58,24 @@ class BillingQuotaServiceTest {
         // Initialize DB connection and schema once per test class
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_billing_quota;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_billing_quota;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Subscriptions,
-                    OrgUsageCounters,
-                    PricingTierConfigs,
-                    Users,
-                    OnCallSchedules,
-                    OnCallParticipants
-                )
-            }
         }
 
         // Clean up any existing test data from previous tests
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            OrgUsageCounters.deleteAll()
-            Subscriptions.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Subscriptions,
+            OrgUsageCounters,
+            PricingTierConfigs,
+            OnCallSchedules,
+            OnCallParticipants
+        )
 
         // Setup test data
         transaction {

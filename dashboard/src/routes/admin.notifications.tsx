@@ -67,6 +67,7 @@ type NotificationType =
   | 'system_up'
   | 'system_down'
   | 'uptime_alert'
+  | 'dashboard_alert'
   | 'verification'
   | 'password_reset'
 
@@ -133,6 +134,15 @@ const notificationTypes: Array<{
     description: 'Monitor status change notification',
     icon: Activity,
     supportsEmail: false,
+    supportsSlack: true,
+    supportsDiscord: true,
+  },
+  {
+    type: 'dashboard_alert',
+    label: 'Dashboard Widget Alert',
+    description: 'Threshold alert from a custom dashboard widget',
+    icon: Bell,
+    supportsEmail: true,
     supportsSlack: true,
     supportsDiscord: true,
   },

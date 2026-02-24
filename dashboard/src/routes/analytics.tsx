@@ -1,7 +1,3 @@
-// Moneat Enterprise - proprietary module
-// Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.
-
 import {createFileRoute, Outlet} from '@tanstack/react-router'
 import {BarChart3} from 'lucide-react'
 import {useProject} from '@/contexts/project-context'

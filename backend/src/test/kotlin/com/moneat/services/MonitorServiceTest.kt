@@ -19,6 +19,7 @@ import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorServiceTest {
     private val service = MonitorService()
@@ -31,33 +32,18 @@ class MonitorServiceTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_monitor_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_monitor_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations, Users, Memberships, Projects,
-                    Systems, SystemAlerts, OrganizationAlertTemplates,
-                    SystemAlertSettings, SystemAlertTemplateStates,
-                    PricingTierConfigs, Subscriptions
-                )
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            SystemAlertTemplateStates.deleteAll()
-            SystemAlerts.deleteAll()
-            SystemAlertSettings.deleteAll()
-            OrganizationAlertTemplates.deleteAll()
-            Subscriptions.deleteAll()
-            Systems.deleteAll()
-            Memberships.deleteAll()
-            Projects.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, Projects, Subscriptions, Systems,
+            SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
+            SystemAlertTemplateStates, PricingTierConfigs
+        )
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

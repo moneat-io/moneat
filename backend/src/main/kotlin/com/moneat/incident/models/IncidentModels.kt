@@ -46,7 +46,8 @@ enum class AlertSource {
     SYSTEM_ALERT,
     SYSTEM_DOWN,
     UPTIME_MONITOR,
-    ERROR_ALERT
+    ERROR_ALERT,
+    DASHBOARD_ALERT
 }
 
 // Data class for incident events

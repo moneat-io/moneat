@@ -471,7 +471,7 @@ function DashboardPage() {
       <div className="px-6 py-4">
         {/* Header */}
         <div className="mb-5">
-          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Overview</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Overview of your systems, applications, and incidents
           </p>

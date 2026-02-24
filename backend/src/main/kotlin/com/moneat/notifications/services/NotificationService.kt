@@ -24,6 +24,7 @@ import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -454,13 +455,18 @@ class NotificationService(private val emailService: EmailService) {
                 uniq(user_id) as unique_users
             FROM $clickhouseDb.events
             WHERE project_id IN (${projectIds.joinToString(",")})
-              AND timestamp >= $startMs
-              AND timestamp < $endMs
+              AND timestamp >= fromUnixTimestamp64Milli($startMs)
+              AND timestamp < fromUnixTimestamp64Milli($endMs)
             FORMAT JSON
             """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
-        val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val responseBody = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            logger.error("ClickHouse query failed in getStatsForPeriod: ${response.status} - ${responseBody.take(500)}")
+            return PeriodStats(totalEvents = 0, uniqueIssues = 0, uniqueUsers = 0)
+        }
+        val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
         val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
 
         return PeriodStats(
@@ -489,8 +495,8 @@ class NotificationService(private val emailService: EmailService) {
                 count() as event_count
             FROM $clickhouseDb.events
             WHERE project_id IN (${projectIds.joinToString(",")})
-              AND timestamp >= $startMs
-              AND timestamp < $endMs
+              AND timestamp >= fromUnixTimestamp64Milli($startMs)
+              AND timestamp < fromUnixTimestamp64Milli($endMs)
               AND issue_id != ''
             GROUP BY issue_id
             ORDER BY event_count DESC
@@ -499,7 +505,12 @@ class NotificationService(private val emailService: EmailService) {
             """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
-        val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val responseBody = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            logger.error("ClickHouse query failed in getTopIssues: ${response.status} - ${responseBody.take(500)}")
+            return emptyList()
+        }
+        val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
         val rows = jsonResponse["data"]?.jsonArray ?: return emptyList()
 
         // Get project names
