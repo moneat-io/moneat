@@ -70,6 +70,7 @@ object DemoDataReseeder {
                 logger.info {
                     "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, $freshAnalyticsCount recent analytics events), skipping reseed"
                 }
+                seedDemoDashboards()
                 return
             }
 
