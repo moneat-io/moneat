@@ -59,6 +59,13 @@ object DemoDataReseeder {
     private const val P2 = "toUInt64(-2)"
     private const val P3 = "toUInt64(-3)"
 
+    // Log reseed tuning
+    private const val LOG_SEED_ROWS = 300
+    private const val LOG_BUCKET_1_MAX = 80
+    private const val LOG_BUCKET_2_MAX = 160
+    private const val LOG_BUCKET_3_MAX = 240
+    private const val LOG_BUCKET_4_BASE_MINUTES = 60
+
     suspend fun reseedIfNeeded() {
         if (!EnvConfig.Demo.enabled) return
 
@@ -69,7 +76,13 @@ object DemoDataReseeder {
             val freshLogsCount = checkFreshLogsCount()
             val demoDashboardCount = countDemoDashboards()
 
-            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0 && freshLogsCount > 0 && demoDashboardCount >= 4) {
+            val hasFreshCore = freshCoreCount > 0
+            val hasFreshLlm = freshLlmCount > 0
+            val hasFreshAnalytics = freshAnalyticsCount > 0
+            val hasFreshLogs = freshLogsCount > 0
+            val hasEnoughDashboards = demoDashboardCount >= 4
+
+            if (hasFreshCore && hasFreshLlm && hasFreshAnalytics && hasFreshLogs && hasEnoughDashboards) {
                 logger.info {
                     "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, " +
                         "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, $demoDashboardCount demo dashboards), skipping reseed"
@@ -875,6 +888,34 @@ object DemoDataReseeder {
     }
 
     private suspend fun reseedLogs() {
+        val msgCase =
+            """
+                CASE number % 8
+                    WHEN 0 THEN concat(
+                        'HTTP GET /api/products completed in ', toString(45 + number % 200), 'ms with status 200')
+                    WHEN 1 THEN concat(
+                        'HTTP POST /api/orders completed in ', toString(123 + number % 300), 'ms with status 201')
+                    WHEN 2 THEN concat(
+                        'User user', toString(number % 50), '@example.com authenticated successfully')
+                    WHEN 3 THEN concat('Cache miss for key: product:', toString(100 + number % 900))
+                    WHEN 4 THEN concat(
+                        'Rate limit approaching for IP 192.168.1.',
+                        toString(number % 254), ': ', toString(950 + number % 50), '/1000 requests')
+                    WHEN 5 THEN concat(
+                        'Database connection timeout after ', toString(30 + number % 30),
+                        's for query: SELECT * FROM orders')
+                    WHEN 6 THEN concat(
+                        'Payment processing failed for order ORD-',
+                        toString(10000 + number % 90000), ': card_declined')
+                    ELSE concat(
+                        'Redis command executed: GET product:', toString(number % 500),
+                        ' in ', toString(2 + number % 20), 'ms')
+                END
+            """.trimIndent()
+        val tagsServiceCase =
+            "CASE number % 5 WHEN 0 THEN 'api-server' WHEN 1 THEN 'auth-service' " +
+                "WHEN 2 THEN 'payment-processor' WHEN 3 THEN 'notification-service' ELSE 'cache-service' END"
+        val tagsEnvCase = "CASE number % 7 WHEN 0 THEN 'staging' ELSE 'production' END"
         val sql =
             """
             INSERT INTO logs (
@@ -887,10 +928,10 @@ object DemoDataReseeder {
                 CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END AS project_id,
                 now64(3) - INTERVAL (
                     CASE
-                        WHEN number < 80  THEN number % 10
-                        WHEN number < 160 THEN 10 + (number % 20)
-                        WHEN number < 240 THEN 30 + (number % 30)
-                        ELSE 60 + (number % 60)
+                        WHEN number < $LOG_BUCKET_1_MAX THEN number % 10
+                        WHEN number < $LOG_BUCKET_2_MAX THEN 10 + (number % 20)
+                        WHEN number < $LOG_BUCKET_3_MAX THEN 30 + (number % 30)
+                        ELSE $LOG_BUCKET_4_BASE_MINUTES + (number % 60)
                     END * 60 + number % 60
                 ) SECOND AS timestamp,
                 now64(3) AS received_at,
@@ -937,26 +978,8 @@ object DemoDataReseeder {
                     WHEN 39 THEN 'warn'
                     ELSE 'info'
                 END AS level,
-                CASE number % 8
-                    WHEN 0 THEN concat('HTTP GET /api/products completed in ', toString(45 + number % 200), 'ms with status 200')
-                    WHEN 1 THEN concat('HTTP POST /api/orders completed in ', toString(123 + number % 300), 'ms with status 201')
-                    WHEN 2 THEN concat('User user', toString(number % 50), '@example.com authenticated successfully')
-                    WHEN 3 THEN concat('Cache miss for key: product:', toString(100 + number % 900))
-                    WHEN 4 THEN concat('Rate limit approaching for IP 192.168.1.', toString(number % 254), ': ', toString(950 + number % 50), '/1000 requests')
-                    WHEN 5 THEN concat('Database connection timeout after ', toString(30 + number % 30), 's for query: SELECT * FROM orders')
-                    WHEN 6 THEN concat('Payment processing failed for order ORD-', toString(10000 + number % 90000), ': card_declined')
-                    ELSE concat('Redis command executed: GET product:', toString(number % 500), ' in ', toString(2 + number % 20), 'ms')
-                END AS message,
-                CASE number % 8
-                    WHEN 0 THEN concat('HTTP GET /api/products completed in ', toString(45 + number % 200), 'ms with status 200')
-                    WHEN 1 THEN concat('HTTP POST /api/orders completed in ', toString(123 + number % 300), 'ms with status 201')
-                    WHEN 2 THEN concat('User user', toString(number % 50), '@example.com authenticated successfully')
-                    WHEN 3 THEN concat('Cache miss for key: product:', toString(100 + number % 900))
-                    WHEN 4 THEN concat('Rate limit approaching for IP 192.168.1.', toString(number % 254), ': ', toString(950 + number % 50), '/1000 requests')
-                    WHEN 5 THEN concat('Database connection timeout after ', toString(30 + number % 30), 's for query: SELECT * FROM orders')
-                    WHEN 6 THEN concat('Payment processing failed for order ORD-', toString(10000 + number % 90000), ': card_declined')
-                    ELSE concat('Redis command executed: GET product:', toString(number % 500), ' in ', toString(2 + number % 20), 'ms')
-                END AS body,
+                $msgCase AS message,
+                $msgCase AS body,
                 CASE number % 5
                     WHEN 0 THEN 'api-server'
                     WHEN 1 THEN 'auth-service'
@@ -979,15 +1002,15 @@ object DemoDataReseeder {
                 lower(hex(generateUUIDv4())) AS trace_id,
                 substring(lower(hex(generateUUIDv4())), 1, 16) AS span_id,
                 map(
-                    'service', CASE number % 5 WHEN 0 THEN 'api-server' WHEN 1 THEN 'auth-service' WHEN 2 THEN 'payment-processor' WHEN 3 THEN 'notification-service' ELSE 'cache-service' END,
-                    'environment', CASE number % 7 WHEN 0 THEN 'staging' ELSE 'production' END,
+                    'service', $tagsServiceCase,
+                    'environment', $tagsEnvCase,
                     'version', concat('1.', toString(number % 5), '.', toString(number % 10))
                 ) AS tags,
                 '' AS container_name,
                 '' AS container_id,
                 '' AS container_image,
                 map() AS resource_attributes
-            FROM numbers(300)
+            FROM numbers($LOG_SEED_ROWS)
             """.trimIndent()
         runCatching { ClickHouseClient.execute(sql) }
             .onFailure { logger.warn { "Reseed logs failed (non-fatal): ${it.message}" } }
