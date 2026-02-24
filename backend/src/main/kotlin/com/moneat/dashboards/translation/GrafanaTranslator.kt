@@ -346,7 +346,7 @@ class GrafanaTranslator : DashboardTranslator {
         }
     }
 
-    private fun resolveDatasource(ds: JsonElement?): String? = when (ds) {
+    private fun resolveDatasource(ds: JsonElement?, @Suppress("UNUSED_PARAMETER") panelIndex: Int = -1): String? = when (ds) {
         is JsonPrimitive if ds.isString -> ds.content
         is JsonObject if ds["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true ->
             ds["type"]?.jsonPrimitive?.content
