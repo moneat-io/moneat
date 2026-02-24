@@ -13,12 +13,14 @@ COPY backend/gradle ./gradle
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle dependencies --no-daemon --build-cache || true
 COPY backend/src ./src
-COPY enterprise/backend /enterprise/backend
 # Copy built email templates from email-builder stage into src so they're processed as resources
 COPY --from=email-builder /emails/build/templates/email ./src/main/resources/email-templates/
+# Copy enterprise backend sources if present in build context (used by moneat-deploy CI/CD)
 ARG ENTERPRISE=false
-RUN --mount=type=cache,target=/home/gradle/.gradle \
-    if [ "$ENTERPRISE" = "true" ]; then \
+RUN --mount=type=bind,source=.,target=/repo,readonly \
+    --mount=type=cache,target=/home/gradle/.gradle \
+    if [ "$ENTERPRISE" = "true" ] && [ -d /repo/enterprise/backend ]; then \
+      cp -r /repo/enterprise/backend /enterprise/backend && \
       gradle shadowJar -Penterprise -PenterprisePath=/enterprise/backend --no-daemon --build-cache; \
     else \
       gradle shadowJar --no-daemon --build-cache; \
