@@ -1753,6 +1753,7 @@ class DashboardService {
             SELECT count() as total
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
+                AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
@@ -1789,6 +1790,7 @@ class DashboardService {
             SELECT uniq(user_id) as total
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
+                AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND user_id != ''
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1803,6 +1805,7 @@ class DashboardService {
                 count() as count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
+                AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             GROUP BY time
@@ -1818,6 +1821,7 @@ class DashboardService {
                 count() as count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
+                AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             GROUP BY level
@@ -1832,6 +1836,7 @@ class DashboardService {
                 count() as count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
+                AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND platform != ''
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1849,6 +1854,7 @@ class DashboardService {
                 count() as count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
+                AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND browser_name != ''
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1866,6 +1872,7 @@ class DashboardService {
                 count() as count
             FROM $clickhouseDb.events
             WHERE project_id = $projectId
+                AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND environment != ''
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}

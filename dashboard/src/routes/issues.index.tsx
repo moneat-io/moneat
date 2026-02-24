@@ -323,7 +323,7 @@ function DashboardPage() {
               <div className="mb-4 grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
                 <div className="grid grid-cols-2 gap-3">
                   <StatsCard
-                    title="Events (24h)"
+                    title="Errors (24h)"
                     value={formatCount(stats.totalEvents)}
                     icon={Activity}
                     accent="blue"
@@ -352,7 +352,7 @@ function DashboardPage() {
                   <div className="min-h-[160px]">
                     <EventsChart
                       data={stats.eventsTimeline}
-                      title="Events in Last 24 Hours"
+                      title="Errors — Last 24 Hours"
                       fillHeight
                     />
                   </div>
