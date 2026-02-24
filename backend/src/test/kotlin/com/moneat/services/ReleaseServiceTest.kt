@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class ReleaseServiceTest {
     private val service = ReleaseService()
@@ -25,34 +26,23 @@ class ReleaseServiceTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_release_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_release_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    Releases,
-                    ReleaseFiles,
-                    FileBlobs,
-                    ArtifactBundles
-                )
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            ArtifactBundles.deleteAll()
-            FileBlobs.deleteAll()
-            ReleaseFiles.deleteAll()
-            Releases.deleteAll()
-            Memberships.deleteAll()
-            Projects.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            Projects,
+            Releases,
+            ReleaseFiles,
+            FileBlobs,
+            ArtifactBundles
+        )
     }
 
     private fun seedOrgAndProject(

@@ -57,8 +57,6 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
@@ -67,6 +65,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorRoutesMockTest {
     companion object {
@@ -82,20 +81,14 @@ class MonitorRoutesMockTest {
     fun setupDatabase() {
         if (!dbInitialized) {
             Database.connect(
-                url = "jdbc:h2:mem:moneat_monitor_mock;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_monitor_mock;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
-                SchemaUtils.create(Users, Organizations, Memberships, Systems)
-            }
             dbInitialized = true
         }
-        transaction {
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Systems.deleteAll()
-            Organizations.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Systems)
     }
 
     private fun Application.installAuth() {

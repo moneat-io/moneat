@@ -36,8 +36,6 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
@@ -45,6 +43,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AiChatRoutesTest {
     private val jwtSecret = "ai-chat-routes-secret"
@@ -57,17 +56,14 @@ class AiChatRoutesTest {
     fun setupDatabase() {
         if (!dbInitialized) {
             Database.connect(
-                url = "jdbc:h2:mem:moneat_ai_routes;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_ai_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
-                SchemaUtils.create(Users)
-            }
             dbInitialized = true
         }
 
+        TestDatabaseHelper.resetSchema(Users)
         transaction {
-            Users.deleteAll()
             Users.insert {
                 it[id] = 101
                 it[email] = "non-admin@test.com"

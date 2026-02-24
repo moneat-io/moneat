@@ -12,8 +12,6 @@ import com.moneat.shared.models.Users
 import io.ktor.server.plugins.BadRequestException
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -24,6 +22,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.testsupport.TestDatabaseHelper
 
 class OrgInvitationServiceTest {
     private val membershipService = OrgMembershipService()
@@ -38,29 +37,14 @@ class OrgInvitationServiceTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_org_invitation;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_org_invitation;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    OrgInvitations,
-                    SsoConfigurations,
-                    EmailsSent,
-                )
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            OrgInvitations.deleteAll()
-            EmailsSent.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, EmailsSent, SsoConfigurations, OrgInvitations)
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

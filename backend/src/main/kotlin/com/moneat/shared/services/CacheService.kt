@@ -108,4 +108,27 @@ object CacheService {
         }
         return value
     }
+
+    fun invalidate(key: String) {
+        try {
+            if (RedisConfig.isConnected()) {
+                RedisConfig.sync().del(key)
+            }
+        } catch (e: Exception) {
+            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
+        }
+    }
+
+    fun invalidatePattern(pattern: String) {
+        try {
+            if (RedisConfig.isConnected()) {
+                val keys = RedisConfig.sync().keys(pattern)
+                if (keys.isNotEmpty()) {
+                    RedisConfig.sync().del(*keys.toTypedArray())
+                }
+            }
+        } catch (e: Exception) {
+            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
+        }
+    }
 }

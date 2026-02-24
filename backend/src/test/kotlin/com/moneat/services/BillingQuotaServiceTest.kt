@@ -30,8 +30,6 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -43,6 +41,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.testsupport.TestDatabaseHelper
 
 class BillingQuotaServiceTest {
     private val billingQuotaService = BillingQuotaService()
@@ -59,30 +58,24 @@ class BillingQuotaServiceTest {
         // Initialize DB connection and schema once per test class
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_billing_quota;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_billing_quota;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Subscriptions,
-                    OrgUsageCounters,
-                    PricingTierConfigs,
-                    Users,
-                    OnCallSchedules,
-                    OnCallParticipants
-                )
-            }
         }
 
         // Clean up any existing test data from previous tests
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            OrgUsageCounters.deleteAll()
-            Subscriptions.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Subscriptions,
+            OrgUsageCounters,
+            PricingTierConfigs,
+            OnCallSchedules,
+            OnCallParticipants
+        )
 
         // Setup test data
         transaction {
@@ -125,7 +118,7 @@ class BillingQuotaServiceTest {
             )
         }
 
-        // With enforcement disabled by default, should succeed
+        // With enforcement enabled, should succeed and increment
         val result =
             billingQuotaService.reserveUnits(
                 organizationId = testOrgId,
@@ -157,9 +150,9 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result.allowed, "Should allow reservation")
-        // With enforcement disabled, usage is not persisted, but returned usage reflects current state
-        assertEquals(100, result.usage.usedErrors, "Returns current state, not updated state (enforcement disabled)")
-        assertEquals(100, result.usage.usedUnits, "Total reflects current state")
+        // With enforcement enabled, usage is persisted and incremented
+        assertEquals(150, result.usage.usedErrors, "100 initial + 50 requested = 150")
+        assertEquals(150, result.usage.usedUnits, "Total reflects updated state")
     }
 
     @Test
@@ -183,8 +176,8 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(okResult.allowed, "Request within limit should succeed")
-        // With enforcement disabled, returns current state
-        assertEquals(250, okResult.usage.usedTransactions)
+        // With enforcement enabled, counters are incremented
+        assertEquals(290, okResult.usage.usedTransactions, "250 initial + 40 requested = 290")
     }
 
     @Test
@@ -207,8 +200,8 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result.allowed, "Request within replay limit should succeed")
-        // With enforcement disabled, usage is not persisted
-        assertEquals(50, result.usage.usedReplays, "Enforcement disabled, so no persistence")
+        // With enforcement enabled, counters are incremented
+        assertEquals(90, result.usage.usedReplays, "50 initial + 40 requested = 90")
     }
 
     @Test
@@ -231,8 +224,8 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result.allowed, "Request within feedback limit should succeed")
-        // With enforcement disabled, usage is not persisted
-        assertEquals(50, result.usage.usedFeedback, "Enforcement disabled, so no persistence")
+        // With enforcement enabled, counters are incremented
+        assertEquals(80, result.usage.usedFeedback, "50 initial + 30 requested = 80")
     }
 
     // ============ PAYG Budget Limits Tests ============
@@ -263,8 +256,8 @@ class BillingQuotaServiceTest {
 
         assertEquals(1100, result.usedUnits)
         assertEquals(1100, result.usedErrors)
-        // With enforcement disabled, PAYG usage tracking only happens during reservations
-        // So we verify the response object is properly structured
+        // With enforcement enabled, PAYG usage tracking happens during reservations
+        // Verify the response object is properly structured
         assertTrue(result.baseLimitUnits > 0)
         assertTrue(result.paygLimitUnits > 0)
     }
@@ -308,8 +301,11 @@ class BillingQuotaServiceTest {
 
         assertTrue(result.allowed, "Batch reservation should succeed within limits")
         assertEquals(null, result.reason)
-        // With enforcement disabled, reservation is allowed but not persisted
-        assertEquals(100, result.usage.usedErrors, "Enforcement disabled, so no persistence")
+        // With enforcement enabled, counters are incremented
+        assertEquals(300, result.usage.usedErrors, "100 initial + 200 requested = 300")
+        assertEquals(200, result.usage.usedTransactions, "50 initial + 150 requested = 200")
+        assertEquals(75, result.usage.usedReplays, "25 initial + 50 requested = 75")
+        assertEquals(50, result.usage.usedFeedback, "10 initial + 40 requested = 50")
     }
 
     @Test
@@ -324,7 +320,7 @@ class BillingQuotaServiceTest {
             )
         }
 
-        // "log" and "logs" should normalize to "error"
+        // "log" and "logs" should normalize to "log"
         val result =
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
@@ -337,8 +333,9 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result.allowed, "Should normalize event types and succeed")
-        // With enforcement disabled, batch is allowed but not persisted
-        assertEquals(0, result.usage.usedErrors, "Enforcement disabled, so no persistence")
+        // With enforcement enabled, counters are incremented
+        assertEquals(100, result.usage.usedErrors, "error: 0 + 100 = 100")
+        assertEquals(150, result.usage.usedLogs, "log + logs: 0 + 100 + 50 = 150")
     }
 
     @Test
@@ -365,8 +362,10 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result.allowed, "Should ignore zero and negative units")
-        // With enforcement disabled, no persistence
-        assertEquals(0, result.usage.usedErrors)
+        // With enforcement enabled, only positive units are incremented
+        assertEquals(100, result.usage.usedErrors, "0 initial + 100 requested = 100")
+        assertEquals(0, result.usage.usedTransactions, "Zero and negative ignored")
+        assertEquals(0, result.usage.usedReplays, "Zero and negative ignored")
     }
 
     @Test
@@ -728,10 +727,11 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result1.allowed, "First batch should succeed")
-        // With enforcement disabled, no persistence
-        assertEquals(0, result1.usage.usedErrors, "Enforcement disabled, so no persistence")
+        // With enforcement enabled, counters are incremented
+        assertEquals(200, result1.usage.usedErrors, "0 initial + 200 requested = 200")
+        assertEquals(100, result1.usage.usedTransactions, "0 initial + 100 requested = 100")
 
-        // Second batch reservation reads same initial state
+        // Second batch reservation reads updated state from first batch
         val result2 =
             billingQuotaService.reserveUnitsBatch(
                 organizationId = testOrgId,
@@ -743,9 +743,12 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result2.allowed, "Second batch should succeed")
-        // Both see the same initial state since enforcement is disabled
-        assertEquals(0, result2.usage.usedReplays)
-        assertEquals(0, result2.usage.usedFeedback)
+        // Second batch sees state from after first batch
+        assertEquals(80, result2.usage.usedReplays, "0 initial + 80 requested = 80")
+        assertEquals(20, result2.usage.usedFeedback, "0 initial + 20 requested = 20")
+        // And errors/transactions remain from first batch
+        assertEquals(200, result2.usage.usedErrors, "From first batch")
+        assertEquals(100, result2.usage.usedTransactions, "From first batch")
     }
 
     @Test
@@ -773,8 +776,12 @@ class BillingQuotaServiceTest {
             )
 
         assertTrue(result.allowed, "Large batch should succeed")
-        // With enforcement disabled, no persistence
-        assertEquals(0, result.usage.usedUnits)
+        // With enforcement enabled, all counters are incremented
+        assertEquals(930, result.usage.usedUnits, "500 + 250 + 80 + 100 = 930")
+        assertEquals(500, result.usage.usedErrors)
+        assertEquals(250, result.usage.usedTransactions)
+        assertEquals(80, result.usage.usedReplays)
+        assertEquals(100, result.usage.usedFeedback)
     }
 
     @Test

@@ -15,7 +15,6 @@
   <a href="https://discord.gg/skH5Pstr"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/moneat-io/moneat/commits"><img src="https://img.shields.io/github/commit-activity/m/moneat-io/moneat?style=flat-square" alt="Commit Activity"></a>
   <a href="https://github.com/moneat-io/moneat/stargazers"><img src="https://img.shields.io/github/stars/moneat-io/moneat?style=flat-square" alt="GitHub Stars"></a>
-  <a href="https://github.com/moneat-io/moneat/actions/workflows/test.yml"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/moneat-io/moneat/main/badges/coverage-badge.json&style=flat-square" alt="Coverage"></a>
 </p>
 
 <p align="center">
@@ -37,12 +36,10 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
 - [**Performance Monitoring**](#performance-monitoring) — Trace slow transactions and bottlenecks
 - [**Logging**](#logging) — Centralized, searchable log management
 - [**Uptime Monitoring & Status Pages**](#uptime-monitoring--status-pages) — Know when things go down, tell users what's up
+- [**Custom Dashboards**](#custom-dashboards) — Build your own views with drag-and-drop widgets
+- [**Product Analytics**](#product-analytics) — Understand user behavior with funnels, retention, and event tracking
 - [**AI Observability**](#ai-observability) — Trace and debug LLM calls
 - [**On-Call & Incident Management**](#on-call--incident-management-enterprise) — PagerDuty-style escalations (Enterprise)
-
-<p align="center">
-  <img src="dashboard/public/screenshots/dashboard.png" alt="Moneat Dashboard" width="800">
-</p>
 
 ---
 
@@ -55,10 +52,13 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
   - [Performance Monitoring](#performance-monitoring)
   - [Logging](#logging)
   - [Uptime Monitoring & Status Pages](#uptime-monitoring--status-pages)
+  - [Custom Dashboards](#custom-dashboards)
+  - [Product Analytics](#product-analytics)
   - [AI Observability](#ai-observability)
   - [On-Call & Incident Management (Enterprise)](#on-call--incident-management-enterprise)
 - [Sentry Compatibility](#sentry-compatibility)
 - [Architecture](#architecture)
+- [Screenshots](#screenshots)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -142,10 +142,6 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 
 → [Error Monitoring docs](https://moneat.io/docs)
 
-<p align="center">
-  <img src="dashboard/public/screenshots/error-tracking.png" alt="Error Monitoring" width="800">
-</p>
-
 ### Session Replay
 
 **Understand what users actually did.**
@@ -157,10 +153,6 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 - Console log capture with filtering
 
 → [Session Replay docs](https://moneat.io/docs)
-
-<p align="center">
-  <img src="dashboard/public/screenshots/session-replay.png" alt="Session Replay" width="800">
-</p>
 
 ### Performance Monitoring
 
@@ -174,10 +166,6 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 
 → [Performance docs](https://moneat.io/docs)
 
-<p align="center">
-  <img src="dashboard/public/screenshots/performance.png" alt="Performance Monitoring" width="800">
-</p>
-
 ### Logging
 
 **Centralized logs, actually searchable.**
@@ -189,10 +177,6 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 - Retention policies for cost-efficient storage
 
 → [Logging docs](https://moneat.io/docs)
-
-<p align="center">
-  <img src="dashboard/public/screenshots/log-management.png" alt="Log Management" width="800">
-</p>
 
 ### Uptime Monitoring & Status Pages
 
@@ -206,11 +190,6 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 
 → [Uptime docs](https://moneat.io/docs)
 
-<p align="center">
-  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="400">
-  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="400">
-</p>
-
 ### AI Observability
 
 **Debug your LLM pipelines.**
@@ -221,6 +200,30 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 - Compatible with OpenTelemetry-based LLM tracing standards
 
 → [AI Observability docs](https://moneat.io/docs)
+
+### Custom Dashboards
+
+**Build the views that matter to you.**
+
+- Drag-and-drop widget builder with charts, tables, and counters
+- Query any data stored in ClickHouse — errors, logs, spans, and custom events
+- Pre-built templates for common use cases (release health, API performance, infrastructure)
+- Share dashboards across your team or make them personal
+- Auto-refreshing dashboards for live monitoring on big screens
+
+→ [Custom Dashboards docs](https://moneat.io/docs)
+
+### Product Analytics
+
+**Understand how users interact with your product.**
+
+- Event-based tracking with custom properties and user identification
+- Funnel analysis to measure conversion across multi-step flows
+- Retention cohort charts to track user engagement over time
+- Trend analysis with breakdowns by any event property
+- Seamlessly correlates with error and performance data for full-stack visibility
+
+→ [Product Analytics docs](https://moneat.io/docs)
 
 ### On-Call & Incident Management (Enterprise)
 
@@ -234,10 +237,6 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 - Native Slack integration for acknowledgment and resolution from chat
 
 → [Enterprise pricing](https://moneat.io/pricing) · [Contact sales](mailto:support@moneat.io)
-
-<p align="center">
-  <img src="dashboard/public/screenshots/escalation-policies.png" alt="Escalation Policies" width="800">
-</p>
 
 ---
 
@@ -300,6 +299,39 @@ moneat-enterprise/           # Separate private repo (proprietary license)
 | Observability | OpenTelemetry, Sentry self-monitoring |
 
 Production deployment configuration lives in the separate **[moneat-deploy](https://github.com/AElbadworthy/moneat-deploy)** repository.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="dashboard/public/screenshots/dashboard.png" alt="Moneat Dashboard" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/error-tracking.png" alt="Error Monitoring" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/session-replay.png" alt="Session Replay" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/performance.png" alt="Performance Monitoring" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/log-management.png" alt="Log Management" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="400">
+  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="400">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/escalation-policies.png" alt="Escalation Policies" width="800">
+</p>
 
 ---
 

@@ -18,6 +18,7 @@ package com.moneat.plugins
 
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.billing.services.BillingBackgroundService
+import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.IngestionWorker
 import com.moneat.llm.services.LlmIngestionWorker
@@ -51,6 +52,7 @@ fun Application.configureBackgroundJobs() {
     }
 
     val monitorAlertService = MonitorAlertService()
+    val dashboardAlertService = DashboardAlertService()
     val billingBackgroundService = BillingBackgroundService()
     val retentionBackgroundService = RetentionBackgroundService()
     val refreshTokenCleanupService = RefreshTokenCleanupService()
@@ -87,6 +89,7 @@ fun Application.configureBackgroundJobs() {
     // Start core background jobs
     logger.info { "Starting background jobs" }
     monitorAlertService.start(jobScope)
+    dashboardAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
     retentionBackgroundService.start(jobScope)
     refreshTokenCleanupService.start(jobScope)
@@ -125,6 +128,7 @@ fun Application.configureBackgroundJobs() {
             logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
         }
         monitorAlertService.stop()
+        dashboardAlertService.stop()
         billingBackgroundService.stop()
         retentionBackgroundService.stop()
         refreshTokenCleanupService.stop()

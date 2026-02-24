@@ -327,6 +327,50 @@ class DiscordService {
         return success
     }
 
+    suspend fun sendDashboardAlert(
+        organizationId: Int,
+        alertName: String,
+        dashboardTitle: String,
+        widgetTitle: String,
+        condition: String,
+        threshold: String,
+        currentValue: String,
+        severity: String?,
+        dashboardId: Long,
+        baseUrl: String
+    ): Boolean {
+        val config = getDiscordConfig(organizationId) ?: return false
+
+        val color = when (severity) {
+            "CRITICAL" -> 0xE01E5A
+            "HIGH" -> 0xE01E5A
+            "MEDIUM" -> 0xECB22E
+            else -> 0xECB22E
+        }
+
+        val embed = DiscordEmbed(
+            title = "📊 Dashboard Alert: $alertName",
+            description = "Alert triggered on **$widgetTitle** in *$dashboardTitle*",
+            url = "$baseUrl/dashboards/$dashboardId",
+            color = color,
+            fields = listOf(
+                DiscordField("Dashboard", dashboardTitle, true),
+                DiscordField("Widget", widgetTitle, true),
+                DiscordField("Condition", "$condition $threshold", true),
+                DiscordField("Current Value", currentValue, true)
+            ),
+            footer = DiscordFooter("Moneat Dashboard Alert"),
+            timestamp = Clock.System.now().toString()
+        )
+
+        val (success, _) = sendMessage(
+            channelId = config.channelId,
+            embed = embed,
+            fallbackText = "📊 Dashboard Alert: $alertName - $condition $threshold (current: $currentValue)"
+        )
+        return success
+    }
+
     suspend fun sendErrorAlert(
         organizationId: Int,
         projectName: String,

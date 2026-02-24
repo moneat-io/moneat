@@ -28,6 +28,7 @@ import com.moneat.events.models.SentryTransaction
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
@@ -136,15 +137,17 @@ class EventService(private val notificationService: NotificationService? = null)
                 "event" -> {
                     logger.debug { "Event payload: ${item.payload.take(500)}" }
                     val event = json.decodeFromString<SentryEvent>(item.payload)
-                    storeEvent(projectId, event)
-                    recordUsage(projectId, "error", item)
+                    if (storeEvent(projectId, event)) {
+                        recordUsage(projectId, "error", item)
+                    }
                 }
 
                 "transaction" -> {
                     logger.debug { "Transaction payload: ${item.payload.take(500)}" }
                     val transaction = parseTransactionPayload(item.payload)
-                    storeTransaction(projectId, transaction)
-                    recordUsage(projectId, "transaction", item)
+                    if (storeTransaction(projectId, transaction)) {
+                        recordUsage(projectId, "transaction", item)
+                    }
                 }
 
                 "session" -> {
@@ -156,8 +159,9 @@ class EventService(private val notificationService: NotificationService? = null)
                     val replayEvent = parseReplayEventPayload(item.payload)
                     lastReplayId = replayEvent.replay_id
                     lastSegmentId = replayEvent.segment_id ?: 0
-                    storeReplayEvent(projectId, replayEvent)
-                    recordUsage(projectId, "replay", item)
+                    if (storeReplayEvent(projectId, replayEvent)) {
+                        recordUsage(projectId, "replay", item)
+                    }
                 }
 
                 "replay_recording" -> {
@@ -203,8 +207,9 @@ class EventService(private val notificationService: NotificationService? = null)
                 "feedback" -> {
                     logger.debug { "Feedback payload: ${item.payload.take(500)}" }
                     val feedback = json.decodeFromString<SentryFeedback>(item.payload)
-                    storeFeedback(projectId, feedback)
-                    recordUsage(projectId, "feedback", item)
+                    if (storeFeedback(projectId, feedback)) {
+                        recordUsage(projectId, "feedback", item)
+                    }
                 }
 
                 else -> {
@@ -219,8 +224,9 @@ class EventService(private val notificationService: NotificationService? = null)
         body: String
     ) {
         val event = json.decodeFromString<SentryEvent>(body)
-        storeEvent(projectId, event)
-        usageTracker.recordUsage(projectId, "error", body.toByteArray(StandardCharsets.UTF_8).size)
+        if (storeEvent(projectId, event)) {
+            usageTracker.recordUsage(projectId, "error", body.toByteArray(StandardCharsets.UTF_8).size)
+        }
     }
 
     private fun recordUsage(
@@ -235,7 +241,7 @@ class EventService(private val notificationService: NotificationService? = null)
     private suspend fun storeTransaction(
         projectId: Long,
         transaction: SentryTransaction
-    ) {
+    ): Boolean {
         val rawEventId = transaction.event_id ?: UUID.randomUUID().toString()
         val eventId = normalizeUuid(rawEventId)
         val traceContext = transaction.contexts?.get("trace") as? JsonObject
@@ -301,7 +307,7 @@ class EventService(private val notificationService: NotificationService? = null)
             if (!transactionResponse.status.isSuccess()) {
                 val errorBody = transactionResponse.bodyAsText()
                 logger.error { "Failed to insert transaction: $errorBody" }
-                return
+                return false
             }
 
             val spans = transaction.spans.orEmpty()
@@ -377,15 +383,17 @@ class EventService(private val notificationService: NotificationService? = null)
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
             }
+            return true
         } catch (e: Exception) {
             logger.error(e) { "Error storing transaction in ClickHouse" }
+            return false
         }
     }
 
     private suspend fun storeEvent(
         projectId: Long,
         event: SentryEvent
-    ) {
+    ): Boolean {
         val eventId = event.event_id ?: UUID.randomUUID().toString()
 
         logger.debug {
@@ -476,8 +484,10 @@ class EventService(private val notificationService: NotificationService? = null)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert event: $errorBody" }
+                return false
             } else {
                 logger.info { "Event stored: $eventId for project $projectId" }
+                CacheService.invalidatePattern("cache:issues:$projectId:*")
                 event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                     try {
                         releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
@@ -497,20 +507,22 @@ class EventService(private val notificationService: NotificationService? = null)
                         logger.error(e) { "Error checking for new issue notifications" }
                     }
                 }
+                return true
             }
         } catch (e: Exception) {
             logger.error(e) { "Error storing event in ClickHouse" }
+            return false
         }
     }
 
     private suspend fun storeFeedback(
         projectId: Long,
         feedback: SentryFeedback
-    ) {
+    ): Boolean {
         // Validate project ID — allow negative demo project IDs (-1, -2, -3)
         if (projectId == 0L) {
             logger.error { "Invalid projectId $projectId for feedback, skipping insert" }
-            return
+            return false
         }
 
         val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
@@ -575,22 +587,25 @@ class EventService(private val notificationService: NotificationService? = null)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert feedback: $errorBody" }
+                return false
             } else {
                 logger.info { "Feedback stored: $feedbackId for project $projectId" }
+                return true
             }
         } catch (e: Exception) {
             logger.error(e) { "Error storing feedback in ClickHouse" }
+            return false
         }
     }
 
     private suspend fun storeReplayEvent(
         projectId: Long,
         replayEvent: SentryReplayEvent
-    ) {
+    ): Boolean {
         // Validate project ID — allow negative demo project IDs (-1, -2, -3)
         if (projectId == 0L) {
             logger.error { "Invalid projectId $projectId for replay event, skipping insert" }
-            return
+            return false
         }
 
         val replayId = replayEvent.replay_id ?: UUID.randomUUID().toString()
@@ -667,11 +682,14 @@ class EventService(private val notificationService: NotificationService? = null)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to insert replay event: $errorBody" }
+                return false
             } else {
                 logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
+                return true
             }
         } catch (e: Exception) {
             logger.error(e) { "Error storing replay event in ClickHouse" }
+            return false
         }
     }
 

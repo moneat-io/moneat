@@ -23,8 +23,6 @@ import com.moneat.incident.models.IncidentSeverity
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.Organizations
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -33,6 +31,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class IncidentServiceTest {
     private var providerConfigId: Int = 0
@@ -45,20 +44,15 @@ class IncidentServiceTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_incident_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_incident_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(Organizations, IncidentProviderConfigs, IncidentRoutingRules)
-            }
         }
         TransactionManager.defaultDatabase = db
 
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(Organizations, IncidentProviderConfigs, IncidentRoutingRules)
         transaction {
-            IncidentRoutingRules.deleteAll()
-            IncidentProviderConfigs.deleteAll()
-            Organizations.deleteAll()
-
             val orgId =
                 Organizations.insert {
                     it[name] = "Incident Org"

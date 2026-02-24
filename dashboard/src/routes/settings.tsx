@@ -60,6 +60,7 @@ import {
   Info,
   Key,
   Layers,
+  LayoutDashboard,
   Loader2,
   Minus,
   Phone,
@@ -78,7 +79,7 @@ import {
 import {SsoTab} from '@/components/sso-settings'
 import {TeamSettings} from '@/components/settings/team-settings'
 import {useAuth} from '@/hooks/useAuth'
-import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
+import {useEnterpriseFeatures, useIsSelfHosted, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'
 import {CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys} from '@/lib/sidebar-config'
 import {useTimezone} from '@/hooks/useTimezone'
 import {TIMEZONES} from '@/lib/timezones'
@@ -163,9 +164,13 @@ function SettingsPage() {
   })
   
   const tier = subscription?.tier?.tierName || 'FREE'
-  const canUseSso = tier === 'TEAM' || tier === 'BUSINESS'
-  const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
   const isSelfHosted = useIsSelfHosted()
+  
+  // SSO available if: (self-hosted with enterprise SSO/OnCall module) OR (SaaS with Team/Business tier)
+  const { data: features } = useEnterpriseFeatures()
+  const hasSsoModule = hasEnterpriseModule(features, 'oncall') || hasEnterpriseModule(features, 'sso')
+  const canUseSso = (isSelfHosted && hasSsoModule) || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS'))
+  const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
   
   return (
     <div>
@@ -262,6 +267,9 @@ function SettingsPage() {
                 >
                   <Shield className="h-4 w-4 mr-2" />
                   SSO
+                  {isSelfHosted && hasSsoModule && (
+                    <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">Enterprise</Badge>
+                  )}
                 </TabsTrigger>
               )}
 
@@ -2454,6 +2462,14 @@ function NotificationsTab() {
           color: 'text-blue-600',
           bgColor: 'bg-blue-500/10'
         }
+      case 'DASHBOARD_ALERT':
+        return { 
+          label: 'Dashboard Alerts', 
+          desc: 'Widget threshold alerts on custom dashboards', 
+          icon: LayoutDashboard,
+          color: 'text-purple-600',
+          bgColor: 'bg-purple-500/10'
+        }
     }
   }
 
@@ -2558,7 +2574,7 @@ function NotificationsTab() {
             </div>
           </div>
           
-          {['SYSTEM_ALERT', 'SYSTEM_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT'].map((s) => renderRow(s as AlertSource))}
+          {['SYSTEM_ALERT', 'SYSTEM_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT', 'DASHBOARD_ALERT'].map((s) => renderRow(s as AlertSource))}
 
           {(!slackConfigured || !discordConfigured) && (
             <div className="mt-6 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground flex items-center gap-2">

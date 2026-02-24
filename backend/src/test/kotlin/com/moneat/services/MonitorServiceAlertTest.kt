@@ -31,8 +31,6 @@ import com.moneat.shared.models.SystemAlerts
 import com.moneat.shared.models.Systems
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
@@ -42,6 +40,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 /**
  * Tests for MonitorService alert CRUD operations (createAlert, updateAlert, deleteAlert,
@@ -60,40 +59,18 @@ class MonitorServiceAlertTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_monitor_alert;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_monitor_alert;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    Systems,
-                    SystemAlerts,
-                    OrganizationAlertTemplates,
-                    SystemAlertSettings,
-                    SystemAlertTemplateStates,
-                    PricingTierConfigs,
-                    Subscriptions
-                )
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            SystemAlertTemplateStates.deleteAll()
-            SystemAlertSettings.deleteAll()
-            SystemAlerts.deleteAll()
-            OrganizationAlertTemplates.deleteAll()
-            Subscriptions.deleteAll()
-            Systems.deleteAll()
-            Memberships.deleteAll()
-            Projects.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, Projects, Subscriptions, Systems,
+            SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
+            SystemAlertTemplateStates, PricingTierConfigs
+        )
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

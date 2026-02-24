@@ -50,8 +50,6 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -63,6 +61,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AdminServiceTest {
     private val service = AdminService()
@@ -75,70 +74,21 @@ class AdminServiceTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_admin_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_admin_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    Memberships,
-                    Projects,
-                    ProjectKeys,
-                    Releases,
-                    ReleaseFiles,
-                    Subscriptions,
-                    UsageRecords,
-                    PromotionalCreditGrants,
-                    EmailsSent,
-                    PricingTierConfigs,
-                    NotificationPreferences,
-                    AlertNotificationPreferences,
-                    AuthTokens,
-                    UserLegalAcceptances,
-                    OrgInvitations,
-                    OrganizationIntegrations,
-                    AlertSilencePeriods,
-                    SsoConfigurations,
-                    AiConversations,
-                    AiMessages,
-                    OrganizationAlertTemplates,
-                    Systems,
-                    SystemAlerts,
-                    SystemAlertSettings
-                )
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            OrgInvitations.deleteAll()
-            OrganizationIntegrations.deleteAll()
-            SystemAlertSettings.deleteAll()
-            SystemAlerts.deleteAll()
-            Systems.deleteAll()
-            OrganizationAlertTemplates.deleteAll()
-            AlertSilencePeriods.deleteAll()
-            AiMessages.deleteAll()
-            AiConversations.deleteAll()
-            SsoConfigurations.deleteAll()
-            ReleaseFiles.deleteAll()
-            Releases.deleteAll()
-            ProjectKeys.deleteAll()
-            Projects.deleteAll()
-            AlertNotificationPreferences.deleteAll()
-            NotificationPreferences.deleteAll()
-            UserLegalAcceptances.deleteAll()
-            AuthTokens.deleteAll()
-            PromotionalCreditGrants.deleteAll()
-            EmailsSent.deleteAll()
-            UsageRecords.deleteAll()
-            Subscriptions.deleteAll()
-            Memberships.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-            PricingTierConfigs.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, Projects, ProjectKeys, UserLegalAcceptances,
+            AuthTokens, Releases, ReleaseFiles, UsageRecords, Subscriptions,
+            NotificationPreferences, AlertNotificationPreferences, EmailsSent,
+            PromotionalCreditGrants, SsoConfigurations, OrgInvitations, PricingTierConfigs,
+            OrganizationIntegrations, AlertSilencePeriods, AiConversations, AiMessages,
+            OrganizationAlertTemplates, Systems, SystemAlerts, SystemAlertSettings
+        )
     }
 
     private fun seedOrg(name: String = "Test Org", slug: String? = null): Int =
