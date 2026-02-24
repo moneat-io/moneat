@@ -15,8 +15,16 @@ RUN --mount=type=cache,target=/home/gradle/.gradle \
 COPY backend/src ./src
 # Copy built email templates from email-builder stage into src so they're processed as resources
 COPY --from=email-builder /emails/build/templates/email ./src/main/resources/email-templates/
-RUN --mount=type=cache,target=/home/gradle/.gradle \
-    gradle shadowJar --no-daemon --build-cache
+# Copy enterprise backend sources if present in build context (used by moneat-deploy CI/CD)
+ARG ENTERPRISE=false
+RUN --mount=type=bind,source=.,target=/repo,readonly \
+    --mount=type=cache,target=/home/gradle/.gradle \
+    if [ "$ENTERPRISE" = "true" ] && [ -d /repo/enterprise/backend ]; then \
+      cp -r /repo/enterprise/backend /enterprise/backend && \
+      gradle shadowJar -Penterprise -PenterprisePath=/enterprise/backend --no-daemon --build-cache; \
+    else \
+      gradle shadowJar --no-daemon --build-cache; \
+    fi
 
 FROM eclipse-temurin:25.0.2_10-jre
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
