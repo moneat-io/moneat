@@ -30,7 +30,6 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -42,6 +41,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.testsupport.TestDatabaseHelper
 
 class BillingQuotaServiceTest {
     private val billingQuotaService = BillingQuotaService()
@@ -67,26 +67,15 @@ class BillingQuotaServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                OnCallParticipants,
-                OnCallSchedules,
-                PricingTierConfigs,
-                OrgUsageCounters,
-                Subscriptions,
-                Organizations,
-                Users
-            )
-            SchemaUtils.create(
-                Users,
-                Organizations,
-                Subscriptions,
-                OrgUsageCounters,
-                PricingTierConfigs,
-                OnCallSchedules,
-                OnCallParticipants
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Subscriptions,
+            OrgUsageCounters,
+            PricingTierConfigs,
+            OnCallSchedules,
+            OnCallParticipants
+        )
 
         // Setup test data
         transaction {

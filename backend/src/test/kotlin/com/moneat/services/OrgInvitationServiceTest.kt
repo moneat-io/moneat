@@ -12,7 +12,6 @@ import com.moneat.shared.models.Users
 import io.ktor.server.plugins.BadRequestException
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -23,6 +22,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.testsupport.TestDatabaseHelper
 
 class OrgInvitationServiceTest {
     private val membershipService = OrgMembershipService()
@@ -44,10 +44,7 @@ class OrgInvitationServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(OrgInvitations, SsoConfigurations, EmailsSent, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, EmailsSent, SsoConfigurations, OrgInvitations)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, EmailsSent, SsoConfigurations, OrgInvitations)
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

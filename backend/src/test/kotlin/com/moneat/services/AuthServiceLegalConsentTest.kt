@@ -29,10 +29,10 @@ import com.moneat.shared.models.Users
 import io.ktor.server.config.*
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthServiceLegalConsentTest {
     private val authService = AuthService()
@@ -56,26 +56,15 @@ class AuthServiceLegalConsentTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                OrgInvitations,
-                EmailsSent,
-                RefreshTokens,
-                UserLegalAcceptances,
-                Memberships,
-                Organizations,
-                Users
-            )
-            SchemaUtils.create(
-                Users,
-                Organizations,
-                Memberships,
-                UserLegalAcceptances,
-                RefreshTokens,
-                EmailsSent,
-                OrgInvitations
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            UserLegalAcceptances,
+            RefreshTokens,
+            EmailsSent,
+            OrgInvitations
+        )
     }
 
     @Test

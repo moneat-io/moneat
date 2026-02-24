@@ -32,7 +32,6 @@ import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -43,6 +42,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class DashboardServiceProjectTest {
     companion object {
@@ -99,26 +99,15 @@ class DashboardServiceProjectTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Drop and recreate schema for clean state
-        transaction {
-            SchemaUtils.drop(
-                ProjectKeys,
-                Projects,
-                Subscriptions,
-                Memberships,
-                Organizations,
-                Users,
-                PricingTierConfigs
-            )
-            SchemaUtils.create(
-                Organizations,
-                Users,
-                Memberships,
-                Projects,
-                ProjectKeys,
-                Subscriptions,
-                PricingTierConfigs
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Organizations,
+            Users,
+            Memberships,
+            Projects,
+            ProjectKeys,
+            Subscriptions,
+            PricingTierConfigs
+        )
     }
 
     // ===================== hasProjectAccess =====================

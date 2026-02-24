@@ -13,7 +13,6 @@ import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -26,6 +25,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthServiceTest {
     private val authService = AuthService()
@@ -45,28 +45,16 @@ class AuthServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                OrgInvitations,
-                SsoConfigurations,
-                EmailsSent,
-                RefreshTokens,
-                UserLegalAcceptances,
-                Memberships,
-                Organizations,
-                Users
-            )
-            SchemaUtils.create(
-                Users,
-                Organizations,
-                Memberships,
-                UserLegalAcceptances,
-                RefreshTokens,
-                EmailsSent,
-                SsoConfigurations,
-                OrgInvitations
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            UserLegalAcceptances,
+            RefreshTokens,
+            EmailsSent,
+            SsoConfigurations,
+            OrgInvitations
+        )
     }
 
     private fun insertTestUser(

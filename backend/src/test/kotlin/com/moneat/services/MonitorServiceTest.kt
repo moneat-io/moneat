@@ -19,6 +19,7 @@ import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorServiceTest {
     private val service = MonitorService()
@@ -38,18 +39,11 @@ class MonitorServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                PricingTierConfigs, SystemAlertTemplateStates, SystemAlertSettings,
-                OrganizationAlertTemplates, SystemAlerts, Systems, Subscriptions, Projects,
-                Memberships, Organizations, Users
-            )
-            SchemaUtils.create(
-                Users, Organizations, Memberships, Projects, Subscriptions, Systems,
-                SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
-                SystemAlertTemplateStates, PricingTierConfigs
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, Projects, Subscriptions, Systems,
+            SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
+            SystemAlertTemplateStates, PricingTierConfigs
+        )
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class ReleaseServiceTest {
     private val service = ReleaseService()
@@ -32,28 +33,16 @@ class ReleaseServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                ArtifactBundles,
-                FileBlobs,
-                ReleaseFiles,
-                Releases,
-                Projects,
-                Memberships,
-                Organizations,
-                Users
-            )
-            SchemaUtils.create(
-                Users,
-                Organizations,
-                Memberships,
-                Projects,
-                Releases,
-                ReleaseFiles,
-                FileBlobs,
-                ArtifactBundles
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            Projects,
+            Releases,
+            ReleaseFiles,
+            FileBlobs,
+            ArtifactBundles
+        )
     }
 
     private fun seedOrgAndProject(

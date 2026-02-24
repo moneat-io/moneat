@@ -9,6 +9,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class OrgMembershipServiceTest {
     private val service = OrgMembershipService()
@@ -28,10 +29,7 @@ class OrgMembershipServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
     }
 
     private fun insertOrg(name: String = "Test Org"): Int =

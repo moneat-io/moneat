@@ -29,7 +29,6 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -38,6 +37,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class UsageTrackingServiceTest {
 
@@ -56,26 +56,15 @@ class UsageTrackingServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                OrgUsageCounters,
-                PricingTierConfigs,
-                Subscriptions,
-                UsageRecords,
-                Projects,
-                Organizations,
-                Users
-            )
-            SchemaUtils.create(
-                Users,
-                Organizations,
-                Projects,
-                UsageRecords,
-                Subscriptions,
-                PricingTierConfigs,
-                OrgUsageCounters
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Projects,
+            UsageRecords,
+            Subscriptions,
+            PricingTierConfigs,
+            OrgUsageCounters
+        )
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

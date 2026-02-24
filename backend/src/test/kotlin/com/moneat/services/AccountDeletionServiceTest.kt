@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AccountDeletionServiceTest {
     private val service = AccountDeletionService()
@@ -32,18 +33,15 @@ class AccountDeletionServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(OrgInvitations, Subscriptions, RefreshTokens, Projects, Memberships, Organizations, Users)
-            SchemaUtils.create(
-                Users,
-                Organizations,
-                Memberships,
-                Projects,
-                RefreshTokens,
-                Subscriptions,
-                OrgInvitations
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            Projects,
+            RefreshTokens,
+            Subscriptions,
+            OrgInvitations
+        )
     }
 
     private fun seedUser(

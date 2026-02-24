@@ -47,7 +47,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -57,6 +56,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class UptimeRoutesTest {
     companion object {
@@ -74,10 +74,7 @@ class UptimeRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(UptimeMonitors, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, UptimeMonitors)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, UptimeMonitors)
     }
 
     private fun Application.installAuth() {

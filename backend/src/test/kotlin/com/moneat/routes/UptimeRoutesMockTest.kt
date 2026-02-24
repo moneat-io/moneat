@@ -48,7 +48,6 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
@@ -56,6 +55,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class UptimeRoutesMockTest {
     companion object {
@@ -76,10 +76,7 @@ class UptimeRoutesMockTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
     }
 
     private fun Application.installAuth() {

@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AdminBillingServiceTest {
     private val service = AdminBillingService()
@@ -29,10 +30,7 @@ class AdminBillingServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(PromotionalCreditGrants, Subscriptions, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, PromotionalCreditGrants)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Subscriptions, PromotionalCreditGrants)
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

@@ -19,13 +19,13 @@ package com.moneat.routes
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.services.PricingTierService
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class PublicBillingRoutesTest {
     companion object {
@@ -44,10 +44,7 @@ class PublicBillingRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(PricingTierConfigs)
-            SchemaUtils.create(PricingTierConfigs)
-        }
+        TestDatabaseHelper.resetSchema(PricingTierConfigs)
 
         transaction {
             PricingTierConfigs.insert {

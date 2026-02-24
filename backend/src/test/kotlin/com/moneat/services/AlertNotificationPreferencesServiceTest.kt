@@ -22,7 +22,6 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -31,6 +30,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AlertNotificationPreferencesServiceTest {
     private val service = AlertNotificationPreferencesService()
@@ -50,10 +50,7 @@ class AlertNotificationPreferencesServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(AlertNotificationPreferences, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, AlertNotificationPreferences)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, AlertNotificationPreferences)
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

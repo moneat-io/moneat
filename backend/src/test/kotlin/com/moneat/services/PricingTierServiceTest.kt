@@ -11,6 +11,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class PricingTierServiceTest {
     private val service = PricingTierService()
@@ -30,10 +31,7 @@ class PricingTierServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(PricingTierConfigs, Subscriptions, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, Subscriptions, PricingTierConfigs)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Subscriptions, PricingTierConfigs)
     }
 
     private fun seedTier(

@@ -22,7 +22,6 @@ import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -32,6 +31,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorAlertServiceTest {
     private val service = MonitorAlertService()
@@ -53,10 +53,7 @@ class MonitorAlertServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(AlertSilencePeriods, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, AlertSilencePeriods)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, AlertSilencePeriods)
     }
 
     private fun seedOrg(name: String = "Alert Org"): Int =

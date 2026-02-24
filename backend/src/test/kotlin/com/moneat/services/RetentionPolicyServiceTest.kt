@@ -24,7 +24,6 @@ import com.moneat.shared.models.Systems
 import com.moneat.shared.services.RetentionPolicyService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.MessageDigest
@@ -34,6 +33,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class RetentionPolicyServiceTest {
     private val service = RetentionPolicyService()
@@ -55,10 +55,7 @@ class RetentionPolicyServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(PricingTierConfigs, Systems, Subscriptions, Projects, Organizations)
-            SchemaUtils.create(Organizations, Projects, Subscriptions, Systems, PricingTierConfigs)
-        }
+        TestDatabaseHelper.resetSchema(Organizations, Projects, Subscriptions, Systems, PricingTierConfigs)
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

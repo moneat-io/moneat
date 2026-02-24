@@ -50,7 +50,6 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -62,6 +61,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AdminServiceTest {
     private val service = AdminService()
@@ -81,24 +81,14 @@ class AdminServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                SystemAlertSettings, SystemAlerts, Systems, OrganizationAlertTemplates, AiMessages,
-                AiConversations, AlertSilencePeriods, OrganizationIntegrations, PricingTierConfigs,
-                OrgInvitations, SsoConfigurations, PromotionalCreditGrants, EmailsSent,
-                AlertNotificationPreferences, NotificationPreferences, Subscriptions, UsageRecords,
-                ReleaseFiles, Releases, AuthTokens, UserLegalAcceptances, ProjectKeys, Projects,
-                Memberships, Organizations, Users
-            )
-            SchemaUtils.create(
-                Users, Organizations, Memberships, Projects, ProjectKeys, UserLegalAcceptances,
-                AuthTokens, Releases, ReleaseFiles, UsageRecords, Subscriptions,
-                NotificationPreferences, AlertNotificationPreferences, EmailsSent,
-                PromotionalCreditGrants, SsoConfigurations, OrgInvitations, PricingTierConfigs,
-                OrganizationIntegrations, AlertSilencePeriods, AiConversations, AiMessages,
-                OrganizationAlertTemplates, Systems, SystemAlerts, SystemAlertSettings
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, Projects, ProjectKeys, UserLegalAcceptances,
+            AuthTokens, Releases, ReleaseFiles, UsageRecords, Subscriptions,
+            NotificationPreferences, AlertNotificationPreferences, EmailsSent,
+            PromotionalCreditGrants, SsoConfigurations, OrgInvitations, PricingTierConfigs,
+            OrganizationIntegrations, AlertSilencePeriods, AiConversations, AiMessages,
+            OrganizationAlertTemplates, Systems, SystemAlerts, SystemAlertSettings
+        )
     }
 
     private fun seedOrg(name: String = "Test Org", slug: String? = null): Int =

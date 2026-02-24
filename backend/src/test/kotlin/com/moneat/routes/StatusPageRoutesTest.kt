@@ -51,7 +51,6 @@ import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
@@ -60,6 +59,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class StatusPageRoutesTest {
     companion object {
@@ -78,16 +78,10 @@ class StatusPageRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                StatusPageIncidentUpdates, StatusPageCustomDomains, StatusPageMonitors,
-                UptimeMonitors, StatusPageIncidents, StatusPages, Memberships, Organizations, Users
-            )
-            SchemaUtils.create(
-                Users, Organizations, Memberships, StatusPages, StatusPageIncidents,
-                UptimeMonitors, StatusPageMonitors, StatusPageCustomDomains, StatusPageIncidentUpdates
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, StatusPages, StatusPageIncidents,
+            UptimeMonitors, StatusPageMonitors, StatusPageCustomDomains, StatusPageIncidentUpdates
+        )
     }
 
     private fun Application.installAuth() {

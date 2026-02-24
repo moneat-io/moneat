@@ -38,7 +38,6 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -46,6 +45,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthRoutesTest {
     private val jwtSecret = "test-secret-for-unit-tests"
@@ -85,10 +85,7 @@ class AuthRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
     }
 
     @Test

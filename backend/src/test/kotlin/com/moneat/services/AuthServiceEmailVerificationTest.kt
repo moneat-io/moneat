@@ -25,12 +25,12 @@ import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthServiceEmailVerificationTest {
     private val authService = AuthService()
@@ -51,10 +51,14 @@ class AuthServiceEmailVerificationTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(EmailsSent, RefreshTokens, UserLegalAcceptances, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, UserLegalAcceptances, RefreshTokens, EmailsSent)
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            UserLegalAcceptances,
+            RefreshTokens,
+            EmailsSent
+        )
     }
 
     @Test

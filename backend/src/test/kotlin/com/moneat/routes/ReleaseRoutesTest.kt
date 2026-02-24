@@ -41,13 +41,13 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class ReleaseRoutesTest {
     private val testBearerToken = "test-bearer-token-releases"
@@ -71,10 +71,7 @@ class ReleaseRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(AuthTokens, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, AuthTokens)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, AuthTokens)
 
         testUserId =
             transaction {

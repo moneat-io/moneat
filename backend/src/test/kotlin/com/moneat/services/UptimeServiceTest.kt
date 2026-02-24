@@ -18,13 +18,13 @@ package com.moneat.services
 
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UptimeMonitors
 import com.moneat.uptime.services.UptimeService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -57,16 +57,11 @@ class UptimeServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Drop and recreate schema for clean state
+        TestDatabaseHelper.resetSchema(Organizations, Users, UptimeMonitors)
         transaction {
-            exec("DROP TABLE IF EXISTS uptime_monitors")
-            exec("DROP TABLE IF EXISTS subscriptions")
-            exec("DROP TABLE IF EXISTS users")
-            exec("DROP TABLE IF EXISTS organizations")
-
-            SchemaUtils.create(Organizations, Users, UptimeMonitors)
             exec(
                 """
-                CREATE TABLE subscriptions (
+                CREATE TABLE IF NOT EXISTS subscriptions (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     organization_id INT NOT NULL,
                     stripe_subscription_id VARCHAR(255),

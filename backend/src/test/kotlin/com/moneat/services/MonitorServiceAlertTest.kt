@@ -31,7 +31,6 @@ import com.moneat.shared.models.SystemAlerts
 import com.moneat.shared.models.Systems
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
@@ -41,6 +40,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 /**
  * Tests for MonitorService alert CRUD operations (createAlert, updateAlert, deleteAlert,
@@ -66,18 +66,11 @@ class MonitorServiceAlertTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(
-                PricingTierConfigs, SystemAlertTemplateStates, SystemAlertSettings,
-                OrganizationAlertTemplates, SystemAlerts, Systems, Subscriptions, Projects,
-                Memberships, Organizations, Users
-            )
-            SchemaUtils.create(
-                Users, Organizations, Memberships, Projects, Subscriptions, Systems,
-                SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
-                SystemAlertTemplateStates, PricingTierConfigs
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, Projects, Subscriptions, Systems,
+            SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
+            SystemAlertTemplateStates, PricingTierConfigs
+        )
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =

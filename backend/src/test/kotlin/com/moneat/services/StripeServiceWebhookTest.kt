@@ -35,6 +35,7 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.test.*
 import kotlin.time.Clock
 import kotlin.time.Instant
+import com.moneat.testsupport.TestDatabaseHelper
 
 class StripeServiceWebhookTest {
     private val stripeService = StripeService()
@@ -62,17 +63,14 @@ class StripeServiceWebhookTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(PricingTierConfigs, StripeWebhookEvents, Subscriptions, Memberships, Organizations, Users)
-            SchemaUtils.create(
-                Users,
-                Organizations,
-                Memberships,
-                Subscriptions,
-                StripeWebhookEvents,
-                PricingTierConfigs
-            )
-        }
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            Subscriptions,
+            StripeWebhookEvents,
+            PricingTierConfigs
+        )
 
         // Setup test data
         transaction {

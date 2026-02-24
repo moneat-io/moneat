@@ -45,7 +45,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -53,6 +52,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.TestDatabaseHelper
 
 class IntegrationRoutesTest {
     private val jwtSecret = "test-secret-for-integration-routes"
@@ -72,10 +72,7 @@ class IntegrationRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(SlackUserMappings, OrganizationIntegrations, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, OrganizationIntegrations, SlackUserMappings)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, OrganizationIntegrations, SlackUserMappings)
     }
 
     @Test

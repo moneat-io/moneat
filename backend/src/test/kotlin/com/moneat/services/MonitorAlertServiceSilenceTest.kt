@@ -21,7 +21,6 @@ import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -33,6 +32,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorAlertServiceSilenceTest {
     companion object {
@@ -66,10 +66,7 @@ class MonitorAlertServiceSilenceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(AlertSilencePeriods, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, AlertSilencePeriods)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, AlertSilencePeriods)
     }
 
     // ===================== isThresholdTriggered (pure logic) =====================

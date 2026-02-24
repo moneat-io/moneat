@@ -22,7 +22,6 @@ import com.moneat.billing.services.PricingTierService
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -31,6 +30,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class PricingTierServiceFeatureFlagsTest {
     companion object {
@@ -51,10 +51,7 @@ class PricingTierServiceFeatureFlagsTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(PricingTierConfigs)
-            SchemaUtils.create(PricingTierConfigs)
-        }
+        TestDatabaseHelper.resetSchema(PricingTierConfigs)
     }
 
     @Test

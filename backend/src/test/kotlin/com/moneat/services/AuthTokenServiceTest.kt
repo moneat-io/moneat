@@ -11,6 +11,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthTokenServiceTest {
     private val service = AuthTokenService()
@@ -30,10 +31,7 @@ class AuthTokenServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        transaction {
-            SchemaUtils.drop(AuthTokens, Memberships, Organizations, Users)
-            SchemaUtils.create(Users, Organizations, Memberships, AuthTokens)
-        }
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, AuthTokens)
     }
 
     private fun seedUser(email: String = "test@example.com"): Int =
