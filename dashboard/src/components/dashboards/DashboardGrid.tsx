@@ -130,18 +130,21 @@ export function DashboardGrid({
     })
   }, [])
 
+  const needsScaling = useMemo(
+    () => visibleWidgets.some(w =>
+      w.widget_type !== 'section' &&
+      w.widget_type !== 'stat' &&
+      w.widget_type !== 'gauge' &&
+      w.widget_type !== 'text' &&
+      w.grid_h <= 4
+    ),
+    [visibleWidgets]
+  )
+
   const layout = useMemo<Layout>(
     () => {
-      const needsScaling = visibleWidgets.some(w => 
-        w.widget_type !== 'section' && 
-        w.widget_type !== 'stat' && 
-        w.widget_type !== 'gauge' && 
-        w.widget_type !== 'text' &&
-        w.grid_h <= 4
-      )
-
       return visibleWidgets.map((w): LayoutItem => {
-        const h = needsScaling 
+        const h = needsScaling
           ? (w.widget_type === 'section' ? 1 : w.grid_h * 2)
           : w.grid_h
           
@@ -161,21 +164,23 @@ export function DashboardGrid({
         }
       })
     },
-    [visibleWidgets, isEditing]
+    [visibleWidgets, isEditing, needsScaling]
   )
 
   const handleLayoutChange = useCallback(
     (newLayout: Layout) => {
       if (!isEditing) return
-      
+      const scale = needsScaling ? 2 : 1
+
       const hasChanges = newLayout.some((layoutItem) => {
         const widget = widgets.find((w) => String(w.id) === layoutItem.i)
         if (!widget) return false
+        // Compare scaled layout values against scaled canonical values
         return (
           layoutItem.x !== widget.grid_x ||
-          layoutItem.y !== widget.grid_y ||
+          layoutItem.y !== widget.grid_y * scale ||
           layoutItem.w !== widget.grid_w ||
-          layoutItem.h !== widget.grid_h
+          layoutItem.h !== (widget.widget_type === 'section' ? 1 : widget.grid_h * scale)
         )
       })
       
@@ -183,14 +188,17 @@ export function DashboardGrid({
       
       const updated: CreateWidgetRequest[] = widgets.map((widget) => {
         const layoutItem = newLayout.find((l) => l.i === String(widget.id))
+        // Reverse the scaling transform before persisting canonical coordinates
         return {
           ...(widget.id > 0 ? {id: widget.id} : {}),
           title: widget.title,
           widget_type: widget.widget_type,
           grid_x: layoutItem?.x ?? widget.grid_x,
-          grid_y: layoutItem?.y ?? widget.grid_y,
+          grid_y: layoutItem != null ? Math.round(layoutItem.y / scale) : widget.grid_y,
           grid_w: layoutItem?.w ?? widget.grid_w,
-          grid_h: layoutItem?.h ?? widget.grid_h,
+          grid_h: layoutItem != null
+            ? (widget.widget_type === 'section' ? 1 : Math.round(layoutItem.h / scale))
+            : widget.grid_h,
           query_configs: widget.query_configs,
           display_config: widget.display_config,
           sort_order: widget.sort_order,
@@ -198,7 +206,7 @@ export function DashboardGrid({
       })
       onLayoutChange(updated)
     },
-    [isEditing, widgets, onLayoutChange]
+    [isEditing, needsScaling, widgets, onLayoutChange]
   )
 
   if (widgets.length === 0 && !isEditing) {

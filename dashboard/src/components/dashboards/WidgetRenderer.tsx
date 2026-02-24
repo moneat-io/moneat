@@ -56,6 +56,21 @@ const COLORS = [
 const TIME_KEYS = new Set(['time_bucket', 'timestamp', 'time', 'Time', 'day', 'Day'])
 
 /**
+ * Parse a ClickHouse datetime string as UTC epoch ms.
+ * ClickHouse returns DateTime64 as "2026-02-24 19:00:00.000" (space, no tz suffix).
+ * Date.parse on that format is implementation-defined and may use local time.
+ * We normalize to ISO-8601 UTC before parsing.
+ */
+function parseUtcTimestamp(v: string): number {
+  // Already has timezone info — parse as-is
+  if (v.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(v)) return Date.parse(v)
+  // Normalize space separator to 'T' then append 'Z' for UTC
+  const iso = v.includes('T') ? v + 'Z' : v.replace(' ', 'T') + 'Z'
+  const ms = Date.parse(iso)
+  return isNaN(ms) ? Date.parse(v) : ms
+}
+
+/**
  * Lightweight replacement for Recharts' ResponsiveContainer.
  * Uses a single ResizeObserver per instance and debounces size updates
  * so charts freeze at their current size during resize and only re-render
@@ -240,25 +255,25 @@ function getTimeSpanMs(timeRange: TimeRangeDef): number {
 }
 
 function formatXAxisTick(v: string | number, spanMs: number) {
-  const ts = typeof v === 'number' ? v : Date.parse(v)
+  const ts = typeof v === 'number' ? v : parseUtcTimestamp(v)
   if (isNaN(ts)) return String(v)
   const d = new Date(ts)
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
   if (spanMs >= 86400000) return `${month}/${day}`
-  const hours = String(d.getHours()).padStart(2, '0')
-  const mins = String(d.getMinutes()).padStart(2, '0')
+  const hours = String(d.getUTCHours()).padStart(2, '0')
+  const mins = String(d.getUTCMinutes()).padStart(2, '0')
   return `${hours}:${mins}`
 }
 
 function formatTooltipLabel(v: string | number) {
-  const ts = typeof v === 'number' ? v : Date.parse(v)
+  const ts = typeof v === 'number' ? v : parseUtcTimestamp(v)
   if (isNaN(ts)) return String(v)
   const d = new Date(ts)
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hours = String(d.getHours()).padStart(2, '0')
-  const mins = String(d.getMinutes()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const hours = String(d.getUTCHours()).padStart(2, '0')
+  const mins = String(d.getUTCMinutes()).padStart(2, '0')
   return `${month}/${day} ${hours}:${mins}`
 }
 
@@ -425,7 +440,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
     pivoted.map(row => {
       const v = row[xKey]
       if (typeof v === 'string') {
-        const ms = Date.parse(v)
+        const ms = parseUtcTimestamp(v)
         return isNaN(ms) ? row : {...row, [xKey]: ms}
       }
       return row
@@ -570,7 +585,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
     const {pivoted: rawPivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
     const pivoted = rawPivoted.map(row => {
       const v = row[timeKey!]
-      if (typeof v === 'string') { const ms = Date.parse(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
+      if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
       return row
     })
     return (
