@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.21
-FROM node:20-alpine AS docs-build
+FROM node:24-alpine AS docs-build
 WORKDIR /app
 COPY docs/package.json docs/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -7,7 +7,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY docs/ .
 RUN npm run build
 
-FROM node:20-alpine AS dashboard-build
+FROM node:24-alpine AS dashboard-build
 WORKDIR /app
 COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm \
