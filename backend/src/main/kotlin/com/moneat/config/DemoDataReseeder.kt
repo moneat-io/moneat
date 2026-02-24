@@ -110,7 +110,7 @@ object DemoDataReseeder {
                 purgeLogsDemoData()
                 reseedLogs()
             }
-            
+
             if (demoDashboardCount >= 4) {
                 logger.info { "Demo dashboards are present ($demoDashboardCount), skipping dashboard reseed" }
             } else {
