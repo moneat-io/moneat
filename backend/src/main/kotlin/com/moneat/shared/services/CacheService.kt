@@ -48,7 +48,8 @@ object CacheService {
         serializer: KSerializer<T>,
         parentSpan: ISpan? = null,
         loader: suspend () -> T
-    ): T {        val cached =
+    ): T {
+        val cached =
             try {
                 withContext(Dispatchers.IO) {
                     if (RedisConfig.isConnected()) {
