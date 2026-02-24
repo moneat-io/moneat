@@ -324,7 +324,8 @@ fun Route.customDashboardRoutes(
                     )
                 }
 
-                val retentionDays = if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+                val retentionDays =
+                    if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
                 val withTimeRange = if (request.timeRange != null) {
                     request.queryConfig.copy(timeRange = request.timeRange)
                 } else {
@@ -413,7 +414,8 @@ fun Route.customDashboardRoutes(
                     return@post
                 }
 
-                val retentionDays = if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+                val retentionDays =
+                    if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
                 val results = mutableMapOf<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>()
 
                 for ((index, query) in request.queries.withIndex()) {

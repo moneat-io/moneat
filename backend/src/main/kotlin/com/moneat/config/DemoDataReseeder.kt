@@ -1114,7 +1114,7 @@ object DemoDataReseeder {
                 QueryDsl(
                     dataSource = "sessions",
                     metrics = listOf(MetricDef(AggFunction.COUNT, alias = "sessions")),
-                    groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR")),
+                    groupBy = listOf(GroupByDef("started", GroupByType.TIME, "1 HOUR")),
                     timeRange = defaultTimeRange,
                     limit = 1000
                 )

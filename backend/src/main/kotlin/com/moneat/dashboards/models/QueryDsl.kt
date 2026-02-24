@@ -24,6 +24,9 @@ enum class DataSource(val tableName: String) {
     @SerialName("events")
     EVENTS("events"),
 
+    @SerialName("sessions")
+    SESSIONS("sessions"),
+
     @SerialName("spans")
     SPANS("spans"),
 
