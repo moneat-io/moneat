@@ -10,11 +10,7 @@
   },
   "type": "module",
   "scripts": {
-    "predev": "node ./scripts/sync-enterprise-if-present.mjs",
     "dev": "node ./scripts/dev.mjs",
-    "sync-enterprise": "node ./scripts/sync-enterprise.mjs",
-    "dev:enterprise": "node ./scripts/dev.mjs --enterprise",
-    "prebuild": "node ./scripts/sync-enterprise-if-present.mjs",
     "build": "npm run lint && tsc && vite build",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
