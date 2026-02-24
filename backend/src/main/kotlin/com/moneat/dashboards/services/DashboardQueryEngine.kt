@@ -53,7 +53,8 @@ class DashboardQueryEngine {
     )
 
     companion object {
-        private val INTERVAL_REGEX = Regex("""^\d+\s+(SECOND|MINUTE|HOUR|DAY|WEEK|MONTH|YEAR)$""", RegexOption.IGNORE_CASE)
+        private val INTERVAL_REGEX =
+            Regex("""^\d+\s+(SECOND|MINUTE|HOUR|DAY|WEEK|MONTH|YEAR)$""", RegexOption.IGNORE_CASE)
 
         private val TIMESTAMP_COLUMNS = mapOf(
             "events" to "timestamp",
