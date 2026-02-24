@@ -1007,43 +1007,52 @@ const TableWidget = memo(function TableWidget({data, displayConfig: dc}: {data: 
 
   if (data.length === 0) return null
 
+  const virtualItems = rowVirtualizer.getVirtualItems()
+  const totalSize = rowVirtualizer.getTotalSize()
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0
+  const paddingBottom = virtualItems.length > 0 ? totalSize - virtualItems[virtualItems.length - 1].end : 0
+
   return (
     <div ref={parentRef} className="h-full overflow-auto">
       <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-muted/50 z-10">
+        <thead className="sticky top-0 bg-muted/90 z-10 shadow-sm">
           <tr>
             {columns.map((col) => (
-              <th key={col} className="text-left px-2 py-1.5 font-medium">
+              <th key={col} className="text-left px-2 py-1.5 font-medium whitespace-nowrap bg-background/95 backdrop-blur">
                 {col.replace(/_/g, ' ')}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody style={{height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative'}}>
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        <tbody>
+          {paddingTop > 0 && (
+            <tr>
+              <td colSpan={columns.length} style={{height: `${paddingTop}px`}} />
+            </tr>
+          )}
+          {virtualItems.map((virtualRow) => {
             const row = data[virtualRow.index]
             return (
               <tr
                 key={virtualRow.index}
-                className="border-t border-muted/30"
+                className="border-t border-muted/30 hover:bg-muted/20 transition-colors"
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
                   height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                  display: 'table-row',
                 }}
               >
                 {columns.map((col) => (
-                  <td key={col} className="px-2 py-1 truncate max-w-[200px]">
+                  <td key={col} className="px-2 py-1 truncate max-w-[300px]" title={String(row[col])}>
                     {fmtCell(row[col])}
                   </td>
                 ))}
               </tr>
             )
           })}
+          {paddingBottom > 0 && (
+            <tr>
+              <td colSpan={columns.length} style={{height: `${paddingBottom}px`}} />
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

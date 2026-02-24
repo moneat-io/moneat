@@ -141,7 +141,7 @@ export function DashboardGrid({
         isDraggable: isEditing,
         isResizable: isEditing && w.widget_type !== 'section',
         minW: w.widget_type === 'section' ? 12 : 2,
-        minH: w.widget_type === 'section' || w.widget_type === 'stat' || w.widget_type === 'gauge' ? 1 : 2,
+        minH: w.widget_type === 'section' ? 1 : (w.widget_type === 'stat' || w.widget_type === 'gauge' ? 2 : 4),
         maxH: w.widget_type === 'section' ? 1 : undefined,
         // Sections must NOT be static — static items act as compaction barriers,
         // which can push sibling widgets below the next section header visually.
@@ -201,7 +201,7 @@ export function DashboardGrid({
         layouts={{lg: layout}}
         breakpoints={GRID_BREAKPOINTS}
         cols={GRID_COLS}
-        rowHeight={80}
+        rowHeight={40}
         width={width}
         isDraggable={isEditing}
         isResizable={isEditing}
