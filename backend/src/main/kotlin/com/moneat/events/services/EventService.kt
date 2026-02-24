@@ -28,6 +28,7 @@ import com.moneat.events.models.SentryTransaction
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
@@ -486,6 +487,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 return false
             } else {
                 logger.info { "Event stored: $eventId for project $projectId" }
+                CacheService.invalidatePattern("cache:issues:$projectId:*")
                 event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                     try {
                         releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)

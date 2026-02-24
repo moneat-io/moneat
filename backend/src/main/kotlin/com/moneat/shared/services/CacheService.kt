@@ -48,8 +48,7 @@ object CacheService {
         serializer: KSerializer<T>,
         parentSpan: ISpan? = null,
         loader: suspend () -> T
-    ): T {
-        val cached =
+    ): T {        val cached =
             try {
                 withContext(Dispatchers.IO) {
                     if (RedisConfig.isConnected()) {
@@ -107,5 +106,28 @@ object CacheService {
             SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
         }
         return value
+    }
+
+    fun invalidate(key: String) {
+        try {
+            if (RedisConfig.isConnected()) {
+                RedisConfig.sync().del(key)
+            }
+        } catch (e: Exception) {
+            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
+        }
+    }
+
+    fun invalidatePattern(pattern: String) {
+        try {
+            if (RedisConfig.isConnected()) {
+                val keys = RedisConfig.sync().keys(pattern)
+                if (keys.isNotEmpty()) {
+                    RedisConfig.sync().del(*keys.toTypedArray())
+                }
+            }
+        } catch (e: Exception) {
+            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
+        }
     }
 }
