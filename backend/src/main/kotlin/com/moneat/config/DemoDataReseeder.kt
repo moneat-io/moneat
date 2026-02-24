@@ -840,7 +840,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4() AS log_id,
-                $P1 AS project_id,
+                CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END AS project_id,
                 now64(3) - INTERVAL (
                     CASE
                         WHEN number < 80  THEN number % 10
