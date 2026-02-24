@@ -67,16 +67,12 @@ object DemoDataReseeder {
             val freshLlmCount = checkFreshLlmDataCount()
             val freshAnalyticsCount = checkFreshAnalyticsDataCount()
             val freshLogsCount = checkFreshLogsCount()
-
-            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0 && freshLogsCount > 0) {
-                logger.info {
-                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, " +
-                        "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs), skipping reseed"
             val demoDashboardCount = countDemoDashboards()
 
-            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0 && demoDashboardCount >= 4) {
+            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0 && freshLogsCount > 0 && demoDashboardCount >= 4) {
                 logger.info {
-                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, $freshAnalyticsCount recent analytics events, $demoDashboardCount demo dashboards), skipping reseed"
+                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, " +
+                        "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, $demoDashboardCount demo dashboards), skipping reseed"
                 }
                 return
             }
@@ -995,6 +991,8 @@ object DemoDataReseeder {
             """.trimIndent()
         runCatching { ClickHouseClient.execute(sql) }
             .onFailure { logger.warn { "Reseed logs failed (non-fatal): ${it.message}" } }
+    }
+
     // ── Demo Dashboard Seeding ─────────────────────────────────────────────
 
     private const val DEMO_ORG_ID = -1L
