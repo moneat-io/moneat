@@ -67,7 +67,7 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
     return formatMonthDay(date, timezone)
   }
   const formatTooltipTime = (ts: number): string => formatDateTime(new Date(ts), timezone)
-  const {chartData, groupKeys, totalRangeMs} = useMemo(() => {
+  const {chartData, groupKeys, totalRangeMs, domainMin, domainMax} = useMemo(() => {
     const keys = new Set<string>()
     const data: HistogramPoint[] = buckets.map((b) => {
       const point: HistogramPoint = {
@@ -91,10 +91,13 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
     })
     const firstTs = data[0]?.timestampMs ?? 0
     const lastTs = data[data.length - 1]?.timestampMs ?? firstTs
+    const bucketInterval = data.length > 1 ? data[1].timestampMs - data[0].timestampMs : 60_000
     return {
       chartData: data,
       groupKeys: sortedKeys,
       totalRangeMs: Math.max(lastTs - firstTs, 60_000),
+      domainMin: firstTs - bucketInterval / 2,
+      domainMax: lastTs + bucketInterval / 2,
     }
   }, [buckets, grouped])
 
@@ -120,7 +123,7 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
           <XAxis
             dataKey="timestampMs"
             type="number"
-            domain={['dataMin', 'dataMax']}
+            domain={[domainMin, domainMax]}
             tickFormatter={(ts) => formatAxisTime(ts, totalRangeMs)}
             fontSize={10}
             height={18}
@@ -135,7 +138,12 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            width={35}
+            width={40}
+            tickFormatter={(v: number) => {
+              if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`
+              if (v >= 1_000) return `${(v / 1_000).toFixed(v % 1_000 === 0 ? 0 : 1)}k`
+              return String(v)
+            }}
             className="fill-muted-foreground"
           />
           <Tooltip
