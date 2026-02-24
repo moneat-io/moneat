@@ -18,6 +18,7 @@ import {memo, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 
 import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
+import {isDemo} from '@/lib/demo'
 import {
     Area,
     AreaChart,
@@ -53,6 +54,21 @@ const COLORS = [
 ]
 
 const TIME_KEYS = new Set(['time_bucket', 'timestamp', 'time', 'Time', 'day', 'Day'])
+
+/**
+ * Parse a ClickHouse datetime string as UTC epoch ms.
+ * ClickHouse returns DateTime64 as "2026-02-24 19:00:00.000" (space, no tz suffix).
+ * Date.parse on that format is implementation-defined and may use local time.
+ * We normalize to ISO-8601 UTC before parsing.
+ */
+function parseUtcTimestamp(v: string): number {
+  // Already has timezone info — parse as-is
+  if (v.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(v)) return Date.parse(v)
+  // Normalize space separator to 'T' then append 'Z' for UTC
+  const iso = v.includes('T') ? v + 'Z' : v.replace(' ', 'T') + 'Z'
+  const ms = Date.parse(iso)
+  return isNaN(ms) ? Date.parse(v) : ms
+}
 
 /**
  * Lightweight replacement for Recharts' ResponsiveContainer.
@@ -125,9 +141,10 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   const {data, isLoading, error} = useQuery({
     queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queries.length, variables],
     queryFn: async () => {
-      if (!projectId) return []
+      if (!projectId && !isDemo()) return []
+      const effectiveProjectId = projectId ?? -1
       if (isBatch) {
-        const result = await api.executeBatchQuery(dashboardId, queries, projectId, timeRange, variables)
+        const result = await api.executeBatchQuery(dashboardId, queries, effectiveProjectId, timeRange, variables)
         // Merge batch results: use legendFormat alias as series name, group by timestamp
         const mergedByTime = new Map<unknown, Record<string, unknown>>()
         for (const [refId, rows] of Object.entries(result.results)) {
@@ -164,10 +181,10 @@ export const WidgetRenderer = memo(function WidgetRenderer({
         return Array.from(mergedByTime.values())
       }
       return queries[0]
-        ? api.executeWidgetQuery(dashboardId, queries[0], projectId, timeRange, variables)
+        ? api.executeWidgetQuery(dashboardId, queries[0], effectiveProjectId, timeRange, variables)
         : []
     },
-    enabled: !!projectId && widget.widget_type !== 'text' && widget.widget_type !== 'section' && queries.length > 0,
+    enabled: (!!projectId || isDemo()) && widget.widget_type !== 'text' && widget.widget_type !== 'section' && queries.length > 0,
     refetchInterval: autoRefresh ? 30000 : false,
   })
 
@@ -238,25 +255,25 @@ function getTimeSpanMs(timeRange: TimeRangeDef): number {
 }
 
 function formatXAxisTick(v: string | number, spanMs: number) {
-  const ts = typeof v === 'number' ? v : Date.parse(v)
+  const ts = typeof v === 'number' ? v : parseUtcTimestamp(v)
   if (isNaN(ts)) return String(v)
   const d = new Date(ts)
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
   if (spanMs >= 86400000) return `${month}/${day}`
-  const hours = String(d.getHours()).padStart(2, '0')
-  const mins = String(d.getMinutes()).padStart(2, '0')
+  const hours = String(d.getUTCHours()).padStart(2, '0')
+  const mins = String(d.getUTCMinutes()).padStart(2, '0')
   return `${hours}:${mins}`
 }
 
 function formatTooltipLabel(v: string | number) {
-  const ts = typeof v === 'number' ? v : Date.parse(v)
+  const ts = typeof v === 'number' ? v : parseUtcTimestamp(v)
   if (isNaN(ts)) return String(v)
   const d = new Date(ts)
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hours = String(d.getHours()).padStart(2, '0')
-  const mins = String(d.getMinutes()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const hours = String(d.getUTCHours()).padStart(2, '0')
+  const mins = String(d.getUTCMinutes()).padStart(2, '0')
   return `${month}/${day} ${hours}:${mins}`
 }
 
@@ -396,7 +413,7 @@ function pivotData(data: Record<string, unknown>[], timeKey: string, labelKeys: 
   return {pivoted, seriesKeys: Array.from(seriesSet)}
 }
 
-const CHART_MARGIN = {top: 4, right: 4, left: 0, bottom: 0}
+const CHART_MARGIN = {top: 5, right: 5, left: 20, bottom: 20}
 const TOOLTIP_STYLE = {
   backgroundColor: 'hsl(var(--popover))',
   border: '1px solid hsl(var(--border))',
@@ -414,6 +431,21 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   const {pivoted, seriesKeys} = useMemo(
     () => hasLabels ? pivotData(data, xKey, labelKeys, valueKeys) : {pivoted: data, seriesKeys: valueKeys},
     [data, xKey, labelKeys, valueKeys, hasLabels]
+  )
+
+  // Recharts type="number" scale="time" requires numeric epoch ms values.
+  // ClickHouse returns time_bucket as a string ("2026-02-24 19:00:00.000"), so
+  // we normalize the time key to epoch ms for correct chart positioning.
+  const chartData = useMemo(() =>
+    pivoted.map(row => {
+      const v = row[xKey]
+      if (typeof v === 'string') {
+        const ms = parseUtcTimestamp(v)
+        return isNaN(ms) ? row : {...row, [xKey]: ms}
+      }
+      return row
+    }),
+    [pivoted, xKey]
   )
 
   const thresholds = parseThresholds(dc)
@@ -439,7 +471,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   return (
     <DebouncedChartContainer>
       {(w, h) => useArea ? (
-        <AreaChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
+        <AreaChart width={w} height={h} data={chartData} margin={CHART_MARGIN}>
           {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
           <XAxis
             dataKey={xKey}
@@ -484,7 +516,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
           ))}
         </AreaChart>
       ) : (
-        <LineChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
+        <LineChart width={w} height={h} data={chartData} margin={CHART_MARGIN}>
           {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
           <XAxis
             dataKey={xKey}
@@ -550,7 +582,12 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
     : formatTooltipValue
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
-    const {pivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const {pivoted: rawPivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const pivoted = rawPivoted.map(row => {
+      const v = row[timeKey!]
+      if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
+      return row
+    })
     return (
       <DebouncedChartContainer>
         {(w, h) => (
@@ -573,6 +610,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
               tickFormatter={tickFormatter}
             />
             <Tooltip
+              cursor={{fill: 'transparent'}}
               contentStyle={TOOLTIP_STYLE}
               wrapperStyle={TOOLTIP_WRAPPER_STYLE}
               labelFormatter={formatTooltipLabel}
@@ -609,7 +647,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
             label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
             tickFormatter={tickFormatter}
           />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter} />
+          <Tooltip cursor={{fill: 'transparent'}} contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter} />
           {legendProps && <Legend {...legendProps} iconSize={8} />}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
@@ -1007,43 +1045,52 @@ const TableWidget = memo(function TableWidget({data, displayConfig: dc}: {data: 
 
   if (data.length === 0) return null
 
+  const virtualItems = rowVirtualizer.getVirtualItems()
+  const totalSize = rowVirtualizer.getTotalSize()
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0
+  const paddingBottom = virtualItems.length > 0 ? totalSize - virtualItems[virtualItems.length - 1].end : 0
+
   return (
     <div ref={parentRef} className="h-full overflow-auto">
       <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-muted/50 z-10">
+        <thead className="sticky top-0 bg-muted/90 z-10 shadow-sm">
           <tr>
             {columns.map((col) => (
-              <th key={col} className="text-left px-2 py-1.5 font-medium">
+              <th key={col} className="text-left px-2 py-1.5 font-medium whitespace-nowrap bg-background/95 backdrop-blur">
                 {col.replace(/_/g, ' ')}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody style={{height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative'}}>
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        <tbody>
+          {paddingTop > 0 && (
+            <tr>
+              <td colSpan={columns.length} style={{height: `${paddingTop}px`}} />
+            </tr>
+          )}
+          {virtualItems.map((virtualRow) => {
             const row = data[virtualRow.index]
             return (
               <tr
                 key={virtualRow.index}
-                className="border-t border-muted/30"
+                className="border-t border-muted/30 hover:bg-muted/20 transition-colors"
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
                   height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                  display: 'table-row',
                 }}
               >
                 {columns.map((col) => (
-                  <td key={col} className="px-2 py-1 truncate max-w-[200px]">
+                  <td key={col} className="px-2 py-1 truncate max-w-[300px]" title={String(row[col])}>
                     {fmtCell(row[col])}
                   </td>
                 ))}
               </tr>
             )
           })}
+          {paddingBottom > 0 && (
+            <tr>
+              <td colSpan={columns.length} style={{height: `${paddingBottom}px`}} />
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

@@ -21,7 +21,7 @@ import {Separator} from '@/components/ui/separator'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import type {DashboardVariable, TimeRangeDef} from '@/lib/api'
-import {Pencil, Plus, Save, Download, Clock, RefreshCw, ArrowLeft, Settings2} from 'lucide-react'
+import {Pencil, Plus, Save, Download, RefreshCw, ArrowLeft, Settings2} from 'lucide-react'
 import {Link} from '@tanstack/react-router'
 
 interface DashboardToolbarProps {
@@ -80,7 +80,7 @@ export function DashboardToolbar({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex items-center gap-3 rounded-lg border bg-card/50 backdrop-blur-sm px-4 py-2.5 shadow-sm">
+      <div className="flex items-center justify-between gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 -mx-4 px-4 py-2 -mt-4 mb-4">
         {/* Navigation + Title */}
         <div className="flex items-center gap-2.5 min-w-0">
           <Tooltip>
@@ -176,20 +176,17 @@ export function DashboardToolbar({
         <div className="flex-1" />
 
         {/* Time range selector */}
-        <div className="flex items-center h-8 rounded-md border bg-muted/40 overflow-hidden">
-          <div className="flex items-center px-2 h-full border-r border-border/50">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-          </div>
+        <div className="flex items-center rounded-md bg-muted/50 p-1 gap-0.5">
           {TIME_RANGE_PRESETS.map((preset) => {
             const isActive = timeRange.from === preset.from
             return (
               <button
                 key={preset.label}
                 onClick={() => onTimeRangeChange({from: preset.from, to: preset.to})}
-                className={`px-2.5 h-full text-xs font-medium transition-all ${
+                className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${
                   isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
                 }`}
               >
                 {preset.label}
@@ -205,7 +202,7 @@ export function DashboardToolbar({
               variant={autoRefresh ? 'default' : 'outline'}
               size="icon"
               onClick={() => onAutoRefreshChange(!autoRefresh)}
-              className="h-8 w-8"
+              className={`h-8 w-8 ${autoRefresh ? '' : 'shadow-none border-transparent hover:bg-muted'}`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${autoRefresh ? 'animate-spin' : ''}`} />
             </Button>
@@ -243,9 +240,8 @@ export function DashboardToolbar({
               </TooltipTrigger>
               <TooltipContent>Export dashboard</TooltipContent>
             </Tooltip>
-            <Button variant="outline" size="sm" onClick={onToggleEdit} className="h-8 text-xs">
-              <Pencil className="h-3.5 w-3.5 mr-1.5" />
-              Edit
+            <Button variant="outline" size="sm" onClick={onToggleEdit} className="h-8 text-xs shadow-none border-transparent hover:bg-muted">
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
           </div>
         )}

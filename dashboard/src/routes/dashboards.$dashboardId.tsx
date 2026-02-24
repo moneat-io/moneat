@@ -26,6 +26,7 @@ import {VariableSettingsDialog} from '@/components/dashboards/VariableSettingsDi
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {useProject} from '@/contexts/project-context'
+import {isDemo} from '@/lib/demo'
 
 interface DashboardSearch {
   edit?: boolean
@@ -48,7 +49,7 @@ function DashboardViewPage() {
   const [selectedWidget, setSelectedWidget] = useState<DashboardWidget | null>(null)
   const [selectedWidgetId, setSelectedWidgetId] = useState<number | null>(null)
   const [showExport, setShowExport] = useState(false)
-  const [timeRange, setTimeRange] = useState({from: 'now-24h', to: 'now'})
+  const [timeRange, setTimeRange] = useState({from: isDemo() ? 'now-7d' : 'now-24h', to: 'now'})
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [variableValues, setVariableValues] = useState<Record<string, string>>({})
   const [resolvedOptions, setResolvedOptions] = useState<Record<string, string[]>>({})
@@ -216,7 +217,7 @@ function DashboardViewPage() {
         ? Math.max(...dashboard.widgets.map((w) => w.grid_y + w.grid_h))
         : 0),
       grid_w: 6,
-      grid_h: 4,
+      grid_h: 8,
       query_configs: [{
         dataSource: 'events',
         metrics: [{function: 'count', alias: 'count'}],
@@ -288,7 +289,7 @@ function DashboardViewPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="p-4 space-y-4">
         <div className="h-10 bg-muted/30 rounded animate-pulse" />
         <div className="h-96 bg-muted/30 rounded animate-pulse" />
       </div>
@@ -304,7 +305,7 @@ function DashboardViewPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 space-y-4">
       <DashboardToolbar
         title={dashboard.title}
         isEditing={isEditing}

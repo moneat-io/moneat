@@ -38,6 +38,13 @@ private val demoSafeWritePaths =
         "/auth/logout"
     )
 
+// POST endpoints that are read-only in nature (send a body but only fetch data)
+private val demoSafeWritePathSuffixes =
+    setOf(
+        "/query",
+        "/query/batch"
+    )
+
 private fun String.removeBearerPrefix(): String {
     return removePrefix("Bearer ").removePrefix("bearer ").trim()
 }
@@ -85,7 +92,7 @@ fun Application.configureDemoModeRestrictions() {
         if (isDemo) {
             val method = call.request.local.method
             val path = call.request.path()
-            if (path in demoSafeWritePaths) {
+            if (path in demoSafeWritePaths || demoSafeWritePathSuffixes.any { path.endsWith(it) }) {
                 return@intercept
             }
 

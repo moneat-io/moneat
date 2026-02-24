@@ -303,23 +303,29 @@ fun Route.customDashboardRoutes(
 
                 val request = call.receive<ExecuteQueryRequest>()
                 val demoEpochMs = call.getDemoEpochMs()
+                val isDemoUser = demoEpochMs != null
 
-                val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required"))
-                    return@post
+                // Demo users are scoped to demo projects; regular users must supply a projectId
+                val projectId: Long = if (isDemoUser) {
+                    -1L // Queries against all 3 demo projects via ClickHouseQueryUtils.projectIdClause
+                } else {
+                    call.request.queryParameters["projectId"]?.toLongOrNull()
+                        ?: return@post call.respond(
+                            HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
+                        )
                 }
-                if (!hasProjectAccess(orgId, projectId)) {
+                if (!isDemoUser && !hasProjectAccess(orgId, projectId)) {
                     return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("Project access denied"))
                 }
-                if (dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
+                if (!isDemoUser && dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
                         ErrorResponse("Dashboard is scoped to project ${dashboardScope.projectId}")
                     )
                 }
 
-                val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+                val retentionDays =
+                    if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
                 val withTimeRange = if (request.timeRange != null) {
                     request.queryConfig.copy(timeRange = request.timeRange)
                 } else {
@@ -383,16 +389,20 @@ fun Route.customDashboardRoutes(
 
                 val request = call.receive<ExecuteBatchQueryRequest>()
                 val demoEpochMs = call.getDemoEpochMs()
+                val isDemoUser = demoEpochMs != null
 
-                val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required"))
-                    return@post
+                val projectId: Long = if (isDemoUser) {
+                    -1L
+                } else {
+                    call.request.queryParameters["projectId"]?.toLongOrNull()
+                        ?: return@post call.respond(
+                            HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
+                        )
                 }
-                if (!hasProjectAccess(orgId, projectId)) {
+                if (!isDemoUser && !hasProjectAccess(orgId, projectId)) {
                     return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("Project access denied"))
                 }
-                if (dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
+                if (!isDemoUser && dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
                         ErrorResponse("Dashboard is scoped to project ${dashboardScope.projectId}")
@@ -404,7 +414,8 @@ fun Route.customDashboardRoutes(
                     return@post
                 }
 
-                val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+                val retentionDays =
+                    if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
                 val results = mutableMapOf<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>()
 
                 for ((index, query) in request.queries.withIndex()) {
