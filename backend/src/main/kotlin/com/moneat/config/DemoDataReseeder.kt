@@ -34,6 +34,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 
@@ -65,12 +66,12 @@ object DemoDataReseeder {
             val freshCoreCount = checkFreshDataCount()
             val freshLlmCount = checkFreshLlmDataCount()
             val freshAnalyticsCount = checkFreshAnalyticsDataCount()
+            val demoDashboardCount = countDemoDashboards()
 
-            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0) {
+            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0 && demoDashboardCount >= 4) {
                 logger.info {
-                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, $freshAnalyticsCount recent analytics events), skipping reseed"
+                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, $freshAnalyticsCount recent analytics events, $demoDashboardCount demo dashboards), skipping reseed"
                 }
-                seedDemoDashboards()
                 return
             }
 
@@ -100,10 +101,14 @@ object DemoDataReseeder {
                 reseedAnalyticsEvents()
             }
 
-            logger.info { "Demo data reseed complete" }
+            if (demoDashboardCount >= 4) {
+                logger.info { "Demo dashboards are present ($demoDashboardCount), skipping dashboard reseed" }
+            } else {
+                logger.info { "Demo dashboards missing or incomplete ($demoDashboardCount found), reseeding..." }
+                seedDemoDashboards()
+            }
 
-            // Always reseed dashboards (PostgreSQL, not subject to ClickHouse TTL)
-            seedDemoDashboards()
+            logger.info { "Demo data reseed complete" }
         } catch (e: Exception) {
             logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
         }
@@ -155,6 +160,18 @@ object DemoDataReseeder {
             0
         }
     }
+
+    private fun countDemoDashboards(): Long =
+        runCatching {
+            transaction {
+                Dashboards.selectAll()
+                    .where { (Dashboards.orgId eq DEMO_ORG_ID) and (Dashboards.createdBy eq DEMO_USER_ID) }
+                    .count()
+            }
+        }.getOrElse {
+            logger.warn { "Failed to count demo dashboards (non-fatal): ${it.message}" }
+            0L
+        }
 
     private suspend fun purgeOldDemoData() {
         val tables =
