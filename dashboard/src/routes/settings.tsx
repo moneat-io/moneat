@@ -164,14 +164,13 @@ function SettingsPage() {
   })
   
   const tier = subscription?.tier?.tierName || 'FREE'
+  const isSelfHosted = useIsSelfHosted()
   
   // SSO available if: (self-hosted with enterprise SSO/OnCall module) OR (SaaS with Team/Business tier)
   const { data: features } = useEnterpriseFeatures()
-  const isSelfHosted = features?.selfHost ?? false
   const hasSsoModule = hasEnterpriseModule(features, 'oncall') || hasEnterpriseModule(features, 'sso')
   const canUseSso = (isSelfHosted && hasSsoModule) || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS'))
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
-  const isSelfHosted = useIsSelfHosted()
   
   return (
     <div>
