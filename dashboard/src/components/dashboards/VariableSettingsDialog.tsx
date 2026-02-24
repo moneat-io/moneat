@@ -59,11 +59,11 @@ export function VariableSettingsDialog({
 
   // Initialize draft when dialog opens
   useEffect(() => {
-    if (open) {
-      setDraft(variables.map((v) => ({...v, options: [...(v.options ?? [])]})))
-      setExpandedIndex(variables.length > 0 ? 0 : null)
-      setOptionInput('')
-    }
+    if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraft(variables.map((v) => ({...v, options: [...(v.options ?? [])]})))
+    setExpandedIndex(variables.length > 0 ? 0 : null)
+    setOptionInput('')
   }, [open, variables])
 
   const updateVar = (index: number, patch: Partial<DashboardVariable>) => {

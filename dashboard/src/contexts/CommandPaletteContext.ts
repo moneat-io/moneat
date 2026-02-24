@@ -14,20 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState, useCallback, type ReactNode} from 'react'
-import {CommandPaletteContext} from '@/contexts/CommandPaletteContext'
+import {createContext} from 'react'
 
-export function CommandPaletteProvider({children}: {children: ReactNode}) {
-  const [open, setOpen] = useState(false)
-  const openPalette = useCallback(() => setOpen(true), [])
-  const setOpenValue = useCallback(
-    (value: boolean | ((prev: boolean) => boolean)) =>
-      setOpen(typeof value === 'function' ? value : () => value),
-    [],
-  )
-  return (
-    <CommandPaletteContext.Provider value={{open, setOpen: setOpenValue, openPalette}}>
-      {children}
-    </CommandPaletteContext.Provider>
-  )
+export interface CommandPaletteContextValue {
+  open: boolean
+  setOpen: (open: boolean | ((prev: boolean) => boolean)) => void
+  openPalette: () => void
 }
+
+export const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null)

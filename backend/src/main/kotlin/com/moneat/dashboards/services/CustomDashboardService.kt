@@ -473,7 +473,7 @@ class CustomDashboardService {
                     (Dashboards.orgId eq orgId) and (
                         (Dashboards.title.lowerCase() like pattern) or
                             ((Dashboards.description.isNotNull()) and (Dashboards.description.lowerCase() like pattern))
-                    )
+                        )
                 }
                 .orderBy(Dashboards.updatedAt, SortOrder.DESC)
                 .limit(10)

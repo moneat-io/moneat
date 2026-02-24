@@ -220,8 +220,10 @@ class GrafanaTranslator : DashboardTranslator {
                 val moneatThresholds = steps.mapNotNull { step ->
                     val stepObj = step.jsonObject
                     val valuePrim = stepObj["value"]?.jsonPrimitive
-                    val value = valuePrim?.intOrNull ?: if (valuePrim?.contentOrNull == null) 0 else return@mapNotNull null
-                    val color = stepObj["color"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    val value = valuePrim?.intOrNull
+                        ?: if (valuePrim?.contentOrNull == null) 0 else return@mapNotNull null
+                    val color = stepObj["color"]?.jsonPrimitive?.contentOrNull
+                        ?: return@mapNotNull null
                     buildJsonObject {
                         put("value", value)
                         put("color", color)
@@ -344,7 +346,7 @@ class GrafanaTranslator : DashboardTranslator {
         }
     }
 
-    private fun resolveDatasource(ds: JsonElement?, panelIndex: Int): String? = when (ds) {
+    private fun resolveDatasource(ds: JsonElement?): String? = when (ds) {
         is JsonPrimitive if ds.isString -> ds.content
         is JsonObject if ds["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true ->
             ds["type"]?.jsonPrimitive?.content
@@ -615,32 +617,48 @@ class GrafanaTranslator : DashboardTranslator {
             dashboard.description?.let { put("description", it) }
             put("panels", JsonArray(panels))
             if (dashboard.variables.isNotEmpty()) {
-                put("templating", buildJsonObject {
-                    put("list", buildJsonArray {
-                        dashboard.variables.forEach { v ->
-                            add(buildJsonObject {
-                                put("name", v.name)
-                                v.label?.let { put("label", it) }
-                                put("type", v.type)
-                                v.query?.let { put("query", it) }
-                                v.current?.let { cur ->
-                                    put("current", buildJsonObject {
-                                        put("value", cur)
-                                        put("text", cur)
-                                    })
+                put(
+                    "templating",
+                    buildJsonObject {
+                        put(
+                            "list",
+                            buildJsonArray {
+                                dashboard.variables.forEach { v ->
+                                    add(
+                                        buildJsonObject {
+                                            put("name", v.name)
+                                            v.label?.let { put("label", it) }
+                                            put("type", v.type)
+                                            v.query?.let { put("query", it) }
+                                            v.current?.let { cur ->
+                                                put(
+                                                    "current",
+                                                    buildJsonObject {
+                                                        put("value", cur)
+                                                        put("text", cur)
+                                                    }
+                                                )
+                                            }
+                                            put(
+                                                "options",
+                                                buildJsonArray {
+                                                    v.options.forEach { opt ->
+                                                        add(
+                                                            buildJsonObject {
+                                                                put("value", opt)
+                                                                put("text", opt)
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    )
                                 }
-                                put("options", buildJsonArray {
-                                    v.options.forEach { opt ->
-                                        add(buildJsonObject {
-                                            put("value", opt)
-                                            put("text", opt)
-                                        })
-                                    }
-                                })
-                            })
-                        }
-                    })
-                })
+                            }
+                        )
+                    }
+                )
             }
             put("schemaVersion", 39)
             put("version", 1)

@@ -81,6 +81,7 @@ function DashboardViewPage() {
   // Initialize variable values from dashboard variable defaults on first load
   useEffect(() => {
     if (!dashboard?.variables?.length) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVariableValues((prev) => {
       const next = {...prev}
       let changed = false

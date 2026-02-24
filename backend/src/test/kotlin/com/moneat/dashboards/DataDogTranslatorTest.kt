@@ -435,22 +435,32 @@ class DataDogTranslatorTest {
         val json = buildJsonObject {
             put("title", "Test")
             put("widgets", JsonArray(emptyList()))
-            put("template_variables", buildJsonArray {
-                add(buildJsonObject {
-                    put("name", "environment")
-                    put("prefix", "env")
-                    put("default", "production")
-                    put("available_values", buildJsonArray {
-                        add(kotlinx.serialization.json.JsonPrimitive("production"))
-                        add(kotlinx.serialization.json.JsonPrimitive("staging"))
-                    })
-                })
-                add(buildJsonObject {
-                    put("name", "host")
-                    put("prefix", "host")
-                    put("default", "*")
-                })
-            })
+            put(
+                "template_variables",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("name", "environment")
+                            put("prefix", "env")
+                            put("default", "production")
+                            put(
+                                "available_values",
+                                buildJsonArray {
+                                    add(kotlinx.serialization.json.JsonPrimitive("production"))
+                                    add(kotlinx.serialization.json.JsonPrimitive("staging"))
+                                }
+                            )
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("name", "host")
+                            put("prefix", "host")
+                            put("default", "*")
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(2, result.variables.size)
@@ -479,12 +489,19 @@ class DataDogTranslatorTest {
     @Test
     fun `export includes template_variables`() {
         val dashboard = com.moneat.dashboards.models.DashboardResponse(
-            id = 1, orgId = 1, title = "Test", createdBy = 1,
-            createdAt = "", updatedAt = "",
+            id = 1,
+            orgId = 1,
+            title = "Test",
+            createdBy = 1,
+            createdAt = "",
+            updatedAt = "",
             variables = listOf(
                 com.moneat.dashboards.models.DashboardVariable(
-                    name = "env", label = "host:env", type = "custom",
-                    defaultValue = "prod", options = listOf("prod", "staging")
+                    name = "env",
+                    label = "host:env",
+                    type = "custom",
+                    defaultValue = "prod",
+                    options = listOf("prod", "staging")
                 )
             )
         )

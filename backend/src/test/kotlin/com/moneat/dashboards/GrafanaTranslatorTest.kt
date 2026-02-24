@@ -304,16 +304,20 @@ class GrafanaTranslatorTest {
             put(
                 "targets",
                 buildJsonArray {
-                    add(buildJsonObject {
-                        put("expr", "system_cpu_usage{instance=\"host\"}")
-                        put("legendFormat", "System CPU Usage")
-                        put("refId", "A")
-                    })
-                    add(buildJsonObject {
-                        put("expr", "process_cpu_usage{instance=\"host\"}")
-                        put("legendFormat", "Process CPU Usage")
-                        put("refId", "B")
-                    })
+                    add(
+                        buildJsonObject {
+                            put("expr", "system_cpu_usage{instance=\"host\"}")
+                            put("legendFormat", "System CPU Usage")
+                            put("refId", "A")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("expr", "process_cpu_usage{instance=\"host\"}")
+                            put("legendFormat", "Process CPU Usage")
+                            put("refId", "B")
+                        }
+                    )
                 }
             )
         }
@@ -358,7 +362,11 @@ class GrafanaTranslatorTest {
     @Test
     fun `parsePromQL with bare metric and labels`() {
         val warnings = mutableListOf<String>()
-        val dsl = translator.parsePromQL("""process_uptime_seconds{application="myapp", instance="host1"}""", warnings, 0)
+        val dsl = translator.parsePromQL(
+            """process_uptime_seconds{application="myapp", instance="host1"}""",
+            warnings,
+            0
+        )
         assertEquals("__prometheus", dsl.dataSource)
         assertEquals(2, dsl.filters.size)
         assertEquals("application", dsl.filters[0].field)
@@ -388,7 +396,9 @@ class GrafanaTranslatorTest {
     @Test
     fun `parsePromQL with sum by aggregation`() {
         val warnings = mutableListOf<String>()
-        val expr = """sum by (uri, method, status) ( increase( http_server_requests_seconds_count{ instance=~"host", application=~"app" }[5m] ) )"""
+        val expr = """sum by (uri, method, status) (
+            increase( http_server_requests_seconds_count{ instance=~"host", application=~"app" }[5m] )
+        )"""
         val dsl = translator.parsePromQL(expr, warnings, 0)
         assertEquals("__prometheus", dsl.dataSource)
         assertTrue(warnings.none { it.contains("couldn't parse") })
@@ -398,7 +408,14 @@ class GrafanaTranslatorTest {
     @Test
     fun `parsePromQL with multiline sum by aggregation`() {
         val warnings = mutableListOf<String>()
-        val expr = "sum by (uri, method, status) (\n  increase(\n    http_server_requests_seconds_count{\n      instance=~\"host\",\n      application=~\"app\"\n    }[5m]\n  )\n)"
+        val expr = """sum by (uri, method, status) (
+            increase(
+              http_server_requests_seconds_count{
+                instance=~"host",
+                application=~"app"
+              }[5m]
+            )
+        )"""
         val dsl = translator.parsePromQL(expr, warnings, 0)
         assertEquals("__prometheus", dsl.dataSource)
         assertTrue(warnings.none { it.contains("couldn't parse") }, "Warnings: $warnings")
@@ -622,11 +639,16 @@ class GrafanaTranslatorTest {
                         buildJsonObject {
                             put("type", "logs")
                             put("title", "Application Logs")
-                            put("targets", buildJsonArray {
-                                add(buildJsonObject {
-                                    put("expr", "{compose_service=~\"app-.*\"}")
-                                })
-                            })
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "{compose_service=~\"app-.*\"}")
+                                        }
+                                    )
+                                }
+                            )
                         }
                     )
                 }
@@ -978,31 +1000,46 @@ class GrafanaTranslatorTest {
         val json = buildJsonObject {
             put("title", "Test")
             put("panels", JsonArray(emptyList()))
-            put("templating", buildJsonObject {
-                put("list", buildJsonArray {
-                    add(buildJsonObject {
-                        put("name", "environment")
-                        put("label", "Environment")
-                        put("type", "custom")
-                        put("current", buildJsonObject { put("value", "production") })
-                        put("options", buildJsonArray {
-                            add(buildJsonObject { put("value", "production") })
-                            add(buildJsonObject { put("value", "staging") })
-                        })
-                    })
-                    add(buildJsonObject {
-                        put("name", "host")
-                        put("type", "query")
-                        put("query", "SELECT DISTINCT host FROM logs")
-                        put("datasource", "clickhouse")
-                    })
-                    add(buildJsonObject {
-                        put("name", "search")
-                        put("type", "textbox")
-                        put("current", buildJsonObject { put("value", "") })
-                    })
-                })
-            })
+            put(
+                "templating",
+                buildJsonObject {
+                    put(
+                        "list",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("name", "environment")
+                                    put("label", "Environment")
+                                    put("type", "custom")
+                                    put("current", buildJsonObject { put("value", "production") })
+                                    put(
+                                        "options",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("value", "production") })
+                                            add(buildJsonObject { put("value", "staging") })
+                                        }
+                                    )
+                                }
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("name", "host")
+                                    put("type", "query")
+                                    put("query", "SELECT DISTINCT host FROM logs")
+                                    put("datasource", "clickhouse")
+                                }
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("name", "search")
+                                    put("type", "textbox")
+                                    put("current", buildJsonObject { put("value", "") })
+                                }
+                            )
+                        }
+                    )
+                }
+            )
         }
         val result = translator.import(json)
         assertEquals(3, result.variables.size)
@@ -1035,12 +1072,19 @@ class GrafanaTranslatorTest {
     @Test
     fun `export includes variables in templating`() {
         val dashboard = DashboardResponse(
-            id = 1, orgId = 1, title = "Test", createdBy = 1,
-            createdAt = "", updatedAt = "",
+            id = 1,
+            orgId = 1,
+            title = "Test",
+            createdBy = 1,
+            createdAt = "",
+            updatedAt = "",
             variables = listOf(
                 com.moneat.dashboards.models.DashboardVariable(
-                    name = "env", label = "Environment", type = "custom",
-                    current = "prod", options = listOf("prod", "staging")
+                    name = "env",
+                    label = "Environment",
+                    type = "custom",
+                    current = "prod",
+                    options = listOf("prod", "staging")
                 )
             )
         )
@@ -1079,7 +1123,12 @@ class GrafanaTranslatorTest {
                                                         "steps",
                                                         buildJsonArray {
                                                             add(buildJsonObject { put("color", "green") })
-                                                            add(buildJsonObject { put("color", "red"); put("value", 80) })
+                                                            add(
+                                                                buildJsonObject {
+                                                                    put("color", "red")
+                                                                    put("value", 80)
+                                                                }
+                                                            )
                                                         }
                                                     )
                                                 }

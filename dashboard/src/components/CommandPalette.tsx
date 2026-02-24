@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useEffect, useState, useMemo} from 'react'
-import {useCommandPalette} from '@/contexts/command-palette-context'
+import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'

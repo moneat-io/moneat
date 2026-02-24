@@ -18,7 +18,7 @@ import {useQuery} from '@tanstack/react-query'
 import {ChevronDown, Search, Plus, Settings, LogOut} from 'lucide-react'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
-import {useCommandPalette} from '@/contexts/command-palette-context'
+import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {cn} from '@/lib/utils'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {

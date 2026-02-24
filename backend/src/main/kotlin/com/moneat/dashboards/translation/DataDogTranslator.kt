@@ -337,23 +337,31 @@ class DataDogTranslator : DashboardTranslator {
             put("layout_type", "ordered")
             put("widgets", JsonArray(widgets))
             if (dashboard.variables.isNotEmpty()) {
-                put("template_variables", buildJsonArray {
-                    dashboard.variables.forEach { v ->
-                        add(buildJsonObject {
-                            put("name", v.name)
-                            v.defaultValue?.let { put("default", it) }
-                            v.label?.let { label ->
-                                val prefix = label.substringBefore(":", label)
-                                put("prefix", prefix)
-                            }
-                            if (v.options.isNotEmpty()) {
-                                put("available_values", buildJsonArray {
-                                    v.options.forEach { opt -> add(JsonPrimitive(opt)) }
-                                })
-                            }
-                        })
+                put(
+                    "template_variables",
+                    buildJsonArray {
+                        dashboard.variables.forEach { v ->
+                            add(
+                                buildJsonObject {
+                                    put("name", v.name)
+                                    v.defaultValue?.let { put("default", it) }
+                                    v.label?.let { label ->
+                                        val prefix = label.substringBefore(":", label)
+                                        put("prefix", prefix)
+                                    }
+                                    if (v.options.isNotEmpty()) {
+                                        put(
+                                            "available_values",
+                                            buildJsonArray {
+                                                v.options.forEach { opt -> add(JsonPrimitive(opt)) }
+                                            }
+                                        )
+                                    }
+                                }
+                            )
+                        }
                     }
-                })
+                )
             }
         }
     }

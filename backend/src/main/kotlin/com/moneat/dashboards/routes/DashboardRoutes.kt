@@ -123,7 +123,12 @@ fun Route.customDashboardRoutes(
         val sources = dataSourceService.listDataSources(orgId)
         val promSource = sources.firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
         if (promSource == null) {
-            logger.warn { "No Prometheus datasource found for org $orgId (${sources.size} sources: ${sources.map { "${it.id}:${it.sourceType}" }}), cannot resolve __prometheus for rawQuery=${dsl.rawQuery?.take(80)}" }
+            logger.warn {
+                val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
+                val shortQuery = dsl.rawQuery?.take(80) ?: ""
+                "No Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
+                    "cannot resolve __prometheus for rawQuery=$shortQuery"
+            }
             return dsl
         }
         logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=${dsl.rawQuery?.take(80)}" }
@@ -321,7 +326,8 @@ fun Route.customDashboardRoutes(
                     request.queryConfig
                 }
                 val effectiveQuery = resolvePrometheusDataSource(
-                    queryEngine.applyVariables(withTimeRange, request.variables), orgId
+                    queryEngine.applyVariables(withTimeRange, request.variables),
+                    orgId
                 )
 
                 try {
@@ -409,7 +415,8 @@ fun Route.customDashboardRoutes(
                         query
                     }
                     val effectiveQuery = resolvePrometheusDataSource(
-                        queryEngine.applyVariables(withTimeRange, request.variables), orgId
+                        queryEngine.applyVariables(withTimeRange, request.variables),
+                        orgId
                     )
 
                     try {
@@ -480,7 +487,10 @@ fun Route.customDashboardRoutes(
 
                     val creds = dataSourceService.getDecryptedCredentials(promSource.id, orgId) ?: continue
                     val options = dataSourceExecutor.executeLabelValuesQuery(
-                        promSource.host, promSource.port, creds, substituted
+                        promSource.host,
+                        promSource.port,
+                        creds,
+                        substituted
                     )
                     if (options.isNotEmpty()) {
                         resolved[v.name] = options
@@ -535,7 +545,10 @@ fun Route.customDashboardRoutes(
                         }
                     )
                     val created = dashboardService.createDashboard(orgId, userId.toLong(), createRequest)
-                    call.respond(HttpStatusCode.Created, DashboardImportResult(created, importResult.warnings, importResult.variables))
+                    call.respond(
+                        HttpStatusCode.Created,
+                        DashboardImportResult(created, importResult.warnings, importResult.variables)
+                    )
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to import dashboard" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
