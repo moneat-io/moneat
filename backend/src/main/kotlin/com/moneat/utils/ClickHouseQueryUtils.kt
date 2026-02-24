@@ -35,10 +35,11 @@ object ClickHouseQueryUtils {
         projectId: Long,
         columnName: String = "project_id"
     ): String {
-        return if (projectId < 0) {
-            "toInt64($columnName) = $projectId"
-        } else {
-            "$columnName = $projectId"
+        return when {
+            // Demo project -1 means "all demo projects" — show cross-project data
+            projectId == -1L -> "toInt64($columnName) IN (-1, -2, -3)"
+            projectId < 0 -> "toInt64($columnName) = $projectId"
+            else -> "$columnName = $projectId"
         }
     }
 
