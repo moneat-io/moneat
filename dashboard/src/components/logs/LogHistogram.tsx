@@ -89,13 +89,15 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
       if (ai === -1 && bi === -1) return a.localeCompare(b)
       return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
     })
-    const timestamps = data.map((d) => d.timestampMs)
-    const minTs = timestamps.length > 0 ? Math.min(...timestamps) : 0
-    const maxTs = timestamps.length > 0 ? Math.max(...timestamps) : minTs
+    const firstTs = data[0]?.timestampMs ?? 0
+    const lastTs = data[data.length - 1]?.timestampMs ?? firstTs
+    const bucketInterval = data.length > 1 ? data[1].timestampMs - data[0].timestampMs : 60_000
     return {
       chartData: data,
       groupKeys: sortedKeys,
-      totalRangeMs: Math.max(maxTs - minTs, 60_000),
+      totalRangeMs: Math.max(lastTs - firstTs, 60_000),
+      domainMin: firstTs - bucketInterval / 2,
+      domainMax: lastTs + bucketInterval / 2,
     }
   }, [buckets, grouped])
 
