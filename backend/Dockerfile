@@ -13,16 +13,10 @@ COPY backend/gradle ./gradle
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle dependencies --no-daemon --build-cache || true
 COPY backend/src ./src
-COPY enterprise/backend /enterprise/backend
 # Copy built email templates from email-builder stage into src so they're processed as resources
 COPY --from=email-builder /emails/build/templates/email ./src/main/resources/email-templates/
-ARG ENTERPRISE=false
 RUN --mount=type=cache,target=/home/gradle/.gradle \
-    if [ "$ENTERPRISE" = "true" ]; then \
-      gradle shadowJar -Penterprise -PenterprisePath=/enterprise/backend --no-daemon --build-cache; \
-    else \
-      gradle shadowJar --no-daemon --build-cache; \
-    fi
+    gradle shadowJar --no-daemon --build-cache
 
 FROM eclipse-temurin:25.0.2_10-jre
 RUN groupadd --system moneat && useradd --system --gid moneat --home /app --create-home moneat

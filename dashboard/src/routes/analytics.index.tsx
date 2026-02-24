@@ -1,7 +1,3 @@
-// Moneat Enterprise - proprietary module
-// Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.
-
 import {useState, useCallback} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
