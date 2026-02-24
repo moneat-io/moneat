@@ -72,7 +72,7 @@ stripe-java = { module = "com.stripe:stripe-java", version = "31.3.0" }
 
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.11" }
-jsonpath = { module = "com.jayway.jsonpath:json-path", version = "2.10.0" }
+jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
 
 # Environment
 dotenv-kotlin = { module = "io.github.cdimascio:dotenv-kotlin", version = "6.5.1" }
