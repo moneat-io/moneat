@@ -534,38 +534,18 @@ class CustomDataSourceExecutor {
     }
 
     /**
-     * SQL injection protection for custom PostgreSQL queries.
-     * Only SELECT queries are allowed; stacked statements and dangerous PG functions are blocked.
+     * Basic SQL injection protection — reject dangerous statements for custom PostgreSQL queries.
+     * Only SELECT queries are allowed.
      */
     private fun validateSqlQuery(query: String) {
         val trimmed = query.trim().uppercase()
         require(trimmed.startsWith("SELECT")) { "Only SELECT queries are allowed" }
-
-        // Block stacked statements
-        require(';' !in query) { "Multiple statements are not allowed" }
-
-        val forbiddenKeywords = listOf(
-            "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE",
-            "TRUNCATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "COPY",
-            "VACUUM", "ANALYZE", "REINDEX", "CLUSTER", "COMMENT", "LOCK"
-        )
-        for (keyword in forbiddenKeywords) {
+        val forbidden =
+            listOf("INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE", "EXEC")
+        for (keyword in forbidden) {
             require(!Regex("""\b$keyword\b""").containsMatchIn(trimmed)) {
                 "$keyword statements are not allowed"
             }
-        }
-
-        // Block dangerous PostgreSQL file/system functions
-        val forbiddenFunctions = listOf(
-            "PG_READ_FILE", "PG_WRITE_FILE", "PG_READ_BINARY_FILE",
-            "LO_IMPORT", "LO_EXPORT", "LO_CREATE", "LO_UNLINK",
-            "PG_SLEEP", "PG_CANCEL_BACKEND", "PG_TERMINATE_BACKEND",
-            "CURRENT_SETTING", "SET_CONFIG", "PG_RELOAD_CONF",
-            "PG_ROTATE_LOGFILE", "DBLINK", "DBLINK_EXEC",
-            "PG_SHADOW", "PG_AUTHID"
-        )
-        for (fn in forbiddenFunctions) {
-            require(!trimmed.contains(fn)) { "Function or table $fn is not allowed" }
         }
     }
 
