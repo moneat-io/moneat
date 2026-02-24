@@ -131,21 +131,36 @@ export function DashboardGrid({
   }, [])
 
   const layout = useMemo<Layout>(
-    () =>
-      visibleWidgets.map((w): LayoutItem => ({
-        i: String(w.id),
-        x: w.grid_x,
-        y: w.grid_y,
-        w: w.grid_w,
-        h: w.grid_h,
-        isDraggable: isEditing,
-        isResizable: isEditing && w.widget_type !== 'section',
-        minW: w.widget_type === 'section' ? 12 : 2,
-        minH: w.widget_type === 'section' ? 1 : (w.widget_type === 'stat' || w.widget_type === 'gauge' ? 2 : 4),
-        maxH: w.widget_type === 'section' ? 1 : undefined,
-        // Sections must NOT be static — static items act as compaction barriers,
-        // which can push sibling widgets below the next section header visually.
-      })),
+    () => {
+      const needsScaling = visibleWidgets.some(w => 
+        w.widget_type !== 'section' && 
+        w.widget_type !== 'stat' && 
+        w.widget_type !== 'gauge' && 
+        w.widget_type !== 'text' &&
+        w.grid_h <= 4
+      )
+
+      return visibleWidgets.map((w): LayoutItem => {
+        const h = needsScaling 
+          ? (w.widget_type === 'section' ? 1 : w.grid_h * 2)
+          : w.grid_h
+          
+        const y = needsScaling ? w.grid_y * 2 : w.grid_y
+
+        return {
+          i: String(w.id),
+          x: w.grid_x,
+          y: y,
+          w: w.grid_w,
+          h: h,
+          isDraggable: isEditing,
+          isResizable: isEditing && w.widget_type !== 'section',
+          minW: w.widget_type === 'section' ? 12 : 2,
+          minH: w.widget_type === 'section' ? 1 : (w.widget_type === 'stat' || w.widget_type === 'gauge' ? 4 : 6),
+          maxH: w.widget_type === 'section' ? 1 : undefined,
+        }
+      })
+    },
     [visibleWidgets, isEditing]
   )
 
