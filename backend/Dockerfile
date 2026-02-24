@@ -20,7 +20,7 @@ ARG ENTERPRISE=false
 RUN --mount=type=bind,source=.,target=/repo,readonly \
     --mount=type=cache,target=/home/gradle/.gradle \
     if [ "$ENTERPRISE" = "true" ] && [ -d /repo/enterprise/backend ]; then \
-      cp -r /repo/enterprise/backend /enterprise/backend && \
+      mkdir -p /enterprise && cp -r /repo/enterprise/backend /enterprise/backend && \
       gradle shadowJar -Penterprise -PenterprisePath=/enterprise/backend --no-daemon --build-cache; \
     else \
       gradle shadowJar --no-daemon --build-cache; \
