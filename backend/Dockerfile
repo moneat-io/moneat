@@ -13,7 +13,13 @@ COPY backend/gradle ./gradle
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle dependencies --no-daemon --build-cache || true
 COPY backend/src ./src
-COPY enterprise/backend /enterprise/backend
+# Copy enterprise backend sources when present (open-source builds skip this)
+RUN --mount=type=bind,source=.,target=/repo,readonly \
+    if [ -d /repo/enterprise/backend ]; then \
+      cp -r /repo/enterprise/backend /enterprise/backend; \
+    else \
+      mkdir -p /enterprise/backend; \
+    fi
 # Copy built email templates from email-builder stage into src so they're processed as resources
 COPY --from=email-builder /emails/build/templates/email ./src/main/resources/email-templates/
 ARG ENTERPRISE=false

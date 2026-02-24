@@ -22,7 +22,6 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingCalculatorRouteImport } from './routes/pricing-calculator'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as OnCallRouteImport } from './routes/on-call'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -35,7 +34,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
 import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
-import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
@@ -48,10 +46,6 @@ import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
-import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
-import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
-import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
-import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
 import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
 import { Route as LegalTermsRouteImport } from './routes/legal.terms'
 import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
@@ -72,10 +66,6 @@ import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdLogsRouteImport } from './routes/projects.$projectId.logs'
-import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
-import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
-import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
-import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 import { Route as ProjectsProjectIdTracesTraceIdRouteImport } from './routes/projects.$projectId.traces.$traceId'
@@ -146,11 +136,6 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OnCallRoute = OnCallRouteImport.update({
-  id: '/on-call',
-  path: '/on-call',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -210,11 +195,6 @@ const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PerformanceRoute,
-} as any)
-const OnCallIndexRoute = OnCallIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => OnCallRoute,
 } as any)
 const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
   id: '/monitoring/',
@@ -277,27 +257,6 @@ const PerformanceTransactionIdRoute =
     path: '/$transactionId',
     getParentRoute: () => PerformanceRoute,
   } as any)
-const OnCallSchedulesRoute = OnCallSchedulesRouteImport.update({
-  id: '/schedules',
-  path: '/schedules',
-  getParentRoute: () => OnCallRoute,
-} as any)
-const OnCallIncidentsRoute = OnCallIncidentsRouteImport.update({
-  id: '/incidents',
-  path: '/incidents',
-  getParentRoute: () => OnCallRoute,
-} as any)
-const OnCallEscalationPoliciesRoute =
-  OnCallEscalationPoliciesRouteImport.update({
-    id: '/escalation-policies',
-    path: '/escalation-policies',
-    getParentRoute: () => OnCallRoute,
-  } as any)
-const OnCallDeclaredIncidentsRoute = OnCallDeclaredIncidentsRouteImport.update({
-  id: '/declared-incidents',
-  path: '/declared-incidents',
-  getParentRoute: () => OnCallRoute,
-} as any)
 const MonitoringSystemIdRoute = MonitoringSystemIdRouteImport.update({
   id: '/monitoring/$systemId',
   path: '/monitoring/$systemId',
@@ -399,28 +358,6 @@ const ProjectsProjectIdLogsRoute = ProjectsProjectIdLogsRouteImport.update({
   path: '/logs',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
-const OnCallIncidentsIncidentIdRoute =
-  OnCallIncidentsIncidentIdRouteImport.update({
-    id: '/$incidentId',
-    path: '/$incidentId',
-    getParentRoute: () => OnCallIncidentsRoute,
-  } as any)
-const OnCallDeclaredIncidentsIncidentIdRoute =
-  OnCallDeclaredIncidentsIncidentIdRouteImport.update({
-    id: '/$incidentId',
-    path: '/$incidentId',
-    getParentRoute: () => OnCallDeclaredIncidentsRoute,
-  } as any)
-const AuthSsoCallbackRoute = AuthSsoCallbackRouteImport.update({
-  id: '/auth/sso/callback',
-  path: '/auth/sso/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthOauthCallbackRoute = AuthOauthCallbackRouteImport.update({
-  id: '/auth/oauth/callback',
-  path: '/auth/oauth/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AiTracesTraceIdRoute = AiTracesTraceIdRouteImport.update({
   id: '/ai/traces/$traceId',
   path: '/ai/traces/$traceId',
@@ -454,7 +391,6 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
-  '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
   '/pricing-calculator': typeof PricingCalculatorRoute
@@ -486,10 +422,6 @@ export interface FileRoutesByFullPath {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
-  '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
-  '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
-  '/on-call/schedules': typeof OnCallSchedulesRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
@@ -502,16 +434,11 @@ export interface FileRoutesByFullPath {
   '/analytics/': typeof AnalyticsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
-  '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
-  '/auth/oauth/callback': typeof AuthOauthCallbackRoute
-  '/auth/sso/callback': typeof AuthSsoCallbackRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
-  '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
@@ -555,10 +482,6 @@ export interface FileRoutesByTo {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
-  '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
-  '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
-  '/on-call/schedules': typeof OnCallSchedulesRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
@@ -571,16 +494,11 @@ export interface FileRoutesByTo {
   '/analytics': typeof AnalyticsIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
-  '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
   '/status-pages': typeof StatusPagesIndexRoute
   '/uptime': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
-  '/auth/oauth/callback': typeof AuthOauthCallbackRoute
-  '/auth/sso/callback': typeof AuthSsoCallbackRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
-  '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
@@ -597,7 +515,6 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
-  '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
   '/pricing-calculator': typeof PricingCalculatorRoute
@@ -629,10 +546,6 @@ export interface FileRoutesById {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
-  '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
-  '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
-  '/on-call/schedules': typeof OnCallSchedulesRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
@@ -645,16 +558,11 @@ export interface FileRoutesById {
   '/analytics/': typeof AnalyticsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
-  '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
-  '/auth/oauth/callback': typeof AuthOauthCallbackRoute
-  '/auth/sso/callback': typeof AuthSsoCallbackRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
-  '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
@@ -672,7 +580,6 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
-    | '/on-call'
     | '/onboarding'
     | '/performance'
     | '/pricing-calculator'
@@ -704,10 +611,6 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
-    | '/on-call/declared-incidents'
-    | '/on-call/escalation-policies'
-    | '/on-call/incidents'
-    | '/on-call/schedules'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
@@ -720,16 +623,11 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/issues/'
     | '/monitoring/'
-    | '/on-call/'
     | '/performance/'
     | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/ai/traces/$traceId'
-    | '/auth/oauth/callback'
-    | '/auth/sso/callback'
-    | '/on-call/declared-incidents/$incidentId'
-    | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/spans/$spanId'
@@ -773,10 +671,6 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
-    | '/on-call/declared-incidents'
-    | '/on-call/escalation-policies'
-    | '/on-call/incidents'
-    | '/on-call/schedules'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
@@ -789,16 +683,11 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/issues'
     | '/monitoring'
-    | '/on-call'
     | '/performance'
     | '/status-pages'
     | '/uptime'
     | '/admin/organizations/$orgId'
     | '/ai/traces/$traceId'
-    | '/auth/oauth/callback'
-    | '/auth/sso/callback'
-    | '/on-call/declared-incidents/$incidentId'
-    | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/spans/$spanId'
@@ -814,7 +703,6 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
-    | '/on-call'
     | '/onboarding'
     | '/performance'
     | '/pricing-calculator'
@@ -846,10 +734,6 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
-    | '/on-call/declared-incidents'
-    | '/on-call/escalation-policies'
-    | '/on-call/incidents'
-    | '/on-call/schedules'
     | '/performance/$transactionId'
     | '/projects/$projectId'
     | '/releases/$version'
@@ -862,16 +746,11 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/issues/'
     | '/monitoring/'
-    | '/on-call/'
     | '/performance/'
     | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/ai/traces/$traceId'
-    | '/auth/oauth/callback'
-    | '/auth/sso/callback'
-    | '/on-call/declared-incidents/$incidentId'
-    | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/spans/$spanId'
@@ -888,7 +767,6 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
   LoginRoute: typeof LoginRoute
-  OnCallRoute: typeof OnCallRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
   PricingCalculatorRoute: typeof PricingCalculatorRoute
@@ -917,8 +795,6 @@ export interface RootRouteChildren {
   StatusPagesIndexRoute: typeof StatusPagesIndexRoute
   UptimeIndexRoute: typeof UptimeIndexRoute
   AiTracesTraceIdRoute: typeof AiTracesTraceIdRoute
-  AuthOauthCallbackRoute: typeof AuthOauthCallbackRoute
-  AuthSsoCallbackRoute: typeof AuthSsoCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1014,13 +890,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/on-call': {
-      id: '/on-call'
-      path: '/on-call'
-      fullPath: '/on-call'
-      preLoaderRoute: typeof OnCallRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -1105,13 +974,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PerformanceIndexRouteImport
       parentRoute: typeof PerformanceRoute
     }
-    '/on-call/': {
-      id: '/on-call/'
-      path: '/'
-      fullPath: '/on-call/'
-      preLoaderRoute: typeof OnCallIndexRouteImport
-      parentRoute: typeof OnCallRoute
-    }
     '/monitoring/': {
       id: '/monitoring/'
       path: '/monitoring'
@@ -1195,34 +1057,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/performance/$transactionId'
       preLoaderRoute: typeof PerformanceTransactionIdRouteImport
       parentRoute: typeof PerformanceRoute
-    }
-    '/on-call/schedules': {
-      id: '/on-call/schedules'
-      path: '/schedules'
-      fullPath: '/on-call/schedules'
-      preLoaderRoute: typeof OnCallSchedulesRouteImport
-      parentRoute: typeof OnCallRoute
-    }
-    '/on-call/incidents': {
-      id: '/on-call/incidents'
-      path: '/incidents'
-      fullPath: '/on-call/incidents'
-      preLoaderRoute: typeof OnCallIncidentsRouteImport
-      parentRoute: typeof OnCallRoute
-    }
-    '/on-call/escalation-policies': {
-      id: '/on-call/escalation-policies'
-      path: '/escalation-policies'
-      fullPath: '/on-call/escalation-policies'
-      preLoaderRoute: typeof OnCallEscalationPoliciesRouteImport
-      parentRoute: typeof OnCallRoute
-    }
-    '/on-call/declared-incidents': {
-      id: '/on-call/declared-incidents'
-      path: '/declared-incidents'
-      fullPath: '/on-call/declared-incidents'
-      preLoaderRoute: typeof OnCallDeclaredIncidentsRouteImport
-      parentRoute: typeof OnCallRoute
     }
     '/monitoring/$systemId': {
       id: '/monitoring/$systemId'
@@ -1364,34 +1198,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdLogsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
-    '/on-call/incidents/$incidentId': {
-      id: '/on-call/incidents/$incidentId'
-      path: '/$incidentId'
-      fullPath: '/on-call/incidents/$incidentId'
-      preLoaderRoute: typeof OnCallIncidentsIncidentIdRouteImport
-      parentRoute: typeof OnCallIncidentsRoute
-    }
-    '/on-call/declared-incidents/$incidentId': {
-      id: '/on-call/declared-incidents/$incidentId'
-      path: '/$incidentId'
-      fullPath: '/on-call/declared-incidents/$incidentId'
-      preLoaderRoute: typeof OnCallDeclaredIncidentsIncidentIdRouteImport
-      parentRoute: typeof OnCallDeclaredIncidentsRoute
-    }
-    '/auth/sso/callback': {
-      id: '/auth/sso/callback'
-      path: '/auth/sso/callback'
-      fullPath: '/auth/sso/callback'
-      preLoaderRoute: typeof AuthSsoCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/oauth/callback': {
-      id: '/auth/oauth/callback'
-      path: '/auth/oauth/callback'
-      fullPath: '/auth/oauth/callback'
-      preLoaderRoute: typeof AuthOauthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/ai/traces/$traceId': {
       id: '/ai/traces/$traceId'
       path: '/ai/traces/$traceId'
@@ -1490,52 +1296,6 @@ const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
   FeedbackRouteChildren,
 )
 
-interface OnCallDeclaredIncidentsRouteChildren {
-  OnCallDeclaredIncidentsIncidentIdRoute: typeof OnCallDeclaredIncidentsIncidentIdRoute
-}
-
-const OnCallDeclaredIncidentsRouteChildren: OnCallDeclaredIncidentsRouteChildren =
-  {
-    OnCallDeclaredIncidentsIncidentIdRoute:
-      OnCallDeclaredIncidentsIncidentIdRoute,
-  }
-
-const OnCallDeclaredIncidentsRouteWithChildren =
-  OnCallDeclaredIncidentsRoute._addFileChildren(
-    OnCallDeclaredIncidentsRouteChildren,
-  )
-
-interface OnCallIncidentsRouteChildren {
-  OnCallIncidentsIncidentIdRoute: typeof OnCallIncidentsIncidentIdRoute
-}
-
-const OnCallIncidentsRouteChildren: OnCallIncidentsRouteChildren = {
-  OnCallIncidentsIncidentIdRoute: OnCallIncidentsIncidentIdRoute,
-}
-
-const OnCallIncidentsRouteWithChildren = OnCallIncidentsRoute._addFileChildren(
-  OnCallIncidentsRouteChildren,
-)
-
-interface OnCallRouteChildren {
-  OnCallDeclaredIncidentsRoute: typeof OnCallDeclaredIncidentsRouteWithChildren
-  OnCallEscalationPoliciesRoute: typeof OnCallEscalationPoliciesRoute
-  OnCallIncidentsRoute: typeof OnCallIncidentsRouteWithChildren
-  OnCallSchedulesRoute: typeof OnCallSchedulesRoute
-  OnCallIndexRoute: typeof OnCallIndexRoute
-}
-
-const OnCallRouteChildren: OnCallRouteChildren = {
-  OnCallDeclaredIncidentsRoute: OnCallDeclaredIncidentsRouteWithChildren,
-  OnCallEscalationPoliciesRoute: OnCallEscalationPoliciesRoute,
-  OnCallIncidentsRoute: OnCallIncidentsRouteWithChildren,
-  OnCallSchedulesRoute: OnCallSchedulesRoute,
-  OnCallIndexRoute: OnCallIndexRoute,
-}
-
-const OnCallRouteWithChildren =
-  OnCallRoute._addFileChildren(OnCallRouteChildren)
-
 interface PerformanceRouteChildren {
   PerformanceTransactionIdRoute: typeof PerformanceTransactionIdRoute
   PerformanceIndexRoute: typeof PerformanceIndexRoute
@@ -1612,7 +1372,6 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,
   LoginRoute: LoginRoute,
-  OnCallRoute: OnCallRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,
   PricingCalculatorRoute: PricingCalculatorRoute,
@@ -1641,8 +1400,6 @@ const rootRouteChildren: RootRouteChildren = {
   StatusPagesIndexRoute: StatusPagesIndexRoute,
   UptimeIndexRoute: UptimeIndexRoute,
   AiTracesTraceIdRoute: AiTracesTraceIdRoute,
-  AuthOauthCallbackRoute: AuthOauthCallbackRoute,
-  AuthSsoCallbackRoute: AuthSsoCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
