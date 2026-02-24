@@ -32,7 +32,7 @@ class ClickHouseQueryUtilsTest {
     @Test
     fun `projectIdClause returns toInt64 cast for negative ID`() {
         val clause = ClickHouseQueryUtils.projectIdClause(-1L)
-        assertEquals("toInt64(project_id) = -1", clause)
+        assertEquals("toInt64(project_id) IN (-1, -2, -3)", clause)
     }
 
     @Test

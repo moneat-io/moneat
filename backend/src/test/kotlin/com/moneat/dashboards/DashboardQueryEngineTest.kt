@@ -374,7 +374,7 @@ class DashboardQueryEngineTest {
     fun `buildWhereClauses with demo epoch uses toDateTime64`() {
         val dsl = QueryDsl(dataSource = "events")
         val clauses = engine.buildWhereClauses(dsl, -1, "timestamp", 1706745600000L, 90)
-        assertTrue(clauses.any { it.contains("toInt64(project_id) = -1") })
+        assertTrue(clauses.any { it.contains("toInt64(project_id) IN (-1, -2, -3)") })
         assertTrue(clauses.any { it.contains("toDateTime64") })
     }
 
