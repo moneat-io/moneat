@@ -497,7 +497,7 @@ function DashboardPage() {
                 accent="amber"
               />
               <StatsCard
-                title="Events (24h)"
+                title="Errors (24h)"
                 value={formatCount(stats?.totalEvents ?? 0)}
                 icon={Activity}
                 accent="blue"
@@ -541,7 +541,7 @@ function DashboardPage() {
           <div className="mb-5 h-[100px]">
             <EventsChart
               data={stats.eventsTimeline}
-              title="Events — Last 24 Hours"
+              title="Errors — Last 24 Hours"
               fillHeight
               compact
             />
