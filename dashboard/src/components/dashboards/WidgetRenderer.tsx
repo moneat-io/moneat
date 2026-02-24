@@ -418,6 +418,21 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
     [data, xKey, labelKeys, valueKeys, hasLabels]
   )
 
+  // Recharts type="number" scale="time" requires numeric epoch ms values.
+  // ClickHouse returns time_bucket as a string ("2026-02-24 19:00:00.000"), so
+  // we normalize the time key to epoch ms for correct chart positioning.
+  const chartData = useMemo(() =>
+    pivoted.map(row => {
+      const v = row[xKey]
+      if (typeof v === 'string') {
+        const ms = Date.parse(v)
+        return isNaN(ms) ? row : {...row, [xKey]: ms}
+      }
+      return row
+    }),
+    [pivoted, xKey]
+  )
+
   const thresholds = parseThresholds(dc)
   const legendProps = getLegendProps(dc)
   const yDomain = getYAxisDomain(dc)
@@ -441,7 +456,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   return (
     <DebouncedChartContainer>
       {(w, h) => useArea ? (
-        <AreaChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
+        <AreaChart width={w} height={h} data={chartData} margin={CHART_MARGIN}>
           {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
           <XAxis
             dataKey={xKey}
@@ -486,7 +501,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
           ))}
         </AreaChart>
       ) : (
-        <LineChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
+        <LineChart width={w} height={h} data={chartData} margin={CHART_MARGIN}>
           {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
           <XAxis
             dataKey={xKey}
@@ -552,7 +567,12 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
     : formatTooltipValue
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
-    const {pivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const {pivoted: rawPivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const pivoted = rawPivoted.map(row => {
+      const v = row[timeKey!]
+      if (typeof v === 'string') { const ms = Date.parse(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
+      return row
+    })
     return (
       <DebouncedChartContainer>
         {(w, h) => (
