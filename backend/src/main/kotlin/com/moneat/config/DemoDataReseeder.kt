@@ -42,10 +42,12 @@ object DemoDataReseeder {
             val freshCoreCount = checkFreshDataCount()
             val freshLlmCount = checkFreshLlmDataCount()
             val freshAnalyticsCount = checkFreshAnalyticsDataCount()
+            val freshLogsCount = checkFreshLogsCount()
 
-            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0) {
+            if (freshCoreCount > 0 && freshLlmCount > 0 && freshAnalyticsCount > 0 && freshLogsCount > 0) {
                 logger.info {
-                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, $freshAnalyticsCount recent analytics events), skipping reseed"
+                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, " +
+                        "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs), skipping reseed"
                 }
                 return
             }
@@ -74,6 +76,14 @@ object DemoDataReseeder {
                 logger.info { "Analytics demo data is stale or missing, reseeding..." }
                 purgeAnalyticsDemoData()
                 reseedAnalyticsEvents()
+            }
+
+            if (freshLogsCount > 0) {
+                logger.info { "Log demo data is fresh ($freshLogsCount recent logs), skipping logs reseed" }
+            } else {
+                logger.info { "Log demo data is stale or missing, reseeding..." }
+                purgeLogsDemoData()
+                reseedLogs()
             }
 
             logger.info { "Demo data reseed complete" }
@@ -793,5 +803,149 @@ object DemoDataReseeder {
 
         runCatching { ClickHouseClient.execute(sql) }
             .onFailure { logger.warn { "Reseed analytics_events failed (non-fatal): ${it.message}" } }
+    }
+
+    private suspend fun checkFreshLogsCount(): Long {
+        val query =
+            """
+            SELECT count() as cnt
+            FROM logs
+            WHERE project_id IN ($P1, $P2, $P3)
+                AND timestamp >= now() - INTERVAL 2 HOUR
+            """.trimIndent()
+        return runCatching {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299) return 0
+            body.trim().toLongOrNull() ?: 0
+        }.getOrElse {
+            logger.warn { "Failed to check fresh logs demo data (non-fatal): ${it.message}" }
+            0
+        }
+    }
+
+    private suspend fun purgeLogsDemoData() {
+        runCatching {
+            ClickHouseClient.execute("ALTER TABLE logs DELETE WHERE project_id IN ($P1, $P2, $P3)")
+        }.onFailure { logger.warn { "Purge logs failed (non-fatal): ${it.message}" } }
+    }
+
+    private suspend fun reseedLogs() {
+        val sql =
+            """
+            INSERT INTO logs (
+                log_id, project_id, timestamp, received_at, level, message, body,
+                service, environment, host, source, trace_id, span_id, tags,
+                container_name, container_id, container_image, resource_attributes
+            )
+            SELECT
+                generateUUIDv4() AS log_id,
+                $P1 AS project_id,
+                now64(3) - INTERVAL (
+                    CASE
+                        WHEN number < 80  THEN number % 10
+                        WHEN number < 160 THEN 10 + (number % 20)
+                        WHEN number < 240 THEN 30 + (number % 30)
+                        ELSE 60 + (number % 60)
+                    END * 60 + number % 60
+                ) SECOND AS timestamp,
+                now64(3) AS received_at,
+                CASE (number * 7 + 3) % 100
+                    WHEN 0 THEN 'debug'
+                    WHEN 1 THEN 'debug'
+                    WHEN 2 THEN 'debug'
+                    WHEN 3 THEN 'debug'
+                    WHEN 4 THEN 'debug'
+                    WHEN 5 THEN 'error'
+                    WHEN 6 THEN 'error'
+                    WHEN 7 THEN 'error'
+                    WHEN 8 THEN 'error'
+                    WHEN 9 THEN 'error'
+                    WHEN 10 THEN 'error'
+                    WHEN 11 THEN 'error'
+                    WHEN 12 THEN 'error'
+                    WHEN 13 THEN 'error'
+                    WHEN 14 THEN 'error'
+                    WHEN 15 THEN 'warn'
+                    WHEN 16 THEN 'warn'
+                    WHEN 17 THEN 'warn'
+                    WHEN 18 THEN 'warn'
+                    WHEN 19 THEN 'warn'
+                    WHEN 20 THEN 'warn'
+                    WHEN 21 THEN 'warn'
+                    WHEN 22 THEN 'warn'
+                    WHEN 23 THEN 'warn'
+                    WHEN 24 THEN 'warn'
+                    WHEN 25 THEN 'warn'
+                    WHEN 26 THEN 'warn'
+                    WHEN 27 THEN 'warn'
+                    WHEN 28 THEN 'warn'
+                    WHEN 29 THEN 'warn'
+                    WHEN 30 THEN 'warn'
+                    WHEN 31 THEN 'warn'
+                    WHEN 32 THEN 'warn'
+                    WHEN 33 THEN 'warn'
+                    WHEN 34 THEN 'warn'
+                    WHEN 35 THEN 'warn'
+                    WHEN 36 THEN 'warn'
+                    WHEN 37 THEN 'warn'
+                    WHEN 38 THEN 'warn'
+                    WHEN 39 THEN 'warn'
+                    ELSE 'info'
+                END AS level,
+                CASE number % 8
+                    WHEN 0 THEN concat('HTTP GET /api/products completed in ', toString(45 + number % 200), 'ms with status 200')
+                    WHEN 1 THEN concat('HTTP POST /api/orders completed in ', toString(123 + number % 300), 'ms with status 201')
+                    WHEN 2 THEN concat('User user', toString(number % 50), '@example.com authenticated successfully')
+                    WHEN 3 THEN concat('Cache miss for key: product:', toString(100 + number % 900))
+                    WHEN 4 THEN concat('Rate limit approaching for IP 192.168.1.', toString(number % 254), ': ', toString(950 + number % 50), '/1000 requests')
+                    WHEN 5 THEN concat('Database connection timeout after ', toString(30 + number % 30), 's for query: SELECT * FROM orders')
+                    WHEN 6 THEN concat('Payment processing failed for order ORD-', toString(10000 + number % 90000), ': card_declined')
+                    ELSE concat('Redis command executed: GET product:', toString(number % 500), ' in ', toString(2 + number % 20), 'ms')
+                END AS message,
+                CASE number % 8
+                    WHEN 0 THEN concat('HTTP GET /api/products completed in ', toString(45 + number % 200), 'ms with status 200')
+                    WHEN 1 THEN concat('HTTP POST /api/orders completed in ', toString(123 + number % 300), 'ms with status 201')
+                    WHEN 2 THEN concat('User user', toString(number % 50), '@example.com authenticated successfully')
+                    WHEN 3 THEN concat('Cache miss for key: product:', toString(100 + number % 900))
+                    WHEN 4 THEN concat('Rate limit approaching for IP 192.168.1.', toString(number % 254), ': ', toString(950 + number % 50), '/1000 requests')
+                    WHEN 5 THEN concat('Database connection timeout after ', toString(30 + number % 30), 's for query: SELECT * FROM orders')
+                    WHEN 6 THEN concat('Payment processing failed for order ORD-', toString(10000 + number % 90000), ': card_declined')
+                    ELSE concat('Redis command executed: GET product:', toString(number % 500), ' in ', toString(2 + number % 20), 'ms')
+                END AS body,
+                CASE number % 5
+                    WHEN 0 THEN 'api-server'
+                    WHEN 1 THEN 'auth-service'
+                    WHEN 2 THEN 'payment-processor'
+                    WHEN 3 THEN 'notification-service'
+                    ELSE 'cache-service'
+                END AS service,
+                CASE number % 7
+                    WHEN 0 THEN 'staging'
+                    ELSE 'production'
+                END AS environment,
+                CASE number % 5
+                    WHEN 0 THEN 'api-prod-1'
+                    WHEN 1 THEN 'api-prod-2'
+                    WHEN 2 THEN 'api-prod-3'
+                    WHEN 3 THEN 'worker-prod-1'
+                    ELSE 'worker-prod-2'
+                END AS host,
+                'sdk' AS source,
+                lower(hex(generateUUIDv4())) AS trace_id,
+                substring(lower(hex(generateUUIDv4())), 1, 16) AS span_id,
+                map(
+                    'service', CASE number % 5 WHEN 0 THEN 'api-server' WHEN 1 THEN 'auth-service' WHEN 2 THEN 'payment-processor' WHEN 3 THEN 'notification-service' ELSE 'cache-service' END,
+                    'environment', CASE number % 7 WHEN 0 THEN 'staging' ELSE 'production' END,
+                    'version', concat('1.', toString(number % 5), '.', toString(number % 10))
+                ) AS tags,
+                '' AS container_name,
+                '' AS container_id,
+                '' AS container_image,
+                map() AS resource_attributes
+            FROM numbers(300)
+            """.trimIndent()
+        runCatching { ClickHouseClient.execute(sql) }
+            .onFailure { logger.warn { "Reseed logs failed (non-fatal): ${it.message}" } }
     }
 }
