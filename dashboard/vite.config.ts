@@ -1,5 +1,5 @@
 import {defineConfig} from 'vite'
-import react from '@vitejs/plugin-react'
+import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import {TanStackRouterVite} from '@tanstack/router-vite-plugin'
 import path from 'path'
@@ -45,6 +45,18 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  optimizeDeps: {
+    include: [
+      'recharts',
+      'react-grid-layout',
+      'react-markdown',
+      'react-syntax-highlighter',
+      'rrweb',
+      'rrweb-player',
+      'date-fns',
+      'lucide-react',
+    ],
   },
   server: {
     host: true,

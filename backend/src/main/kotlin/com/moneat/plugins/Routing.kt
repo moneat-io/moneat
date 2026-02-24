@@ -18,6 +18,7 @@ package com.moneat.plugins
 
 import com.moneat.ai.aiChatRoutes
 import com.moneat.auth.routes.authRoutes
+import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.billing.routes.stripeWebhookRoutes
 import com.moneat.config.ClickHouseClient
@@ -199,5 +200,8 @@ fun Application.configureRouting() {
 
         // AI chat assistant endpoints
         aiChatRoutes()
+
+        // Custom dashboard builder endpoints
+        customDashboardRoutes()
     }
 }

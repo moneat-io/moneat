@@ -517,6 +517,75 @@ class SlackService {
         return success
     }
 
+    suspend fun sendDashboardAlert(
+        organizationId: Int,
+        alertName: String,
+        dashboardTitle: String,
+        widgetTitle: String,
+        condition: String,
+        threshold: String,
+        currentValue: String,
+        severity: String?,
+        dashboardId: Long,
+        baseUrl: String
+    ): Boolean {
+        val config = getSlackConfig(organizationId) ?: return false
+
+        val emoji = if (severity == "CRITICAL" || severity == "HIGH") "🔴" else "⚠️"
+        val color = when (severity) {
+            "CRITICAL" -> "#E01E5A"
+            "HIGH" -> "#E01E5A"
+            "MEDIUM" -> "#ECB22E"
+            else -> "#ECB22E"
+        }
+
+        val mainBlocks = listOf(
+            SlackBlock(
+                type = "header",
+                text = SlackText(type = "plain_text", text = "$emoji Dashboard Alert: $alertName", emoji = true)
+            )
+        )
+
+        val attachmentBlocks = listOf(
+            SlackBlock(
+                type = "section",
+                fields = listOf(
+                    SlackText(type = "mrkdwn", text = "*Dashboard:*\n$dashboardTitle"),
+                    SlackText(type = "mrkdwn", text = "*Widget:*\n$widgetTitle"),
+                    SlackText(type = "mrkdwn", text = "*Condition:*\n$condition $threshold"),
+                    SlackText(type = "mrkdwn", text = "*Current Value:*\n$currentValue")
+                )
+            ),
+            SlackBlock(
+                type = "actions",
+                elements = listOf(
+                    SlackElement(
+                        type = "button",
+                        text = SlackText(type = "plain_text", text = "View Dashboard"),
+                        url = "$baseUrl/dashboards/$dashboardId"
+                    )
+                )
+            )
+        )
+
+        val attachments = listOf(
+            SlackAttachment(
+                color = color,
+                blocks = attachmentBlocks,
+                fallback = "$emoji Dashboard Alert: $alertName"
+            )
+        )
+
+        val (success, _) = sendMessage(
+            accessToken = config.accessToken,
+            channel = config.channelId,
+            blocks = mainBlocks,
+            attachments = attachments,
+            fallbackText = "$emoji Dashboard Alert: $alertName - $condition $threshold (current: $currentValue)"
+        )
+        return success
+    }
+
     suspend fun sendErrorAlert(
         organizationId: Int,
         projectName: String,

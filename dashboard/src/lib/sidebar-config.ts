@@ -20,6 +20,7 @@ import {
   Bell,
   Brain,
   Globe,
+  LayoutDashboard,
   MessageSquare,
   Package,
   Play,
@@ -43,10 +44,11 @@ export const CONFIGURABLE_SIDEBAR_ITEMS: SidebarItem[] = [
   { key: 'monitoring', label: 'Monitoring', icon: Server },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'on-call', label: 'On-Call', icon: Bell },
+  { key: 'dashboards', label: 'Dashboards', icon: LayoutDashboard },
 ];
 
 // Always visible items (not configurable)
-export const ALWAYS_VISIBLE_ITEMS = ['dashboard', 'admin', 'settings'];
+export const ALWAYS_VISIBLE_ITEMS = ['overview', 'admin', 'settings'];
 
 /**
  * Check if a sidebar item should be visible based on user preferences

@@ -454,8 +454,8 @@ class NotificationService(private val emailService: EmailService) {
                 uniq(user_id) as unique_users
             FROM $clickhouseDb.events
             WHERE project_id IN (${projectIds.joinToString(",")})
-              AND timestamp >= $startMs
-              AND timestamp < $endMs
+              AND timestamp >= fromUnixTimestamp64Milli($startMs)
+              AND timestamp < fromUnixTimestamp64Milli($endMs)
             FORMAT JSON
             """.trimIndent()
 
@@ -489,8 +489,8 @@ class NotificationService(private val emailService: EmailService) {
                 count() as event_count
             FROM $clickhouseDb.events
             WHERE project_id IN (${projectIds.joinToString(",")})
-              AND timestamp >= $startMs
-              AND timestamp < $endMs
+              AND timestamp >= fromUnixTimestamp64Milli($startMs)
+              AND timestamp < fromUnixTimestamp64Milli($endMs)
               AND issue_id != ''
             GROUP BY issue_id
             ORDER BY event_count DESC

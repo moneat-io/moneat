@@ -19,14 +19,13 @@ package com.moneat.routes
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.services.PricingTierService
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.TestDatabaseHelper
 
 class PublicBillingRoutesTest {
     companion object {
@@ -38,19 +37,14 @@ class PublicBillingRoutesTest {
         // Initialize DB connection and schema once per test class
         if (!dbInitialized) {
             Database.connect(
-                url = "jdbc:h2:mem:moneat_public_billing;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_public_billing;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction {
-                SchemaUtils.create(PricingTierConfigs)
-            }
             dbInitialized = true
         }
 
-        // Clean up any existing test data from previous tests
-        transaction {
-            PricingTierConfigs.deleteAll()
-        }
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(PricingTierConfigs)
 
         transaction {
             PricingTierConfigs.insert {

@@ -17,16 +17,14 @@
 package com.moneat.services
 
 import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UptimeMonitors
 import com.moneat.uptime.services.UptimeService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -55,53 +53,44 @@ class UptimeServiceTest {
                 url = "jdbc:h2:mem:moneat_uptime_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    UptimeMonitors
-                )
-                exec(
-                    """
-                    CREATE TABLE IF NOT EXISTS subscriptions (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        organization_id INT NOT NULL,
-                        stripe_subscription_id VARCHAR(255),
-                        stripe_customer_id VARCHAR(255),
-                        plan VARCHAR(50) NOT NULL,
-                        status VARCHAR(50) NOT NULL,
-                        billing_interval VARCHAR(20) DEFAULT 'monthly' NOT NULL,
-                        current_period_start TIMESTAMP,
-                        current_period_end TIMESTAMP,
-                        pricing_tier_config_id INT,
-                        payg_budget_cents INT DEFAULT 0 NOT NULL,
-                        payg_used_units BIGINT DEFAULT 0 NOT NULL,
-                        payg_used_micros BIGINT DEFAULT 0 NOT NULL,
-                        pending_meter_units BIGINT DEFAULT 0 NOT NULL,
-                        pending_meter_batch_id VARCHAR(255),
-                        pending_meter_batch_units BIGINT DEFAULT 0 NOT NULL,
-                        stripe_base_item_id VARCHAR(255),
-                        stripe_overage_item_id VARCHAR(255),
-                        stripe_oncall_item_id VARCHAR(255),
-                        oncall_seats INT DEFAULT 0 NOT NULL,
-                        billing_grace_until TIMESTAMP,
-                        bonus_gb_bytes BIGINT DEFAULT 0 NOT NULL,
-                        bonus_units BIGINT DEFAULT 0 NOT NULL,
-                        bonus_granted_at TIMESTAMP,
-                        bonus_granted_by INT,
-                        bonus_reason VARCHAR(500)
-                    )
-                    """.trimIndent()
-                )
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+        // Drop and recreate schema for clean state
+        TestDatabaseHelper.resetSchema(Organizations, Users, UptimeMonitors)
         transaction {
-            UptimeMonitors.deleteAll()
-            Subscriptions.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
+            exec(
+                """
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    stripe_subscription_id VARCHAR(255),
+                    stripe_customer_id VARCHAR(255),
+                    plan VARCHAR(50) NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    billing_interval VARCHAR(20) DEFAULT 'monthly' NOT NULL,
+                    current_period_start TIMESTAMP,
+                    current_period_end TIMESTAMP,
+                    pricing_tier_config_id INT,
+                    payg_budget_cents INT DEFAULT 0 NOT NULL,
+                    payg_used_units BIGINT DEFAULT 0 NOT NULL,
+                    payg_used_micros BIGINT DEFAULT 0 NOT NULL,
+                    pending_meter_units BIGINT DEFAULT 0 NOT NULL,
+                    pending_meter_batch_id VARCHAR(255),
+                    pending_meter_batch_units BIGINT DEFAULT 0 NOT NULL,
+                    stripe_base_item_id VARCHAR(255),
+                    stripe_overage_item_id VARCHAR(255),
+                    stripe_oncall_item_id VARCHAR(255),
+                    oncall_seats INT DEFAULT 0 NOT NULL,
+                    billing_grace_until TIMESTAMP,
+                    bonus_gb_bytes BIGINT DEFAULT 0 NOT NULL,
+                    bonus_units BIGINT DEFAULT 0 NOT NULL,
+                    bonus_granted_at TIMESTAMP,
+                    bonus_granted_by INT,
+                    bonus_reason VARCHAR(500)
+                )
+                """.trimIndent()
+            )
         }
     }
 

@@ -21,8 +21,6 @@ import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -34,6 +32,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorAlertServiceSilenceTest {
     companion object {
@@ -60,23 +59,14 @@ class MonitorAlertServiceSilenceTest {
     fun setupDatabase() {
         if (db == null) {
             db = org.jetbrains.exposed.v1.jdbc.Database.connect(
-                url = "jdbc:h2:mem:moneat_monitor_silence;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_monitor_silence;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    AlertSilencePeriods
-                )
-            }
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            AlertSilencePeriods.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(Users, Organizations, AlertSilencePeriods)
     }
 
     // ===================== isThresholdTriggered (pure logic) =====================

@@ -25,8 +25,6 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -35,6 +33,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import com.moneat.testsupport.TestDatabaseHelper
 
 class AlertChannelServicesTest {
     companion object {
@@ -46,27 +45,15 @@ class AlertChannelServicesTest {
         if (db == null) {
             db = Database.connect(
                 url =
-                "jdbc:h2:mem:moneat_alert_channel_services;MODE=PostgreSQL;" +
+                "jdbc:h2:mem:moneat_alert_channel_services;" +
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            transaction(db!!) {
-                SchemaUtils.create(
-                    Organizations,
-                    Users,
-                    EmailsSent,
-                    OrganizationIntegrations
-                )
-            }
         }
-
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        transaction {
-            OrganizationIntegrations.deleteAll()
-            EmailsSent.deleteAll()
-            Users.deleteAll()
-            Organizations.deleteAll()
-        }
+
+        // Ensure schema exists (idempotent in H2) and clean between tests
+        TestDatabaseHelper.resetSchema(Users, Organizations, EmailsSent, OrganizationIntegrations)
     }
 
     private fun seedOrg(name: String = "Channel Org"): Int =

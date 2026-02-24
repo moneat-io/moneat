@@ -328,7 +328,7 @@ interface NotificationPreferences {
   projects: ProjectNotificationPreference[]
 }
 
-export type AlertSource = 'SYSTEM_ALERT' | 'SYSTEM_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT'
+export type AlertSource = 'SYSTEM_ALERT' | 'SYSTEM_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT' | 'DASHBOARD_ALERT'
 
 export interface AlertNotificationPreference {
   alertSource: AlertSource
@@ -1925,6 +1925,300 @@ interface AnalyticsBreakdownApiResponse {
 interface AnalyticsRealtimeApiResponse {
   currentVisitors?: number
   visitors?: number
+}
+
+// Custom Dashboards types
+
+interface DashboardVariable {
+  name: string
+  label?: string | null
+  type: string
+  query?: string | null
+  default_value?: string | null
+  current?: string | null
+  options: string[]
+  datasource?: string | null
+}
+
+interface MetricDef {
+  function: string
+  field?: string | null
+  alias?: string | null
+}
+
+interface GroupByDef {
+  field: string
+  type: 'field' | 'time'
+  interval?: string | null
+}
+
+interface FilterDef {
+  field: string
+  op: string
+  value?: string | null
+  values?: string[] | null
+}
+
+interface OrderByDef {
+  field: string
+  direction: string
+}
+
+interface TimeRangeDef {
+  from: string
+  to: string
+}
+
+interface QueryDsl {
+  dataSource: string
+  metrics: MetricDef[]
+  groupBy: GroupByDef[]
+  filters: FilterDef[]
+  orderBy?: OrderByDef | null
+  limit: number
+  timeRange: TimeRangeDef
+  rawQuery?: string | null
+  ref_id?: string | null
+}
+
+interface DashboardWidget {
+  id: number
+  dashboard_id: number
+  title?: string | null
+  widget_type: string
+  grid_x: number
+  grid_y: number
+  grid_w: number
+  grid_h: number
+  query_configs: QueryDsl[]
+  display_config: Record<string, string>
+  sort_order: number
+}
+
+interface DashboardWidgetAlertNotificationChannels {
+  email: boolean
+  slack: boolean
+  discord: boolean
+}
+
+interface DashboardWidgetAlert {
+  id: number
+  widget_id: number
+  dashboard_id: number
+  name: string
+  condition: '>' | '<' | '>=' | '<=' | '=='
+  threshold: number
+  metric_index: number
+  duration_seconds: number
+  incident_severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+  enabled: boolean
+  notification_channels: DashboardWidgetAlertNotificationChannels
+  last_triggered_at: string | null
+  last_value: number | null
+  created_at: string
+  updated_at: string
+}
+
+interface CreateDashboardAlertRequest {
+  widget_id: number
+  name: string
+  condition: '>' | '<' | '>=' | '<=' | '=='
+  threshold: number
+  metric_index?: number
+  duration_seconds?: number
+  incident_severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+  enabled?: boolean
+  notification_channels?: DashboardWidgetAlertNotificationChannels
+}
+
+interface UpdateDashboardAlertRequest {
+  name?: string
+  condition?: '>' | '<' | '>=' | '<=' | '=='
+  threshold?: number
+  metric_index?: number
+  duration_seconds?: number
+  incident_severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+  enabled?: boolean
+  notification_channels?: DashboardWidgetAlertNotificationChannels
+}
+
+interface BatchQueryResult {
+  results: Record<string, Record<string, unknown>[]>
+}
+
+interface CustomDashboard {
+  id: number
+  org_id: number
+  project_id?: number | null
+  folder_id?: number | null
+  title: string
+  description?: string | null
+  layout_type: string
+  is_default: boolean
+  is_favorited?: boolean
+  variables?: DashboardVariable[]
+  created_by: number
+  created_at: string
+  updated_at: string
+  widgets: DashboardWidget[]
+}
+
+interface DashboardFolder {
+  id: number
+  org_id: number
+  name: string
+  color?: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+interface CreateDashboardRequest {
+  title: string
+  description?: string | null
+  project_id?: number | null
+  folder_id?: number | null
+  layout_type?: string
+  is_default?: boolean
+  variables?: DashboardVariable[]
+  widgets: CreateWidgetRequest[]
+}
+
+interface CreateFolderRequest {
+  name: string
+  color?: string | null
+  sort_order?: number
+}
+
+interface UpdateFolderRequest {
+  name?: string | null
+  color?: string | null
+  sort_order?: number | null
+}
+
+interface CreateWidgetRequest {
+  id?: number
+  title?: string | null
+  widget_type: string
+  grid_x: number
+  grid_y: number
+  grid_w: number
+  grid_h: number
+  query_configs: QueryDsl[]
+  display_config?: Record<string, string>
+  sort_order?: number
+}
+
+interface UpdateDashboardRequest {
+  title?: string | null
+  description?: string | null
+  folder_id?: number | null
+  layout_type?: string | null
+  is_default?: boolean | null
+  variables?: DashboardVariable[] | null
+  widgets?: CreateWidgetRequest[] | null
+}
+
+interface SearchResponse {
+  dashboards: CustomDashboard[]
+  projects: SearchProjectResponse[]
+}
+
+interface SearchProjectResponse {
+  id: number
+  name: string
+}
+
+interface ExecuteQueryRequest {
+  query_config: QueryDsl
+  time_range?: TimeRangeDef | null
+  variables?: Record<string, string>
+}
+
+interface DashboardImportResult {
+  dashboard: CustomDashboard
+  warnings: string[]
+  variables?: DashboardVariable[]
+}
+
+interface DataSourceField {
+  name: string
+  type: string
+  description: string
+}
+
+interface DataSourceInfo {
+  name: string
+  label: string
+  fields: DataSourceField[]
+}
+
+// Custom Data Sources types
+interface CustomDataSourceResponse {
+  id: number
+  org_id: number
+  name: string
+  description?: string
+  source_type: string
+  host: string
+  port?: number
+  database_name?: string
+  extra_config: Record<string, string>
+  enabled: boolean
+  created_by: number
+  created_at: string
+  updated_at: string
+  has_credentials: boolean
+}
+
+interface CreateCustomDataSourceRequest {
+  name: string
+  description?: string
+  source_type: string
+  host: string
+  port?: number
+  database_name?: string
+  username?: string
+  password?: string
+  api_key?: string
+  extra_config?: Record<string, string>
+}
+
+interface UpdateCustomDataSourceRequest {
+  name?: string
+  description?: string
+  host?: string
+  port?: number
+  database_name?: string
+  username?: string
+  password?: string
+  api_key?: string
+  extra_config?: Record<string, string>
+  enabled?: boolean
+}
+
+interface TestConnectionRequest {
+  source_type: string
+  host: string
+  port?: number
+  database_name?: string
+  username?: string
+  password?: string
+  api_key?: string
+}
+
+interface TestConnectionResult {
+  success: boolean
+  message: string
+  tables?: string[]
+  metrics?: string[]
+}
+
+interface CustomDataSourceQueryRequest {
+  data_source_id: number
+  query: string
+  limit?: number
+  time_range?: TimeRangeDef
 }
 
 class ApiClient {
@@ -4328,6 +4622,194 @@ class ApiClient {
     const stepsParam = steps.map(s => `steps[]=${encodeURIComponent(s)}`).join('&')
     return this.request<AnalyticsFunnelResponse>(`${API_BASE}/analytics/${projectId}/funnel${qs}${sep}${stepsParam}`)
   }
+
+  // Custom Dashboards API
+
+  async getDashboards(projectId?: number): Promise<CustomDashboard[]> {
+    const qs = projectId ? `?projectId=${projectId}` : ''
+    return this.request<CustomDashboard[]>(`${API_BASE}/dashboards${qs}`)
+  }
+
+  async getDashboard(id: number): Promise<CustomDashboard> {
+    return this.request<CustomDashboard>(`${API_BASE}/dashboards/${id}`)
+  }
+
+  async createDashboard(data: CreateDashboardRequest): Promise<CustomDashboard> {
+    return this.request<CustomDashboard>(`${API_BASE}/dashboards`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateDashboard(id: number, data: UpdateDashboardRequest): Promise<CustomDashboard> {
+    return this.request<CustomDashboard>(`${API_BASE}/dashboards/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteDashboard(id: number): Promise<void> {
+    await this.request<void>(`${API_BASE}/dashboards/${id}`, { method: 'DELETE' })
+  }
+
+  async toggleDashboardFavorite(id: number): Promise<{ is_favorited: boolean }> {
+    return this.request<{ is_favorited: boolean }>(`${API_BASE}/dashboards/${id}/favorite`, {
+      method: 'POST',
+    })
+  }
+
+  async moveDashboardToFolder(id: number, folderId: number | null): Promise<{ folder_id: number | null }> {
+    return this.request<{ folder_id: number | null }>(`${API_BASE}/dashboards/${id}/folder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder_id: folderId }),
+    })
+  }
+
+  async getDashboardFolders(): Promise<DashboardFolder[]> {
+    return this.request<DashboardFolder[]>(`${API_BASE}/dashboards/folders`)
+  }
+
+  async createDashboardFolder(data: CreateFolderRequest): Promise<DashboardFolder> {
+    return this.request<DashboardFolder>(`${API_BASE}/dashboards/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateDashboardFolder(id: number, data: UpdateFolderRequest): Promise<DashboardFolder> {
+    return this.request<DashboardFolder>(`${API_BASE}/dashboards/folders/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteDashboardFolder(id: number): Promise<void> {
+    await this.request<void>(`${API_BASE}/dashboards/folders/${id}`, { method: 'DELETE' })
+  }
+
+  async search(query: string): Promise<SearchResponse> {
+    const qs = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ''
+    return this.request<SearchResponse>(`${API_BASE}/search${qs}`)
+  }
+
+  async executeWidgetQuery(dashboardId: number, queryConfig: QueryDsl, projectId: number, timeRange?: TimeRangeDef, variables?: Record<string, string>): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>(`${API_BASE}/dashboards/${dashboardId}/query?projectId=${projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query_config: queryConfig, time_range: timeRange, variables }),
+    })
+  }
+
+  async executeBatchQuery(dashboardId: number, queries: QueryDsl[], projectId: number, timeRange?: TimeRangeDef, variables?: Record<string, string>): Promise<BatchQueryResult> {
+    return this.request<BatchQueryResult>(`${API_BASE}/dashboards/${dashboardId}/query/batch?projectId=${projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ queries, time_range: timeRange, variables }),
+    })
+  }
+
+  async resolveVariableOptions(dashboardId: number, currentValues: Record<string, string>): Promise<Record<string, string[]>> {
+    return this.request<Record<string, string[]>>(`${API_BASE}/dashboards/${dashboardId}/variables/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentValues),
+    })
+  }
+
+  async importDashboard(format: string, json: string): Promise<DashboardImportResult> {
+    return this.request<DashboardImportResult>(`${API_BASE}/dashboards/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ format, json }),
+    })
+  }
+
+  async exportDashboard(id: number, format: string): Promise<unknown> {
+    return this.request<unknown>(`${API_BASE}/dashboards/${id}/export/${format}`)
+  }
+
+  async getDataSources(): Promise<DataSourceInfo[]> {
+    return this.request<DataSourceInfo[]>(`${API_BASE}/dashboards/datasources`)
+  }
+
+  async getDashboardTemplates(): Promise<CreateDashboardRequest[]> {
+    return this.request<CreateDashboardRequest[]>(`${API_BASE}/dashboards/templates`)
+  }
+
+  // Dashboard Widget Alerts API
+  async listDashboardAlerts(dashboardId: number): Promise<DashboardWidgetAlert[]> {
+    return this.request<DashboardWidgetAlert[]>(`${API_BASE}/dashboards/${dashboardId}/alerts`)
+  }
+
+  async createDashboardAlert(dashboardId: number, data: CreateDashboardAlertRequest): Promise<DashboardWidgetAlert> {
+    return this.request<DashboardWidgetAlert>(`${API_BASE}/dashboards/${dashboardId}/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateDashboardAlert(dashboardId: number, alertId: number, data: UpdateDashboardAlertRequest): Promise<DashboardWidgetAlert> {
+    return this.request<DashboardWidgetAlert>(`${API_BASE}/dashboards/${dashboardId}/alerts/${alertId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteDashboardAlert(dashboardId: number, alertId: number): Promise<void> {
+    await this.request<void>(`${API_BASE}/dashboards/${dashboardId}/alerts/${alertId}`, { method: 'DELETE' })
+  }
+
+  // Custom Data Sources API
+  async listCustomDataSources(): Promise<CustomDataSourceResponse[]> {
+    return this.request<CustomDataSourceResponse[]>(`${API_BASE}/datasources`)
+  }
+
+  async getCustomDataSource(id: number): Promise<CustomDataSourceResponse> {
+    return this.request<CustomDataSourceResponse>(`${API_BASE}/datasources/${id}`)
+  }
+
+  async createCustomDataSource(request: CreateCustomDataSourceRequest): Promise<CustomDataSourceResponse> {
+    return this.request<CustomDataSourceResponse>(`${API_BASE}/datasources`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateCustomDataSource(id: number, request: UpdateCustomDataSourceRequest): Promise<CustomDataSourceResponse> {
+    return this.request<CustomDataSourceResponse>(`${API_BASE}/datasources/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteCustomDataSource(id: number): Promise<void> {
+    await this.request(`${API_BASE}/datasources/${id}`, { method: 'DELETE' })
+  }
+
+  async testDataSourceConnection(request: TestConnectionRequest): Promise<TestConnectionResult> {
+    return this.request<TestConnectionResult>(`${API_BASE}/datasources/test`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async getDataSourceSchema(id: number): Promise<DataSourceField[]> {
+    return this.request<DataSourceField[]>(`${API_BASE}/datasources/${id}/schema`)
+  }
+
+  async queryCustomDataSource(id: number, request: CustomDataSourceQueryRequest): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>(`${API_BASE}/datasources/${id}/query`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
 }
 
 export const api = new ApiClient()
@@ -4494,4 +4976,35 @@ export type {
   AnalyticsRealtimeResponse,
   AnalyticsFunnelStep,
   AnalyticsFunnelResponse,
+  DashboardVariable,
+  MetricDef,
+  GroupByDef,
+  FilterDef,
+  OrderByDef,
+  TimeRangeDef,
+  QueryDsl,
+  DashboardWidget,
+  DashboardWidgetAlert,
+  DashboardWidgetAlertNotificationChannels,
+  CreateDashboardAlertRequest,
+  UpdateDashboardAlertRequest,
+  CustomDashboard,
+  DashboardFolder,
+  CreateDashboardRequest,
+  CreateFolderRequest,
+  UpdateFolderRequest,
+  CreateWidgetRequest,
+  UpdateDashboardRequest,
+  ExecuteQueryRequest,
+  DashboardImportResult,
+  SearchResponse,
+  SearchProjectResponse,
+  DataSourceField,
+  DataSourceInfo,
+  CustomDataSourceResponse,
+  CreateCustomDataSourceRequest,
+  UpdateCustomDataSourceRequest,
+  TestConnectionRequest,
+  TestConnectionResult,
+  CustomDataSourceQueryRequest,
 }

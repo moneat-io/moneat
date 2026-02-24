@@ -60,6 +60,7 @@ import {
   Info,
   Key,
   Layers,
+  LayoutDashboard,
   Loader2,
   Minus,
   Phone,
@@ -2454,6 +2455,14 @@ function NotificationsTab() {
           color: 'text-blue-600',
           bgColor: 'bg-blue-500/10'
         }
+      case 'DASHBOARD_ALERT':
+        return { 
+          label: 'Dashboard Alerts', 
+          desc: 'Widget threshold alerts on custom dashboards', 
+          icon: LayoutDashboard,
+          color: 'text-purple-600',
+          bgColor: 'bg-purple-500/10'
+        }
     }
   }
 
@@ -2558,7 +2567,7 @@ function NotificationsTab() {
             </div>
           </div>
           
-          {['SYSTEM_ALERT', 'SYSTEM_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT'].map((s) => renderRow(s as AlertSource))}
+          {['SYSTEM_ALERT', 'SYSTEM_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT', 'DASHBOARD_ALERT'].map((s) => renderRow(s as AlertSource))}
 
           {(!slackConfigured || !discordConfigured) && (
             <div className="mt-6 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground flex items-center gap-2">

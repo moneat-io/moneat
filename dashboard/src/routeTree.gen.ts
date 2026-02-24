@@ -28,6 +28,7 @@ import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-ca
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
@@ -38,6 +39,7 @@ import { Route as PerformanceIndexRouteImport } from './routes/performance.index
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
+import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -58,6 +60,8 @@ import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
+import { Route as DashboardsDatasourcesRouteImport } from './routes/dashboards.datasources'
+import { Route as DashboardsDashboardIdRouteImport } from './routes/dashboards.$dashboardId'
 import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
@@ -176,6 +180,11 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardsRoute = DashboardsRouteImport.update({
+  id: '/dashboards',
+  path: '/dashboards',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -225,6 +234,11 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/issues/',
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardsRoute,
 } as any)
 const AnalyticsIndexRoute = AnalyticsIndexRouteImport.update({
   id: '/',
@@ -327,6 +341,16 @@ const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
   id: '/$feedbackId',
   path: '/$feedbackId',
   getParentRoute: () => FeedbackRoute,
+} as any)
+const DashboardsDatasourcesRoute = DashboardsDatasourcesRouteImport.update({
+  id: '/datasources',
+  path: '/datasources',
+  getParentRoute: () => DashboardsRoute,
+} as any)
+const DashboardsDashboardIdRoute = DashboardsDashboardIdRouteImport.update({
+  id: '/$dashboardId',
+  path: '/$dashboardId',
+  getParentRoute: () => DashboardsRoute,
 } as any)
 const AiGenerationsRoute = AiGenerationsRouteImport.update({
   id: '/ai/generations',
@@ -449,6 +473,7 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRouteWithChildren
+  '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -480,6 +505,8 @@ export interface FileRoutesByFullPath {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
+  '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -500,6 +527,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
+  '/dashboards/': typeof DashboardsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -549,6 +577,8 @@ export interface FileRoutesByTo {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
+  '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -569,6 +599,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/ai': typeof AiIndexRoute
   '/analytics': typeof AnalyticsIndexRoute
+  '/dashboards': typeof DashboardsIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
@@ -592,6 +623,7 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRouteWithChildren
+  '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -623,6 +655,8 @@ export interface FileRoutesById {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
+  '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -643,6 +677,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
+  '/dashboards/': typeof DashboardsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -667,6 +702,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/admin'
     | '/analytics'
+    | '/dashboards'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -698,6 +734,8 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/dashboards/$dashboardId'
+    | '/dashboards/datasources'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -718,6 +756,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/ai/'
     | '/analytics/'
+    | '/dashboards/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -767,6 +806,8 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/dashboards/$dashboardId'
+    | '/dashboards/datasources'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -787,6 +828,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/ai'
     | '/analytics'
+    | '/dashboards'
     | '/issues'
     | '/monitoring'
     | '/on-call'
@@ -809,6 +851,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/admin'
     | '/analytics'
+    | '/dashboards'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -840,6 +883,8 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/dashboards/$dashboardId'
+    | '/dashboards/datasources'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -860,6 +905,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/ai/'
     | '/analytics/'
+    | '/dashboards/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -883,6 +929,7 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   AdminRoute: typeof AdminRouteWithChildren
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
+  DashboardsRoute: typeof DashboardsRouteWithChildren
   DemoRoute: typeof DemoRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -1056,6 +1103,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboards': {
+      id: '/dashboards'
+      path: '/dashboards'
+      fullPath: '/dashboards'
+      preLoaderRoute: typeof DashboardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/analytics': {
       id: '/analytics'
       path: '/analytics'
@@ -1125,6 +1179,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/issues/'
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/dashboards/': {
+      id: '/dashboards/'
+      path: '/'
+      fullPath: '/dashboards/'
+      preLoaderRoute: typeof DashboardsIndexRouteImport
+      parentRoute: typeof DashboardsRoute
     }
     '/analytics/': {
       id: '/analytics/'
@@ -1265,6 +1326,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback/$feedbackId'
       preLoaderRoute: typeof FeedbackFeedbackIdRouteImport
       parentRoute: typeof FeedbackRoute
+    }
+    '/dashboards/datasources': {
+      id: '/dashboards/datasources'
+      path: '/datasources'
+      fullPath: '/dashboards/datasources'
+      preLoaderRoute: typeof DashboardsDatasourcesRouteImport
+      parentRoute: typeof DashboardsRoute
+    }
+    '/dashboards/$dashboardId': {
+      id: '/dashboards/$dashboardId'
+      path: '/$dashboardId'
+      fullPath: '/dashboards/$dashboardId'
+      preLoaderRoute: typeof DashboardsDashboardIdRouteImport
+      parentRoute: typeof DashboardsRoute
     }
     '/ai/generations': {
       id: '/ai/generations'
@@ -1478,6 +1553,22 @@ const AnalyticsRouteWithChildren = AnalyticsRoute._addFileChildren(
   AnalyticsRouteChildren,
 )
 
+interface DashboardsRouteChildren {
+  DashboardsDashboardIdRoute: typeof DashboardsDashboardIdRoute
+  DashboardsDatasourcesRoute: typeof DashboardsDatasourcesRoute
+  DashboardsIndexRoute: typeof DashboardsIndexRoute
+}
+
+const DashboardsRouteChildren: DashboardsRouteChildren = {
+  DashboardsDashboardIdRoute: DashboardsDashboardIdRoute,
+  DashboardsDatasourcesRoute: DashboardsDatasourcesRoute,
+  DashboardsIndexRoute: DashboardsIndexRoute,
+}
+
+const DashboardsRouteWithChildren = DashboardsRoute._addFileChildren(
+  DashboardsRouteChildren,
+)
+
 interface FeedbackRouteChildren {
   FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
 }
@@ -1607,6 +1698,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   AdminRoute: AdminRouteWithChildren,
   AnalyticsRoute: AnalyticsRouteWithChildren,
+  DashboardsRoute: DashboardsRouteWithChildren,
   DemoRoute: DemoRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
