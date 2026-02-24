@@ -1,7 +1,5 @@
 # Enterprise routes — source of truth is ../moneat-enterprise/dashboard/src/routes/
 # These are copied here by scripts/sync-enterprise-routes.sh at build time.
-src/routes/analytics.tsx
-src/routes/analytics.index.tsx
 src/routes/on-call.tsx
 src/routes/on-call.index.tsx
 src/routes/on-call.schedules.tsx
