@@ -213,11 +213,11 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     // User Insights
     { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
     { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
-    ...(hasEnterpriseModule(features, 'analytics') ? [{ key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, badge: 'Enterprise' }] : []),
+    ...(hasEnterpriseModule(features, 'analytics') ? [{ key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
     // Additional Features
     { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
     { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
-    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, badge: 'Enterprise' }] : []),
+    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
     // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
   ]
