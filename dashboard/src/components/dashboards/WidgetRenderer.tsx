@@ -18,6 +18,7 @@ import {memo, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 
 import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
+import {isDemo} from '@/lib/demo'
 import {
     Area,
     AreaChart,
@@ -125,9 +126,10 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   const {data, isLoading, error} = useQuery({
     queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queries.length, variables],
     queryFn: async () => {
-      if (!projectId) return []
+      if (!projectId && !isDemo()) return []
+      const effectiveProjectId = projectId ?? -1
       if (isBatch) {
-        const result = await api.executeBatchQuery(dashboardId, queries, projectId, timeRange, variables)
+        const result = await api.executeBatchQuery(dashboardId, queries, effectiveProjectId, timeRange, variables)
         // Merge batch results: use legendFormat alias as series name, group by timestamp
         const mergedByTime = new Map<unknown, Record<string, unknown>>()
         for (const [refId, rows] of Object.entries(result.results)) {
@@ -164,10 +166,10 @@ export const WidgetRenderer = memo(function WidgetRenderer({
         return Array.from(mergedByTime.values())
       }
       return queries[0]
-        ? api.executeWidgetQuery(dashboardId, queries[0], projectId, timeRange, variables)
+        ? api.executeWidgetQuery(dashboardId, queries[0], effectiveProjectId, timeRange, variables)
         : []
     },
-    enabled: !!projectId && widget.widget_type !== 'text' && widget.widget_type !== 'section' && queries.length > 0,
+    enabled: (!!projectId || isDemo()) && widget.widget_type !== 'text' && widget.widget_type !== 'section' && queries.length > 0,
     refetchInterval: autoRefresh ? 30000 : false,
   })
 
@@ -396,7 +398,7 @@ function pivotData(data: Record<string, unknown>[], timeKey: string, labelKeys: 
   return {pivoted, seriesKeys: Array.from(seriesSet)}
 }
 
-const CHART_MARGIN = {top: 4, right: 4, left: 0, bottom: 0}
+const CHART_MARGIN = {top: 5, right: 5, left: 20, bottom: 20}
 const TOOLTIP_STYLE = {
   backgroundColor: 'hsl(var(--popover))',
   border: '1px solid hsl(var(--border))',
@@ -573,6 +575,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
               tickFormatter={tickFormatter}
             />
             <Tooltip
+              cursor={{fill: 'transparent'}}
               contentStyle={TOOLTIP_STYLE}
               wrapperStyle={TOOLTIP_WRAPPER_STYLE}
               labelFormatter={formatTooltipLabel}
@@ -609,7 +612,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
             label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
             tickFormatter={tickFormatter}
           />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter} />
+          <Tooltip cursor={{fill: 'transparent'}} contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter} />
           {legendProps && <Legend {...legendProps} iconSize={8} />}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
