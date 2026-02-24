@@ -79,7 +79,7 @@ import {
 import {SsoTab} from '@/components/sso-settings'
 import {TeamSettings} from '@/components/settings/team-settings'
 import {useAuth} from '@/hooks/useAuth'
-import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
+import {useEnterpriseFeatures, useIsSelfHosted, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'
 import {CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys} from '@/lib/sidebar-config'
 import {useTimezone} from '@/hooks/useTimezone'
 import {TIMEZONES} from '@/lib/timezones'
@@ -164,7 +164,12 @@ function SettingsPage() {
   })
   
   const tier = subscription?.tier?.tierName || 'FREE'
-  const canUseSso = tier === 'TEAM' || tier === 'BUSINESS'
+  
+  // SSO available if: (self-hosted with enterprise SSO/OnCall module) OR (SaaS with Team/Business tier)
+  const { data: features } = useEnterpriseFeatures()
+  const isSelfHosted = features?.selfHost ?? false
+  const hasSsoModule = hasEnterpriseModule(features, 'oncall') || hasEnterpriseModule(features, 'sso')
+  const canUseSso = (isSelfHosted && hasSsoModule) || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS'))
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
   const isSelfHosted = useIsSelfHosted()
   
@@ -263,6 +268,9 @@ function SettingsPage() {
                 >
                   <Shield className="h-4 w-4 mr-2" />
                   SSO
+                  {isSelfHosted && hasSsoModule && (
+                    <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">Enterprise</Badge>
+                  )}
                 </TabsTrigger>
               )}
 
