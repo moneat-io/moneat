@@ -54,6 +54,9 @@ class DashboardQueryEngine {
     )
 
     companion object {
+        private val INTERVAL_REGEX =
+            Regex("""^\d+\s+(SECOND|MINUTE|HOUR|DAY|WEEK|MONTH|YEAR)$""", RegexOption.IGNORE_CASE)
+
         private val TIMESTAMP_COLUMNS = mapOf(
             "events" to "timestamp",
             "spans" to "timestamp",
@@ -190,6 +193,9 @@ class DashboardQueryEngine {
                     val interval = if (gb.interval == "auto" || gb.interval == null) {
                         resolveTimeInterval(dsl.timeRange.from, dsl.timeRange.to)
                     } else {
+                        require(INTERVAL_REGEX.matches(gb.interval)) {
+                            "Invalid interval: ${gb.interval}. Must be e.g. '1 MINUTE', '5 HOUR'."
+                        }
                         gb.interval
                     }
                     clauses.add("toStartOfInterval($tsCol, INTERVAL $interval) AS time_bucket")
@@ -206,6 +212,7 @@ class DashboardQueryEngine {
             metric.field?.let { ClickHouseSqlUtils.validateFieldName(it) }
             val aggExpr = metric.function.toClickHouse(metric.field)
             val alias = metric.alias ?: "${metric.function.value}_${metric.field ?: "all"}"
+            ClickHouseSqlUtils.validateFieldName(alias)
             clauses.add("$aggExpr AS $alias")
         }
 
@@ -314,6 +321,7 @@ class DashboardQueryEngine {
 
     internal fun buildOrderByClause(dsl: QueryDsl): String {
         if (dsl.orderBy != null) {
+            ClickHouseSqlUtils.validateFieldName(dsl.orderBy.field)
             val dir = if (dsl.orderBy.direction.lowercase() == "asc") "ASC" else "DESC"
             return "${dsl.orderBy.field} $dir"
         }

@@ -125,6 +125,75 @@ class CustomDataSourceExecutorTest {
         assertTrue(ex.cause?.message?.contains("DELETE") == true || ex.cause?.message?.contains("Only SELECT") == true)
     }
 
+    @Test
+    fun `validateSqlQuery allows semicolon inside string literal`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        method.invoke(executor, "SELECT 'a;b' FROM t")
+    }
+
+    @Test
+    fun `validateSqlQuery allows comment as column name`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        method.invoke(executor, "SELECT comment FROM posts")
+    }
+
+    @Test
+    fun `validateSqlQuery allows lock as column name`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        method.invoke(executor, "SELECT lock FROM sessions")
+    }
+
+    @Test
+    fun `validateSqlQuery rejects stacked statements`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        assertFailsWith<Exception> {
+            method.invoke(executor, "SELECT 1; DROP TABLE users")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects LOCK TABLE`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        val ex = assertFailsWith<Exception> {
+            method.invoke(executor, "LOCK TABLE users")
+        }
+        assertTrue(
+            ex.cause?.message?.contains("LOCK") == true || ex.cause?.message?.contains("Only SELECT") == true
+        )
+    }
+
+    @Test
+    fun `validateSqlQuery rejects COMMENT ON`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        val ex = assertFailsWith<Exception> {
+            method.invoke(executor, "SELECT 1 FROM t WHERE COMMENT ON TABLE t IS 'x'")
+        }
+        assertTrue(ex.cause?.message?.contains("COMMENT") == true)
+    }
+
+    @Test
+    fun `validateSqlQuery rejects pg_read_file call`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        val ex = assertFailsWith<Exception> {
+            method.invoke(executor, "SELECT pg_read_file('/etc/passwd')")
+        }
+        assertTrue(ex.cause?.message?.contains("PG_READ_FILE") == true)
+    }
+
+    @Test
+    fun `validateSqlQuery allows column name containing dblink substring`() {
+        val method = executor.javaClass.getDeclaredMethod("validateSqlQuery", String::class.java)
+        method.isAccessible = true
+        method.invoke(executor, "SELECT my_dblink_config FROM settings")
+    }
+
     // --- Prometheus URL building ---
 
     @Test

@@ -49,6 +49,76 @@ import java.util.concurrent.ConcurrentHashMap
 private val logger = KotlinLogging.logger {}
 
 class CustomDataSourceExecutor {
+
+    companion object {
+        private fun wordBoundary(keyword: String) = Regex("""\b${Regex.escape(keyword)}\b""", RegexOption.IGNORE_CASE)
+
+        private val FORBIDDEN_KEYWORD_PATTERNS = listOf(
+            wordBoundary("INSERT"),
+            wordBoundary("UPDATE"),
+            wordBoundary("DELETE"),
+            wordBoundary("DROP"),
+            wordBoundary("ALTER"),
+            wordBoundary("CREATE"),
+            wordBoundary("TRUNCATE"),
+            wordBoundary("GRANT"),
+            wordBoundary("REVOKE"),
+            wordBoundary("EXEC"),
+            wordBoundary("EXECUTE"),
+            wordBoundary("COPY"),
+            wordBoundary("VACUUM"),
+            wordBoundary("ANALYZE"),
+            wordBoundary("REINDEX"),
+            wordBoundary("CLUSTER"),
+            Regex("""\bCOMMENT\s+ON\b""", RegexOption.IGNORE_CASE),
+            Regex("""\bLOCK\s+TABLE\b""", RegexOption.IGNORE_CASE),
+        )
+
+        private val FORBIDDEN_KEYWORD_NAMES = listOf(
+            "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE",
+            "TRUNCATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "COPY",
+            "VACUUM", "ANALYZE", "REINDEX", "CLUSTER", "COMMENT", "LOCK",
+        )
+
+        private val FORBIDDEN_FUNCTIONS = listOf(
+            "PG_READ_FILE", "PG_WRITE_FILE", "PG_READ_BINARY_FILE",
+            "LO_IMPORT", "LO_EXPORT", "LO_CREATE", "LO_UNLINK",
+            "PG_SLEEP", "PG_CANCEL_BACKEND", "PG_TERMINATE_BACKEND",
+            "CURRENT_SETTING", "SET_CONFIG", "PG_RELOAD_CONF",
+            "PG_ROTATE_LOGFILE", "DBLINK", "DBLINK_EXEC",
+            "PG_SHADOW", "PG_AUTHID",
+        )
+
+        private val FORBIDDEN_FUNCTION_PATTERNS = FORBIDDEN_FUNCTIONS.map { fn ->
+            Regex("""\b${Regex.escape(fn)}\s*\(""", RegexOption.IGNORE_CASE)
+        }
+    }
+
+    private fun hasSemicolonOutsideQuotes(query: String): Boolean {
+        var i = 0
+        var inSingle = false
+        var inDouble = false
+        while (i < query.length) {
+            val c = query[i]
+            when {
+                inSingle -> {
+                    if (c == '\'' && i + 1 < query.length && query[i + 1] == '\'') {
+                        i++ // skip escaped '' in SQL
+                    } else if (c == '\'') {
+                        inSingle = false
+                    }
+                }
+                inDouble -> {
+                    if (c == '"') inDouble = false
+                }
+                c == '\'' -> inSingle = true
+                c == '"' -> inDouble = true
+                c == ';' -> return true
+            }
+            i++
+        }
+        return false
+    }
     private val json = Json { ignoreUnknownKeys = true }
     private val httpClient = HttpClient(CIO) {
         engine {
@@ -534,18 +604,25 @@ class CustomDataSourceExecutor {
     }
 
     /**
-     * Basic SQL injection protection — reject dangerous statements for custom PostgreSQL queries.
-     * Only SELECT queries are allowed.
+     * SQL injection protection for custom PostgreSQL queries.
+     * Only SELECT queries are allowed; stacked statements and dangerous PG functions are blocked.
      */
     private fun validateSqlQuery(query: String) {
         val trimmed = query.trim().uppercase()
         require(trimmed.startsWith("SELECT")) { "Only SELECT queries are allowed" }
-        val forbidden =
-            listOf("INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE", "EXEC")
-        for (keyword in forbidden) {
-            require(!Regex("""\b$keyword\b""").containsMatchIn(trimmed)) {
-                "$keyword statements are not allowed"
+
+        // Block stacked statements (semicolons outside quoted regions only)
+        require(!hasSemicolonOutsideQuotes(query)) { "Multiple statements are not allowed" }
+
+        for ((pattern, name) in FORBIDDEN_KEYWORD_PATTERNS.zip(FORBIDDEN_KEYWORD_NAMES)) {
+            require(!pattern.containsMatchIn(query)) {
+                "$name statements are not allowed"
             }
+        }
+
+        // Block dangerous PostgreSQL file/system functions (call-site pattern)
+        for ((pattern, fn) in FORBIDDEN_FUNCTION_PATTERNS.zip(FORBIDDEN_FUNCTIONS)) {
+            require(!pattern.containsMatchIn(query)) { "Function or table $fn is not allowed" }
         }
     }
 
