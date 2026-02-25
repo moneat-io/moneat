@@ -68,6 +68,14 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Self-Hosting',
+      collapsed: false,
+      items: [
+        'self-hosting',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Account',
       collapsed: false,
       items: [
