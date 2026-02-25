@@ -20,11 +20,13 @@ import {
   ArrowRight,
   Bell,
   Box,
+  Code2,
   FileText,
   GitBranch,
   Globe,
   Phone,
   Play,
+  Server,
   Shield,
   Zap,
   type LucideIcon,
@@ -41,6 +43,12 @@ const SlackLogo = ({ className }: { className?: string }) => (
     <path fill="#36C5F0" d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.52 2.52 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52h-2.521zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.522 2.522 0 0 1-2.521 2.521H2.522A2.52 2.52 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
     <path fill="#2EB67D" d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.52 2.52 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.522 2.522 0 0 1-2.52-2.521V2.522A2.52 2.52 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
     <path fill="#ECB22E" d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.52 2.52 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.52 2.52 0 0 1 2.52-2.52h6.313A2.52 2.52 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+  </svg>
+)
+
+const GithubIcon = ({className}: {className?: string}) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
   </svg>
 )
 
@@ -267,7 +275,7 @@ const secondaryFeatures: Feature[] = [
 const stats = [
   {value: 'Free forever', label: 'No credit card required'},
   {value: 'From $29/mo', label: 'Full observability platform'},
-  {value: 'Zero', label: 'Per-seat fees'},
+  {value: 'Open source', label: 'Self-hostable under AGPL'},
   {value: 'Unlimited', label: 'Projects on paid plans'},
 ]
 
@@ -328,30 +336,30 @@ export function VariantA() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-400" />
                 </span>
-                Works with Sentry SDKs out of the box
+                Open source &middot; Works with Sentry SDKs
               </div>
             </div>
 
             <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl mb-6 animate-fade-in-up animation-delay-100">
-              Know when things break.
+              One platform for
               <br />
               <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-sky-400 bg-clip-text text-transparent">
-                Fix them faster.
+                everything observability.
               </span>
             </h1>
 
-            <div className="flex flex-wrap justify-center gap-2.5 mb-8 animate-fade-in-up animation-delay-150">
-              {['Error Tracking', 'Log Management', 'LLM Monitoring', 'Session Replay', 'Uptime', 'On-Call'].map(tag => (
+            <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-8 leading-relaxed animate-fade-in-up animation-delay-150">
+              Errors, logs, uptime, replays, on-call, and status pages — stop stitching
+              together five different tools. Open source, self-hostable, and Sentry-compatible.
+            </p>
+
+            <div className="flex flex-wrap justify-center gap-2.5 mb-10 animate-fade-in-up animation-delay-200">
+              {['Errors', 'Logs', 'Uptime', 'Replays', 'On-Call', 'LLM', 'Dashboards', 'Analytics'].map(tag => (
                 <span key={tag} className="text-sm text-slate-300/80 border border-slate-700/50 rounded-full px-3.5 py-1 bg-white/[0.03] backdrop-blur-sm">
                   {tag}
                 </span>
               ))}
             </div>
-
-            <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up animation-delay-200">
-              Errors, logs, uptime, LLM monitoring, on-call, and status pages — everything your team needs
-              to keep your app reliable, in one place. Simple GB pricing — your whole team included.
-            </p>
 
             <div className="flex flex-col items-center animate-fade-in-up animation-delay-300">
               <div className="flex flex-col sm:flex-row gap-4 justify-center w-full sm:w-auto mb-4">
@@ -413,6 +421,57 @@ export function VariantA() {
                 <div className="text-sm text-slate-400">{stat.label}</div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Open-source callout ────────────────────────── */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-background">
+        <div className="max-w-4xl mx-auto">
+          <div className="rounded-2xl border border-border/60 bg-muted/30 p-8 sm:p-12">
+            <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
+              <div className="flex-1 text-center lg:text-left">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400 mb-4">
+                  <Code2 className="h-3.5 w-3.5" />
+                  AGPL v3 Licensed
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold mb-3">
+                  Open source. Self-hostable. Yours to own.
+                </h2>
+                <p className="text-muted-foreground leading-relaxed mb-6">
+                  Run Moneat on your own infrastructure with a single <code className="text-sm bg-muted px-1.5 py-0.5 rounded">docker compose up</code>.
+                  Full source code, no vendor lock-in, no data leaving your network.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+                  <Button asChild variant="outline" className="gap-2">
+                    <a href="https://github.com/moneat-io/moneat" target="_blank" rel="noopener noreferrer">
+                      <GithubIcon className="h-4 w-4" />
+                      View on GitHub
+                    </a>
+                  </Button>
+                  <Button asChild variant="ghost" className="gap-2 text-muted-foreground">
+                    <a href="/docs" target="_blank" rel="noopener noreferrer">
+                      <Server className="h-4 w-4" />
+                      Self-host docs
+                    </a>
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-6 sm:gap-10 text-center shrink-0">
+                <div>
+                  <div className="text-3xl font-bold text-foreground">9</div>
+                  <div className="text-xs text-muted-foreground mt-1">Features</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-foreground">700+</div>
+                  <div className="text-xs text-muted-foreground mt-1">Commits</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-foreground">10+</div>
+                  <div className="text-xs text-muted-foreground mt-1">SDK platforms</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -522,15 +581,15 @@ export function VariantA() {
                 No code changes, no migration headaches. Your team can switch in minutes, not days.
               </p>
               <Button
-                asChild
-                variant="outline"
-                className="border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/50"
-              >
-                <Link to="/signup">
-                  Try it free
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
+                  asChild
+                  variant="outline"
+                  className="border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/50"
+                >
+                  <Link to="/signup">
+                    Start Free
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
             </div>
             {/* Code-style screenshot */}
             <div className="lg:w-[58%] w-full">
@@ -607,7 +666,7 @@ export function VariantA() {
             className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-400/40 transition-all duration-300 text-base px-8 h-12"
           >
             <Link to="/signup">
-              Get Started Free
+              Start Free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {Link} from '@tanstack/react-router'
 import {isDemo} from '@/lib/demo'
 import {Info} from 'lucide-react'
 
@@ -25,10 +26,18 @@ export function DemoBanner() {
   return (
     <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2">
       <div className="flex items-center justify-center gap-2 text-sm text-amber-700 dark:text-amber-300">
-        <Info className="h-4 w-4" />
+        <Info className="h-4 w-4 shrink-0" />
         <span className="font-medium">Demo Mode</span>
         <span className="text-muted-foreground">•</span>
-        <span>You're viewing read-only demo data. All write operations are disabled.</span>
+        <span>You're viewing read-only demo data.</span>
+        <span className="text-muted-foreground">•</span>
+        <Link
+          to="/signup"
+          className="font-semibold underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
+        >
+          Sign up free
+        </Link>
+        <span className="text-muted-foreground hidden sm:inline">to create your own workspace</span>
       </div>
     </div>
   )
