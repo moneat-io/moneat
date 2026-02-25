@@ -1,0 +1,8 @@
+<clickhouse>
+    <!-- Reduce log level from default 'trace' to 'warning' to prevent disk saturation -->
+    <logger>
+        <level>warning</level>
+    </logger>
+    <!-- Disable system.text_log which mirrors all log entries into a MergeTree table on disk -->
+    <text_log remove="1" />
+</clickhouse>
