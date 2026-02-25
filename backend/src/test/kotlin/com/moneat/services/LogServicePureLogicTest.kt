@@ -144,7 +144,10 @@ class LogServicePureLogicTest {
     @Test
     fun `decodeQueueMessage accepts legacy project_id and uses effectiveOrganizationId`() {
         val legacyJson =
-            """{"project_id":77,"system_id":null,"source":"sdk","logs":[{"log_id":"x","timestamp_ms":1,"level":"info","message":"m","body":"b","service":"s","environment":"e","host":"h","source":"sdk","container_name":"","container_id":"","container_image":"","trace_id":"","span_id":""}]}"""
+            """{"project_id":77,"system_id":null,"source":"sdk","logs":[{"log_id":"x",""" +
+                """ "timestamp_ms":1,"level":"info","message":"m","body":"b","service":"s",""" +
+                """ "environment":"e","host":"h","source":"sdk","container_name":"",""" +
+                """ "container_id":"","container_image":"","trace_id":"","span_id":""}]}"""
         val decoded = service.decodeQueueMessage(legacyJson)
         assertEquals(77L, decoded.effectiveOrganizationId)
         assertEquals(77L, decoded.legacyProjectId)
