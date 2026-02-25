@@ -19,7 +19,6 @@ import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
 import {
   Command,
   CommandEmpty,
@@ -60,7 +59,7 @@ const PAGE_ITEMS: Array<{
   {label: 'Overview', description: 'Project metrics and key stats', href: '/', icon: Home, keywords: ['home']},
   {label: 'Issues', description: 'Errors and exceptions', href: '/issues', icon: AlertCircle, keywords: ['errors', 'bugs']},
   {label: 'Performance', description: 'Traces and transaction timing', href: '/performance', icon: Timer, keywords: ['traces', 'transactions']},
-  {label: 'Logs', description: 'Search and explore log events', href: '/projects', icon: ScrollText, keywords: ['logging']},
+  {label: 'Logs', description: 'Search and explore log events', href: '/logs', icon: ScrollText, keywords: ['logging']},
   {label: 'Dashboards', description: 'Custom metrics and visualizations', href: '/dashboards', icon: LayoutDashboard, keywords: ['widgets']},
   {label: 'Monitoring', description: 'Infrastructure and system health', href: '/monitoring', icon: Server, keywords: ['infrastructure', 'systems', 'servers']},
   {label: 'Uptime', description: 'Uptime monitors and checks', href: '/uptime', icon: Activity, keywords: ['monitors', 'uptime monitors', 'checks']},
@@ -84,12 +83,12 @@ const SETTINGS_ITEMS: Array<{
   keywords?: string[]
 }> = [
   {
-    label: 'Auth Tokens',
-    description: 'Manage API authentication tokens',
-    href: '/settings?tab=auth-tokens',
-    tab: 'auth-tokens',
+    label: 'API Keys',
+    description: 'Auth tokens and log API keys',
+    href: '/settings?tab=api-keys',
+    tab: 'api-keys',
     icon: Shield,
-    keywords: ['api', 'tokens', 'keys', 'authentication'],
+    keywords: ['api', 'tokens', 'keys', 'authentication', 'logs', 'otlp', 'ingestion'],
   },
   {
     label: 'General Settings',
@@ -173,7 +172,6 @@ export function CommandPalette() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const navigate = useNavigate()
-  const {selectedProjectId} = useProject()
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -198,7 +196,6 @@ export function CommandPalette() {
   })
 
   const {data: features} = useEnterpriseFeatures()
-  const logsHref = selectedProjectId ? `/projects/${selectedProjectId}/logs` : '/projects'
 
   const visiblePageItems = useMemo(
     () =>
@@ -269,12 +266,11 @@ export function CommandPalette() {
           <CommandGroup heading="Pages" forceMount>
             {filteredPages.map((item) => {
               const Icon = item.icon
-              const href = item.label === 'Logs' ? logsHref : item.href
               return (
                 <CommandItem
                   key={`page-${item.label}`}
                   value={item.label}
-                  onSelect={() => handleSelect(href)}
+                  onSelect={() => handleSelect(item.href)}
                 >
                   <Icon className="mr-2 h-4 w-4 shrink-0" />
                   <div className="flex flex-col gap-0.5 min-w-0">

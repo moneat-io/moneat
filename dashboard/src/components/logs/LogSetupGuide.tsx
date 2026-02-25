@@ -14,44 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {Link} from '@tanstack/react-router'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
-import {BookOpen, Check, Cpu, Globe, Server, Smartphone, TerminalSquare} from 'lucide-react'
+import {BookOpen, Check, Cpu, Globe, Key, Server, Smartphone, TerminalSquare} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {applySdkVersionsToSnippet, type SdkVersionMap} from '@/lib/sdk-versions'
 import {CopyBlock} from '@/components/ui/copy-block'
+import {Button} from '@/components/ui/button'
 
 interface LogSetupGuideProps {
-  dsn?: string
   sdkVersions?: SdkVersionMap
 }
-
-const sentrySdkSteps = [
-  {
-    title: 'Install the Sentry SDK',
-    code: 'npm install @sentry/node',
-    language: 'bash',
-  },
-  {
-    title: 'Enable logs and send messages',
-    code: `const Sentry = require('@sentry/node');
-
-Sentry.init({
-  dsn: 'YOUR_DSN_HERE',
-  enableLogs: true,
-});
-
-Sentry.logger.info('A simple log message');
-Sentry.logger.error('A %s log message', 'formatted');
-
-// Optional: auto-capture console output as logs
-// Sentry.init({
-//   dsn: 'YOUR_DSN_HERE',
-//   enableLogs: true,
-//   integrations: [Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] })],
-// });`,
-    language: 'javascript',
-  },
-]
 
 const platforms = [
   {
@@ -75,9 +48,10 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 
 # Configure OTLP exporter pointing to Moneat
+# Create a log API key in Settings > Log API Keys
 exporter = OTLPLogExporter(
     endpoint="https://api.moneat.io/v1/logs/otlp",
-    headers={"x-moneat-dsn": "YOUR_DSN_HERE"},
+    headers={"Authorization": "Bearer YOUR_LOG_API_KEY"},
 )
 
 logger_provider = LoggerProvider()
@@ -164,7 +138,7 @@ func main() {
         otlploghttp.WithEndpoint("api.moneat.io"),
         otlploghttp.WithURLPath("/v1/logs/otlp"),
         otlploghttp.WithHeaders(map[string]string{
-            "x-moneat-dsn": "YOUR_DSN_HERE",
+            "Authorization": "Bearer YOUR_LOG_API_KEY",
         }),
     )
 
@@ -206,7 +180,7 @@ import io.opentelemetry.sdk.logs.export.BatchLogRecordProcessor
 
 val exporter = OtlpGrpcLogRecordExporter.builder()
     .setEndpoint("https://api.moneat.io/v1/logs/otlp")
-    .addHeader("x-moneat-dsn", "YOUR_DSN_HERE")
+    .addHeader("Authorization", "Bearer YOUR_LOG_API_KEY")
     .build()
 
 val loggerProvider = SdkLoggerProvider.builder()
@@ -227,7 +201,7 @@ val loggerProvider = SdkLoggerProvider.builder()
         title: 'Send logs directly via the OTLP HTTP endpoint',
         code: `curl -X POST https://api.moneat.io/v1/logs/otlp \\
   -H "Content-Type: application/json" \\
-  -H "x-moneat-dsn: YOUR_DSN_HERE" \\
+  -H "Authorization: Bearer YOUR_LOG_API_KEY" \\
   -d '{
     "resourceLogs": [{
       "resource": {
@@ -254,7 +228,7 @@ val loggerProvider = SdkLoggerProvider.builder()
   },
 ]
 
-export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
+export function LogSetupGuide({sdkVersions}: LogSetupGuideProps) {
   return (
     <div className="mx-auto max-w-3xl py-8">
       <div className="mb-8 text-center">
@@ -265,6 +239,12 @@ export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
         <p className="text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto">
           Ship your application logs to Moneat using OpenTelemetry (OTLP). Works with any language and integrates with your existing logging framework.
         </p>
+        <Button asChild variant="default" className="mt-4">
+          <Link to="/settings" search={{tab: 'api-keys'}}>
+            <Key className="h-4 w-4 mr-2" />
+            Create Log API Key
+          </Link>
+        </Button>
       </div>
 
       <div className="mb-10 rounded-xl border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 p-5">
@@ -316,10 +296,7 @@ export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
                   </div>
                   <div className="ml-9">
                     <CopyBlock
-                      code={applySdkVersionsToSnippet(
-                        dsn ? step.code.replace(/YOUR_DSN_HERE/g, dsn) : step.code,
-                        sdkVersions
-                      )}
+                      code={applySdkVersionsToSnippet(step.code, sdkVersions)}
                       language={step.language}
                     />
                   </div>
@@ -343,41 +320,6 @@ export function LogSetupGuide({dsn, sdkVersions}: LogSetupGuideProps) {
         </Tabs>
       </div>
 
-      <div className="mb-4 rounded-lg border bg-card p-5">
-        <div className="mb-3 flex items-start gap-3">
-          <div className="mt-0.5 rounded-md bg-muted p-2">
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold text-foreground">Sentry SDK Logs</h4>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Already using Sentry for error tracking? The SDK can also forward structured log messages to the Log Explorer. Best for lightweight diagnostic context -- for full application logging, use OTLP above.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          {sentrySdkSteps.map((step, index) => (
-            <div key={step.title} className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">
-                  {index + 1}
-                </div>
-                <h5 className="text-sm font-medium">{step.title}</h5>
-              </div>
-              <div className="ml-9">
-                <CopyBlock
-                  code={applySdkVersionsToSnippet(
-                    dsn ? step.code.replace(/YOUR_DSN_HERE/g, dsn) : step.code,
-                    sdkVersions
-                  )}
-                  language={step.language}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }

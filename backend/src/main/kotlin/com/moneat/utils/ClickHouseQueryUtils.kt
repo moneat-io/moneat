@@ -44,6 +44,26 @@ object ClickHouseQueryUtils {
     }
 
     /**
+     * Generate an organization_id comparison clause for org-scoped log queries.
+     * Handles demo mode negative IDs.
+     *
+     * @param orgId The organization ID to compare
+     * @param columnName The column name (default: "organization_id")
+     * @return A WHERE clause fragment like "organization_id = 123" or "toInt64(organization_id) = -1"
+     */
+    fun orgIdClause(
+        orgId: Long,
+        columnName: String = "organization_id"
+    ): String {
+        return when {
+            // Demo org -1 means "all demo orgs"
+            orgId == -1L -> "toInt64($columnName) IN (-1, -2, -3)"
+            orgId < 0 -> "toInt64($columnName) = $orgId"
+            else -> "$columnName = $orgId"
+        }
+    }
+
+    /**
      * Generate a timestamp retention clause that respects demo mode.
      *
      * @param column The timestamp column name

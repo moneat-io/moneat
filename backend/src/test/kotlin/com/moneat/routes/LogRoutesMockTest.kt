@@ -91,12 +91,14 @@ class LogRoutesMockTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(userId: Int, orgId: Int): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId).sign(Algorithm.HMAC256(JWT_SECRET))
+            .withClaim("userId", userId)
+            .withClaim("orgId", orgId)
+            .sign(Algorithm.HMAC256(JWT_SECRET))
 
-    /** Seed user + org + membership + project, returning (userId, projectId) */
-    private fun seedUserAndProject(): Pair<Int, Long> {
+    /** Seed user + org + membership + project, returning (userId, orgId) */
+    private fun seedUserAndOrg(): Pair<Int, Int> {
         val orgId = transaction {
             Organizations.insert {
                 it[name] = "Log Mock Org"
@@ -117,76 +119,68 @@ class LogRoutesMockTest {
                 it[role] = "owner"
             }
         }
-        val projectId = transaction {
+        transaction {
             Projects.insert {
                 it[organization_id] = orgId
                 it[name] = "Test Project"
                 it[slug] = "test-project-${System.nanoTime()}"
-            } get Projects.id
+            }
         }
-        return Pair(userId, projectId)
+        return Pair(userId, orgId)
     }
 
-    // ─── GET /projects/{id}/logs ──────────────────────────────────────────────
+    // ─── GET /logs (org-scoped) ───────────────────────────────────────────────
 
     @Test
     fun `GET project logs returns 200 with empty result`() =
         testApplication {
-            val (userId, projectId) = seedUserAndProject()
+            val (userId, orgId) = seedUserAndOrg()
             val logResponse = LogQueryResponse(logs = emptyList(), hasMore = false, totalCount = 0L)
-            coEvery { mockLogService.queryLogs(projectId, any()) } returns logResponse
+            coEvery { mockLogService.queryLogs(orgId.toLong(), any()) } returns logResponse
 
             application {
                 installAuth()
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/$projectId/logs") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            val response = client.get("/v1/logs") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("logs"))
         }
 
     @Test
-    fun `GET project logs returns 403 when no project access`() =
+    fun `GET logs returns 401 when unauthenticated`() =
         testApplication {
-            // User with no org membership → no project access
-            val userId = transaction {
-                Users.insert {
-                    it[email] = "no-access-${System.nanoTime()}@test.com"
-                    it[password_hash] = "hash"
-                    it[email_verified] = true
-                } get Users.id
-            }
-
+            // Request without auth header → 401 (or 403 if auth rejects)
             application {
                 installAuth()
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/999/logs") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
-            }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            val response = client.get("/v1/logs")
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
-    // ─── GET /projects/{id}/logs/tag-values ───────────────────────────────────
+    // ─── GET /logs/tag-values ─────────────────────────────────────────────────
 
     @Test
     fun `GET log tag values returns 200`() =
         testApplication {
-            val (userId, projectId) = seedUserAndProject()
+            val (userId, orgId) = seedUserAndOrg()
             val tagValuesResponse = LogTagValuesResponse(key = "service", values = listOf("api", "worker"))
-            coEvery { mockLogService.getTagValues(projectId, "service", null, null, 50) } returns tagValuesResponse
+            coEvery {
+                mockLogService.getTagValues(orgId.toLong(), "service", null, null, 50)
+            } returns tagValuesResponse
 
             application {
                 installAuth()
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/$projectId/logs/tag-values?key=service") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            val response = client.get("/v1/logs/tag-values?key=service") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("service"))
@@ -195,54 +189,56 @@ class LogRoutesMockTest {
     @Test
     fun `GET log tag values returns 400 when key is missing`() =
         testApplication {
-            val (userId, projectId) = seedUserAndProject()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/$projectId/logs/tag-values") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            val response = client.get("/v1/logs/tag-values") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── GET /projects/{id}/logs/filters ──────────────────────────────────────
+    // ─── GET /logs/filters ────────────────────────────────────────────────────
 
     @Test
     fun `GET log filters returns 200`() =
         testApplication {
-            val (userId, projectId) = seedUserAndProject()
+            val (userId, orgId) = seedUserAndOrg()
             val filtersResponse = LogFilterOptionsWithCountsResponse(
                 services = emptyList(),
                 environments = emptyList(),
                 levels = emptyList(),
                 tagKeys = emptyList()
             )
-            coEvery { mockLogService.getFilterOptionsWithCounts(projectId, null, null) } returns filtersResponse
+            coEvery {
+                mockLogService.getFilterOptionsWithCounts(orgId.toLong(), null, null)
+            } returns filtersResponse
 
             application {
                 installAuth()
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/$projectId/logs/filters") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            val response = client.get("/v1/logs/filters") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    // ─── GET /projects/{id}/logs/aggregate ────────────────────────────────────
+    // ─── GET /logs/aggregate ───────────────────────────────────────────────────
 
     @Test
     fun `GET log aggregate returns 200`() =
         testApplication {
-            val (userId, projectId) = seedUserAndProject()
+            val (userId, orgId) = seedUserAndOrg()
             val aggregateResponse = LogAggregateResponse(buckets = emptyList(), totalCount = 0L, interval = "1h")
             coEvery {
                 mockLogService.aggregateLogs(
-                    eq(projectId), any(), any(), any(), any(), any(), any(),
+                    eq(orgId.toLong()), any(), any(), any(), any(), any(), any(),
                     any(), any(), any(), any(), any(), any(), any()
                 )
             } returns aggregateResponse
@@ -252,23 +248,23 @@ class LogRoutesMockTest {
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/$projectId/logs/aggregate") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            val response = client.get("/v1/logs/aggregate") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("buckets"))
         }
 
-    // ─── GET /projects/{id}/logs/top ──────────────────────────────────────────
+    // ─── GET /logs/top ────────────────────────────────────────────────────────
 
     @Test
     fun `GET log top values returns 200`() =
         testApplication {
-            val (userId, projectId) = seedUserAndProject()
+            val (userId, orgId) = seedUserAndOrg()
             val topResponse = LogTopResponse(field = "service", values = emptyList(), totalCount = 0L)
             coEvery {
                 mockLogService.topValues(
-                    eq(projectId), eq("service"), any(), any(), any(), any(), any(),
+                    eq(orgId.toLong()), eq("service"), any(), any(), any(), any(), any(),
                     any(), any(), any(), any(), any(), any(), any()
                 )
             } returns topResponse
@@ -278,8 +274,8 @@ class LogRoutesMockTest {
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/$projectId/logs/top?field=service") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            val response = client.get("/v1/logs/top?field=service") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("service"))
@@ -288,15 +284,15 @@ class LogRoutesMockTest {
     @Test
     fun `GET log top values returns 400 when field missing`() =
         testApplication {
-            val (userId, projectId) = seedUserAndProject()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
                 routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
             }
 
-            val response = client.get("/v1/projects/$projectId/logs/top") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            val response = client.get("/v1/logs/top") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }

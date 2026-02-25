@@ -231,10 +231,6 @@ fun Route.monitorRoutes(
                     return@post
                 }
 
-                // Agent logs are now scoped to system, not project
-                // We still need a projectId for billing/quota tracking, so use the first project in the org
-                val projectId = resolveProjectForOrganization(organizationId, payload.projectId) ?: 0L
-
                 if (quotaService.isEnforcementEnabled()) {
                     val billableBytes = logService.estimateBillableBytes(payload.logs, systemId.toString())
                     val reservation =
@@ -262,7 +258,12 @@ fun Route.monitorRoutes(
                         .propertyOrNull("logs.queueKey")
                         ?.getString()
                         ?: "moneat:logs:queue"
-                val accepted = logService.enqueueAgentLogs(projectId, systemId.toString(), payload.logs, queueKey)
+                val accepted = logService.enqueueAgentLogs(
+                    organizationId.toLong(),
+                    systemId.toString(),
+                    payload.logs,
+                    queueKey
+                )
                 call.respond(
                     HttpStatusCode.Accepted,
                     AgentLogIngestResponse(accepted = accepted, systemId = systemId.toString())

@@ -229,7 +229,7 @@ fun Route.ingestRoutes(
                     .propertyOrNull("logs.queueKey")
                     ?.getString()
                     ?: "moneat:logs:queue"
-            val accepted = logService.enqueueSdkLogs(projectId, entries, queueKey)
+            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey)
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
 

@@ -44,7 +44,6 @@ data class LogIngestEntry(
 
 @Serializable
 data class AgentLogsRequest(
-    @SerialName("project_id") val projectId: Long? = null,
     val logs: List<AgentLogEntry> = emptyList()
 )
 
@@ -70,11 +69,16 @@ data class AgentLogEntry(
 
 @Serializable
 data class QueuedLogBatch(
-    @SerialName("project_id") val projectId: Long,
+    @SerialName("organization_id") val organizationId: Long? = null,
+    @SerialName("project_id") val legacyProjectId: Long? = null,
     @SerialName("system_id") val systemId: String? = null,
     val source: String,
     val logs: List<QueuedLogEntry>
-)
+) {
+    /** Effective org ID: prefers organization_id, falls back to legacy project_id for backward compatibility. */
+    val effectiveOrganizationId: Long
+        get() = organizationId ?: legacyProjectId ?: 0L
+}
 
 @Serializable
 data class QueuedLogEntry(

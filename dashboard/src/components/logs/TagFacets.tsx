@@ -25,7 +25,6 @@ import type {FacetFilter} from './LogSearchBar'
 import type {LogFilterOptionWithCount} from '@/lib/api'
 
 interface TagFacetsProps {
-  projectId: number
   availableTagKeys: string[]
   availableServices: LogFilterOptionWithCount[]
   availableEnvironments: LogFilterOptionWithCount[]
@@ -33,6 +32,8 @@ interface TagFacetsProps {
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   from?: string
   to?: string
+  /** Scope identifier (e.g. systemId for monitor mode) to avoid cache mixing between org and system views */
+  scopeId?: string | null
 }
 
 function formatFacetCount(n: number): string {
@@ -185,24 +186,24 @@ function FacetSection({
 
 function TagKeySection({
   tagKey,
-  projectId,
   facetFilters,
   onFacetFiltersChange,
   from,
   to,
+  scopeId,
 }: {
   tagKey: string
-  projectId: number
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   from?: string
   to?: string
+  scopeId?: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
 
   const {data: tagValues} = useQuery({
-    queryKey: ['project-log-tag-values', projectId, tagKey, from, to],
-    queryFn: () => api.getProjectLogTagValues(projectId, tagKey, {from, to, limit: 30}),
+    queryKey: ['log-tag-values', scopeId ?? 'org', tagKey, from, to],
+    queryFn: () => api.getLogTagValues(tagKey, {from, to, limit: 30}),
     enabled: expanded,
     staleTime: 60_000,
   })
@@ -322,7 +323,6 @@ function TagKeySection({
 }
 
 export function TagFacets({
-  projectId,
   availableTagKeys,
   availableServices,
   availableEnvironments,
@@ -330,6 +330,7 @@ export function TagFacets({
   onFacetFiltersChange,
   from,
   to,
+  scopeId,
 }: TagFacetsProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card/50">
@@ -378,11 +379,11 @@ export function TagFacets({
           <TagKeySection
             key={key}
             tagKey={key}
-            projectId={projectId}
             facetFilters={facetFilters}
             onFacetFiltersChange={onFacetFiltersChange}
             from={from}
             to={to}
+            scopeId={scopeId}
           />
         ))}
 

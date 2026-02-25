@@ -414,6 +414,22 @@ interface LogTopResponse {
   totalCount: number
 }
 
+export interface LogApiKey {
+  id: number
+  name: string
+  keyPrefix: string
+  createdAt: string
+  lastUsedAt?: string
+}
+
+export interface CreateLogApiKeyResponse {
+  id: number
+  name: string
+  keyPrefix: string
+  key: string
+  createdAt: string
+}
+
 interface RawLogResponse {
   logs?: Record<string, unknown>[]
   nextCursor?: string | null
@@ -2376,6 +2392,64 @@ class ApiClient {
     return response.json()
   }
 
+  /**
+   * Fetch with auth (same credentials/impersonation/401 retry as request) for non-JSON responses (e.g. blob download).
+   */
+  private async fetchWithAuth(
+    endpoint: string,
+    options: RequestInit = {},
+    authRetryCount = 0
+  ): Promise<Response> {
+    const impersonateToken = this.getImpersonateToken()
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string>),
+    }
+    if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
+
+    let response: Response
+    try {
+      response = await fetch(endpoint, { ...options, headers, credentials: 'include' })
+    } catch {
+      throw new Error('NETWORK_ERROR')
+    }
+
+    if (response.status === 401) {
+      if (authRetryCount >= 1) {
+        this.logout()
+        if (
+          !this.authRedirectInProgress &&
+          typeof window !== 'undefined' &&
+          !AUTH_PAGE_PATHS.has(window.location.pathname)
+        ) {
+          this.authRedirectInProgress = true
+          window.location.assign('/login')
+        }
+        throw new Error('Unauthorized')
+      }
+      if (!this.refreshPromise) {
+        this.refreshPromise = this.refreshAccessToken().finally(() => {
+          this.refreshPromise = null
+        })
+      }
+      const refreshed = await this.refreshPromise
+      if (refreshed) {
+        return this.fetchWithAuth(endpoint, options, authRetryCount + 1)
+      }
+      this.logout()
+      if (
+        !this.authRedirectInProgress &&
+        typeof window !== 'undefined' &&
+        !AUTH_PAGE_PATHS.has(window.location.pathname)
+      ) {
+        this.authRedirectInProgress = true
+        window.location.assign('/login')
+      }
+      throw new Error('Unauthorized')
+    }
+
+    return response
+  }
+
   private mapMonitorSystem(row: Record<string, unknown>): MonitorSystemWithMetrics {
     const latest = (row.latest_metrics ?? {}) as Record<string, unknown>
 
@@ -2789,8 +2863,7 @@ class ApiClient {
     return this.request<ProjectStats>(`${API_BASE}/projects/${projectId}/stats?period=${period}`)
   }
 
-  async getProjectLogs(
-    projectId: number,
+  async getLogs(
     options: {
       cursor?: string
       limit?: number
@@ -2834,7 +2907,7 @@ class ApiClient {
       })
     }
 
-    const response = await this.request<RawLogResponse>(`${API_BASE}/projects/${projectId}/logs?${params.toString()}`)
+    const response = await this.request<RawLogResponse>(`${API_BASE}/logs?${params.toString()}`)
     const rows: Record<string, unknown>[] = response.logs ?? []
     const logs = rows.map((row) => ({
       logId: row.logId ?? row.log_id,
@@ -2925,8 +2998,7 @@ class ApiClient {
     }
   }
 
-  async getProjectLogFilters(
-    projectId: number,
+  async getLogFilters(
     options: { from?: string; to?: string } = {}
   ): Promise<LogFilterOptionsWithCounts> {
     const params = new URLSearchParams()
@@ -2934,7 +3006,7 @@ class ApiClient {
     if (options.to) params.set('to', options.to)
     const query = params.toString()
     const response = await this.request<RawLogFilterResponse>(
-      `${API_BASE}/projects/${projectId}/logs/filters${query ? `?${query}` : ''}`
+      `${API_BASE}/logs/filters${query ? `?${query}` : ''}`
     )
     // Support both old format (string[]) and new format (object with count)
     const mapServices = (arr: (string | { value: string; count: number })[]) =>
@@ -2949,8 +3021,30 @@ class ApiClient {
     }
   }
 
-  async getProjectLogTagValues(
-    projectId: number,
+  async getLogApiKeys(): Promise<{ keys: LogApiKey[] }> {
+    const response = await this.request<{ keys: Record<string, unknown>[] }>(`${API_BASE}/logs/api-keys`)
+    const keys = (response.keys ?? []).map((k) => ({
+      id: k.id as number,
+      name: k.name as string,
+      keyPrefix: (k.keyPrefix ?? k.key_prefix) as string,
+      createdAt: (k.createdAt ?? k.created_at) as string,
+      lastUsedAt: (k.lastUsedAt ?? k.last_used_at) as string | undefined,
+    }))
+    return { keys }
+  }
+
+  async createLogApiKey(name: string): Promise<CreateLogApiKeyResponse> {
+    return this.request<CreateLogApiKeyResponse>(`${API_BASE}/logs/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async deleteLogApiKey(id: number): Promise<void> {
+    await this.request(`${API_BASE}/logs/api-keys/${id}`, { method: 'DELETE' })
+  }
+
+  async getLogTagValues(
     key: string,
     options: { from?: string; to?: string; limit?: number } = {}
   ): Promise<{ key: string; values: string[] }> {
@@ -2960,12 +3054,11 @@ class ApiClient {
     if (options.to) params.set('to', options.to)
     if (options.limit) params.set('limit', String(options.limit))
     return this.request<{ key: string; values: string[] }>(
-      `${API_BASE}/projects/${projectId}/logs/tag-values?${params.toString()}`
+      `${API_BASE}/logs/tag-values?${params.toString()}`
     )
   }
 
-  createProjectLogTailStream(
-    projectId: number,
+  createLogTailStream(
     options: {
       query?: string
       levels?: string[]
@@ -2982,7 +3075,7 @@ class ApiClient {
     if (options.environment) params.set('environment', options.environment)
 
     // Auth is handled via httpOnly cookie (EventSource sends cookies for same-origin)
-    return new EventSource(`${API_BASE}/projects/${projectId}/logs/tail?${params.toString()}`, { withCredentials: true })
+    return new EventSource(`${API_BASE}/logs/tail?${params.toString()}`, { withCredentials: true })
   }
 
   private buildLogFilterParams(options: {
@@ -3023,8 +3116,7 @@ class ApiClient {
     return params
   }
 
-  async getProjectLogAggregate(
-    projectId: number,
+  async getLogAggregate(
     options: {
       from?: string
       to?: string
@@ -3045,7 +3137,7 @@ class ApiClient {
     if (options.interval) params.set('interval', options.interval)
     if (options.groupBy) params.set('groupBy', options.groupBy)
     const response = await this.request<RawLogAggregateResponse>(
-      `${API_BASE}/projects/${projectId}/logs/aggregate?${params.toString()}`
+      `${API_BASE}/logs/aggregate?${params.toString()}`
     )
     return {
       buckets: (response.buckets ?? []).map((b) => ({
@@ -3058,8 +3150,7 @@ class ApiClient {
     }
   }
 
-  async getProjectLogTop(
-    projectId: number,
+  async getLogTop(
     options: {
       field: string
       limit?: number
@@ -3080,7 +3171,7 @@ class ApiClient {
     params.set('field', options.field)
     if (options.limit) params.set('limit', String(options.limit))
     const response = await this.request<RawLogTopResponse>(
-      `${API_BASE}/projects/${projectId}/logs/top?${params.toString()}`
+      `${API_BASE}/logs/top?${params.toString()}`
     )
     return {
       field: response.field ?? options.field,
@@ -3092,9 +3183,7 @@ class ApiClient {
     }
   }
 
-  async downloadProjectLogExport(
-    projectId: number,
-    options: {
+  async downloadLogExport(options: {
       from?: string
       to?: string
       query?: string
@@ -3112,10 +3201,7 @@ class ApiClient {
     const params = this.buildLogFilterParams(options)
     if (options.limit) params.set('limit', String(options.limit))
 
-    const response = await fetch(
-      `${API_BASE}/projects/${projectId}/logs/export?${params.toString()}`,
-      { credentials: 'include' }
-    )
+    const response = await this.fetchWithAuth(`${API_BASE}/logs/export?${params.toString()}`)
     if (!response.ok) throw new Error('Export failed')
 
     const blob = await response.blob()

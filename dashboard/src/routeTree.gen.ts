@@ -23,6 +23,7 @@ import { Route as PricingCalculatorRouteImport } from './routes/pricing-calculat
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as OnCallRouteImport } from './routes/on-call'
+import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -75,7 +76,6 @@ import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
-import { Route as ProjectsProjectIdLogsRouteImport } from './routes/projects.$projectId.logs'
 import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
 import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
 import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
@@ -153,6 +153,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
 const OnCallRoute = OnCallRouteImport.update({
   id: '/on-call',
   path: '/on-call',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsRoute = LogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -418,11 +423,6 @@ const ProjectsProjectIdSettingsRoute =
     path: '/settings',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
-const ProjectsProjectIdLogsRoute = ProjectsProjectIdLogsRouteImport.update({
-  id: '/logs',
-  path: '/logs',
-  getParentRoute: () => ProjectsProjectIdRoute,
-} as any)
 const OnCallIncidentsIncidentIdRoute =
   OnCallIncidentsIncidentIdRouteImport.update({
     id: '/$incidentId',
@@ -479,6 +479,7 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -540,7 +541,6 @@ export interface FileRoutesByFullPath {
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
-  '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
@@ -553,6 +553,7 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
   '/onboarding': typeof OnboardingRoute
   '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
@@ -612,7 +613,6 @@ export interface FileRoutesByTo {
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
-  '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
@@ -629,6 +629,7 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -690,7 +691,6 @@ export interface FileRoutesById {
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
-  '/projects/$projectId/logs': typeof ProjectsProjectIdLogsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
@@ -708,6 +708,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
+    | '/logs'
     | '/on-call'
     | '/onboarding'
     | '/performance'
@@ -769,7 +770,6 @@ export interface FileRouteTypes {
     | '/auth/sso/callback'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
-    | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
@@ -782,6 +782,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
+    | '/logs'
     | '/onboarding'
     | '/pricing-calculator'
     | '/privacy'
@@ -841,7 +842,6 @@ export interface FileRouteTypes {
     | '/auth/sso/callback'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
-    | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
@@ -857,6 +857,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/impersonate-callback'
     | '/login'
+    | '/logs'
     | '/on-call'
     | '/onboarding'
     | '/performance'
@@ -918,7 +919,6 @@ export interface FileRouteTypes {
     | '/auth/sso/callback'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
-    | '/projects/$projectId/logs'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
@@ -935,6 +935,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
   LoginRoute: typeof LoginRoute
+  LogsRoute: typeof LogsRoute
   OnCallRoute: typeof OnCallRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
@@ -1066,6 +1067,13 @@ declare module '@tanstack/react-router' {
       path: '/on-call'
       fullPath: '/on-call'
       preLoaderRoute: typeof OnCallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs': {
+      id: '/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -1432,13 +1440,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
-    '/projects/$projectId/logs': {
-      id: '/projects/$projectId/logs'
-      path: '/logs'
-      fullPath: '/projects/$projectId/logs'
-      preLoaderRoute: typeof ProjectsProjectIdLogsRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
-    }
     '/on-call/incidents/$incidentId': {
       id: '/on-call/incidents/$incidentId'
       path: '/$incidentId'
@@ -1642,14 +1643,12 @@ const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(
 )
 
 interface ProjectsProjectIdRouteChildren {
-  ProjectsProjectIdLogsRoute: typeof ProjectsProjectIdLogsRoute
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
   ProjectsProjectIdSpansSpanIdRoute: typeof ProjectsProjectIdSpansSpanIdRoute
   ProjectsProjectIdTracesTraceIdRoute: typeof ProjectsProjectIdTracesTraceIdRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
-  ProjectsProjectIdLogsRoute: ProjectsProjectIdLogsRoute,
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
   ProjectsProjectIdSpansSpanIdRoute: ProjectsProjectIdSpansSpanIdRoute,
   ProjectsProjectIdTracesTraceIdRoute: ProjectsProjectIdTracesTraceIdRoute,
@@ -1704,6 +1703,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,
   LoginRoute: LoginRoute,
+  LogsRoute: LogsRoute,
   OnCallRoute: OnCallRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,

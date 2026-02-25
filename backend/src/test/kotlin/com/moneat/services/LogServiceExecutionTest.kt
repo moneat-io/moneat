@@ -73,7 +73,7 @@ class LogServiceExecutionTest {
 
                 val result =
                     LogService().queryLogs(
-                        projectId = 42,
+                        organizationId = 42L,
                         request = LogQueryRequest(limit = 1)
                     )
 
@@ -95,7 +95,7 @@ class LogServiceExecutionTest {
         runBlocking {
             val result =
                 LogService().queryLogs(
-                    projectId = 42,
+                    organizationId = 42L,
                     request = LogQueryRequest(systemId = "not-a-uuid")
                 )
 
@@ -128,7 +128,7 @@ class LogServiceExecutionTest {
 
                 val result =
                     LogService().aggregateLogs(
-                        projectId = 7,
+                        organizationId = 7L,
                         from = "2026-02-01T10:00:00Z",
                         to = "2026-02-01T12:00:00Z",
                         interval = "auto",

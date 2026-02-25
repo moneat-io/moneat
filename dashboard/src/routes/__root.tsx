@@ -48,6 +48,7 @@ const STATIC_TITLES: Record<string, string> = {
   '/performance': 'Performance',
   '/releases': 'Releases',
   '/replays': 'Session Replays',
+  '/logs': 'Logs',
   '/monitoring': 'Infrastructure Monitoring',
   '/on-call': 'On-Call Management',
   '/settings': 'Settings & Billing',
@@ -98,7 +99,6 @@ function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
   }
 
   const dynamicMatchers: Array<[RegExp, (matches: RegExpMatchArray) => string]> = [
-    [/^\/projects\/([^/]+)\/logs$/, (match) => `Project ${formatEntityId(match[1])} Logs`],
     [/^\/projects\/([^/]+)\/settings$/, (match) => `Project ${formatEntityId(match[1])} Settings`],
     [/^\/projects\/([^/]+)$/, (match) => `Project ${formatEntityId(match[1])}`],
     [/^\/issues\/([^/]+)$/, (match) => `Issue ${formatEntityId(match[1])}`],

@@ -464,7 +464,7 @@ describe('ApiClient - Extended Methods', () => {
       }
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/logs`, ({ request }) => {
+        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('q')).toBe('service:web')
           return HttpResponse.json({ 
@@ -474,7 +474,7 @@ describe('ApiClient - Extended Methods', () => {
         })
       )
 
-      const result = await api.getProjectLogs(1, { query: 'service:web' })
+      const result = await api.getLogs({ query: 'service:web' })
       expect(result.logs).toEqual([mockLog])
       expect(result.hasMore).toBe(false)
     })
@@ -488,12 +488,12 @@ describe('ApiClient - Extended Methods', () => {
       }
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/logs/filters`, () => {
+        http.get(`${API_BASE}/v1/logs/filters`, () => {
           return HttpResponse.json(mockServerResponse)
         })
       )
 
-      const filters = await api.getProjectLogFilters(1)
+      const filters = await api.getLogFilters()
       // services/environments are transformed to {value, count} objects
       expect(filters).toEqual({
         services: [{value: 'web', count: 0}, {value: 'api', count: 0}],

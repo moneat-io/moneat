@@ -45,7 +45,7 @@ class LogIngestionWorkerTest {
             val message =
                 LogService().encodeQueueMessage(
                     QueuedLogBatch(
-                        projectId = 99,
+                        organizationId = 99L,
                         source = "sdk",
                         logs =
                         listOf(

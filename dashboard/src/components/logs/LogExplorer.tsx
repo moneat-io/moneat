@@ -41,11 +41,9 @@ import {
 import {getNowDate} from '@/lib/demo'
 
 interface LogExplorerProps {
-  projectId?: number
   systemId?: string
   initialQuery?: string
   initialContainerName?: string
-  dsn?: string
   sdkVersions?: Record<string, string>
   className?: string
   enableAutoRefresh?: boolean
@@ -116,11 +114,9 @@ function intervalToMs(interval: string | undefined): number {
 }
 
 export function LogExplorer({
-  projectId,
   systemId,
   initialQuery = '',
   initialContainerName,
-  dsn,
   sdkVersions,
   className,
   enableAutoRefresh = true,
@@ -334,21 +330,21 @@ export function LogExplorer({
       setCursorHistory([])
       setAccumulatedLogs([])
     })
-  }, [projectId, systemId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
+  }, [systemId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
 
-  // Fetch filter options (with counts)
+  // Fetch filter options (with counts) - org-scoped when no systemId; monitor systems don't have filters
   const {data: filterOptions} = useQuery({
-    queryKey: ['log-filters', projectId, systemId, timeRange.from, timeRange.to],
+    queryKey: ['log-filters', systemId, timeRange.from, timeRange.to],
     queryFn: async () => {
-      if (projectId) {
-        return api.getProjectLogFilters(projectId, {from: timeRange.from, to: timeRange.to})
+      if (systemId) {
+        return {services: [], environments: [], levels: [], tagKeys: []} as LogFilterOptionsWithCounts
       }
-      return {services: [], environments: [], levels: [], tagKeys: []} as LogFilterOptionsWithCounts
+      return api.getLogFilters({from: timeRange.from, to: timeRange.to})
     },
-    enabled: Boolean(projectId || systemId) && enableFacets,
+    enabled: !systemId && enableFacets,
   })
 
-  // Fetch logs
+  // Fetch logs - org-scoped (getLogs) when no systemId; getSystemLogs when systemId (monitor)
   const {
     data: logPage,
     isLoading: isInitialLoading,
@@ -356,7 +352,6 @@ export function LogExplorer({
   } = useQuery({
     queryKey: [
       'logs',
-      projectId,
       systemId,
       cursor,
       query,
@@ -392,12 +387,10 @@ export function LogExplorer({
 
       if (systemId) {
         return api.getSystemLogs(systemId, commonOptions)
-      } else if (projectId) {
-        return api.getProjectLogs(projectId, commonOptions)
       }
-      throw new Error('Either projectId or systemId must be provided')
+      return api.getLogs(commonOptions)
     },
-    enabled: Boolean(projectId || systemId),
+    enabled: true,
     refetchInterval: autoRefreshInterval || false,
   })
 
@@ -424,18 +417,18 @@ export function LogExplorer({
   const logs = accumulatedLogs
   const totalCount = logPage?.totalCount ?? null
 
-  // Aggregate query for histogram - always enabled to show above all modes
+  // Aggregate query for histogram - org-scoped only (monitor systems don't have aggregate)
   const {data: aggregateData} = useQuery({
     queryKey: [
-      'log-aggregate', projectId, timeRange.from, timeRange.to,
+      'log-aggregate', systemId, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
       JSON.stringify(derivedFilters.tags), groupBy,
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,
       derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
     ],
     queryFn: () => {
-      if (!projectId) throw new Error('Missing projectId')
-      return api.getProjectLogAggregate(projectId, {
+      if (systemId) throw new Error('Aggregate not supported for monitor systems')
+      return api.getLogAggregate({
         from: timeRange.from,
         to: timeRange.to,
         query: query || undefined,
@@ -450,21 +443,21 @@ export function LogExplorer({
         groupBy,
       })
     },
-    enabled: Boolean(projectId),
+    enabled: !systemId,
   })
 
-  // Top values query for toplist/pie/table views
+  // Top values query for toplist/pie/table views - org-scoped only
   const {data: topData} = useQuery({
     queryKey: [
-      'log-top', projectId, topField, timeRange.from, timeRange.to,
+      'log-top', systemId, topField, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
       JSON.stringify(derivedFilters.tags),
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,
       derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
     ],
     queryFn: () => {
-      if (!projectId) throw new Error('Missing projectId')
-      return api.getProjectLogTop(projectId, {
+      if (systemId) throw new Error('Top not supported for monitor systems')
+      return api.getLogTop({
         field: topField,
         limit: 20,
         from: timeRange.from,
@@ -480,13 +473,13 @@ export function LogExplorer({
         excludeTags: Object.keys(derivedFilters.excludeTags).length > 0 ? derivedFilters.excludeTags : undefined,
       })
     },
-    enabled: Boolean(projectId) && (vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table'),
+    enabled: !systemId && (vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table'),
   })
 
   const handleExportCsv = useCallback(async () => {
-    if (!projectId) return
+    if (systemId) return
     try {
-      await api.downloadProjectLogExport(projectId, {
+      await api.downloadLogExport({
         from: timeRange.from,
         to: timeRange.to,
         query: query || undefined,
@@ -502,7 +495,7 @@ export function LogExplorer({
     } catch (error) {
       console.error('CSV export failed:', formatErrorForLogging(error))
     }
-  }, [projectId, timeRange, query, hasCustomLevelFilter, levels, derivedFilters])
+  }, [systemId, timeRange, query, hasCustomLevelFilter, levels, derivedFilters])
 
   const handleHistogramBucketClick = useCallback((bucketStartIso: string) => {
     const bucketStart = new Date(bucketStartIso)
@@ -654,7 +647,6 @@ export function LogExplorer({
           >
             {showFacets && enableFacets && (
               <TagFacets
-                projectId={projectId ?? 0} 
                 availableTagKeys={filterOptions?.tagKeys ?? []}
                 availableServices={filterOptions?.services ?? []}
                 availableEnvironments={filterOptions?.environments ?? []}
@@ -662,6 +654,7 @@ export function LogExplorer({
                 onFacetFiltersChange={setFacetFilters}
                 from={timeRange.from}
                 to={timeRange.to}
+                scopeId={systemId}
               />
             )}
           </div>
@@ -736,8 +729,8 @@ export function LogExplorer({
                 )}
               </div>
 
-              {/* CSV Export */}
-              {projectId && (
+              {/* CSV Export - org-scoped only, not for monitor systems */}
+              {!systemId && (
                 <Button variant="ghost" size="sm" onClick={handleExportCsv} className="h-7 gap-1.5 text-xs">
                   <Download className="h-3.5 w-3.5" />
                   CSV
@@ -820,16 +813,7 @@ export function LogExplorer({
             <div className="flex-1 overflow-y-auto" ref={logContainerRef}>
               {showEmptyState ? (
                 <div className="px-3 pb-6 sm:px-4 sm:pb-8">
-                  {dsn ? (
-                    <LogSetupGuide dsn={dsn} sdkVersions={sdkVersions} />
-                  ) : (
-                    <div className="flex items-center justify-center py-24">
-                      <div className="text-center">
-                        <TerminalSquare className="mx-auto h-10 w-10 text-muted-foreground/30" />
-                        <p className="mt-3 text-sm font-medium text-muted-foreground">No logs found</p>
-                      </div>
-                    </div>
-                  )}
+                  <LogSetupGuide sdkVersions={sdkVersions} />
                 </div>
               ) : isInitialLoadingState ? (
                 <div className="flex items-center justify-center py-24">
