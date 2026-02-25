@@ -430,6 +430,98 @@ export interface CreateLogApiKeyResponse {
   createdAt: string
 }
 
+export interface DdApiKey {
+  id: number
+  name: string
+  keyPrefix: string
+  createdAt: string
+  lastUsedAt?: string
+}
+
+export interface CreateDdApiKeyResponse {
+  id: number
+  name: string
+  keyPrefix: string
+  key: string
+  createdAt: string
+}
+
+// --- DD Trace types ---
+
+export interface DdTraceListItem {
+  traceId: string
+  rootService: string
+  rootResource: string
+  rootName: string
+  spanCount: number
+  durationNs: number
+  startNs: number
+  hasError: boolean
+}
+
+export interface DdTraceListResponse {
+  traces: DdTraceListItem[]
+  totalCount: number
+}
+
+export interface DdSpanResponse {
+  spanId: string
+  traceId: string
+  parentId: string
+  name: string
+  service: string
+  resource: string
+  type: string
+  startNs: number
+  durationNs: number
+  error: number
+  meta: Record<string, string>
+  metrics: Record<string, number>
+  host: string
+  env: string
+  version: string
+}
+
+export interface DdTraceDetailResponse {
+  traceId: string
+  spans: DdSpanResponse[]
+}
+
+export interface DdServiceMapEntry {
+  service: string
+  spanCount: number
+  errorCount: number
+  avgDurationNs: number
+  callsTo: string[]
+}
+
+export interface DdServiceMapResponse {
+  services: DdServiceMapEntry[]
+}
+
+// --- DD Profile types ---
+
+export interface DdProfileResponse {
+  profileId: string
+  host: string
+  service: string
+  env: string
+  version: string
+  runtime: string
+  language: string
+  profileType: string
+  startTime: string
+  endTime: string
+  durationNs: number
+  sizeBytes: number
+  tags: Record<string, string>
+}
+
+export interface DdProfileListResponse {
+  profiles: DdProfileResponse[]
+  totalCount: number
+}
+
 interface RawLogResponse {
   logs?: Record<string, unknown>[]
   nextCursor?: string | null
@@ -3042,6 +3134,85 @@ class ApiClient {
 
   async deleteLogApiKey(id: number): Promise<void> {
     await this.request(`${API_BASE}/logs/api-keys/${id}`, { method: 'DELETE' })
+  }
+
+  async getDdApiKeys(): Promise<{ keys: DdApiKey[] }> {
+    const response = await this.request<{ keys: Record<string, unknown>[] }>(
+      `${API_BASE}/dd/api-keys`
+    )
+    const keys = (response.keys ?? []).map((k) => ({
+      id: k.id as number,
+      name: k.name as string,
+      keyPrefix: (k.keyPrefix ?? k.key_prefix) as string,
+      createdAt: (k.createdAt ?? k.created_at) as string,
+      lastUsedAt: (k.lastUsedAt ?? k.last_used_at) as string | undefined,
+    }))
+    return { keys }
+  }
+
+  async createDdApiKey(name: string): Promise<CreateDdApiKeyResponse> {
+    return this.request<CreateDdApiKeyResponse>(`${API_BASE}/dd/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async deleteDdApiKey(id: number): Promise<void> {
+    await this.request(`${API_BASE}/dd/api-keys/${id}`, { method: 'DELETE' })
+  }
+
+  // --- DD Traces ---
+
+  async getDdTraces(params: {
+    service?: string
+    env?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdTraceListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.service) searchParams.set('service', params.service)
+    if (params.env) searchParams.set('env', params.env)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.offset) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdTraceListResponse>(
+      `${API_BASE}/dd/traces${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getDdTraceDetail(traceId: string): Promise<DdTraceDetailResponse> {
+    return this.request<DdTraceDetailResponse>(
+      `${API_BASE}/dd/traces/${traceId}`
+    )
+  }
+
+  async getDdServiceMap(): Promise<DdServiceMapResponse> {
+    return this.request<DdServiceMapResponse>(
+      `${API_BASE}/dd/services/map`
+    )
+  }
+
+  // --- DD Profiles ---
+
+  async getDdProfiles(params: {
+    service?: string
+    type?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdProfileListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.service) searchParams.set('service', params.service)
+    if (params.type) searchParams.set('type', params.type)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.offset) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdProfileListResponse>(
+      `${API_BASE}/dd/profiles${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  getDdProfileDownloadUrl(profileId: string): string {
+    return `${API_BASE}/dd/profiles/${profileId}/download`
   }
 
   async getLogTagValues(

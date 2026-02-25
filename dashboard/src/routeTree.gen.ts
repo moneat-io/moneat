@@ -29,6 +29,8 @@ import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-ca
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DdTracesRouteImport } from './routes/dd-traces'
+import { Route as DdProfilesRouteImport } from './routes/dd-profiles'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -40,6 +42,8 @@ import { Route as PerformanceIndexRouteImport } from './routes/performance.index
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
+import { Route as DdTracesIndexRouteImport } from './routes/dd-traces.index'
+import { Route as DdProfilesIndexRouteImport } from './routes/dd-profiles.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
@@ -61,6 +65,8 @@ import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
+import { Route as DdTracesTraceIdRouteImport } from './routes/dd-traces.$traceId'
+import { Route as DdProfilesProfileIdRouteImport } from './routes/dd-profiles.$profileId'
 import { Route as DashboardsDatasourcesRouteImport } from './routes/dashboards.datasources'
 import { Route as DashboardsDashboardIdRouteImport } from './routes/dashboards.$dashboardId'
 import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
@@ -185,6 +191,16 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DdTracesRoute = DdTracesRouteImport.update({
+  id: '/dd-traces',
+  path: '/dd-traces',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DdProfilesRoute = DdProfilesRouteImport.update({
+  id: '/dd-profiles',
+  path: '/dd-profiles',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardsRoute = DashboardsRouteImport.update({
   id: '/dashboards',
   path: '/dashboards',
@@ -239,6 +255,16 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/issues/',
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DdTracesIndexRoute = DdTracesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DdTracesRoute,
+} as any)
+const DdProfilesIndexRoute = DdProfilesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DdProfilesRoute,
 } as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
@@ -346,6 +372,16 @@ const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
   id: '/$feedbackId',
   path: '/$feedbackId',
   getParentRoute: () => FeedbackRoute,
+} as any)
+const DdTracesTraceIdRoute = DdTracesTraceIdRouteImport.update({
+  id: '/$traceId',
+  path: '/$traceId',
+  getParentRoute: () => DdTracesRoute,
+} as any)
+const DdProfilesProfileIdRoute = DdProfilesProfileIdRouteImport.update({
+  id: '/$profileId',
+  path: '/$profileId',
+  getParentRoute: () => DdProfilesRoute,
 } as any)
 const DashboardsDatasourcesRoute = DashboardsDatasourcesRouteImport.update({
   id: '/datasources',
@@ -474,6 +510,8 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
+  '/dd-profiles': typeof DdProfilesRouteWithChildren
+  '/dd-traces': typeof DdTracesRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -508,6 +546,8 @@ export interface FileRoutesByFullPath {
   '/ai/generations': typeof AiGenerationsRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
+  '/dd-profiles/$profileId': typeof DdProfilesProfileIdRoute
+  '/dd-traces/$traceId': typeof DdTracesTraceIdRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -529,6 +569,8 @@ export interface FileRoutesByFullPath {
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/dd-profiles/': typeof DdProfilesIndexRoute
+  '/dd-traces/': typeof DdTracesIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -580,6 +622,8 @@ export interface FileRoutesByTo {
   '/ai/generations': typeof AiGenerationsRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
+  '/dd-profiles/$profileId': typeof DdProfilesProfileIdRoute
+  '/dd-traces/$traceId': typeof DdTracesTraceIdRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -601,6 +645,8 @@ export interface FileRoutesByTo {
   '/ai': typeof AiIndexRoute
   '/analytics': typeof AnalyticsIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
+  '/dd-profiles': typeof DdProfilesIndexRoute
+  '/dd-traces': typeof DdTracesIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
@@ -624,6 +670,8 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
+  '/dd-profiles': typeof DdProfilesRouteWithChildren
+  '/dd-traces': typeof DdTracesRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -658,6 +706,8 @@ export interface FileRoutesById {
   '/ai/generations': typeof AiGenerationsRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
+  '/dd-profiles/$profileId': typeof DdProfilesProfileIdRoute
+  '/dd-traces/$traceId': typeof DdTracesTraceIdRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -679,6 +729,8 @@ export interface FileRoutesById {
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/dd-profiles/': typeof DdProfilesIndexRoute
+  '/dd-traces/': typeof DdTracesIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -703,6 +755,8 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/dashboards'
+    | '/dd-profiles'
+    | '/dd-traces'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -737,6 +791,8 @@ export interface FileRouteTypes {
     | '/ai/generations'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
+    | '/dd-profiles/$profileId'
+    | '/dd-traces/$traceId'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -758,6 +814,8 @@ export interface FileRouteTypes {
     | '/ai/'
     | '/analytics/'
     | '/dashboards/'
+    | '/dd-profiles/'
+    | '/dd-traces/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -809,6 +867,8 @@ export interface FileRouteTypes {
     | '/ai/generations'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
+    | '/dd-profiles/$profileId'
+    | '/dd-traces/$traceId'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -830,6 +890,8 @@ export interface FileRouteTypes {
     | '/ai'
     | '/analytics'
     | '/dashboards'
+    | '/dd-profiles'
+    | '/dd-traces'
     | '/issues'
     | '/monitoring'
     | '/on-call'
@@ -852,6 +914,8 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/dashboards'
+    | '/dd-profiles'
+    | '/dd-traces'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -886,6 +950,8 @@ export interface FileRouteTypes {
     | '/ai/generations'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
+    | '/dd-profiles/$profileId'
+    | '/dd-traces/$traceId'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -907,6 +973,8 @@ export interface FileRouteTypes {
     | '/ai/'
     | '/analytics/'
     | '/dashboards/'
+    | '/dd-profiles/'
+    | '/dd-traces/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -930,6 +998,8 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
   DashboardsRoute: typeof DashboardsRouteWithChildren
+  DdProfilesRoute: typeof DdProfilesRouteWithChildren
+  DdTracesRoute: typeof DdTracesRouteWithChildren
   DemoRoute: typeof DemoRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -1111,6 +1181,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dd-traces': {
+      id: '/dd-traces'
+      path: '/dd-traces'
+      fullPath: '/dd-traces'
+      preLoaderRoute: typeof DdTracesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dd-profiles': {
+      id: '/dd-profiles'
+      path: '/dd-profiles'
+      fullPath: '/dd-profiles'
+      preLoaderRoute: typeof DdProfilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboards': {
       id: '/dashboards'
       path: '/dashboards'
@@ -1187,6 +1271,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/issues/'
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/dd-traces/': {
+      id: '/dd-traces/'
+      path: '/'
+      fullPath: '/dd-traces/'
+      preLoaderRoute: typeof DdTracesIndexRouteImport
+      parentRoute: typeof DdTracesRoute
+    }
+    '/dd-profiles/': {
+      id: '/dd-profiles/'
+      path: '/'
+      fullPath: '/dd-profiles/'
+      preLoaderRoute: typeof DdProfilesIndexRouteImport
+      parentRoute: typeof DdProfilesRoute
     }
     '/dashboards/': {
       id: '/dashboards/'
@@ -1334,6 +1432,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback/$feedbackId'
       preLoaderRoute: typeof FeedbackFeedbackIdRouteImport
       parentRoute: typeof FeedbackRoute
+    }
+    '/dd-traces/$traceId': {
+      id: '/dd-traces/$traceId'
+      path: '/$traceId'
+      fullPath: '/dd-traces/$traceId'
+      preLoaderRoute: typeof DdTracesTraceIdRouteImport
+      parentRoute: typeof DdTracesRoute
+    }
+    '/dd-profiles/$profileId': {
+      id: '/dd-profiles/$profileId'
+      path: '/$profileId'
+      fullPath: '/dd-profiles/$profileId'
+      preLoaderRoute: typeof DdProfilesProfileIdRouteImport
+      parentRoute: typeof DdProfilesRoute
     }
     '/dashboards/datasources': {
       id: '/dashboards/datasources'
@@ -1570,6 +1682,34 @@ const DashboardsRouteWithChildren = DashboardsRoute._addFileChildren(
   DashboardsRouteChildren,
 )
 
+interface DdProfilesRouteChildren {
+  DdProfilesProfileIdRoute: typeof DdProfilesProfileIdRoute
+  DdProfilesIndexRoute: typeof DdProfilesIndexRoute
+}
+
+const DdProfilesRouteChildren: DdProfilesRouteChildren = {
+  DdProfilesProfileIdRoute: DdProfilesProfileIdRoute,
+  DdProfilesIndexRoute: DdProfilesIndexRoute,
+}
+
+const DdProfilesRouteWithChildren = DdProfilesRoute._addFileChildren(
+  DdProfilesRouteChildren,
+)
+
+interface DdTracesRouteChildren {
+  DdTracesTraceIdRoute: typeof DdTracesTraceIdRoute
+  DdTracesIndexRoute: typeof DdTracesIndexRoute
+}
+
+const DdTracesRouteChildren: DdTracesRouteChildren = {
+  DdTracesTraceIdRoute: DdTracesTraceIdRoute,
+  DdTracesIndexRoute: DdTracesIndexRoute,
+}
+
+const DdTracesRouteWithChildren = DdTracesRoute._addFileChildren(
+  DdTracesRouteChildren,
+)
+
 interface FeedbackRouteChildren {
   FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
 }
@@ -1698,6 +1838,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   AnalyticsRoute: AnalyticsRouteWithChildren,
   DashboardsRoute: DashboardsRouteWithChildren,
+  DdProfilesRoute: DdProfilesRouteWithChildren,
+  DdTracesRoute: DdTracesRouteWithChildren,
   DemoRoute: DemoRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
