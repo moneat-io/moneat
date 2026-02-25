@@ -45,7 +45,7 @@ export interface LogViewSearch {
 }
 
 const VALID_VIZ_MODES: LogVizMode[] = ['timeseries', 'table', 'toplist', 'pie']
-const VALID_TIME_PRESETS = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '3d', '7d', 'custom']
+const VALID_TIME_PRESETS = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '3d', '7d', '14d', '30d', 'custom']
 
 /**
  * Parse URL search params into normalized log view state.

@@ -44,6 +44,8 @@ const TIME_PRESETS: TimeRangePreset[] = [
   {label: 'Last 24 hours', value: '24h', minutes: 1440},
   {label: 'Last 3 days', value: '3d', minutes: 4320},
   {label: 'Last 7 days', value: '7d', minutes: 10080},
+  {label: 'Last 14 days', value: '14d', minutes: 20160},
+  {label: 'Last 30 days', value: '30d', minutes: 43200},
 ]
 
 const LEVEL_OPTIONS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal']
