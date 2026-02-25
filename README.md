@@ -298,7 +298,7 @@ moneat-enterprise/           # Separate private repo (proprietary license)
 | Notifications | Twilio (SMS), Slack, Push |
 | Observability | OpenTelemetry, Sentry self-monitoring |
 
-Production deployment configuration lives in the separate **[moneat-deploy](https://github.com/AElbadworthy/moneat-deploy)** repository.
+Production deployment configuration lives in the separate repository.
 
 ---
 
