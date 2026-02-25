@@ -449,18 +449,16 @@ fun Route.logRoutes(
 
         get("/logs/tail") {
             val principal = call.principal<JWTPrincipal>()
-            if (principal == null) {
-                val userId = authenticateTailRequest(call)
-                if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
-                    return@get
-                }
-            }
-
-            val orgId = call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()?.toLong()
-                ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
-                    return@get
+            val orgId =
+                if (principal != null) {
+                    principal.payload.getClaim("orgId").asInt().toLong()
+                } else {
+                    val auth = authenticateTailRequest(call)
+                    if (auth == null) {
+                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
+                        return@get
+                    }
+                    auth.second
                 }
 
             val filters =
@@ -582,8 +580,8 @@ private fun extractOrgIdFromLogApiKey(
             ?.takeIf { it.startsWith(bearerPrefix, ignoreCase = true) }
             ?.substring(bearerPrefix.length)
             ?.trim()
-            ?: call.request.queryParameters["key"]
-    return key?.let { logApiKeyService.validateKey(it) }
+            ?: return null
+    return logApiKeyService.validateKey(key)
 }
 
 private fun extractOrgIdFromLegacyDsn(
@@ -626,11 +624,8 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
             ?.takeIf { it.startsWith(bearerPrefix, ignoreCase = true) }
             ?.substring(bearerPrefix.length)
             ?.trim()
-    // Try: Authorization header → cookie → query param (legacy fallback)
-    val token =
-        bearerToken
-            ?: call.request.cookies["auth_token"]
-            ?: call.request.queryParameters["token"]
+    // Authorization header or cookie only (no query param to avoid leaking secrets)
+    val token = bearerToken ?: call.request.cookies["auth_token"]
 
     if (token.isNullOrBlank()) return null
 

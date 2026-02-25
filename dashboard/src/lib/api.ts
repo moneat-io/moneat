@@ -2392,6 +2392,64 @@ class ApiClient {
     return response.json()
   }
 
+  /**
+   * Fetch with auth (same credentials/impersonation/401 retry as request) for non-JSON responses (e.g. blob download).
+   */
+  private async fetchWithAuth(
+    endpoint: string,
+    options: RequestInit = {},
+    authRetryCount = 0
+  ): Promise<Response> {
+    const impersonateToken = this.getImpersonateToken()
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string>),
+    }
+    if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
+
+    let response: Response
+    try {
+      response = await fetch(endpoint, { ...options, headers, credentials: 'include' })
+    } catch {
+      throw new Error('NETWORK_ERROR')
+    }
+
+    if (response.status === 401) {
+      if (authRetryCount >= 1) {
+        this.logout()
+        if (
+          !this.authRedirectInProgress &&
+          typeof window !== 'undefined' &&
+          !AUTH_PAGE_PATHS.has(window.location.pathname)
+        ) {
+          this.authRedirectInProgress = true
+          window.location.assign('/login')
+        }
+        throw new Error('Unauthorized')
+      }
+      if (!this.refreshPromise) {
+        this.refreshPromise = this.refreshAccessToken().finally(() => {
+          this.refreshPromise = null
+        })
+      }
+      const refreshed = await this.refreshPromise
+      if (refreshed) {
+        return this.fetchWithAuth(endpoint, options, authRetryCount + 1)
+      }
+      this.logout()
+      if (
+        !this.authRedirectInProgress &&
+        typeof window !== 'undefined' &&
+        !AUTH_PAGE_PATHS.has(window.location.pathname)
+      ) {
+        this.authRedirectInProgress = true
+        window.location.assign('/login')
+      }
+      throw new Error('Unauthorized')
+    }
+
+    return response
+  }
+
   private mapMonitorSystem(row: Record<string, unknown>): MonitorSystemWithMetrics {
     const latest = (row.latest_metrics ?? {}) as Record<string, unknown>
 
@@ -3143,10 +3201,7 @@ class ApiClient {
     const params = this.buildLogFilterParams(options)
     if (options.limit) params.set('limit', String(options.limit))
 
-    const response = await fetch(
-      `${API_BASE}/logs/export?${params.toString()}`,
-      { credentials: 'include' }
-    )
+    const response = await this.fetchWithAuth(`${API_BASE}/logs/export?${params.toString()}`)
     if (!response.ok) throw new Error('Export failed')
 
     const blob = await response.blob()

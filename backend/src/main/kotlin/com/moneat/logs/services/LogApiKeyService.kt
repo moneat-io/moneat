@@ -140,7 +140,8 @@ class LogApiKeyService {
                 .selectAll()
                 .where {
                     (LogApiKeys.id eq keyId) and
-                        (LogApiKeys.organization_id eq organizationId)
+                        (LogApiKeys.organization_id eq organizationId) and
+                        (LogApiKeys.is_active eq true)
                 }
                 .firstOrNull() != null
         }

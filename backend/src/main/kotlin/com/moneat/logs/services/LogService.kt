@@ -189,7 +189,12 @@ class LogService {
         }
 
         val totalBytes = batch.logs.sumOf { it.message.length + it.body.length }
-        usageTracking.recordOrgUsage(batch.organizationId.toInt(), "log", totalBytes)
+        val orgIdLong = batch.effectiveOrganizationId
+        if (orgIdLong in Int.MIN_VALUE..Int.MAX_VALUE) {
+            usageTracking.recordOrgUsage(orgIdLong.toInt(), "log", totalBytes)
+        } else {
+            logger.error { "organizationId $orgIdLong out of Int range, skipping usage recording" }
+        }
 
         return batch.logs.map { toResponse(it, batch.systemId) }
     }
@@ -1149,6 +1154,7 @@ class LogService {
             encodeQueueMessage(
                 QueuedLogBatch(
                     organizationId = organizationId,
+                    legacyProjectId = null,
                     systemId = systemId,
                     source = source,
                     logs = logs

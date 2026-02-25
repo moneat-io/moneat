@@ -114,7 +114,7 @@ class LogServicePureLogicTest {
             resourceAttributes = mapOf("service.name" to "api")
         )
         val batch = QueuedLogBatch(
-            projectId = 42L,
+            organizationId = 42L,
             systemId = null,
             source = "sdk",
             logs = listOf(entry)
@@ -123,7 +123,7 @@ class LogServicePureLogicTest {
         val encoded = service.encodeQueueMessage(batch)
         val decoded = service.decodeQueueMessage(encoded)
 
-        assertEquals(42L, decoded.projectId)
+        assertEquals(42L, decoded.effectiveOrganizationId)
         assertNull(decoded.systemId)
         assertEquals("sdk", decoded.source)
         assertEquals(1, decoded.logs.size)
@@ -135,10 +135,20 @@ class LogServicePureLogicTest {
 
     @Test
     fun `encodeQueueMessage produces JSON string`() {
-        val batch = QueuedLogBatch(projectId = 1L, source = "sdk", logs = emptyList())
+        val batch = QueuedLogBatch(organizationId = 1L, source = "sdk", logs = emptyList())
         val encoded = service.encodeQueueMessage(batch)
         assertTrue(encoded.startsWith("{"))
-        assertTrue(encoded.contains("project_id"))
+        assertTrue(encoded.contains("organization_id"))
+    }
+
+    @Test
+    fun `decodeQueueMessage accepts legacy project_id and uses effectiveOrganizationId`() {
+        val legacyJson =
+            """{"project_id":77,"system_id":null,"source":"sdk","logs":[{"log_id":"x","timestamp_ms":1,"level":"info","message":"m","body":"b","service":"s","environment":"e","host":"h","source":"sdk","container_name":"","container_id":"","container_image":"","trace_id":"","span_id":""}]}"""
+        val decoded = service.decodeQueueMessage(legacyJson)
+        assertEquals(77L, decoded.effectiveOrganizationId)
+        assertEquals(77L, decoded.legacyProjectId)
+        assertNull(decoded.organizationId)
     }
 
     // ==================== parseLiveLog ====================

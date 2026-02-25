@@ -32,6 +32,8 @@ interface TagFacetsProps {
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   from?: string
   to?: string
+  /** Scope identifier (e.g. systemId for monitor mode) to avoid cache mixing between org and system views */
+  scopeId?: string | null
 }
 
 function formatFacetCount(n: number): string {
@@ -188,17 +190,19 @@ function TagKeySection({
   onFacetFiltersChange,
   from,
   to,
+  scopeId,
 }: {
   tagKey: string
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   from?: string
   to?: string
+  scopeId?: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
 
   const {data: tagValues} = useQuery({
-    queryKey: ['log-tag-values', tagKey, from, to],
+    queryKey: ['log-tag-values', scopeId ?? 'org', tagKey, from, to],
     queryFn: () => api.getLogTagValues(tagKey, {from, to, limit: 30}),
     enabled: expanded,
     staleTime: 60_000,
@@ -326,6 +330,7 @@ export function TagFacets({
   onFacetFiltersChange,
   from,
   to,
+  scopeId,
 }: TagFacetsProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card/50">
@@ -378,6 +383,7 @@ export function TagFacets({
             onFacetFiltersChange={onFacetFiltersChange}
             from={from}
             to={to}
+            scopeId={scopeId}
           />
         ))}
 

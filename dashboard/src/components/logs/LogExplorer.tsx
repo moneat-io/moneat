@@ -654,6 +654,7 @@ export function LogExplorer({
                 onFacetFiltersChange={setFacetFilters}
                 from={timeRange.from}
                 to={timeRange.to}
+                scopeId={systemId}
               />
             )}
           </div>

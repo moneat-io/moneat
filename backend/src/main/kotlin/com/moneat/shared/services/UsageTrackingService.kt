@@ -69,6 +69,9 @@ data class QuotaStatus(
 class UsageTrackingService {
     companion object {
         val instance = UsageTrackingService()
+
+        /** Sentinel project ID for org-level usage (logs, etc.) when no specific project applies. */
+        const val ORG_PROJECT_ID_SENTINEL = 0L
     }
 
     private val buffer = ConcurrentHashMap<String, Pair<AtomicInteger, java.util.concurrent.atomic.AtomicLong>>()
@@ -104,14 +107,14 @@ class UsageTrackingService {
     }
 
     /**
-     * Record org-scoped usage (e.g. logs). Uses projectId=0 for org-level events.
+     * Record org-scoped usage (e.g. logs). Uses ORG_PROJECT_ID_SENTINEL for org-level events.
      */
     fun recordOrgUsage(
         organizationId: Int,
         eventType: String,
         byteSize: Int = 0
     ) {
-        recordUsageInternal(organizationId, 0L, eventType, byteSize)
+        recordUsageInternal(organizationId, ORG_PROJECT_ID_SENTINEL, eventType, byteSize)
     }
 
     private fun recordUsageInternal(

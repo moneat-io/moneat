@@ -97,9 +97,17 @@ export function LogApiKeysTab() {
     },
   })
 
-  const handleCopyKey = (value: string) => {
-    navigator.clipboard.writeText(value)
-    toast({title: 'Copied', description: 'Key copied to clipboard.'})
+  const handleCopyKey = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast({title: 'Copied', description: 'Key copied to clipboard.'})
+    } catch {
+      toast({
+        title: 'Copy failed',
+        description: 'Could not copy to clipboard. Try selecting and copying manually.',
+        variant: 'destructive',
+      })
+    }
   }
 
   const handleCloseCreateDialog = () => {
@@ -173,6 +181,8 @@ export function LogApiKeysTab() {
                         size="sm"
                         className="text-destructive hover:text-destructive"
                         onClick={() => setRevokeKey(key)}
+                        aria-label={`Revoke API key ${key.name}`}
+                        title="Revoke API key"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -273,6 +283,8 @@ export function LogApiKeysTab() {
                   size="icon"
                   onClick={() => handleCopyKey(createdKey.key)}
                   className="shrink-0"
+                  aria-label="Copy API key"
+                  title="Copy API key"
                 >
                   <Copy className="h-4 w-4" />
                 </Button>
