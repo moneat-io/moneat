@@ -14,14 +14,76 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect} from 'react'
+import {useEffect, useState} from 'react'
 import {Link} from '@tanstack/react-router'
+import {Menu} from 'lucide-react'
 import {Logo} from '@/components/logo'
 import {Button} from '@/components/ui/button'
+import {Sheet, SheetContent, SheetTrigger} from '@/components/ui/sheet'
 import {VariantA} from './variant-a'
 import {PricingSection} from './pricing-section'
 import {PricingCalculatorSection} from './pricing-calculator-section'
 import {Helmet} from 'react-helmet-async'
+
+const NAV_LINKS = [
+  {label: 'Features', href: '#features'},
+  {label: 'Live Demo', to: '/demo'},
+  {label: 'Pricing', href: '#pricing'},
+  {label: 'Calculator', href: '#pricing-calculator'},
+  {label: 'Docs', href: '/docs'},
+] as const
+
+function MobileNav() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open menu">
+          <Menu className="h-5 w-5" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-72 bg-background p-0">
+        <div className="flex items-center px-4 py-4 border-b border-border/50">
+          <Logo className="h-7" />
+        </div>
+        <nav className="flex flex-col gap-1 px-3 py-4">
+          {NAV_LINKS.map((link) =>
+            'to' in link ? (
+              <Link
+                key={link.label}
+                to={link.to}
+                onClick={() => setOpen(false)}
+                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={link.label}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                {link.label}
+              </a>
+            ),
+          )}
+        </nav>
+        <div className="flex flex-col gap-3 px-4 pt-2 border-t border-border/50 mt-auto">
+          <Link to="/login" onClick={() => setOpen(false)}>
+            <Button variant="outline" className="w-full">Log in</Button>
+          </Link>
+          <Link to="/signup" onClick={() => setOpen(false)}>
+            <Button className="w-full bg-sky-500 hover:bg-sky-600 text-white shadow-md shadow-sky-500/25">
+              Sign up free
+            </Button>
+          </Link>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
 
 export function LandingPage() {
   // The landing page is always dark regardless of the user's saved theme preference.
@@ -95,7 +157,7 @@ export function LandingPage() {
               Docs
             </a>
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
             <Link to="/login">
               <Button variant="ghost" className="text-sm">Log in</Button>
             </Link>
@@ -105,6 +167,9 @@ export function LandingPage() {
               </Button>
             </Link>
           </div>
+
+          {/* Mobile menu */}
+          <MobileNav />
         </div>
       </header>
 

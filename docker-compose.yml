@@ -35,6 +35,7 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./backend/src/main/resources/db/clickhouse_init.sql:/docker-entrypoint-initdb.d/clickhouse_init.sql
+      - ./clickhouse-config/logging.xml:/etc/clickhouse-server/config.d/logging.xml
     ulimits:
       nofile:
         soft: 262144
