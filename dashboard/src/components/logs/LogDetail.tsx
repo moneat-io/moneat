@@ -23,7 +23,6 @@ import {cn} from '@/lib/utils'
 import {stripAnsi} from '@/lib/ansi'
 import {Check, Copy, ExternalLink, Eye} from 'lucide-react'
 import {useCallback, useState} from 'react'
-import {useParams} from '@tanstack/react-router'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTimeFull} from '@/lib/date-format'
 
@@ -32,6 +31,8 @@ interface LogDetailProps {
   open: boolean
   onClose: () => void
   onViewInContext?: (log: LogEntry) => void
+  /** Optional project ID for trace/span links (traces are project-scoped) */
+  projectId?: number
 }
 
 const levelStyles: Record<string, string> = {
@@ -138,8 +139,7 @@ function tryFormatJson(value: string): {isJson: boolean; formatted: string} {
   }
 }
 
-export function LogDetail({log, open, onClose, onViewInContext}: LogDetailProps) {
-  const {projectId} = useParams({strict: false})
+export function LogDetail({log, open, onClose, onViewInContext, projectId}: LogDetailProps) {
   const { timezone } = useTimezone()
 
   if (!log) return null

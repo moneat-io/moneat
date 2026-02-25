@@ -414,6 +414,22 @@ interface LogTopResponse {
   totalCount: number
 }
 
+export interface LogApiKey {
+  id: number
+  name: string
+  keyPrefix: string
+  createdAt: string
+  lastUsedAt?: string
+}
+
+export interface CreateLogApiKeyResponse {
+  id: number
+  name: string
+  keyPrefix: string
+  key: string
+  createdAt: string
+}
+
 interface RawLogResponse {
   logs?: Record<string, unknown>[]
   nextCursor?: string | null
@@ -2789,8 +2805,7 @@ class ApiClient {
     return this.request<ProjectStats>(`${API_BASE}/projects/${projectId}/stats?period=${period}`)
   }
 
-  async getProjectLogs(
-    projectId: number,
+  async getLogs(
     options: {
       cursor?: string
       limit?: number
@@ -2834,7 +2849,7 @@ class ApiClient {
       })
     }
 
-    const response = await this.request<RawLogResponse>(`${API_BASE}/projects/${projectId}/logs?${params.toString()}`)
+    const response = await this.request<RawLogResponse>(`${API_BASE}/logs?${params.toString()}`)
     const rows: Record<string, unknown>[] = response.logs ?? []
     const logs = rows.map((row) => ({
       logId: row.logId ?? row.log_id,
@@ -2925,8 +2940,7 @@ class ApiClient {
     }
   }
 
-  async getProjectLogFilters(
-    projectId: number,
+  async getLogFilters(
     options: { from?: string; to?: string } = {}
   ): Promise<LogFilterOptionsWithCounts> {
     const params = new URLSearchParams()
@@ -2934,7 +2948,7 @@ class ApiClient {
     if (options.to) params.set('to', options.to)
     const query = params.toString()
     const response = await this.request<RawLogFilterResponse>(
-      `${API_BASE}/projects/${projectId}/logs/filters${query ? `?${query}` : ''}`
+      `${API_BASE}/logs/filters${query ? `?${query}` : ''}`
     )
     // Support both old format (string[]) and new format (object with count)
     const mapServices = (arr: (string | { value: string; count: number })[]) =>
@@ -2949,8 +2963,30 @@ class ApiClient {
     }
   }
 
-  async getProjectLogTagValues(
-    projectId: number,
+  async getLogApiKeys(): Promise<{ keys: LogApiKey[] }> {
+    const response = await this.request<{ keys: Record<string, unknown>[] }>(`${API_BASE}/logs/api-keys`)
+    const keys = (response.keys ?? []).map((k) => ({
+      id: k.id as number,
+      name: k.name as string,
+      keyPrefix: (k.keyPrefix ?? k.key_prefix) as string,
+      createdAt: (k.createdAt ?? k.created_at) as string,
+      lastUsedAt: (k.lastUsedAt ?? k.last_used_at) as string | undefined,
+    }))
+    return { keys }
+  }
+
+  async createLogApiKey(name: string): Promise<CreateLogApiKeyResponse> {
+    return this.request<CreateLogApiKeyResponse>(`${API_BASE}/logs/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async deleteLogApiKey(id: number): Promise<void> {
+    await this.request(`${API_BASE}/logs/api-keys/${id}`, { method: 'DELETE' })
+  }
+
+  async getLogTagValues(
     key: string,
     options: { from?: string; to?: string; limit?: number } = {}
   ): Promise<{ key: string; values: string[] }> {
@@ -2960,12 +2996,11 @@ class ApiClient {
     if (options.to) params.set('to', options.to)
     if (options.limit) params.set('limit', String(options.limit))
     return this.request<{ key: string; values: string[] }>(
-      `${API_BASE}/projects/${projectId}/logs/tag-values?${params.toString()}`
+      `${API_BASE}/logs/tag-values?${params.toString()}`
     )
   }
 
-  createProjectLogTailStream(
-    projectId: number,
+  createLogTailStream(
     options: {
       query?: string
       levels?: string[]
@@ -2982,7 +3017,7 @@ class ApiClient {
     if (options.environment) params.set('environment', options.environment)
 
     // Auth is handled via httpOnly cookie (EventSource sends cookies for same-origin)
-    return new EventSource(`${API_BASE}/projects/${projectId}/logs/tail?${params.toString()}`, { withCredentials: true })
+    return new EventSource(`${API_BASE}/logs/tail?${params.toString()}`, { withCredentials: true })
   }
 
   private buildLogFilterParams(options: {
@@ -3023,8 +3058,7 @@ class ApiClient {
     return params
   }
 
-  async getProjectLogAggregate(
-    projectId: number,
+  async getLogAggregate(
     options: {
       from?: string
       to?: string
@@ -3045,7 +3079,7 @@ class ApiClient {
     if (options.interval) params.set('interval', options.interval)
     if (options.groupBy) params.set('groupBy', options.groupBy)
     const response = await this.request<RawLogAggregateResponse>(
-      `${API_BASE}/projects/${projectId}/logs/aggregate?${params.toString()}`
+      `${API_BASE}/logs/aggregate?${params.toString()}`
     )
     return {
       buckets: (response.buckets ?? []).map((b) => ({
@@ -3058,8 +3092,7 @@ class ApiClient {
     }
   }
 
-  async getProjectLogTop(
-    projectId: number,
+  async getLogTop(
     options: {
       field: string
       limit?: number
@@ -3080,7 +3113,7 @@ class ApiClient {
     params.set('field', options.field)
     if (options.limit) params.set('limit', String(options.limit))
     const response = await this.request<RawLogTopResponse>(
-      `${API_BASE}/projects/${projectId}/logs/top?${params.toString()}`
+      `${API_BASE}/logs/top?${params.toString()}`
     )
     return {
       field: response.field ?? options.field,
@@ -3092,9 +3125,7 @@ class ApiClient {
     }
   }
 
-  async downloadProjectLogExport(
-    projectId: number,
-    options: {
+  async downloadLogExport(options: {
       from?: string
       to?: string
       query?: string
@@ -3113,7 +3144,7 @@ class ApiClient {
     if (options.limit) params.set('limit', String(options.limit))
 
     const response = await fetch(
-      `${API_BASE}/projects/${projectId}/logs/export?${params.toString()}`,
+      `${API_BASE}/logs/export?${params.toString()}`,
       { credentials: 'include' }
     )
     if (!response.ok) throw new Error('Export failed')

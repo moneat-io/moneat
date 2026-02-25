@@ -59,7 +59,7 @@ function TraceDetailPage() {
           <li>The trace ID in the log doesn&apos;t match any actual trace data</li>
         </ul>
         <Button asChild variant="outline" size="sm" className="mt-4">
-          <Link to="/projects/$projectId/logs" params={{ projectId }}>
+          <Link to="/logs">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Logs
           </Link>
@@ -86,7 +86,7 @@ function TraceDetailPage() {
           size="sm"
           asChild
         >
-          <Link to="/projects/$projectId/logs" params={{ projectId }}>
+          <Link to="/logs">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Logs
           </Link>

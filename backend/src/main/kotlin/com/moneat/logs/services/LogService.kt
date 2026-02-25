@@ -72,35 +72,35 @@ class LogService {
     private val usageTracking = UsageTrackingService.instance
     private val queryParser = LogQueryParser()
 
-    fun liveChannel(projectId: Long): String = "log:live:$projectId"
+    fun liveChannel(organizationId: Long): String = "log:live:$organizationId"
 
     suspend fun enqueueSdkLogs(
-        projectId: Long,
+        organizationId: Long,
         entries: List<LogIngestEntry>,
         queueKey: String
     ): Int {
         val normalized = entries.mapNotNull { normalizeSdkEntry(it) }
-        return enqueueNormalized(projectId, null, "sdk", normalized, queueKey)
+        return enqueueNormalized(organizationId, null, "sdk", normalized, queueKey)
     }
 
     suspend fun enqueueAgentLogs(
-        projectId: Long,
+        organizationId: Long,
         systemId: String?,
         entries: List<AgentLogEntry>,
         queueKey: String
     ): Int {
         val normalized = entries.mapNotNull { normalizeAgentEntry(it, systemId) }
-        return enqueueNormalized(projectId, systemId, "agent", normalized, queueKey)
+        return enqueueNormalized(organizationId, systemId, "agent", normalized, queueKey)
     }
 
     suspend fun enqueueOtlpLogs(
-        projectId: Long,
+        organizationId: Long,
         body: String,
         queueKey: String
     ): Int {
         val parsed = parseOtlpJson(body)
         val normalized = parsed.mapNotNull { normalizeOtlpEntry(it) }
-        return enqueueNormalized(projectId, null, "otlp", normalized, queueKey)
+        return enqueueNormalized(organizationId, null, "otlp", normalized, queueKey)
     }
 
     fun estimateBillableBytes(entries: List<LogIngestEntry>): Long {
@@ -136,7 +136,7 @@ class LogService {
                 """
             (
                 toUUID('${escapeSql(entry.logId)}'),
-                ${batch.projectId},
+                ${batch.organizationId},
                 toUUID('${escapeSql(systemIdValue)}'),
                 fromUnixTimestamp64Milli(${entry.timestampMs}),
                 '${escapeSql(entry.level)}',
@@ -161,7 +161,7 @@ class LogService {
             """
             INSERT INTO $clickhouseDb.logs (
                 log_id,
-                project_id,
+                organization_id,
                 system_id,
                 timestamp,
                 level,
@@ -189,17 +189,17 @@ class LogService {
         }
 
         val totalBytes = batch.logs.sumOf { it.message.length + it.body.length }
-        usageTracking.recordUsage(batch.projectId, "log", totalBytes)
+        usageTracking.recordOrgUsage(batch.organizationId.toInt(), "log", totalBytes)
 
         return batch.logs.map { toResponse(it, batch.systemId) }
     }
 
     suspend fun publishLiveLogs(
-        projectId: Long,
+        organizationId: Long,
         logs: List<LogEntryResponse>
     ) {
         if (logs.isEmpty()) return
-        val channel = liveChannel(projectId)
+        val channel = liveChannel(organizationId)
         val redis = RedisConfig.sync()
         logs.forEach { log ->
             redis.publish(channel, json.encodeToString(log))
@@ -238,21 +238,21 @@ class LogService {
     }
 
     suspend fun queryLogs(
-        projectId: Long,
+        organizationId: Long,
         request: LogQueryRequest
     ): LogQueryResponse {
         val limit = request.limit.coerceIn(1, 500)
         val conditions = mutableListOf<String>()
 
         val totalCountFilter =
-            buildScopeFilter(projectId, request.systemId) ?: return LogQueryResponse(
+            buildScopeFilter(organizationId, request.systemId) ?: return LogQueryResponse(
                 logs = emptyList(),
                 nextCursor = null,
                 hasMore = false,
                 totalCount = 0L
             )
 
-        // Support filtering by either system_id or project_id
+        // Support filtering by either system_id or organization_id
         conditions += totalCountFilter
 
         val fromMs = parseTimeToMillis(request.from)
@@ -451,7 +451,7 @@ class LogService {
     }
 
     suspend fun aggregateLogs(
-        projectId: Long,
+        organizationId: Long,
         from: String?,
         to: String?,
         interval: String?,
@@ -476,7 +476,7 @@ class LogService {
             }
         val chInterval = intervalToClickHouse(resolvedInterval)
 
-        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
 
@@ -550,7 +550,7 @@ class LogService {
             }
 
         logger.debug {
-            "Aggregate logs SQL for project $projectId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql"
+            "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql"
         }
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
@@ -591,13 +591,13 @@ class LogService {
             }
 
         logger.debug {
-            "Aggregate logs result for project $projectId: ${buckets.size} buckets, totalCount=$totalCount, interval=$resolvedInterval"
+            "Aggregate logs result for org $organizationId: ${buckets.size} buckets, totalCount=$totalCount, interval=$resolvedInterval"
         }
         return LogAggregateResponse(buckets = buckets, totalCount = totalCount, interval = resolvedInterval)
     }
 
     suspend fun topValues(
-        projectId: Long,
+        organizationId: Long,
         field: String,
         limit: Int,
         from: String?,
@@ -612,7 +612,7 @@ class LogService {
         excludeContainerName: String?,
         excludeTags: Map<String, String>
     ): LogTopResponse {
-        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         val toMs = parseTimeToMillis(to)
@@ -724,7 +724,7 @@ class LogService {
     }
 
     suspend fun exportCsv(
-        projectId: Long,
+        organizationId: Long,
         from: String?,
         to: String?,
         query: String?,
@@ -738,7 +738,7 @@ class LogService {
         excludeTags: Map<String, String>,
         limit: Int
     ): String {
-        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         val toMs = parseTimeToMillis(to)
@@ -846,11 +846,11 @@ class LogService {
     }
 
     suspend fun getFilterOptionsWithCounts(
-        projectId: Long,
+        organizationId: Long,
         from: String?,
         to: String?
     ): LogFilterOptionsWithCountsResponse {
-        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
         val toMs = parseTimeToMillis(to)
@@ -923,11 +923,11 @@ class LogService {
     }
 
     suspend fun getFilterOptions(
-        projectId: Long,
+        organizationId: Long,
         from: String?,
         to: String?
     ): LogFilterOptionsResponse {
-        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
         val fromMs = parseTimeToMillis(from)
         if (fromMs != null) {
             conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
@@ -987,7 +987,7 @@ class LogService {
     }
 
     suspend fun getTagValues(
-        projectId: Long,
+        organizationId: Long,
         key: String,
         from: String?,
         to: String?,
@@ -1002,7 +1002,7 @@ class LogService {
         // Check if this is a top-level field or a tag
         val isTopLevelField = actualField in topLevelFields
 
-        val conditions = mutableListOf(ClickHouseQueryUtils.projectIdClause(projectId))
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
 
         // Only add has() check for actual tags, not top-level fields
         if (!isTopLevelField) {
@@ -1137,7 +1137,7 @@ class LogService {
     }
 
     private suspend fun enqueueNormalized(
-        projectId: Long,
+        organizationId: Long,
         systemId: String?,
         source: String,
         logs: List<QueuedLogEntry>,
@@ -1148,7 +1148,7 @@ class LogService {
         val message =
             encodeQueueMessage(
                 QueuedLogBatch(
-                    projectId = projectId,
+                    organizationId = organizationId,
                     systemId = systemId,
                     source = source,
                     logs = logs
@@ -1347,12 +1347,12 @@ class LogService {
     }
 
     private fun buildScopeFilter(
-        projectId: Long,
+        organizationId: Long,
         systemId: String?
     ): String? {
         val rawSystemId = systemId?.trim()
         if (rawSystemId.isNullOrEmpty()) {
-            return ClickHouseQueryUtils.projectIdClause(projectId)
+            return ClickHouseQueryUtils.orgIdClause(organizationId)
         }
 
         val parsed =

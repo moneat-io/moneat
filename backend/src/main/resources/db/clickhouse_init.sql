@@ -70,10 +70,11 @@ ORDER BY (project_id, timestamp, event_id)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Logs table for centralized logging
+-- Logs table for centralized logging (org-scoped)
 CREATE TABLE IF NOT EXISTS logs (
     log_id UUID,
-    project_id UInt64,
+    organization_id UInt64,
+    system_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
     timestamp DateTime64(3, 'UTC'),
     received_at DateTime64(3, 'UTC') DEFAULT now64(3),
     level Enum8('trace' = 1, 'debug' = 2, 'info' = 3, 'warn' = 4, 'error' = 5, 'fatal' = 6),
@@ -92,10 +93,11 @@ CREATE TABLE IF NOT EXISTS logs (
     resource_attributes Map(String, String),
     INDEX idx_logs_message message TYPE tokenbf_v1(30720, 2, 0) GRANULARITY 1,
     INDEX idx_logs_body body TYPE tokenbf_v1(30720, 2, 0) GRANULARITY 1,
-    INDEX idx_logs_service service TYPE bloom_filter GRANULARITY 1
+    INDEX idx_logs_service service TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_logs_organization_id organization_id TYPE bloom_filter GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp, log_id)
+ORDER BY (organization_id, timestamp, log_id)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 

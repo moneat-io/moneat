@@ -20,6 +20,7 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {loadStripe} from '@stripe/stripe-js'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {type AlertNotificationPreference, type AlertSource, api, type AuthToken} from '@/lib/api'
+import {LogApiKeysTab} from '@/components/settings/LogApiKeysTab'
 import {trackEvent} from '@/lib/analytics'
 import {buildPricingCardModel} from '@/lib/pricing-display'
 import {Button} from '@/components/ui/button'
@@ -134,7 +135,7 @@ function isExpired(expiresAt: string | null | undefined): boolean {
 export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>) => {
     return {
-      tab: (search.tab as string) || 'auth-tokens',
+      tab: (search.tab as string) || 'api-keys',
       ...(search.checkout ? { checkout: search.checkout as string } : {}),
     }
   },
@@ -180,7 +181,7 @@ function SettingsPage() {
           Settings
         </h1>
         <Tabs 
-          value={search.tab || 'auth-tokens'} 
+          value={search.tab || 'api-keys'} 
           onValueChange={(tab) => navigate({ search: { tab } })}
           orientation="vertical"
           className="flex flex-col md:flex-row gap-8 items-start"
@@ -191,18 +192,18 @@ function SettingsPage() {
                 General
               </div>
               <TabsTrigger 
-                value="auth-tokens" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                <Key className="h-4 w-4 mr-2" />
-                Auth Tokens
-              </TabsTrigger>
-              <TabsTrigger 
                 value="general" 
                 className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
                 <SlidersHorizontal className="h-4 w-4 mr-2" />
                 General
+              </TabsTrigger>
+              <TabsTrigger 
+                value="api-keys" 
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Key className="h-4 w-4 mr-2" />
+                API Keys
               </TabsTrigger>
 
               <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
@@ -229,7 +230,6 @@ function SettingsPage() {
                 <BellOff className="h-4 w-4 mr-2" />
                 Silence Periods
               </TabsTrigger>
-
               {(canManageTeam || canUseSso) && (
                 <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
                   Organization
@@ -287,8 +287,8 @@ function SettingsPage() {
           </aside>
           
           <div className="flex-1 w-full min-w-0">
-            <TabsContent value="auth-tokens" className="space-y-4 mt-0">
-              <AuthTokensTab />
+            <TabsContent value="api-keys" className="space-y-4 mt-0">
+              <ApiKeysTab />
             </TabsContent>
             <TabsContent value="integrations" className="space-y-4 mt-0">
               <IntegrationsTab />
@@ -330,7 +330,16 @@ function SettingsPage() {
   )
 }
 
-function AuthTokensTab() {
+function ApiKeysTab() {
+  return (
+    <div className="space-y-8">
+      <AuthTokensSection />
+      <LogApiKeysTab />
+    </div>
+  )
+}
+
+function AuthTokensSection() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { timezone } = useTimezone()
@@ -409,8 +418,7 @@ function AuthTokensTab() {
               Auth Tokens
             </CardTitle>
             <CardDescription>
-              Generate tokens for CLI tools and CI/CD pipelines to upload source maps, manage
-              releases, and more.
+              For CLI tools and CI/CD: upload source maps, manage releases, read events.
             </CardDescription>
           </div>
           <Button onClick={() => setCreateOpen(true)} disabled={!!createdTokenValue}>

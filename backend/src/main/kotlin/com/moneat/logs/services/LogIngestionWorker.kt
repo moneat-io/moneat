@@ -78,7 +78,7 @@ class LogIngestionWorker(
         try {
             val batch = logService.decodeQueueMessage(payload)
             val inserted = logService.insertBatch(batch)
-            logService.publishLiveLogs(batch.projectId, inserted)
+            logService.publishLiveLogs(batch.organizationId, inserted)
         } catch (e: Exception) {
             logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
             onDlq(payload)

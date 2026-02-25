@@ -23,8 +23,10 @@ import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
+import com.moneat.logs.models.CreateLogApiKeyRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogTailFilters
+import com.moneat.logs.services.LogApiKeyService
 import com.moneat.logs.services.LogService
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
@@ -42,6 +44,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
@@ -60,11 +63,56 @@ private val json = Json { ignoreUnknownKeys = true }
 fun Route.logRoutes(
     logService: LogService = LogService(),
     quotaService: BillingQuotaService = BillingQuotaService(),
+    logApiKeyService: LogApiKeyService = LogApiKeyService(),
 ) {
     val eventService = EventService()
     val dashboardService = DashboardService()
 
     route("/v1") {
+        authenticate("auth-jwt") {
+            post("/logs/api-keys") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = principal.payload.getClaim("orgId").asInt()
+
+                val request = call.receive<CreateLogApiKeyRequest>()
+                val name = request.name.trim()
+                if (name.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Name is required"))
+                    return@post
+                }
+
+                val response = logApiKeyService.createKey(organizationId = orgId, name = name, createdBy = userId)
+                call.respond(HttpStatusCode.Created, response)
+            }
+
+            get("/logs/api-keys") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+
+                val keys = logApiKeyService.listKeys(orgId)
+                call.respond(HttpStatusCode.OK, mapOf("keys" to keys))
+            }
+
+            delete("/logs/api-keys/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
+                    return@delete
+                }
+
+                val deleted = logApiKeyService.deleteKey(organizationId = orgId, keyId = id)
+                if (!deleted) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
+                    return@delete
+                }
+                call.respond(HttpStatusCode.NoContent)
+            }
+        }
+
         post("/logs/otlp") {
             val bodyBytes = call.receive<ByteArray>()
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
@@ -84,38 +132,12 @@ fun Route.logRoutes(
                 return@post
             }
 
-            val dsnLikeHeader =
-                call.request.header("x-moneat-dsn")
-                    ?: call.request.header("X-Moneat-Dsn")
-                    ?: call.request.header(HttpHeaders.Authorization)
+            val organizationId: Int? =
+                extractOrgIdFromLogApiKey(call, logApiKeyService)
+                    ?: extractOrgIdFromLegacyDsn(call, eventService)
 
-            val projectId =
-                extractProjectIdFromDsn(dsnLikeHeader)
-                    ?: call.request.queryParameters["projectId"]?.toLongOrNull()
-
-            if (projectId == null) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing project ID in DSN or query parameter"))
-                return@post
-            }
-
-            val publicKey =
-                extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
-                    ?: extractPublicKeyFromDsn(dsnLikeHeader)
-
-            if (publicKey == null) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing DSN authentication"))
-                return@post
-            }
-
-            val verification = eventService.verifyProjectKey(projectId, publicKey)
-            if (!verification.isValid) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid DSN"))
-                return@post
-            }
-
-            val organizationId = eventService.getOrganizationIdForProject(projectId)
             if (organizationId == null) {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key or DSN"))
                 return@post
             }
 
@@ -146,27 +168,76 @@ fun Route.logRoutes(
                     .propertyOrNull("logs.queueKey")
                     ?.getString()
                     ?: "moneat:logs:queue"
-            val accepted = logService.enqueueSdkLogs(projectId, parsedEntries, queueKey)
+            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), parsedEntries, queueKey)
+            call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+        }
+
+        post("/logs/ingest") {
+            val organizationId = extractOrgIdFromLogApiKey(call, logApiKeyService)
+            if (organizationId == null) {
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key"))
+                return@post
+            }
+
+            val bodyBytes = call.receive<ByteArray>()
+            val encoding = call.request.header(HttpHeaders.ContentEncoding)
+            val payloadBytes =
+                if (encoding == "gzip") {
+                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
+                } else {
+                    bodyBytes
+                }
+
+            val entries =
+                try {
+                    json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(payloadBytes.decodeToString())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                }
+
+            if (entries.isEmpty()) {
+                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
+                return@post
+            }
+
+            if (quotaService.isEnforcementEnabled()) {
+                val billableBytes = logService.estimateBillableBytes(entries)
+                val reservation =
+                    quotaService.reserveUnits(
+                        organizationId = organizationId,
+                        requestedUnits = entries.size,
+                        eventType = "log",
+                        requestedBytes = billableBytes
+                    )
+                if (!reservation.allowed) {
+                    call.respond(
+                        HttpStatusCode.TooManyRequests,
+                        mapOf(
+                            "error" to "Quota exceeded",
+                            "reason" to reservation.reason,
+                            "usage" to reservation.usage
+                        )
+                    )
+                    return@post
+                }
+            }
+
+            val queueKey =
+                call.application.environment.config
+                    .propertyOrNull("logs.queueKey")
+                    ?.getString()
+                    ?: "moneat:logs:queue"
+            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey)
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
 
         authenticate("auth-jwt") {
-            get("/projects/{projectId}/logs") {
+            get("/logs") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
-
-                val projectId = call.parameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
-                    return@get
-                }
-
-                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                    call.respond(HttpStatusCode.Forbidden)
-                    return@get
-                }
 
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
@@ -201,24 +272,13 @@ fun Route.logRoutes(
                         excludeTags = parseExcludeTagQueryParams(call)
                     )
 
-                val result = logService.queryLogs(projectId, request)
+                val result = logService.queryLogs(orgId, request)
                 call.respond(HttpStatusCode.OK, result)
             }
 
-            get("/projects/{projectId}/logs/tag-values") {
+            get("/logs/tag-values") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val projectId = call.parameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
-                    return@get
-                }
-
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
-                    call.respond(HttpStatusCode.Forbidden)
-                    return@get
-                }
+                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
 
                 val key = call.request.queryParameters["key"]
                 if (key.isNullOrBlank()) {
@@ -228,7 +288,7 @@ fun Route.logRoutes(
 
                 val result =
                     logService.getTagValues(
-                        projectId = projectId,
+                        organizationId = orgId,
                         key = key,
                         from = call.request.queryParameters["from"],
                         to = call.request.queryParameters["to"],
@@ -237,22 +297,11 @@ fun Route.logRoutes(
                 call.respond(HttpStatusCode.OK, result)
             }
 
-            get("/projects/{projectId}/logs/filters") {
+            get("/logs/filters") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
-
-                val projectId = call.parameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
-                    return@get
-                }
-
-                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                    call.respond(HttpStatusCode.Forbidden)
-                    return@get
-                }
 
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
@@ -272,29 +321,18 @@ fun Route.logRoutes(
 
                 val result =
                     logService.getFilterOptionsWithCounts(
-                        projectId = projectId,
+                        organizationId = orgId,
                         from = defaultFrom,
                         to = defaultTo
                     )
                 call.respond(HttpStatusCode.OK, result)
             }
 
-            get("/projects/{projectId}/logs/aggregate") {
+            get("/logs/aggregate") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
-
-                val projectId = call.parameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
-                    return@get
-                }
-
-                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                    call.respond(HttpStatusCode.Forbidden)
-                    return@get
-                }
 
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
@@ -314,7 +352,7 @@ fun Route.logRoutes(
 
                 val result =
                     logService.aggregateLogs(
-                        projectId = projectId,
+                        organizationId = orgId,
                         from = defaultFrom,
                         to = defaultTo,
                         interval = call.request.queryParameters["interval"],
@@ -330,27 +368,16 @@ fun Route.logRoutes(
                         groupBy = call.request.queryParameters["groupBy"]
                     )
                 logger.debug {
-                    "Aggregate logs response for project $projectId: ${result.buckets.size} buckets, totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, to=$defaultTo, isDemo=$isDemo"
+                    "Aggregate logs response for org $orgId: ${result.buckets.size} buckets, totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, to=$defaultTo, isDemo=$isDemo"
                 }
                 call.respond(HttpStatusCode.OK, result)
             }
 
-            get("/projects/{projectId}/logs/top") {
+            get("/logs/top") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
-
-                val projectId = call.parameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
-                    return@get
-                }
-
-                if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                    call.respond(HttpStatusCode.Forbidden)
-                    return@get
-                }
 
                 val field = call.request.queryParameters["field"]
                 if (field.isNullOrBlank()) {
@@ -376,7 +403,7 @@ fun Route.logRoutes(
 
                 val result =
                     logService.topValues(
-                        projectId = projectId,
+                        organizationId = orgId,
                         field = field,
                         limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10,
                         from = defaultFrom,
@@ -394,24 +421,13 @@ fun Route.logRoutes(
                 call.respond(HttpStatusCode.OK, result)
             }
 
-            get("/projects/{projectId}/logs/export") {
+            get("/logs/export") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val projectId = call.parameters["projectId"]?.toLongOrNull()
-                if (projectId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
-                    return@get
-                }
-
-                if (!dashboardService.hasProjectAccess(userId, projectId)) {
-                    call.respond(HttpStatusCode.Forbidden)
-                    return@get
-                }
+                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
 
                 val csv =
                     logService.exportCsv(
-                        projectId = projectId,
+                        organizationId = orgId,
                         from = call.request.queryParameters["from"],
                         to = call.request.queryParameters["to"],
                         query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
@@ -431,23 +447,21 @@ fun Route.logRoutes(
             }
         }
 
-        get("/projects/{projectId}/logs/tail") {
-            val userId = authenticateTailRequest(call)
-            if (userId == null) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
-                return@get
+        get("/logs/tail") {
+            val principal = call.principal<JWTPrincipal>()
+            if (principal == null) {
+                val userId = authenticateTailRequest(call)
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
+                    return@get
+                }
             }
 
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
-            if (projectId == null) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
-                return@get
-            }
-
-            if (!dashboardService.hasProjectAccess(userId, projectId)) {
-                call.respond(HttpStatusCode.Forbidden)
-                return@get
-            }
+            val orgId = call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()?.toLong()
+                ?: run {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
+                    return@get
+                }
 
             val filters =
                 LogTailFilters(
@@ -461,7 +475,7 @@ fun Route.logRoutes(
                 call.application.environment.config
                     .property("redis.url")
                     .getString()
-            val channel = logService.liveChannel(projectId)
+            val channel = logService.liveChannel(orgId)
             val queue = LinkedBlockingQueue<String>()
 
             val client = RedisClient.create(RedisURI.create(redisUrl))
@@ -504,7 +518,7 @@ fun Route.logRoutes(
                         flush()
                     }
                 } catch (e: Exception) {
-                    logger.debug { "SSE log tail disconnected for project $projectId: ${e.message}" }
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
                 } finally {
                     try {
                         connection.sync().unsubscribe(channel)
@@ -557,6 +571,42 @@ private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, Strin
         }.toMap()
 }
 
+private fun extractOrgIdFromLogApiKey(
+    call: io.ktor.server.application.ApplicationCall,
+    logApiKeyService: LogApiKeyService
+): Int? {
+    val authHeader = call.request.header(HttpHeaders.Authorization)
+    val bearerPrefix = "Bearer "
+    val key =
+        authHeader
+            ?.takeIf { it.startsWith(bearerPrefix, ignoreCase = true) }
+            ?.substring(bearerPrefix.length)
+            ?.trim()
+            ?: call.request.queryParameters["key"]
+    return key?.let { logApiKeyService.validateKey(it) }
+}
+
+private fun extractOrgIdFromLegacyDsn(
+    call: io.ktor.server.application.ApplicationCall,
+    eventService: com.moneat.events.services.EventService
+): Int? {
+    val dsnLikeHeader =
+        call.request.header("x-moneat-dsn")
+            ?: call.request.header("X-Moneat-Dsn")
+            ?: call.request.header(HttpHeaders.Authorization)
+    val projectId =
+        extractProjectIdFromDsn(dsnLikeHeader)
+            ?: call.request.queryParameters["projectId"]?.toLongOrNull()
+            ?: return null
+    val publicKey =
+        extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
+            ?: extractPublicKeyFromDsn(dsnLikeHeader)
+            ?: return null
+    val verification = eventService.verifyProjectKey(projectId, publicKey)
+    if (!verification.isValid) return null
+    return eventService.getOrganizationIdForProject(projectId)
+}
+
 private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
     if (dsnLike.isNullOrBlank()) return null
     val cleaned = dsnLike.removePrefix("DSN ").trim()
@@ -568,7 +618,7 @@ private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
         ?.toLongOrNull()
 }
 
-private fun authenticateTailRequest(call: ApplicationCall): Int? {
+private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
     val authHeader = call.request.header(HttpHeaders.Authorization)
     val bearerPrefix = "Bearer "
     val bearerToken =
@@ -597,7 +647,10 @@ private fun authenticateTailRequest(call: ApplicationCall): Int? {
                 .withAudience(audience)
                 .build()
 
-        verifier.verify(token).getClaim("userId").asInt()
+        val decoded = verifier.verify(token)
+        val userId = decoded.getClaim("userId").asInt()
+        val orgId = decoded.getClaim("orgId").asInt().toLong()
+        Pair(userId, orgId)
     } catch (_: Exception) {
         null
     }

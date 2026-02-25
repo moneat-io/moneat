@@ -100,6 +100,26 @@ class UsageTrackingService {
         byteSize: Int = 0
     ) {
         val orgId = getOrganizationId(projectId) ?: return
+        recordUsageInternal(orgId, projectId, eventType, byteSize)
+    }
+
+    /**
+     * Record org-scoped usage (e.g. logs). Uses projectId=0 for org-level events.
+     */
+    fun recordOrgUsage(
+        organizationId: Int,
+        eventType: String,
+        byteSize: Int = 0
+    ) {
+        recordUsageInternal(organizationId, 0L, eventType, byteSize)
+    }
+
+    private fun recordUsageInternal(
+        orgId: Int,
+        projectId: Long,
+        eventType: String,
+        byteSize: Int
+    ) {
         val today = Clock.System.todayIn(TimeZone.UTC)
         val key = "$orgId|$projectId|$eventType|$today"
 

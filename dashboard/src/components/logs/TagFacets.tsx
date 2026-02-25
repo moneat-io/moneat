@@ -25,7 +25,6 @@ import type {FacetFilter} from './LogSearchBar'
 import type {LogFilterOptionWithCount} from '@/lib/api'
 
 interface TagFacetsProps {
-  projectId: number
   availableTagKeys: string[]
   availableServices: LogFilterOptionWithCount[]
   availableEnvironments: LogFilterOptionWithCount[]
@@ -185,14 +184,12 @@ function FacetSection({
 
 function TagKeySection({
   tagKey,
-  projectId,
   facetFilters,
   onFacetFiltersChange,
   from,
   to,
 }: {
   tagKey: string
-  projectId: number
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   from?: string
@@ -201,8 +198,8 @@ function TagKeySection({
   const [expanded, setExpanded] = useState(false)
 
   const {data: tagValues} = useQuery({
-    queryKey: ['project-log-tag-values', projectId, tagKey, from, to],
-    queryFn: () => api.getProjectLogTagValues(projectId, tagKey, {from, to, limit: 30}),
+    queryKey: ['log-tag-values', tagKey, from, to],
+    queryFn: () => api.getLogTagValues(tagKey, {from, to, limit: 30}),
     enabled: expanded,
     staleTime: 60_000,
   })
@@ -322,7 +319,6 @@ function TagKeySection({
 }
 
 export function TagFacets({
-  projectId,
   availableTagKeys,
   availableServices,
   availableEnvironments,
@@ -378,7 +374,6 @@ export function TagFacets({
           <TagKeySection
             key={key}
             tagKey={key}
-            projectId={projectId}
             facetFilters={facetFilters}
             onFacetFiltersChange={onFacetFiltersChange}
             from={from}

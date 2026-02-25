@@ -27,8 +27,9 @@ import {cn} from '@/lib/utils'
 import {ChevronLeft, ChevronRight, Loader2, TerminalSquare} from 'lucide-react'
 
 interface EmbeddedLogsProps {
-  projectId?: number
   systemId?: string
+  /** Optional project ID for trace/span links in log detail (e.g. when embedded in issue view) */
+  projectId?: number
   /**
    * Filter logs by time range around a specific timestamp
    * Shows logs from [centerTimestamp - contextMinutes] to [centerTimestamp + contextMinutes]
@@ -63,8 +64,8 @@ interface EmbeddedLogsProps {
 }
 
 export function EmbeddedLogs({
-  projectId,
   systemId,
+  projectId,
   centerTimestamp,
   contextMinutes = 5,
   query,
@@ -105,14 +106,13 @@ export function EmbeddedLogs({
     }
   }, [centerTimestamp, contextMinutes])
 
-  // Fetch logs
+  // Fetch logs - org-scoped (getLogs) when no systemId; getSystemLogs when systemId (monitor)
   const {
     data: logPage,
     isLoading,
   } = useQuery({
     queryKey: [
       'embedded-logs',
-      projectId,
       systemId,
       cursor,
       query,
@@ -138,23 +138,21 @@ export function EmbeddedLogs({
           to: timeRange.to,
           tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
         })
-      } else if (projectId) {
-        return api.getProjectLogs(projectId, {
-          cursor: cursor || undefined,
-          limit: 100,
-          query: query || undefined,
-          levels,
-          service,
-          environment,
-          containerName,
-          from: timeRange.from,
-          to: timeRange.to,
-          tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
-        })
       }
-      throw new Error('Either projectId or systemId must be provided')
+      return api.getLogs({
+        cursor: cursor || undefined,
+        limit: 100,
+        query: query || undefined,
+        levels,
+        service,
+        environment,
+        containerName,
+        from: timeRange.from,
+        to: timeRange.to,
+        tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
+      })
     },
-    enabled: Boolean(projectId || systemId),
+    enabled: true,
   })
 
   const logs = logPage?.logs ?? []
@@ -277,7 +275,7 @@ export function EmbeddedLogs({
       </div>
 
       {/* Log detail sheet */}
-      <LogDetail log={selectedLog} open={detailOpen} onClose={() => setDetailOpen(false)} />
+      <LogDetail log={selectedLog} open={detailOpen} onClose={() => setDetailOpen(false)} projectId={projectId} />
     </div>
   )
 }

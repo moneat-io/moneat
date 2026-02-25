@@ -204,7 +204,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
     { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
-    { key: 'logs', icon: ScrollText, label: 'Logs', href: activeProjectId ? `/projects/${activeProjectId}/logs` : '/projects', requiresProject: true },
+    { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false },
     { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false, badge: 'Beta' },
     // Monitoring & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
