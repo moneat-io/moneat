@@ -1,4 +1,4 @@
-import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset, Gamepad2, Check } from 'lucide-react'
+import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset, Gamepad2, Check, Newspaper } from 'lucide-react'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -8,7 +8,7 @@ import {
 } from './ui/dropdown-menu'
 import { useEffect, useState } from 'react'
 
-type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer'
+type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer' | 'retro'
 
 const VT323_FONT_ID = 'vt323-font'
 
@@ -31,12 +31,15 @@ export function ThemeSwitcher() {
     const root = window.document.documentElement
     
     // Remove all theme classes
-    root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset', 'theme-gamer')
+    root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset', 'theme-gamer', 'theme-retro')
 
     if (newTheme === 'light') {
       // No class for light mode (default)
     } else if (newTheme === 'dark') {
       root.classList.add('dark')
+    } else if (newTheme === 'retro') {
+      // Retro is light-based but needs the theme class
+      root.classList.add('theme-retro')
     } else {
       // For other themes, they are dark-based, so add 'dark' and the theme class
       root.classList.add('dark', `theme-${newTheme}`)
@@ -91,6 +94,11 @@ export function ThemeSwitcher() {
           <Gamepad2 className="mr-2 h-4 w-4" />
           <span>Gamer</span>
           {theme === 'gamer' && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleThemeChange('retro')}>
+          <Newspaper className="mr-2 h-4 w-4" />
+          <span>Retro</span>
+          {theme === 'retro' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
