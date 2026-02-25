@@ -77,7 +77,7 @@ function flattenFrames(
   return result
 }
 
-export function DdFlamegraph({frames, emptyMessage}: Props) {
+export function Flamegraph({frames, emptyMessage}: Props) {
   const [focusFrame, setFocusFrame] = useState<FlamegraphFrame | null>(null)
   const [hoveredFrame, setHoveredFrame] = useState<FlatFrame | null>(null)
 

@@ -448,7 +448,7 @@ export interface CreateDdApiKeyResponse {
 
 // --- DD Trace types ---
 
-export interface DdTraceListItem {
+export interface ApmTraceListItem {
   traceId: string
   rootService: string
   rootResource: string
@@ -459,12 +459,12 @@ export interface DdTraceListItem {
   hasError: boolean
 }
 
-export interface DdTraceListResponse {
-  traces: DdTraceListItem[]
+export interface ApmTraceListResponse {
+  traces: ApmTraceListItem[]
   totalCount: number
 }
 
-export interface DdSpanResponse {
+export interface ApmSpanResponse {
   spanId: string
   traceId: string
   parentId: string
@@ -482,12 +482,12 @@ export interface DdSpanResponse {
   version: string
 }
 
-export interface DdTraceDetailResponse {
+export interface ApmTraceDetailResponse {
   traceId: string
-  spans: DdSpanResponse[]
+  spans: ApmSpanResponse[]
 }
 
-export interface DdServiceMapEntry {
+export interface ApmServiceMapEntry {
   service: string
   spanCount: number
   errorCount: number
@@ -495,13 +495,13 @@ export interface DdServiceMapEntry {
   callsTo: string[]
 }
 
-export interface DdServiceMapResponse {
-  services: DdServiceMapEntry[]
+export interface ApmServiceMapResponse {
+  services: ApmServiceMapEntry[]
 }
 
 // --- DD Profile types ---
 
-export interface DdProfileResponse {
+export interface ProfileResponse {
   profileId: string
   host: string
   service: string
@@ -517,8 +517,8 @@ export interface DdProfileResponse {
   tags: Record<string, string>
 }
 
-export interface DdProfileListResponse {
-  profiles: DdProfileResponse[]
+export interface ProfileListResponse {
+  profiles: ProfileResponse[]
   totalCount: number
 }
 
@@ -3163,55 +3163,55 @@ class ApiClient {
 
   // --- DD Traces ---
 
-  async getDdTraces(params: {
+  async getApmTraces(params: {
     service?: string
     env?: string
     limit?: number
     offset?: number
-  } = {}): Promise<DdTraceListResponse> {
+  } = {}): Promise<ApmTraceListResponse> {
     const searchParams = new URLSearchParams()
     if (params.service) searchParams.set('service', params.service)
     if (params.env) searchParams.set('env', params.env)
     if (params.limit) searchParams.set('limit', String(params.limit))
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
-    return this.request<DdTraceListResponse>(
+    return this.request<ApmTraceListResponse>(
       `${API_BASE}/dd/traces${qs ? `?${qs}` : ''}`
     )
   }
 
-  async getDdTraceDetail(traceId: string): Promise<DdTraceDetailResponse> {
-    return this.request<DdTraceDetailResponse>(
+  async getApmTraceDetail(traceId: string): Promise<ApmTraceDetailResponse> {
+    return this.request<ApmTraceDetailResponse>(
       `${API_BASE}/dd/traces/${traceId}`
     )
   }
 
-  async getDdServiceMap(): Promise<DdServiceMapResponse> {
-    return this.request<DdServiceMapResponse>(
+  async getApmServiceMap(): Promise<ApmServiceMapResponse> {
+    return this.request<ApmServiceMapResponse>(
       `${API_BASE}/dd/services/map`
     )
   }
 
   // --- DD Profiles ---
 
-  async getDdProfiles(params: {
+  async getProfiles(params: {
     service?: string
     type?: string
     limit?: number
     offset?: number
-  } = {}): Promise<DdProfileListResponse> {
+  } = {}): Promise<ProfileListResponse> {
     const searchParams = new URLSearchParams()
     if (params.service) searchParams.set('service', params.service)
     if (params.type) searchParams.set('type', params.type)
     if (params.limit) searchParams.set('limit', String(params.limit))
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
-    return this.request<DdProfileListResponse>(
+    return this.request<ProfileListResponse>(
       `${API_BASE}/dd/profiles${qs ? `?${qs}` : ''}`
     )
   }
 
-  getDdProfileDownloadUrl(profileId: string): string {
+  getProfileDownloadUrl(profileId: string): string {
     return `${API_BASE}/dd/profiles/${profileId}/download`
   }
 

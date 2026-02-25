@@ -9,15 +9,15 @@
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 
-export const Route = createFileRoute('/dd-profiles')({
+export const Route = createFileRoute('/apm-traces')({
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
       throw redirect({to: '/login'})
     }
   },
-  component: DdProfilesLayout,
+  component: ApmTracesLayout,
 })
 
-function DdProfilesLayout() {
+function ApmTracesLayout() {
   return <Outlet />
 }

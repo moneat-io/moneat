@@ -9,14 +9,14 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {DdFlamegraph} from '@/components/datadog/DdFlamegraph'
+import {Flamegraph} from '@/components/profiling/Flamegraph'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {ArrowLeft, Download, Loader2} from 'lucide-react'
 
-export const Route = createFileRoute('/dd-profiles/$profileId')({
-  component: DdProfileDetailPage,
+export const Route = createFileRoute('/profiles/$profileId')({
+  component: ProfileDetailPage,
 })
 
 function formatBytes(bytes: number): string {
@@ -30,13 +30,12 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(1)}s`
 }
 
-function DdProfileDetailPage() {
+function ProfileDetailPage() {
   const {profileId} = Route.useParams()
 
-  // Fetch the profiles list to get metadata for this profile
   const {data: profilesData, isLoading} = useQuery({
-    queryKey: ['ddProfiles'],
-    queryFn: () => api.getDdProfiles({limit: 200}),
+    queryKey: ['profiles'],
+    queryFn: () => api.getProfiles({limit: 200}),
     enabled: api.isAuthenticated(),
   })
 
@@ -58,7 +57,7 @@ function DdProfileDetailPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/dd-profiles">
+            <Link to="/profiles">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -72,7 +71,7 @@ function DdProfileDetailPage() {
           </div>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <a href={api.getDdProfileDownloadUrl(profileId)} download>
+          <a href={api.getProfileDownloadUrl(profileId)} download>
             <Download className="h-4 w-4 mr-2" />
             Download pprof
           </a>
@@ -132,7 +131,7 @@ function DdProfileDetailPage() {
       {/* Flamegraph placeholder */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Flamegraph</h2>
-        <DdFlamegraph
+        <Flamegraph
           emptyMessage="Flamegraph rendering requires pprof parsing. Download the profile to view in speedscope or pprof."
         />
       </div>

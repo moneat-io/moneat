@@ -6,18 +6,18 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {type DdSpanResponse} from '@/lib/api'
+import {type ApmSpanResponse} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {useState, useMemo} from 'react'
 import {Badge} from '@/components/ui/badge'
 import {ChevronDown, ChevronRight} from 'lucide-react'
 
 interface Props {
-  spans: DdSpanResponse[]
+  spans: ApmSpanResponse[]
 }
 
 interface SpanNode {
-  span: DdSpanResponse
+  span: ApmSpanResponse
   children: SpanNode[]
   depth: number
 }
@@ -42,7 +42,7 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(2)}s`
 }
 
-function buildTree(spans: DdSpanResponse[]): SpanNode[] {
+function buildTree(spans: ApmSpanResponse[]): SpanNode[] {
   const spanMap = new Map<string, SpanNode>()
   const roots: SpanNode[] = []
 
@@ -76,7 +76,7 @@ function flattenTree(nodes: SpanNode[]): SpanNode[] {
   return result
 }
 
-export function DdSpanWaterfall({spans}: Props) {
+export function SpanWaterfall({spans}: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const {flatSpans, traceStart, traceDuration} = useMemo(() => {

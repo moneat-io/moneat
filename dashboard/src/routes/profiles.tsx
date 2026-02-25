@@ -9,15 +9,15 @@
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 
-export const Route = createFileRoute('/dd-traces')({
+export const Route = createFileRoute('/profiles')({
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
       throw redirect({to: '/login'})
     }
   },
-  component: DdTracesLayout,
+  component: ProfilesLayout,
 })
 
-function DdTracesLayout() {
+function ProfilesLayout() {
   return <Outlet />
 }

@@ -7,40 +7,42 @@
 // (at your option) any later version.
 
 import {useQuery} from '@tanstack/react-query'
-import {api, type DdProfileResponse} from '@/lib/api'
+import {api, type ApmTraceListItem} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
-import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
-import {Loader2, Download, Search} from 'lucide-react'
+import {Loader2, AlertTriangle, Search} from 'lucide-react'
 import {useState} from 'react'
 import {Link} from '@tanstack/react-router'
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 function formatDuration(ns: number): string {
-  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(0)}ms`
-  return `${(ns / 1_000_000_000).toFixed(1)}s`
+  if (ns < 1000) return `${ns}ns`
+  if (ns < 1_000_000) return `${(ns / 1000).toFixed(1)}µs`
+  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)}ms`
+  return `${(ns / 1_000_000_000).toFixed(2)}s`
 }
 
-export function DdProfileList() {
+function formatTime(ns: number): string {
+  if (!ns) return '—'
+  const date = new Date(ns / 1_000_000) // ns to ms
+  return date.toLocaleString()
+}
+
+export function TraceList() {
   const [serviceFilter, setServiceFilter] = useState('')
 
   const {data, isLoading} = useQuery({
-    queryKey: ['ddProfiles', serviceFilter],
+    queryKey: ['apmTraces', serviceFilter],
     queryFn: () =>
-      api.getDdProfiles({
+      api.getApmTraces({
         service: serviceFilter || undefined,
         limit: 50,
       }),
     enabled: api.isAuthenticated(),
+    refetchInterval: 15000,
   })
 
-  const profiles = data?.profiles ?? []
+  const traces = data?.traces ?? []
 
   return (
     <div className="space-y-4">
@@ -56,7 +58,7 @@ export function DdProfileList() {
         </div>
         {data?.totalCount != null && (
           <span className="text-sm text-muted-foreground">
-            {data.totalCount.toLocaleString()} profiles
+            {data.totalCount.toLocaleString()} traces
           </span>
         )}
       </div>
@@ -65,12 +67,11 @@ export function DdProfileList() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : profiles.length === 0 ? (
+      ) : traces.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No profiles found</p>
+          <p className="font-medium">No traces found</p>
           <p className="text-sm mt-1">
-            Enable continuous profiling in your Datadog-compatible agent to
-            collect profiles.
+            Configure an agent to send APM traces.
           </p>
         </div>
       ) : (
@@ -78,54 +79,44 @@ export function DdProfileList() {
           <TableHeader>
             <TableRow>
               <TableHead>Service</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Host</TableHead>
+              <TableHead>Resource</TableHead>
+              <TableHead>Spans</TableHead>
               <TableHead>Duration</TableHead>
-              <TableHead>Size</TableHead>
               <TableHead>Time</TableHead>
-              <TableHead className="w-[80px]" />
+              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {profiles.map((profile: DdProfileResponse) => (
-              <TableRow key={profile.profileId}>
+            {traces.map((trace: ApmTraceListItem) => (
+              <TableRow key={trace.traceId}>
                 <TableCell>
                   <Link
-                    to="/dd-profiles/$profileId"
-                    params={{profileId: profile.profileId}}
+                    to="/apm-traces/$traceId"
+                    params={{traceId: trace.traceId}}
                     className="font-medium text-primary hover:underline"
                   >
-                    {profile.service || '(unknown)'}
+                    {trace.rootService}
                   </Link>
                 </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{profile.profileType}</Badge>
+                <TableCell className="max-w-[300px] truncate text-sm text-muted-foreground">
+                  {trace.rootResource}
+                </TableCell>
+                <TableCell className="text-sm">{trace.spanCount}</TableCell>
+                <TableCell className="text-sm font-mono">
+                  {formatDuration(trace.durationNs)}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {profile.host || '—'}
-                </TableCell>
-                <TableCell className="text-sm font-mono">
-                  {formatDuration(profile.durationNs)}
-                </TableCell>
-                <TableCell className="text-sm font-mono">
-                  {formatBytes(profile.sizeBytes)}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {new Date(profile.startTime).toLocaleString()}
+                  {formatTime(trace.startNs)}
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    asChild
-                  >
-                    <a
-                      href={api.getDdProfileDownloadUrl(profile.profileId)}
-                      download
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                  </Button>
+                  {trace.hasError ? (
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Error
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">OK</Badge>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

@@ -7,42 +7,40 @@
 // (at your option) any later version.
 
 import {useQuery} from '@tanstack/react-query'
-import {api, type DdTraceListItem} from '@/lib/api'
+import {api, type ProfileResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
-import {Loader2, AlertTriangle, Search} from 'lucide-react'
+import {Loader2, Download, Search} from 'lucide-react'
 import {useState} from 'react'
 import {Link} from '@tanstack/react-router'
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function formatDuration(ns: number): string {
-  if (ns < 1000) return `${ns}ns`
-  if (ns < 1_000_000) return `${(ns / 1000).toFixed(1)}µs`
-  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)}ms`
-  return `${(ns / 1_000_000_000).toFixed(2)}s`
+  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(0)}ms`
+  return `${(ns / 1_000_000_000).toFixed(1)}s`
 }
 
-function formatTime(ns: number): string {
-  if (!ns) return '—'
-  const date = new Date(ns / 1_000_000) // ns to ms
-  return date.toLocaleString()
-}
-
-export function DdTraceList() {
+export function ProfileList() {
   const [serviceFilter, setServiceFilter] = useState('')
 
   const {data, isLoading} = useQuery({
-    queryKey: ['ddTraces', serviceFilter],
+    queryKey: ['profiles', serviceFilter],
     queryFn: () =>
-      api.getDdTraces({
+      api.getProfiles({
         service: serviceFilter || undefined,
         limit: 50,
       }),
     enabled: api.isAuthenticated(),
-    refetchInterval: 15000,
   })
 
-  const traces = data?.traces ?? []
+  const profiles = data?.profiles ?? []
 
   return (
     <div className="space-y-4">
@@ -58,7 +56,7 @@ export function DdTraceList() {
         </div>
         {data?.totalCount != null && (
           <span className="text-sm text-muted-foreground">
-            {data.totalCount.toLocaleString()} traces
+            {data.totalCount.toLocaleString()} profiles
           </span>
         )}
       </div>
@@ -67,11 +65,11 @@ export function DdTraceList() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : traces.length === 0 ? (
+      ) : profiles.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No traces found</p>
+          <p className="font-medium">No profiles found</p>
           <p className="text-sm mt-1">
-            Configure a Datadog-compatible agent to send APM traces.
+            Enable continuous profiling in your agent to collect profiles.
           </p>
         </div>
       ) : (
@@ -79,44 +77,54 @@ export function DdTraceList() {
           <TableHeader>
             <TableRow>
               <TableHead>Service</TableHead>
-              <TableHead>Resource</TableHead>
-              <TableHead>Spans</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Host</TableHead>
               <TableHead>Duration</TableHead>
+              <TableHead>Size</TableHead>
               <TableHead>Time</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {traces.map((trace: DdTraceListItem) => (
-              <TableRow key={trace.traceId}>
+            {profiles.map((profile: ProfileResponse) => (
+              <TableRow key={profile.profileId}>
                 <TableCell>
                   <Link
-                    to="/dd-traces/$traceId"
-                    params={{traceId: trace.traceId}}
+                    to="/profiles/$profileId"
+                    params={{profileId: profile.profileId}}
                     className="font-medium text-primary hover:underline"
                   >
-                    {trace.rootService}
+                    {profile.service || '(unknown)'}
                   </Link>
                 </TableCell>
-                <TableCell className="max-w-[300px] truncate text-sm text-muted-foreground">
-                  {trace.rootResource}
-                </TableCell>
-                <TableCell className="text-sm">{trace.spanCount}</TableCell>
-                <TableCell className="text-sm font-mono">
-                  {formatDuration(trace.durationNs)}
+                <TableCell>
+                  <Badge variant="secondary">{profile.profileType}</Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {formatTime(trace.startNs)}
+                  {profile.host || '—'}
+                </TableCell>
+                <TableCell className="text-sm font-mono">
+                  {formatDuration(profile.durationNs)}
+                </TableCell>
+                <TableCell className="text-sm font-mono">
+                  {formatBytes(profile.sizeBytes)}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {new Date(profile.startTime).toLocaleString()}
                 </TableCell>
                 <TableCell>
-                  {trace.hasError ? (
-                    <Badge variant="destructive" className="gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Error
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">OK</Badge>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                  >
+                    <a
+                      href={api.getProfileDownloadUrl(profile.profileId)}
+                      download
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}

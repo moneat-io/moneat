@@ -18,10 +18,10 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(2)}s`
 }
 
-export function DdServiceMap() {
+export function ServiceMap() {
   const {data, isLoading} = useQuery({
-    queryKey: ['ddServiceMap'],
-    queryFn: () => api.getDdServiceMap(),
+    queryKey: ['apmServiceMap'],
+    queryFn: () => api.getApmServiceMap(),
     enabled: api.isAuthenticated(),
     refetchInterval: 30000,
   })
@@ -41,7 +41,7 @@ export function DdServiceMap() {
       <div className="text-center py-12 text-muted-foreground">
         <p className="font-medium">No services found</p>
         <p className="text-sm mt-1">
-          Service map populates automatically as DD traces are ingested.
+          Service map populates automatically as traces are ingested.
         </p>
       </div>
     )

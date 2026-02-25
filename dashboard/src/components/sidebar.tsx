@@ -221,8 +221,8 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
     ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
     ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'dd-traces', icon: Cpu, label: 'DD Traces', href: '/dd-traces', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'dd-profiles', icon: Flame, label: 'DD Profiles', href: '/dd-profiles', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'apm-traces', icon: Cpu, label: 'APM Traces', href: '/apm-traces', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
     ] : []),
     // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),

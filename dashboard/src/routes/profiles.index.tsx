@@ -7,22 +7,22 @@
 // (at your option) any later version.
 
 import {createFileRoute} from '@tanstack/react-router'
-import {DdProfileList} from '@/components/datadog/DdProfileList'
+import {ProfileList} from '@/components/profiling/ProfileList'
 
-export const Route = createFileRoute('/dd-profiles/')({
-  component: DdProfilesIndexPage,
+export const Route = createFileRoute('/profiles/')({
+  component: ProfilesIndexPage,
 })
 
-function DdProfilesIndexPage() {
+function ProfilesIndexPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">DD-Compatible Profiles</h1>
+        <h1 className="text-2xl font-bold">Profiles</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Continuous profiling data from Datadog-compatible agents
+          Continuous profiling data from your applications
         </p>
       </div>
-      <DdProfileList />
+      <ProfileList />
     </div>
   )
 }

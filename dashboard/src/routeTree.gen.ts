@@ -18,6 +18,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReplaysRouteImport } from './routes/replays'
 import { Route as ReleasesRouteImport } from './routes/releases'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ProfilesRouteImport } from './routes/profiles'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingCalculatorRouteImport } from './routes/pricing-calculator'
 import { Route as PerformanceRouteImport } from './routes/performance'
@@ -29,22 +30,21 @@ import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-ca
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DemoRouteImport } from './routes/demo'
-import { Route as DdTracesRouteImport } from './routes/dd-traces'
-import { Route as DdProfilesRouteImport } from './routes/dd-profiles'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
+import { Route as ApmTracesRouteImport } from './routes/apm-traces'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
 import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.index'
+import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
-import { Route as DdTracesIndexRouteImport } from './routes/dd-traces.index'
-import { Route as DdProfilesIndexRouteImport } from './routes/dd-profiles.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
+import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -54,6 +54,7 @@ import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as ProfilesProfileIdRouteImport } from './routes/profiles.$profileId'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
 import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
@@ -65,10 +66,9 @@ import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
-import { Route as DdTracesTraceIdRouteImport } from './routes/dd-traces.$traceId'
-import { Route as DdProfilesProfileIdRouteImport } from './routes/dd-profiles.$profileId'
 import { Route as DashboardsDatasourcesRouteImport } from './routes/dashboards.datasources'
 import { Route as DashboardsDashboardIdRouteImport } from './routes/dashboards.$dashboardId'
+import { Route as ApmTracesTraceIdRouteImport } from './routes/apm-traces.$traceId'
 import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminUsageRouteImport } from './routes/admin.usage'
@@ -136,6 +136,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfilesRoute = ProfilesRouteImport.update({
+  id: '/profiles',
+  path: '/profiles',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -191,19 +196,14 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DdTracesRoute = DdTracesRouteImport.update({
-  id: '/dd-traces',
-  path: '/dd-traces',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DdProfilesRoute = DdProfilesRouteImport.update({
-  id: '/dd-profiles',
-  path: '/dd-profiles',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardsRoute = DashboardsRouteImport.update({
   id: '/dashboards',
   path: '/dashboards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApmTracesRoute = ApmTracesRouteImport.update({
+  id: '/apm-traces',
+  path: '/apm-traces',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
@@ -236,6 +236,11 @@ const StatusPagesIndexRoute = StatusPagesIndexRouteImport.update({
   path: '/status-pages/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfilesIndexRoute = ProfilesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProfilesRoute,
+} as any)
 const PerformanceIndexRoute = PerformanceIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -256,20 +261,15 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DdTracesIndexRoute = DdTracesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DdTracesRoute,
-} as any)
-const DdProfilesIndexRoute = DdProfilesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DdProfilesRoute,
-} as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardsRoute,
+} as any)
+const ApmTracesIndexRoute = ApmTracesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ApmTracesRoute,
 } as any)
 const AnalyticsIndexRoute = AnalyticsIndexRouteImport.update({
   id: '/',
@@ -315,6 +315,11 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/$projectId',
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
+} as any)
+const ProfilesProfileIdRoute = ProfilesProfileIdRouteImport.update({
+  id: '/$profileId',
+  path: '/$profileId',
+  getParentRoute: () => ProfilesRoute,
 } as any)
 const PerformanceTransactionIdRoute =
   PerformanceTransactionIdRouteImport.update({
@@ -373,16 +378,6 @@ const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
   path: '/$feedbackId',
   getParentRoute: () => FeedbackRoute,
 } as any)
-const DdTracesTraceIdRoute = DdTracesTraceIdRouteImport.update({
-  id: '/$traceId',
-  path: '/$traceId',
-  getParentRoute: () => DdTracesRoute,
-} as any)
-const DdProfilesProfileIdRoute = DdProfilesProfileIdRouteImport.update({
-  id: '/$profileId',
-  path: '/$profileId',
-  getParentRoute: () => DdProfilesRoute,
-} as any)
 const DashboardsDatasourcesRoute = DashboardsDatasourcesRouteImport.update({
   id: '/datasources',
   path: '/datasources',
@@ -392,6 +387,11 @@ const DashboardsDashboardIdRoute = DashboardsDashboardIdRouteImport.update({
   id: '/$dashboardId',
   path: '/$dashboardId',
   getParentRoute: () => DashboardsRoute,
+} as any)
+const ApmTracesTraceIdRoute = ApmTracesTraceIdRouteImport.update({
+  id: '/$traceId',
+  path: '/$traceId',
+  getParentRoute: () => ApmTracesRoute,
 } as any)
 const AiGenerationsRoute = AiGenerationsRouteImport.update({
   id: '/ai/generations',
@@ -509,9 +509,8 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRouteWithChildren
+  '/apm-traces': typeof ApmTracesRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
-  '/dd-profiles': typeof DdProfilesRouteWithChildren
-  '/dd-traces': typeof DdTracesRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -523,6 +522,7 @@ export interface FileRoutesByFullPath {
   '/performance': typeof PerformanceRouteWithChildren
   '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
+  '/profiles': typeof ProfilesRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
@@ -544,10 +544,9 @@ export interface FileRoutesByFullPath {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
-  '/dd-profiles/$profileId': typeof DdProfilesProfileIdRoute
-  '/dd-traces/$traceId': typeof DdTracesTraceIdRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -559,6 +558,7 @@ export interface FileRoutesByFullPath {
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
+  '/profiles/$profileId': typeof ProfilesProfileIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
@@ -568,13 +568,13 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
+  '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
-  '/dd-profiles/': typeof DdProfilesIndexRoute
-  '/dd-traces/': typeof DdTracesIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/profiles/': typeof ProfilesIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
@@ -620,10 +620,9 @@ export interface FileRoutesByTo {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
-  '/dd-profiles/$profileId': typeof DdProfilesProfileIdRoute
-  '/dd-traces/$traceId': typeof DdTracesTraceIdRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -635,6 +634,7 @@ export interface FileRoutesByTo {
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
+  '/profiles/$profileId': typeof ProfilesProfileIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
@@ -644,13 +644,13 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/ai': typeof AiIndexRoute
   '/analytics': typeof AnalyticsIndexRoute
+  '/apm-traces': typeof ApmTracesIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
-  '/dd-profiles': typeof DdProfilesIndexRoute
-  '/dd-traces': typeof DdTracesIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
+  '/profiles': typeof ProfilesIndexRoute
   '/status-pages': typeof StatusPagesIndexRoute
   '/uptime': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
@@ -669,9 +669,8 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRouteWithChildren
+  '/apm-traces': typeof ApmTracesRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
-  '/dd-profiles': typeof DdProfilesRouteWithChildren
-  '/dd-traces': typeof DdTracesRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -683,6 +682,7 @@ export interface FileRoutesById {
   '/performance': typeof PerformanceRouteWithChildren
   '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
+  '/profiles': typeof ProfilesRouteWithChildren
   '/projects': typeof ProjectsRouteWithChildren
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
@@ -704,10 +704,9 @@ export interface FileRoutesById {
   '/admin/usage': typeof AdminUsageRoute
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
+  '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
-  '/dd-profiles/$profileId': typeof DdProfilesProfileIdRoute
-  '/dd-traces/$traceId': typeof DdTracesTraceIdRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -719,6 +718,7 @@ export interface FileRoutesById {
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
+  '/profiles/$profileId': typeof ProfilesProfileIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
@@ -728,13 +728,13 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
+  '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
-  '/dd-profiles/': typeof DdProfilesIndexRoute
-  '/dd-traces/': typeof DdTracesIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
+  '/profiles/': typeof ProfilesIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
@@ -754,9 +754,8 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/admin'
     | '/analytics'
+    | '/apm-traces'
     | '/dashboards'
-    | '/dd-profiles'
-    | '/dd-traces'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -768,6 +767,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/pricing-calculator'
     | '/privacy'
+    | '/profiles'
     | '/projects'
     | '/releases'
     | '/replays'
@@ -789,10 +789,9 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/apm-traces/$traceId'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
-    | '/dd-profiles/$profileId'
-    | '/dd-traces/$traceId'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -804,6 +803,7 @@ export interface FileRouteTypes {
     | '/on-call/incidents'
     | '/on-call/schedules'
     | '/performance/$transactionId'
+    | '/profiles/$profileId'
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
@@ -813,13 +813,13 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/ai/'
     | '/analytics/'
+    | '/apm-traces/'
     | '/dashboards/'
-    | '/dd-profiles/'
-    | '/dd-traces/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
+    | '/profiles/'
     | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
@@ -865,10 +865,9 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/apm-traces/$traceId'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
-    | '/dd-profiles/$profileId'
-    | '/dd-traces/$traceId'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -880,6 +879,7 @@ export interface FileRouteTypes {
     | '/on-call/incidents'
     | '/on-call/schedules'
     | '/performance/$transactionId'
+    | '/profiles/$profileId'
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
@@ -889,13 +889,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/ai'
     | '/analytics'
+    | '/apm-traces'
     | '/dashboards'
-    | '/dd-profiles'
-    | '/dd-traces'
     | '/issues'
     | '/monitoring'
     | '/on-call'
     | '/performance'
+    | '/profiles'
     | '/status-pages'
     | '/uptime'
     | '/admin/organizations/$orgId'
@@ -913,9 +913,8 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/admin'
     | '/analytics'
+    | '/apm-traces'
     | '/dashboards'
-    | '/dd-profiles'
-    | '/dd-traces'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -927,6 +926,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/pricing-calculator'
     | '/privacy'
+    | '/profiles'
     | '/projects'
     | '/releases'
     | '/replays'
@@ -948,10 +948,9 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/ai/generations'
+    | '/apm-traces/$traceId'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
-    | '/dd-profiles/$profileId'
-    | '/dd-traces/$traceId'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -963,6 +962,7 @@ export interface FileRouteTypes {
     | '/on-call/incidents'
     | '/on-call/schedules'
     | '/performance/$transactionId'
+    | '/profiles/$profileId'
     | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
@@ -972,13 +972,13 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/ai/'
     | '/analytics/'
+    | '/apm-traces/'
     | '/dashboards/'
-    | '/dd-profiles/'
-    | '/dd-traces/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
+    | '/profiles/'
     | '/status-pages/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
@@ -997,9 +997,8 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   AdminRoute: typeof AdminRouteWithChildren
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
+  ApmTracesRoute: typeof ApmTracesRouteWithChildren
   DashboardsRoute: typeof DashboardsRouteWithChildren
-  DdProfilesRoute: typeof DdProfilesRouteWithChildren
-  DdTracesRoute: typeof DdTracesRouteWithChildren
   DemoRoute: typeof DemoRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -1011,6 +1010,7 @@ export interface RootRouteChildren {
   PerformanceRoute: typeof PerformanceRouteWithChildren
   PricingCalculatorRoute: typeof PricingCalculatorRoute
   PrivacyRoute: typeof PrivacyRoute
+  ProfilesRoute: typeof ProfilesRouteWithChildren
   ProjectsRoute: typeof ProjectsRouteWithChildren
   ReleasesRoute: typeof ReleasesRouteWithChildren
   ReplaysRoute: typeof ReplaysRouteWithChildren
@@ -1104,6 +1104,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profiles': {
+      id: '/profiles'
+      path: '/profiles'
+      fullPath: '/profiles'
+      preLoaderRoute: typeof ProfilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -1181,25 +1188,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dd-traces': {
-      id: '/dd-traces'
-      path: '/dd-traces'
-      fullPath: '/dd-traces'
-      preLoaderRoute: typeof DdTracesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dd-profiles': {
-      id: '/dd-profiles'
-      path: '/dd-profiles'
-      fullPath: '/dd-profiles'
-      preLoaderRoute: typeof DdProfilesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dashboards': {
       id: '/dashboards'
       path: '/dashboards'
       fullPath: '/dashboards'
       preLoaderRoute: typeof DashboardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apm-traces': {
+      id: '/apm-traces'
+      path: '/apm-traces'
+      fullPath: '/apm-traces'
+      preLoaderRoute: typeof ApmTracesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/analytics': {
@@ -1244,6 +1244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StatusPagesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profiles/': {
+      id: '/profiles/'
+      path: '/'
+      fullPath: '/profiles/'
+      preLoaderRoute: typeof ProfilesIndexRouteImport
+      parentRoute: typeof ProfilesRoute
+    }
     '/performance/': {
       id: '/performance/'
       path: '/'
@@ -1272,26 +1279,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dd-traces/': {
-      id: '/dd-traces/'
-      path: '/'
-      fullPath: '/dd-traces/'
-      preLoaderRoute: typeof DdTracesIndexRouteImport
-      parentRoute: typeof DdTracesRoute
-    }
-    '/dd-profiles/': {
-      id: '/dd-profiles/'
-      path: '/'
-      fullPath: '/dd-profiles/'
-      preLoaderRoute: typeof DdProfilesIndexRouteImport
-      parentRoute: typeof DdProfilesRoute
-    }
     '/dashboards/': {
       id: '/dashboards/'
       path: '/'
       fullPath: '/dashboards/'
       preLoaderRoute: typeof DashboardsIndexRouteImport
       parentRoute: typeof DashboardsRoute
+    }
+    '/apm-traces/': {
+      id: '/apm-traces/'
+      path: '/'
+      fullPath: '/apm-traces/'
+      preLoaderRoute: typeof ApmTracesIndexRouteImport
+      parentRoute: typeof ApmTracesRoute
     }
     '/analytics/': {
       id: '/analytics/'
@@ -1355,6 +1355,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects/$projectId'
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
+    }
+    '/profiles/$profileId': {
+      id: '/profiles/$profileId'
+      path: '/$profileId'
+      fullPath: '/profiles/$profileId'
+      preLoaderRoute: typeof ProfilesProfileIdRouteImport
+      parentRoute: typeof ProfilesRoute
     }
     '/performance/$transactionId': {
       id: '/performance/$transactionId'
@@ -1433,20 +1440,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackFeedbackIdRouteImport
       parentRoute: typeof FeedbackRoute
     }
-    '/dd-traces/$traceId': {
-      id: '/dd-traces/$traceId'
-      path: '/$traceId'
-      fullPath: '/dd-traces/$traceId'
-      preLoaderRoute: typeof DdTracesTraceIdRouteImport
-      parentRoute: typeof DdTracesRoute
-    }
-    '/dd-profiles/$profileId': {
-      id: '/dd-profiles/$profileId'
-      path: '/$profileId'
-      fullPath: '/dd-profiles/$profileId'
-      preLoaderRoute: typeof DdProfilesProfileIdRouteImport
-      parentRoute: typeof DdProfilesRoute
-    }
     '/dashboards/datasources': {
       id: '/dashboards/datasources'
       path: '/datasources'
@@ -1460,6 +1453,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboards/$dashboardId'
       preLoaderRoute: typeof DashboardsDashboardIdRouteImport
       parentRoute: typeof DashboardsRoute
+    }
+    '/apm-traces/$traceId': {
+      id: '/apm-traces/$traceId'
+      path: '/$traceId'
+      fullPath: '/apm-traces/$traceId'
+      preLoaderRoute: typeof ApmTracesTraceIdRouteImport
+      parentRoute: typeof ApmTracesRoute
     }
     '/ai/generations': {
       id: '/ai/generations'
@@ -1666,6 +1666,20 @@ const AnalyticsRouteWithChildren = AnalyticsRoute._addFileChildren(
   AnalyticsRouteChildren,
 )
 
+interface ApmTracesRouteChildren {
+  ApmTracesTraceIdRoute: typeof ApmTracesTraceIdRoute
+  ApmTracesIndexRoute: typeof ApmTracesIndexRoute
+}
+
+const ApmTracesRouteChildren: ApmTracesRouteChildren = {
+  ApmTracesTraceIdRoute: ApmTracesTraceIdRoute,
+  ApmTracesIndexRoute: ApmTracesIndexRoute,
+}
+
+const ApmTracesRouteWithChildren = ApmTracesRoute._addFileChildren(
+  ApmTracesRouteChildren,
+)
+
 interface DashboardsRouteChildren {
   DashboardsDashboardIdRoute: typeof DashboardsDashboardIdRoute
   DashboardsDatasourcesRoute: typeof DashboardsDatasourcesRoute
@@ -1680,34 +1694,6 @@ const DashboardsRouteChildren: DashboardsRouteChildren = {
 
 const DashboardsRouteWithChildren = DashboardsRoute._addFileChildren(
   DashboardsRouteChildren,
-)
-
-interface DdProfilesRouteChildren {
-  DdProfilesProfileIdRoute: typeof DdProfilesProfileIdRoute
-  DdProfilesIndexRoute: typeof DdProfilesIndexRoute
-}
-
-const DdProfilesRouteChildren: DdProfilesRouteChildren = {
-  DdProfilesProfileIdRoute: DdProfilesProfileIdRoute,
-  DdProfilesIndexRoute: DdProfilesIndexRoute,
-}
-
-const DdProfilesRouteWithChildren = DdProfilesRoute._addFileChildren(
-  DdProfilesRouteChildren,
-)
-
-interface DdTracesRouteChildren {
-  DdTracesTraceIdRoute: typeof DdTracesTraceIdRoute
-  DdTracesIndexRoute: typeof DdTracesIndexRoute
-}
-
-const DdTracesRouteChildren: DdTracesRouteChildren = {
-  DdTracesTraceIdRoute: DdTracesTraceIdRoute,
-  DdTracesIndexRoute: DdTracesIndexRoute,
-}
-
-const DdTracesRouteWithChildren = DdTracesRoute._addFileChildren(
-  DdTracesRouteChildren,
 )
 
 interface FeedbackRouteChildren {
@@ -1782,6 +1768,20 @@ const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(
   PerformanceRouteChildren,
 )
 
+interface ProfilesRouteChildren {
+  ProfilesProfileIdRoute: typeof ProfilesProfileIdRoute
+  ProfilesIndexRoute: typeof ProfilesIndexRoute
+}
+
+const ProfilesRouteChildren: ProfilesRouteChildren = {
+  ProfilesProfileIdRoute: ProfilesProfileIdRoute,
+  ProfilesIndexRoute: ProfilesIndexRoute,
+}
+
+const ProfilesRouteWithChildren = ProfilesRoute._addFileChildren(
+  ProfilesRouteChildren,
+)
+
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
   ProjectsProjectIdSpansSpanIdRoute: typeof ProjectsProjectIdSpansSpanIdRoute
@@ -1837,9 +1837,8 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   AdminRoute: AdminRouteWithChildren,
   AnalyticsRoute: AnalyticsRouteWithChildren,
+  ApmTracesRoute: ApmTracesRouteWithChildren,
   DashboardsRoute: DashboardsRouteWithChildren,
-  DdProfilesRoute: DdProfilesRouteWithChildren,
-  DdTracesRoute: DdTracesRouteWithChildren,
   DemoRoute: DemoRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
@@ -1851,6 +1850,7 @@ const rootRouteChildren: RootRouteChildren = {
   PerformanceRoute: PerformanceRouteWithChildren,
   PricingCalculatorRoute: PricingCalculatorRoute,
   PrivacyRoute: PrivacyRoute,
+  ProfilesRoute: ProfilesRouteWithChildren,
   ProjectsRoute: ProjectsRouteWithChildren,
   ReleasesRoute: ReleasesRouteWithChildren,
   ReplaysRoute: ReplaysRouteWithChildren,

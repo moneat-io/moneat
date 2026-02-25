@@ -9,14 +9,14 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {DdSpanWaterfall} from '@/components/datadog/DdSpanWaterfall'
+import {SpanWaterfall} from '@/components/apm/SpanWaterfall'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {ArrowLeft, Loader2} from 'lucide-react'
 
-export const Route = createFileRoute('/dd-traces/$traceId')({
-  component: DdTraceDetailPage,
+export const Route = createFileRoute('/apm-traces/$traceId')({
+  component: TraceDetailPage,
 })
 
 function formatDuration(ns: number): string {
@@ -26,12 +26,12 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(2)}s`
 }
 
-function DdTraceDetailPage() {
+function TraceDetailPage() {
   const {traceId} = Route.useParams()
 
   const {data, isLoading} = useQuery({
-    queryKey: ['ddTrace', traceId],
-    queryFn: () => api.getDdTraceDetail(traceId),
+    queryKey: ['apmTrace', traceId],
+    queryFn: () => api.getApmTraceDetail(traceId),
     enabled: api.isAuthenticated(),
   })
 
@@ -48,7 +48,7 @@ function DdTraceDetailPage() {
       <div className="p-6">
         <p className="text-muted-foreground">Trace not found.</p>
         <Button variant="outline" className="mt-4" asChild>
-          <Link to="/dd-traces">
+          <Link to="/apm-traces">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to traces
           </Link>
@@ -70,7 +70,7 @@ function DdTraceDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/dd-traces">
+          <Link to="/apm-traces">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -143,7 +143,7 @@ function DdTraceDetailPage() {
       {/* Span waterfall */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Span Waterfall</h2>
-        <DdSpanWaterfall spans={spans} />
+        <SpanWaterfall spans={spans} />
       </div>
 
       {/* Span details table */}

@@ -7,21 +7,21 @@
 // (at your option) any later version.
 
 import {createFileRoute} from '@tanstack/react-router'
-import {DdTraceList} from '@/components/datadog/DdTraceList'
-import {DdServiceMap} from '@/components/datadog/DdServiceMap'
+import {TraceList} from '@/components/apm/TraceList'
+import {ServiceMap} from '@/components/apm/ServiceMap'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 
-export const Route = createFileRoute('/dd-traces/')({
-  component: DdTracesIndexPage,
+export const Route = createFileRoute('/apm-traces/')({
+  component: ApmTracesIndexPage,
 })
 
-function DdTracesIndexPage() {
+function ApmTracesIndexPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">DD-Compatible Traces</h1>
+        <h1 className="text-2xl font-bold">APM Traces</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          APM traces from Datadog-compatible agents
+          Application performance monitoring traces
         </p>
       </div>
 
@@ -31,10 +31,10 @@ function DdTracesIndexPage() {
           <TabsTrigger value="services">Service Map</TabsTrigger>
         </TabsList>
         <TabsContent value="traces" className="mt-4">
-          <DdTraceList />
+          <TraceList />
         </TabsContent>
         <TabsContent value="services" className="mt-4">
-          <DdServiceMap />
+          <ServiceMap />
         </TabsContent>
       </Tabs>
     </div>
