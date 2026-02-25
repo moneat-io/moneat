@@ -3297,7 +3297,7 @@ object DemoDataSeeder {
                 "($rootSpanId, $traceId, 0, $orgId, 'http.request', 'api-gateway', " +
                     "'$rootResource', 'web', $rootTs, $rootDuration, ${if (isError) 1 else 0}, " +
                     "map('http.method','${rootResource.substringBefore(" ")}','http.url','${rootResource.substringAfter(" ")}','http.status_code','${if (isError) "500" else "200"}'), " +
-                    "map('_sample_rate','1'), 'prod-web-01', 'production', '1.3.0')",
+                    "map('_sample_rate', 1.0), 'prod-web-01', 'production', '1.3.0')",
             )
 
             // Child spans: downstream services
@@ -3325,7 +3325,7 @@ object DemoDataSeeder {
                 spanRows.add(
                     "($childSpanId, $traceId, $rootSpanId, $orgId, '$opName', '${svc.name}', " +
                         "'${resource.replace("'", "''")}', '${svc.type}', $childTs, $childDuration, $childError, " +
-                        "map('component','${svc.name}'), map('_sample_rate','1'), '${svc.host}', 'production', '1.3.0')",
+                        "map('component','${svc.name}'), map('_sample_rate', 1.0), '${svc.host}', 'production', '1.3.0')",
                 )
                 elapsed += childDuration + random.nextLong(500_000L, 2_000_000L)
             }
