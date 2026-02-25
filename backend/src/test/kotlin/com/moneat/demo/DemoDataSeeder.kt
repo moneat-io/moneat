@@ -3747,14 +3747,14 @@ object DemoDataSeeder {
             println("Deleting Datadog agent ClickHouse data...")
             val ddClickhouseQueries =
                 listOf(
-                    "ALTER TABLE apm_spans DELETE WHERE organization_id = $orgId",
-                    "ALTER TABLE trace_stats DELETE WHERE organization_id = $orgId",
-                    "ALTER TABLE profiles DELETE WHERE organization_id = $orgId",
-                    "ALTER TABLE infra_events DELETE WHERE organization_id = $orgId",
-                    "ALTER TABLE service_checks DELETE WHERE organization_id = $orgId",
-                    "ALTER TABLE processes DELETE WHERE organization_id = $orgId",
-                    "ALTER TABLE containers DELETE WHERE organization_id = $orgId",
-                    "ALTER TABLE network_connections DELETE WHERE organization_id = $orgId",
+                    "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
                 )
 
             for (query in ddClickhouseQueries) {
