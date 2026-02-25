@@ -522,6 +522,16 @@ export interface ProfileListResponse {
   totalCount: number
 }
 
+export interface FlamegraphFrame {
+  name: string
+  value: number
+  children: FlamegraphFrame[]
+}
+
+export interface FlamegraphResponse {
+  frames: FlamegraphFrame[]
+}
+
 // --- Event types ---
 
 export interface DdEventResponse {
@@ -3339,6 +3349,12 @@ class ApiClient {
 
   getProfileDownloadUrl(profileId: string): string {
     return `${API_BASE}/profiles/${profileId}/download`
+  }
+
+  async getProfileFlamegraph(profileId: string): Promise<FlamegraphResponse> {
+    return this.request<FlamegraphResponse>(
+      `${API_BASE}/profiles/${profileId}/flamegraph`
+    )
   }
 
   // --- Events ---

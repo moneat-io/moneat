@@ -8,7 +8,7 @@
 
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type FlamegraphFrame} from '@/lib/api'
 import {Flamegraph} from '@/components/profiling/Flamegraph'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
@@ -42,6 +42,14 @@ function ProfileDetailPage() {
   const profile = profilesData?.profiles?.find(
     (p) => p.profileId === profileId,
   )
+
+  const {data: flamegraphData} = useQuery({
+    queryKey: ['profileFlamegraph', profileId],
+    queryFn: () => api.getProfileFlamegraph(profileId),
+    enabled: api.isAuthenticated() && !!profileId,
+  })
+
+  const frames = flamegraphData?.frames as FlamegraphFrame[] | undefined
 
   if (isLoading) {
     return (
@@ -128,11 +136,12 @@ function ProfileDetailPage() {
         </div>
       )}
 
-      {/* Flamegraph placeholder */}
+      {/* Flamegraph */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Flamegraph</h2>
         <Flamegraph
-          emptyMessage="Flamegraph rendering requires pprof parsing. Download the profile to view in speedscope or pprof."
+          frames={frames}
+          emptyMessage="Loading flamegraph data…"
         />
       </div>
 

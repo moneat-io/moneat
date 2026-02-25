@@ -14,7 +14,7 @@ import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Loader2, Download, Search} from 'lucide-react'
 import {useState} from 'react'
-import {Link} from '@tanstack/react-router'
+import {Link, useNavigate} from '@tanstack/react-router'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -29,6 +29,7 @@ function formatDuration(ns: number): string {
 
 export function ProfileList() {
   const [serviceFilter, setServiceFilter] = useState('')
+  const navigate = useNavigate()
 
   const {data, isLoading} = useQuery({
     queryKey: ['profiles', serviceFilter],
@@ -87,7 +88,16 @@ export function ProfileList() {
           </TableHeader>
           <TableBody>
             {profiles.map((profile: ProfileResponse) => (
-              <TableRow key={profile.profileId}>
+              <TableRow
+                key={profile.profileId}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() =>
+                  navigate({
+                    to: '/profiles/$profileId',
+                    params: {profileId: profile.profileId},
+                  })
+                }
+              >
                 <TableCell>
                   <Link
                     to="/profiles/$profileId"
