@@ -1,5 +1,5 @@
--- Datadog-compatible continuous profiling metadata table
-CREATE TABLE IF NOT EXISTS dd_profiles (
+-- Continuous profiling metadata table
+CREATE TABLE IF NOT EXISTS profiles (
     profile_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     host String DEFAULT '',
@@ -15,9 +15,9 @@ CREATE TABLE IF NOT EXISTS dd_profiles (
     storage_key String,
     tags Map(String, String),
     size_bytes UInt64 DEFAULT 0,
-    INDEX idx_dd_profiles_service service TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_profiles_host host TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_profiles_type profile_type TYPE bloom_filter GRANULARITY 1
+    INDEX idx_profiles_service service TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_profiles_host host TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_profiles_type profile_type TYPE bloom_filter GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(start_time)
 ORDER BY (organization_id, service, start_time)

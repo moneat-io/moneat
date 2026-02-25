@@ -21,7 +21,7 @@ import {loadStripe} from '@stripe/stripe-js'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {type AlertNotificationPreference, type AlertSource, api, type AuthToken} from '@/lib/api'
 import {LogApiKeysTab} from '@/components/settings/LogApiKeysTab'
-import {DatadogApiKeysTab} from '@/components/settings/DatadogApiKeysTab'
+import {AgentApiKeysTab} from '@/components/settings/AgentApiKeysTab'
 import {trackEvent} from '@/lib/analytics'
 import {buildPricingCardModel} from '@/lib/pricing-display'
 import {Button} from '@/components/ui/button'
@@ -338,7 +338,7 @@ function ApiKeysTab() {
     <div className="space-y-8">
       <AuthTokensSection />
       <LogApiKeysTab />
-      {hasDatadog && <DatadogApiKeysTab />}
+      {hasDatadog && <AgentApiKeysTab />}
     </div>
   )
 }

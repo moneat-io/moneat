@@ -7,18 +7,19 @@
 // (at your option) any later version.
 
 import {useQuery} from '@tanstack/react-query'
-import {api, type DdServiceCheckResponse} from '@/lib/api'
+import {api, type DdEventResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Loader2, Search} from 'lucide-react'
 import {useState} from 'react'
 
-function statusBadgeVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case 'ok': return 'outline'
+function alertBadgeVariant(alertType: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (alertType) {
+    case 'error': return 'destructive'
     case 'warning': return 'secondary'
-    case 'critical': return 'destructive'
+    case 'success': return 'outline'
     default: return 'default'
   }
 }
@@ -32,21 +33,23 @@ function formatTimestamp(ts: string): string {
   }
 }
 
-export function ServiceCheckList() {
+export function EventStream() {
   const [hostFilter, setHostFilter] = useState('')
+  const [alertTypeFilter, setAlertTypeFilter] = useState('')
 
   const {data, isLoading} = useQuery({
-    queryKey: ['ddServiceChecks', hostFilter],
+    queryKey: ['events', hostFilter, alertTypeFilter],
     queryFn: () =>
-      api.getDdServiceChecks({
+      api.getEvents({
         host: hostFilter || undefined,
+        alertType: alertTypeFilter || undefined,
         limit: 50,
       }),
     enabled: api.isAuthenticated(),
     refetchInterval: 15000,
   })
 
-  const checks = data?.serviceChecks ?? []
+  const events = data?.events ?? []
 
   return (
     <div className="space-y-4">
@@ -60,9 +63,21 @@ export function ServiceCheckList() {
             className="pl-9"
           />
         </div>
+        <Select value={alertTypeFilter} onValueChange={(v) => setAlertTypeFilter(v === 'all' ? '' : v)}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Alert type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="info">Info</SelectItem>
+            <SelectItem value="warning">Warning</SelectItem>
+            <SelectItem value="error">Error</SelectItem>
+            <SelectItem value="success">Success</SelectItem>
+          </SelectContent>
+        </Select>
         {data?.totalCount != null && (
           <span className="text-sm text-muted-foreground">
-            {data.totalCount.toLocaleString()} checks
+            {data.totalCount.toLocaleString()} events
           </span>
         )}
       </div>
@@ -71,37 +86,42 @@ export function ServiceCheckList() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : checks.length === 0 ? (
+      ) : events.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No service checks found</p>
+          <p className="font-medium">No events found</p>
           <p className="text-sm mt-1">
-            Service checks will appear when a DD-compatible agent reports health checks.
+            Events will appear when an agent sends event data.
           </p>
         </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Check Name</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Alert</TableHead>
               <TableHead>Host</TableHead>
-              <TableHead>Message</TableHead>
+              <TableHead>Source</TableHead>
               <TableHead>Time</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {checks.map((check: DdServiceCheckResponse) => (
-              <TableRow key={check.checkId}>
-                <TableCell className="font-mono text-sm">{check.checkName}</TableCell>
+            {events.map((event: DdEventResponse) => (
+              <TableRow key={event.eventId}>
+                <TableCell className="max-w-md">
+                  <p className="font-medium truncate">{event.title}</p>
+                  {event.text && (
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{event.text}</p>
+                  )}
+                </TableCell>
                 <TableCell>
-                  <Badge variant={statusBadgeVariant(check.status)}>
-                    {check.status}
+                  <Badge variant={alertBadgeVariant(event.alertType)}>
+                    {event.alertType}
                   </Badge>
                 </TableCell>
-                <TableCell className="font-mono text-xs">{check.host || '—'}</TableCell>
-                <TableCell className="text-xs max-w-xs truncate">{check.message || '—'}</TableCell>
+                <TableCell className="font-mono text-xs">{event.host || '—'}</TableCell>
+                <TableCell className="text-xs">{event.sourceTypeName || '—'}</TableCell>
                 <TableCell className="text-xs whitespace-nowrap">
-                  {formatTimestamp(check.timestamp)}
+                  {formatTimestamp(event.timestamp)}
                 </TableCell>
               </TableRow>
             ))}

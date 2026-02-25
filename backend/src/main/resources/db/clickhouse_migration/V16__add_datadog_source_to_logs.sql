@@ -1,4 +1,4 @@
--- Add 'datadog' source type to logs table for DD-compatible log ingestion
+-- Add 'datadog' source type to logs table for agent-based log ingestion
 ALTER TABLE logs MODIFY COLUMN source Enum8(
     'sdk' = 1,
     'agent_stdout' = 2,

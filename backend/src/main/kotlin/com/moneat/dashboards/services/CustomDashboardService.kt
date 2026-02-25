@@ -756,7 +756,7 @@ class CustomDashboardService {
                 gridH = 4,
                 queryConfigs = listOf(
                     QueryDsl(
-                        dataSource = "system_metrics",
+                        dataSource = "metrics",
                         metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu")),
                         groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto"))
                     )
@@ -771,7 +771,7 @@ class CustomDashboardService {
                 gridH = 4,
                 queryConfigs = listOf(
                     QueryDsl(
-                        dataSource = "system_metrics",
+                        dataSource = "metrics",
                         metrics = listOf(MetricDef(AggFunction.AVG, "mem_used", "avg_mem")),
                         groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto"))
                     )
@@ -786,7 +786,7 @@ class CustomDashboardService {
                 gridH = 4,
                 queryConfigs = listOf(
                     QueryDsl(
-                        dataSource = "system_metrics",
+                        dataSource = "metrics",
                         metrics = listOf(
                             MetricDef(AggFunction.AVG, "net_recv_bytes", "avg_recv"),
                             MetricDef(AggFunction.AVG, "net_sent_bytes", "avg_sent")
@@ -804,7 +804,7 @@ class CustomDashboardService {
                 gridH = 4,
                 queryConfigs = listOf(
                     QueryDsl(
-                        dataSource = "system_metrics",
+                        dataSource = "metrics",
                         metrics = listOf(
                             MetricDef(AggFunction.MAX, "disk_used", "max_disk_used"),
                             MetricDef(AggFunction.AVG, "load_1", "avg_load")

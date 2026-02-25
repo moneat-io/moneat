@@ -1,5 +1,5 @@
--- Datadog-compatible processes table
-CREATE TABLE IF NOT EXISTS dd_processes (
+-- Processes table
+CREATE TABLE IF NOT EXISTS processes (
     process_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     host String,
@@ -15,16 +15,16 @@ CREATE TABLE IF NOT EXISTS dd_processes (
     open_fd_count UInt32 DEFAULT 0,
     tags Map(String, String),
     timestamp DateTime64(3, 'UTC'),
-    INDEX idx_dd_proc_host host TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_proc_name name TYPE bloom_filter GRANULARITY 1
+    INDEX idx_proc_host host TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_proc_name name TYPE bloom_filter GRANULARITY 1
 ) ENGINE = ReplacingMergeTree(timestamp)
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, host, pid, timestamp)
 TTL toDateTime(timestamp) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible containers table
-CREATE TABLE IF NOT EXISTS dd_containers (
+-- Containers table
+CREATE TABLE IF NOT EXISTS containers (
     container_id_hash UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     host String,
@@ -39,17 +39,17 @@ CREATE TABLE IF NOT EXISTS dd_containers (
     net_tx_bytes UInt64 DEFAULT 0,
     tags Map(String, String),
     timestamp DateTime64(3, 'UTC'),
-    INDEX idx_dd_cont_host host TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_cont_name name TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_cont_image image TYPE bloom_filter GRANULARITY 1
+    INDEX idx_cont_host host TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_cont_name name TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_cont_image image TYPE bloom_filter GRANULARITY 1
 ) ENGINE = ReplacingMergeTree(timestamp)
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, host, container_id, timestamp)
 TTL toDateTime(timestamp) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible network connections table
-CREATE TABLE IF NOT EXISTS dd_connections (
+-- Network connections table
+CREATE TABLE IF NOT EXISTS network_connections (
     connection_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     host String,
@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS dd_connections (
     bytes_recv UInt64 DEFAULT 0,
     tags Map(String, String),
     timestamp DateTime64(3, 'UTC'),
-    INDEX idx_dd_conn_host host TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_conn_remote remote_addr TYPE bloom_filter GRANULARITY 1
+    INDEX idx_conn_host host TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_conn_remote remote_addr TYPE bloom_filter GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, host, timestamp)

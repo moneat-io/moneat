@@ -58,8 +58,8 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       {name: 'events', label: 'Events', fields: []},
       {name: 'spans', label: 'Spans', fields: []},
       {name: 'logs', label: 'Logs', fields: []},
-      {name: 'system_metrics', label: 'System Metrics', fields: []},
-      {name: 'container_metrics', label: 'Container Metrics', fields: []},
+      {name: 'metrics', label: 'System Metrics', fields: []},
+      {name: 'containers', label: 'Container Metrics', fields: []},
       {name: 'uptime_heartbeats', label: 'Uptime Heartbeats', fields: []},
       {name: 'llm_generations', label: 'LLM Generations', fields: []},
       {name: 'analytics_events', label: 'Analytics Events', fields: []},
@@ -141,8 +141,8 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       
       // Check which datasources don't exist in Moneat
       // Built-in datasources that always exist
-      const builtInSources = new Set(['events', 'spans', 'logs', 'system_metrics', 
-        'container_metrics', 'uptime_heartbeats', 'llm_generations', 'analytics_events'])
+      const builtInSources = new Set(['events', 'spans', 'logs', 'metrics', 
+        'containers', 'uptime_heartbeats', 'llm_generations', 'analytics_events'])
       
       console.log('Found datasources in import:', Array.from(foundDataSources))
       console.log('Available custom datasources:', customDataSourcesData?.map(d => ({name: d.name, type: d.source_type})))

@@ -46,7 +46,7 @@ function formatDate(iso: string | null | undefined, timezone: string): string {
   }
 }
 
-export function DatadogApiKeysTab() {
+export function AgentApiKeysTab() {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const {timezone} = useTimezone()
@@ -56,21 +56,21 @@ export function DatadogApiKeysTab() {
   const [revokeKey, setRevokeKey] = useState<DdApiKey | null>(null)
 
   const {data: keysData, isLoading} = useQuery({
-    queryKey: ['ddApiKeys'],
-    queryFn: () => api.getDdApiKeys(),
+    queryKey: ['agentApiKeys'],
+    queryFn: () => api.getAgentApiKeys(),
     enabled: api.isAuthenticated(),
   })
 
   const keys = keysData?.keys ?? []
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => api.createDdApiKey(name),
+    mutationFn: (name: string) => api.createAgentApiKey(name),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({queryKey: ['ddApiKeys']})
+      queryClient.invalidateQueries({queryKey: ['agentApiKeys']})
       setCreatedKey({key: data.key, name: data.name})
       setNewKeyName('')
       setCreateOpen(false)
-      toast({title: 'DD API key created', description: 'Copy the key now—it won\'t be shown again.'})
+      toast({title: 'Agent key created', description: 'Copy the key now—it won\'t be shown again.'})
     },
     onError: (err: Error) => {
       toast({
@@ -82,11 +82,11 @@ export function DatadogApiKeysTab() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteDdApiKey(id),
+    mutationFn: (id: number) => api.deleteAgentApiKey(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['ddApiKeys']})
+      queryClient.invalidateQueries({queryKey: ['agentApiKeys']})
       setRevokeKey(null)
-      toast({title: 'Key revoked', description: 'The DD API key has been revoked.'})
+      toast({title: 'Key revoked', description: 'The agent API key has been revoked.'})
     },
     onError: (err: Error) => {
       toast({
@@ -117,19 +117,19 @@ export function DatadogApiKeysTab() {
     createMutation.reset()
   }
 
-  const ddUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
+  const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
 
   return (
     <>
-      <Card id="dd-api-keys">
+      <Card id="agent-api-keys">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              DD-Compatible Agent Keys
+              Agent Keys
             </CardTitle>
             <CardDescription>
-              Create API keys for Datadog-compatible agent and SDK ingestion. Keys are shown
+              Create API keys for compatible agent and SDK ingestion. Keys are shown
               in full only once when created.
             </CardDescription>
           </div>
@@ -144,9 +144,9 @@ export function DatadogApiKeysTab() {
           ) : keys.length === 0 ? (
             <div className="border rounded-lg p-8 text-center text-muted-foreground">
               <Shield className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p className="font-medium">No DD-compatible agent keys yet</p>
+              <p className="font-medium">No agent keys yet</p>
               <p className="text-sm mt-1">
-                Create a key to start ingesting data from Datadog-compatible agents and SDKs.
+                Create a key to start ingesting data from compatible agents and SDKs.
               </p>
               <Button variant="outline" className="mt-4" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -200,32 +200,32 @@ export function DatadogApiKeysTab() {
       {/* Setup instructions */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Agent Setup</CardTitle>
+          <CardTitle className="text-base">Agent Configuration</CardTitle>
           <CardDescription>
-            Configure a Datadog-compatible agent to send telemetry to Moneat.
+            Configure a compatible agent to send telemetry to Moneat.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
             <p className="text-sm font-medium mb-1">datadog.yaml</p>
             <pre className="text-xs bg-muted px-3 py-2 rounded-md break-all whitespace-pre-wrap font-mono">
-{`api_key: <YOUR_DD_API_KEY>
-dd_url: ${ddUrl}
+{`api_key: <YOUR_API_KEY>
+dd_url: ${ingestUrl}
 apm_config:
-  apm_dd_url: ${ddUrl}
+  apm_dd_url: ${ingestUrl}
 logs_config:
-  logs_dd_url: ${ddUrl}`}
+  logs_dd_url: ${ingestUrl}`}
             </pre>
           </div>
           <div>
             <p className="text-sm font-medium mb-1">Environment variables</p>
             <pre className="text-xs bg-muted px-3 py-2 rounded-md break-all whitespace-pre-wrap font-mono">
-{`DD_API_KEY=<YOUR_DD_API_KEY>
-DD_DD_URL=${ddUrl}`}
+{`DD_API_KEY=<YOUR_API_KEY>
+DD_DD_URL=${ingestUrl}`}
             </pre>
           </div>
           <p className="text-sm text-muted-foreground">
-            Replace <code className="bg-muted px-1 rounded">&lt;YOUR_DD_API_KEY&gt;</code> with
+            Replace <code className="bg-muted px-1 rounded">&lt;YOUR_API_KEY&gt;</code> with
             the full key shown when you create a new key above.
           </p>
         </CardContent>
@@ -235,7 +235,7 @@ DD_DD_URL=${ddUrl}`}
       <Dialog open={createOpen} onOpenChange={(o) => !o && handleCloseCreateDialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create DD-Compatible Agent Key</DialogTitle>
+            <DialogTitle>Create Agent Key</DialogTitle>
             <DialogDescription>
               Give this key a name to identify it (e.g. &quot;Production Agent&quot;). The full key
               will be shown once and cannot be retrieved later.
@@ -243,9 +243,9 @@ DD_DD_URL=${ddUrl}`}
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="dd-key-name">Name</Label>
+              <Label htmlFor="agent-key-name">Name</Label>
               <Input
-                id="dd-key-name"
+                id="agent-key-name"
                 value={newKeyName}
                 onChange={(e) => setNewKeyName(e.target.value)}
                 placeholder="e.g. Production Agent"
@@ -274,7 +274,7 @@ DD_DD_URL=${ddUrl}`}
       <Dialog open={!!createdKey} onOpenChange={(o) => !o && handleCloseCreateDialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>DD-Compatible Agent Key Created</DialogTitle>
+            <DialogTitle>Agent Key Created</DialogTitle>
             <DialogDescription>
               Copy your key now. It won&apos;t be shown again. Store it securely.
             </DialogDescription>
@@ -311,7 +311,7 @@ DD_DD_URL=${ddUrl}`}
       <Dialog open={!!revokeKey} onOpenChange={(o) => !o && setRevokeKey(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revoke DD-Compatible Agent Key</DialogTitle>
+            <DialogTitle>Revoke Agent Key</DialogTitle>
             <DialogDescription>
               Are you sure you want to revoke &quot;{revokeKey?.name}&quot;? Any agents using this
               key will no longer be able to send data.

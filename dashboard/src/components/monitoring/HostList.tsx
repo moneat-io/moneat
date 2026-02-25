@@ -41,8 +41,8 @@ function isOnline(lastSeenAt: string): boolean {
 
 export function HostList() {
   const {data, isLoading} = useQuery({
-    queryKey: ['ddHosts'],
-    queryFn: () => api.getDdHosts(),
+    queryKey: ['hosts'],
+    queryFn: () => api.getHosts(),
     enabled: api.isAuthenticated(),
     refetchInterval: 30000,
   })
@@ -68,7 +68,7 @@ export function HostList() {
         <div className="text-center py-12 text-muted-foreground">
           <p className="font-medium">No hosts reporting</p>
           <p className="text-sm mt-1">
-            Hosts will appear when a DD-compatible agent sends metadata.
+            Hosts will appear when an agent sends metadata.
           </p>
         </div>
       ) : (

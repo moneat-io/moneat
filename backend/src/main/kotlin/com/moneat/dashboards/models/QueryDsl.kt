@@ -33,11 +33,11 @@ enum class DataSource(val tableName: String) {
     @SerialName("logs")
     LOGS("logs"),
 
-    @SerialName("system_metrics")
-    SYSTEM_METRICS("system_metrics"),
+    @SerialName("metrics")
+    METRICS("metrics"),
 
-    @SerialName("container_metrics")
-    CONTAINER_METRICS("container_metrics"),
+    @SerialName("containers")
+    CONTAINERS("containers"),
 
     @SerialName("uptime_heartbeats")
     UPTIME_HEARTBEATS("uptime_heartbeats"),
@@ -49,7 +49,15 @@ enum class DataSource(val tableName: String) {
     ANALYTICS_EVENTS("analytics_events");
 
     companion object {
-        fun fromString(value: String): DataSource? = entries.find { it.tableName == value }
+        fun fromString(value: String): DataSource? {
+            // Backward compat: legacy table names map to new unified tables
+            val normalized = when (value) {
+                "system_metrics" -> "metrics"
+                "container_metrics" -> "containers"
+                else -> value
+            }
+            return entries.find { it.tableName == normalized }
+        }
     }
 }
 

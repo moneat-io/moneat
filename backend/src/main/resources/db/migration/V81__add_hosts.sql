@@ -1,4 +1,4 @@
-CREATE TABLE dd_hosts (
+CREATE TABLE hosts (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     hostname VARCHAR(512) NOT NULL,
@@ -15,5 +15,5 @@ CREATE TABLE dd_hosts (
     UNIQUE (organization_id, hostname)
 );
 
-CREATE INDEX idx_dd_hosts_org ON dd_hosts(organization_id);
-CREATE INDEX idx_dd_hosts_last_seen ON dd_hosts(last_seen_at);
+CREATE INDEX idx_hosts_org ON hosts(organization_id);
+CREATE INDEX idx_hosts_last_seen ON hosts(last_seen_at);

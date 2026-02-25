@@ -1,5 +1,5 @@
--- DD API keys for Datadog-compatible agent intake (enterprise feature)
-CREATE TABLE IF NOT EXISTS dd_api_keys (
+-- Agent API keys for compatible agent intake (enterprise feature)
+CREATE TABLE IF NOT EXISTS agent_api_keys (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
@@ -12,6 +12,6 @@ CREATE TABLE IF NOT EXISTS dd_api_keys (
     is_active BOOLEAN DEFAULT true
 );
 
-CREATE INDEX idx_dd_api_keys_org ON dd_api_keys(organization_id);
-CREATE INDEX idx_dd_api_keys_prefix ON dd_api_keys(key_prefix);
-CREATE INDEX idx_dd_api_keys_active ON dd_api_keys(organization_id, is_active);
+CREATE INDEX idx_agent_api_keys_org ON agent_api_keys(organization_id);
+CREATE INDEX idx_agent_api_keys_prefix ON agent_api_keys(key_prefix);
+CREATE INDEX idx_agent_api_keys_active ON agent_api_keys(organization_id, is_active);

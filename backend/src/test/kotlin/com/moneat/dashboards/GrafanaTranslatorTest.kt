@@ -450,7 +450,7 @@ class GrafanaTranslatorTest {
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
                     queryConfigs = listOf(
                         QueryDsl(
-                            dataSource = "system_metrics",
+                            dataSource = "metrics",
                             metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu")),
                             groupBy = listOf(GroupByDef("timestamp", TIME, "1 HOUR"))
                         )

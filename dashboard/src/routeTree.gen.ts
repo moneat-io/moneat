@@ -30,9 +30,6 @@ import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-ca
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DemoRouteImport } from './routes/demo'
-import { Route as DdInfraRouteImport } from './routes/dd-infra'
-import { Route as DdHostsRouteImport } from './routes/dd-hosts'
-import { Route as DdEventsRouteImport } from './routes/dd-events'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as ApmTracesRouteImport } from './routes/apm-traces'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
@@ -46,8 +43,6 @@ import { Route as PerformanceIndexRouteImport } from './routes/performance.index
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
-import { Route as DdInfraIndexRouteImport } from './routes/dd-infra.index'
-import { Route as DdEventsIndexRouteImport } from './routes/dd-events.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
@@ -65,6 +60,11 @@ import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
 import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
 import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
+import { Route as MonitoringProcessesRouteImport } from './routes/monitoring.processes'
+import { Route as MonitoringNetworkRouteImport } from './routes/monitoring.network'
+import { Route as MonitoringHostsRouteImport } from './routes/monitoring.hosts'
+import { Route as MonitoringEventsRouteImport } from './routes/monitoring.events'
+import { Route as MonitoringContainersRouteImport } from './routes/monitoring.containers'
 import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
 import { Route as LegalTermsRouteImport } from './routes/legal.terms'
 import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
@@ -201,21 +201,6 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DdInfraRoute = DdInfraRouteImport.update({
-  id: '/dd-infra',
-  path: '/dd-infra',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DdHostsRoute = DdHostsRouteImport.update({
-  id: '/dd-hosts',
-  path: '/dd-hosts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DdEventsRoute = DdEventsRouteImport.update({
-  id: '/dd-events',
-  path: '/dd-events',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardsRoute = DashboardsRouteImport.update({
   id: '/dashboards',
   path: '/dashboards',
@@ -280,16 +265,6 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/issues/',
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const DdInfraIndexRoute = DdInfraIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DdInfraRoute,
-} as any)
-const DdEventsIndexRoute = DdEventsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DdEventsRoute,
 } as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
@@ -377,6 +352,31 @@ const OnCallDeclaredIncidentsRoute = OnCallDeclaredIncidentsRouteImport.update({
   id: '/declared-incidents',
   path: '/declared-incidents',
   getParentRoute: () => OnCallRoute,
+} as any)
+const MonitoringProcessesRoute = MonitoringProcessesRouteImport.update({
+  id: '/monitoring/processes',
+  path: '/monitoring/processes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MonitoringNetworkRoute = MonitoringNetworkRouteImport.update({
+  id: '/monitoring/network',
+  path: '/monitoring/network',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MonitoringHostsRoute = MonitoringHostsRouteImport.update({
+  id: '/monitoring/hosts',
+  path: '/monitoring/hosts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MonitoringEventsRoute = MonitoringEventsRouteImport.update({
+  id: '/monitoring/events',
+  path: '/monitoring/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MonitoringContainersRoute = MonitoringContainersRouteImport.update({
+  id: '/monitoring/containers',
+  path: '/monitoring/containers',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const MonitoringSystemIdRoute = MonitoringSystemIdRouteImport.update({
   id: '/monitoring/$systemId',
@@ -541,9 +541,6 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
-  '/dd-events': typeof DdEventsRouteWithChildren
-  '/dd-hosts': typeof DdHostsRoute
-  '/dd-infra': typeof DdInfraRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -586,6 +583,11 @@ export interface FileRoutesByFullPath {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
+  '/monitoring/containers': typeof MonitoringContainersRoute
+  '/monitoring/events': typeof MonitoringEventsRoute
+  '/monitoring/hosts': typeof MonitoringHostsRoute
+  '/monitoring/network': typeof MonitoringNetworkRoute
+  '/monitoring/processes': typeof MonitoringProcessesRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -603,8 +605,6 @@ export interface FileRoutesByFullPath {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
-  '/dd-events/': typeof DdEventsIndexRoute
-  '/dd-infra/': typeof DdInfraIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -625,7 +625,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
-  '/dd-hosts': typeof DdHostsRoute
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -665,6 +664,11 @@ export interface FileRoutesByTo {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
+  '/monitoring/containers': typeof MonitoringContainersRoute
+  '/monitoring/events': typeof MonitoringEventsRoute
+  '/monitoring/hosts': typeof MonitoringHostsRoute
+  '/monitoring/network': typeof MonitoringNetworkRoute
+  '/monitoring/processes': typeof MonitoringProcessesRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -682,8 +686,6 @@ export interface FileRoutesByTo {
   '/analytics': typeof AnalyticsIndexRoute
   '/apm-traces': typeof ApmTracesIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
-  '/dd-events': typeof DdEventsIndexRoute
-  '/dd-infra': typeof DdInfraIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
@@ -709,9 +711,6 @@ export interface FileRoutesById {
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
-  '/dd-events': typeof DdEventsRouteWithChildren
-  '/dd-hosts': typeof DdHostsRoute
-  '/dd-infra': typeof DdInfraRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -754,6 +753,11 @@ export interface FileRoutesById {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/$systemId': typeof MonitoringSystemIdRoute
+  '/monitoring/containers': typeof MonitoringContainersRoute
+  '/monitoring/events': typeof MonitoringEventsRoute
+  '/monitoring/hosts': typeof MonitoringHostsRoute
+  '/monitoring/network': typeof MonitoringNetworkRoute
+  '/monitoring/processes': typeof MonitoringProcessesRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -771,8 +775,6 @@ export interface FileRoutesById {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
-  '/dd-events/': typeof DdEventsIndexRoute
-  '/dd-infra/': typeof DdInfraIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -799,9 +801,6 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
-    | '/dd-events'
-    | '/dd-hosts'
-    | '/dd-infra'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -844,6 +843,11 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
+    | '/monitoring/containers'
+    | '/monitoring/events'
+    | '/monitoring/hosts'
+    | '/monitoring/network'
+    | '/monitoring/processes'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -861,8 +865,6 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
-    | '/dd-events/'
-    | '/dd-infra/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -883,7 +885,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/accept-invite'
-    | '/dd-hosts'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -923,6 +924,11 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
+    | '/monitoring/containers'
+    | '/monitoring/events'
+    | '/monitoring/hosts'
+    | '/monitoring/network'
+    | '/monitoring/processes'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -940,8 +946,6 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
-    | '/dd-events'
-    | '/dd-infra'
     | '/issues'
     | '/monitoring'
     | '/on-call'
@@ -966,9 +970,6 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
-    | '/dd-events'
-    | '/dd-hosts'
-    | '/dd-infra'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -1011,6 +1012,11 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/$systemId'
+    | '/monitoring/containers'
+    | '/monitoring/events'
+    | '/monitoring/hosts'
+    | '/monitoring/network'
+    | '/monitoring/processes'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -1028,8 +1034,6 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
-    | '/dd-events/'
-    | '/dd-infra/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -1055,9 +1059,6 @@ export interface RootRouteChildren {
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
   ApmTracesRoute: typeof ApmTracesRouteWithChildren
   DashboardsRoute: typeof DashboardsRouteWithChildren
-  DdEventsRoute: typeof DdEventsRouteWithChildren
-  DdHostsRoute: typeof DdHostsRoute
-  DdInfraRoute: typeof DdInfraRouteWithChildren
   DemoRoute: typeof DemoRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -1085,6 +1086,11 @@ export interface RootRouteChildren {
   LegalSmsConsentRoute: typeof LegalSmsConsentRoute
   LegalTermsRoute: typeof LegalTermsRoute
   MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
+  MonitoringContainersRoute: typeof MonitoringContainersRoute
+  MonitoringEventsRoute: typeof MonitoringEventsRoute
+  MonitoringHostsRoute: typeof MonitoringHostsRoute
+  MonitoringNetworkRoute: typeof MonitoringNetworkRoute
+  MonitoringProcessesRoute: typeof MonitoringProcessesRoute
   SSlugRoute: typeof SSlugRoute
   StatusPagesPageIdRoute: typeof StatusPagesPageIdRoute
   UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
@@ -1247,27 +1253,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dd-infra': {
-      id: '/dd-infra'
-      path: '/dd-infra'
-      fullPath: '/dd-infra'
-      preLoaderRoute: typeof DdInfraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dd-hosts': {
-      id: '/dd-hosts'
-      path: '/dd-hosts'
-      fullPath: '/dd-hosts'
-      preLoaderRoute: typeof DdHostsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dd-events': {
-      id: '/dd-events'
-      path: '/dd-events'
-      fullPath: '/dd-events'
-      preLoaderRoute: typeof DdEventsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dashboards': {
       id: '/dashboards'
       path: '/dashboards'
@@ -1358,20 +1343,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/issues/'
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/dd-infra/': {
-      id: '/dd-infra/'
-      path: '/'
-      fullPath: '/dd-infra/'
-      preLoaderRoute: typeof DdInfraIndexRouteImport
-      parentRoute: typeof DdInfraRoute
-    }
-    '/dd-events/': {
-      id: '/dd-events/'
-      path: '/'
-      fullPath: '/dd-events/'
-      preLoaderRoute: typeof DdEventsIndexRouteImport
-      parentRoute: typeof DdEventsRoute
     }
     '/dashboards/': {
       id: '/dashboards/'
@@ -1491,6 +1462,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/on-call/declared-incidents'
       preLoaderRoute: typeof OnCallDeclaredIncidentsRouteImport
       parentRoute: typeof OnCallRoute
+    }
+    '/monitoring/processes': {
+      id: '/monitoring/processes'
+      path: '/monitoring/processes'
+      fullPath: '/monitoring/processes'
+      preLoaderRoute: typeof MonitoringProcessesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/monitoring/network': {
+      id: '/monitoring/network'
+      path: '/monitoring/network'
+      fullPath: '/monitoring/network'
+      preLoaderRoute: typeof MonitoringNetworkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/monitoring/hosts': {
+      id: '/monitoring/hosts'
+      path: '/monitoring/hosts'
+      fullPath: '/monitoring/hosts'
+      preLoaderRoute: typeof MonitoringHostsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/monitoring/events': {
+      id: '/monitoring/events'
+      path: '/monitoring/events'
+      fullPath: '/monitoring/events'
+      preLoaderRoute: typeof MonitoringEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/monitoring/containers': {
+      id: '/monitoring/containers'
+      path: '/monitoring/containers'
+      fullPath: '/monitoring/containers'
+      preLoaderRoute: typeof MonitoringContainersRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/monitoring/$systemId': {
       id: '/monitoring/$systemId'
@@ -1790,29 +1796,6 @@ const DashboardsRouteWithChildren = DashboardsRoute._addFileChildren(
   DashboardsRouteChildren,
 )
 
-interface DdEventsRouteChildren {
-  DdEventsIndexRoute: typeof DdEventsIndexRoute
-}
-
-const DdEventsRouteChildren: DdEventsRouteChildren = {
-  DdEventsIndexRoute: DdEventsIndexRoute,
-}
-
-const DdEventsRouteWithChildren = DdEventsRoute._addFileChildren(
-  DdEventsRouteChildren,
-)
-
-interface DdInfraRouteChildren {
-  DdInfraIndexRoute: typeof DdInfraIndexRoute
-}
-
-const DdInfraRouteChildren: DdInfraRouteChildren = {
-  DdInfraIndexRoute: DdInfraIndexRoute,
-}
-
-const DdInfraRouteWithChildren =
-  DdInfraRoute._addFileChildren(DdInfraRouteChildren)
-
 interface FeedbackRouteChildren {
   FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
 }
@@ -1956,9 +1939,6 @@ const rootRouteChildren: RootRouteChildren = {
   AnalyticsRoute: AnalyticsRouteWithChildren,
   ApmTracesRoute: ApmTracesRouteWithChildren,
   DashboardsRoute: DashboardsRouteWithChildren,
-  DdEventsRoute: DdEventsRouteWithChildren,
-  DdHostsRoute: DdHostsRoute,
-  DdInfraRoute: DdInfraRouteWithChildren,
   DemoRoute: DemoRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
@@ -1986,6 +1966,11 @@ const rootRouteChildren: RootRouteChildren = {
   LegalSmsConsentRoute: LegalSmsConsentRoute,
   LegalTermsRoute: LegalTermsRoute,
   MonitoringSystemIdRoute: MonitoringSystemIdRoute,
+  MonitoringContainersRoute: MonitoringContainersRoute,
+  MonitoringEventsRoute: MonitoringEventsRoute,
+  MonitoringHostsRoute: MonitoringHostsRoute,
+  MonitoringNetworkRoute: MonitoringNetworkRoute,
+  MonitoringProcessesRoute: MonitoringProcessesRoute,
   SSlugRoute: SSlugRoute,
   StatusPagesPageIdRoute: StatusPagesPageIdRoute,
   UptimeMonitorIdRoute: UptimeMonitorIdRoute,

@@ -32,6 +32,7 @@ import {
     Bell,
     BookOpen,
     Brain,
+    Box,
     CalendarClock,
     Check,
     ChevronLeft,
@@ -49,6 +50,7 @@ import {
     ScrollText,
     Server,
     Shield,
+    Terminal,
     Timer,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
@@ -226,9 +228,11 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     ...(hasEnterpriseModule(features, 'datadog') ? [
       { key: 'apm-traces', icon: Cpu, label: 'APM Traces', href: '/apm-traces', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
       { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'dd-events', icon: CalendarClock, label: 'DD Events', href: '/dd-events', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'dd-hosts', icon: HardDrive, label: 'DD Hosts', href: '/dd-hosts', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'dd-infra', icon: Network, label: 'DD Infrastructure', href: '/dd-infra', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'monitoring-hosts', icon: HardDrive, label: 'Hosts', href: '/monitoring/hosts', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'monitoring-containers', icon: Box, label: 'Containers', href: '/monitoring/containers', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'monitoring-processes', icon: Terminal, label: 'Processes', href: '/monitoring/processes', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'monitoring-network', icon: Network, label: 'Network', href: '/monitoring/network', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'monitoring-events', icon: CalendarClock, label: 'Events', href: '/monitoring/events', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
     ] : []),
     // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),

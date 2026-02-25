@@ -7,37 +7,46 @@
 // (at your option) any later version.
 
 import {useQuery} from '@tanstack/react-query'
-import {api, type DdProcessResponse} from '@/lib/api'
+import {api, type DdServiceCheckResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
 import {Loader2, Search} from 'lucide-react'
 import {useState} from 'react'
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  const kb = bytes / 1024
-  if (kb < 1024) return `${kb.toFixed(1)} KB`
-  const mb = kb / 1024
-  if (mb < 1024) return `${mb.toFixed(1)} MB`
-  const gb = mb / 1024
-  return `${gb.toFixed(2)} GB`
+function statusBadgeVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'ok': return 'outline'
+    case 'warning': return 'secondary'
+    case 'critical': return 'destructive'
+    default: return 'default'
+  }
 }
 
-export function ProcessExplorer() {
+function formatTimestamp(ts: string): string {
+  if (!ts) return '—'
+  try {
+    return new Date(ts).toLocaleString()
+  } catch {
+    return ts
+  }
+}
+
+export function ServiceCheckList() {
   const [hostFilter, setHostFilter] = useState('')
 
   const {data, isLoading} = useQuery({
-    queryKey: ['ddProcesses', hostFilter],
+    queryKey: ['serviceChecks', hostFilter],
     queryFn: () =>
-      api.getDdProcesses({
+      api.getServiceChecks({
         host: hostFilter || undefined,
-        limit: 100,
+        limit: 50,
       }),
     enabled: api.isAuthenticated(),
-    refetchInterval: 10000,
+    refetchInterval: 15000,
   })
 
-  const processes = data?.processes ?? []
+  const checks = data?.serviceChecks ?? []
 
   return (
     <div className="space-y-4">
@@ -53,7 +62,7 @@ export function ProcessExplorer() {
         </div>
         {data?.totalCount != null && (
           <span className="text-sm text-muted-foreground">
-            {data.totalCount.toLocaleString()} processes
+            {data.totalCount.toLocaleString()} checks
           </span>
         )}
       </div>
@@ -62,44 +71,38 @@ export function ProcessExplorer() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : processes.length === 0 ? (
+      ) : checks.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No processes found</p>
+          <p className="font-medium">No service checks found</p>
           <p className="text-sm mt-1">
-            Processes will appear when a DD-compatible agent sends process data.
+            Service checks will appear when an agent reports health checks.
           </p>
         </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>PID</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>User</TableHead>
+              <TableHead>Check Name</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Host</TableHead>
-              <TableHead className="text-right">CPU %</TableHead>
-              <TableHead className="text-right">RSS</TableHead>
-              <TableHead className="text-right">Threads</TableHead>
-              <TableHead>State</TableHead>
+              <TableHead>Message</TableHead>
+              <TableHead>Time</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {processes.map((proc: DdProcessResponse) => (
-              <TableRow key={proc.processId}>
-                <TableCell className="font-mono text-xs">{proc.pid}</TableCell>
-                <TableCell className="font-medium text-sm max-w-xs truncate">
-                  {proc.name}
+            {checks.map((check: DdServiceCheckResponse) => (
+              <TableRow key={check.checkId}>
+                <TableCell className="font-mono text-sm">{check.checkName}</TableCell>
+                <TableCell>
+                  <Badge variant={statusBadgeVariant(check.status)}>
+                    {check.status}
+                  </Badge>
                 </TableCell>
-                <TableCell className="text-xs">{proc.user || '—'}</TableCell>
-                <TableCell className="font-mono text-xs">{proc.host}</TableCell>
-                <TableCell className="text-right text-sm">
-                  {proc.cpuPercent.toFixed(1)}%
+                <TableCell className="font-mono text-xs">{check.host || '—'}</TableCell>
+                <TableCell className="text-xs max-w-xs truncate">{check.message || '—'}</TableCell>
+                <TableCell className="text-xs whitespace-nowrap">
+                  {formatTimestamp(check.timestamp)}
                 </TableCell>
-                <TableCell className="text-right text-xs font-mono">
-                  {formatBytes(proc.memRss)}
-                </TableCell>
-                <TableCell className="text-right text-sm">{proc.threadCount}</TableCell>
-                <TableCell className="text-xs">{proc.state || '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>

@@ -1,5 +1,5 @@
--- Datadog-compatible K8s orchestrator resources table
-CREATE TABLE IF NOT EXISTS dd_k8s_resources (
+-- K8s orchestrator resources table
+CREATE TABLE IF NOT EXISTS k8s_resources (
     resource_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     uid String,
@@ -15,18 +15,18 @@ CREATE TABLE IF NOT EXISTS dd_k8s_resources (
     resource_version String DEFAULT '',
     creation_timestamp DateTime64(3, 'UTC') DEFAULT now(),
     collected_at DateTime64(3, 'UTC') DEFAULT now(),
-    INDEX idx_dd_k8s_type resource_type TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_k8s_namespace namespace TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_k8s_name name TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_k8s_cluster cluster_name TYPE bloom_filter GRANULARITY 1
+    INDEX idx_k8s_type resource_type TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_k8s_namespace namespace TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_k8s_name name TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_k8s_cluster cluster_name TYPE bloom_filter GRANULARITY 1
 ) ENGINE = ReplacingMergeTree(collected_at)
 PARTITION BY toYYYYMM(collected_at)
 ORDER BY (organization_id, cluster_name, resource_type, namespace, uid)
 TTL toDateTime(collected_at) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible K8s manifest storage
-CREATE TABLE IF NOT EXISTS dd_k8s_manifests (
+-- K8s manifest storage
+CREATE TABLE IF NOT EXISTS k8s_manifests (
     manifest_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     uid String,
@@ -37,16 +37,16 @@ CREATE TABLE IF NOT EXISTS dd_k8s_manifests (
     manifest String,
     content_type String DEFAULT 'application/json',
     collected_at DateTime64(3, 'UTC') DEFAULT now(),
-    INDEX idx_dd_k8s_manif_type resource_type TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_k8s_manif_name name TYPE bloom_filter GRANULARITY 1
+    INDEX idx_k8s_manif_type resource_type TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_k8s_manif_name name TYPE bloom_filter GRANULARITY 1
 ) ENGINE = ReplacingMergeTree(collected_at)
 PARTITION BY toYYYYMM(collected_at)
 ORDER BY (organization_id, cluster_name, resource_type, namespace, uid)
 TTL toDateTime(collected_at) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible DBM query samples table
-CREATE TABLE IF NOT EXISTS dd_dbm_queries (
+-- DBM query samples table
+CREATE TABLE IF NOT EXISTS dbm_queries (
     query_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     db_host String DEFAULT '',
@@ -66,17 +66,17 @@ CREATE TABLE IF NOT EXISTS dd_dbm_queries (
     env String DEFAULT '',
     service String DEFAULT '',
     tags Map(String, String),
-    INDEX idx_dd_dbm_queries_host db_host TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_dbm_queries_system db_system TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_dbm_queries_sig query_signature TYPE bloom_filter GRANULARITY 1
+    INDEX idx_dbm_queries_host db_host TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_dbm_queries_system db_system TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_dbm_queries_sig query_signature TYPE bloom_filter GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, db_host, timestamp)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible DBM metrics table (pre-aggregated query stats)
-CREATE TABLE IF NOT EXISTS dd_dbm_metrics (
+-- DBM metrics table (pre-aggregated query stats)
+CREATE TABLE IF NOT EXISTS dbm_metrics (
     organization_id UInt64,
     db_host String DEFAULT '',
     db_system String DEFAULT '',
@@ -91,16 +91,16 @@ CREATE TABLE IF NOT EXISTS dd_dbm_metrics (
     host String DEFAULT '',
     env String DEFAULT '',
     tags Map(String, String),
-    INDEX idx_dd_dbm_metrics_host db_host TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_dbm_metrics_sig query_signature TYPE bloom_filter GRANULARITY 1
+    INDEX idx_dbm_metrics_host db_host TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_dbm_metrics_sig query_signature TYPE bloom_filter GRANULARITY 1
 ) ENGINE = SummingMergeTree((calls, total_time_ns, rows, shared_blks_hit, shared_blks_read))
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, db_host, db_name, query_signature, timestamp)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible DBM activity table (currently executing queries)
-CREATE TABLE IF NOT EXISTS dd_dbm_activity (
+-- DBM activity table (currently executing queries)
+CREATE TABLE IF NOT EXISTS dbm_activity (
     activity_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     db_host String DEFAULT '',
@@ -118,16 +118,16 @@ CREATE TABLE IF NOT EXISTS dd_dbm_activity (
     host String DEFAULT '',
     env String DEFAULT '',
     tags Map(String, String),
-    INDEX idx_dd_dbm_activity_host db_host TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_dbm_activity_state state TYPE bloom_filter GRANULARITY 1
+    INDEX idx_dbm_activity_host db_host TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_dbm_activity_state state TYPE bloom_filter GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, db_host, timestamp)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible debugger logs/snapshots table
-CREATE TABLE IF NOT EXISTS dd_debugger_logs (
+-- Debugger logs/snapshots table
+CREATE TABLE IF NOT EXISTS debugger_logs (
     log_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     service String DEFAULT '',
@@ -141,16 +141,16 @@ CREATE TABLE IF NOT EXISTS dd_debugger_logs (
     host String DEFAULT '',
     timestamp DateTime64(3, 'UTC'),
     tags Map(String, String),
-    INDEX idx_dd_debugger_service service TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_debugger_probe probe_id TYPE bloom_filter GRANULARITY 1
+    INDEX idx_debugger_service service TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_debugger_probe probe_id TYPE bloom_filter GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, service, timestamp)
 TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
--- Datadog-compatible debugger diagnostics table
-CREATE TABLE IF NOT EXISTS dd_debugger_diagnostics (
+-- Debugger diagnostics table
+CREATE TABLE IF NOT EXISTS debugger_diagnostics (
     diagnostic_id UUID DEFAULT generateUUIDv4(),
     organization_id UInt64,
     service String DEFAULT '',
@@ -162,8 +162,8 @@ CREATE TABLE IF NOT EXISTS dd_debugger_diagnostics (
     host String DEFAULT '',
     timestamp DateTime64(3, 'UTC'),
     tags Map(String, String),
-    INDEX idx_dd_diag_service service TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_dd_diag_probe probe_id TYPE bloom_filter GRANULARITY 1
+    INDEX idx_diag_service service TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_diag_probe probe_id TYPE bloom_filter GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (organization_id, service, timestamp)

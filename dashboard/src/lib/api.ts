@@ -499,7 +499,7 @@ export interface ApmServiceMapResponse {
   services: ApmServiceMapEntry[]
 }
 
-// --- DD Profile types ---
+// --- Profile types ---
 
 export interface ProfileResponse {
   profileId: string
@@ -522,7 +522,7 @@ export interface ProfileListResponse {
   totalCount: number
 }
 
-// --- DD Event types ---
+// --- Event types ---
 
 export interface DdEventResponse {
   eventId: string
@@ -543,7 +543,7 @@ export interface DdEventListResponse {
   totalCount: number
 }
 
-// --- DD Service Check types ---
+// --- Service Check types ---
 
 export interface DdServiceCheckResponse {
   checkId: string
@@ -560,7 +560,7 @@ export interface DdServiceCheckListResponse {
   totalCount: number
 }
 
-// --- DD Host types ---
+// --- Host types ---
 
 export interface DdHostResponse {
   id: number
@@ -581,7 +581,7 @@ export interface DdHostListResponse {
   totalCount: number
 }
 
-// --- DD Infrastructure types ---
+// --- Infrastructure types ---
 
 export interface DdProcessResponse {
   processId: string
@@ -3262,9 +3262,9 @@ class ApiClient {
     await this.request(`${API_BASE}/logs/api-keys/${id}`, { method: 'DELETE' })
   }
 
-  async getDdApiKeys(): Promise<{ keys: DdApiKey[] }> {
+  async getAgentApiKeys(): Promise<{ keys: DdApiKey[] }> {
     const response = await this.request<{ keys: Record<string, unknown>[] }>(
-      `${API_BASE}/dd/api-keys`
+      `${API_BASE}/agent-api-keys`
     )
     const keys = (response.keys ?? []).map((k) => ({
       id: k.id as number,
@@ -3276,18 +3276,18 @@ class ApiClient {
     return { keys }
   }
 
-  async createDdApiKey(name: string): Promise<CreateDdApiKeyResponse> {
-    return this.request<CreateDdApiKeyResponse>(`${API_BASE}/dd/api-keys`, {
+  async createAgentApiKey(name: string): Promise<CreateDdApiKeyResponse> {
+    return this.request<CreateDdApiKeyResponse>(`${API_BASE}/agent-api-keys`, {
       method: 'POST',
       body: JSON.stringify({ name }),
     })
   }
 
-  async deleteDdApiKey(id: number): Promise<void> {
-    await this.request(`${API_BASE}/dd/api-keys/${id}`, { method: 'DELETE' })
+  async deleteAgentApiKey(id: number): Promise<void> {
+    await this.request(`${API_BASE}/agent-api-keys/${id}`, { method: 'DELETE' })
   }
 
-  // --- DD Traces ---
+  // --- APM Traces ---
 
   async getApmTraces(params: {
     service?: string
@@ -3302,23 +3302,23 @@ class ApiClient {
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<ApmTraceListResponse>(
-      `${API_BASE}/dd/traces${qs ? `?${qs}` : ''}`
+      `${API_BASE}/traces${qs ? `?${qs}` : ''}`
     )
   }
 
   async getApmTraceDetail(traceId: string): Promise<ApmTraceDetailResponse> {
     return this.request<ApmTraceDetailResponse>(
-      `${API_BASE}/dd/traces/${traceId}`
+      `${API_BASE}/traces/${traceId}`
     )
   }
 
   async getApmServiceMap(): Promise<ApmServiceMapResponse> {
     return this.request<ApmServiceMapResponse>(
-      `${API_BASE}/dd/services/map`
+      `${API_BASE}/services/map`
     )
   }
 
-  // --- DD Profiles ---
+  // --- Profiles ---
 
   async getProfiles(params: {
     service?: string
@@ -3333,17 +3333,17 @@ class ApiClient {
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<ProfileListResponse>(
-      `${API_BASE}/dd/profiles${qs ? `?${qs}` : ''}`
+      `${API_BASE}/profiles${qs ? `?${qs}` : ''}`
     )
   }
 
   getProfileDownloadUrl(profileId: string): string {
-    return `${API_BASE}/dd/profiles/${profileId}/download`
+    return `${API_BASE}/profiles/${profileId}/download`
   }
 
-  // --- DD Events ---
+  // --- Events ---
 
-  async getDdEvents(params: {
+  async getEvents(params: {
     alertType?: string
     host?: string
     limit?: number
@@ -3356,11 +3356,11 @@ class ApiClient {
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdEventListResponse>(
-      `${API_BASE}/dd/events${qs ? `?${qs}` : ''}`
+      `${API_BASE}/infra/events${qs ? `?${qs}` : ''}`
     )
   }
 
-  async getDdServiceChecks(params: {
+  async getServiceChecks(params: {
     checkName?: string
     host?: string
     limit?: number
@@ -3373,19 +3373,19 @@ class ApiClient {
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdServiceCheckListResponse>(
-      `${API_BASE}/dd/service-checks${qs ? `?${qs}` : ''}`
+      `${API_BASE}/infra/service-checks${qs ? `?${qs}` : ''}`
     )
   }
 
-  // --- DD Hosts ---
+  // --- Hosts ---
 
-  async getDdHosts(): Promise<DdHostListResponse> {
-    return this.request<DdHostListResponse>(`${API_BASE}/dd/hosts`)
+  async getHosts(): Promise<DdHostListResponse> {
+    return this.request<DdHostListResponse>(`${API_BASE}/hosts`)
   }
 
-  // --- DD Infrastructure ---
+  // --- Infrastructure ---
 
-  async getDdProcesses(params: {
+  async getProcesses(params: {
     host?: string
     limit?: number
     offset?: number
@@ -3396,11 +3396,11 @@ class ApiClient {
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdProcessListResponse>(
-      `${API_BASE}/dd/processes${qs ? `?${qs}` : ''}`
+      `${API_BASE}/infra/processes${qs ? `?${qs}` : ''}`
     )
   }
 
-  async getDdContainers(params: {
+  async getContainers(params: {
     host?: string
     limit?: number
     offset?: number
@@ -3411,11 +3411,11 @@ class ApiClient {
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdContainerListResponse>(
-      `${API_BASE}/dd/containers${qs ? `?${qs}` : ''}`
+      `${API_BASE}/infra/containers${qs ? `?${qs}` : ''}`
     )
   }
 
-  async getDdConnections(params: {
+  async getConnections(params: {
     host?: string
     limit?: number
     offset?: number
@@ -3426,7 +3426,7 @@ class ApiClient {
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdConnectionListResponse>(
-      `${API_BASE}/dd/connections${qs ? `?${qs}` : ''}`
+      `${API_BASE}/infra/connections${qs ? `?${qs}` : ''}`
     )
   }
 

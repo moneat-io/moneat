@@ -2328,7 +2328,7 @@ object DemoDataSeeder {
 
         // Delete existing container metrics for this organization to ensure fresh data
         try {
-            val deleteQuery = "DELETE FROM $db.container_metrics WHERE org_id = $organizationId"
+            val deleteQuery = "ALTER TABLE $db.containers DELETE WHERE organization_id = $organizationId"
             ClickHouseClient.execute(deleteQuery)
             println("🗑️  Deleted old container metrics for fresh data")
         } catch (e: Exception) {
@@ -2423,17 +2423,18 @@ object DemoDataSeeder {
                     val netRecv = if (isRunning) random.nextLong(1024L * 1024L, 100L * 1024L * 1024L) else 0L
                     val netSent = if (isRunning) random.nextLong(512L * 1024L, 50L * 1024L * 1024L) else 0L
 
+                    val ts = "fromUnixTimestamp64Milli(${timestamp.toEpochMilli()})"
+                    val tagsMap = "map('system_id','$systemId')"
                     val containerQuery =
                         """
-                        INSERT INTO $db.container_metrics (
-                            system_id, org_id, container_name, container_id, image, status,
-                            cpu_percent, mem_used, mem_limit,
-                            net_recv_bytes, net_sent_bytes, timestamp
+                        INSERT INTO $db.containers (
+                            organization_id, host, container_id, name, image, state,
+                            cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes, tags, timestamp
                         ) VALUES (
-                            toUUID('$systemId'),
                             $organizationId,
-                            '$containerName',
+                            '$systemName',
                             '$containerId',
+                            '$containerName',
                             '$image',
                             '$status',
                             $cpuPercent,
@@ -2441,7 +2442,8 @@ object DemoDataSeeder {
                             $memLimit,
                             $netRecv,
                             $netSent,
-                            toDateTime64(${timestamp.epochSecond}, 3, 'UTC')
+                            $tagsMap,
+                            $ts
                         )
                         """.trimIndent()
 
@@ -2479,7 +2481,7 @@ object DemoDataSeeder {
 
         // Delete existing system metrics for this organization to ensure fresh data
         try {
-            val deleteQuery = "DELETE FROM $db.system_metrics WHERE org_id = $organizationId"
+            val deleteQuery = "ALTER TABLE $db.metrics DELETE WHERE organization_id = $organizationId"
             ClickHouseClient.execute(deleteQuery)
             println("🗑️  Deleted old system metrics for fresh data")
         } catch (e: Exception) {
@@ -2560,45 +2562,45 @@ object DemoDataSeeder {
                 // Battery (only for mobile/laptop monitoring, rare)
                 val batteryPercent = 0.0f
 
+                val ts = "fromUnixTimestamp64Milli(${timestamp.toEpochMilli()})"
+                val tagsMap = "map('system_id','$systemId')"
+                val metricRows =
+                    listOf(
+                        Triple("system.cpu.percent", cpuPercent.toDouble(), 1),
+                        Triple("system.mem.total", memTotal.toDouble(), 1),
+                        Triple("system.mem.used", memUsed.toDouble(), 1),
+                        Triple("system.mem.available", memAvailable.toDouble(), 1),
+                        Triple("system.swap.total", swapTotal.toDouble(), 1),
+                        Triple("system.swap.used", swapUsed.toDouble(), 1),
+                        Triple("system.disk.total", diskTotal.toDouble(), 1),
+                        Triple("system.disk.used", diskUsed.toDouble(), 1),
+                        Triple("system.disk.read_bytes", diskReadBytes.toDouble(), 1),
+                        Triple("system.disk.write_bytes", diskWriteBytes.toDouble(), 1),
+                        Triple("system.net.recv_bytes", netRecvBytes.toDouble(), 1),
+                        Triple("system.net.sent_bytes", netSentBytes.toDouble(), 1),
+                        Triple("system.load.1", load1.toDouble(), 1),
+                        Triple("system.load.5", load5.toDouble(), 1),
+                        Triple("system.load.15", load15.toDouble(), 1),
+                        Triple("system.temp.max", tempMax.toDouble(), 1),
+                        Triple("system.gpu.percent", gpuPercent.toDouble(), 1),
+                        Triple("system.gpu.mem_percent", gpuMemPercent.toDouble(), 1),
+                        Triple("system.gpu.power", gpuPower.toDouble(), 1),
+                        Triple("system.battery.percent", batteryPercent.toDouble(), 1)
+                    )
+                val values =
+                    metricRows.joinToString(",") { (name, value, mtype) ->
+                        "($organizationId,'$name',$mtype,$ts,$value,'$systemName',$tagsMap,'','')"
+                    }
                 val systemMetricsQuery =
                     """
-                    INSERT INTO $db.system_metrics (
-                        system_id, org_id, timestamp,
-                        cpu_percent, mem_total, mem_used, mem_available,
-                        swap_total, swap_used, disk_total, disk_used,
-                        disk_read_bytes, disk_write_bytes, net_recv_bytes, net_sent_bytes,
-                        load_1, load_5, load_15, temp_max,
-                        gpu_percent, gpu_mem_percent, gpu_power, battery_percent
-                    ) VALUES (
-                        toUUID('$systemId'),
-                        $organizationId,
-                        toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
-                        $cpuPercent,
-                        $memTotal,
-                        $memUsed,
-                        $memAvailable,
-                        $swapTotal,
-                        $swapUsed,
-                        $diskTotal,
-                        $diskUsed,
-                        $diskReadBytes,
-                        $diskWriteBytes,
-                        $netRecvBytes,
-                        $netSentBytes,
-                        $load1,
-                        $load5,
-                        $load15,
-                        $tempMax,
-                        $gpuPercent,
-                        $gpuMemPercent,
-                        $gpuPower,
-                        $batteryPercent
-                    )
+                    INSERT INTO $db.metrics (
+                        organization_id, metric_name, metric_type, timestamp, value, host, tags, unit, source_type_name
+                    ) VALUES $values
                     """.trimIndent()
 
                 try {
                     ClickHouseClient.execute(systemMetricsQuery)
-                    totalMetrics++
+                    totalMetrics += metricRows.size
                 } catch (e: Exception) {
                     if (i == 0) println("❌ Error inserting system metric for $systemName: ${e.message}")
                 }

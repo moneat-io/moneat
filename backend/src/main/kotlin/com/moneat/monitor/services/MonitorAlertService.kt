@@ -292,7 +292,7 @@ class MonitorAlertService {
         val alertKey = "alert_state:${alert.systemId}:${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
 
         // Get recent metrics for the system
-        val currentValue = getCurrentMetricValue(alert.systemId, alert.metric) ?: return
+        val currentValue = getCurrentMetricValue(alert.systemId, alert.organizationId, alert.metric) ?: return
 
         // Check if alert condition is met
         val triggered = isThresholdTriggered(alert.condition, currentValue, alert.threshold)
@@ -420,33 +420,42 @@ class MonitorAlertService {
     }
 
     /**
-     * Get the current value of a metric for a system.
+     * Get the current value of a metric for a system from metrics table.
      */
     private suspend fun getCurrentMetricValue(
         systemId: UUID,
+        organizationId: Int,
         metric: String
     ): Double? {
-        val metricColumn =
+        val sysIdStr = systemId.toString()
+
+        val (selectExpr, metricFilter) =
             when (metric) {
-                "cpu_percent" -> "cpu_percent"
-                "mem_percent" -> "(mem_used / mem_total * 100)"
-                "disk_percent" -> "(disk_used / disk_total * 100)"
-                "load_1" -> "load_1"
-                "load_5" -> "load_5"
-                "load_15" -> "load_15"
-                "temp_max" -> "temp_max"
-                "gpu_percent" -> "gpu_percent"
-                "battery_percent" -> "battery_percent"
+                "cpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.cpu.percent'"
+                "mem_percent" ->
+                    "argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) / " +
+                        "nullIf(argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp), 0) * 100" to
+                        "metric_name IN ('system.mem.used','system.mem.total')"
+                "disk_percent" ->
+                    "argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) / " +
+                        "nullIf(argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp), 0) * 100" to
+                        "metric_name IN ('system.disk.used','system.disk.total')"
+                "load_1" -> "argMax(value, timestamp)" to "metric_name = 'system.load.1'"
+                "load_5" -> "argMax(value, timestamp)" to "metric_name = 'system.load.5'"
+                "load_15" -> "argMax(value, timestamp)" to "metric_name = 'system.load.15'"
+                "temp_max" -> "argMax(value, timestamp)" to "metric_name = 'system.temp.max'"
+                "gpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.gpu.percent'"
+                "battery_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.battery.percent'"
                 else -> return null
             }
 
         val query =
             """
-            SELECT $metricColumn as value
-            FROM $clickhouseDb.system_metrics
-            WHERE system_id = toUUID('$systemId')
-            ORDER BY timestamp DESC
-            LIMIT 1
+            SELECT $selectExpr as value
+            FROM $clickhouseDb.metrics
+            WHERE organization_id = $organizationId
+              AND tags['system_id'] = '$sysIdStr'
+              AND $metricFilter
             FORMAT JSONCompact
             """.trimIndent()
 
@@ -476,39 +485,71 @@ class MonitorAlertService {
      * Check if the alert condition has been sustained for the required duration.
      */
     private suspend fun checkSustainedCondition(alert: AlertData): Boolean {
-        val metricColumn =
+        val sysIdStr = alert.systemId.toString()
+        val baseFilter =
+            "organization_id = ${alert.organizationId} AND tags['system_id'] = '$sysIdStr' " +
+            "AND timestamp >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
+
+        val (query, usesDerived) =
             when (alert.metric) {
-                "cpu_percent" -> "cpu_percent"
-                "mem_percent" -> "(mem_used / mem_total * 100)"
-                "disk_percent" -> "(disk_used / disk_total * 100)"
-                "load_1" -> "load_1"
-                "load_5" -> "load_5"
-                "load_15" -> "load_15"
-                "temp_max" -> "temp_max"
-                "gpu_percent" -> "gpu_percent"
-                "battery_percent" -> "battery_percent"
-                else -> return false
+                "mem_percent", "disk_percent" -> {
+                    val usedName = if (alert.metric == "mem_percent") "system.mem.used" else "system.disk.used"
+                    val totalName = if (alert.metric == "mem_percent") "system.mem.total" else "system.disk.total"
+                    val havingClause =
+                        when (alert.condition) {
+                            ">" -> "pct > ${alert.threshold}"
+                            "<" -> "pct < ${alert.threshold}"
+                            ">=" -> "pct >= ${alert.threshold}"
+                            "<=" -> "pct <= ${alert.threshold}"
+                            "==" -> "pct == ${alert.threshold}"
+                            else -> return false
+                        }
+                    val q =
+                        """
+                        SELECT count(*) as cnt FROM (
+                            SELECT timestamp,
+                                max(CASE WHEN metric_name='$usedName' THEN value END) /
+                                nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0) * 100 as pct
+                            FROM $clickhouseDb.metrics
+                            WHERE $baseFilter AND metric_name IN ('$usedName','$totalName')
+                            GROUP BY timestamp
+                            HAVING $havingClause
+                        )
+                        FORMAT JSONCompact
+                        """.trimIndent()
+                    q to true
+                }
+                else -> {
+                    val metricName =
+                        when (alert.metric) {
+                            "cpu_percent" -> "system.cpu.percent"
+                            "load_1" -> "system.load.1"
+                            "load_5" -> "system.load.5"
+                            "load_15" -> "system.load.15"
+                            "temp_max" -> "system.temp.max"
+                            "gpu_percent" -> "system.gpu.percent"
+                            "battery_percent" -> "system.battery.percent"
+                            else -> return false
+                        }
+                    val conditionSql =
+                        when (alert.condition) {
+                            ">" -> "value > ${alert.threshold}"
+                            "<" -> "value < ${alert.threshold}"
+                            ">=" -> "value >= ${alert.threshold}"
+                            "<=" -> "value <= ${alert.threshold}"
+                            "==" -> "value == ${alert.threshold}"
+                            else -> return false
+                        }
+                    val q =
+                        """
+                        SELECT count(*) as cnt
+                        FROM $clickhouseDb.metrics
+                        WHERE $baseFilter AND metric_name = '$metricName' AND $conditionSql
+                        FORMAT JSONCompact
+                        """.trimIndent()
+                    q to false
+                }
             }
-
-        val conditionSql =
-            when (alert.condition) {
-                ">" -> "$metricColumn > ${alert.threshold}"
-                "<" -> "$metricColumn < ${alert.threshold}"
-                ">=" -> "$metricColumn >= ${alert.threshold}"
-                "<=" -> "$metricColumn <= ${alert.threshold}"
-                "==" -> "$metricColumn == ${alert.threshold}"
-                else -> return false
-            }
-
-        val query =
-            """
-            SELECT count(*) as cnt
-            FROM $clickhouseDb.system_metrics
-            WHERE system_id = toUUID('${alert.systemId}')
-              AND timestamp >= now() - INTERVAL ${alert.durationSeconds} SECOND
-              AND $conditionSql
-            FORMAT JSONCompact
-            """.trimIndent()
 
         return try {
             val response = ClickHouseClient.execute(query)

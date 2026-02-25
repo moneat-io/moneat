@@ -7,7 +7,7 @@
 // (at your option) any later version.
 
 import {useQuery} from '@tanstack/react-query'
-import {api, type DdConnectionResponse} from '@/lib/api'
+import {api, type DdContainerResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
@@ -24,13 +24,22 @@ function formatBytes(bytes: number): string {
   return `${gb.toFixed(2)} GB`
 }
 
-export function NetworkConnections() {
+function stateBadge(state: string): 'default' | 'secondary' | 'destructive' {
+  switch (state) {
+    case 'running': return 'default'
+    case 'exited':
+    case 'dead': return 'destructive'
+    default: return 'secondary'
+  }
+}
+
+export function ContainerList() {
   const [hostFilter, setHostFilter] = useState('')
 
   const {data, isLoading} = useQuery({
-    queryKey: ['ddConnections', hostFilter],
+    queryKey: ['containers', hostFilter],
     queryFn: () =>
-      api.getDdConnections({
+      api.getContainers({
         host: hostFilter || undefined,
         limit: 100,
       }),
@@ -38,7 +47,7 @@ export function NetworkConnections() {
     refetchInterval: 10000,
   })
 
-  const connections = data?.connections ?? []
+  const containers = data?.containers ?? []
 
   return (
     <div className="space-y-4">
@@ -54,7 +63,7 @@ export function NetworkConnections() {
         </div>
         {data?.totalCount != null && (
           <span className="text-sm text-muted-foreground">
-            {data.totalCount.toLocaleString()} connections
+            {data.totalCount.toLocaleString()} containers
           </span>
         )}
       </div>
@@ -63,47 +72,52 @@ export function NetworkConnections() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : connections.length === 0 ? (
+      ) : containers.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No connections found</p>
+          <p className="font-medium">No containers found</p>
           <p className="text-sm mt-1">
-            Network connections will appear when a DD-compatible agent sends connection data.
+            Containers will appear when an agent sends container data.
           </p>
         </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>PID</TableHead>
-              <TableHead>Local</TableHead>
-              <TableHead>Remote</TableHead>
-              <TableHead>Protocol</TableHead>
-              <TableHead>Direction</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>State</TableHead>
+              <TableHead>Image</TableHead>
               <TableHead>Host</TableHead>
-              <TableHead className="text-right">Sent</TableHead>
-              <TableHead className="text-right">Recv</TableHead>
+              <TableHead className="text-right">CPU %</TableHead>
+              <TableHead className="text-right">Memory</TableHead>
+              <TableHead className="text-right">Net RX</TableHead>
+              <TableHead className="text-right">Net TX</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {connections.map((conn: DdConnectionResponse) => (
-              <TableRow key={conn.connectionId}>
-                <TableCell className="font-mono text-xs">{conn.pid || '—'}</TableCell>
-                <TableCell className="font-mono text-xs">
-                  {conn.localAddr}:{conn.localPort}
-                </TableCell>
-                <TableCell className="font-mono text-xs">
-                  {conn.remoteAddr}:{conn.remotePort}
+            {containers.map((c: DdContainerResponse) => (
+              <TableRow key={c.id}>
+                <TableCell className="font-medium text-sm max-w-xs truncate">
+                  {c.name || c.containerId.slice(0, 12)}
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{conn.protocol}</Badge>
+                  <Badge variant={stateBadge(c.state)}>{c.state}</Badge>
                 </TableCell>
-                <TableCell className="text-xs">{conn.direction || '—'}</TableCell>
-                <TableCell className="font-mono text-xs">{conn.host}</TableCell>
-                <TableCell className="text-right text-xs font-mono">
-                  {formatBytes(conn.bytesSent)}
+                <TableCell className="text-xs font-mono max-w-xs truncate">{c.image || '—'}</TableCell>
+                <TableCell className="font-mono text-xs">{c.host}</TableCell>
+                <TableCell className="text-right text-sm">
+                  {c.cpuPercent.toFixed(1)}%
                 </TableCell>
                 <TableCell className="text-right text-xs font-mono">
-                  {formatBytes(conn.bytesRecv)}
+                  {formatBytes(c.memUsage)}
+                  {c.memLimit > 0 && (
+                    <span className="text-muted-foreground"> / {formatBytes(c.memLimit)}</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right text-xs font-mono">
+                  {formatBytes(c.netRxBytes)}
+                </TableCell>
+                <TableCell className="text-right text-xs font-mono">
+                  {formatBytes(c.netTxBytes)}
                 </TableCell>
               </TableRow>
             ))}
