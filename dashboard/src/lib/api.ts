@@ -808,6 +808,13 @@ interface BillingTierConfig {
   analyticsRetentionDays?: number
   monthlyAnalyticsPageviewLimit?: number
   analyticsPageviewOverageRateCentsPer100k?: number
+  monthlyApmSpanLimit?: number
+  apmSpanOverageRateCentsPer1m?: number
+  monthlyCustomMetricLimit?: number
+  customMetricOverageRateCentsPer100k?: number
+  maxHosts?: number | null
+  profilingEnabled?: boolean
+  networkMonitoringEnabled?: boolean
   isCurrent: boolean
 }
 
@@ -871,6 +878,10 @@ interface BillingUsage {
   analyticsPageviewLimit?: number
   analyticsPageviewOverageCentsEstimate?: number
   analyticsPageviewOverageRateCentsPer100k?: number
+  usedApmSpans?: number
+  apmSpanLimit?: number
+  usedCustomMetrics?: number
+  customMetricLimit?: number
   plan: string
   status: string
   withinQuota: boolean
@@ -3399,6 +3410,30 @@ class ApiClient {
     return this.request<DdHostListResponse>(`${API_BASE}/hosts`)
   }
 
+  async getHost(hostId: number): Promise<DdHostResponse> {
+    return this.request<DdHostResponse>(`${API_BASE}/hosts/${hostId}`)
+  }
+
+  async getHostMetrics(
+    hostId: number,
+    from?: string,
+    to?: string
+  ): Promise<SystemMetricsHistory> {
+    const params = new URLSearchParams()
+    if (from) params.append('from', from)
+    if (to) params.append('to', to)
+    const qs = params.toString()
+    return this.request<SystemMetricsHistory>(
+      `${API_BASE}/hosts/${hostId}/metrics${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getHostContainers(hostId: number): Promise<DdContainerListResponse> {
+    return this.request<DdContainerListResponse>(
+      `${API_BASE}/hosts/${hostId}/containers`
+    )
+  }
+
   // --- Infrastructure ---
 
   async getProcesses(params: {
@@ -4174,6 +4209,41 @@ class ApiClient {
       netRecvBytes: row.netRecvBytes ?? row.net_recv_bytes,
       netSentBytes: row.netSentBytes ?? row.net_sent_bytes,
     }))
+  }
+
+  async getAllSystemContainers(): Promise<{
+    containers: Array<{
+      system_id: string
+      system_name: string
+      name: string
+      id: string
+      image: string
+      status: string
+      cpu_percent: number
+      mem_used: number
+      mem_limit: number
+      net_recv_bytes: number
+      net_sent_bytes: number
+      mem_percent: number
+    }>
+  }> {
+    const response = await this.request<{
+      containers: Array<{
+        system_id: string
+        system_name: string
+        name: string
+        id: string
+        image: string
+        status: string
+        cpu_percent: number
+        mem_used: number
+        mem_limit: number
+        net_recv_bytes: number
+        net_sent_bytes: number
+        mem_percent: number
+      }>
+    }>(`${API_BASE}/monitor/containers`)
+    return response
   }
 
   async getContainerMetrics(

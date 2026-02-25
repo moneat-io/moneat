@@ -24,6 +24,7 @@ import { Route as PricingCalculatorRouteImport } from './routes/pricing-calculat
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as OnCallRouteImport } from './routes/on-call'
+import { Route as MonitoringRouteImport } from './routes/monitoring'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
@@ -62,10 +63,8 @@ import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.e
 import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
 import { Route as MonitoringProcessesRouteImport } from './routes/monitoring.processes'
 import { Route as MonitoringNetworkRouteImport } from './routes/monitoring.network'
-import { Route as MonitoringHostsRouteImport } from './routes/monitoring.hosts'
 import { Route as MonitoringEventsRouteImport } from './routes/monitoring.events'
 import { Route as MonitoringContainersRouteImport } from './routes/monitoring.containers'
-import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
 import { Route as LegalTermsRouteImport } from './routes/legal.terms'
 import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
@@ -89,6 +88,7 @@ import { Route as AdminAttributionRouteImport } from './routes/admin.attribution
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
 import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
+import { Route as MonitoringHostsHostIdRouteImport } from './routes/monitoring.hosts.$hostId'
 import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
@@ -169,6 +169,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
 const OnCallRoute = OnCallRouteImport.update({
   id: '/on-call',
   path: '/on-call',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MonitoringRoute = MonitoringRouteImport.update({
+  id: '/monitoring',
+  path: '/monitoring',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogsRoute = LogsRouteImport.update({
@@ -257,9 +262,9 @@ const OnCallIndexRoute = OnCallIndexRouteImport.update({
   getParentRoute: () => OnCallRoute,
 } as any)
 const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
-  id: '/monitoring/',
-  path: '/monitoring/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => MonitoringRoute,
 } as any)
 const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/issues/',
@@ -354,34 +359,24 @@ const OnCallDeclaredIncidentsRoute = OnCallDeclaredIncidentsRouteImport.update({
   getParentRoute: () => OnCallRoute,
 } as any)
 const MonitoringProcessesRoute = MonitoringProcessesRouteImport.update({
-  id: '/monitoring/processes',
-  path: '/monitoring/processes',
-  getParentRoute: () => rootRouteImport,
+  id: '/processes',
+  path: '/processes',
+  getParentRoute: () => MonitoringRoute,
 } as any)
 const MonitoringNetworkRoute = MonitoringNetworkRouteImport.update({
-  id: '/monitoring/network',
-  path: '/monitoring/network',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MonitoringHostsRoute = MonitoringHostsRouteImport.update({
-  id: '/monitoring/hosts',
-  path: '/monitoring/hosts',
-  getParentRoute: () => rootRouteImport,
+  id: '/network',
+  path: '/network',
+  getParentRoute: () => MonitoringRoute,
 } as any)
 const MonitoringEventsRoute = MonitoringEventsRouteImport.update({
-  id: '/monitoring/events',
-  path: '/monitoring/events',
-  getParentRoute: () => rootRouteImport,
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => MonitoringRoute,
 } as any)
 const MonitoringContainersRoute = MonitoringContainersRouteImport.update({
-  id: '/monitoring/containers',
-  path: '/monitoring/containers',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MonitoringSystemIdRoute = MonitoringSystemIdRouteImport.update({
-  id: '/monitoring/$systemId',
-  path: '/monitoring/$systemId',
-  getParentRoute: () => rootRouteImport,
+  id: '/containers',
+  path: '/containers',
+  getParentRoute: () => MonitoringRoute,
 } as any)
 const LegalTermsRoute = LegalTermsRouteImport.update({
   id: '/legal/terms',
@@ -501,6 +496,11 @@ const OnCallDeclaredIncidentsIncidentIdRoute =
     path: '/$incidentId',
     getParentRoute: () => OnCallDeclaredIncidentsRoute,
   } as any)
+const MonitoringHostsHostIdRoute = MonitoringHostsHostIdRouteImport.update({
+  id: '/hosts/$hostId',
+  path: '/hosts/$hostId',
+  getParentRoute: () => MonitoringRoute,
+} as any)
 const AuthSsoCallbackRoute = AuthSsoCallbackRouteImport.update({
   id: '/auth/sso/callback',
   path: '/auth/sso/callback',
@@ -547,6 +547,7 @@ export interface FileRoutesByFullPath {
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/monitoring': typeof MonitoringRouteWithChildren
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -582,10 +583,8 @@ export interface FileRoutesByFullPath {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/events': typeof MonitoringEventsRoute
-  '/monitoring/hosts': typeof MonitoringHostsRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
@@ -616,6 +615,7 @@ export interface FileRoutesByFullPath {
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
+  '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -663,10 +663,8 @@ export interface FileRoutesByTo {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/events': typeof MonitoringEventsRoute
-  '/monitoring/hosts': typeof MonitoringHostsRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
@@ -697,6 +695,7 @@ export interface FileRoutesByTo {
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
+  '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -717,6 +716,7 @@ export interface FileRoutesById {
   '/impersonate-callback': typeof ImpersonateCallbackRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/monitoring': typeof MonitoringRouteWithChildren
   '/on-call': typeof OnCallRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
@@ -752,10 +752,8 @@ export interface FileRoutesById {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/events': typeof MonitoringEventsRoute
-  '/monitoring/hosts': typeof MonitoringHostsRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
@@ -786,6 +784,7 @@ export interface FileRoutesById {
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
+  '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -807,6 +806,7 @@ export interface FileRouteTypes {
     | '/impersonate-callback'
     | '/login'
     | '/logs'
+    | '/monitoring'
     | '/on-call'
     | '/onboarding'
     | '/performance'
@@ -842,10 +842,8 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
-    | '/monitoring/$systemId'
     | '/monitoring/containers'
     | '/monitoring/events'
-    | '/monitoring/hosts'
     | '/monitoring/network'
     | '/monitoring/processes'
     | '/on-call/declared-incidents'
@@ -876,6 +874,7 @@ export interface FileRouteTypes {
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
+    | '/monitoring/hosts/$hostId'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/settings'
@@ -923,10 +922,8 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
-    | '/monitoring/$systemId'
     | '/monitoring/containers'
     | '/monitoring/events'
-    | '/monitoring/hosts'
     | '/monitoring/network'
     | '/monitoring/processes'
     | '/on-call/declared-incidents'
@@ -957,6 +954,7 @@ export interface FileRouteTypes {
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
+    | '/monitoring/hosts/$hostId'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/settings'
@@ -976,6 +974,7 @@ export interface FileRouteTypes {
     | '/impersonate-callback'
     | '/login'
     | '/logs'
+    | '/monitoring'
     | '/on-call'
     | '/onboarding'
     | '/performance'
@@ -1011,10 +1010,8 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
-    | '/monitoring/$systemId'
     | '/monitoring/containers'
     | '/monitoring/events'
-    | '/monitoring/hosts'
     | '/monitoring/network'
     | '/monitoring/processes'
     | '/on-call/declared-incidents'
@@ -1045,6 +1042,7 @@ export interface FileRouteTypes {
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
+    | '/monitoring/hosts/$hostId'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/settings'
@@ -1065,6 +1063,7 @@ export interface RootRouteChildren {
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
+  MonitoringRoute: typeof MonitoringRouteWithChildren
   OnCallRoute: typeof OnCallRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
@@ -1085,18 +1084,11 @@ export interface RootRouteChildren {
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalSmsConsentRoute: typeof LegalSmsConsentRoute
   LegalTermsRoute: typeof LegalTermsRoute
-  MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
-  MonitoringContainersRoute: typeof MonitoringContainersRoute
-  MonitoringEventsRoute: typeof MonitoringEventsRoute
-  MonitoringHostsRoute: typeof MonitoringHostsRoute
-  MonitoringNetworkRoute: typeof MonitoringNetworkRoute
-  MonitoringProcessesRoute: typeof MonitoringProcessesRoute
   SSlugRoute: typeof SSlugRoute
   StatusPagesPageIdRoute: typeof StatusPagesPageIdRoute
   UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
   AiIndexRoute: typeof AiIndexRoute
   IssuesIndexRoute: typeof IssuesIndexRoute
-  MonitoringIndexRoute: typeof MonitoringIndexRoute
   StatusPagesIndexRoute: typeof StatusPagesIndexRoute
   UptimeIndexRoute: typeof UptimeIndexRoute
   AiTracesTraceIdRoute: typeof AiTracesTraceIdRoute
@@ -1209,6 +1201,13 @@ declare module '@tanstack/react-router' {
       path: '/on-call'
       fullPath: '/on-call'
       preLoaderRoute: typeof OnCallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/monitoring': {
+      id: '/monitoring'
+      path: '/monitoring'
+      fullPath: '/monitoring'
+      preLoaderRoute: typeof MonitoringRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logs': {
@@ -1332,10 +1331,10 @@ declare module '@tanstack/react-router' {
     }
     '/monitoring/': {
       id: '/monitoring/'
-      path: '/monitoring'
+      path: '/'
       fullPath: '/monitoring/'
       preLoaderRoute: typeof MonitoringIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof MonitoringRoute
     }
     '/issues/': {
       id: '/issues/'
@@ -1465,45 +1464,31 @@ declare module '@tanstack/react-router' {
     }
     '/monitoring/processes': {
       id: '/monitoring/processes'
-      path: '/monitoring/processes'
+      path: '/processes'
       fullPath: '/monitoring/processes'
       preLoaderRoute: typeof MonitoringProcessesRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof MonitoringRoute
     }
     '/monitoring/network': {
       id: '/monitoring/network'
-      path: '/monitoring/network'
+      path: '/network'
       fullPath: '/monitoring/network'
       preLoaderRoute: typeof MonitoringNetworkRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/monitoring/hosts': {
-      id: '/monitoring/hosts'
-      path: '/monitoring/hosts'
-      fullPath: '/monitoring/hosts'
-      preLoaderRoute: typeof MonitoringHostsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof MonitoringRoute
     }
     '/monitoring/events': {
       id: '/monitoring/events'
-      path: '/monitoring/events'
+      path: '/events'
       fullPath: '/monitoring/events'
       preLoaderRoute: typeof MonitoringEventsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof MonitoringRoute
     }
     '/monitoring/containers': {
       id: '/monitoring/containers'
-      path: '/monitoring/containers'
+      path: '/containers'
       fullPath: '/monitoring/containers'
       preLoaderRoute: typeof MonitoringContainersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/monitoring/$systemId': {
-      id: '/monitoring/$systemId'
-      path: '/monitoring/$systemId'
-      fullPath: '/monitoring/$systemId'
-      preLoaderRoute: typeof MonitoringSystemIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof MonitoringRoute
     }
     '/legal/terms': {
       id: '/legal/terms'
@@ -1666,6 +1651,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallDeclaredIncidentsIncidentIdRouteImport
       parentRoute: typeof OnCallDeclaredIncidentsRoute
     }
+    '/monitoring/hosts/$hostId': {
+      id: '/monitoring/hosts/$hostId'
+      path: '/hosts/$hostId'
+      fullPath: '/monitoring/hosts/$hostId'
+      preLoaderRoute: typeof MonitoringHostsHostIdRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
     '/auth/sso/callback': {
       id: '/auth/sso/callback'
       path: '/auth/sso/callback'
@@ -1808,6 +1800,28 @@ const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
   FeedbackRouteChildren,
 )
 
+interface MonitoringRouteChildren {
+  MonitoringContainersRoute: typeof MonitoringContainersRoute
+  MonitoringEventsRoute: typeof MonitoringEventsRoute
+  MonitoringNetworkRoute: typeof MonitoringNetworkRoute
+  MonitoringProcessesRoute: typeof MonitoringProcessesRoute
+  MonitoringIndexRoute: typeof MonitoringIndexRoute
+  MonitoringHostsHostIdRoute: typeof MonitoringHostsHostIdRoute
+}
+
+const MonitoringRouteChildren: MonitoringRouteChildren = {
+  MonitoringContainersRoute: MonitoringContainersRoute,
+  MonitoringEventsRoute: MonitoringEventsRoute,
+  MonitoringNetworkRoute: MonitoringNetworkRoute,
+  MonitoringProcessesRoute: MonitoringProcessesRoute,
+  MonitoringIndexRoute: MonitoringIndexRoute,
+  MonitoringHostsHostIdRoute: MonitoringHostsHostIdRoute,
+}
+
+const MonitoringRouteWithChildren = MonitoringRoute._addFileChildren(
+  MonitoringRouteChildren,
+)
+
 interface OnCallDeclaredIncidentsRouteChildren {
   OnCallDeclaredIncidentsIncidentIdRoute: typeof OnCallDeclaredIncidentsIncidentIdRoute
 }
@@ -1945,6 +1959,7 @@ const rootRouteChildren: RootRouteChildren = {
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
+  MonitoringRoute: MonitoringRouteWithChildren,
   OnCallRoute: OnCallRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,
@@ -1965,18 +1980,11 @@ const rootRouteChildren: RootRouteChildren = {
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalSmsConsentRoute: LegalSmsConsentRoute,
   LegalTermsRoute: LegalTermsRoute,
-  MonitoringSystemIdRoute: MonitoringSystemIdRoute,
-  MonitoringContainersRoute: MonitoringContainersRoute,
-  MonitoringEventsRoute: MonitoringEventsRoute,
-  MonitoringHostsRoute: MonitoringHostsRoute,
-  MonitoringNetworkRoute: MonitoringNetworkRoute,
-  MonitoringProcessesRoute: MonitoringProcessesRoute,
   SSlugRoute: SSlugRoute,
   StatusPagesPageIdRoute: StatusPagesPageIdRoute,
   UptimeMonitorIdRoute: UptimeMonitorIdRoute,
   AiIndexRoute: AiIndexRoute,
   IssuesIndexRoute: IssuesIndexRoute,
-  MonitoringIndexRoute: MonitoringIndexRoute,
   StatusPagesIndexRoute: StatusPagesIndexRoute,
   UptimeIndexRoute: UptimeIndexRoute,
   AiTracesTraceIdRoute: AiTracesTraceIdRoute,
