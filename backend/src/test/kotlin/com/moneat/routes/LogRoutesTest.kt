@@ -41,9 +41,11 @@ import kotlin.test.assertTrue
 class LogRoutesTest {
     private val jwtSecret = "log-routes-secret"
 
-    private fun token(userId: Int) =
+    private fun token(userId: Int, orgId: Int = 1) =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId).sign(Algorithm.HMAC256(jwtSecret))
+            .withClaim("userId", userId)
+            .withClaim("orgId", orgId)
+            .sign(Algorithm.HMAC256(jwtSecret))
 
     private fun setupApp(block: io.ktor.server.application.Application.() -> Unit) =
         block.also { }
@@ -78,7 +80,7 @@ class LogRoutesTest {
         }
 
     @Test
-    fun `otlp endpoint returns bad request when project id is missing`() =
+    fun `otlp endpoint returns 401 when auth is missing`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -128,59 +130,11 @@ class LogRoutesTest {
                     setBody(payload)
                 }
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("Missing project ID"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertTrue(response.bodyAsText().contains("Missing or invalid"))
         }
 
-    // ==================== Authenticated log query endpoints (invalid projectId → 400) ====================
-
-    @Test
-    fun `query logs returns 400 for non-numeric project id`() =
-        testApplication {
-            application {
-                install(ContentNegotiation) { json() }
-                install(Authentication) {
-                    jwt("auth-jwt") {
-                        verifier(
-                            JWT.require(
-                                Algorithm.HMAC256(jwtSecret)
-                            ).withIssuer("moneat").withAudience("moneat-users").build()
-                        )
-                        validate { JWTPrincipal(it.payload) }
-                    }
-                }
-                routing { logRoutes() }
-            }
-            val response = client.get("/v1/projects/not-a-number/logs") {
-                header(HttpHeaders.Authorization, "Bearer ${token(1)}")
-            }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("Invalid project ID"))
-        }
-
-    @Test
-    fun `tag values returns 400 for non-numeric project id`() =
-        testApplication {
-            application {
-                install(ContentNegotiation) { json() }
-                install(Authentication) {
-                    jwt("auth-jwt") {
-                        verifier(
-                            JWT.require(
-                                Algorithm.HMAC256(jwtSecret)
-                            ).withIssuer("moneat").withAudience("moneat-users").build()
-                        )
-                        validate { JWTPrincipal(it.payload) }
-                    }
-                }
-                routing { logRoutes() }
-            }
-            val response = client.get("/v1/projects/not-a-number/logs/tag-values?key=level") {
-                header(HttpHeaders.Authorization, "Bearer ${token(1)}")
-            }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("Invalid project ID"))
-        }
+    // ==================== Authenticated log query endpoints (org-scoped) ====================
 
     @Test
     fun `tag values returns 400 for missing key parameter`() =
@@ -199,106 +153,10 @@ class LogRoutesTest {
                 }
                 routing { logRoutes() }
             }
-            // Valid numeric ID but missing key param - would need project access so use invalid ID
-            val response = client.get("/v1/projects/not-a-number/logs/tag-values") {
+            val response = client.get("/v1/logs/tag-values") {
                 header(HttpHeaders.Authorization, "Bearer ${token(1)}")
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
-        }
-
-    @Test
-    fun `filters returns 400 for non-numeric project id`() =
-        testApplication {
-            application {
-                install(ContentNegotiation) { json() }
-                install(Authentication) {
-                    jwt("auth-jwt") {
-                        verifier(
-                            JWT.require(
-                                Algorithm.HMAC256(jwtSecret)
-                            ).withIssuer("moneat").withAudience("moneat-users").build()
-                        )
-                        validate { JWTPrincipal(it.payload) }
-                    }
-                }
-                routing { logRoutes() }
-            }
-            val response = client.get("/v1/projects/abc/logs/filters") {
-                header(HttpHeaders.Authorization, "Bearer ${token(1)}")
-            }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("Invalid project ID"))
-        }
-
-    @Test
-    fun `aggregate returns 400 for non-numeric project id`() =
-        testApplication {
-            application {
-                install(ContentNegotiation) { json() }
-                install(Authentication) {
-                    jwt("auth-jwt") {
-                        verifier(
-                            JWT.require(
-                                Algorithm.HMAC256(jwtSecret)
-                            ).withIssuer("moneat").withAudience("moneat-users").build()
-                        )
-                        validate { JWTPrincipal(it.payload) }
-                    }
-                }
-                routing { logRoutes() }
-            }
-            val response = client.get("/v1/projects/xyz/logs/aggregate") {
-                header(HttpHeaders.Authorization, "Bearer ${token(1)}")
-            }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("Invalid project ID"))
-        }
-
-    @Test
-    fun `top logs returns 400 for non-numeric project id`() =
-        testApplication {
-            application {
-                install(ContentNegotiation) { json() }
-                install(Authentication) {
-                    jwt("auth-jwt") {
-                        verifier(
-                            JWT.require(
-                                Algorithm.HMAC256(jwtSecret)
-                            ).withIssuer("moneat").withAudience("moneat-users").build()
-                        )
-                        validate { JWTPrincipal(it.payload) }
-                    }
-                }
-                routing { logRoutes() }
-            }
-            val response = client.get("/v1/projects/bad/logs/top") {
-                header(HttpHeaders.Authorization, "Bearer ${token(1)}")
-            }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("Invalid project ID"))
-        }
-
-    @Test
-    fun `export returns 400 for non-numeric project id`() =
-        testApplication {
-            application {
-                install(ContentNegotiation) { json() }
-                install(Authentication) {
-                    jwt("auth-jwt") {
-                        verifier(
-                            JWT.require(
-                                Algorithm.HMAC256(jwtSecret)
-                            ).withIssuer("moneat").withAudience("moneat-users").build()
-                        )
-                        validate { JWTPrincipal(it.payload) }
-                    }
-                }
-                routing { logRoutes() }
-            }
-            val response = client.get("/v1/projects/bad/logs/export") {
-                header(HttpHeaders.Authorization, "Bearer ${token(1)}")
-            }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("Invalid project ID"))
+            assertTrue(response.bodyAsText().contains("Missing tag key"))
         }
 }
