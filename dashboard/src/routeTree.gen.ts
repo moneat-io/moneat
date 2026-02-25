@@ -30,6 +30,9 @@ import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-ca
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DdInfraRouteImport } from './routes/dd-infra'
+import { Route as DdHostsRouteImport } from './routes/dd-hosts'
+import { Route as DdEventsRouteImport } from './routes/dd-events'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as ApmTracesRouteImport } from './routes/apm-traces'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
@@ -43,6 +46,8 @@ import { Route as PerformanceIndexRouteImport } from './routes/performance.index
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
+import { Route as DdInfraIndexRouteImport } from './routes/dd-infra.index'
+import { Route as DdEventsIndexRouteImport } from './routes/dd-events.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
@@ -196,6 +201,21 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DdInfraRoute = DdInfraRouteImport.update({
+  id: '/dd-infra',
+  path: '/dd-infra',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DdHostsRoute = DdHostsRouteImport.update({
+  id: '/dd-hosts',
+  path: '/dd-hosts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DdEventsRoute = DdEventsRouteImport.update({
+  id: '/dd-events',
+  path: '/dd-events',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardsRoute = DashboardsRouteImport.update({
   id: '/dashboards',
   path: '/dashboards',
@@ -260,6 +280,16 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/issues/',
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DdInfraIndexRoute = DdInfraIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DdInfraRoute,
+} as any)
+const DdEventsIndexRoute = DdEventsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DdEventsRoute,
 } as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
@@ -511,6 +541,9 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
+  '/dd-events': typeof DdEventsRouteWithChildren
+  '/dd-hosts': typeof DdHostsRoute
+  '/dd-infra': typeof DdInfraRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -570,6 +603,8 @@ export interface FileRoutesByFullPath {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/dd-events/': typeof DdEventsIndexRoute
+  '/dd-infra/': typeof DdInfraIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -590,6 +625,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
+  '/dd-hosts': typeof DdHostsRoute
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -646,6 +682,8 @@ export interface FileRoutesByTo {
   '/analytics': typeof AnalyticsIndexRoute
   '/apm-traces': typeof ApmTracesIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
+  '/dd-events': typeof DdEventsIndexRoute
+  '/dd-infra': typeof DdInfraIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
@@ -671,6 +709,9 @@ export interface FileRoutesById {
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
   '/dashboards': typeof DashboardsRouteWithChildren
+  '/dd-events': typeof DdEventsRouteWithChildren
+  '/dd-hosts': typeof DdHostsRoute
+  '/dd-infra': typeof DdInfraRouteWithChildren
   '/demo': typeof DemoRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -730,6 +771,8 @@ export interface FileRoutesById {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/dd-events/': typeof DdEventsIndexRoute
+  '/dd-infra/': typeof DdInfraIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -756,6 +799,9 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
+    | '/dd-events'
+    | '/dd-hosts'
+    | '/dd-infra'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -815,6 +861,8 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
+    | '/dd-events/'
+    | '/dd-infra/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -835,6 +883,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/accept-invite'
+    | '/dd-hosts'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -891,6 +940,8 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
+    | '/dd-events'
+    | '/dd-infra'
     | '/issues'
     | '/monitoring'
     | '/on-call'
@@ -915,6 +966,9 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
+    | '/dd-events'
+    | '/dd-hosts'
+    | '/dd-infra'
     | '/demo'
     | '/feedback'
     | '/forgot-password'
@@ -974,6 +1028,8 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
+    | '/dd-events/'
+    | '/dd-infra/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -999,6 +1055,9 @@ export interface RootRouteChildren {
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
   ApmTracesRoute: typeof ApmTracesRouteWithChildren
   DashboardsRoute: typeof DashboardsRouteWithChildren
+  DdEventsRoute: typeof DdEventsRouteWithChildren
+  DdHostsRoute: typeof DdHostsRoute
+  DdInfraRoute: typeof DdInfraRouteWithChildren
   DemoRoute: typeof DemoRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -1188,6 +1247,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dd-infra': {
+      id: '/dd-infra'
+      path: '/dd-infra'
+      fullPath: '/dd-infra'
+      preLoaderRoute: typeof DdInfraRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dd-hosts': {
+      id: '/dd-hosts'
+      path: '/dd-hosts'
+      fullPath: '/dd-hosts'
+      preLoaderRoute: typeof DdHostsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dd-events': {
+      id: '/dd-events'
+      path: '/dd-events'
+      fullPath: '/dd-events'
+      preLoaderRoute: typeof DdEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboards': {
       id: '/dashboards'
       path: '/dashboards'
@@ -1278,6 +1358,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/issues/'
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/dd-infra/': {
+      id: '/dd-infra/'
+      path: '/'
+      fullPath: '/dd-infra/'
+      preLoaderRoute: typeof DdInfraIndexRouteImport
+      parentRoute: typeof DdInfraRoute
+    }
+    '/dd-events/': {
+      id: '/dd-events/'
+      path: '/'
+      fullPath: '/dd-events/'
+      preLoaderRoute: typeof DdEventsIndexRouteImport
+      parentRoute: typeof DdEventsRoute
     }
     '/dashboards/': {
       id: '/dashboards/'
@@ -1696,6 +1790,29 @@ const DashboardsRouteWithChildren = DashboardsRoute._addFileChildren(
   DashboardsRouteChildren,
 )
 
+interface DdEventsRouteChildren {
+  DdEventsIndexRoute: typeof DdEventsIndexRoute
+}
+
+const DdEventsRouteChildren: DdEventsRouteChildren = {
+  DdEventsIndexRoute: DdEventsIndexRoute,
+}
+
+const DdEventsRouteWithChildren = DdEventsRoute._addFileChildren(
+  DdEventsRouteChildren,
+)
+
+interface DdInfraRouteChildren {
+  DdInfraIndexRoute: typeof DdInfraIndexRoute
+}
+
+const DdInfraRouteChildren: DdInfraRouteChildren = {
+  DdInfraIndexRoute: DdInfraIndexRoute,
+}
+
+const DdInfraRouteWithChildren =
+  DdInfraRoute._addFileChildren(DdInfraRouteChildren)
+
 interface FeedbackRouteChildren {
   FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
 }
@@ -1839,6 +1956,9 @@ const rootRouteChildren: RootRouteChildren = {
   AnalyticsRoute: AnalyticsRouteWithChildren,
   ApmTracesRoute: ApmTracesRouteWithChildren,
   DashboardsRoute: DashboardsRouteWithChildren,
+  DdEventsRoute: DdEventsRouteWithChildren,
+  DdHostsRoute: DdHostsRoute,
+  DdInfraRoute: DdInfraRouteWithChildren,
   DemoRoute: DemoRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,

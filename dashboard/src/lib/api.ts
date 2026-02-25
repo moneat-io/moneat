@@ -522,6 +522,132 @@ export interface ProfileListResponse {
   totalCount: number
 }
 
+// --- DD Event types ---
+
+export interface DdEventResponse {
+  eventId: string
+  title: string
+  text: string
+  timestamp: string
+  priority: string
+  host: string
+  tags: Record<string, string>
+  alertType: string
+  aggregationKey: string
+  sourceTypeName: string
+  deviceName: string
+}
+
+export interface DdEventListResponse {
+  events: DdEventResponse[]
+  totalCount: number
+}
+
+// --- DD Service Check types ---
+
+export interface DdServiceCheckResponse {
+  checkId: string
+  checkName: string
+  host: string
+  status: string
+  timestamp: string
+  tags: Record<string, string>
+  message: string
+}
+
+export interface DdServiceCheckListResponse {
+  serviceChecks: DdServiceCheckResponse[]
+  totalCount: number
+}
+
+// --- DD Host types ---
+
+export interface DdHostResponse {
+  id: number
+  hostname: string
+  os: string
+  platform: string
+  processor: string
+  cpuCores: number
+  memoryTotalKb: number
+  agentVersion: string
+  tags: Record<string, string>
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
+export interface DdHostListResponse {
+  hosts: DdHostResponse[]
+  totalCount: number
+}
+
+// --- DD Infrastructure types ---
+
+export interface DdProcessResponse {
+  processId: string
+  host: string
+  pid: number
+  name: string
+  command: string
+  user: string
+  cpuPercent: number
+  memRss: number
+  memVms: number
+  state: string
+  threadCount: number
+  openFdCount: number
+  tags: Record<string, string>
+  timestamp: string
+}
+
+export interface DdProcessListResponse {
+  processes: DdProcessResponse[]
+  totalCount: number
+}
+
+export interface DdContainerResponse {
+  id: string
+  host: string
+  containerId: string
+  name: string
+  image: string
+  state: string
+  cpuPercent: number
+  memUsage: number
+  memLimit: number
+  netRxBytes: number
+  netTxBytes: number
+  tags: Record<string, string>
+  timestamp: string
+}
+
+export interface DdContainerListResponse {
+  containers: DdContainerResponse[]
+  totalCount: number
+}
+
+export interface DdConnectionResponse {
+  connectionId: string
+  host: string
+  pid: number
+  localAddr: string
+  localPort: number
+  remoteAddr: string
+  remotePort: number
+  protocol: string
+  family: string
+  direction: string
+  bytesSent: number
+  bytesRecv: number
+  tags: Record<string, string>
+  timestamp: string
+}
+
+export interface DdConnectionListResponse {
+  connections: DdConnectionResponse[]
+  totalCount: number
+}
+
 interface RawLogResponse {
   logs?: Record<string, unknown>[]
   nextCursor?: string | null
@@ -3213,6 +3339,95 @@ class ApiClient {
 
   getProfileDownloadUrl(profileId: string): string {
     return `${API_BASE}/dd/profiles/${profileId}/download`
+  }
+
+  // --- DD Events ---
+
+  async getDdEvents(params: {
+    alertType?: string
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdEventListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.alertType) searchParams.set('alert_type', params.alertType)
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.offset) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdEventListResponse>(
+      `${API_BASE}/dd/events${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getDdServiceChecks(params: {
+    checkName?: string
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdServiceCheckListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.checkName) searchParams.set('check_name', params.checkName)
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.offset) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdServiceCheckListResponse>(
+      `${API_BASE}/dd/service-checks${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  // --- DD Hosts ---
+
+  async getDdHosts(): Promise<DdHostListResponse> {
+    return this.request<DdHostListResponse>(`${API_BASE}/dd/hosts`)
+  }
+
+  // --- DD Infrastructure ---
+
+  async getDdProcesses(params: {
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdProcessListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.offset) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdProcessListResponse>(
+      `${API_BASE}/dd/processes${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getDdContainers(params: {
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdContainerListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.offset) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdContainerListResponse>(
+      `${API_BASE}/dd/containers${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getDdConnections(params: {
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdConnectionListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.offset) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdConnectionListResponse>(
+      `${API_BASE}/dd/connections${qs ? `?${qs}` : ''}`
+    )
   }
 
   async getLogTagValues(
