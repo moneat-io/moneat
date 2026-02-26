@@ -898,7 +898,7 @@ class StripeService(
                     (Subscriptions.pending_meter_units greater 0L) or
                         (Subscriptions.pending_apm_span_overage_units greater 0L) or
                         (Subscriptions.pending_custom_metric_overage_units greater 0L)
-                ) and
+                    ) and
                     (Subscriptions.stripe_customer_id.isNotNull()) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }

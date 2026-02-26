@@ -1124,6 +1124,7 @@ class DashboardService {
             val retentionDays = getProjectRetentionDays(projectId)
             val filters = buildTransactionFilterClause(environment, operation)
             val nowSql = demoNowClause(demoEpochMs)
+            val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
             val query =
                 """
             SELECT
@@ -1137,7 +1138,7 @@ class DashboardService {
                 (countIf(level IN ('error', 'fatal')) * 100.0) / if(count() = 0, 1, count()) as failure_rate,
                 count() / ${periodConfig.periodMinutes}.0 as tpm
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'transaction'
                 AND timestamp >= $nowSql - INTERVAL ${periodConfig.hoursBack} HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1200,6 +1201,7 @@ class DashboardService {
             val retentionDays = getProjectRetentionDays(projectId)
             val filters = buildTransactionFilterClause(environment, operation)
             val nowSql = demoNowClause(demoEpochMs)
+            val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId, "e.project_id")
 
             val aggregateQuery =
                 """
@@ -1208,7 +1210,7 @@ class DashboardService {
                 avg(duration_ms) as avg_duration,
                 (countIf(duration_ms <= 300) + countIf(duration_ms <= 1200)) / (2.0 * if(count() = 0, 1, count())) as apdex
             FROM $clickhouseDb.events e
-            WHERE e.project_id = $projectId
+            WHERE $projectIdClause
                 AND e.event_type = 'transaction'
                 AND e.timestamp >= $nowSql - INTERVAL ${periodConfig.hoursBack} HOUR
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
@@ -1226,7 +1228,7 @@ class DashboardService {
                 ) as time,
                 count() as count
             FROM $clickhouseDb.events e
-            WHERE e.project_id = $projectId
+            WHERE $projectIdClause
                 AND e.event_type = 'transaction'
                 AND e.timestamp >= $nowSql - INTERVAL ${periodConfig.hoursBack} HOUR
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
@@ -1245,7 +1247,7 @@ class DashboardService {
                 e.duration_ms as duration,
                 formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp_iso
             FROM $clickhouseDb.events e
-            WHERE e.project_id = $projectId
+            WHERE $projectIdClause
                 AND e.event_type = 'transaction'
                 AND e.timestamp >= $nowSql - INTERVAL ${periodConfig.hoursBack} HOUR
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
@@ -1746,13 +1748,14 @@ class DashboardService {
                 }
 
             val nowSql = demoNowClause(demoEpochMs)
+            val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
 
             // Total events in period
             val totalEventsQuery =
                 """
             SELECT count() as total
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1764,7 +1767,7 @@ class DashboardService {
                 """
             SELECT count(DISTINCT issue_id) as total
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
@@ -1777,7 +1780,7 @@ class DashboardService {
             FROM (
                 SELECT issue_id
                 FROM $clickhouseDb.issues FINAL
-                WHERE project_id = $projectId
+                WHERE $projectIdClause
                     AND status = 'unresolved'
                     AND ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             )
@@ -1789,7 +1792,7 @@ class DashboardService {
                 """
             SELECT uniq(user_id) as total
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND user_id != ''
@@ -1804,7 +1807,7 @@ class DashboardService {
                 formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%SZ', 'UTC') as time,
                 count() as count
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1820,7 +1823,7 @@ class DashboardService {
                 level,
                 count() as count
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1835,7 +1838,7 @@ class DashboardService {
                 platform,
                 count() as count
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND platform != ''
@@ -1853,7 +1856,7 @@ class DashboardService {
                 browser_name,
                 count() as count
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND browser_name != ''
@@ -1871,7 +1874,7 @@ class DashboardService {
                 environment,
                 count() as count
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND event_type = 'error'
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND environment != ''
@@ -1887,7 +1890,7 @@ class DashboardService {
                 status,
                 count() as count
             FROM $clickhouseDb.issues FINAL
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
             GROUP BY status
             FORMAT JSONEachRow
@@ -1901,7 +1904,7 @@ class DashboardService {
                 any(message) as title,
                 count() as count
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND event_type = 'error'
                 AND ${timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -1918,7 +1921,7 @@ class DashboardService {
                 formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%SZ', 'UTC') as time,
                 uniq(user_id) as count
             FROM $clickhouseDb.events
-            WHERE project_id = $projectId
+            WHERE $projectIdClause
                 AND timestamp >= now() - INTERVAL $hoursBack HOUR
                 AND user_id != ''
                 AND ${timestampRetentionClause("timestamp", retentionDays)}

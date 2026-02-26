@@ -104,6 +104,9 @@ class UptimeScheduler(
 
         // Launch check for each monitor in parallel
         monitors.forEach { monitor ->
+            // Skip demo org monitors — their uptime data is managed by DemoDataReseeder
+            if (monitor.organizationId == -1) return@forEach
+
             // Skip if already running a check for this monitor
             if (!runningChecks.add(monitor.id)) {
                 return@forEach
