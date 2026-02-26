@@ -34,6 +34,7 @@ import com.moneat.llm.routes.llmIngestRoutes
 import com.moneat.llm.routes.llmRoutes
 import com.moneat.logs.routes.logRoutes
 import com.moneat.monitor.routes.monitorRoutes
+import com.moneat.monitor.routes.infraRoutes
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
@@ -179,6 +180,9 @@ fun Application.configureRouting() {
 
         // Server monitoring endpoints
         monitorRoutes()
+
+        // Infrastructure monitoring endpoints (k8s, dbm, debugger, ndm, sbom)
+        infraRoutes()
 
         // Logging ingestion and query endpoints
         logRoutes()
