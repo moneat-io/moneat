@@ -51,6 +51,10 @@ private fun getOrgIdsForUser(userId: Int): List<Int> {
     }
 }
 
+private fun orgIdsToChCondition(orgIds: List<Int>): String {
+    return orgIds.joinToString(",") { "toUInt64($it)" }
+}
+
 private fun parseLimit(limitParam: String?): Int {
     val limit = limitParam?.toIntOrNull() ?: DEFAULT_LIMIT
     return limit.coerceIn(1, MAX_LIMIT)
@@ -107,7 +111,7 @@ fun Route.infraRoutes() {
                 val alertType = call.parameters["alert_type"]
 
                 val conditions = mutableListOf(
-                    "organization_id IN (${orgIds.joinToString(",")})"
+                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
                 if (host != null) conditions.add("host = '$host'")
                 if (alertType != null) conditions.add("alert_type = '$alertType'")
@@ -141,7 +145,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM service_checks
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY timestamp DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -171,7 +175,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val host = call.parameters["host"]
                 val conditions = mutableListOf(
-                    "organization_id IN (${orgIds.joinToString(",")})"
+                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
                 if (host != null) conditions.add("host = '$host'")
 
@@ -204,7 +208,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val host = call.parameters["host"]
                 val conditions = mutableListOf(
-                    "organization_id IN (${orgIds.joinToString(",")})"
+                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
                 if (host != null) conditions.add("host = '$host'")
 
@@ -237,7 +241,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM network_connections
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY timestamp DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -268,7 +272,7 @@ fun Route.infraRoutes() {
                 val resourceType = call.parameters["resource_type"]
 
                 val conditions = mutableListOf(
-                    "organization_id IN (${orgIds.joinToString(",")})"
+                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
                 if (resourceType != null) {
                     conditions.add("resource_type = '$resourceType'")
@@ -303,7 +307,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM dbm_queries
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY timestamp DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -330,7 +334,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM debugger_logs
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY timestamp DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -358,7 +362,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM debugger_diagnostics
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY timestamp DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -388,7 +392,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM sbom_packages
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY collected_at DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -415,7 +419,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM ndm_devices
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY collected_at DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -440,7 +444,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM ndm_flows
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY sampled_at DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -465,7 +469,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM ndm_traps
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY received_at DESC
                     LIMIT $limit
                     FORMAT JSONEachRow
@@ -490,7 +494,7 @@ fun Route.infraRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
                 val query = """
                     SELECT * FROM network_paths
-                    WHERE organization_id IN (${orgIds.joinToString(",")})
+                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
                     ORDER BY collected_at DESC
                     LIMIT $limit
                     FORMAT JSONEachRow

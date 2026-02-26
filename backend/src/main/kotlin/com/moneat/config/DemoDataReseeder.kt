@@ -27,6 +27,7 @@ import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.OrderByDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
+import com.moneat.shared.models.Organizations
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
@@ -145,11 +146,16 @@ object DemoDataReseeder {
             } else {
                 logger.info { "Infra demo data is stale or missing, reseeding..." }
                 purgeInfraDemoData()
-                reseedKubernetesData()
-                reseedDbmData()
-                reseedDebuggerData()
-                reseedNdmData()
-                reseedSbomData()
+                val orgIds = getAllOrgIds()
+                val chOrgIds = orgIds.map { "toUInt64($it)" }
+                logger.info { "Seeding infra demo data for ${chOrgIds.size} organizations" }
+                for (chOrg in chOrgIds) {
+                    reseedKubernetesData(chOrg)
+                    reseedDbmData(chOrg)
+                    reseedDebuggerData(chOrg)
+                    reseedNdmData(chOrg)
+                    reseedSbomData(chOrg)
+                }
             }
 
             if (demoDashboardCount >= 4) {
@@ -1091,19 +1097,37 @@ object DemoDataReseeder {
         }.onFailure { logger.warn { "Purge hosts failed (non-fatal): ${it.message}" } }
     }
 
+    private fun getAllOrgIds(): List<Int> {
+        return transaction {
+            Organizations.selectAll()
+                .map { it[Organizations.id] }
+        }
+    }
+
+    private val infraDemoTables = listOf(
+        "k8s_resources", "dbm_queries", "debugger_logs",
+        "debugger_diagnostics", "ndm_devices", "ndm_traps",
+        "ndm_flows", "network_paths", "sbom_packages"
+    )
+
     private suspend fun checkFreshInfraDataCount(): Long {
+        val orgIds = getAllOrgIds()
+        if (orgIds.isEmpty()) return 0
+        val orgList = orgIds.joinToString(",") { "toUInt64($it)" }
         val query =
             """
-            SELECT count() as cnt
+            SELECT count(DISTINCT organization_id) as cnt
             FROM k8s_resources
-            WHERE organization_id = $ORG1
+            WHERE organization_id IN ($orgList)
                 AND collected_at >= now() - INTERVAL 2 HOUR
             """.trimIndent()
         return runCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299) return 0
-            body.trim().toLongOrNull() ?: 0
+            val distinctOrgs = body.trim().toLongOrNull() ?: 0
+            if (distinctOrgs < orgIds.size) return 0
+            distinctOrgs
         }.getOrElse {
             logger.warn { "Failed to check fresh infra demo data (non-fatal): ${it.message}" }
             0
@@ -1111,15 +1135,10 @@ object DemoDataReseeder {
     }
 
     private suspend fun purgeInfraDemoData() {
-        val tables = listOf(
-            "k8s_resources", "dbm_queries", "debugger_logs",
-            "debugger_diagnostics", "ndm_devices", "ndm_traps",
-            "ndm_flows", "network_paths", "sbom_packages"
-        )
-        for (table in tables) {
+        for (table in infraDemoTables) {
             runCatching {
                 ClickHouseClient.execute(
-                    "ALTER TABLE $table DELETE WHERE organization_id = $ORG1"
+                    "ALTER TABLE $table DELETE WHERE 1=1"
                 )
             }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
         }
@@ -1428,7 +1447,7 @@ object DemoDataReseeder {
     // ── Kubernetes Demo Data ──────────────────────────────────────────────
 
     @Suppress("LongMethod")
-    private suspend fun reseedKubernetesData() {
+    private suspend fun reseedKubernetesData(orgId: String) {
         // Pods (15 across namespaces)
         val podsSql =
             """
@@ -1439,7 +1458,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 toString(generateUUIDv4()),
                 'Pod',
                 arrayElement(['default', 'default', 'kube-system', 'default', 'monitoring',
@@ -1488,7 +1507,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 toString(generateUUIDv4()),
                 'Node',
                 '',
@@ -1519,7 +1538,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 toString(generateUUIDv4()),
                 'Service',
                 'default',
@@ -1550,7 +1569,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 toString(generateUUIDv4()),
                 'Deployment',
                 'default',
@@ -1581,7 +1600,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 toString(generateUUIDv4()),
                 'DaemonSet',
                 'kube-system',
@@ -1610,7 +1629,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 toString(generateUUIDv4()),
                 'ReplicaSet',
                 'default',
@@ -1637,7 +1656,7 @@ object DemoDataReseeder {
 
     // ── Database Monitoring Demo Data ──────────────────────────────────────
 
-    private suspend fun reseedDbmData() {
+    private suspend fun reseedDbmData(orgId: String) {
         val queriesSql =
             """
             INSERT INTO dbm_queries (
@@ -1648,7 +1667,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 arrayElement(['prod-db-01', 'prod-db-01', 'prod-db-01', 'prod-db-02',
                     'prod-db-02'], intDiv(number, 4) % 5 + 1),
                 'postgresql',
@@ -1699,7 +1718,7 @@ object DemoDataReseeder {
 
     // ── Debugger Demo Data ─────────────────────────────────────────────────
 
-    private suspend fun reseedDebuggerData() {
+    private suspend fun reseedDebuggerData(orgId: String) {
         // Debugger logs (15 entries)
         val logsSql =
             """
@@ -1709,7 +1728,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 arrayElement(['api-gateway', 'user-service', 'order-service',
                     'product-service', 'payment-service'], number % 5 + 1),
                 'production',
@@ -1765,7 +1784,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 arrayElement(['api-gateway', 'user-service', 'order-service',
                     'product-service', 'payment-service'], number % 5 + 1),
                 'production',
@@ -1795,7 +1814,7 @@ object DemoDataReseeder {
     // ── Network Device Monitoring Demo Data ────────────────────────────────
 
     @Suppress("LongMethod")
-    private suspend fun reseedNdmData() {
+    private suspend fun reseedNdmData(orgId: String) {
         // Network devices (8)
         val devicesSql =
             """
@@ -1806,7 +1825,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 concat('device-', toString(number + 1)),
                 arrayElement([
                     '10.0.1.1', '10.0.1.2', '10.0.2.1', '10.0.2.2',
@@ -1855,7 +1874,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 arrayElement([
                     '10.0.1.1', '10.0.1.2', '10.0.2.1', '10.0.2.2',
                     '10.0.3.1', '10.0.3.2', '10.0.1.1', '10.0.2.1',
@@ -1906,7 +1925,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 arrayElement([
                     '10.0.1.50', '10.0.1.51', '10.0.2.30', '10.0.1.50',
                     '203.0.113.10', '10.0.2.30', '10.0.1.50', '10.0.3.20',
@@ -1953,7 +1972,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 arrayElement([
                     '10.0.1.50', '10.0.1.50', '10.0.2.30',
                     '10.0.1.50', '10.0.3.20', '10.0.2.30'
@@ -1990,7 +2009,7 @@ object DemoDataReseeder {
 
     // ── SBOM Demo Data ─────────────────────────────────────────────────────
 
-    private suspend fun reseedSbomData() {
+    private suspend fun reseedSbomData(orgId: String) {
         val sbomSql =
             """
             INSERT INTO sbom_packages (
@@ -2000,7 +2019,7 @@ object DemoDataReseeder {
             )
             SELECT
                 generateUUIDv4(),
-                $ORG1,
+                $orgId,
                 arrayElement(['prod-web-01', 'prod-api-01', 'prod-db-01',
                     'prod-worker-01', 'prod-web-02'], number % 5 + 1),
                 substring(toString(sipHash64(number, 100)), 1, 12),
