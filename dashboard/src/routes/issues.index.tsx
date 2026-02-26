@@ -588,20 +588,27 @@ function DashboardPage() {
   )
 }
 
+const APM_ERRORS_PAGE_SIZE = 50
+
 function ApmErrorsTab() {
   const [serviceFilter, setServiceFilter] = useState('')
+  const [offset, setOffset] = useState(0)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['apm-errors', serviceFilter],
+    queryKey: ['apm-errors', serviceFilter, offset],
     queryFn: () => api.getApmErrors({
       service: serviceFilter || undefined,
-      limit: 100,
+      limit: APM_ERRORS_PAGE_SIZE,
+      offset,
     }),
     enabled: api.isAuthenticated(),
     refetchInterval: 15000,
   })
 
   const errors = data?.errors ?? []
+  const totalCount = data?.totalCount ?? 0
+  const canPrev = offset > 0
+  const canNext = offset + errors.length < totalCount
 
   return (
     <div className="px-6 py-4">
@@ -617,7 +624,7 @@ function ApmErrorsTab() {
           <Input
             placeholder="Filter by service..."
             value={serviceFilter}
-            onChange={(e) => setServiceFilter(e.target.value)}
+            onChange={(e) => { setServiceFilter(e.target.value); setOffset(0) }}
             className="pl-10"
           />
         </div>
@@ -645,6 +652,11 @@ function ApmErrorsTab() {
         </Card>
       ) : (
         <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+          {totalCount > APM_ERRORS_PAGE_SIZE && (
+            <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/40">
+              Showing {offset + 1}–{offset + errors.length} of {totalCount}
+            </div>
+          )}
           <div className="hidden md:flex items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
             <div className="w-16 shrink-0">Service</div>
             <div className="flex-1 min-w-0">Error</div>
@@ -655,9 +667,10 @@ function ApmErrorsTab() {
           <div className="divide-y divide-border/40">
             {errors.map((error: ApmErrorGroup) => {
               const traceId = normalizeApmTraceId(error.traceId)
+              const stableKey = `${error.service}|${error.resource}|${error.errorMessage}|${error.errorType}`
               return (
                 <div
-                  key={error.id}
+                  key={stableKey}
                   className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500"
                 >
                   <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
@@ -707,6 +720,26 @@ function ApmErrorsTab() {
               )
             })}
           </div>
+          {(canPrev || canNext) && (
+            <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canPrev}
+                onClick={() => setOffset(Math.max(0, offset - APM_ERRORS_PAGE_SIZE))}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canNext}
+                onClick={() => setOffset(offset + APM_ERRORS_PAGE_SIZE)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
