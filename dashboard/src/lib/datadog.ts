@@ -11,8 +11,12 @@ export interface DatadogInitOptions {
 }
 
 export function resolveProxyUrl(proxyUrl?: string, backendUrl?: string): string {
-  if (proxyUrl) return proxyUrl
-  return (backendUrl || 'https://api.moneat.io') + '/dd'
+  const base = proxyUrl || (backendUrl || 'https://api.moneat.io')
+  return base.replace(/\/+$/, '') + '/dd'
+}
+
+function joinUrl(base: string, path: string): string {
+  return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '')
 }
 
 export function initDatadog(options: DatadogInitOptions): void {
@@ -20,7 +24,7 @@ export function initDatadog(options: DatadogInitOptions): void {
   const service = options.service || 'moneat-dashboard'
   const env = options.env || 'production'
   const proxyFn = ({path, parameters}: {path: string; parameters: string}) =>
-    `${ddProxyUrl}${path}?${parameters}`
+    joinUrl(ddProxyUrl, path) + (parameters ? `?${parameters}` : '')
 
   datadogRum.init({
     applicationId: options.applicationId,

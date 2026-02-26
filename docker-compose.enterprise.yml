@@ -25,7 +25,7 @@
 services:
   datadog-agent:
     profiles: [datadog]
-    image: datadog/agent:latest
+    image: datadog/agent:${DATADOG_AGENT_TAG:-7}
     container_name: moneat-datadog-agent
     restart: unless-stopped
     environment:
@@ -71,7 +71,8 @@ services:
       args:
         ENTERPRISE: "true"
     env_file:
-      - .env.enterprise  # Optional: enterprise-specific secrets (Twilio, SAML, DD_, etc.)
+      - file: .env.enterprise  # Optional: enterprise-specific secrets (Twilio, SAML, DD_, etc.)
+        required: false
 
   frontend:
     build:

@@ -34,8 +34,12 @@ COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
 
 # Download Datadog Java agent for enterprise builds (profiling, APM, dynamic instrumentation)
 ARG ENTERPRISE=false
+ARG DD_JAVA_AGENT_VERSION=1.59.0
+ARG DD_JAVA_AGENT_SHA256=f2aa729581b60af266cc6555cf9d9701e98ee71c194b4f25d97de354f46fc533
 RUN if [ "$ENTERPRISE" = "true" ]; then \
-      wget -q -O /app/dd-java-agent.jar 'https://dtdg.co/latest-java-tracer'; \
+      wget -q -O /app/dd-java-agent.jar \
+        "https://repo1.maven.org/maven2/com/datadoghq/dd-java-agent/${DD_JAVA_AGENT_VERSION}/dd-java-agent-${DD_JAVA_AGENT_VERSION}.jar" && \
+      echo "${DD_JAVA_AGENT_SHA256}  /app/dd-java-agent.jar" | sha256sum -c -; \
     fi
 
 COPY backend/entrypoint.sh /app/entrypoint.sh
