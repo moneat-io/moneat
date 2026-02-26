@@ -29,7 +29,6 @@ import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
-import com.moneat.synthetics.routes.SyntheticsScheduler
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +58,6 @@ fun Application.configureBackgroundJobs() {
     val refreshTokenCleanupService = RefreshTokenCleanupService()
     val artifactCleanupService = ArtifactCleanupService()
     val uptimeScheduler = UptimeScheduler()
-    val syntheticsScheduler = SyntheticsScheduler()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
     val workerCount =
@@ -97,7 +95,6 @@ fun Application.configureBackgroundJobs() {
     refreshTokenCleanupService.start(jobScope)
     artifactCleanupService.start(jobScope)
     uptimeScheduler.start()
-    syntheticsScheduler.start()
     ingestionWorker.start()
     logIngestionWorker.start()
     llmIngestionWorker.start()
@@ -137,7 +134,6 @@ fun Application.configureBackgroundJobs() {
         refreshTokenCleanupService.stop()
         artifactCleanupService.stop()
         uptimeScheduler.stop()
-        syntheticsScheduler.stop()
         ingestionWorker.stop()
         logIngestionWorker.stop()
         llmIngestionWorker.stop()
