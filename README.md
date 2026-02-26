@@ -40,6 +40,7 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
 - [**Product Analytics**](#product-analytics) — Understand user behavior with funnels, retention, and event tracking
 - [**AI Observability**](#ai-observability) — Trace and debug LLM calls
 - [**On-Call & Incident Management**](#on-call--incident-management-enterprise) — PagerDuty-style escalations (Enterprise)
+- [**Datadog Compatibility**](#datadog-compatibility-enterprise) — Drop your Datadog agent into Moneat with no code changes (Enterprise)
 
 ---
 
@@ -56,6 +57,7 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
   - [Product Analytics](#product-analytics)
   - [AI Observability](#ai-observability)
   - [On-Call & Incident Management (Enterprise)](#on-call--incident-management-enterprise)
+  - [Datadog Compatibility (Enterprise)](#datadog-compatibility-enterprise)
 - [Sentry Compatibility](#sentry-compatibility)
 - [Architecture](#architecture)
 - [Screenshots](#screenshots)
@@ -123,7 +125,7 @@ cd dashboard && npm install && npm run dev
 
 ### Enterprise
 
-Need SSO, on-call, or incident management? Check out the [Enterprise plan](https://moneat.io/pricing) or contact [support@moneat.io](mailto:support@moneat.io).
+Need SSO, on-call, incident management, or Datadog compatibility? Check out the [Enterprise plan](https://moneat.io/pricing) or contact [support@moneat.io](mailto:support@moneat.io).
 
 ---
 
@@ -240,6 +242,67 @@ Need SSO, on-call, or incident management? Check out the [Enterprise plan](https
 
 ---
 
+### Datadog Compatibility (Enterprise)
+
+**Point your Datadog agent at Moneat — no code changes required.**
+
+Moneat Enterprise implements the Datadog agent ingestion protocol end-to-end, so you can redirect any existing Datadog agent deployment to your self-hosted Moneat instance. Configure your agent's `dd_url` / `apm_config.apm_dd_url` to your Moneat host and everything starts flowing immediately.
+
+**Metrics**
+- Full metrics API compatibility (v1, v2, v3 series) — gauges, counts, rates
+- DogStatsD proxy endpoint for application-emitted custom metrics
+- Distribution metrics and sketches (percentile aggregation)
+
+**APM & Tracing**
+- Trace ingestion across all agent wire formats (v0.3–v0.7, msgpack and JSON)
+- Trace stats aggregation for service-level throughput and error rates
+- Service dependency map — visualize upstream/downstream call graphs
+- Trace detail view with span waterfall, tags, and resource breakdown
+
+**Continuous Profiler**
+- CPU, heap, allocation, goroutine, and blocking profile ingestion
+- Flamegraph visualization in the dashboard (pprof and Sentry profile formats)
+- Filter by service, environment, and profile type
+
+**Logs**
+- Log ingestion via the Datadog agent log collector (v2 API)
+- Full-text search, severity filtering, and retention policies — same pipeline as Sentry logs
+
+**Infrastructure**
+- Host metadata collection (OS, platform, CPU, memory, agent version)
+- Per-host metric history — CPU, memory, disk, network, load (5-minute buckets)
+- Container stats — name, image, state, CPU, memory, and network I/O
+- Process list with CPU/memory, command, user, thread count, and open file descriptors
+- Network connections with protocol, direction, and byte counters
+
+**Events & Service Checks**
+- Infrastructure events (v1 `check_run` and v2 `events` / `service_checks`)
+- Filterable event timeline in the dashboard
+
+**Database Monitoring (DBM)**
+- Query samples and execution plans from the Datadog Database Monitoring agent
+- Query metrics aggregation and active session tracking
+- Schema and metadata ingestion for query explain support
+
+**Network Device Monitoring (NDM)**
+- SNMP device discovery — vendor, model, OS version, reachability
+- SNMP trap ingestion with severity and OID
+- NetFlow / sFlow network flow records
+- Network path topology (traceroute-style hops and RTTs)
+
+**Cloud Security Management (CSM)**
+- Runtime security event ingestion with rule name, category, and severity
+- Activity dump collection for forensic process trees
+- Compliance finding ingestion (CIS, PCI-DSS, SOC 2, etc.) with pass/fail/skip status
+- Compliance summary view grouped by framework
+
+**Kubernetes Orchestration**
+- Kubernetes resource and manifest payloads from the Datadog orchestrator check
+
+→ [Enterprise pricing](https://moneat.io/pricing) · [Contact sales](mailto:support@moneat.io)
+
+---
+
 ## Sentry Compatibility
 
 Moneat implements the **Sentry ingestion API** (envelope and legacy store endpoints), so you can use existing Sentry SDKs with zero code changes. Just point your DSN at your Moneat instance.
@@ -280,7 +343,7 @@ moneat/
 └── docker-compose.yml       # Local development infrastructure
 
 moneat-enterprise/           # Separate private repo (proprietary license)
-├── backend/                 #   SSO, on-call, escalation, analytics
+├── backend/                 #   SSO, on-call, escalation, analytics, Datadog compatibility
 └── dashboard/               #   Enterprise UI components
 ```
 

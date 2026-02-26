@@ -1,0 +1,65 @@
+---
+sidebar_position: 5
+title: Dashboard Import
+description: Import your existing Datadog dashboards into Moneat with automatic widget and metric translation.
+---
+
+# Dashboard Import
+
+## Overview
+
+If you're migrating from Datadog, you can import your existing dashboards into Moneat. The importer translates Datadog's dashboard JSON format into Moneat's native format, including widget types, metric queries, and template variables.
+
+## Importing a Dashboard
+
+import StepList from '@site/src/components/StepList';
+
+<StepList
+  steps={[
+    {
+      title: 'Export from Datadog',
+      content: 'In your Datadog dashboard, click the gear icon → Export Dashboard JSON. Copy the JSON content.',
+    },
+    {
+      title: 'Open the import dialog',
+      content: 'In Moneat, go to Dashboards and click Import. Paste the Datadog JSON into the editor.',
+    },
+    {
+      title: 'Review and save',
+      content: 'Moneat translates widgets, metrics, and template variables automatically. Review any warnings, then save the imported dashboard.',
+    },
+  ]}
+/>
+
+## Supported Widget Types
+
+The importer maps Datadog widget types to their Moneat equivalents:
+
+| Datadog Widget | Moneat Widget |
+|---|---|
+| Timeseries | Timeseries |
+| Top List | Top List |
+| Query Value | Stat |
+| Table | Table |
+| Heatmap | Heatmap |
+| Distribution | Bar |
+| Pie / Sunburst | Donut |
+| Note / Free Text | Text |
+
+## Metric Translation
+
+Datadog metric namespaces are automatically mapped to Moneat's metric system:
+
+- **System metrics** — `system.cpu.*`, `system.mem.*`, `system.disk.*`, `system.net.*`
+- **Trace metrics** — `trace.*` APM metrics
+- **Log metrics** — `logs.*` log-based metrics
+- **Container metrics** — `container.*`, `docker.*` metrics
+- **Network metrics** — `network.*` flow metrics
+
+## Template Variables
+
+Datadog template variables (like `$env`, `$service`, `$host`) are preserved during import and mapped to Moneat's variable system. You can edit them after import in the dashboard settings.
+
+:::info
+Some Datadog-specific widgets or custom metric queries may not have a direct equivalent. The importer will flag these with warnings so you can adjust them manually after import.
+:::

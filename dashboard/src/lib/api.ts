@@ -3327,8 +3327,8 @@ class ApiClient {
     const searchParams = new URLSearchParams()
     if (params.service) searchParams.set('service', params.service)
     if (params.env) searchParams.set('env', params.env)
-    if (params.limit) searchParams.set('limit', String(params.limit))
-    if (params.offset) searchParams.set('offset', String(params.offset))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<ApmTraceListResponse>(
       `${API_BASE}/traces${qs ? `?${qs}` : ''}`
@@ -3360,16 +3360,28 @@ class ApiClient {
     if (params.service) searchParams.set('service', params.service)
     if (params.type) searchParams.set('type', params.type)
     if (params.source) searchParams.set('source', params.source)
-    if (params.limit) searchParams.set('limit', String(params.limit))
-    if (params.offset) searchParams.set('offset', String(params.offset))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<ProfileListResponse>(
       `${API_BASE}/profiles${qs ? `?${qs}` : ''}`
     )
   }
 
-  getProfileDownloadUrl(profileId: string): string {
-    return `${API_BASE}/profiles/${profileId}/download`
+  async downloadProfile(profileId: string, filename?: string): Promise<void> {
+    const response = await this.fetchWithAuth(
+      `${API_BASE}/profiles/${profileId}/download`
+    )
+    if (!response.ok) throw new Error('Profile download failed')
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename ?? `profile-${profileId}.pprof.gz`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   async getProfileFlamegraph(profileId: string): Promise<FlamegraphResponse> {
@@ -3389,8 +3401,8 @@ class ApiClient {
     const searchParams = new URLSearchParams()
     if (params.alertType) searchParams.set('alert_type', params.alertType)
     if (params.host) searchParams.set('host', params.host)
-    if (params.limit) searchParams.set('limit', String(params.limit))
-    if (params.offset) searchParams.set('offset', String(params.offset))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdEventListResponse>(
       `${API_BASE}/infra/events${qs ? `?${qs}` : ''}`
@@ -3406,8 +3418,8 @@ class ApiClient {
     const searchParams = new URLSearchParams()
     if (params.checkName) searchParams.set('check_name', params.checkName)
     if (params.host) searchParams.set('host', params.host)
-    if (params.limit) searchParams.set('limit', String(params.limit))
-    if (params.offset) searchParams.set('offset', String(params.offset))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdServiceCheckListResponse>(
       `${API_BASE}/infra/service-checks${qs ? `?${qs}` : ''}`
@@ -3417,11 +3429,11 @@ class ApiClient {
   // --- Hosts ---
 
   async getHosts(): Promise<DdHostListResponse> {
-    return this.request<DdHostListResponse>(`${API_BASE}/hosts`)
+    return this.request<DdHostListResponse>(`${API_BASE}/infra/hosts`)
   }
 
   async getHost(hostId: number): Promise<DdHostResponse> {
-    return this.request<DdHostResponse>(`${API_BASE}/hosts/${hostId}`)
+    return this.request<DdHostResponse>(`${API_BASE}/infra/hosts/${hostId}`)
   }
 
   async getHostMetrics(
@@ -3434,13 +3446,13 @@ class ApiClient {
     if (to) params.append('to', to)
     const qs = params.toString()
     return this.request<SystemMetricsHistory>(
-      `${API_BASE}/hosts/${hostId}/metrics${qs ? `?${qs}` : ''}`
+      `${API_BASE}/infra/hosts/${hostId}/metrics${qs ? `?${qs}` : ''}`
     )
   }
 
   async getHostContainers(hostId: number): Promise<DdContainerListResponse> {
     return this.request<DdContainerListResponse>(
-      `${API_BASE}/hosts/${hostId}/containers`
+      `${API_BASE}/infra/hosts/${hostId}/containers`
     )
   }
 
@@ -3453,8 +3465,8 @@ class ApiClient {
   } = {}): Promise<DdProcessListResponse> {
     const searchParams = new URLSearchParams()
     if (params.host) searchParams.set('host', params.host)
-    if (params.limit) searchParams.set('limit', String(params.limit))
-    if (params.offset) searchParams.set('offset', String(params.offset))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdProcessListResponse>(
       `${API_BASE}/infra/processes${qs ? `?${qs}` : ''}`
@@ -3468,8 +3480,8 @@ class ApiClient {
   } = {}): Promise<DdContainerListResponse> {
     const searchParams = new URLSearchParams()
     if (params.host) searchParams.set('host', params.host)
-    if (params.limit) searchParams.set('limit', String(params.limit))
-    if (params.offset) searchParams.set('offset', String(params.offset))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdContainerListResponse>(
       `${API_BASE}/infra/containers${qs ? `?${qs}` : ''}`
@@ -3483,8 +3495,8 @@ class ApiClient {
   } = {}): Promise<DdConnectionListResponse> {
     const searchParams = new URLSearchParams()
     if (params.host) searchParams.set('host', params.host)
-    if (params.limit) searchParams.set('limit', String(params.limit))
-    if (params.offset) searchParams.set('offset', String(params.offset))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
     return this.request<DdConnectionListResponse>(
       `${API_BASE}/infra/connections${qs ? `?${qs}` : ''}`

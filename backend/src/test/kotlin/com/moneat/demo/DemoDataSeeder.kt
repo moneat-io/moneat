@@ -3222,14 +3222,30 @@ object DemoDataSeeder {
     private suspend fun seedDatadogAgentData(orgId: Int) {
         val db = ClickHouseClient.getDatabase()
 
-        // Check if already seeded
-        val spanCount =
-            ClickHouseClient.executeWithFormat(
-                "SELECT count() FROM $db.apm_spans WHERE organization_id = $orgId",
-                "TabSeparated",
-            ).trim().toLongOrNull() ?: 0L
-        if (spanCount > 0) {
-            println("Datadog agent data already exists ($spanCount spans). Skipping.")
+        // Check if already seeded — require data in key tables to skip
+        val datadogTables =
+            listOf(
+                Triple("apm_spans", "organization_id", "count()"),
+                Triple("profiles", "organization_id", "count()"),
+                Triple("service_checks", "organization_id", "count()"),
+                Triple("containers", "organization_id", "count()"),
+            )
+        var allSeeded = true
+        for ((table, orgCol, agg) in datadogTables) {
+            val cnt =
+                runCatching {
+                    ClickHouseClient.executeWithFormat(
+                        "SELECT $agg FROM $db.$table WHERE $orgCol = $orgId",
+                        "TabSeparated",
+                    ).trim().toLongOrNull() ?: 0L
+                }.getOrElse { 0L }
+            if (cnt == 0L) {
+                allSeeded = false
+                break
+            }
+        }
+        if (allSeeded) {
+            println("Datadog agent data already exists in all tables. Skipping.")
             return
         }
 
@@ -3244,13 +3260,40 @@ object DemoDataSeeder {
                 Host("prod-worker-01", "Ubuntu 22.04", "linux", "AMD EPYC 7R13", 8, 16_384_000L, "7.52.1"),
             )
         transaction {
+            exec("DELETE FROM hosts WHERE organization_id = $orgId")
             hosts.forEach { h ->
+                val firstDays = random.nextInt(7, 30)
+                val lastSecs = random.nextInt(0, 300)
+                val firstTs =
+                    Instant.now().minus(firstDays.toLong(), ChronoUnit.DAYS)
+                        .toString()
+                        .replace("T", " ")
+                        .dropLast(1)
+                val lastTs =
+                    Instant.now().minusSeconds(lastSecs.toLong())
+                        .toString()
+                        .replace("T", " ")
+                        .dropLast(1)
                 exec(
                     """
-                    INSERT INTO hosts (organization_id, hostname, os, platform, processor, cpu_cores, memory_total_kb, agent_version, gohai, tags, first_seen_at, last_seen_at)
-                    VALUES ($orgId, '${h.hostname}', '${h.os}', '${h.platform}', '${h.processor}', ${h.cpuCores}, ${h.memoryKb}, '${h.agentVersion}',
-                        '{}', '{"env":"production","service":"acme-shopping"}', NOW() - INTERVAL '${random.nextInt(7, 30)} days', NOW() - INTERVAL '${random.nextInt(0, 300)} seconds')
-                    ON CONFLICT (organization_id, hostname) DO UPDATE SET last_seen_at = NOW() - INTERVAL '${random.nextInt(0, 300)} seconds'
+                    INSERT INTO hosts (
+                        organization_id, hostname, os, platform, processor,
+                        cpu_cores, memory_total_kb, agent_version, gohai, tags,
+                        first_seen_at, last_seen_at
+                    ) VALUES (
+                        $orgId,
+                        '${h.hostname}',
+                        '${h.os}',
+                        '${h.platform}',
+                        '${h.processor}',
+                        ${h.cpuCores},
+                        ${h.memoryKb},
+                        '${h.agentVersion}',
+                        '{}',
+                        '{"env":"production","service":"acme-shopping"}',
+                        '$firstTs',
+                        '$lastTs'
+                    )
                     """.trimIndent(),
                 )
             }
@@ -3378,16 +3421,76 @@ object DemoDataSeeder {
         val eventRows = mutableListOf<String>()
         val eventTemplates =
             listOf(
-                EventTemplate("Deployment started: api-gateway v1.3.0", "Rolling deployment initiated for api-gateway. 4 pods updating.", "normal", "info", "deployment"),
-                EventTemplate("Deployment completed: api-gateway v1.3.0", "All pods healthy. Zero-downtime deployment successful.", "normal", "success", "deployment"),
-                EventTemplate("High memory usage on prod-db-01", "Memory utilization at 87%. Consider scaling or optimizing queries.", "normal", "warning", "system"),
-                EventTemplate("Auto-scaling triggered: order-service", "CPU above 80% for 5 minutes. Scaling from 3 to 5 replicas.", "normal", "warning", "kubernetes"),
-                EventTemplate("SSL certificate renewed: *.acme.com", "Certificate auto-renewed via Let's Encrypt. Valid until 2026-05-25.", "low", "info", "cert-manager"),
-                EventTemplate("Database backup completed", "Full backup of prod-db-01 completed. Size: 42.3GB, Duration: 12m34s.", "low", "info", "backup"),
-                EventTemplate("Rate limiting activated: /api/v1/search", "Request rate exceeded 1000/min threshold from 203.0.113.42.", "normal", "warning", "api-gateway"),
-                EventTemplate("Pod restart: payment-service-7f8d9c", "Container OOMKilled. Memory limit: 512Mi. Peak usage: 498Mi.", "normal", "error", "kubernetes"),
-                EventTemplate("Cache eviction spike on prod-cache-01", "Redis evicted 15,000 keys in last 5 minutes. maxmemory-policy: allkeys-lru.", "normal", "warning", "redis"),
-                EventTemplate("Deployment rolled back: user-service v1.2.9", "Health check failures exceeded threshold. Automatic rollback to v1.2.8.", "normal", "error", "deployment"),
+                EventTemplate(
+                    "Deployment started: api-gateway v1.3.0",
+                    "Rolling deployment initiated for api-gateway. 4 pods updating.",
+                    "normal",
+                    "info",
+                    "deployment",
+                ),
+                EventTemplate(
+                    "Deployment completed: api-gateway v1.3.0",
+                    "All pods healthy. Zero-downtime deployment successful.",
+                    "normal",
+                    "success",
+                    "deployment",
+                ),
+                EventTemplate(
+                    "High memory usage on prod-db-01",
+                    "Memory utilization at 87%. Consider scaling or optimizing queries.",
+                    "normal",
+                    "warning",
+                    "system",
+                ),
+                EventTemplate(
+                    "Auto-scaling triggered: order-service",
+                    "CPU above 80% for 5 minutes. Scaling from 3 to 5 replicas.",
+                    "normal",
+                    "warning",
+                    "kubernetes",
+                ),
+                EventTemplate(
+                    "SSL certificate renewed: *.acme.com",
+                    "Certificate auto-renewed via Let's Encrypt. Valid until 2026-05-25.",
+                    "low",
+                    "info",
+                    "cert-manager",
+                ),
+                EventTemplate(
+                    "Database backup completed",
+                    "Full backup of prod-db-01 completed. Size: 42.3GB, Duration: 12m34s.",
+                    "low",
+                    "info",
+                    "backup",
+                ),
+                EventTemplate(
+                    "Rate limiting activated: /api/v1/search",
+                    "Request rate exceeded 1000/min threshold from 203.0.113.42.",
+                    "normal",
+                    "warning",
+                    "api-gateway",
+                ),
+                EventTemplate(
+                    "Pod restart: payment-service-7f8d9c",
+                    "Container OOMKilled. Memory limit: 512Mi. Peak usage: 498Mi.",
+                    "normal",
+                    "error",
+                    "kubernetes",
+                ),
+                EventTemplate(
+                    "Cache eviction spike on prod-cache-01",
+                    "Redis evicted 15,000 keys in last 5 minutes. maxmemory-policy: allkeys-lru.",
+                    "normal",
+                    "warning",
+                    "redis",
+                ),
+                EventTemplate(
+                    "Deployment rolled back: user-service v1.2.9",
+                    "Health check failures exceeded threshold. Automatic rollback to v1.2.8.",
+                    "normal",
+                    "error",
+                    "deployment",
+                ),
             )
         eventTemplates.forEachIndexed { idx, tmpl ->
             val ts = "fromUnixTimestamp64Milli(${Instant.now().minus(random.nextInt(0, 72).toLong(), ChronoUnit.HOURS).toEpochMilli()})"

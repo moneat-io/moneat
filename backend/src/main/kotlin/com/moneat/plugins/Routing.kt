@@ -35,6 +35,8 @@ import com.moneat.llm.routes.llmRoutes
 import com.moneat.logs.routes.logRoutes
 import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.monitor.routes.infraRoutes
+import com.moneat.security.routes.securityRoutes
+import com.moneat.synthetics.routes.syntheticsRoutes
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
@@ -183,6 +185,12 @@ fun Application.configureRouting() {
 
         // Infrastructure monitoring endpoints (k8s, dbm, debugger, ndm, sbom)
         infraRoutes()
+
+        // Security monitoring endpoints (CWS events, CSPM compliance)
+        securityRoutes()
+
+        // Synthetic monitoring endpoints
+        syntheticsRoutes()
 
         // Logging ingestion and query endpoints
         logRoutes()

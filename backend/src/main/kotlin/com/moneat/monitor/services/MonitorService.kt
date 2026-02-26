@@ -382,6 +382,7 @@ class MonitorService {
                 argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp) as cpu_percent,
                 argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp) as mem_total,
                 argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) as mem_used,
+                argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) as mem_available,
                 argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp) as disk_total,
                 argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) as disk_used,
                 argMax(CASE WHEN metric_name='system.net.recv_bytes' THEN value END, timestamp) as net_recv_bytes,
@@ -425,40 +426,47 @@ class MonitorService {
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val diskTotal =
+            val memAvailable =
                 data
                     .getOrNull(3)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val diskUsed =
+            val diskTotal =
                 data
                     .getOrNull(4)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val netRecvBytes =
+            val diskUsed =
                 data
                     .getOrNull(5)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val netSentBytes =
+            val netRecvBytes =
                 data
                     .getOrNull(6)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val load1 = data.getOrNull(7)?.toString()?.toFloatOrNull() ?: 0f
-            val tempMax = data.getOrNull(8)?.toString()?.toFloatOrNull()
-            val gpuPercent = data.getOrNull(9)?.toString()?.toFloatOrNull()
-            val batteryPercent = data.getOrNull(10)?.toString()?.toFloatOrNull()
+            val netSentBytes =
+                data
+                    .getOrNull(7)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
+            val load1 = data.getOrNull(8)?.toString()?.toFloatOrNull() ?: 0f
+            val tempMax = data.getOrNull(9)?.toString()?.toFloatOrNull()
+            val gpuPercent = data.getOrNull(10)?.toString()?.toFloatOrNull()
+            val batteryPercent = data.getOrNull(11)?.toString()?.toFloatOrNull()
 
+            val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
             return LatestMetrics(
                 cpu_percent = cpuPercent,
                 mem_total = memTotal,
-                mem_used = memUsed,
-                mem_percent = if (memTotal > 0) (memUsed.toFloat() / memTotal * 100) else 0f,
+                mem_used = effectiveMemUsed,
+                mem_percent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * 100) else 0f,
                 disk_total = diskTotal,
                 disk_used = diskUsed,
                 disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * 100) else 0f,
@@ -523,8 +531,8 @@ class MonitorService {
             SELECT
                 toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
                 avg(CASE WHEN metric_name='system.cpu.percent' THEN value END) as cpu,
-                avg(CASE WHEN metric_name='system.mem.used' THEN value END) /
-                    nullIf(avg(CASE WHEN metric_name='system.mem.total' THEN value END), 0) * 100 as mem,
+                (1 - avg(CASE WHEN metric_name='system.mem.available' THEN value END) /
+                    nullIf(avg(CASE WHEN metric_name='system.mem.total' THEN value END), 0)) * 100 as mem,
                 avg(CASE WHEN metric_name='system.disk.used' THEN value END) /
                     nullIf(avg(CASE WHEN metric_name='system.disk.total' THEN value END), 0) * 100 as disk,
                 sum(CASE WHEN metric_name='system.net.recv_bytes' THEN value ELSE 0 END) as net_recv,

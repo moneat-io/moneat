@@ -8,6 +8,7 @@
 
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
+import {BetaBanner} from '@/components/BetaBanner'
 
 export const Route = createFileRoute('/apm-traces')({
   beforeLoad: async () => {
@@ -19,5 +20,10 @@ export const Route = createFileRoute('/apm-traces')({
 })
 
 function ApmTracesLayout() {
-  return <Outlet />
+  return (
+    <>
+      <BetaBanner pageKey="apm-traces" />
+      <Outlet />
+    </>
+  )
 }

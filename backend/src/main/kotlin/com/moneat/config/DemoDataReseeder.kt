@@ -77,6 +77,8 @@ object DemoDataReseeder {
             val freshLogsCount = checkFreshLogsCount()
             val freshDatadogCount = checkFreshDatadogCount()
             val freshInfraCount = checkFreshInfraDataCount()
+            val freshSecurityCount = checkFreshSecurityDataCount()
+            val freshSyntheticsCount = checkFreshSyntheticsDataCount()
             val demoDashboardCount = countDemoDashboards()
 
             val hasFreshCore = freshCoreCount > 0
@@ -85,15 +87,18 @@ object DemoDataReseeder {
             val hasFreshLogs = freshLogsCount > 0
             val hasFreshDatadog = freshDatadogCount > 0
             val hasFreshInfra = freshInfraCount > 0
+            val hasFreshSecurity = freshSecurityCount > 0
+            val hasFreshSynthetics = freshSyntheticsCount > 0
             val hasEnoughDashboards = demoDashboardCount >= 4
 
             if (hasFreshCore && hasFreshLlm && hasFreshAnalytics && hasFreshLogs &&
-                hasFreshDatadog && hasFreshInfra && hasEnoughDashboards
+                hasFreshDatadog && hasFreshInfra && hasFreshSecurity && hasFreshSynthetics && hasEnoughDashboards
             ) {
                 logger.info {
                     "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, " +
                         "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, " +
                         "$freshDatadogCount recent Datadog spans, $freshInfraCount recent infra rows, " +
+                        "$freshSecurityCount recent security events, $freshSyntheticsCount recent synthetics, " +
                         "$demoDashboardCount demo dashboards), skipping reseed"
                 }
                 return
@@ -163,6 +168,22 @@ object DemoDataReseeder {
             } else {
                 logger.info { "Demo dashboards missing or incomplete ($demoDashboardCount found), reseeding..." }
                 seedDemoDashboards()
+            }
+
+            if (hasFreshSecurity) {
+                logger.info { "Security demo data is fresh ($freshSecurityCount recent events), skipping security reseed" }
+            } else {
+                logger.info { "Security demo data is stale or missing, reseeding..." }
+                purgeSecurityDemoData()
+                reseedSecurityData()
+            }
+
+            if (hasFreshSynthetics) {
+                logger.info { "Synthetics demo data is fresh ($freshSyntheticsCount recent results), skipping synthetics reseed" }
+            } else {
+                logger.info { "Synthetics demo data is stale or missing, reseeding..." }
+                purgeSyntheticsDemoData()
+                reseedSyntheticsData()
             }
 
             logger.info { "Demo data reseed complete" }
@@ -1055,18 +1076,29 @@ object DemoDataReseeder {
     private const val ORG1 = "toUInt64(-1)"
 
     private suspend fun checkFreshDatadogCount(): Long {
-        val query =
-            """
-            SELECT count() as cnt
-            FROM apm_spans
-            WHERE organization_id = $ORG1
-                AND start >= now() - INTERVAL 2 HOUR
-            """.trimIndent()
         return runCatching {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return 0
-            body.trim().toLongOrNull() ?: 0
+            val tablesWithTimeCol =
+                listOf(
+                    Triple("apm_spans", "start", "organization_id"),
+                    Triple("profiles", "start_time", "organization_id"),
+                    Triple("service_checks", "timestamp", "organization_id"),
+                    Triple("containers", "timestamp", "organization_id"),
+                )
+            var minCount = Long.MAX_VALUE
+            for ((table, timeCol, orgCol) in tablesWithTimeCol) {
+                val q =
+                    """
+                    SELECT count() as cnt
+                    FROM $table
+                    WHERE $orgCol = $ORG1
+                        AND $timeCol >= now() - INTERVAL 2 HOUR
+                    """.trimIndent()
+                val response = ClickHouseClient.execute(q)
+                if (response.status.value !in 200..299) return 0
+                val cnt = response.bodyAsText().trim().toLongOrNull() ?: 0
+                if (cnt < minCount) minCount = cnt
+            }
+            if (minCount == Long.MAX_VALUE) 0 else minCount
         }.getOrElse {
             logger.warn { "Failed to check fresh Datadog demo data (non-fatal): ${it.message}" }
             0
@@ -1074,16 +1106,17 @@ object DemoDataReseeder {
     }
 
     private suspend fun purgeDatadogDemoData() {
-        val tables = listOf(
-            "apm_spans",
-            "trace_stats",
-            "profiles",
-            "infra_events",
-            "service_checks",
-            "processes",
-            "containers",
-            "network_connections"
-        )
+        val tables =
+            listOf(
+                "apm_spans",
+                "trace_stats",
+                "profiles",
+                "infra_events",
+                "service_checks",
+                "processes",
+                "containers",
+                "network_connections",
+            )
         for (table in tables) {
             runCatching {
                 ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE organization_id = $ORG1")
@@ -1104,11 +1137,18 @@ object DemoDataReseeder {
         }
     }
 
-    private val infraDemoTables = listOf(
-        "k8s_resources", "dbm_queries", "debugger_logs",
-        "debugger_diagnostics", "ndm_devices", "ndm_traps",
-        "ndm_flows", "network_paths", "sbom_packages"
-    )
+    private val infraDemoTables =
+        listOf(
+            "k8s_resources",
+            "dbm_queries",
+            "debugger_logs",
+            "debugger_diagnostics",
+            "ndm_devices",
+            "ndm_traps",
+            "ndm_flows",
+            "network_paths",
+            "sbom_packages",
+        )
 
     private suspend fun checkFreshInfraDataCount(): Long {
         val orgIds = getAllOrgIds()
@@ -1135,10 +1175,13 @@ object DemoDataReseeder {
     }
 
     private suspend fun purgeInfraDemoData() {
+        val orgIds = getAllOrgIds()
+        if (orgIds.isEmpty()) return
+        val orgList = orgIds.joinToString(",") { "toUInt64($it)" }
         for (table in infraDemoTables) {
             runCatching {
                 ClickHouseClient.execute(
-                    "ALTER TABLE $table DELETE WHERE 1=1"
+                    "ALTER TABLE $table DELETE WHERE organization_id IN ($orgList)"
                 )
             }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
         }
@@ -2086,6 +2129,185 @@ object DemoDataReseeder {
             .onFailure { logger.warn { "Reseed sbom_packages failed (non-fatal): ${it.message}" } }
 
         logger.info { "SBOM demo data reseed complete" }
+    }
+
+    // ── Security Demo Data ─────────────────────────────────────────────────
+
+    private suspend fun checkFreshSecurityDataCount(): Long {
+        val query = """
+            SELECT count() FROM security_events
+            WHERE organization_id IN ($P1, $P2, $P3)
+                AND timestamp >= now() - INTERVAL 2 HOUR
+        """.trimIndent()
+        return runCatching {
+            val response = ClickHouseClient.execute(query)
+            if (response.status.value !in 200..299) return 0
+            response.bodyAsText().trim().toLongOrNull() ?: 0L
+        }.getOrElse {
+            logger.warn { "Failed to check fresh security demo data (non-fatal): ${it.message}" }
+            0L
+        }
+    }
+
+    private suspend fun purgeSecurityDemoData() {
+        for (table in listOf("security_events", "compliance_findings", "security_dumps")) {
+            runCatching {
+                ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE 1=1")
+            }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
+        }
+    }
+
+    @Suppress("LongMethod")
+    private suspend fun reseedSecurityData() {
+        val securityEventsSql = """
+            INSERT INTO security_events (
+                event_id, organization_id, rule_id, rule_name, rule_category,
+                severity, agent_rule_version, event_type, process_name,
+                file_path, host, env, tags, timestamp
+            )
+            SELECT
+                generateUUIDv4(),
+                arrayElement([$P1, $P2, $P3], number % 3 + 1),
+                arrayElement([
+                    'cws-001', 'cws-002', 'cws-003', 'cws-004', 'cws-005',
+                    'cws-006', 'cws-007', 'cws-008'
+                ], number % 8 + 1),
+                arrayElement([
+                    'Sensitive file accessed', 'Privilege escalation attempt',
+                    'Suspicious network connection', 'Container escape attempt',
+                    'Cryptominer detected', 'Reverse shell spawned',
+                    'SSH key modification', 'Cron job created'
+                ], number % 8 + 1),
+                arrayElement(['file', 'process', 'network', 'container'], number % 4 + 1),
+                arrayElement(['info', 'low', 'medium', 'high', 'critical'], number % 5 + 1),
+                '7.52.1',
+                arrayElement([
+                    'file_open', 'process_exec', 'network_connect',
+                    'setuid', 'module_load', 'ptrace'
+                ], number % 6 + 1),
+                arrayElement([
+                    'sshd', 'bash', 'python3', 'curl', 'wget',
+                    'nc', 'ncat', 'openssl', 'nmap', 'su'
+                ], number % 10 + 1),
+                arrayElement([
+                    '/etc/passwd', '/etc/shadow', '/root/.ssh/authorized_keys',
+                    '/proc/self/mem', '/var/run/docker.sock',
+                    '/etc/crontab', '/usr/bin/sudo', '/bin/sh'
+                ], number % 8 + 1),
+                arrayElement([
+                    'prod-web-01', 'prod-api-01', 'prod-db-01',
+                    'prod-worker-01', 'prod-web-02'
+                ], number % 5 + 1),
+                'production',
+                map('env', 'production', 'team', arrayElement(['backend', 'frontend', 'infra'], number % 3 + 1)),
+                now() - INTERVAL (number * 37 % 4320) MINUTE
+            FROM numbers(60)
+        """.trimIndent()
+        runCatching { ClickHouseClient.execute(securityEventsSql) }
+            .onFailure { logger.warn { "Reseed security_events failed (non-fatal): ${it.message}" } }
+
+        val complianceSql = """
+            INSERT INTO compliance_findings (
+                finding_id, organization_id, framework, rule_id, rule_name,
+                status, resource_type, resource_id, resource_name, tags, evaluated_at
+            )
+            SELECT
+                generateUUIDv4(),
+                arrayElement([$P1, $P2, $P3], number % 3 + 1),
+                arrayElement(['CIS', 'PCI-DSS', 'SOC2', 'HIPAA', 'NIST'], number % 5 + 1),
+                concat('rule-', toString(number % 20 + 1)),
+                arrayElement([
+                    'Ensure MFA is enabled', 'Restrict root account access',
+                    'Enable audit logging', 'Encrypt data at rest',
+                    'Use private subnets', 'Restrict security group ingress',
+                    'Enable VPC flow logs', 'Rotate access keys',
+                    'Enable CloudTrail', 'Patch OS vulnerabilities',
+                    'Disable unused ports', 'Enable WAF',
+                    'Use encrypted EBS volumes', 'Restrict S3 public access',
+                    'Enable GuardDuty', 'Use least privilege IAM',
+                    'Enable Config rules', 'Use TLS 1.2+',
+                    'Enable container scanning', 'Restrict SSH access'
+                ], number % 20 + 1),
+                arrayElement(['passed', 'failed', 'passed', 'passed', 'skipped'], number % 5 + 1),
+                arrayElement(['aws_s3_bucket', 'aws_ec2_instance', 'aws_iam_user',
+                    'aws_security_group', 'k8s_pod'], number % 5 + 1),
+                concat('res-', toString(sipHash64(number, 42) % 1000)),
+                arrayElement([
+                    'prod-bucket-01', 'prod-web-01', 'deploy-user',
+                    'web-sg', 'api-pod-01'
+                ], number % 5 + 1),
+                map('env', 'production'),
+                now() - INTERVAL (number * 61 % 2880) MINUTE
+            FROM numbers(100)
+        """.trimIndent()
+        runCatching { ClickHouseClient.execute(complianceSql) }
+            .onFailure { logger.warn { "Reseed compliance_findings failed (non-fatal): ${it.message}" } }
+
+        logger.info { "Security demo data reseed complete" }
+    }
+
+    // ── Synthetics Demo Data ────────────────────────────────────────────────
+
+    private suspend fun checkFreshSyntheticsDataCount(): Long {
+        val query = """
+            SELECT count() FROM synthetic_results
+            WHERE organization_id IN ($P1, $P2, $P3)
+                AND timestamp >= now() - INTERVAL 2 HOUR
+        """.trimIndent()
+        return runCatching {
+            val response = ClickHouseClient.execute(query)
+            if (response.status.value !in 200..299) return 0
+            response.bodyAsText().trim().toLongOrNull() ?: 0L
+        }.getOrElse {
+            logger.warn { "Failed to check fresh synthetics demo data (non-fatal): ${it.message}" }
+            0L
+        }
+    }
+
+    private suspend fun purgeSyntheticsDemoData() {
+        runCatching {
+            ClickHouseClient.execute("ALTER TABLE synthetic_results DELETE WHERE 1=1")
+        }.onFailure { logger.warn { "Purge synthetic_results failed (non-fatal): ${it.message}" } }
+    }
+
+    @Suppress("LongMethod")
+    private suspend fun reseedSyntheticsData() {
+        val syntheticsSql = """
+            INSERT INTO synthetic_results (
+                result_id, organization_id, test_id, test_name, test_type,
+                status, probe_dc, duration_ms, error_message, timings, tags, timestamp
+            )
+            SELECT
+                generateUUIDv4(),
+                arrayElement([$P1, $P2, $P3], number % 3 + 1),
+                concat('test-', toString(number % 10 + 1)),
+                arrayElement([
+                    'Homepage availability', 'Login flow', 'API health check',
+                    'Checkout flow', 'Search endpoint', 'User profile API',
+                    'Payment gateway', 'Image upload', 'Auth token refresh',
+                    'Webhook delivery'
+                ], number % 10 + 1),
+                arrayElement(['api', 'browser', 'multistep'], number % 3 + 1),
+                arrayElement(['passed', 'passed', 'passed', 'failed', 'passed'], number % 5 + 1),
+                arrayElement([
+                    'aws:us-east-1', 'aws:eu-west-1', 'aws:ap-southeast-1',
+                    'gcp:us-central1', 'azure:eastus'
+                ], number % 5 + 1),
+                toUInt64(50 + number % 450),
+                if(number % 5 = 3, 'Connection timeout after 30s', ''),
+                map(
+                    'dns', toFloat64(5 + number % 20),
+                    'connect', toFloat64(10 + number % 30),
+                    'ttfb', toFloat64(30 + number % 100)
+                ),
+                map('env', 'production'),
+                now() - INTERVAL (number * 23 % 2880) MINUTE
+            FROM numbers(80)
+        """.trimIndent()
+        runCatching { ClickHouseClient.execute(syntheticsSql) }
+            .onFailure { logger.warn { "Reseed synthetic_results failed (non-fatal): ${it.message}" } }
+
+        logger.info { "Synthetics demo data reseed complete" }
     }
 
     // ── Demo Dashboard Seeding ─────────────────────────────────────────────

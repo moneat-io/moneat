@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as SyntheticsRouteImport } from './routes/synthetics'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReplaysRouteImport } from './routes/replays'
 import { Route as ReleasesRouteImport } from './routes/releases'
@@ -38,7 +40,9 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
+import { Route as SyntheticsIndexRouteImport } from './routes/synthetics.index'
 import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.index'
+import { Route as SecurityIndexRouteImport } from './routes/security.index'
 import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
@@ -51,6 +55,7 @@ import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
+import { Route as SecurityComplianceRouteImport } from './routes/security.compliance'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
@@ -61,9 +66,14 @@ import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
 import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
 import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
+import { Route as MonitoringSbomRouteImport } from './routes/monitoring.sbom'
 import { Route as MonitoringProcessesRouteImport } from './routes/monitoring.processes'
+import { Route as MonitoringNetworkDevicesRouteImport } from './routes/monitoring.network-devices'
 import { Route as MonitoringNetworkRouteImport } from './routes/monitoring.network'
+import { Route as MonitoringKubernetesRouteImport } from './routes/monitoring.kubernetes'
 import { Route as MonitoringEventsRouteImport } from './routes/monitoring.events'
+import { Route as MonitoringDebuggerRouteImport } from './routes/monitoring.debugger'
+import { Route as MonitoringDatabasesRouteImport } from './routes/monitoring.databases'
 import { Route as MonitoringContainersRouteImport } from './routes/monitoring.containers'
 import { Route as LegalTermsRouteImport } from './routes/legal.terms'
 import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
@@ -85,9 +95,14 @@ import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
+import { Route as MonitoringKubernetesIndexRouteImport } from './routes/monitoring.kubernetes.index'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
 import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
+import { Route as MonitoringNetworkDevicesTrapsRouteImport } from './routes/monitoring.network-devices.traps'
+import { Route as MonitoringNetworkDevicesPathsRouteImport } from './routes/monitoring.network-devices.paths'
+import { Route as MonitoringNetworkDevicesFlowsRouteImport } from './routes/monitoring.network-devices.flows'
+import { Route as MonitoringKubernetesResourceTypeRouteImport } from './routes/monitoring.kubernetes.$resourceType'
 import { Route as MonitoringHostsHostIdRouteImport } from './routes/monitoring.hosts.$hostId'
 import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
@@ -111,6 +126,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SyntheticsRoute = SyntheticsRouteImport.update({
+  id: '/synthetics',
+  path: '/synthetics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -119,6 +139,11 @@ const SignupRoute = SignupRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -241,10 +266,20 @@ const UptimeIndexRoute = UptimeIndexRouteImport.update({
   path: '/uptime/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SyntheticsIndexRoute = SyntheticsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SyntheticsRoute,
+} as any)
 const StatusPagesIndexRoute = StatusPagesIndexRouteImport.update({
   id: '/status-pages/',
   path: '/status-pages/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityIndexRoute = SecurityIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SecurityRoute,
 } as any)
 const ProfilesIndexRoute = ProfilesIndexRouteImport.update({
   id: '/',
@@ -306,6 +341,11 @@ const StatusPagesPageIdRoute = StatusPagesPageIdRouteImport.update({
   path: '/status-pages/$pageId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecurityComplianceRoute = SecurityComplianceRouteImport.update({
+  id: '/compliance',
+  path: '/compliance',
+  getParentRoute: () => SecurityRoute,
+} as any)
 const SSlugRoute = SSlugRouteImport.update({
   id: '/s/$slug',
   path: '/s/$slug',
@@ -358,19 +398,45 @@ const OnCallDeclaredIncidentsRoute = OnCallDeclaredIncidentsRouteImport.update({
   path: '/declared-incidents',
   getParentRoute: () => OnCallRoute,
 } as any)
+const MonitoringSbomRoute = MonitoringSbomRouteImport.update({
+  id: '/sbom',
+  path: '/sbom',
+  getParentRoute: () => MonitoringRoute,
+} as any)
 const MonitoringProcessesRoute = MonitoringProcessesRouteImport.update({
   id: '/processes',
   path: '/processes',
   getParentRoute: () => MonitoringRoute,
 } as any)
+const MonitoringNetworkDevicesRoute =
+  MonitoringNetworkDevicesRouteImport.update({
+    id: '/network-devices',
+    path: '/network-devices',
+    getParentRoute: () => MonitoringRoute,
+  } as any)
 const MonitoringNetworkRoute = MonitoringNetworkRouteImport.update({
   id: '/network',
   path: '/network',
   getParentRoute: () => MonitoringRoute,
 } as any)
+const MonitoringKubernetesRoute = MonitoringKubernetesRouteImport.update({
+  id: '/kubernetes',
+  path: '/kubernetes',
+  getParentRoute: () => MonitoringRoute,
+} as any)
 const MonitoringEventsRoute = MonitoringEventsRouteImport.update({
   id: '/events',
   path: '/events',
+  getParentRoute: () => MonitoringRoute,
+} as any)
+const MonitoringDebuggerRoute = MonitoringDebuggerRouteImport.update({
+  id: '/debugger',
+  path: '/debugger',
+  getParentRoute: () => MonitoringRoute,
+} as any)
+const MonitoringDatabasesRoute = MonitoringDatabasesRouteImport.update({
+  id: '/databases',
+  path: '/databases',
   getParentRoute: () => MonitoringRoute,
 } as any)
 const MonitoringContainersRoute = MonitoringContainersRouteImport.update({
@@ -478,6 +544,12 @@ const AdminAttributionRoute = AdminAttributionRouteImport.update({
   path: '/attribution',
   getParentRoute: () => AdminRoute,
 } as any)
+const MonitoringKubernetesIndexRoute =
+  MonitoringKubernetesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => MonitoringKubernetesRoute,
+  } as any)
 const ProjectsProjectIdSettingsRoute =
   ProjectsProjectIdSettingsRouteImport.update({
     id: '/settings',
@@ -495,6 +567,30 @@ const OnCallDeclaredIncidentsIncidentIdRoute =
     id: '/$incidentId',
     path: '/$incidentId',
     getParentRoute: () => OnCallDeclaredIncidentsRoute,
+  } as any)
+const MonitoringNetworkDevicesTrapsRoute =
+  MonitoringNetworkDevicesTrapsRouteImport.update({
+    id: '/traps',
+    path: '/traps',
+    getParentRoute: () => MonitoringNetworkDevicesRoute,
+  } as any)
+const MonitoringNetworkDevicesPathsRoute =
+  MonitoringNetworkDevicesPathsRouteImport.update({
+    id: '/paths',
+    path: '/paths',
+    getParentRoute: () => MonitoringNetworkDevicesRoute,
+  } as any)
+const MonitoringNetworkDevicesFlowsRoute =
+  MonitoringNetworkDevicesFlowsRouteImport.update({
+    id: '/flows',
+    path: '/flows',
+    getParentRoute: () => MonitoringNetworkDevicesRoute,
+  } as any)
+const MonitoringKubernetesResourceTypeRoute =
+  MonitoringKubernetesResourceTypeRouteImport.update({
+    id: '/$resourceType',
+    path: '/$resourceType',
+    getParentRoute: () => MonitoringKubernetesRoute,
   } as any)
 const MonitoringHostsHostIdRoute = MonitoringHostsHostIdRouteImport.update({
   id: '/hosts/$hostId',
@@ -558,8 +654,10 @@ export interface FileRoutesByFullPath {
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/security': typeof SecurityRouteWithChildren
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
@@ -584,9 +682,14 @@ export interface FileRoutesByFullPath {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
+  '/monitoring/databases': typeof MonitoringDatabasesRoute
+  '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
+  '/monitoring/kubernetes': typeof MonitoringKubernetesRouteWithChildren
   '/monitoring/network': typeof MonitoringNetworkRoute
+  '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
+  '/monitoring/sbom': typeof MonitoringSbomRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -597,6 +700,7 @@ export interface FileRoutesByFullPath {
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
+  '/security/compliance': typeof SecurityComplianceRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -609,16 +713,23 @@ export interface FileRoutesByFullPath {
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
+  '/security/': typeof SecurityIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
+  '/synthetics/': typeof SyntheticsIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
+  '/monitoring/kubernetes/$resourceType': typeof MonitoringKubernetesResourceTypeRoute
+  '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
+  '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
+  '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
@@ -664,9 +775,13 @@ export interface FileRoutesByTo {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
+  '/monitoring/databases': typeof MonitoringDatabasesRoute
+  '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
+  '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
+  '/monitoring/sbom': typeof MonitoringSbomRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -677,6 +792,7 @@ export interface FileRoutesByTo {
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
+  '/security/compliance': typeof SecurityComplianceRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin': typeof AdminIndexRoute
@@ -689,16 +805,23 @@ export interface FileRoutesByTo {
   '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
   '/profiles': typeof ProfilesIndexRoute
+  '/security': typeof SecurityIndexRoute
   '/status-pages': typeof StatusPagesIndexRoute
+  '/synthetics': typeof SyntheticsIndexRoute
   '/uptime': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
+  '/monitoring/kubernetes/$resourceType': typeof MonitoringKubernetesResourceTypeRoute
+  '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
+  '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
+  '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
@@ -727,8 +850,10 @@ export interface FileRoutesById {
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/security': typeof SecurityRouteWithChildren
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
@@ -753,9 +878,14 @@ export interface FileRoutesById {
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
+  '/monitoring/databases': typeof MonitoringDatabasesRoute
+  '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
+  '/monitoring/kubernetes': typeof MonitoringKubernetesRouteWithChildren
   '/monitoring/network': typeof MonitoringNetworkRoute
+  '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
+  '/monitoring/sbom': typeof MonitoringSbomRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -766,6 +896,7 @@ export interface FileRoutesById {
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
+  '/security/compliance': typeof SecurityComplianceRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -778,16 +909,23 @@ export interface FileRoutesById {
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
+  '/security/': typeof SecurityIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
+  '/synthetics/': typeof SyntheticsIndexRoute
   '/uptime/': typeof UptimeIndexRoute
   '/admin/organizations/$orgId': typeof AdminOrganizationsOrgIdRoute
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
   '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
+  '/monitoring/kubernetes/$resourceType': typeof MonitoringKubernetesResourceTypeRoute
+  '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
+  '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
+  '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
@@ -817,8 +955,10 @@ export interface FileRouteTypes {
     | '/releases'
     | '/replays'
     | '/reset-password'
+    | '/security'
     | '/settings'
     | '/signup'
+    | '/synthetics'
     | '/terms'
     | '/verify-email'
     | '/verify-email-required'
@@ -843,9 +983,14 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/containers'
+    | '/monitoring/databases'
+    | '/monitoring/debugger'
     | '/monitoring/events'
+    | '/monitoring/kubernetes'
     | '/monitoring/network'
+    | '/monitoring/network-devices'
     | '/monitoring/processes'
+    | '/monitoring/sbom'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -856,6 +1001,7 @@ export interface FileRouteTypes {
     | '/releases/$version'
     | '/replays/$replayId'
     | '/s/$slug'
+    | '/security/compliance'
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
@@ -868,16 +1014,23 @@ export interface FileRouteTypes {
     | '/on-call/'
     | '/performance/'
     | '/profiles/'
+    | '/security/'
     | '/status-pages/'
+    | '/synthetics/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
     | '/monitoring/hosts/$hostId'
+    | '/monitoring/kubernetes/$resourceType'
+    | '/monitoring/network-devices/flows'
+    | '/monitoring/network-devices/paths'
+    | '/monitoring/network-devices/traps'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/settings'
+    | '/monitoring/kubernetes/'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
   fileRoutesByTo: FileRoutesByTo
@@ -923,9 +1076,13 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/containers'
+    | '/monitoring/databases'
+    | '/monitoring/debugger'
     | '/monitoring/events'
     | '/monitoring/network'
+    | '/monitoring/network-devices'
     | '/monitoring/processes'
+    | '/monitoring/sbom'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -936,6 +1093,7 @@ export interface FileRouteTypes {
     | '/releases/$version'
     | '/replays/$replayId'
     | '/s/$slug'
+    | '/security/compliance'
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin'
@@ -948,16 +1106,23 @@ export interface FileRouteTypes {
     | '/on-call'
     | '/performance'
     | '/profiles'
+    | '/security'
     | '/status-pages'
+    | '/synthetics'
     | '/uptime'
     | '/admin/organizations/$orgId'
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
     | '/monitoring/hosts/$hostId'
+    | '/monitoring/kubernetes/$resourceType'
+    | '/monitoring/network-devices/flows'
+    | '/monitoring/network-devices/paths'
+    | '/monitoring/network-devices/traps'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/settings'
+    | '/monitoring/kubernetes'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
   id:
@@ -985,8 +1150,10 @@ export interface FileRouteTypes {
     | '/releases'
     | '/replays'
     | '/reset-password'
+    | '/security'
     | '/settings'
     | '/signup'
+    | '/synthetics'
     | '/terms'
     | '/verify-email'
     | '/verify-email-required'
@@ -1011,9 +1178,14 @@ export interface FileRouteTypes {
     | '/legal/sms-consent'
     | '/legal/terms'
     | '/monitoring/containers'
+    | '/monitoring/databases'
+    | '/monitoring/debugger'
     | '/monitoring/events'
+    | '/monitoring/kubernetes'
     | '/monitoring/network'
+    | '/monitoring/network-devices'
     | '/monitoring/processes'
+    | '/monitoring/sbom'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -1024,6 +1196,7 @@ export interface FileRouteTypes {
     | '/releases/$version'
     | '/replays/$replayId'
     | '/s/$slug'
+    | '/security/compliance'
     | '/status-pages/$pageId'
     | '/uptime/$monitorId'
     | '/admin/'
@@ -1036,16 +1209,23 @@ export interface FileRouteTypes {
     | '/on-call/'
     | '/performance/'
     | '/profiles/'
+    | '/security/'
     | '/status-pages/'
+    | '/synthetics/'
     | '/uptime/'
     | '/admin/organizations/$orgId'
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
     | '/monitoring/hosts/$hostId'
+    | '/monitoring/kubernetes/$resourceType'
+    | '/monitoring/network-devices/flows'
+    | '/monitoring/network-devices/paths'
+    | '/monitoring/network-devices/traps'
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/projects/$projectId/settings'
+    | '/monitoring/kubernetes/'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
   fileRoutesById: FileRoutesById
@@ -1074,8 +1254,10 @@ export interface RootRouteChildren {
   ReleasesRoute: typeof ReleasesRouteWithChildren
   ReplaysRoute: typeof ReplaysRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SecurityRoute: typeof SecurityRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
+  SyntheticsRoute: typeof SyntheticsRouteWithChildren
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
@@ -1119,6 +1301,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/synthetics': {
+      id: '/synthetics'
+      path: '/synthetics'
+      fullPath: '/synthetics'
+      preLoaderRoute: typeof SyntheticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -1131,6 +1320,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -1301,12 +1497,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UptimeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/synthetics/': {
+      id: '/synthetics/'
+      path: '/'
+      fullPath: '/synthetics/'
+      preLoaderRoute: typeof SyntheticsIndexRouteImport
+      parentRoute: typeof SyntheticsRoute
+    }
     '/status-pages/': {
       id: '/status-pages/'
       path: '/status-pages'
       fullPath: '/status-pages/'
       preLoaderRoute: typeof StatusPagesIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/security/': {
+      id: '/security/'
+      path: '/'
+      fullPath: '/security/'
+      preLoaderRoute: typeof SecurityIndexRouteImport
+      parentRoute: typeof SecurityRoute
     }
     '/profiles/': {
       id: '/profiles/'
@@ -1392,6 +1602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StatusPagesPageIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/security/compliance': {
+      id: '/security/compliance'
+      path: '/compliance'
+      fullPath: '/security/compliance'
+      preLoaderRoute: typeof SecurityComplianceRouteImport
+      parentRoute: typeof SecurityRoute
+    }
     '/s/$slug': {
       id: '/s/$slug'
       path: '/s/$slug'
@@ -1462,11 +1679,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallDeclaredIncidentsRouteImport
       parentRoute: typeof OnCallRoute
     }
+    '/monitoring/sbom': {
+      id: '/monitoring/sbom'
+      path: '/sbom'
+      fullPath: '/monitoring/sbom'
+      preLoaderRoute: typeof MonitoringSbomRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
     '/monitoring/processes': {
       id: '/monitoring/processes'
       path: '/processes'
       fullPath: '/monitoring/processes'
       preLoaderRoute: typeof MonitoringProcessesRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
+    '/monitoring/network-devices': {
+      id: '/monitoring/network-devices'
+      path: '/network-devices'
+      fullPath: '/monitoring/network-devices'
+      preLoaderRoute: typeof MonitoringNetworkDevicesRouteImport
       parentRoute: typeof MonitoringRoute
     }
     '/monitoring/network': {
@@ -1476,11 +1707,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringNetworkRouteImport
       parentRoute: typeof MonitoringRoute
     }
+    '/monitoring/kubernetes': {
+      id: '/monitoring/kubernetes'
+      path: '/kubernetes'
+      fullPath: '/monitoring/kubernetes'
+      preLoaderRoute: typeof MonitoringKubernetesRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
     '/monitoring/events': {
       id: '/monitoring/events'
       path: '/events'
       fullPath: '/monitoring/events'
       preLoaderRoute: typeof MonitoringEventsRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
+    '/monitoring/debugger': {
+      id: '/monitoring/debugger'
+      path: '/debugger'
+      fullPath: '/monitoring/debugger'
+      preLoaderRoute: typeof MonitoringDebuggerRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
+    '/monitoring/databases': {
+      id: '/monitoring/databases'
+      path: '/databases'
+      fullPath: '/monitoring/databases'
+      preLoaderRoute: typeof MonitoringDatabasesRouteImport
       parentRoute: typeof MonitoringRoute
     }
     '/monitoring/containers': {
@@ -1630,6 +1882,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAttributionRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/monitoring/kubernetes/': {
+      id: '/monitoring/kubernetes/'
+      path: '/'
+      fullPath: '/monitoring/kubernetes/'
+      preLoaderRoute: typeof MonitoringKubernetesIndexRouteImport
+      parentRoute: typeof MonitoringKubernetesRoute
+    }
     '/projects/$projectId/settings': {
       id: '/projects/$projectId/settings'
       path: '/settings'
@@ -1650,6 +1909,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/on-call/declared-incidents/$incidentId'
       preLoaderRoute: typeof OnCallDeclaredIncidentsIncidentIdRouteImport
       parentRoute: typeof OnCallDeclaredIncidentsRoute
+    }
+    '/monitoring/network-devices/traps': {
+      id: '/monitoring/network-devices/traps'
+      path: '/traps'
+      fullPath: '/monitoring/network-devices/traps'
+      preLoaderRoute: typeof MonitoringNetworkDevicesTrapsRouteImport
+      parentRoute: typeof MonitoringNetworkDevicesRoute
+    }
+    '/monitoring/network-devices/paths': {
+      id: '/monitoring/network-devices/paths'
+      path: '/paths'
+      fullPath: '/monitoring/network-devices/paths'
+      preLoaderRoute: typeof MonitoringNetworkDevicesPathsRouteImport
+      parentRoute: typeof MonitoringNetworkDevicesRoute
+    }
+    '/monitoring/network-devices/flows': {
+      id: '/monitoring/network-devices/flows'
+      path: '/flows'
+      fullPath: '/monitoring/network-devices/flows'
+      preLoaderRoute: typeof MonitoringNetworkDevicesFlowsRouteImport
+      parentRoute: typeof MonitoringNetworkDevicesRoute
+    }
+    '/monitoring/kubernetes/$resourceType': {
+      id: '/monitoring/kubernetes/$resourceType'
+      path: '/$resourceType'
+      fullPath: '/monitoring/kubernetes/$resourceType'
+      preLoaderRoute: typeof MonitoringKubernetesResourceTypeRouteImport
+      parentRoute: typeof MonitoringKubernetesRoute
     }
     '/monitoring/hosts/$hostId': {
       id: '/monitoring/hosts/$hostId'
@@ -1800,20 +2087,61 @@ const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
   FeedbackRouteChildren,
 )
 
+interface MonitoringKubernetesRouteChildren {
+  MonitoringKubernetesResourceTypeRoute: typeof MonitoringKubernetesResourceTypeRoute
+  MonitoringKubernetesIndexRoute: typeof MonitoringKubernetesIndexRoute
+}
+
+const MonitoringKubernetesRouteChildren: MonitoringKubernetesRouteChildren = {
+  MonitoringKubernetesResourceTypeRoute: MonitoringKubernetesResourceTypeRoute,
+  MonitoringKubernetesIndexRoute: MonitoringKubernetesIndexRoute,
+}
+
+const MonitoringKubernetesRouteWithChildren =
+  MonitoringKubernetesRoute._addFileChildren(MonitoringKubernetesRouteChildren)
+
+interface MonitoringNetworkDevicesRouteChildren {
+  MonitoringNetworkDevicesFlowsRoute: typeof MonitoringNetworkDevicesFlowsRoute
+  MonitoringNetworkDevicesPathsRoute: typeof MonitoringNetworkDevicesPathsRoute
+  MonitoringNetworkDevicesTrapsRoute: typeof MonitoringNetworkDevicesTrapsRoute
+}
+
+const MonitoringNetworkDevicesRouteChildren: MonitoringNetworkDevicesRouteChildren =
+  {
+    MonitoringNetworkDevicesFlowsRoute: MonitoringNetworkDevicesFlowsRoute,
+    MonitoringNetworkDevicesPathsRoute: MonitoringNetworkDevicesPathsRoute,
+    MonitoringNetworkDevicesTrapsRoute: MonitoringNetworkDevicesTrapsRoute,
+  }
+
+const MonitoringNetworkDevicesRouteWithChildren =
+  MonitoringNetworkDevicesRoute._addFileChildren(
+    MonitoringNetworkDevicesRouteChildren,
+  )
+
 interface MonitoringRouteChildren {
   MonitoringContainersRoute: typeof MonitoringContainersRoute
+  MonitoringDatabasesRoute: typeof MonitoringDatabasesRoute
+  MonitoringDebuggerRoute: typeof MonitoringDebuggerRoute
   MonitoringEventsRoute: typeof MonitoringEventsRoute
+  MonitoringKubernetesRoute: typeof MonitoringKubernetesRouteWithChildren
   MonitoringNetworkRoute: typeof MonitoringNetworkRoute
+  MonitoringNetworkDevicesRoute: typeof MonitoringNetworkDevicesRouteWithChildren
   MonitoringProcessesRoute: typeof MonitoringProcessesRoute
+  MonitoringSbomRoute: typeof MonitoringSbomRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
   MonitoringHostsHostIdRoute: typeof MonitoringHostsHostIdRoute
 }
 
 const MonitoringRouteChildren: MonitoringRouteChildren = {
   MonitoringContainersRoute: MonitoringContainersRoute,
+  MonitoringDatabasesRoute: MonitoringDatabasesRoute,
+  MonitoringDebuggerRoute: MonitoringDebuggerRoute,
   MonitoringEventsRoute: MonitoringEventsRoute,
+  MonitoringKubernetesRoute: MonitoringKubernetesRouteWithChildren,
   MonitoringNetworkRoute: MonitoringNetworkRoute,
+  MonitoringNetworkDevicesRoute: MonitoringNetworkDevicesRouteWithChildren,
   MonitoringProcessesRoute: MonitoringProcessesRoute,
+  MonitoringSbomRoute: MonitoringSbomRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
   MonitoringHostsHostIdRoute: MonitoringHostsHostIdRoute,
 }
@@ -1946,6 +2274,32 @@ const ReplaysRouteChildren: ReplaysRouteChildren = {
 const ReplaysRouteWithChildren =
   ReplaysRoute._addFileChildren(ReplaysRouteChildren)
 
+interface SecurityRouteChildren {
+  SecurityComplianceRoute: typeof SecurityComplianceRoute
+  SecurityIndexRoute: typeof SecurityIndexRoute
+}
+
+const SecurityRouteChildren: SecurityRouteChildren = {
+  SecurityComplianceRoute: SecurityComplianceRoute,
+  SecurityIndexRoute: SecurityIndexRoute,
+}
+
+const SecurityRouteWithChildren = SecurityRoute._addFileChildren(
+  SecurityRouteChildren,
+)
+
+interface SyntheticsRouteChildren {
+  SyntheticsIndexRoute: typeof SyntheticsIndexRoute
+}
+
+const SyntheticsRouteChildren: SyntheticsRouteChildren = {
+  SyntheticsIndexRoute: SyntheticsIndexRoute,
+}
+
+const SyntheticsRouteWithChildren = SyntheticsRoute._addFileChildren(
+  SyntheticsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptInviteRoute: AcceptInviteRoute,
@@ -1970,8 +2324,10 @@ const rootRouteChildren: RootRouteChildren = {
   ReleasesRoute: ReleasesRouteWithChildren,
   ReplaysRoute: ReplaysRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  SecurityRoute: SecurityRouteWithChildren,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
+  SyntheticsRoute: SyntheticsRouteWithChildren,
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,

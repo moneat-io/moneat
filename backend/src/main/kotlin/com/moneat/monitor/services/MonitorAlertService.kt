@@ -433,9 +433,9 @@ class MonitorAlertService {
             when (metric) {
                 "cpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.cpu.percent'"
                 "mem_percent" ->
-                    "argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) / " +
-                        "nullIf(argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp), 0) * 100" to
-                        "metric_name IN ('system.mem.used','system.mem.total')"
+                    "(1 - argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) / " +
+                        "nullIf(argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp), 0)) * 100" to
+                        "metric_name IN ('system.mem.available','system.mem.total')"
                 "disk_percent" ->
                     "argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) / " +
                         "nullIf(argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp), 0) * 100" to
@@ -493,6 +493,7 @@ class MonitorAlertService {
         val (query, usesDerived) =
             when (alert.metric) {
                 "mem_percent", "disk_percent" -> {
+                    val availName = if (alert.metric == "mem_percent") "system.mem.available" else null
                     val usedName = if (alert.metric == "mem_percent") "system.mem.used" else "system.disk.used"
                     val totalName = if (alert.metric == "mem_percent") "system.mem.total" else "system.disk.total"
                     val havingClause =
@@ -504,14 +505,25 @@ class MonitorAlertService {
                             "==" -> "pct == ${alert.threshold}"
                             else -> return false
                         }
+                    val pctExpr = if (availName != null) {
+                        "(1 - max(CASE WHEN metric_name='$availName' THEN value END) / " +
+                            "nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0)) * 100"
+                    } else {
+                        "max(CASE WHEN metric_name='$usedName' THEN value END) / " +
+                            "nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0) * 100"
+                    }
+                    val metricFilter = if (availName != null) {
+                        "metric_name IN ('$availName','$totalName')"
+                    } else {
+                        "metric_name IN ('$usedName','$totalName')"
+                    }
                     val q =
                         """
                         SELECT count(*) as cnt FROM (
                             SELECT timestamp,
-                                max(CASE WHEN metric_name='$usedName' THEN value END) /
-                                nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0) * 100 as pct
+                                $pctExpr as pct
                             FROM $clickhouseDb.metrics
-                            WHERE $baseFilter AND metric_name IN ('$usedName','$totalName')
+                            WHERE $baseFilter AND $metricFilter
                             GROUP BY timestamp
                             HAVING $havingClause
                         )

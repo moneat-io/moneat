@@ -37,15 +37,18 @@ import {
     ChevronRight,
     Cpu,
     Flame,
+    FlaskConical,
     Globe,
     Home,
     LayoutDashboard,
     MessageSquare,
     Package,
     Play,
+    Rocket,
     ScrollText,
     Server,
     Shield,
+    ShieldAlert,
     Timer,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
@@ -221,8 +224,10 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
     ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
     ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'apm-traces', icon: Cpu, label: 'APM Traces', href: '/apm-traces', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
+      { key: 'apm-traces', icon: Cpu, label: 'APM Traces', href: '/apm-traces', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
+      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
+      { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
+      { key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
     ] : []),
     // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
@@ -233,7 +238,7 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   })
 
   const projectNavItems = activeProjectId ? [
-    { icon: BookOpen, label: 'Setup Guide', href: `/projects/${activeProjectId}` },
+    { icon: Rocket, label: 'Setup Guide', href: `/projects/${activeProjectId}` },
   ] : []
 
   const renderSidebarContent = () => (
@@ -380,6 +385,29 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
             </Tooltip>
           )}
         </div>
+
+        {/* Documentation Link */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href="/docs/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                'flex items-center gap-3 py-2 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent',
+                isExpanded ? 'px-3' : 'px-2 justify-center'
+              )}
+            >
+              <BookOpen className="h-5 w-5 flex-shrink-0" />
+              {isExpanded && <span className="text-sm font-medium">Documentation</span>}
+            </a>
+          </TooltipTrigger>
+          {!isExpanded && (
+            <TooltipContent side="right">
+              <p>Documentation</p>
+            </TooltipContent>
+          )}
+        </Tooltip>
 
         {/* Expand/Collapse Button */}
         <Button

@@ -17,6 +17,7 @@
 package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
 import com.moneat.events.models.SentryEnvelope
@@ -68,6 +69,10 @@ class EventService(private val notificationService: NotificationService? = null)
     private val usageTracker = UsageTrackingService.instance
     private val releaseService = ReleaseService()
     private val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    private val profileStoragePath: String = EnvConfig.get(
+        "PROFILE_STORAGE_PATH",
+        "/var/lib/moneat/profiles"
+    )
 
     // In-memory caches for hot-path lookups (project keys & org IDs rarely change)
     private data class CachedEntry<T>(val value: T, val expiresAt: Long)
@@ -202,6 +207,13 @@ class EventService(private val notificationService: NotificationService? = null)
                     recordUsage(projectId, "replay", item)
                     lastReplayId = null
                     lastSegmentId = 0
+                }
+
+                "profile" -> {
+                    logger.debug { "Profile payload: ${item.payload.take(500)}" }
+                    if (storeProfile(projectId, item.payload)) {
+                        recordUsage(projectId, "profile", item)
+                    }
                 }
 
                 "feedback" -> {
@@ -1074,6 +1086,101 @@ class EventService(private val notificationService: NotificationService? = null)
     ): Double {
         if (start == null || end == null) return 0.0
         return ((end - start) * 1000.0).coerceAtLeast(0.0)
+    }
+
+    private suspend fun storeProfile(
+        projectId: Long,
+        payload: String
+    ): Boolean {
+        if (projectId == 0L) {
+            logger.error { "Invalid projectId $projectId for profile, skipping insert" }
+            return false
+        }
+        val orgId = getOrganizationIdForProject(projectId)
+        if (orgId == null) {
+            logger.error { "Missing organization for projectId $projectId, skipping profile insert" }
+            return false
+        }
+        try {
+            val profileJson = json.parseToJsonElement(payload).jsonObject
+
+            val transactionName = profileJson["transaction_name"]
+                ?.jsonPrimitive?.contentOrNull ?: ""
+            val platform = profileJson["platform"]
+                ?.jsonPrimitive?.contentOrNull ?: ""
+            val runtimeObj = profileJson["runtime"]?.jsonObject
+            val runtimeName = runtimeObj?.get("name")
+                ?.jsonPrimitive?.contentOrNull ?: ""
+            val runtimeVersion = runtimeObj?.get("version")
+                ?.jsonPrimitive?.contentOrNull ?: ""
+            val runtime = if (runtimeVersion.isNotEmpty()) {
+                "$runtimeName $runtimeVersion"
+            } else {
+                runtimeName
+            }
+            val environment = profileJson["environment"]
+                ?.jsonPrimitive?.contentOrNull ?: ""
+            val release = profileJson["release"]
+                ?.jsonPrimitive?.contentOrNull ?: ""
+
+            val profileId = profileJson["event_id"]
+                ?.jsonPrimitive?.contentOrNull
+                ?: UUID.randomUUID().toString()
+            val normalizedId = normalizeUuid(profileId)
+
+            val storageKey = "$orgId/$normalizedId.profile.json"
+            val storageDir = java.io.File(profileStoragePath)
+            val storageFile = java.io.File(storageDir, storageKey)
+            storageFile.parentFile.mkdirs()
+            storageFile.writeText(payload)
+
+            val nowMs = System.currentTimeMillis()
+            val durationNs = profileJson["duration_ns"]
+                ?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                ?: 0L
+            val payloadSize = payload.toByteArray(
+                StandardCharsets.UTF_8
+            ).size
+
+            val insert = """
+                INSERT INTO $clickhouseDb.profiles (
+                    profile_id, organization_id,
+                    host, service, env, version,
+                    runtime, language, profile_type,
+                    start_time, end_time, duration_ns,
+                    storage_key, tags, size_bytes, source
+                ) VALUES (
+                    generateUUIDv4(),
+                    $orgId,
+                    '',
+                    '${escapeSql(transactionName)}',
+                    '${escapeSql(environment)}',
+                    '${escapeSql(release)}',
+                    '${escapeSql(runtime)}',
+                    '${escapeSql(platform)}',
+                    'cpu',
+                    fromUnixTimestamp64Milli($nowMs),
+                    fromUnixTimestamp64Milli(${nowMs + durationNs / 1_000_000}),
+                    $durationNs,
+                    '${escapeSql(storageKey)}',
+                    map(),
+                    $payloadSize,
+                    'sentry'
+                )
+            """.trimIndent()
+
+            val response = ClickHouseClient.execute(insert)
+            if (!response.status.isSuccess()) {
+                logger.error {
+                    "Failed to insert Sentry profile into ClickHouse"
+                }
+                return false
+            }
+            return true
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to store Sentry profile" }
+            return false
+        }
     }
 
     private fun escapeSql(str: String): String {

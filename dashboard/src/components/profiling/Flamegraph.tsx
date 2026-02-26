@@ -61,6 +61,7 @@ function flattenFrames(
   depth: number = 0,
   x: number = 0,
 ): FlatFrame[] {
+  if (totalValue <= 0) return []
   const result: FlatFrame[] = []
   let currentX = x
 

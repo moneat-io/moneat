@@ -22,7 +22,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react'
-import {useState, useCallback, useMemo} from 'react'
+import {useState, useCallback} from 'react'
 
 export const Route = createFileRoute('/apm-traces/$traceId')({
   component: TraceDetailPage,
@@ -116,7 +116,6 @@ function TraceDetailPage() {
     : Math.max(...spans.map((s) => s.durationNs))
   const services = [...new Set(spans.map((s) => s.service))]
   const errorCount = spans.filter((s) => s.error > 0).length
-  const spanTypes = [...new Set(spans.map((s) => s.type).filter(Boolean))]
 
   return (
     <div className="p-6 space-y-5">

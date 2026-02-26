@@ -20,9 +20,14 @@ import {useEnterpriseFeatures, hasEnterpriseModule} from '@/hooks/useEnterpriseF
 import {
     ArrowLeft,
     Box,
+    Bug,
     CalendarClock,
+    Database,
     HardDrive,
     Network,
+    Package,
+    Router,
+    Ship,
     Terminal,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
@@ -43,9 +48,17 @@ const allTabs = [
   {id: 'processes', label: 'Processes', href: '/monitoring/processes', icon: Terminal, requiresDatadog: true},
   {id: 'network', label: 'Network', href: '/monitoring/network', icon: Network, requiresDatadog: true},
   {id: 'events', label: 'Events', href: '/monitoring/events', icon: CalendarClock, requiresDatadog: true},
+  {id: 'kubernetes', label: 'Kubernetes', href: '/monitoring/kubernetes', icon: Ship, requiresDatadog: true},
+  {id: 'databases', label: 'Databases', href: '/monitoring/databases', icon: Database, requiresDatadog: true},
+  {id: 'debugger', label: 'Debugger', href: '/monitoring/debugger', icon: Bug, requiresDatadog: true},
+  {id: 'network-devices', label: 'Network Devices', href: '/monitoring/network-devices', icon: Router, requiresDatadog: true},
+  {id: 'sbom', label: 'SBOM', href: '/monitoring/sbom', icon: Package, requiresDatadog: true},
 ]
 
-const KNOWN_TAB_PATHS = ['hosts', 'containers', 'processes', 'network', 'events']
+const KNOWN_TAB_PATHS = [
+  'hosts', 'containers', 'processes', 'network', 'events',
+  'kubernetes', 'databases', 'debugger', 'network-devices', 'sbom',
+]
 
 function MonitoringLayout() {
   const router = useRouterState()

@@ -150,7 +150,7 @@ export function ContainerList() {
         queryFn: async () => {
           try {
             const res = await api.getContainers({limit: 200})
-            return res.containers.map((c) => ({
+            const mapped = res.containers.map((c) => ({
             id: `dd-${c.host}-${c.containerId}`,
             host: c.host,
             containerId: c.containerId,
@@ -165,6 +165,16 @@ export function ContainerList() {
             source: 'datadog-agent' as const,
             timestamp: c.timestamp,
           } satisfies MergedContainer))
+            // Deduplicate by (host, containerId), keeping the most recent entry
+            const seen = new Map<string, MergedContainer>()
+            for (const c of mapped) {
+              const key = `${c.host}::${c.containerId}`
+              const existing = seen.get(key)
+              if (!existing || (c.timestamp ?? '') > (existing.timestamp ?? '')) {
+                seen.set(key, c)
+              }
+            }
+            return Array.from(seen.values())
           } catch {
             return []
           }

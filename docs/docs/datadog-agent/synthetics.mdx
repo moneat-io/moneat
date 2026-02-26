@@ -1,0 +1,40 @@
+---
+sidebar_position: 9
+title: Synthetic Tests
+description: View synthetic test results from the Datadog Agent in the Moneat dashboard.
+---
+
+# Synthetic Tests
+
+## Overview
+
+Moneat displays synthetic test results reported by the Datadog Agent. Tests themselves are created and managed in Datadog — Moneat receives the results and surfaces them in one place alongside your other observability data.
+
+:::info Enterprise feature
+Synthetic test result ingestion requires the Datadog Agent integration, available on Enterprise plans.
+:::
+
+## Prerequisites
+
+- The Datadog Agent deployed and connected to Moneat (see [Agent Setup](/datadog-agent/agent-setup))
+- Synthetic tests configured in your Datadog account
+- The Enterprise `datadog` module enabled
+
+## Creating Tests
+
+Tests are created and scheduled in Datadog, not in Moneat. Refer to the [Datadog Synthetic Monitoring documentation](https://docs.datadoghq.com/synthetics/) for how to create API tests, multistep API tests, and browser tests.
+
+Once a test runs, the Datadog Agent forwards the results to Moneat automatically.
+
+## Viewing Test Results
+
+Navigate to **Synthetics** in the sidebar to see all incoming test results.
+
+| Column | Description |
+|---|---|
+| **Test Name** | The name of the synthetic test as defined in Datadog |
+| **Type** | Test type (API, multistep, or browser) |
+| **Status** | `passed`, `failed`, or `skipped` |
+| **Duration** | Test execution time in milliseconds |
+| **Probe** | The datacenter or location the test ran from |
+| **Time** | When the result was recorded |

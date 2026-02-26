@@ -20,7 +20,8 @@ import {api, type DdHostResponse} from '@/lib/api'
 import {cn, formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent} from '@/components/ui/card'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Separator} from '@/components/ui/separator'
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,9 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/c
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {
+  Activity,
+  ArrowUpRight,
+  BookOpen,
   Check,
   CheckCircle2,
   CircleCheck,
@@ -46,12 +50,15 @@ import {
   Loader2,
   MemoryStick,
   Microchip,
+  Network,
   Plus,
   Search,
   Server,
   ServerOff,
   Terminal,
   Zap,
+  LayoutGrid,
+  List,
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
 import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
@@ -445,11 +452,175 @@ function SortIndicator({field, sortField, sortDir}: {field: SortField; sortField
   return <span className="ml-1 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
 }
 
+function HostCard({host}: {host: DdHostResponse}) {
+  const online = isOnline(host.lastSeenAt)
+
+  return (
+    <Link
+      to="/monitoring/hosts/$hostId"
+      params={{hostId: String(host.id)}}
+      className="block group"
+    >
+      <Card className="relative overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 group-hover:-translate-y-0.5">
+        {/* Top color accent bar */}
+        <div
+          className={cn(
+            'absolute top-0 left-0 right-0 h-1',
+            online
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+              : 'bg-gradient-to-r from-red-500 to-rose-500'
+          )}
+        />
+
+        <CardHeader className="pb-3 pt-5">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={cn(
+                  'flex items-center justify-center h-10 w-10 rounded-lg shrink-0',
+                  online ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                )}
+              >
+                {online ? <Server className="h-5 w-5" /> : <ServerOff className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0">
+                <CardTitle className="text-base truncate">{host.hostname}</CardTitle>
+                {host.os && (
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{host.os}</p>
+                )}
+              </div>
+            </div>
+            <Badge
+              variant={online ? 'default' : 'secondary'}
+              className={cn(
+                'text-xs shrink-0',
+                online
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/20'
+                  : 'bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/20 border-red-500/20'
+              )}
+            >
+              <div
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full mr-1.5',
+                  online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                )}
+              />
+              {online ? 'up' : 'down'}
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4 pb-5">
+          {/* Primary Metrics - Cores, Memory, Agent */}
+          <div className="grid grid-cols-3 gap-3">
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+                    <div className="flex h-10 w-10 items-center justify-center">
+                      <span className="text-lg font-bold tabular-nums text-violet-600 dark:text-violet-400">
+                        {host.cpuCores ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Cpu className="h-3 w-3" />
+                      <span>Cores</span>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>CPU Cores: {host.cpuCores ?? '—'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+                    <div className="flex h-10 w-10 items-center justify-center">
+                      <span className="text-xs font-bold tabular-nums text-orange-600 dark:text-orange-400 leading-tight text-center">
+                        {host.memoryTotalKb ? formatBytes(host.memoryTotalKb) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MemoryStick className="h-3 w-3" />
+                      <span>RAM</span>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Memory: {host.memoryTotalKb ? formatBytes(host.memoryTotalKb) : '—'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+                    <div className="flex h-10 w-10 items-center justify-center">
+                      <span className="text-xs font-bold tabular-nums text-sky-600 dark:text-sky-400 font-mono">
+                        v{host.agentVersion || '?'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Activity className="h-3 w-3" />
+                      <span>Agent</span>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Agent Version: {host.agentVersion ? `v${host.agentVersion}` : '—'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          <Separator />
+
+          {/* Secondary Metrics */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Microchip className="h-3.5 w-3.5 text-violet-500" />
+                <span className="text-xs">Processor</span>
+              </div>
+              <span className="font-mono text-xs font-medium truncate max-w-[120px]" title={host.processor}>
+                {host.processor || '—'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Network className="h-3.5 w-3.5 text-sky-500" />
+                <span className="text-xs">Platform</span>
+              </div>
+              <span className="font-mono text-xs font-medium truncate max-w-[120px]" title={host.platform}>
+                {host.platform || host.os || '—'}
+              </span>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs text-muted-foreground">
+              {host.lastSeenAt ? formatRelativeTime(host.lastSeenAt) : 'Never seen'}
+            </span>
+            <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  )
+}
+
 function MonitoringHostsPage() {
   const navigate = useNavigate()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
   const [sortField, setSortField] = useState<SortField>('hostname')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -533,13 +704,23 @@ function MonitoringHostsPage() {
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Hosts</h1>
-              <p className="text-muted-foreground mt-1">
-                Monitor your infrastructure with the Datadog-compatible agent
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                <HardDrive className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Hosts</h1>
+                <p className="text-muted-foreground mt-1">
+                  Monitor your infrastructure with the Datadog-compatible agent
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <a href="/docs/datadog-agent/agent-setup" target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <BookOpen className="h-4 w-4" />
+                View docs
+              </a>
               {isAtLimit ? (
                 <TooltipProvider>
                   <Tooltip>
@@ -612,27 +793,53 @@ function MonitoringHostsPage() {
                 className="pl-9"
               />
             </div>
-            <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
-              {([
-                {key: 'all' as const, color: 'bg-blue-500', count: hosts.length},
-                {key: 'online' as const, color: 'bg-emerald-500', count: onlineCount},
-                {key: 'offline' as const, color: 'bg-red-500', count: offlineCount},
-              ]).map((f) => (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+                {([
+                  {key: 'all' as const, color: 'bg-blue-500', count: hosts.length},
+                  {key: 'online' as const, color: 'bg-emerald-500', count: onlineCount},
+                  {key: 'offline' as const, color: 'bg-red-500', count: offlineCount},
+                ]).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setStatusFilter(f.key)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      statusFilter === f.key
+                        ? 'bg-secondary text-secondary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    )}
+                  >
+                    <div className={cn('h-1.5 w-1.5 rounded-full', f.color)} />
+                    <span className="capitalize">{f.key}</span>
+                    <span className="ml-0.5 text-[10px] text-muted-foreground">{f.count}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
                 <button
-                  key={f.key}
-                  onClick={() => setStatusFilter(f.key)}
+                  onClick={() => setViewMode('grid')}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                    statusFilter === f.key
+                    'p-1.5 rounded-md transition-colors',
+                    viewMode === 'grid'
                       ? 'bg-secondary text-secondary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
                 >
-                  <div className={cn('h-1.5 w-1.5 rounded-full', f.color)} />
-                  <span className="capitalize">{f.key}</span>
-                  <span className="ml-0.5 text-[10px] text-muted-foreground">{f.count}</span>
+                  <LayoutGrid className="h-4 w-4" />
                 </button>
-              ))}
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={cn(
+                    'p-1.5 rounded-md transition-colors',
+                    viewMode === 'list'
+                      ? 'bg-secondary text-secondary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  )}
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -662,6 +869,12 @@ function MonitoringHostsPage() {
           <div className="text-center py-12 text-muted-foreground">
             <p className="font-medium">No hosts match your filters</p>
             <p className="text-sm mt-1">Try adjusting your search or status filter.</p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filtered.map((host) => (
+              <HostCard key={host.id} host={host} />
+            ))}
           </div>
         ) : (
           <Card className="overflow-hidden border-border/60 shadow-sm">

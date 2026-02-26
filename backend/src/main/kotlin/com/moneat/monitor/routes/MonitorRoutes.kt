@@ -182,6 +182,9 @@ fun Route.monitorRoutes(
                     }
                 }
 
+                // Ingest metrics and get poll interval
+                val intervalSeconds = monitorService.ingestMetrics(systemId, organizationId, payload)
+
                 if (metricCount > 0) {
                     usageTracking.recordOrgUsage(
                         organizationId = organizationId,
@@ -189,9 +192,6 @@ fun Route.monitorRoutes(
                         count = metricCount
                     )
                 }
-
-                // Ingest metrics and get poll interval
-                val intervalSeconds = monitorService.ingestMetrics(systemId, organizationId, payload)
 
                 call.respond(
                     HttpStatusCode.OK,

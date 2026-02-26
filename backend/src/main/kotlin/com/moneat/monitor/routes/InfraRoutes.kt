@@ -61,6 +61,16 @@ private fun parseLimit(limitParam: String?): Int {
 }
 
 /**
+ * Validates that a filter value is safe for SQL interpolation (alphanumeric, hyphen, underscore, dot only).
+ * Returns the value if safe, null otherwise to prevent SQL injection.
+ */
+private fun safeFilterValue(value: String?): String? {
+    if (value == null || value.isEmpty()) return null
+    val safePattern = Regex("^[a-zA-Z0-9_\\-.]+$")
+    return if (safePattern.matches(value)) value else null
+}
+
+/**
  * Converts ClickHouse snake_case JSON keys to camelCase.
  */
 private fun snakeToCamel(snake: String): String {
@@ -113,8 +123,8 @@ fun Route.infraRoutes() {
                 val conditions = mutableListOf(
                     "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
-                if (host != null) conditions.add("host = '$host'")
-                if (alertType != null) conditions.add("alert_type = '$alertType'")
+                safeFilterValue(host)?.let { conditions.add("host = '$it'") }
+                safeFilterValue(alertType)?.let { conditions.add("alert_type = '$it'") }
 
                 val query = """
                     SELECT * FROM infra_events
@@ -177,7 +187,7 @@ fun Route.infraRoutes() {
                 val conditions = mutableListOf(
                     "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
-                if (host != null) conditions.add("host = '$host'")
+                safeFilterValue(host)?.let { conditions.add("host = '$it'") }
 
                 val query = """
                     SELECT * FROM processes
@@ -210,7 +220,7 @@ fun Route.infraRoutes() {
                 val conditions = mutableListOf(
                     "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
-                if (host != null) conditions.add("host = '$host'")
+                safeFilterValue(host)?.let { conditions.add("host = '$it'") }
 
                 val query = """
                     SELECT * FROM containers
@@ -274,9 +284,7 @@ fun Route.infraRoutes() {
                 val conditions = mutableListOf(
                     "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
-                if (resourceType != null) {
-                    conditions.add("resource_type = '$resourceType'")
-                }
+                safeFilterValue(resourceType)?.let { conditions.add("resource_type = '$it'") }
 
                 val query = """
                     SELECT * FROM k8s_resources

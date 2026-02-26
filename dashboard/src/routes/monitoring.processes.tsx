@@ -9,6 +9,7 @@
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {ProcessExplorer} from '@/components/monitoring/ProcessExplorer'
+import {BookOpen, Terminal} from 'lucide-react'
 
 export const Route = createFileRoute('/monitoring/processes')({
   beforeLoad: () => {
@@ -21,7 +22,23 @@ export const Route = createFileRoute('/monitoring/processes')({
 
 function MonitoringProcessesPage() {
   return (
-    <div className="container mx-auto px-4 py-4">
+    <div className="container mx-auto px-4 py-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600">
+            <Terminal className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Processes</h1>
+            <p className="text-muted-foreground mt-1">Running processes and resource consumption</p>
+          </div>
+        </div>
+        <a href="/docs/datadog-agent/" target="_blank" rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <BookOpen className="h-4 w-4" />
+          View docs
+        </a>
+      </div>
       <ProcessExplorer />
     </div>
   )

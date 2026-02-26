@@ -81,11 +81,6 @@ function ApmTracesIndexPage() {
     }
   }, [traces, data?.totalCount])
 
-  const availableServices = useMemo(
-    () => [...new Set(traces.map((t) => t.rootService))].sort(),
-    [traces]
-  )
-
   const availableEnvs = useMemo(() => {
     const envs = new Set<string>()
     // We don't have env on ApmTraceListItem, so this is placeholder

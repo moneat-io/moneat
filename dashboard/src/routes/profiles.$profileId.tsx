@@ -8,7 +8,7 @@
 
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api, type FlamegraphFrame} from '@/lib/api'
+import {api} from '@/lib/api'
 import {Flamegraph} from '@/components/profiling/Flamegraph'
 import {Card, CardContent} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
@@ -78,7 +78,7 @@ function ProfileDetailPage() {
   const {profileId} = Route.useParams()
 
   const {data: profilesData, isLoading} = useQuery({
-    queryKey: ['profiles'],
+    queryKey: ['profiles', {limit: 200}],
     queryFn: () => api.getProfiles({limit: 200}),
     enabled: api.isAuthenticated(),
   })
@@ -93,13 +93,21 @@ function ProfileDetailPage() {
     enabled: api.isAuthenticated() && !!profileId,
   })
 
-  const frames = flamegraphData?.frames as FlamegraphFrame[] | undefined
+  const frames = flamegraphData?.frames
 
   if (isLoading) {
     return (
       <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">Loading profile...</p>
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
+        <p className="text-sm text-muted-foreground">Profile not found</p>
       </div>
     )
   }
@@ -117,7 +125,7 @@ function ProfileDetailPage() {
             className="h-8 w-8 mt-0.5 shrink-0"
             asChild
           >
-            <Link to="/profiles">
+            <Link to="/profiles" search={{tab: 'sentry'}}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -146,11 +154,14 @@ function ProfileDetailPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="shrink-0" asChild>
-          <a href={api.getProfileDownloadUrl(profileId)} download>
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Download pprof
-          </a>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => api.downloadProfile(profileId)}
+        >
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Download pprof
         </Button>
       </div>
 

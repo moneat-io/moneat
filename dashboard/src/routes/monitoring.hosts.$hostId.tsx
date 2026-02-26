@@ -956,7 +956,11 @@ function HostDetailPage() {
                       </defs>
                       <CartesianGrid {...commonGrid} />
                       <XAxis {...commonXAxis} />
-                      <YAxis {...commonYAxis} />
+                      <YAxis
+                        {...commonYAxis}
+                        width={60}
+                        tickFormatter={(value) => formatBytesShort(value)}
+                      />
                       <Tooltip
                         content={
                           <ChartTooltip
@@ -995,7 +999,7 @@ function HostDetailPage() {
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-6">
-            <AlertsTab systemId={`host:${hostId}`} />
+            <AlertsTab systemId={host.tags?.system_id ?? `host:${hostId}`} />
           </TabsContent>
         </Tabs>
       </div>

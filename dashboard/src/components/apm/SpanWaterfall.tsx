@@ -65,18 +65,6 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(2)}s`
 }
 
-function formatTimestamp(ns: number): string {
-  if (!ns) return '—'
-  const date = new Date(ns / 1_000_000)
-  return date.toLocaleTimeString(undefined, {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    fractionalSecondDigits: 3,
-  } as Intl.DateTimeFormatOptions)
-}
-
 function buildTree(spans: ApmSpanResponse[]): SpanNode[] {
   const spanMap = new Map<string, SpanNode>()
   const roots: SpanNode[] = []

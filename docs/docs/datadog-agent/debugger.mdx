@@ -1,0 +1,128 @@
+---
+sidebar_position: 8
+title: Dynamic Instrumentation
+description: Debug live applications without redeploying using dynamic probes for logs, metrics, and snapshots.
+---
+
+# Dynamic Instrumentation
+
+## Overview
+
+Dynamic Instrumentation (also called the Debugger) lets you add observability probes to your running applications without restarting or redeploying them. Insert log probes, metric probes, or snapshot probes at any method or line of code, and the agent captures the data in real time.
+
+:::info Enterprise feature
+Dynamic Instrumentation requires the Datadog Agent integration, available on Enterprise plans.
+:::
+
+## Prerequisites
+
+- A supported application runtime (Java, Python, .NET, or Node.js)
+- The Datadog Agent deployed alongside your application (see [Agent Setup](/datadog-agent/agent-setup))
+- The application's tracing library configured with Dynamic Instrumentation support
+- The Enterprise `datadog` module enabled
+
+## Enable Dynamic Instrumentation
+
+### Java Example
+
+Add the Dynamic Instrumentation flags when launching your application:
+
+```bash
+java -javaagent:/path/to/dd-java-agent.jar \
+  -Ddd.service=my-service \
+  -Ddd.dynamic.instrumentation.enabled=true \
+  -Ddd.trace.agent.url=https://api.moneat.io/dd \
+  -jar myapp.jar
+```
+
+### Python Example
+
+```bash
+DD_DYNAMIC_INSTRUMENTATION_ENABLED=true \
+DD_SERVICE=my-service \
+DD_TRACE_AGENT_URL=https://api.moneat.io/dd \
+ddtrace-run python myapp.py
+```
+
+Ensure the Datadog Agent is running and reachable from your application.
+
+## Creating Probes
+
+Navigate to **Monitoring → Debugger** in the dashboard and click **Create Probe**.
+
+### 1. Select probe type
+
+| Type | What it does |
+|---|---|
+| **Log probe** | Captures a log message with variable values each time the target line is executed |
+| **Metric probe** | Increments a counter or records a gauge/histogram at a specific code location |
+| **Snapshot probe** | Captures the full local variable state (a "snapshot") for inspection |
+
+### 2. Target a location
+
+Specify where in your code the probe should be inserted:
+
+- **Service** — the name of the instrumented service (must match `DD_SERVICE`)
+- **File / Class** — the source file path or fully qualified class name (e.g., `com.example.OrderService`)
+- **Method or Line** — the method name, or a specific line number within the file
+
+### 3. Configure capture options
+
+Depending on the probe type, you can set:
+
+- **Condition** — a boolean expression evaluated at the probe site (e.g., `user.id == 42`); the probe only fires when the condition is `true`
+- **Message template** (log probes) — a template string that can reference in-scope variables using `{}` (e.g., `"Order {orderId} placed by {user.email}"`)
+- **Metric name and type** (metric probes) — the metric name and whether it is a `count`, `gauge`, or `histogram`
+- **Capture depth** (snapshot probes) — how many levels deep to capture nested objects
+
+### 4. Save and activate
+
+Click **Save**. The configuration is pushed to the Datadog Agent, which injects the probe at the next opportunity without restarting your application. Monitor the **Probe Status** panel to confirm the probe reaches **Emitting** state.
+
+To remove a probe, click the **⋮** menu next to it in the Probe Status table and select **Delete**.
+
+## Dashboard View
+
+Navigate to **Monitoring → Debugger** in the dashboard to see two panels:
+
+### Probe Status
+
+Shows diagnostics for all configured probes:
+
+| Column | Description |
+|---|---|
+| **Probe ID** | Unique identifier for the probe |
+| **Service** | The application service the probe is attached to |
+| **Type** | Probe type (log, metric, or snapshot) |
+| **Status** | Current probe state |
+| **Message** | Status details or error messages |
+| **Updated** | When the probe status was last updated |
+
+Probe statuses include:
+
+- **Received** — The agent has received the probe configuration
+- **Installed** — The probe has been injected into the running application
+- **Emitting** — The probe is actively capturing and sending data
+- **Error** — The probe encountered an error during installation or execution
+- **Blocked** — The probe was blocked (e.g., rate limiting or security rules)
+
+### Probe Logs
+
+Displays log output captured by active log probes:
+
+| Column | Description |
+|---|---|
+| **Probe ID** | The probe that generated the log entry |
+| **Service** | The instrumented service |
+| **Message** | The captured log message, including variable values |
+| **Timestamp** | When the log was captured |
+
+## Use Cases
+
+- **Debug production issues** — Add a log probe to capture variable values at a specific line without redeploying
+- **Validate fixes** — Instrument a code path to confirm a bug fix is working before removing the probe
+- **Ad-hoc metrics** — Create metric probes to count method invocations or measure execution time for specific code paths
+
+:::tip
+Start with log probes to capture context around a known issue. Once you identify the root cause, remove the probe to avoid unnecessary overhead.
+:::

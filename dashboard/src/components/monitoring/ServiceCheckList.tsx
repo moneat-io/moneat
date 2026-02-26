@@ -91,7 +91,7 @@ export function ServiceCheckList() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const {data, isLoading} = useQuery({
-    queryKey: ['serviceChecks', searchQuery],
+    queryKey: ['serviceChecks'],
     queryFn: () =>
       api.getServiceChecks({
         host: undefined,

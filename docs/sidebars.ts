@@ -23,6 +23,22 @@ const sidebars: SidebarsConfig = {
         'ai-observability',
         {
           type: 'category',
+          label: 'Datadog Agent',
+          link: { type: 'doc', id: 'datadog-agent/index' },
+          items: [
+            'datadog-agent/agent-setup',
+            'datadog-agent/continuous-profiling',
+            'datadog-agent/log-collection',
+            'datadog-agent/dashboard-import',
+            'datadog-agent/kubernetes',
+            'datadog-agent/database-monitoring',
+            'datadog-agent/debugger',
+            'datadog-agent/network-devices',
+            'datadog-agent/sbom',
+          ],
+        },
+        {
+          type: 'category',
           label: 'Product Analytics',
           link: { type: 'doc', id: 'product-analytics/index' },
           items: [

@@ -110,10 +110,10 @@ export function EventStream() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const {data, isLoading} = useQuery({
-    queryKey: ['events', hostFilter, alertTypeFilter === 'all' ? '' : alertTypeFilter],
+    queryKey: ['events', alertTypeFilter === 'all' ? '' : alertTypeFilter],
     queryFn: () =>
       api.getEvents({
-        host: hostFilter || undefined,
+        host: undefined,
         alertType: alertTypeFilter === 'all' ? undefined : alertTypeFilter,
         limit: 50,
       }),
