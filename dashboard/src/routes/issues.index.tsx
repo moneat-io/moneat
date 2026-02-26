@@ -104,6 +104,16 @@ function formatCount(n: number): string {
   return n.toLocaleString()
 }
 
+function normalizeApmTraceId(value: unknown): string | null {
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value) || value < 0) return null
+    return String(value)
+  }
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return /^\d+$/.test(normalized) ? normalized : null
+}
+
 function getIssueDisplayTitle(issue: { title: string; culprit: string }): string {
   const title = issue.title?.trim() ?? ''
   const culprit = issue.culprit?.trim() ?? ''
@@ -643,56 +653,59 @@ function ApmErrorsTab() {
             <div className="w-16 shrink-0 text-right">Trace</div>
           </div>
           <div className="divide-y divide-border/40">
-            {errors.map((error: ApmErrorGroup) => (
-              <div
-                key={error.id}
-                className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500"
-              >
-                <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
-                  <Badge
-                    variant="outline"
-                    className="shrink-0 text-[11px] px-1.5 py-0 gap-1"
-                  >
-                    <Server className="h-3 w-3" />
-                    {error.service}
-                  </Badge>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold truncate text-sm">
-                      {error.errorMessage || error.resource}
-                    </div>
-                    {error.errorType && (
-                      <div className="text-xs text-muted-foreground truncate">
-                        {error.errorType}
+            {errors.map((error: ApmErrorGroup) => {
+              const traceId = normalizeApmTraceId(error.traceId)
+              return (
+                <div
+                  key={error.id}
+                  className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500"
+                >
+                  <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 text-[11px] px-1.5 py-0 gap-1"
+                    >
+                      <Server className="h-3 w-3" />
+                      {error.service}
+                    </Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate text-sm">
+                        {error.errorMessage || error.resource}
                       </div>
-                    )}
-                    <div className="text-xs text-muted-foreground truncate mt-0.5">
-                      {error.resource}
+                      {error.errorType && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {error.errorType}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {error.resource}
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-16 shrink-0 text-right">
-                    <div className="font-semibold text-foreground">
-                      {formatCount(error.count)}
+                    <div className="w-16 shrink-0 text-right">
+                      <div className="font-semibold text-foreground">
+                        {formatCount(error.count)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">errors</div>
                     </div>
-                    <div className="text-xs text-muted-foreground">errors</div>
-                  </div>
-                  <div className="hidden md:block w-24 shrink-0 text-right text-xs text-muted-foreground">
-                    {error.lastSeen ? formatRelativeTime(error.lastSeen) : '—'}
-                  </div>
-                  <div className="w-16 shrink-0 text-right">
-                    {error.traceId && (
-                      <Link
-                        to="/performance/traces/$traceId"
-                        params={{ traceId: error.traceId }}
-                        className="text-xs text-primary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        View trace
-                      </Link>
-                    )}
+                    <div className="hidden md:block w-24 shrink-0 text-right text-xs text-muted-foreground">
+                      {error.lastSeen ? formatRelativeTime(error.lastSeen) : '—'}
+                    </div>
+                    <div className="w-16 shrink-0 text-right">
+                      {traceId && (
+                        <Link
+                          to="/performance/traces/$traceId"
+                          params={{ traceId }}
+                          className="text-xs text-primary hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View trace
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

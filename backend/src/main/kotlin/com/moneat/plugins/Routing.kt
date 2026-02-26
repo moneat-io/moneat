@@ -33,7 +33,6 @@ import com.moneat.incident.routes.incidentProviderRoutes
 import com.moneat.llm.routes.llmIngestRoutes
 import com.moneat.llm.routes.llmRoutes
 import com.moneat.logs.routes.logRoutes
-import com.moneat.monitor.routes.apmRoutes
 import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
@@ -180,9 +179,6 @@ fun Application.configureRouting() {
 
         // Server monitoring endpoints
         monitorRoutes()
-
-        // APM trace query endpoints
-        apmRoutes()
 
         // Logging ingestion and query endpoints
         logRoutes()

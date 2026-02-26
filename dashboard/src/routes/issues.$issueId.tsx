@@ -119,6 +119,16 @@ function parseContextEntries(rawContexts: unknown): [string, unknown][] {
   }
 }
 
+function normalizeApmTraceId(value: unknown): string | null {
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value) || value < 0) return null
+    return String(value)
+  }
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return /^\d+$/.test(normalized) ? normalized : null
+}
+
 export const Route = createFileRoute('/issues/$issueId')({
   beforeLoad: () => {
     if (!api.isAuthenticated()) {
@@ -466,8 +476,10 @@ function IssueDetailPage() {
                   {(() => {
                     const traceCtx = contextEntries.find(([key]) => key === 'trace')
                     const traceId = traceCtx
-                      ? (traceCtx[1] as Record<string, unknown>)?.trace_id as string | undefined
-                      : undefined
+                      ? normalizeApmTraceId(
+                          (traceCtx[1] as Record<string, unknown>)?.trace_id
+                        )
+                      : null
                     if (!traceId) return null
                     return (
                       <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 flex items-center justify-between gap-3">
