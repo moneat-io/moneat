@@ -75,6 +75,7 @@ object DemoDataReseeder {
             val freshAnalyticsCount = checkFreshAnalyticsDataCount()
             val freshLogsCount = checkFreshLogsCount()
             val freshDatadogCount = checkFreshDatadogCount()
+            val freshInfraCount = checkFreshInfraDataCount()
             val demoDashboardCount = countDemoDashboards()
 
             val hasFreshCore = freshCoreCount > 0
@@ -82,13 +83,17 @@ object DemoDataReseeder {
             val hasFreshAnalytics = freshAnalyticsCount > 0
             val hasFreshLogs = freshLogsCount > 0
             val hasFreshDatadog = freshDatadogCount > 0
+            val hasFreshInfra = freshInfraCount > 0
             val hasEnoughDashboards = demoDashboardCount >= 4
 
-            if (hasFreshCore && hasFreshLlm && hasFreshAnalytics && hasFreshLogs && hasFreshDatadog && hasEnoughDashboards) {
+            if (hasFreshCore && hasFreshLlm && hasFreshAnalytics && hasFreshLogs &&
+                hasFreshDatadog && hasFreshInfra && hasEnoughDashboards
+            ) {
                 logger.info {
                     "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, " +
                         "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, " +
-                        "$freshDatadogCount recent Datadog spans, $demoDashboardCount demo dashboards), skipping reseed"
+                        "$freshDatadogCount recent Datadog spans, $freshInfraCount recent infra rows, " +
+                        "$demoDashboardCount demo dashboards), skipping reseed"
                 }
                 return
             }
@@ -133,6 +138,18 @@ object DemoDataReseeder {
                 logger.info { "Datadog demo data is stale or missing, reseeding..." }
                 purgeDatadogDemoData()
                 reseedDatadogData()
+            }
+
+            if (freshInfraCount > 0) {
+                logger.info { "Infra demo data is fresh ($freshInfraCount recent rows), skipping infra reseed" }
+            } else {
+                logger.info { "Infra demo data is stale or missing, reseeding..." }
+                purgeInfraDemoData()
+                reseedKubernetesData()
+                reseedDbmData()
+                reseedDebuggerData()
+                reseedNdmData()
+                reseedSbomData()
             }
 
             if (demoDashboardCount >= 4) {
@@ -1052,10 +1069,14 @@ object DemoDataReseeder {
 
     private suspend fun purgeDatadogDemoData() {
         val tables = listOf(
-            "apm_spans", "trace_stats", "profiles", "infra_events",
-            "service_checks", "processes", "containers", "network_connections",
-            "k8s_resources", "dbm_queries", "debugger_logs", "debugger_diagnostics",
-            "ndm_devices", "ndm_traps", "ndm_flows", "network_paths", "sbom_packages"
+            "apm_spans",
+            "trace_stats",
+            "profiles",
+            "infra_events",
+            "service_checks",
+            "processes",
+            "containers",
+            "network_connections"
         )
         for (table in tables) {
             runCatching {
@@ -1068,6 +1089,40 @@ object DemoDataReseeder {
                 exec("DELETE FROM hosts WHERE organization_id = -1")
             }
         }.onFailure { logger.warn { "Purge hosts failed (non-fatal): ${it.message}" } }
+    }
+
+    private suspend fun checkFreshInfraDataCount(): Long {
+        val query =
+            """
+            SELECT count() as cnt
+            FROM k8s_resources
+            WHERE organization_id = $ORG1
+                AND collected_at >= now() - INTERVAL 2 HOUR
+            """.trimIndent()
+        return runCatching {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299) return 0
+            body.trim().toLongOrNull() ?: 0
+        }.getOrElse {
+            logger.warn { "Failed to check fresh infra demo data (non-fatal): ${it.message}" }
+            0
+        }
+    }
+
+    private suspend fun purgeInfraDemoData() {
+        val tables = listOf(
+            "k8s_resources", "dbm_queries", "debugger_logs",
+            "debugger_diagnostics", "ndm_devices", "ndm_traps",
+            "ndm_flows", "network_paths", "sbom_packages"
+        )
+        for (table in tables) {
+            runCatching {
+                ClickHouseClient.execute(
+                    "ALTER TABLE $table DELETE WHERE organization_id = $ORG1"
+                )
+            }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
+        }
     }
 
     @Suppress("LongMethod")
@@ -1366,12 +1421,6 @@ object DemoDataReseeder {
             """.trimIndent()
         runCatching { ClickHouseClient.execute(connSql) }
             .onFailure { logger.warn { "Reseed network_connections failed (non-fatal): ${it.message}" } }
-
-        reseedKubernetesData()
-        reseedDbmData()
-        reseedDebuggerData()
-        reseedNdmData()
-        reseedSbomData()
 
         logger.info { "Datadog agent demo data reseed complete" }
     }

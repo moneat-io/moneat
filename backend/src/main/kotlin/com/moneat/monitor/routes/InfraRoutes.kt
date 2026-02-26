@@ -27,17 +27,17 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
-import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
+
+private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
@@ -57,83 +57,34 @@ private fun parseLimit(limitParam: String?): Int {
 }
 
 /**
- * Parses a ClickHouse TSVWithNamesAndTypes response into a list of JSON objects.
- * Format: first line = column names (tab-separated), second line = types, rest = data rows.
+ * Converts ClickHouse snake_case JSON keys to camelCase.
  */
-private fun parseTsvResponse(body: String): List<JsonObject> {
-    val lines = body.trim().lines()
-    if (lines.size < 2) return emptyList()
-
-    val headers = lines[0].split('\t')
-    val types = lines[1].split('\t')
-
-    return lines.drop(2).mapNotNull { line ->
-        if (line.isBlank()) return@mapNotNull null
-        val values = line.split('\t')
-        buildJsonObject {
-            headers.forEachIndexed { i, header ->
-                val value = values.getOrElse(i) { "" }
-                val type = types.getOrElse(i) { "" }
-                val camelKey = snakeToCamel(header)
-                when {
-                    type.startsWith("Array") -> {
-                        put(camelKey, parseClickHouseArray(value))
-                    }
-                    type.startsWith("Map") -> {
-                        put(camelKey, parseClickHouseMap(value))
-                    }
-                    type.startsWith("UInt") || type.startsWith("Int") ||
-                        type.startsWith("Float") || type.startsWith("Decimal") -> {
-                        val num = value.toLongOrNull()
-                        if (num != null) {
-                            put(camelKey, JsonPrimitive(num))
-                        } else {
-                            val dbl = value.toDoubleOrNull()
-                            if (dbl != null) {
-                                put(camelKey, JsonPrimitive(dbl))
-                            } else {
-                                put(camelKey, JsonPrimitive(value))
-                            }
-                        }
-                    }
-                    else -> put(camelKey, JsonPrimitive(value))
-                }
-            }
-        }
-    }
-}
-
 private fun snakeToCamel(snake: String): String {
     return snake.split('_').mapIndexed { index, part ->
-        if (index == 0) part.lowercase() else part.replaceFirstChar { it.uppercase() }
+        if (index == 0) {
+            part.lowercase()
+        } else {
+            part.replaceFirstChar { it.uppercase() }
+        }
     }.joinToString("")
 }
 
-private fun parseClickHouseArray(value: String): JsonArray {
-    val trimmed = value.trim()
-    if (trimmed == "[]" || trimmed.isEmpty()) return buildJsonArray {}
-    val inner = trimmed.removePrefix("[").removeSuffix("]")
-    return buildJsonArray {
-        inner.split(',').forEach { item ->
-            add(JsonPrimitive(item.trim().removeSurrounding("'")))
-        }
-    }
+private fun camelCaseKeys(obj: JsonObject): JsonObject {
+    val entries = obj.entries.associate { (k, v) -> snakeToCamel(k) to v }
+    return JsonObject(entries)
 }
 
-private fun parseClickHouseMap(value: String): JsonObject {
-    val trimmed = value.trim()
-    if (trimmed == "{}" || trimmed.isEmpty()) return buildJsonObject {}
-    val inner = trimmed.removePrefix("{").removeSuffix("}")
-    return buildJsonObject {
-        inner.split(',').forEach { pair ->
-            val parts = pair.split(':', limit = 2)
-            if (parts.size == 2) {
-                val key = parts[0].trim().removeSurrounding("'")
-                val v = parts[1].trim().removeSurrounding("'")
-                put(key, JsonPrimitive(v))
-            }
+/**
+ * Parses ClickHouse JSONEachRow response into a list of camelCase JsonObjects.
+ */
+private fun parseJsonEachRow(body: String): List<JsonObject> {
+    return body.trim().lines()
+        .filter { it.isNotBlank() }
+        .mapNotNull { line ->
+            runCatching {
+                camelCaseKeys(json.parseToJsonElement(line).jsonObject)
+            }.getOrNull()
         }
-    }
 }
 
 @Suppress("LongMethod", "CyclomaticComplexMethod")
@@ -166,7 +117,7 @@ fun Route.infraRoutes() {
                     WHERE ${conditions.joinToString(" AND ")}
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -193,7 +144,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -229,7 +180,7 @@ fun Route.infraRoutes() {
                     WHERE ${conditions.joinToString(" AND ")}
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -262,7 +213,7 @@ fun Route.infraRoutes() {
                     WHERE ${conditions.joinToString(" AND ")}
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -289,7 +240,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -328,7 +279,7 @@ fun Route.infraRoutes() {
                     WHERE ${conditions.joinToString(" AND ")}
                     ORDER BY collected_at DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -355,7 +306,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -382,7 +333,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -410,7 +361,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY timestamp DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -440,7 +391,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY collected_at DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -467,7 +418,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY collected_at DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -492,7 +443,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY sampled_at DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -517,7 +468,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY received_at DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -542,7 +493,7 @@ fun Route.infraRoutes() {
                     WHERE organization_id IN (${orgIds.joinToString(",")})
                     ORDER BY collected_at DESC
                     LIMIT $limit
-                    FORMAT TSVWithNamesAndTypes
+                    FORMAT JSONEachRow
                 """.trimIndent()
 
                 val result = executeChQuery(query) ?: run {
@@ -562,7 +513,7 @@ private suspend fun executeChQuery(query: String): List<JsonObject>? {
             logger.warn { "ClickHouse query failed: ${response.status}" }
             return null
         }
-        parseTsvResponse(response.bodyAsText())
+        parseJsonEachRow(response.bodyAsText())
     }.getOrElse {
         logger.warn { "ClickHouse query error: ${it.message}" }
         null
