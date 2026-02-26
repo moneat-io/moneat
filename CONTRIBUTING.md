@@ -2,16 +2,13 @@
 
 Thank you for your interest in contributing to Moneat! This document outlines how to contribute and the requirements for doing so.
 
-## Dual-License Structure
+## License
 
-Moneat uses an open-core dual-license model:
-
-- **Core (AGPLv3)**: All code outside the `enterprise/` directory is licensed under the GNU Affero General Public License v3.0. Contributions to core are under AGPLv3 with CLA rights (see below).
-- **Enterprise (Proprietary)**: Enterprise code lives in a separate private repository ([moneat-enterprise](https://github.com/moneat-io/moneat-enterprise)) and is licensed under the Moneat Enterprise License. Contributions to enterprise code are under the proprietary license.
+All code in this repository is licensed under the [GNU Affero General Public License v3.0](LICENSE). Enterprise features live in a separate private repository ([moneat-enterprise](https://github.com/moneat-io/moneat-enterprise)).
 
 ## Contributor License Agreement (CLA)
 
-All contributions to Moneat require signing our [Contributor License Agreement](CLA.md). The CLA grants Moneat the right to sublicense your contributions, which enables us to include community code in both the open-source core and the proprietary enterprise edition.
+All contributions to Moneat require signing our [Contributor License Agreement](CLA.md). The CLA grants Moneat the right to sublicense your contributions.
 
 **How it works:**
 1. Submit a pull request
@@ -132,8 +129,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
 
 ## License
 
-- Contributions to files **outside** `enterprise/` are licensed under the [GNU Affero General Public License v3.0](LICENSE).
-- Contributions to the [moneat-enterprise](https://github.com/moneat-io/moneat-enterprise) repository are licensed under the Moneat Enterprise License.
+- All contributions to this repository are licensed under the [GNU Affero General Public License v3.0](LICENSE).
 - All contributors must sign the [Contributor License Agreement](CLA.md).
 
 ## Code of Conduct

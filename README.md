@@ -10,7 +10,6 @@
 
 <p align="center">
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-blue.svg?style=flat-square" alt="License: AGPL v3"></a>
-  <a href="https://github.com/moneat-io/moneat-enterprise/blob/main/LICENSE"><img src="https://img.shields.io/badge/Enterprise-Proprietary-orange.svg?style=flat-square" alt="Enterprise"></a>
   <a href="https://github.com/moneat-io/moneat/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome"></a>
   <a href="https://discord.gg/skH5Pstr"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/moneat-io/moneat/commits"><img src="https://img.shields.io/github/commit-activity/m/moneat-io/moneat?style=flat-square" alt="Commit Activity"></a>
@@ -341,10 +340,6 @@ moneat/
 ├── emails/                  # Maizzle email templates
 ├── e2e/                     # E2E test apps (web, Android, KMP)
 └── docker-compose.yml       # Local development infrastructure
-
-moneat-enterprise/           # Separate private repo (proprietary license)
-├── backend/                 #   SSO, on-call, escalation, analytics, Datadog compatibility
-└── dashboard/               #   Enterprise UI components
 ```
 
 ### Tech Stack
@@ -412,10 +407,6 @@ We welcome contributions! Whether it's a bug fix, feature, or documentation impr
 
 Copyright © 2026 Moneat
 
-Moneat uses a **dual-license model:**
-
-- **Core (AGPLv3)** — All code in this repository is licensed under the [GNU Affero General Public License v3.0](LICENSE). Self-host, modify, and redistribute freely — modifications must be shared under the same license when used to provide a network service.
-
-- **Enterprise (Proprietary)** — Enterprise features live in a [separate private repository](https://github.com/moneat-io/moneat-enterprise) under the Moneat Enterprise License. Free for development and testing; production use requires a [paid subscription](https://moneat.io/pricing).
+All code in this repository is licensed under the [GNU Affero General Public License v3.0](LICENSE). Self-host, modify, and redistribute freely — modifications must be shared under the same license when used to provide a network service.
 
 For licensing questions, contact [licensing@moneat.io](mailto:licensing@moneat.io).
