@@ -113,6 +113,13 @@ class EnvironmentValidator {
         if (!openAiApiKey.isNullOrBlank()) {
             logger.info { "OpenAI API key detected - AI chat will be available for admin users" }
         }
+
+        // Validate Datadog Agent configuration when enabled
+        val ddAgentHost = getConfigValue("DD_AGENT_HOST")
+        if (!ddAgentHost.isNullOrBlank()) {
+            validateRequired("DD_SERVICE", "DD_AGENT_HOST is set (Datadog Agent enabled)", errors)
+            validateRequired("DD_ENV", "DD_AGENT_HOST is set (Datadog Agent enabled)", errors)
+        }
     }
 
     private fun validateRequired(

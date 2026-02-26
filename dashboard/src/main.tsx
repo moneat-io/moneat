@@ -57,6 +57,20 @@ if (import.meta.env.VITE_ANALYTICS_KEY) {
   })
 }
 
+// Initialize Datadog RUM & Browser Logs (enterprise deployments only)
+// Data is sent to Moneat's DD-compatible intake via the proxy parameter.
+if (import.meta.env.VITE_DD_APPLICATION_ID && import.meta.env.VITE_DD_CLIENT_TOKEN) {
+  const {initDatadog} = await import('./lib/datadog')
+  initDatadog({
+    applicationId: import.meta.env.VITE_DD_APPLICATION_ID,
+    clientToken: import.meta.env.VITE_DD_CLIENT_TOKEN,
+    proxyUrl: import.meta.env.VITE_DD_PROXY_URL,
+    backendUrl: import.meta.env.VITE_BACKEND_URL,
+    service: import.meta.env.VITE_DD_SERVICE,
+    env: import.meta.env.VITE_DD_ENV,
+  })
+}
+
 const queryClient = new QueryClient()
 
 const router = createRouter({

@@ -71,6 +71,7 @@ function DashboardListPage() {
   const [selectedFolder, setSelectedFolder] = useState<FolderFilter>('all')
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [now] = useState(() => Date.now())
 
   const {data: dashboards, isLoading} = useQuery({
     queryKey: ['custom-dashboards'],
@@ -300,6 +301,7 @@ function DashboardListPage() {
                     key={dashboard.id}
                     dashboard={dashboard}
                     folders={folders ?? []}
+                    now={now}
                     onDelete={() => deleteMutation.mutate(dashboard.id)}
                     onDuplicate={() => {
                       api.getDashboard(dashboard.id).then((full) => {
@@ -601,6 +603,7 @@ const FolderSidebarItem = memo(function FolderSidebarItem({
 const DashboardCard = memo(function DashboardCard({
   dashboard,
   folders,
+  now,
   onDelete,
   onDuplicate,
   onFavoriteToggle,
@@ -608,6 +611,7 @@ const DashboardCard = memo(function DashboardCard({
 }: {
   dashboard: CustomDashboard
   folders: DashboardFolder[]
+  now: number
   onDelete: () => void
   onDuplicate: () => void
   onFavoriteToggle: () => void
@@ -622,7 +626,7 @@ const DashboardCard = memo(function DashboardCard({
   const accent = getAccentColor(dashboard.id)
   const widgetCount = dashboard.widgets.length
   const updatedDate = useMemo(() => new Date(dashboard.updated_at), [dashboard.updated_at])
-  const isRecent = Date.now() - updatedDate.getTime() < 86400000
+  const isRecent = now - updatedDate.getTime() < 86400000
 
   return (
     <Link

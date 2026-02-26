@@ -31,9 +31,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 RUN groupadd --system moneat && useradd --system --gid moneat --home /app --create-home moneat
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
+
+# Download Datadog Java agent for enterprise builds (profiling, APM, dynamic instrumentation)
+ARG ENTERPRISE=false
+ARG DD_JAVA_AGENT_VERSION=1.59.0
+ARG DD_JAVA_AGENT_SHA256=f2aa729581b60af266cc6555cf9d9701e98ee71c194b4f25d97de354f46fc533
+RUN if [ "$ENTERPRISE" = "true" ]; then \
+      wget -q -O /app/dd-java-agent.jar \
+        "https://repo1.maven.org/maven2/com/datadoghq/dd-java-agent/${DD_JAVA_AGENT_VERSION}/dd-java-agent-${DD_JAVA_AGENT_VERSION}.jar" && \
+      echo "${DD_JAVA_AGENT_SHA256}  /app/dd-java-agent.jar" | sha256sum -c -; \
+    fi
+
+COPY backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 RUN mkdir -p /app/storage/chunks /app/storage/artifact_bundles && chown -R moneat:moneat /app/storage
 USER moneat
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
   CMD wget -q -O /dev/null http://localhost:8080/health/ready || exit 1
-CMD ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/app/entrypoint.sh"]
