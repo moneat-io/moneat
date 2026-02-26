@@ -488,7 +488,7 @@ class MonitorAlertService {
         val sysIdStr = alert.systemId.toString()
         val baseFilter =
             "organization_id = ${alert.organizationId} AND tags['system_id'] = '$sysIdStr' " +
-            "AND timestamp >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
+                "AND timestamp >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
 
         val (query, usesDerived) =
             when (alert.metric) {

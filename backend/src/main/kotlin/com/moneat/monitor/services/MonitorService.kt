@@ -27,6 +27,7 @@ import com.moneat.monitor.models.ContainerMetricDataPoint
 import com.moneat.monitor.models.ContainerMetricsPayload
 import com.moneat.monitor.models.ContainerMetricsResponse
 import com.moneat.monitor.models.ContainerStats
+import com.moneat.monitor.models.ContainerWithSystem
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.LatestMetrics
@@ -255,6 +256,20 @@ class MonitorService {
         if (EnvConfig.SelfHost.enabled) return 10
         val tier = getTierConfig(organizationId)
         return tier.monitorIntervalSeconds
+    }
+
+    /**
+     * Count metric rows that would be inserted into the metrics table (for usage tracking).
+     * System metrics only; container data goes to the containers table.
+     */
+    fun countMetricsInPayload(payload: SystemMetricsPayload): Int {
+        var count = 15
+        if (payload.temp_max != null) count++
+        if (payload.gpu_percent != null) count++
+        if (payload.gpu_mem_percent != null) count++
+        if (payload.gpu_power != null) count++
+        if (payload.battery_percent != null) count++
+        return count
     }
 
     private suspend fun insertContainerMetric(
@@ -663,6 +678,38 @@ class MonitorService {
             logger.error(e) { "Failed to parse container stats" }
             emptyList()
         }
+    }
+
+    /**
+     * Get latest container stats from all systems in the given organizations.
+     */
+    suspend fun getLatestContainersForOrganizations(organizationIds: List<Int>): List<ContainerWithSystem> {
+        val allContainers = mutableListOf<ContainerWithSystem>()
+        for (orgId in organizationIds) {
+            val systems = listSystems(orgId)
+            for (system in systems) {
+                val containers = getLatestContainers(system.id)
+                for (c in containers) {
+                    allContainers.add(
+                        ContainerWithSystem(
+                            systemId = system.id.toString(),
+                            systemName = system.name,
+                            name = c.name,
+                            id = c.id,
+                            image = c.image,
+                            status = c.status,
+                            cpuPercent = c.cpu_percent,
+                            memUsed = c.mem_used,
+                            memLimit = c.mem_limit,
+                            netRecvBytes = c.net_recv_bytes,
+                            netSentBytes = c.net_sent_bytes,
+                            memPercent = c.mem_percent
+                        )
+                    )
+                }
+            }
+        }
+        return allContainers
     }
 
     /**

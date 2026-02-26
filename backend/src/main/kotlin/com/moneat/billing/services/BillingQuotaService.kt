@@ -121,13 +121,17 @@ class BillingQuotaService(
             val state = loadQuotaState(organizationId, lockRows = true)
             val requestedLlm = normalizedRequests["llm"] ?: 0L
             val requestedLogUnits = normalizedRequests["log"] ?: 0L
-            val requestedAggregate = normalizedRequests.filterKeys { it != "llm" && it != "log" }.values.sum()
+            val requestedAggregate =
+                normalizedRequests
+                    .filterKeys { it !in listOf("llm", "log", "apm_span", "custom_metric") }
+                    .values
+                    .sum()
             val totalAfter = state.usedUnits + requestedAggregate
             val requestedTotalBytes = normalizedBytes.values.sum()
             val bytesAfter = state.usedBytes + requestedTotalBytes
 
             for ((eventType, requestedUnits) in normalizedRequests) {
-                // Logs are byte-limited only, skip unit-based quota check
+                // Logs are byte-limited only; apm_span and custom_metric have separate limits
                 if (eventType == "log") continue
 
                 val usedForType = usedUnitsForType(state, eventType)
@@ -214,6 +218,8 @@ class BillingQuotaService(
             val requestedTransactions = normalizedRequests["transaction"] ?: 0L
             val requestedReplays = normalizedRequests["replay"] ?: 0L
             val requestedFeedback = normalizedRequests["feedback"] ?: 0L
+            val requestedApmSpans = normalizedRequests["apm_span"] ?: 0L
+            val requestedCustomMetrics = normalizedRequests["custom_metric"] ?: 0L
 
             val errorBytes = normalizedBytes["error"] ?: 0L
             val replayBytes = normalizedBytes["replay"] ?: 0L
@@ -231,6 +237,8 @@ class BillingQuotaService(
                 it[used_feedback] = state.usedFeedback + requestedFeedback
                 it[used_llm_events] = state.usedLlmEvents + requestedLlm
                 it[used_logs] = state.usedLogs + requestedLogUnits
+                it[used_apm_spans] = state.usedApmSpans + requestedApmSpans
+                it[used_custom_metrics] = state.usedCustomMetrics + requestedCustomMetrics
                 it[used_bytes] = bytesAfter
                 it[used_error_bytes] = state.usedErrorBytes + errorBytes
                 it[used_replay_bytes] = state.usedReplayBytes + replayBytes
@@ -321,7 +329,11 @@ class BillingQuotaService(
         val llmOverageRateCentsPer1k: Int,
         val usedAnalyticsPageviews: Long,
         val analyticsPageviewLimit: Long,
-        val analyticsPageviewOverageRateCentsPer100k: Int
+        val analyticsPageviewOverageRateCentsPer100k: Int,
+        val usedApmSpans: Long,
+        val apmSpanLimit: Long,
+        val usedCustomMetrics: Long,
+        val customMetricLimit: Long
     )
 
     private fun loadQuotaState(
@@ -445,6 +457,8 @@ class BillingQuotaService(
         val usedLogBytes = usageRow[OrgUsageCounters.used_log_bytes]
         val usedLlmBytes = usageRow[OrgUsageCounters.used_llm_bytes]
         val usedAnalyticsPageviews = usageRow[OrgUsageCounters.used_analytics_pageviews]
+        val usedApmSpans = usageRow[OrgUsageCounters.used_apm_spans]
+        val usedCustomMetrics = usageRow[OrgUsageCounters.used_custom_metrics]
         val errorLimit = tier.monthlyErrorLimit
         val llmEventLimit = tier.monthlyLlmEventLimit
         val transactionLimit = tier.monthlyTransactionLimit
@@ -529,7 +543,11 @@ class BillingQuotaService(
             llmOverageRateCentsPer1k = tier.llmOverageRateCentsPer1k,
             usedAnalyticsPageviews = usedAnalyticsPageviews,
             analyticsPageviewLimit = tier.monthlyAnalyticsPageviewLimit,
-            analyticsPageviewOverageRateCentsPer100k = tier.analyticsPageviewOverageRateCentsPer100k
+            analyticsPageviewOverageRateCentsPer100k = tier.analyticsPageviewOverageRateCentsPer100k,
+            usedApmSpans = usedApmSpans,
+            apmSpanLimit = tier.monthlyApmSpanLimit,
+            usedCustomMetrics = usedCustomMetrics,
+            customMetricLimit = tier.monthlyCustomMetricLimit
         )
     }
 
@@ -540,7 +558,9 @@ class BillingQuotaService(
                 state.usedErrors to state.errorLimit,
                 state.usedTransactions to state.transactionLimit,
                 state.usedReplays to state.replayLimit,
-                state.usedFeedback to state.feedbackLimit
+                state.usedFeedback to state.feedbackLimit,
+                state.usedApmSpans to state.apmSpanLimit,
+                state.usedCustomMetrics to state.customMetricLimit
             ).all { (used, limit) ->
                 limit < 0 || used <= (limit + effectivePaygHeadroom)
             }
@@ -646,6 +666,10 @@ class BillingQuotaService(
             analyticsPageviewLimit = state.analyticsPageviewLimit,
             analyticsPageviewOverageCentsEstimate = analyticsPageviewOverageCents,
             analyticsPageviewOverageRateCentsPer100k = state.analyticsPageviewOverageRateCentsPer100k,
+            usedApmSpans = state.usedApmSpans,
+            apmSpanLimit = state.apmSpanLimit,
+            usedCustomMetrics = state.usedCustomMetrics,
+            customMetricLimit = state.customMetricLimit,
             plan = state.plan,
             status = state.status,
             withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
@@ -707,6 +731,13 @@ class BillingQuotaService(
             analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
             monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
             analyticsPageviewOverageRateCentsPer100k = row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
+            monthlyApmSpanLimit = row[PricingTierConfigs.monthly_apm_span_limit],
+            apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
+            monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],
+            customMetricOverageRateCentsPer100k = row[PricingTierConfigs.custom_metric_overage_rate_cents_per_100k],
+            maxHosts = row[PricingTierConfigs.max_hosts],
+            profilingEnabled = row[PricingTierConfigs.profiling_enabled],
+            networkMonitoringEnabled = row[PricingTierConfigs.network_monitoring_enabled],
             isCurrent = row[PricingTierConfigs.is_current]
         )
     }
@@ -789,6 +820,23 @@ class BillingQuotaService(
                 PricingTier.BUSINESS -> 10_000_000
             },
             analyticsPageviewOverageRateCentsPer100k = if (tier == PricingTier.FREE) 0 else 1000,
+            monthlyApmSpanLimit = when (tier) {
+                PricingTier.FREE -> 500_000
+                PricingTier.PRO -> 10_000_000
+                PricingTier.TEAM -> 100_000_000
+                PricingTier.BUSINESS -> Long.MAX_VALUE
+            },
+            apmSpanOverageRateCentsPer1m = if (tier == PricingTier.FREE) 0 else 30,
+            monthlyCustomMetricLimit = when (tier) {
+                PricingTier.FREE -> 100_000
+                PricingTier.PRO -> 1_000_000
+                PricingTier.TEAM -> 10_000_000
+                PricingTier.BUSINESS -> Long.MAX_VALUE
+            },
+            customMetricOverageRateCentsPer100k = if (tier == PricingTier.FREE) 0 else 50,
+            maxHosts = if (tier == PricingTier.FREE) 3 else null,
+            profilingEnabled = tier != PricingTier.FREE,
+            networkMonitoringEnabled = tier != PricingTier.FREE,
             isCurrent = true
         )
     }
@@ -801,6 +849,8 @@ class BillingQuotaService(
             "feedback" -> "feedback"
             "llm" -> "llm"
             "log", "logs" -> "log"
+            "apm_span", "apm" -> "apm_span"
+            "custom_metric", "metric" -> "custom_metric"
             else -> "error"
         }
     }
@@ -812,6 +862,8 @@ class BillingQuotaService(
     private fun usedUnitsForType(state: QuotaState, eventType: String): Long {
         return when (eventType) {
             "error" -> state.usedErrors
+            "apm_span" -> state.usedApmSpans
+            "custom_metric" -> state.usedCustomMetrics
             "transaction" -> state.usedTransactions
             "replay" -> state.usedReplays
             "feedback" -> state.usedFeedback
@@ -837,6 +889,10 @@ class BillingQuotaService(
             "llm" -> state.llmEventLimit
 
             "log" -> -1L
+
+            "apm_span" -> state.apmSpanLimit
+
+            "custom_metric" -> state.customMetricLimit
 
             // Logs are byte-limited, not unit-limited
             else -> state.errorLimit

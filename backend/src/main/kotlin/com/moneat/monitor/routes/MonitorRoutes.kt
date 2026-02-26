@@ -21,7 +21,11 @@ import com.moneat.logs.models.AgentLogsRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.models.AgentLogIngestResponse
+import com.moneat.monitor.models.AgentApiKeyResponse
+import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
+import com.moneat.monitor.models.CreateAgentApiKeyRequest
+import com.moneat.monitor.models.CreateAgentApiKeyResponse
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.models.CreateSystemRequest
@@ -31,6 +35,7 @@ import com.moneat.monitor.models.SystemMetricsPayload
 import com.moneat.monitor.models.SystemResponse
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
+import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Memberships
@@ -156,12 +161,34 @@ fun Route.monitorRoutes(
 
                 logger.debug { "Received metrics from system $systemId (org $organizationId)" }
 
-                // Track bandwidth usage
-                usageTracking.recordUsage(
-                    projectId = systemId.mostSignificantBits, // Use system UUID as pseudo-project for usage tracking
-                    eventType = "system_metric",
-                    byteSize = bodyBytes.size
-                )
+                val metricCount = monitorService.countMetricsInPayload(payload)
+                if (quotaService.isEnforcementEnabled() && metricCount > 0) {
+                    val reservation =
+                        quotaService.reserveUnits(
+                            organizationId = organizationId,
+                            requestedUnits = metricCount,
+                            eventType = "custom_metric"
+                        )
+                    if (!reservation.allowed) {
+                        call.respond(
+                            HttpStatusCode.TooManyRequests,
+                            IngestResponse(
+                                success = false,
+                                interval_seconds = 60,
+                                message = "Custom metrics quota exceeded. Please upgrade your plan."
+                            )
+                        )
+                        return@post
+                    }
+                }
+
+                if (metricCount > 0) {
+                    usageTracking.recordOrgUsage(
+                        organizationId = organizationId,
+                        eventType = "custom_metric",
+                        count = metricCount
+                    )
+                }
 
                 // Ingest metrics and get poll interval
                 val intervalSeconds = monitorService.ingestMetrics(systemId, organizationId, payload)
@@ -319,6 +346,21 @@ fun Route.monitorRoutes(
                     }
 
                 call.respond(HttpStatusCode.OK, response)
+            }
+
+            // List all containers across all systems
+            get("/containers") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    return@get
+                }
+
+                val containers = monitorService.getLatestContainersForOrganizations(organizationIds)
+                call.respond(HttpStatusCode.OK, AllContainersResponse(containers = containers))
             }
 
             // Create a new system
@@ -938,6 +980,57 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
+                call.respond(HttpStatusCode.NoContent)
+            }
+        }
+    }
+
+    route("/v1") {
+        authenticate("auth-jwt") {
+            val agentApiKeyService = AgentApiKeyService()
+
+            get("/agent-api-keys") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val keys = agentApiKeyService.listKeys(orgId)
+                call.respond(HttpStatusCode.OK, mapOf("keys" to keys))
+            }
+
+            post("/agent-api-keys") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+                val orgId = principal.payload.getClaim("orgId").asInt()
+
+                val request = call.receive<CreateAgentApiKeyRequest>()
+                val name = request.name.trim()
+                if (name.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Name is required"))
+                    return@post
+                }
+
+                val response = agentApiKeyService.createKey(
+                    organizationId = orgId,
+                    name = name,
+                    createdBy = userId
+                )
+                call.respond(HttpStatusCode.Created, response)
+            }
+
+            delete("/agent-api-keys/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
+                    return@delete
+                }
+
+                val deleted = agentApiKeyService.deleteKey(organizationId = orgId, keyId = id)
+                if (!deleted) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
+                    return@delete
+                }
                 call.respond(HttpStatusCode.NoContent)
             }
         }

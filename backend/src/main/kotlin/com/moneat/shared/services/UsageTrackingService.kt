@@ -103,7 +103,7 @@ class UsageTrackingService {
         byteSize: Int = 0
     ) {
         val orgId = getOrganizationId(projectId) ?: return
-        recordUsageInternal(orgId, projectId, eventType, byteSize)
+        recordUsageInternal(orgId, projectId, eventType, 1, byteSize)
     }
 
     /**
@@ -114,27 +114,41 @@ class UsageTrackingService {
         eventType: String,
         byteSize: Int = 0
     ) {
-        recordUsageInternal(organizationId, ORG_PROJECT_ID_SENTINEL, eventType, byteSize)
+        recordUsageInternal(organizationId, ORG_PROJECT_ID_SENTINEL, eventType, 1, byteSize)
+    }
+
+    /**
+     * Record org-scoped usage with explicit count (e.g. APM spans, custom metrics).
+     */
+    fun recordOrgUsage(
+        organizationId: Int,
+        eventType: String,
+        count: Int,
+        byteSize: Int = 0
+    ) {
+        if (count <= 0) return
+        recordUsageInternal(organizationId, ORG_PROJECT_ID_SENTINEL, eventType, count, byteSize)
     }
 
     private fun recordUsageInternal(
         orgId: Int,
         projectId: Long,
         eventType: String,
+        count: Int,
         byteSize: Int
     ) {
+        if (count <= 0) return
         val today = Clock.System.todayIn(TimeZone.UTC)
         val key = "$orgId|$projectId|$eventType|$today"
 
         buffer.compute(key) { _, pair ->
             if (pair == null) {
                 Pair(
-                    AtomicInteger(1),
-                    java.util.concurrent.atomic
-                        .AtomicLong(byteSize.toLong())
+                    AtomicInteger(count),
+                    java.util.concurrent.atomic.AtomicLong(byteSize.toLong())
                 )
             } else {
-                pair.first.incrementAndGet()
+                pair.first.addAndGet(count)
                 pair.second.addAndGet(byteSize.toLong())
                 pair
             }

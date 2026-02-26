@@ -32,25 +32,20 @@ import {
     Bell,
     BookOpen,
     Brain,
-    Box,
-    CalendarClock,
     Check,
     ChevronLeft,
     ChevronRight,
     Cpu,
     Flame,
     Globe,
-    HardDrive,
     Home,
     LayoutDashboard,
     MessageSquare,
-    Network,
     Package,
     Play,
     ScrollText,
     Server,
     Shield,
-    Terminal,
     Timer,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
@@ -228,11 +223,6 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
     ...(hasEnterpriseModule(features, 'datadog') ? [
       { key: 'apm-traces', icon: Cpu, label: 'APM Traces', href: '/apm-traces', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
       { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'monitoring-hosts', icon: HardDrive, label: 'Hosts', href: '/monitoring/hosts', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'monitoring-containers', icon: Box, label: 'Containers', href: '/monitoring/containers', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'monitoring-processes', icon: Terminal, label: 'Processes', href: '/monitoring/processes', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'monitoring-network', icon: Network, label: 'Network', href: '/monitoring/network', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
-      { key: 'monitoring-events', icon: CalendarClock, label: 'Events', href: '/monitoring/events', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) },
     ] : []),
     // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
@@ -270,7 +260,14 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
           {navItems.map((item) => {
             const isActive = item.href === '/'
               ? currentPath === '/'
-              : currentPath === item.href || currentPath.startsWith(item.href + '/')
+              : currentPath === item.href ||
+                (currentPath.startsWith(item.href + '/') &&
+                  !navItems.some(
+                    (other) =>
+                      other.href !== item.href &&
+                      (currentPath === other.href || currentPath.startsWith(other.href + '/')) &&
+                      other.href.startsWith(item.href + '/')
+                  ))
             const Icon = item.icon
 
             const linkContent = (

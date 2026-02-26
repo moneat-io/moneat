@@ -16,6 +16,7 @@
 
 package com.moneat.events.services
 
+import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.notifications.services.EmailService
@@ -83,13 +84,14 @@ class IngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
+        val redis = RedisConfig.newBlockingConnection()
         while (scope.isActive) {
             try {
                 // BRPOP block with 5s timeout so we can check isActive periodically
-                val result = RedisConfig.syncBlocking().brpop(5, queueKey)
+                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
                 val value = result?.value ?: continue
                 processMessageForTest(workerId, value) { message ->
-                    RedisConfig.syncBlocking().rpush(dlqKey, message)
+                    RedisConfig.sync().rpush(dlqKey, message)
                 }
             } catch (e: CancellationException) {
                 break
@@ -103,7 +105,7 @@ class IngestionWorker(
     internal suspend fun processMessageForTest(
         workerId: Int,
         value: String,
-        onDlq: (String) -> Unit = { message -> RedisConfig.syncBlocking().rpush(dlqKey, message) }
+        onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
         try {
             val (projectId, envelopeBytes) = decodeMessage(value)

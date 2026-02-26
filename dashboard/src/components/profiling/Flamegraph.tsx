@@ -6,7 +6,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {useMemo, useState, useCallback} from 'react'
+import {useMemo, useState, useCallback, useRef} from 'react'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {RotateCcw} from 'lucide-react'
@@ -19,22 +19,25 @@ interface FlamegraphFrame {
 }
 
 interface Props {
-  /** URL to fetch pprof data, or pre-parsed frame tree */
   frames?: FlamegraphFrame[]
-  /** Fallback message if no data */
   emptyMessage?: string
 }
 
-// Color palette for flamegraph bars
 const COLORS = [
-  'hsl(20, 80%, 55%)',   // warm orange
-  'hsl(30, 85%, 50%)',   // orange
-  'hsl(40, 80%, 50%)',   // amber
-  'hsl(50, 75%, 45%)',   // gold
-  'hsl(15, 75%, 55%)',   // red-orange
-  'hsl(25, 80%, 52%)',   // deep orange
-  'hsl(35, 78%, 48%)',   // warm amber
-  'hsl(45, 72%, 47%)',   // honey
+  'hsl(14, 80%, 52%)',   // red-orange
+  'hsl(28, 85%, 50%)',   // orange
+  'hsl(42, 80%, 48%)',   // amber
+  'hsl(55, 72%, 42%)',   // gold
+  'hsl(130, 45%, 42%)',  // green
+  'hsl(160, 50%, 40%)',  // teal
+  'hsl(200, 60%, 48%)',  // blue
+  'hsl(220, 55%, 52%)',  // indigo
+  'hsl(260, 45%, 55%)',  // purple
+  'hsl(290, 40%, 52%)',  // violet
+  'hsl(340, 55%, 50%)',  // rose
+  'hsl(5, 70%, 52%)',    // crimson
+  'hsl(175, 50%, 38%)',  // cyan
+  'hsl(240, 40%, 55%)',  // slate blue
 ]
 
 function hashColor(name: string): string {
@@ -77,9 +80,49 @@ function flattenFrames(
   return result
 }
 
+function updateTooltip(
+  el: HTMLDivElement | null,
+  ff: FlatFrame | null,
+  x: number,
+  y: number,
+) {
+  if (!el) return
+  if (!ff) {
+    el.style.display = 'none'
+    return
+  }
+  el.style.display = 'block'
+  el.style.left = `${x + 12}px`
+  el.style.top = `${y - 10}px`
+
+  const nameEl = el.querySelector<HTMLElement>('[data-tip="name"]')
+  const samplesEl = el.querySelector<HTMLElement>('[data-tip="samples"]')
+  const pctEl = el.querySelector<HTMLElement>('[data-tip="pct"]')
+  const selfEl = el.querySelector<HTMLElement>('[data-tip="self"]')
+  const barEl = el.querySelector<HTMLElement>('[data-tip="bar"]')
+
+  if (nameEl) nameEl.textContent = ff.frame.name
+  if (samplesEl) samplesEl.textContent = ff.frame.value.toLocaleString()
+  if (pctEl) pctEl.textContent = `${ff.width.toFixed(1)}%`
+  if (selfEl) {
+    if (ff.frame.self != null && ff.frame.self > 0) {
+      selfEl.style.display = ''
+      const v = selfEl.querySelector<HTMLElement>('span')
+      if (v) v.textContent = ff.frame.self.toLocaleString()
+    } else {
+      selfEl.style.display = 'none'
+    }
+  }
+  if (barEl) {
+    barEl.style.width = `${Math.max(ff.width, 4)}%`
+    barEl.style.backgroundColor = hashColor(ff.frame.name)
+  }
+}
+
 export function Flamegraph({frames, emptyMessage}: Props) {
   const [focusFrame, setFocusFrame] = useState<FlamegraphFrame | null>(null)
-  const [hoveredFrame, setHoveredFrame] = useState<FlatFrame | null>(null)
+  const hoveredRef = useRef<FlatFrame | null>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
 
   const totalValue = useMemo(() => {
     if (!frames?.length) return 0
@@ -129,33 +172,18 @@ export function Flamegraph({frames, emptyMessage}: Props) {
 
   return (
     <div className="space-y-2">
-      {/* Controls */}
-      <div className="flex items-center gap-2">
-        {focusFrame && (
-          <>
-            <Badge variant="secondary" className="text-xs">
-              Zoomed: {focusFrame.name}
-            </Badge>
-            <Button variant="ghost" size="sm" onClick={handleReset}>
-              <RotateCcw className="h-3 w-3 mr-1" />
-              Reset
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Hover tooltip */}
-      {hoveredFrame && (
-        <div className="text-xs bg-popover border rounded-md px-2 py-1 shadow-sm">
-          <span className="font-medium">{hoveredFrame.frame.name}</span>
-          <span className="text-muted-foreground ml-2">
-            {hoveredFrame.frame.value.toLocaleString()} samples
-            ({hoveredFrame.width.toFixed(1)}%)
-          </span>
+      {focusFrame && (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-xs">
+            Zoomed: {focusFrame.name}
+          </Badge>
+          <Button variant="ghost" size="sm" onClick={handleReset}>
+            <RotateCcw className="h-3 w-3 mr-1" />
+            Reset
+          </Button>
         </div>
       )}
 
-      {/* Flamegraph SVG */}
       <div className="border rounded-lg overflow-x-auto">
         <svg
           width="100%"
@@ -163,14 +191,20 @@ export function Flamegraph({frames, emptyMessage}: Props) {
           viewBox={`0 0 100 ${svgHeight}`}
           preserveAspectRatio="none"
           className="block"
+          onMouseMove={(e) => {
+            updateTooltip(tooltipRef.current, hoveredRef.current, e.clientX, e.clientY)
+          }}
+          onMouseLeave={() => {
+            hoveredRef.current = null
+            updateTooltip(tooltipRef.current, null, 0, 0)
+          }}
         >
           {flatFrames.map((ff, i) => {
             const y = svgHeight - (ff.depth + 1) * rowHeight - 2
             return (
               <g
                 key={`${ff.depth}-${ff.x}-${i}`}
-                onMouseEnter={() => setHoveredFrame(ff)}
-                onMouseLeave={() => setHoveredFrame(null)}
+                onMouseEnter={() => { hoveredRef.current = ff }}
                 onClick={() => handleZoomIn(ff.frame)}
                 className="cursor-pointer"
               >
@@ -201,6 +235,32 @@ export function Flamegraph({frames, emptyMessage}: Props) {
             )
           })}
         </svg>
+      </div>
+
+      {/* Tooltip — always mounted, updated imperatively to avoid re-renders */}
+      <div
+        ref={tooltipRef}
+        className="fixed z-50 pointer-events-none max-w-sm"
+        style={{display: 'none'}}
+      >
+        <div className="bg-popover border rounded-lg px-3 py-2 shadow-lg text-xs space-y-1">
+          <p data-tip="name" className="font-semibold text-popover-foreground truncate" />
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <span>
+              <span data-tip="samples" className="text-popover-foreground font-medium" />{' '}
+              samples
+            </span>
+            <span data-tip="pct" className="text-popover-foreground font-medium" />
+            <span data-tip="self" style={{display: 'none'}}>
+              self:{' '}
+              <span className="text-popover-foreground font-medium" />
+            </span>
+          </div>
+          <div
+            data-tip="bar"
+            className="h-1 rounded-full mt-1"
+          />
+        </div>
       </div>
     </div>
   )

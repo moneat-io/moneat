@@ -8,9 +8,19 @@
 
 import {type ApmSpanResponse} from '@/lib/api'
 import {cn} from '@/lib/utils'
-import {useState, useMemo} from 'react'
+import {useState, useMemo, useCallback} from 'react'
 import {Badge} from '@/components/ui/badge'
-import {ChevronDown, ChevronRight} from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  X,
+  Clock,
+  Server,
+  Tag,
+  AlertTriangle,
+  Copy,
+  Check,
+} from 'lucide-react'
 
 interface Props {
   spans: ApmSpanResponse[]
@@ -31,8 +41,21 @@ const SERVICE_COLORS: Record<string, string> = {
   custom: 'bg-gray-500',
 }
 
+const SERVICE_COLORS_BORDER: Record<string, string> = {
+  web: 'border-emerald-500',
+  http: 'border-blue-500',
+  db: 'border-amber-500',
+  cache: 'border-violet-500',
+  grpc: 'border-cyan-500',
+  custom: 'border-gray-500',
+}
+
 function getSpanColor(type: string): string {
   return SERVICE_COLORS[type] || SERVICE_COLORS.custom
+}
+
+function getSpanBorderColor(type: string): string {
+  return SERVICE_COLORS_BORDER[type] || SERVICE_COLORS_BORDER.custom
 }
 
 function formatDuration(ns: number): string {
@@ -40,6 +63,18 @@ function formatDuration(ns: number): string {
   if (ns < 1_000_000) return `${(ns / 1000).toFixed(1)}µs`
   if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)}ms`
   return `${(ns / 1_000_000_000).toFixed(2)}s`
+}
+
+function formatTimestamp(ns: number): string {
+  if (!ns) return '—'
+  const date = new Date(ns / 1_000_000)
+  return date.toLocaleTimeString(undefined, {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+  } as Intl.DateTimeFormatOptions)
 }
 
 function buildTree(spans: ApmSpanResponse[]): SpanNode[] {
@@ -76,8 +111,34 @@ function flattenTree(nodes: SpanNode[]): SpanNode[] {
   return result
 }
 
+function CopyButton({text}: {text: string}) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [text])
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-0.5 hover:bg-muted rounded transition-colors"
+      title="Copy to clipboard"
+    >
+      {copied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 text-muted-foreground" />
+      )}
+    </button>
+  )
+}
+
 export function SpanWaterfall({spans}: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null)
 
   const {flatSpans, traceStart, traceDuration} = useMemo(() => {
     const tree = buildTree(spans)
@@ -87,7 +148,8 @@ export function SpanWaterfall({spans}: Props) {
     return {flatSpans, traceStart, traceDuration: traceEnd - traceStart}
   }, [spans])
 
-  const toggleCollapse = (spanId: string) => {
+  const toggleCollapse = (spanId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
     setCollapsed((prev) => {
       const next = new Set(prev)
       if (next.has(spanId)) {
@@ -99,13 +161,11 @@ export function SpanWaterfall({spans}: Props) {
     })
   }
 
-  // Filter out collapsed children
   const visibleSpans = useMemo(() => {
     const visible: SpanNode[] = []
     const hiddenParents = new Set<string>()
 
     for (const node of flatSpans) {
-      // Check if any ancestor is collapsed
       let parentId = node.span.parentId
       let hidden = false
       while (parentId && parentId !== '0') {
@@ -127,6 +187,16 @@ export function SpanWaterfall({spans}: Props) {
     return visible
   }, [flatSpans, collapsed, spans])
 
+  const selectedSpan = useMemo(
+    () => spans.find((s) => s.spanId === selectedSpanId) ?? null,
+    [spans, selectedSpanId]
+  )
+
+  const spanTypes = useMemo(() => {
+    const types = new Set(spans.map((s) => s.type).filter(Boolean))
+    return [...types]
+  }, [spans])
+
   if (spans.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -136,99 +206,350 @@ export function SpanWaterfall({spans}: Props) {
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="grid grid-cols-[300px_1fr] border-b bg-muted/50 px-2 py-1.5 text-xs font-medium text-muted-foreground">
-        <div>Operation</div>
-        <div>Timeline ({formatDuration(traceDuration)})</div>
-      </div>
+    <div className="flex gap-4">
+      {/* Main waterfall */}
+      <div
+        className={cn(
+          'border rounded-lg overflow-hidden flex-1 min-w-0',
+          selectedSpan && 'max-w-[calc(100%-380px)]'
+        )}
+      >
+        {/* Legend */}
+        {spanTypes.length > 0 && (
+          <div className="flex items-center gap-3 px-3 py-1.5 border-b bg-muted/30 flex-wrap">
+            <span className="text-[10px] text-muted-foreground uppercase font-medium tracking-wider">
+              Types
+            </span>
+            {spanTypes.map((type) => (
+              <div key={type} className="flex items-center gap-1">
+                <span
+                  className={cn(
+                    'w-2 h-2 rounded-full',
+                    getSpanColor(type)
+                  )}
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  {type}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {/* Rows */}
-      <div className="divide-y">
-        {visibleSpans.map((node) => {
-          const {span} = node
-          const left =
-            traceDuration > 0
-              ? ((span.startNs - traceStart) / traceDuration) * 100
-              : 0
-          const width =
-            traceDuration > 0
-              ? Math.max((span.durationNs / traceDuration) * 100, 0.5)
-              : 100
-          const hasChildren = node.children.length > 0
-          const isCollapsed = collapsed.has(span.spanId)
+        {/* Header */}
+        <div className="grid grid-cols-[minmax(280px,2fr)_minmax(200px,3fr)] border-b bg-muted/50 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+          <div>Operation</div>
+          <div>Timeline ({formatDuration(traceDuration)})</div>
+        </div>
 
-          return (
-            <div
-              key={span.spanId}
-              className="grid grid-cols-[300px_1fr] items-center px-2 py-1 hover:bg-muted/30 text-sm"
-            >
-              {/* Operation name */}
+        {/* Rows */}
+        <div className="divide-y max-h-[600px] overflow-y-auto">
+          {visibleSpans.map((node) => {
+            const {span} = node
+            const left =
+              traceDuration > 0
+                ? ((span.startNs - traceStart) / traceDuration) * 100
+                : 0
+            const width =
+              traceDuration > 0
+                ? Math.max((span.durationNs / traceDuration) * 100, 0.5)
+                : 100
+            const hasChildren = node.children.length > 0
+            const isCollapsed = collapsed.has(span.spanId)
+            const isSelected = selectedSpanId === span.spanId
+
+            return (
               <div
-                className="flex items-center gap-1 min-w-0"
-                style={{paddingLeft: `${node.depth * 16}px`}}
+                key={span.spanId}
+                className={cn(
+                  'grid grid-cols-[minmax(280px,2fr)_minmax(200px,3fr)] items-center px-2 py-1 text-sm cursor-pointer transition-colors',
+                  isSelected
+                    ? 'bg-primary/5 hover:bg-primary/8'
+                    : 'hover:bg-muted/30'
+                )}
+                onClick={() =>
+                  setSelectedSpanId(
+                    selectedSpanId === span.spanId ? null : span.spanId
+                  )
+                }
               >
-                {hasChildren ? (
-                  <button
-                    onClick={() => toggleCollapse(span.spanId)}
-                    className="p-0.5 hover:bg-muted rounded"
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    )}
-                  </button>
-                ) : (
-                  <span className="w-4" />
-                )}
-                <span
-                  className={cn(
-                    'w-2 h-2 rounded-full shrink-0',
-                    getSpanColor(span.type)
-                  )}
-                />
-                <span className="truncate font-medium text-xs">
-                  {span.service}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {span.name}
-                </span>
-                {span.error > 0 && (
-                  <Badge
-                    variant="destructive"
-                    className="h-4 text-[10px] px-1"
-                  >
-                    ERR
-                  </Badge>
-                )}
-              </div>
-
-              {/* Timeline bar */}
-              <div className="relative h-5">
+                {/* Operation name */}
                 <div
-                  className={cn(
-                    'absolute top-1 h-3 rounded-sm opacity-80',
-                    getSpanColor(span.type)
-                  )}
-                  style={{
-                    left: `${left}%`,
-                    width: `${width}%`,
-                    minWidth: '2px',
-                  }}
-                  title={`${span.service}.${span.name}: ${formatDuration(span.durationNs)}`}
-                />
-                <span
-                  className="absolute top-0.5 text-[10px] text-muted-foreground"
-                  style={{left: `${Math.min(left + width + 1, 90)}%`}}
+                  className="flex items-center gap-1 min-w-0"
+                  style={{paddingLeft: `${node.depth * 16}px`}}
                 >
-                  {formatDuration(span.durationNs)}
-                </span>
+                  {hasChildren ? (
+                    <button
+                      onClick={(e) => toggleCollapse(span.spanId, e)}
+                      className="p-0.5 hover:bg-muted rounded shrink-0"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="w-4 shrink-0" />
+                  )}
+                  <span
+                    className={cn(
+                      'w-2 h-2 rounded-full shrink-0',
+                      getSpanColor(span.type)
+                    )}
+                  />
+                  <span className="truncate font-medium text-xs">
+                    {span.service}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {span.name}
+                  </span>
+                  {span.error > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="h-4 text-[10px] px-1 shrink-0"
+                    >
+                      ERR
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Timeline bar */}
+                <div className="relative h-6">
+                  <div
+                    className={cn(
+                      'absolute top-1.5 h-3 rounded-sm transition-opacity',
+                      span.error > 0
+                        ? 'bg-red-500/70'
+                        : getSpanColor(span.type),
+                      span.error === 0 && 'opacity-70',
+                      isSelected && 'opacity-100 ring-1 ring-primary'
+                    )}
+                    style={{
+                      left: `${left}%`,
+                      width: `${width}%`,
+                      minWidth: '3px',
+                    }}
+                  />
+                  <span
+                    className="absolute top-1 text-[10px] text-muted-foreground tabular-nums"
+                    style={{left: `${Math.min(left + width + 1, 85)}%`}}
+                  >
+                    {formatDuration(span.durationNs)}
+                  </span>
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
+
+      {/* Span detail panel */}
+      {selectedSpan && (
+        <SpanDetailPanel
+          span={selectedSpan}
+          traceStart={traceStart}
+          onClose={() => setSelectedSpanId(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function SpanDetailPanel({
+  span,
+  traceStart,
+  onClose,
+}: {
+  span: ApmSpanResponse
+  traceStart: number
+  onClose: () => void
+}) {
+  const offsetFromStart = span.startNs - traceStart
+
+  return (
+    <div className="w-[360px] shrink-0 border rounded-lg overflow-hidden">
+      {/* Panel header */}
+      <div
+        className={cn(
+          'flex items-center justify-between px-3 py-2 border-b border-l-2',
+          getSpanBorderColor(span.type)
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                getSpanColor(span.type)
+              )}
+            />
+            <span className="font-semibold text-sm truncate">
+              {span.service}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground truncate mt-0.5">
+            {span.name}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-muted rounded shrink-0"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="overflow-y-auto max-h-[540px]">
+        {/* Quick info */}
+        <div className="grid grid-cols-2 gap-px bg-muted/30">
+          <InfoCell
+            icon={<Clock className="h-3 w-3" />}
+            label="Duration"
+            value={formatDuration(span.durationNs)}
+          />
+          <InfoCell
+            icon={<Clock className="h-3 w-3" />}
+            label="Offset"
+            value={`+${formatDuration(offsetFromStart)}`}
+          />
+          <InfoCell
+            icon={<Server className="h-3 w-3" />}
+            label="Service"
+            value={span.service}
+          />
+          <InfoCell
+            icon={<Tag className="h-3 w-3" />}
+            label="Type"
+            value={span.type || '—'}
+          />
+        </div>
+
+        {/* Error indicator */}
+        {span.error > 0 && (
+          <div className="mx-3 mt-3 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+            <span className="text-sm text-red-500 font-medium">
+              This span has an error
+            </span>
+          </div>
+        )}
+
+        {/* Resource */}
+        {span.resource && (
+          <div className="px-3 pt-3">
+            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1">
+              Resource
+            </div>
+            <div className="bg-muted/50 rounded px-2 py-1.5 text-xs font-mono break-all flex items-start gap-1">
+              <span className="flex-1">{span.resource}</span>
+              <CopyButton text={span.resource} />
+            </div>
+          </div>
+        )}
+
+        {/* IDs */}
+        <div className="px-3 pt-3">
+          <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
+            Identifiers
+          </div>
+          <div className="space-y-1">
+            <IdRow label="Span ID" value={span.spanId} />
+            <IdRow label="Trace ID" value={span.traceId} />
+            {span.parentId !== '0' && (
+              <IdRow label="Parent ID" value={span.parentId} />
+            )}
+          </div>
+        </div>
+
+        {/* Host / Env / Version */}
+        {(span.host || span.env || span.version) && (
+          <div className="px-3 pt-3">
+            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
+              Infrastructure
+            </div>
+            <div className="space-y-1">
+              {span.host && <IdRow label="Host" value={span.host} />}
+              {span.env && <IdRow label="Env" value={span.env} />}
+              {span.version && <IdRow label="Version" value={span.version} />}
+            </div>
+          </div>
+        )}
+
+        {/* Meta tags */}
+        {span.meta && Object.keys(span.meta).length > 0 && (
+          <div className="px-3 pt-3">
+            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
+              Tags ({Object.keys(span.meta).length})
+            </div>
+            <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+              {Object.entries(span.meta).map(([k, v]) => (
+                <div
+                  key={k}
+                  className="flex items-start gap-2 text-xs py-0.5 group"
+                >
+                  <span className="text-muted-foreground font-mono shrink-0 min-w-[100px]">
+                    {k}
+                  </span>
+                  <span className="break-all flex-1">{v}</span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <CopyButton text={v} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Metrics */}
+        {span.metrics && Object.keys(span.metrics).length > 0 && (
+          <div className="px-3 pt-3 pb-3">
+            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
+              Metrics ({Object.keys(span.metrics).length})
+            </div>
+            <div className="space-y-0.5">
+              {Object.entries(span.metrics).map(([k, v]) => (
+                <div key={k} className="flex items-center gap-2 text-xs py-0.5">
+                  <span className="text-muted-foreground font-mono shrink-0 min-w-[100px]">
+                    {k}
+                  </span>
+                  <span className="font-mono tabular-nums">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function InfoCell({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className="px-3 py-2">
+      <div className="flex items-center gap-1 text-muted-foreground mb-0.5">
+        {icon}
+        <span className="text-[10px] uppercase tracking-wider">{label}</span>
+      </div>
+      <span className="text-sm font-medium font-mono">{value}</span>
+    </div>
+  )
+}
+
+function IdRow({label, value}: {label: string; value: string}) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-muted-foreground w-16 shrink-0">{label}</span>
+      <span className="font-mono text-[11px] truncate flex-1">{value}</span>
+      <CopyButton text={value} />
     </div>
   )
 }

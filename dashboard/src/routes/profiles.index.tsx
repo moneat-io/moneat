@@ -8,21 +8,30 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {ProfileList} from '@/components/profiling/ProfileList'
+import {useState} from 'react'
 
 export const Route = createFileRoute('/profiles/')({
   component: ProfilesIndexPage,
 })
 
 function ProfilesIndexPage() {
+  const [serviceFilter, setServiceFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Profiles</h1>
-        <p className="text-muted-foreground text-sm mt-1">
+        <h1 className="text-2xl font-bold tracking-tight">Profiles</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
           Continuous profiling data from your applications
         </p>
       </div>
-      <ProfileList />
+      <ProfileList
+        serviceFilter={serviceFilter}
+        onServiceFilterChange={setServiceFilter}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
+      />
     </div>
   )
 }

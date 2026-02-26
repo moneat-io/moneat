@@ -8,12 +8,36 @@
 
 import {useQuery} from '@tanstack/react-query'
 import {api, type ProfileResponse} from '@/lib/api'
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
-import {Loader2, Download, Search} from 'lucide-react'
-import {useState} from 'react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Activity,
+  Clock,
+  Code2,
+  Download,
+  HardDrive,
+  Layers,
+  Loader2,
+  Search,
+  Server,
+} from 'lucide-react'
+import {useState, useMemo} from 'react'
 import {Link, useNavigate} from '@tanstack/react-router'
 
 function formatBytes(bytes: number): string {
@@ -27,15 +51,65 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(1)}s`
 }
 
-export function ProfileList() {
-  const [serviceFilter, setServiceFilter] = useState('')
+function timeAgo(iso: string): string {
+  const now = Date.now()
+  const then = new Date(iso).getTime()
+  const diffMs = now - then
+  if (diffMs < 0) return 'just now'
+
+  const seconds = Math.floor(diffMs / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  cpu: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+  wall: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  heap: 'bg-green-500/15 text-green-400 border-green-500/30',
+  alloc: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  goroutine: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  mutex: 'bg-red-500/15 text-red-400 border-red-500/30',
+  block: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+}
+
+function profileTypeBadgeClass(type: string): string {
+  const key = type.toLowerCase()
+  for (const [k, v] of Object.entries(TYPE_COLORS)) {
+    if (key.includes(k)) return v
+  }
+  return 'bg-secondary text-secondary-foreground'
+}
+
+interface Props {
+  serviceFilter: string
+  onServiceFilterChange: (val: string) => void
+  typeFilter: string
+  onTypeFilterChange: (val: string) => void
+}
+
+export function ProfileList({
+  serviceFilter,
+  onServiceFilterChange,
+  typeFilter,
+  onTypeFilterChange,
+}: Props) {
   const navigate = useNavigate()
 
   const {data, isLoading} = useQuery({
-    queryKey: ['profiles', serviceFilter],
+    queryKey: ['profiles', serviceFilter, typeFilter],
     queryFn: () =>
       api.getProfiles({
         service: serviceFilter || undefined,
+        type: typeFilter || undefined,
         limit: 50,
       }),
     enabled: api.isAuthenticated(),
@@ -43,104 +117,225 @@ export function ProfileList() {
 
   const profiles = data?.profiles ?? []
 
+  const stats = useMemo(() => {
+    if (profiles.length === 0) return null
+
+    const services = new Set(profiles.map((p) => p.service))
+    const types = new Set(profiles.map((p) => p.profileType))
+    const totalSize = profiles.reduce((sum, p) => sum + p.sizeBytes, 0)
+    const durations = profiles.map((p) => p.durationNs).sort((a, b) => a - b)
+    const avgDuration =
+      durations.reduce((sum, d) => sum + d, 0) / durations.length
+
+    return {
+      totalProfiles: data?.totalCount ?? profiles.length,
+      serviceCount: services.size,
+      typeCount: types.size,
+      totalSize,
+      avgDuration,
+    }
+  }, [profiles, data?.totalCount])
+
+  const availableTypes = useMemo(
+    () => [...new Set(profiles.map((p) => p.profileType))].sort(),
+    [profiles],
+  )
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Filters */}
       <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Filter by service..."
             value={serviceFilter}
-            onChange={(e) => setServiceFilter(e.target.value)}
-            className="pl-9"
+            onChange={(e) => onServiceFilterChange(e.target.value)}
+            className="pl-9 h-9"
           />
         </div>
-        {data?.totalCount != null && (
-          <span className="text-sm text-muted-foreground">
-            {data.totalCount.toLocaleString()} profiles
-          </span>
+        {availableTypes.length > 1 && (
+          <Select
+            value={typeFilter || '__all'}
+            onValueChange={(v) => onTypeFilterChange(v === '__all' ? '' : v)}
+          >
+            <SelectTrigger className="h-9 w-[160px]">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">All types</SelectItem>
+              {availableTypes.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
 
+      {/* Summary stats */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <StatCard
+            label="Total Profiles"
+            value={stats.totalProfiles.toLocaleString()}
+            icon={<Layers className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Services"
+            value={String(stats.serviceCount)}
+            icon={<Server className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Profile Types"
+            value={String(stats.typeCount)}
+            icon={<Code2 className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Avg Duration"
+            value={formatDuration(stats.avgDuration)}
+            icon={<Activity className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Total Size"
+            value={formatBytes(stats.totalSize)}
+            icon={<HardDrive className="h-4 w-4" />}
+          />
+        </div>
+      )}
+
+      {/* Table */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : profiles.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No profiles found</p>
-          <p className="text-sm mt-1">
-            Enable continuous profiling in your agent to collect profiles.
+        <div className="rounded-lg border border-dashed py-16 text-center">
+          <Layers className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+          <p className="font-medium text-muted-foreground">
+            No profiles found
+          </p>
+          <p className="text-sm text-muted-foreground/70 mt-1 max-w-sm mx-auto">
+            Enable continuous profiling in your agent to start collecting
+            profiles from your applications.
           </p>
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Service</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Host</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Size</TableHead>
-              <TableHead>Time</TableHead>
-              <TableHead className="w-[80px]" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {profiles.map((profile: ProfileResponse) => (
-              <TableRow
-                key={profile.profileId}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() =>
-                  navigate({
-                    to: '/profiles/$profileId',
-                    params: {profileId: profile.profileId},
-                  })
-                }
-              >
-                <TableCell>
-                  <Link
-                    to="/profiles/$profileId"
-                    params={{profileId: profile.profileId}}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {profile.service || '(unknown)'}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{profile.profileType}</Badge>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {profile.host || '—'}
-                </TableCell>
-                <TableCell className="text-sm font-mono">
-                  {formatDuration(profile.durationNs)}
-                </TableCell>
-                <TableCell className="text-sm font-mono">
-                  {formatBytes(profile.sizeBytes)}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {new Date(profile.startTime).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    asChild
-                  >
-                    <a
-                      href={api.getProfileDownloadUrl(profile.profileId)}
-                      download
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                  </Button>
-                </TableCell>
+        <div className="rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Service</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="hidden md:table-cell">
+                  Environment
+                </TableHead>
+                <TableHead className="hidden lg:table-cell">Host</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead className="hidden sm:table-cell">Size</TableHead>
+                <TableHead>Time</TableHead>
+                <TableHead className="w-[48px]" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {profiles.map((profile: ProfileResponse) => (
+                <TableRow
+                  key={profile.profileId}
+                  className="cursor-pointer group"
+                  onClick={() =>
+                    navigate({
+                      to: '/profiles/$profileId',
+                      params: {profileId: profile.profileId},
+                    })
+                  }
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Link
+                        to="/profiles/$profileId"
+                        params={{profileId: profile.profileId}}
+                        className="font-medium text-primary hover:underline truncate"
+                      >
+                        {profile.service || '(unknown)'}
+                      </Link>
+                      {profile.language && (
+                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                          {profile.language}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={`text-[11px] border ${profileTypeBadgeClass(profile.profileType)}`}
+                    >
+                      {profile.profileType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                    {profile.env || '—'}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-sm text-muted-foreground font-mono truncate max-w-[160px]">
+                    {profile.host || '—'}
+                  </TableCell>
+                  <TableCell className="text-sm font-mono tabular-nums">
+                    {formatDuration(profile.durationNs)}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell text-sm font-mono tabular-nums text-muted-foreground">
+                    {formatBytes(profile.sizeBytes)}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <span title={new Date(profile.startTime).toLocaleString()}>
+                      <Clock className="h-3 w-3 inline mr-1 -mt-px" />
+                      {timeAgo(profile.startTime)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                      asChild
+                    >
+                      <a
+                        href={api.getProfileDownloadUrl(profile.profileId)}
+                        download
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </a>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
+    </div>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string
+  value: string
+  icon: React.ReactNode
+}) {
+  return (
+    <div className="rounded-lg border bg-card px-4 py-3 flex flex-col gap-1">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <span className="text-xl font-bold tabular-nums tracking-tight">
+        {value}
+      </span>
     </div>
   )
 }

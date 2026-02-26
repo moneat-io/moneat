@@ -24,26 +24,33 @@ import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.api.reactive.RedisReactiveCommands
 import io.lettuce.core.api.sync.RedisCommands
+import java.time.Duration
+
+const val BRPOP_TIMEOUT_SECONDS = 5L
+// Blocking command timeout — must exceed BRPOP wait time. Each worker gets its own connection.
+private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BRPOP_TIMEOUT_SECONDS + 10)
 
 object RedisConfig {
     private var client: RedisClient? = null
     private var connection: StatefulRedisConnection<String, String>? = null
-    private var blockingConnection: StatefulRedisConnection<String, String>? = null
+    private val blockingConnections = mutableListOf<StatefulRedisConnection<String, String>>()
 
     fun init(redisUrl: String) {
         if (connection != null) return
         val uri = RedisURI.create(redisUrl)
         client = RedisClient.create(uri)
         connection = client!!.connect()
-        blockingConnection = client!!.connect()
     }
 
     fun sync(): RedisCommands<String, String> {
         return connection!!.sync()
     }
 
-    fun syncBlocking(): RedisCommands<String, String> {
-        return blockingConnection!!.sync()
+    /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
+    fun newBlockingConnection(): RedisCommands<String, String> {
+        val conn = client!!.connect().also { it.timeout = BLOCKING_COMMAND_TIMEOUT }
+        synchronized(blockingConnections) { blockingConnections.add(conn) }
+        return conn.sync()
     }
 
     fun async(): RedisAsyncCommands<String, String> {
@@ -59,8 +66,10 @@ object RedisConfig {
     fun close() {
         connection?.close()
         connection = null
-        blockingConnection?.close()
-        blockingConnection = null
+        synchronized(blockingConnections) {
+            blockingConnections.forEach { it.close() }
+            blockingConnections.clear()
+        }
         client?.shutdown()
         client = null
     }
