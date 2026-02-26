@@ -23,8 +23,6 @@ import {ProjectProvider} from './contexts/project-context'
 import {TooltipProvider} from './components/ui/tooltip'
 import {HelmetProvider} from 'react-helmet-async'
 import * as Sentry from '@sentry/react'
-import {datadogRum} from '@datadog/browser-rum'
-import {datadogLogs} from '@datadog/browser-logs'
 import {initAnalytics} from './lib/analytics'
 import './index.css'
 
@@ -62,32 +60,14 @@ if (import.meta.env.VITE_ANALYTICS_KEY) {
 // Initialize Datadog RUM & Browser Logs (enterprise deployments only)
 // Data is sent to Moneat's DD-compatible intake via the proxy parameter.
 if (import.meta.env.VITE_DD_APPLICATION_ID && import.meta.env.VITE_DD_CLIENT_TOKEN) {
-  const ddProxyUrl = import.meta.env.VITE_DD_PROXY_URL
-    || (import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io') + '/dd'
-
-  datadogRum.init({
+  const {initDatadog} = await import('./lib/datadog')
+  initDatadog({
     applicationId: import.meta.env.VITE_DD_APPLICATION_ID,
     clientToken: import.meta.env.VITE_DD_CLIENT_TOKEN,
-    site: 'datadoghq.com',
-    proxy: ({path, parameters}) => `${ddProxyUrl}${path}?${parameters}`,
-    service: import.meta.env.VITE_DD_SERVICE || 'moneat-dashboard',
-    env: import.meta.env.VITE_DD_ENV || 'production',
-    sessionSampleRate: 100,
-    sessionReplaySampleRate: 100,
-    trackUserInteractions: true,
-    trackResources: true,
-    trackLongTasks: true,
-    defaultPrivacyLevel: 'mask-user-input',
-  })
-
-  datadogLogs.init({
-    clientToken: import.meta.env.VITE_DD_CLIENT_TOKEN,
-    site: 'datadoghq.com',
-    proxy: ({path, parameters}) => `${ddProxyUrl}${path}?${parameters}`,
-    service: import.meta.env.VITE_DD_SERVICE || 'moneat-dashboard',
-    env: import.meta.env.VITE_DD_ENV || 'production',
-    forwardErrorsToLogs: true,
-    sessionSampleRate: 100,
+    proxyUrl: import.meta.env.VITE_DD_PROXY_URL,
+    backendUrl: import.meta.env.VITE_BACKEND_URL,
+    service: import.meta.env.VITE_DD_SERVICE,
+    env: import.meta.env.VITE_DD_ENV,
   })
 }
 
