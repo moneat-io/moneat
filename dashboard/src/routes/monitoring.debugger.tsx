@@ -18,6 +18,21 @@ export const Route = createFileRoute('/monitoring/debugger')({
   component: DebuggerDashboard,
 })
 
+interface DebuggerLog {
+  debuggerType?: string
+  timestamp?: string
+  message?: string
+  service?: string
+  probeId?: string
+}
+
+interface DebuggerDiagnostic {
+  probeId?: string
+  service?: string
+  env?: string
+  status?: string
+}
+
 const statusColors: Record<string, string> = {
   received: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20',
   installed: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
@@ -37,8 +52,9 @@ function DebuggerDashboard() {
     queryFn: () => api.get('/v1/infra/debugger/diagnostics?limit=50'),
   })
 
-  const logs = logsData?.logs || []
-  const diagnostics = diagData?.diagnostics || []
+  const logs: DebuggerLog[] = (logsData?.logs as DebuggerLog[] | undefined) ?? []
+  const diagnostics: DebuggerDiagnostic[] =
+    (diagData?.diagnostics as DebuggerDiagnostic[] | undefined) ?? []
 
   return (
     <div className="container mx-auto px-4 py-4 space-y-4">
@@ -92,13 +108,16 @@ function DebuggerDashboard() {
               </div>
             ) : diagnostics.length > 0 ? (
               <div className="space-y-2">
-                {diagnostics.map((d: any, i: number) => (
+                {diagnostics.map((d, i: number) => (
                   <div key={i} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                     <div className="min-w-0">
                       <p className="font-mono text-xs truncate">{d.probeId}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{d.service} · {d.env}</p>
                     </div>
-                    <Badge variant="secondary" className={cn('text-xs shrink-0 ml-3', statusColors[d.status] || '')}>
+                    <Badge
+                      variant="secondary"
+                      className={cn('text-xs shrink-0 ml-3', statusColors[d.status ?? ''] || '')}
+                    >
                       {d.status}
                     </Badge>
                   </div>
@@ -134,7 +153,7 @@ function DebuggerDashboard() {
               </div>
             ) : logs.length > 0 ? (
               <div className="space-y-2">
-                {logs.map((l: any, i: number) => (
+                {logs.map((l, i: number) => (
                   <div key={i} className="p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
                     <div className="flex items-center justify-between mb-1.5">
                       <Badge variant="outline" className="text-xs">{l.debuggerType}</Badge>

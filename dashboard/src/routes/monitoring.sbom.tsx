@@ -21,6 +21,15 @@ export const Route = createFileRoute('/monitoring/sbom')({
   component: SbomDashboard,
 })
 
+interface SbomPackage {
+  packageName?: string
+  packageVersion?: string
+  packageType?: string
+  host?: string
+  imageName?: string
+  cveIds?: string[]
+}
+
 function SbomDashboard() {
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -29,12 +38,12 @@ function SbomDashboard() {
     queryFn: () => api.get('/v1/infra/sbom?limit=100'),
   })
 
-  const packages = data?.packages || []
+  const packages: SbomPackage[] = (data?.packages as SbomPackage[] | undefined) ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return packages
     const q = searchQuery.toLowerCase()
-    return packages.filter((p: any) =>
+    return packages.filter((p) =>
       p.packageName?.toLowerCase().includes(q) ||
       p.packageVersion?.toLowerCase().includes(q) ||
       p.packageType?.toLowerCase().includes(q) ||
@@ -43,7 +52,7 @@ function SbomDashboard() {
     )
   }, [packages, searchQuery])
 
-  const cveTotal = packages.reduce((sum: number, p: any) =>
+  const cveTotal = packages.reduce((sum: number, p) =>
     sum + (Array.isArray(p.cveIds) ? p.cveIds.length : 0), 0
   )
 
@@ -135,7 +144,7 @@ function SbomDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((p: any, i: number) => {
+                    {filtered.map((p, i: number) => {
                       const cveCount = Array.isArray(p.cveIds) ? p.cveIds.length : 0
                       return (
                         <TableRow key={i} className="hover:bg-muted/50 transition-colors">

@@ -30,6 +30,15 @@ const RESOURCE_TYPE_MAP: Record<string, string> = {
   replicasets: 'ReplicaSet',
 }
 
+interface KubernetesResource {
+  uid?: string
+  name?: string
+  namespace?: string
+  clusterName?: string
+  status?: string
+  collectedAt?: string
+}
+
 function statusColor(status: string) {
   switch (status) {
     case 'Running':
@@ -59,12 +68,13 @@ function KubernetesResourceList() {
     queryFn: () => api.get(`/v1/infra/k8s-resources?resource_type=${k8sType}&limit=100`),
   })
 
-  const resources = (data as any)?.resources || []
+  const resources: KubernetesResource[] =
+    (data as {resources?: KubernetesResource[]} | undefined)?.resources ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return resources
     const q = searchQuery.toLowerCase()
-    return resources.filter((r: any) =>
+    return resources.filter((r) =>
       r.name?.toLowerCase().includes(q) ||
       r.namespace?.toLowerCase().includes(q) ||
       r.clusterName?.toLowerCase().includes(q) ||
@@ -138,7 +148,7 @@ function KubernetesResourceList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r: any) => (
+                {filtered.map((r) => (
                   <TableRow key={r.uid || r.name} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="pl-4">
                       <TooltipProvider delayDuration={300}>

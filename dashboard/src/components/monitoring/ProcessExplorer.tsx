@@ -217,7 +217,7 @@ export function ProcessExplorer() {
     }
   }
 
-  function SortIndicator({field}: {field: SortField}) {
+  function renderSortIndicator(field: SortField) {
     if (sortField !== field) return null
     return <span className="ml-1 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
   }
@@ -330,14 +330,14 @@ export function ProcessExplorer() {
                     onClick={() => toggleSort('pid')}
                   >
                     PID
-                    <SortIndicator field="pid" />
+                    {renderSortIndicator('pid')}
                   </TableHead>
                   <TableHead
                     className="cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort('name')}
                   >
                     Process
-                    <SortIndicator field="name" />
+                    {renderSortIndicator('name')}
                   </TableHead>
                   <TableHead>User</TableHead>
                   <TableHead>Host</TableHead>
@@ -347,21 +347,21 @@ export function ProcessExplorer() {
                     onClick={() => toggleSort('cpu')}
                   >
                     CPU
-                    <SortIndicator field="cpu" />
+                    {renderSortIndicator('cpu')}
                   </TableHead>
                   <TableHead
                     className="min-w-[140px] cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort('memory')}
                   >
                     RSS Memory
-                    <SortIndicator field="memory" />
+                    {renderSortIndicator('memory')}
                   </TableHead>
                   <TableHead
                     className="text-right cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort('threads')}
                   >
                     Threads
-                    <SortIndicator field="threads" />
+                    {renderSortIndicator('threads')}
                   </TableHead>
                   <TableHead className="text-right pr-4">Last Seen</TableHead>
                 </TableRow>

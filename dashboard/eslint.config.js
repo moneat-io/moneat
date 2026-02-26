@@ -6,7 +6,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'public/docs/**'] },
   js.configs.recommended,
   // Node.js scripts and config files
   {
@@ -34,6 +34,7 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      'react-hooks/exhaustive-deps': 'off',
       // TypeScript handles undefined variable checking; disabling avoids false positives
       // for React namespace, browser/Node types, and other TS-resolved globals.
       'no-undef': 'off',

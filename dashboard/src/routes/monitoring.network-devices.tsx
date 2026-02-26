@@ -28,6 +28,16 @@ const tabs = [
   {id: 'paths', label: 'Paths', href: '/monitoring/network-devices/paths', icon: Wifi},
 ]
 
+interface NetworkDevice {
+  deviceId?: string
+  hostname?: string
+  ipAddress?: string
+  vendor?: string
+  model?: string
+  status?: string
+  reachability?: string
+}
+
 function NetworkDevicesLayout() {
   const router = useRouterState()
   const currentPath = router.location.pathname
@@ -41,12 +51,12 @@ function NetworkDevicesLayout() {
     enabled: isIndexPage,
   })
 
-  const devices = data?.devices || []
+  const devices: NetworkDevice[] = (data?.devices as NetworkDevice[] | undefined) ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return devices
     const q = searchQuery.toLowerCase()
-    return devices.filter((d: any) =>
+    return devices.filter((d) =>
       d.hostname?.toLowerCase().includes(q) ||
       d.deviceId?.toLowerCase().includes(q) ||
       d.ipAddress?.toLowerCase().includes(q) ||
@@ -157,7 +167,7 @@ function NetworkDevicesLayout() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((d: any) => (
+                      {filtered.map((d) => (
                         <TableRow key={d.deviceId} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="pl-4 font-medium">{d.hostname || d.deviceId}</TableCell>
                           <TableCell className="font-mono text-xs">{d.ipAddress}</TableCell>

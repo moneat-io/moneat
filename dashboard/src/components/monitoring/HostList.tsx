@@ -119,7 +119,7 @@ export function HostList() {
     }
   }
 
-  function SortIndicator({field}: {field: SortField}) {
+  function renderSortIndicator(field: SortField) {
     if (sortField !== field) return null
     return <span className="ml-1 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
   }
@@ -232,7 +232,7 @@ export function HostList() {
                     onClick={() => toggleSort('hostname')}
                   >
                     Host
-                    <SortIndicator field="hostname" />
+                    {renderSortIndicator('hostname')}
                   </TableHead>
                   <TableHead>OS / Platform</TableHead>
                   <TableHead>Processor</TableHead>
@@ -241,14 +241,14 @@ export function HostList() {
                     onClick={() => toggleSort('cores')}
                   >
                     CPU Cores
-                    <SortIndicator field="cores" />
+                    {renderSortIndicator('cores')}
                   </TableHead>
                   <TableHead
                     className="min-w-[160px] cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort('memory')}
                   >
                     Memory
-                    <SortIndicator field="memory" />
+                    {renderSortIndicator('memory')}
                   </TableHead>
                   <TableHead>Agent</TableHead>
                   <TableHead
@@ -256,7 +256,7 @@ export function HostList() {
                     onClick={() => toggleSort('lastSeen')}
                   >
                     Last Seen
-                    <SortIndicator field="lastSeen" />
+                    {renderSortIndicator('lastSeen')}
                   </TableHead>
                 </TableRow>
               </TableHeader>

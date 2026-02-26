@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {type FormEvent, Fragment, useEffect, useMemo, useState} from 'react'
+import {type FormEvent, Fragment, useMemo, useState} from 'react'
 import {createFileRoute, Link, redirect, useNavigate, useSearch} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {loadStripe} from '@stripe/stripe-js'
@@ -1035,17 +1035,11 @@ function BillingTab() {
     enabled: api.isAuthenticated() && plansData?.stripeEnabled === true,
   })
 
+  const publishableKey = plansData?.publishableKey
   const stripePromise = useMemo(() => {
-    if (!plansData?.publishableKey) return null
-    return loadStripe(plansData.publishableKey)
-  }, [plansData?.publishableKey])
-
-  useEffect(() => {
-    if (usage && pendingOnCallSeats === null && usage.oncallSeats !== undefined) {
-      setPendingOnCallSeats(usage.oncallSeats)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usage?.oncallSeats])
+    if (!publishableKey) return null
+    return loadStripe(publishableKey)
+  }, [publishableKey])
 
   const updateOnCallSeatsMutation = useMutation({
     mutationFn: (seats: number) => api.updateOnCallSeats(seats),
@@ -1145,6 +1139,11 @@ function BillingTab() {
 
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`
   const statusBadgeVariant = usage.status === 'active' || usage.status === 'trialing' ? 'default' : 'secondary'
+  const effectiveOnCallSeats = pendingOnCallSeats ?? usage.oncallSeats ?? 0
+  const hasPendingOnCallChange =
+    pendingOnCallSeats !== null &&
+    usage.oncallSeats !== undefined &&
+    pendingOnCallSeats !== usage.oncallSeats
 
   const calculateProration = (seatDiff: number) => {
     if (!usage || !usage.oncallPerUserMonthlyCents) return 0
@@ -1229,7 +1228,7 @@ function BillingTab() {
                   <span className="text-2xl font-bold">{usage.oncallUsedSeats ?? 0}</span>
                   <span className="text-muted-foreground">of {usage.oncallSeats ?? 0} seats used</span>
                 </div>
-                {(usage.oncallUsedSeats ?? 0) > (pendingOnCallSeats ?? usage.oncallSeats ?? 0) && (
+                {(usage.oncallUsedSeats ?? 0) > effectiveOnCallSeats && (
                   <p className="text-xs text-red-500 font-medium flex items-center gap-1">
                     <AlertCircle className="h-3 w-3" />
                     Cannot reduce below currently used seats ({usage.oncallUsedSeats})
@@ -1243,19 +1242,23 @@ function BillingTab() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setPendingOnCallSeats(Math.max((usage.oncallUsedSeats ?? 0), (pendingOnCallSeats ?? 0) - 1))}
-                    disabled={updateOnCallSeatsMutation.isPending || (pendingOnCallSeats ?? 0) <= (usage.oncallUsedSeats ?? 0)}
+                    onClick={() =>
+                      setPendingOnCallSeats(
+                        Math.max((usage.oncallUsedSeats ?? 0), effectiveOnCallSeats - 1)
+                      )
+                    }
+                    disabled={updateOnCallSeatsMutation.isPending || effectiveOnCallSeats <= (usage.oncallUsedSeats ?? 0)}
                   >
                     <Minus className="h-4 w-4" />
                   </Button>
                   <div className="w-12 text-center font-mono text-lg font-medium">
-                    {pendingOnCallSeats ?? 0}
+                    {effectiveOnCallSeats}
                   </div>
                   <Button
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setPendingOnCallSeats((pendingOnCallSeats ?? 0) + 1)}
+                    onClick={() => setPendingOnCallSeats(effectiveOnCallSeats + 1)}
                     disabled={updateOnCallSeatsMutation.isPending}
                   >
                     <Plus className="h-4 w-4" />
@@ -1264,7 +1267,7 @@ function BillingTab() {
               </div>
             </div>
 
-            {(pendingOnCallSeats !== null && usage.oncallSeats !== undefined && pendingOnCallSeats !== usage.oncallSeats) && (
+            {hasPendingOnCallChange && (
               <div className="rounded-lg bg-muted/50 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-sm">
                   <span className="font-medium">Summary: </span>

@@ -39,7 +39,7 @@ import {
   Server,
 } from 'lucide-react'
 import {useMemo} from 'react'
-import {Link, useNavigate} from '@tanstack/react-router'
+import {Link} from '@tanstack/react-router'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`

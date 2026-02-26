@@ -148,7 +148,7 @@ export function TraceList({serviceFilter: externalService, envFilter}: TraceList
     )
   }
 
-  const SortIcon = ({field}: {field: SortField}) => {
+  const renderSortIcon = (field: SortField) => {
     if (sort.field !== field)
       return <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />
     return sort.dir === 'asc' ? (
@@ -208,19 +208,19 @@ export function TraceList({serviceFilter: externalService, envFilter}: TraceList
                 onClick={() => toggleSort('spans')}
                 className="flex items-center gap-1 hover:text-foreground transition-colors"
               >
-                Spans <SortIcon field="spans" />
+                Spans {renderSortIcon('spans')}
               </button>
               <button
                 onClick={() => toggleSort('duration')}
                 className="flex items-center gap-1 hover:text-foreground transition-colors"
               >
-                Duration <SortIcon field="duration" />
+                Duration {renderSortIcon('duration')}
               </button>
               <button
                 onClick={() => toggleSort('time')}
                 className="flex items-center gap-1 hover:text-foreground transition-colors"
               >
-                Time <SortIcon field="time" />
+                Time {renderSortIcon('time')}
               </button>
               <div>Status</div>
             </div>

@@ -28,6 +28,15 @@ const severityColors: Record<string, string> = {
   info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20',
 }
 
+interface NetworkTrap {
+  trapId?: string
+  deviceIp?: string
+  oid?: string
+  severity?: string
+  message?: string
+  receivedAt?: string
+}
+
 function NdmTraps() {
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -36,12 +45,12 @@ function NdmTraps() {
     queryFn: () => api.get('/v1/network-devices/traps?limit=100'),
   })
 
-  const traps = data?.traps || []
+  const traps: NetworkTrap[] = (data?.traps as NetworkTrap[] | undefined) ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return traps
     const q = searchQuery.toLowerCase()
-    return traps.filter((t: any) =>
+    return traps.filter((t) =>
       t.deviceIp?.toLowerCase().includes(q) ||
       t.oid?.toLowerCase().includes(q) ||
       t.severity?.toLowerCase().includes(q) ||
@@ -115,12 +124,15 @@ function NdmTraps() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((t: any) => (
+                {filtered.map((t) => (
                   <TableRow key={t.trapId} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="pl-4 font-mono text-xs">{t.deviceIp}</TableCell>
                     <TableCell className="font-mono text-xs">{t.oid}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={cn('text-xs', severityColors[t.severity] || '')}>
+                      <Badge
+                        variant="secondary"
+                        className={cn('text-xs', severityColors[t.severity ?? ''] || '')}
+                      >
                         {t.severity}
                       </Badge>
                     </TableCell>

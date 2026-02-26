@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
@@ -33,13 +33,23 @@ const severityColors: Record<string, string> = {
   info: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
 }
 
+interface SecurityEvent {
+  eventId?: string
+  severity?: string
+  ruleName?: string
+  eventType?: string
+  processName?: string
+  host?: string
+  timestamp?: string
+}
+
 function SecurityEvents() {
   const {data, isLoading} = useQuery({
     queryKey: ['security-events'],
     queryFn: () => api.get('/v1/security/events?limit=50'),
   })
 
-  const events = data?.events || []
+  const events: SecurityEvent[] = (data?.events as SecurityEvent[] | undefined) ?? []
 
   if (isLoading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" /></div>
 
@@ -60,10 +70,12 @@ function SecurityEvents() {
               </tr>
             </thead>
             <tbody>
-              {events.map((e: any) => (
+              {events.map((e) => (
                 <tr key={e.eventId} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="py-2 pr-4">
-                    <Badge variant="outline" className={cn('text-xs', severityColors[e.severity] || '')}>{e.severity}</Badge>
+                    <Badge variant="outline" className={cn('text-xs', severityColors[e.severity ?? ''] || '')}>
+                      {e.severity}
+                    </Badge>
                   </td>
                   <td className="py-2 pr-4">{e.ruleName}</td>
                   <td className="py-2 pr-4">{e.eventType}</td>

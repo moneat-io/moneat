@@ -20,6 +20,14 @@ export const Route = createFileRoute('/monitoring/network-devices/paths')({
   component: NdmPaths,
 })
 
+interface NetworkPath {
+  pathId?: string
+  source?: string
+  destination?: string
+  hops?: unknown[]
+  collectedAt?: string
+}
+
 function NdmPaths() {
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -28,12 +36,12 @@ function NdmPaths() {
     queryFn: () => api.get('/v1/network-devices/paths?limit=100'),
   })
 
-  const paths = data?.paths || []
+  const paths: NetworkPath[] = (data?.paths as NetworkPath[] | undefined) ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return paths
     const q = searchQuery.toLowerCase()
-    return paths.filter((p: any) =>
+    return paths.filter((p) =>
       p.source?.toLowerCase().includes(q) ||
       p.destination?.toLowerCase().includes(q)
     )
@@ -104,7 +112,7 @@ function NdmPaths() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((p: any) => {
+                {filtered.map((p) => {
                   const hopCount = Array.isArray(p.hops) ? p.hops.length : 0
                   return (
                     <TableRow key={p.pathId} className="hover:bg-muted/50 transition-colors">

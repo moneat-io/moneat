@@ -32,6 +32,21 @@ const statusColors: Record<string, string> = {
   error: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
 }
 
+interface ComplianceSummary {
+  status?: string
+  count?: number
+}
+
+interface ComplianceFinding {
+  findingId?: string
+  framework?: string
+  ruleName?: string
+  status?: string
+  resourceType?: string
+  resourceName?: string
+  evaluatedAt?: string
+}
+
 function ComplianceFindings() {
   const {data: summaryData} = useQuery({
     queryKey: ['compliance-summary'],
@@ -43,8 +58,8 @@ function ComplianceFindings() {
     queryFn: () => api.get('/v1/security/compliance?limit=50'),
   })
 
-  const findings = data?.findings || []
-  const summary = summaryData?.summary || []
+  const findings: ComplianceFinding[] = (data?.findings as ComplianceFinding[] | undefined) ?? []
+  const summary: ComplianceSummary[] = (summaryData?.summary as ComplianceSummary[] | undefined) ?? []
 
   return (
     <div className="space-y-6">
@@ -52,7 +67,9 @@ function ComplianceFindings() {
       {summary.length > 0 && (
         <div className="grid gap-4 md:grid-cols-4">
           {['passed', 'failed', 'skipped', 'error'].map(status => {
-            const count = summary.filter((s: any) => s.status === status).reduce((a: number, s: any) => a + (s.count || 0), 0)
+            const count = summary
+              .filter((s) => s.status === status)
+              .reduce((a: number, s) => a + (s.count || 0), 0)
             return (
               <Card key={status}>
                 <CardContent className="pt-4">
@@ -89,12 +106,14 @@ function ComplianceFindings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {findings.map((f: any) => (
+                  {findings.map((f) => (
                     <tr key={f.findingId} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="py-2 pr-4"><Badge variant="outline" className="text-xs">{f.framework}</Badge></td>
                       <td className="py-2 pr-4">{f.ruleName}</td>
                       <td className="py-2 pr-4">
-                        <Badge variant="outline" className={cn('text-xs', statusColors[f.status] || '')}>{f.status}</Badge>
+                        <Badge variant="outline" className={cn('text-xs', statusColors[f.status ?? ''] || '')}>
+                          {f.status}
+                        </Badge>
                       </td>
                       <td className="py-2 pr-4 text-xs">{f.resourceType}: {f.resourceName}</td>
                       <td className="py-2 text-muted-foreground text-xs">{f.evaluatedAt}</td>

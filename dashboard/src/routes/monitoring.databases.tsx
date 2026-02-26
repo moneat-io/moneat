@@ -23,6 +23,14 @@ export const Route = createFileRoute('/monitoring/databases')({
   component: DatabaseMonitoring,
 })
 
+interface DatabaseQuery {
+  statement?: string
+  dbHost?: string
+  dbName?: string
+  durationNs?: number
+  timestamp?: string
+}
+
 function DatabaseMonitoring() {
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -31,12 +39,12 @@ function DatabaseMonitoring() {
     queryFn: () => api.get('/v1/infra/dbm/queries?limit=50'),
   })
 
-  const queries = (data as any)?.queries || []
+  const queries: DatabaseQuery[] = (data as {queries?: DatabaseQuery[]} | undefined)?.queries ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return queries
     const q = searchQuery.toLowerCase()
-    return queries.filter((qr: any) =>
+    return queries.filter((qr) =>
       qr.statement?.toLowerCase().includes(q) ||
       qr.dbHost?.toLowerCase().includes(q) ||
       qr.dbName?.toLowerCase().includes(q)
@@ -120,7 +128,7 @@ function DatabaseMonitoring() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((q: any, i: number) => (
+                    {filtered.map((q, i: number) => (
                       <TableRow key={i} className="hover:bg-muted/50 transition-colors">
                         <TableCell className="pl-4 max-w-md">
                           <TooltipProvider delayDuration={300}>
@@ -156,7 +164,7 @@ function DatabaseMonitoring() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs tabular-nums font-mono">
-                            {(q.durationNs / 1e6).toFixed(1)}ms
+                            {((q.durationNs ?? 0) / 1e6).toFixed(1)}ms
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right pr-4 text-xs text-muted-foreground">{q.timestamp}</TableCell>

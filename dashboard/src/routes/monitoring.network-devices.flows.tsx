@@ -20,6 +20,18 @@ export const Route = createFileRoute('/monitoring/network-devices/flows')({
   component: NdmFlows,
 })
 
+interface NetworkFlow {
+  flowId?: string
+  srcIp?: string
+  srcPort?: number
+  dstIp?: string
+  dstPort?: number
+  protocol?: string
+  bytes?: number
+  flowType?: string
+  sampledAt?: string
+}
+
 function NdmFlows() {
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -28,12 +40,12 @@ function NdmFlows() {
     queryFn: () => api.get('/v1/network-devices/flows?limit=100'),
   })
 
-  const flows = data?.flows || []
+  const flows: NetworkFlow[] = (data?.flows as NetworkFlow[] | undefined) ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return flows
     const q = searchQuery.toLowerCase()
-    return flows.filter((f: any) =>
+    return flows.filter((f) =>
       f.srcIp?.toLowerCase().includes(q) ||
       f.dstIp?.toLowerCase().includes(q) ||
       f.protocol?.toLowerCase().includes(q) ||
@@ -108,12 +120,14 @@ function NdmFlows() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((f: any) => (
+                {filtered.map((f) => (
                   <TableRow key={f.flowId} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="pl-4 font-mono text-xs">{f.srcIp}:{f.srcPort}</TableCell>
                     <TableCell className="font-mono text-xs">{f.dstIp}:{f.dstPort}</TableCell>
                     <TableCell className="text-sm">{f.protocol}</TableCell>
-                    <TableCell className="text-sm tabular-nums">{Number(f.bytes).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm tabular-nums">
+                      {Number(f.bytes ?? 0).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">{f.flowType}</Badge>
                     </TableCell>

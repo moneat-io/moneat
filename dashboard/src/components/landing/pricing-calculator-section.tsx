@@ -387,13 +387,9 @@ const DATADOG_ERROR_RATE_PER_1K = 0.25
 function estimateDatadogCost(usage: Usage): number {
   const infraCost = usage.hosts * DATADOG_COST_PER_HOST
   const logCost = usage.logGb * DATADOG_LOG_COST_PER_GB
-  let errorCost = 0
-  if (usage.errors <= 50_000) {
-    errorCost = usage.errors > 0 ? DATADOG_ERROR_COST_FIRST_50K : 0
-  } else {
-    errorCost =
-      DATADOG_ERROR_COST_FIRST_50K + Math.ceil((usage.errors - 50_000) / 1000) * DATADOG_ERROR_RATE_PER_1K
-  }
+  const errorCost = usage.errors <= 50_000
+    ? (usage.errors > 0 ? DATADOG_ERROR_COST_FIRST_50K : 0)
+    : DATADOG_ERROR_COST_FIRST_50K + Math.ceil((usage.errors - 50_000) / 1000) * DATADOG_ERROR_RATE_PER_1K
   return infraCost + logCost + errorCost
 }
 
