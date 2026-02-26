@@ -35,7 +35,6 @@ import {
     Check,
     ChevronLeft,
     ChevronRight,
-    Cpu,
     Flame,
     FlaskConical,
     Globe,
@@ -205,30 +204,31 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
   }
 
   const baseNavItems: NavItem[] = [
-    // Core Observability (most used)
+    // Core Observability
     { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
     { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false },
-    { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false, badge: 'Beta' },
-    // Monitoring & Uptime
+    ...(hasEnterpriseModule(features, 'datadog') ? [
+      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
+    ] : []),
+    // Infrastructure & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
     { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
-    // User Insights
+    // Insights & Tools
+    { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false, badge: 'Beta' },
     { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
     { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
-    ...(hasEnterpriseModule(features, 'analytics') ? [{ key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
-    // Additional Features
     { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
     { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
-    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
+    // Enterprise-gated features
     ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'apm-traces', icon: Cpu, label: 'APM Traces', href: '/apm-traces', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
-      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
       { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
       { key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, badge: features?.selfHost ? 'Enterprise' : 'Beta' },
     ] : []),
+    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
+    ...(hasEnterpriseModule(features, 'analytics') ? [{ key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
     // Management
     ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
   ]

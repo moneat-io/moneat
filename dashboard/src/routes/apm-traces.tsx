@@ -6,24 +6,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
-import {BetaBanner} from '@/components/BetaBanner'
+import {createFileRoute, redirect} from '@tanstack/react-router'
 
 export const Route = createFileRoute('/apm-traces')({
   beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
+    throw redirect({to: '/performance/traces'})
   },
-  component: ApmTracesLayout,
 })
-
-function ApmTracesLayout() {
-  return (
-    <>
-      <BetaBanner pageKey="apm-traces" />
-      <Outlet />
-    </>
-  )
-}

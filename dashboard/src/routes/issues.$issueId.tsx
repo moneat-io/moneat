@@ -462,6 +462,33 @@ function IssueDetailPage() {
                     )}
                   </div>
 
+                  {/* Cross-link to APM trace if trace_id exists in contexts */}
+                  {(() => {
+                    const traceCtx = contextEntries.find(([key]) => key === 'trace')
+                    const traceId = traceCtx
+                      ? (traceCtx[1] as Record<string, unknown>)?.trace_id as string | undefined
+                      : undefined
+                    if (!traceId) return null
+                    return (
+                      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Activity className="h-4 w-4 text-blue-500" />
+                          <span className="text-muted-foreground">
+                            This error has an associated APM trace
+                          </span>
+                        </div>
+                        <Link
+                          to="/performance/traces/$traceId"
+                          params={{ traceId }}
+                          className="text-sm text-primary hover:underline font-medium flex items-center gap-1"
+                        >
+                          View trace
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    )
+                  })()}
+
                   <div>
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
