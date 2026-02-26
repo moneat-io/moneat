@@ -515,6 +515,7 @@ export interface ProfileResponse {
   durationNs: number
   sizeBytes: number
   tags: Record<string, string>
+  source?: string
 }
 
 export interface ProfileListResponse {
@@ -2632,6 +2633,13 @@ class ApiClient {
   }
 
   /**
+   * Public GET helper — delegates to the private request() method with auth.
+   */
+  async get<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint)
+  }
+
+  /**
    * Fetch with auth (same credentials/impersonation/401 retry as request) for non-JSON responses (e.g. blob download).
    */
   private async fetchWithAuth(
@@ -3344,12 +3352,14 @@ class ApiClient {
   async getProfiles(params: {
     service?: string
     type?: string
+    source?: string
     limit?: number
     offset?: number
   } = {}): Promise<ProfileListResponse> {
     const searchParams = new URLSearchParams()
     if (params.service) searchParams.set('service', params.service)
     if (params.type) searchParams.set('type', params.type)
+    if (params.source) searchParams.set('source', params.source)
     if (params.limit) searchParams.set('limit', String(params.limit))
     if (params.offset) searchParams.set('offset', String(params.offset))
     const qs = searchParams.toString()
