@@ -621,11 +621,8 @@ const DashboardCard = memo(function DashboardCard({
 
   const accent = getAccentColor(dashboard.id)
   const widgetCount = dashboard.widgets.length
-  const isRecent = useMemo(() => {
-    const updatedDate = new Date(dashboard.updated_at)
-    // eslint-disable-next-line react-hooks/purity
-    return Date.now() - updatedDate.getTime() < 86400000
-  }, [dashboard.updated_at])
+  const updatedDate = useMemo(() => new Date(dashboard.updated_at), [dashboard.updated_at])
+  const isRecent = Date.now() - updatedDate.getTime() < 86400000
 
   return (
     <Link
