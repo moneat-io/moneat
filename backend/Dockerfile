@@ -31,9 +31,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 RUN groupadd --system moneat && useradd --system --gid moneat --home /app --create-home moneat
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
+
+# Download Datadog Java agent for enterprise builds (profiling, APM, dynamic instrumentation)
+ARG ENTERPRISE=false
+RUN if [ "$ENTERPRISE" = "true" ]; then \
+      wget -q -O /app/dd-java-agent.jar 'https://dtdg.co/latest-java-tracer'; \
+    fi
+
+COPY backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 RUN mkdir -p /app/storage/chunks /app/storage/artifact_bundles && chown -R moneat:moneat /app/storage
 USER moneat
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
   CMD wget -q -O /dev/null http://localhost:8080/health/ready || exit 1
-CMD ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/app/entrypoint.sh"]

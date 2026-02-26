@@ -16,11 +16,86 @@
 # Add enterprise-specific environment variables to your .env file:
 #   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER (for On-Call voice alerts)
 #   SAML_CERT, SAML_KEY, SAML_ENTITY_ID (for SSO)
+#
+# Datadog Agent integration (optional):
+#   Set DD_API_KEY in .env.enterprise to enable the Datadog Agent sidecar.
+#   Features: continuous profiling, APM, dynamic instrumentation, log collection.
 
 services:
+  datadog-agent:
+    image: datadog/agent:latest
+    container_name: moneat-datadog-agent
+    restart: unless-stopped
+    environment:
+      # Core
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+      DD_ENV: ${DD_ENV:-production}
+      DD_HOSTNAME: ${DD_HOSTNAME:-moneat-host}
+      # APM
+      DD_APM_ENABLED: "true"
+      DD_APM_NON_LOCAL_TRAFFIC: "true"
+      # Continuous Profiling
+      DD_PROFILING_ENABLED: "true"
+      # Live Processes
+      DD_PROCESS_AGENT_ENABLED: "true"
+      # Log Collection
+      DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+      # Dynamic Instrumentation (Probes / Debugger)
+      DD_DYNAMIC_INSTRUMENTATION_ENABLED: "true"
+      # Network Performance Monitoring
+      DD_SYSTEM_PROBE_ENABLED: "true"
+      DD_SYSTEM_PROBE_NETWORK_ENABLED: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+    ports:
+      - "8126:8126"   # APM traces
+      - "8125:8125"   # DogStatsD metrics
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - SYS_PTRACE
+      - NET_ADMIN
+      - NET_BROADCAST
+    security_opt:
+      - apparmor:unconfined
+
   backend:
     build:
       args:
         ENTERPRISE: "true"
     env_file:
       - .env.enterprise  # Optional: enterprise-specific secrets (Twilio, SAML, etc.)
+    environment:
+      # Datadog Java Agent configuration
+      DD_AGENT_HOST: datadog-agent
+      DD_SERVICE: moneat-backend
+      DD_ENV: ${DD_ENV:-production}
+      DD_VERSION: ${RELEASE_VERSION:-dev}
+      # Continuous Profiling
+      DD_PROFILING_ENABLED: "true"
+      DD_PROFILING_HEAP_ENABLED: "true"
+      # APM / Tracing
+      DD_TRACE_ENABLED: "true"
+      DD_TRACE_SAMPLE_RATE: "1.0"
+      DD_LOGS_INJECTION: "true"
+      # Dynamic Instrumentation (Probes)
+      DD_DYNAMIC_INSTRUMENTATION_ENABLED: "true"
+      # JVM Runtime Metrics
+      DD_JMXFETCH_ENABLED: "true"
+      DD_RUNTIME_METRICS_ENABLED: "true"
+    depends_on:
+      - datadog-agent
+
+  frontend:
+    build:
+      args:
+        VITE_DD_APPLICATION_ID: ${DD_RUM_APPLICATION_ID:-}
+        VITE_DD_CLIENT_TOKEN: ${DD_RUM_CLIENT_TOKEN:-}
+        VITE_DD_SITE: ${DD_SITE:-datadoghq.com}
+        VITE_DD_SERVICE: moneat-dashboard
+        VITE_DD_ENV: ${DD_ENV:-production}

@@ -23,6 +23,8 @@ import {ProjectProvider} from './contexts/project-context'
 import {TooltipProvider} from './components/ui/tooltip'
 import {HelmetProvider} from 'react-helmet-async'
 import * as Sentry from '@sentry/react'
+import {datadogRum} from '@datadog/browser-rum'
+import {datadogLogs} from '@datadog/browser-logs'
 import {initAnalytics} from './lib/analytics'
 import './index.css'
 
@@ -54,6 +56,32 @@ if (import.meta.env.VITE_ANALYTICS_KEY) {
     domain: window.location.hostname,
     apiHost: backendUrl,
     key: import.meta.env.VITE_ANALYTICS_KEY,
+  })
+}
+
+// Initialize Datadog RUM & Browser Logs (enterprise deployments only)
+if (import.meta.env.VITE_DD_APPLICATION_ID && import.meta.env.VITE_DD_CLIENT_TOKEN) {
+  datadogRum.init({
+    applicationId: import.meta.env.VITE_DD_APPLICATION_ID,
+    clientToken: import.meta.env.VITE_DD_CLIENT_TOKEN,
+    site: import.meta.env.VITE_DD_SITE || 'datadoghq.com',
+    service: import.meta.env.VITE_DD_SERVICE || 'moneat-dashboard',
+    env: import.meta.env.VITE_DD_ENV || 'production',
+    sessionSampleRate: 100,
+    sessionReplaySampleRate: 100,
+    trackUserInteractions: true,
+    trackResources: true,
+    trackLongTasks: true,
+    defaultPrivacyLevel: 'mask-user-input',
+  })
+
+  datadogLogs.init({
+    clientToken: import.meta.env.VITE_DD_CLIENT_TOKEN,
+    site: import.meta.env.VITE_DD_SITE || 'datadoghq.com',
+    service: import.meta.env.VITE_DD_SERVICE || 'moneat-dashboard',
+    env: import.meta.env.VITE_DD_ENV || 'production',
+    forwardErrorsToLogs: true,
+    sessionSampleRate: 100,
   })
 }
 
