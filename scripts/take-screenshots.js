@@ -12,8 +12,8 @@
  * Prerequisites:
  * - Run `npm install --save-dev playwright` in the scripts directory
  * - Run `npx playwright install chromium`
- * - Ensure demo data is seeded: `./scripts/seed-demo-data.sh`
  * - Ensure dashboard is running: `cd dashboard && npm run dev`
+ * - Ensure backend is running with demo data available
  */
 
 const { chromium } = require('playwright');
@@ -23,8 +23,6 @@ const pixelmatch = require('pixelmatch');
 const { PNG } = require('pngjs');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const DEMO_EMAIL = 'demo@moneat.dev';
-const DEMO_PASSWORD = 'demo123';
 const SCREENSHOTS_DIR = path.join(__dirname, '../dashboard/public/screenshots');
 
 // Diff threshold: 0.1 = 10% of pixels can differ
@@ -78,7 +76,7 @@ const SCREENSHOTS = [
     description: 'Main dashboard overview',
     path: '/',
     waitFor: 'text=Recent Issues',
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   // Primary features
   {
@@ -86,7 +84,7 @@ const SCREENSHOTS = [
     description: 'Error tracking / Issues list',
     path: '/issues',
     waitFor: 'text=Issues',
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   {
     name: 'log-management',
@@ -120,14 +118,14 @@ const SCREENSHOTS = [
         }
       }
     },
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   {
     name: 'session-replay',
     description: 'Session replay list',
     path: '/replays',
     waitFor: 'text=Replays',
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   // Secondary features
   {
@@ -135,21 +133,21 @@ const SCREENSHOTS = [
     description: 'Performance monitoring',
     path: '/performance',
     waitFor: 'text=Performance',
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   {
     name: 'uptime',
     description: 'Uptime monitoring',
     path: '/uptime',
     waitFor: 'text=Uptime',
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   {
     name: 'status-pages',
     description: 'Public status pages',
     path: '/s/acme-status',
     waitFor: 'text=Status',
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   {
     name: 'containers',
@@ -192,45 +190,107 @@ const SCREENSHOTS = [
         console.log('   ⚠️  Could not navigate to containers:', e.message);
       }
     },
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
   },
   {
     name: 'escalation-policies',
     description: 'On-call escalation policies',
     path: '/on-call/escalation-policies',
     waitFor: 'text=Escalation Policies',
-    viewport: { width: 1920, height: 1080 },
+    viewport: { width: 1200, height: 750 },
+  },
+  // New features
+  {
+    name: 'ai',
+    description: 'AI observability overview',
+    path: '/ai',
+    waitFor: 'text=AI',
+    viewport: { width: 1200, height: 750 },
+  },
+  {
+    name: 'apm-traces',
+    description: 'APM trace flamegraph (first trace detail)',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/apm-traces`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      
+      // Click the first trace row/link
+      try {
+        const firstTrace = page.locator('a[href^="/apm-traces/"]').first();
+        const traceExists = await firstTrace.count() > 0;
+        if (traceExists) {
+          await firstTrace.click();
+          await page.waitForLoadState('networkidle');
+          await page.waitForTimeout(2000);
+          console.log('   ✅ Navigated to first APM trace');
+        } else {
+          console.log('   ⚠️  No APM traces found');
+        }
+      } catch (e) {
+        console.log('   ⚠️  Could not navigate to APM trace:', e.message);
+      }
+    },
+    viewport: { width: 1200, height: 750 },
+  },
+  {
+    name: 'profiles',
+    description: 'Continuous profiling flamegraph (first profile detail)',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/profiles`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      
+      // Click the first profile row/link
+      try {
+        const firstProfile = page.locator('a[href^="/profiles/"]').first();
+        const profileExists = await firstProfile.count() > 0;
+        if (profileExists) {
+          await firstProfile.click();
+          await page.waitForLoadState('networkidle');
+          await page.waitForTimeout(2000);
+          console.log('   ✅ Navigated to first profile');
+        } else {
+          console.log('   ⚠️  No profiles found');
+        }
+      } catch (e) {
+        console.log('   ⚠️  Could not navigate to profile:', e.message);
+      }
+    },
+    viewport: { width: 1200, height: 750 },
+  },
+  {
+    name: 'security',
+    description: 'Security and compliance page',
+    path: '/security',
+    waitFor: 'text=Security',
+    viewport: { width: 1200, height: 750 },
   },
 ];
 
 async function login(page) {
-  console.log('🔐 Logging in as demo user...');
+  console.log('🔐 Logging in via demo route...');
   
   try {
-    await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
+    // Navigate to /demo which auto-authenticates and redirects to /projects
+    await page.goto(`${BASE_URL}/demo`, { waitUntil: 'networkidle' });
     
-    // Wait for login form to be visible
-    await page.waitForSelector('#email', { timeout: 10000 });
-    
-    // Fill in login form using the actual IDs from the form
-    await page.fill('#email', DEMO_EMAIL);
-    await page.fill('#password', DEMO_PASSWORD);
-    
-    console.log(`   Email: ${DEMO_EMAIL}`);
-    
-    // Click the sign in button
-    const signInButton = await page.locator('button[type="submit"]:has-text("Sign in")').first();
-    await signInButton.click();
-    
-    // Wait for navigation away from login page (could go to / or /projects)
-    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
+    // Wait for redirect away from /demo
+    await page.waitForURL((url) => !url.pathname.includes('/demo'), { timeout: 15000 });
     
     // Wait a bit for the page to fully load
     await page.waitForTimeout(2000);
     
-    console.log(`✅ Logged in successfully - now at: ${page.url()}`);
+    console.log(`✅ Logged in via demo - now at: ${page.url()}`);
+    
+    // Set localStorage flags to suppress banners in screenshots
+    await page.evaluate(() => {
+      localStorage.setItem('screenshot-mode', 'true');
+      localStorage.setItem('beta-banner-dismissed-apm-traces', 'true');
+      localStorage.setItem('beta-banner-dismissed-profiles', 'true');
+      localStorage.setItem('beta-banner-dismissed-security', 'true');
+    });
+    console.log('🚫 Banners suppressed via localStorage');
   } catch (error) {
-    console.error('❌ Login failed:', error.message);
+    console.error('❌ Demo login failed:', error.message);
     
     // Take a debug screenshot
     const debugPath = path.join(SCREENSHOTS_DIR, 'debug-login-error.png');
@@ -270,6 +330,23 @@ async function takeScreenshot(page, config) {
     // Additional wait for any animations to complete
     await page.waitForTimeout(1000);
     
+    // Measure sidebar and topbar to crop them out
+    const clip = await page.evaluate(() => {
+      // Sidebar: fixed left column
+      const sidebar = document.querySelector('.fixed.left-0.top-0');
+      // Topbar: the border-b header bar with backdrop-blur
+      const topbar = document.querySelector('.border-b.backdrop-blur');
+      const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 0;
+      const topbarHeight = topbar ? topbar.getBoundingClientRect().height : 0;
+      return {
+        x: sidebarWidth,
+        y: topbarHeight,
+        width: window.innerWidth - sidebarWidth,
+        height: window.innerHeight - topbarHeight,
+      };
+    });
+    console.log(`   ✂️  Cropping sidebar=${clip.x}px topbar=${clip.y}px`);
+    
     // Prepare screenshot path
     const screenshotPath = path.join(SCREENSHOTS_DIR, `${config.name}.png`);
     
@@ -298,16 +375,16 @@ async function takeScreenshot(page, config) {
             screenshotBuffer = await genericContainer.screenshot({ type: 'png' });
           } else {
             console.log(`⚠️  Card container not found for ${config.elementSelector}, taking full page`);
-            screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
+            screenshotBuffer = await page.screenshot({ fullPage: false, clip, type: 'png' });
           }
         }
       } else {
         console.log(`⚠️  Element not found: ${config.elementSelector}, taking full page screenshot`);
-        screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
+        screenshotBuffer = await page.screenshot({ fullPage: false, clip, type: 'png' });
       }
     } else {
-      // Regular full viewport screenshot
-      screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
+      // Crop to content area only (no sidebar, no topbar)
+      screenshotBuffer = await page.screenshot({ fullPage: false, clip, type: 'png' });
     }
     
     // Compare with existing screenshot (if any)
@@ -353,7 +430,7 @@ async function main() {
   
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-    deviceScaleFactor: 1.25, // 125% zoom
+    deviceScaleFactor: 2, // retina 2× for sharp, readable screenshots
   });
   
   const page = await context.newPage();

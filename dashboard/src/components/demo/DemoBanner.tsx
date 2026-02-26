@@ -19,7 +19,7 @@ import {isDemo} from '@/lib/demo'
 import {Info} from 'lucide-react'
 
 export function DemoBanner() {
-  if (!isDemo()) {
+  if (!isDemo() || localStorage.getItem('screenshot-mode') === 'true') {
     return null
   }
 

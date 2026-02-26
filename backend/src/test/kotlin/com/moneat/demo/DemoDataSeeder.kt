@@ -1649,12 +1649,13 @@ object DemoDataSeeder {
             val logQuery =
                 """
                 INSERT INTO $db.logs (
-                    log_id, project_id, timestamp, received_at, level, message, body,
+                    log_id, project_id, organization_id, timestamp, received_at, level, message, body,
                     service, environment, host, source, trace_id, span_id, tags,
                     container_name, container_id, container_image, resource_attributes
                 ) VALUES (
                     '$logId',
                     $androidProjectId,
+                    toUInt64(-1),
                     toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
                     now64(3),
                     '$finalLevel',

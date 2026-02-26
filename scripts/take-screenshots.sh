@@ -42,18 +42,6 @@ fi
 echo "✅ Dashboard is running"
 echo ""
 
-# Reseed demo data with fresh timestamps
-echo "🔄 Seeding demo data with fresh timestamps..."
-if [ -f "./seed-demo-data.sh" ]; then
-    ./seed-demo-data.sh
-elif [ -f "../scripts/seed-demo-data.sh" ]; then
-    ../scripts/seed-demo-data.sh
-else
-    echo "⚠️  Warning: Could not find seed-demo-data.sh script"
-    echo "   Screenshots may have stale data"
-fi
-echo ""
-
 # Run screenshot script
 if [ "$1" = "--debug" ] || [ "$1" = "-d" ]; then
     echo "🐛 Running in debug mode (browser visible)..."
