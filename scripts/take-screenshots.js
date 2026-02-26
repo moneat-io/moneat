@@ -76,7 +76,7 @@ const SCREENSHOTS = [
     description: 'Main dashboard overview',
     path: '/',
     waitFor: 'text=Recent Issues',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   // Primary features
   {
@@ -84,7 +84,7 @@ const SCREENSHOTS = [
     description: 'Error tracking / Issues list',
     path: '/issues',
     waitFor: 'text=Issues',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'log-management',
@@ -118,14 +118,14 @@ const SCREENSHOTS = [
         }
       }
     },
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'session-replay',
     description: 'Session replay list',
     path: '/replays',
     waitFor: 'text=Replays',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   // Secondary features
   {
@@ -133,21 +133,21 @@ const SCREENSHOTS = [
     description: 'Performance monitoring',
     path: '/performance',
     waitFor: 'text=Performance',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'uptime',
     description: 'Uptime monitoring',
     path: '/uptime',
     waitFor: 'text=Uptime',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'status-pages',
     description: 'Public status pages',
     path: '/s/acme-status',
     waitFor: 'text=Status',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'containers',
@@ -190,14 +190,14 @@ const SCREENSHOTS = [
         console.log('   ⚠️  Could not navigate to containers:', e.message);
       }
     },
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'escalation-policies',
     description: 'On-call escalation policies',
     path: '/on-call/escalation-policies',
     waitFor: 'text=Escalation Policies',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   // New features
   {
@@ -205,7 +205,7 @@ const SCREENSHOTS = [
     description: 'AI observability overview',
     path: '/ai',
     waitFor: 'text=AI',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'apm-traces',
@@ -230,7 +230,7 @@ const SCREENSHOTS = [
         console.log('   ⚠️  Could not navigate to APM trace:', e.message);
       }
     },
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'profiles',
@@ -255,14 +255,14 @@ const SCREENSHOTS = [
         console.log('   ⚠️  Could not navigate to profile:', e.message);
       }
     },
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
   {
     name: 'security',
     description: 'Security and compliance page',
     path: '/security',
     waitFor: 'text=Security',
-    viewport: { width: 1200, height: 750 },
+    viewport: { width: 1920, height: 1080 },
   },
 ];
 
