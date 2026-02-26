@@ -63,6 +63,8 @@ const CONDITION_OPTIONS = [
   {value: '==', label: 'Equal to (==)'},
 ]
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function AlertsTab({systemId}: AlertsTabProps) {
   const queryClient = useQueryClient()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -70,9 +72,13 @@ export function AlertsTab({systemId}: AlertsTabProps) {
   const [editingAlert, setEditingAlert] = useState<SystemAlert | null>(null)
   const [createEnabled, setCreateEnabled] = useState(false)
 
+  const rawId = systemId.startsWith('host:') ? systemId.slice(5) : systemId
+  const effectiveSystemId = UUID_REGEX.test(rawId) ? rawId : null
+
   const {data: alertConfig, isLoading} = useQuery({
-    queryKey: ['system-alert-config', systemId],
-    queryFn: () => api.getSystemAlertConfig(systemId),
+    queryKey: ['system-alert-config', effectiveSystemId ?? 'none'],
+    queryFn: () => api.getSystemAlertConfig(effectiveSystemId!),
+    enabled: !!effectiveSystemId && api.isAuthenticated(),
   })
 
   const {data: integrations = []} = useQuery({
@@ -94,9 +100,9 @@ export function AlertsTab({systemId}: AlertsTabProps) {
   }, [alertConfig, activeScope])
 
   const scopeMutation = useMutation({
-    mutationFn: (scope: AlertScope) => api.updateSystemAlertScope(systemId, scope),
+    mutationFn: (scope: AlertScope) => api.updateSystemAlertScope(effectiveSystemId!, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', systemId]})
+      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
     },
   })
 
@@ -111,9 +117,9 @@ export function AlertsTab({systemId}: AlertsTabProps) {
         enabled: boolean
         incidentSeverity?: string
       }
-    }) => api.createSystemAlert(systemId, alert, scope),
+    }) => api.createSystemAlert(effectiveSystemId!, alert, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', systemId]})
+      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
       setIsCreateDialogOpen(false)
       setCreateEnabled(false)
     },
@@ -121,26 +127,26 @@ export function AlertsTab({systemId}: AlertsTabProps) {
 
   const updateMutation = useMutation({
     mutationFn: ({alert, updates}: {alert: SystemAlert; updates: Partial<SystemAlert>}) =>
-      api.updateSystemAlert(systemId, alert.id, updates, alert.scope),
+      api.updateSystemAlert(effectiveSystemId!, alert.id, updates, alert.scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', systemId]})
+      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
       setIsEditDialogOpen(false)
       setEditingAlert(null)
     },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (alert: SystemAlert) => api.deleteSystemAlert(systemId, alert.id, alert.scope),
+    mutationFn: (alert: SystemAlert) => api.deleteSystemAlert(effectiveSystemId!, alert.id, alert.scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', systemId]})
+      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
     },
   })
 
   const toggleMutation = useMutation({
     mutationFn: ({alert, enabled}: {alert: SystemAlert; enabled: boolean}) =>
-      api.updateSystemAlert(systemId, alert.id, {enabled}, alert.scope),
+      api.updateSystemAlert(effectiveSystemId!, alert.id, {enabled}, alert.scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', systemId]})
+      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
     },
   })
 
@@ -202,6 +208,19 @@ export function AlertsTab({systemId}: AlertsTabProps) {
 
   const enabledAlerts = alerts.filter((a) => a.enabled).length
   const totalAlerts = alerts.length
+
+  if (!effectiveSystemId) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground text-sm">
+            Alerts are configured per monitor system. This host does not have an associated monitor
+            system, or the system ID could not be resolved.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-6">

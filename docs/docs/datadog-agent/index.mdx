@@ -1,0 +1,54 @@
+---
+sidebar_position: 1
+title: Datadog Agent Overview
+description: Use a Datadog-compatible agent to send infrastructure metrics, APM traces, logs, and profiles to Moneat.
+---
+
+# Datadog Agent
+
+## Overview
+
+Moneat can ingest telemetry from the Datadog Agent, giving you infrastructure monitoring, APM traces, continuous profiling, log collection, and more — without sending data to Datadog. Deploy the standard Datadog Agent on your hosts and point it at your Moneat instance.
+
+:::info Enterprise feature
+Datadog Agent ingestion is available on Enterprise plans. Some features (processes, network monitoring) require the Datadog enterprise module.
+:::
+
+## How It Works
+
+The Datadog Agent collects system metrics, APM traces, logs, and profiles from your hosts and containers. Moneat implements a compatible ingestion API at the `/dd` endpoint, so the agent sends data to Moneat instead of Datadog's servers.
+
+**What you get:**
+
+- **Host monitoring** — CPU, memory, disk, and network metrics from every host
+- **Container monitoring** — Docker container stats, images, and resource usage
+- **APM traces** — Distributed traces with service maps, latency, and error tracking
+- **Continuous profiling** — CPU, heap, wall-time, and other profile types
+- **Log collection** — Structured logs with Datadog-compatible query syntax
+- **Process monitoring** — Running processes and resource consumption (Enterprise)
+- **Network monitoring** — Network flow data between services (Enterprise)
+- **Kubernetes monitoring** — Pods, nodes, services, deployments, and more (Enterprise)
+- **Database monitoring** — Slow query tracking and database performance (Enterprise)
+- **Dynamic instrumentation** — Debug live applications with probes (Enterprise)
+- **Synthetic tests** — Create and schedule API tests from the dashboard (Enterprise)
+- **Network device monitoring** — SNMP devices, traps, and flow data (Enterprise)
+- **SBOM** — Software package inventory with CVE tracking (Enterprise)
+
+## Quick Start
+
+1. [Create an agent API key](/datadog-agent/agent-setup#create-an-agent-api-key) in your Moneat dashboard
+2. [Deploy the agent](/datadog-agent/agent-setup#deploy-the-agent) on your host using Docker
+3. Metrics, traces, and logs start appearing in the **Monitoring** tab automatically
+
+## Next Steps
+
+- [Agent Setup](/datadog-agent/agent-setup) — Create API keys and deploy the agent
+- [Continuous Profiling](/datadog-agent/continuous-profiling) — Enable and view application profiles
+- [Log Collection](/datadog-agent/log-collection) — Send logs via the Datadog Agent
+- [Dashboard Import](/datadog-agent/dashboard-import) — Import existing Datadog dashboards
+- [Kubernetes Monitoring](/datadog-agent/kubernetes) — Monitor cluster resources and workloads
+- [Database Monitoring](/datadog-agent/database-monitoring) — Track slow queries and database performance
+- [Dynamic Instrumentation](/datadog-agent/debugger) — Debug live applications with dynamic probes
+- [Synthetic Tests](/datadog-agent/synthetics) — View API and browser test results from Datadog
+- [Network Device Monitoring](/datadog-agent/network-devices) — Monitor SNMP devices, traps, and flows
+- [SBOM](/datadog-agent/sbom) — Inventory software packages and track CVEs

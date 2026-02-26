@@ -57,6 +57,13 @@ export interface PricingCardTierInput {
   analyticsRetentionDays?: number
   monthlyAnalyticsPageviewLimit?: number
   analyticsPageviewOverageRateCentsPer100k?: number
+  monthlyApmSpanLimit?: number
+  apmSpanOverageRateCentsPer1m?: number
+  monthlyCustomMetricLimit?: number
+  customMetricOverageRateCentsPer100k?: number
+  maxHosts?: number | null
+  profilingEnabled?: boolean
+  networkMonitoringEnabled?: boolean
 }
 
 export interface OverageItem {
@@ -156,6 +163,25 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
     limits.push(`${isUnlimited(llmLimit) ? 'Unlimited' : formatEventLimit(llmLimit)} AI observability events`)
   }
 
+  const apmLimit = tier.monthlyApmSpanLimit
+  if (apmLimit != null && apmLimit > 0) {
+    limits.push(`${isUnlimited(apmLimit) ? 'Unlimited' : formatEventLimit(apmLimit)} APM spans`)
+  }
+
+  const metricLimit = tier.monthlyCustomMetricLimit
+  if (metricLimit != null && metricLimit > 0) {
+    limits.push(`${isUnlimited(metricLimit) ? 'Unlimited' : formatEventLimit(metricLimit)} custom metrics`)
+  }
+
+  const maxHosts = tier.maxHosts
+  if (maxHosts !== undefined) {
+    if (maxHosts == null || maxHosts >= UNLIMITED_SYSTEMS_SENTINEL) {
+      limits.push('Unlimited hosts')
+    } else {
+      limits.push(`Up to ${maxHosts} hosts`)
+    }
+  }
+
   const retentionParts: string[] = []
   const errRet = tier.retentionDays
   const logRet = tier.logRetentionDays ?? errRet
@@ -210,6 +236,8 @@ function buildPlatformFeatures(tier: PricingCardTierInput): string[] {
   }
   if (tier.samlEnabled) features.push('SAML SSO')
   if (tier.oidcEnabled) features.push('OIDC SSO')
+  if (tier.profilingEnabled) features.push('Continuous profiling')
+  if (tier.networkMonitoringEnabled) features.push('Network monitoring')
   if (tier.prioritySupportEnabled) features.push('Priority support')
   if (tier.slaEnabled) features.push('SLA guarantee')
   if (tier.customRetentionEnabled) features.push('Custom retention')
@@ -233,6 +261,12 @@ function buildOverages(tier: PricingCardTierInput): OverageItem[] {
 
   const analyticsRate = tier.analyticsPageviewOverageRateCentsPer100k
   if (analyticsRate != null && analyticsRate > 0) overages.push({label: 'Page views', rate: formatCentsRate(analyticsRate, '100K')})
+
+  const apmRate = tier.apmSpanOverageRateCentsPer1m
+  if (apmRate != null && apmRate > 0) overages.push({label: 'APM spans', rate: formatCentsRate(apmRate, '1M')})
+
+  const metricRate = tier.customMetricOverageRateCentsPer100k
+  if (metricRate != null && metricRate > 0) overages.push({label: 'Custom metrics', rate: formatCentsRate(metricRate, '100K')})
 
   return overages
 }

@@ -754,7 +754,7 @@ export function LogExplorer({
               )}
             </div>
 
-            {/* Histogram - always visible above all modes (like Datadog) */}
+            {/* Histogram - always visible above all modes */}
             {vizMode === 'timeseries' && aggregateData && aggregateData.buckets.length > 0 && (
               <div className="shrink-0 border-b bg-card/50">
                 <div className="px-3 pt-2 pb-1.5">

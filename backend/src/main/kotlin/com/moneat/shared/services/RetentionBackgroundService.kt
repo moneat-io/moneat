@@ -224,8 +224,8 @@ class RetentionBackgroundService(
 
         val tables =
             listOf(
-                "system_metrics" to "timestamp",
-                "container_metrics" to "timestamp"
+                "metrics" to "timestamp",
+                "containers" to "timestamp"
             )
 
         var mutations = 0
@@ -235,8 +235,8 @@ class RetentionBackgroundService(
                 val query =
                     """
                     ALTER TABLE $clickhouseDb.$table
-                    DELETE WHERE org_id IN ($orgList)
-                        AND $timeColumn < now() - INTERVAL $retentionDays DAY
+                    DELETE WHERE organization_id IN ($orgList)
+                        AND $timeColumn < now64(3) - INTERVAL $retentionDays DAY
                     """.trimIndent()
                 if (submitMutation(query, "$table(org)")) {
                     mutations++

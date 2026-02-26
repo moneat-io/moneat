@@ -27,6 +27,7 @@ import com.moneat.monitor.models.ContainerMetricDataPoint
 import com.moneat.monitor.models.ContainerMetricsPayload
 import com.moneat.monitor.models.ContainerMetricsResponse
 import com.moneat.monitor.models.ContainerStats
+import com.moneat.monitor.models.ContainerWithSystem
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.LatestMetrics
@@ -194,42 +195,48 @@ class MonitorService {
             }
         }
 
-        // Insert system metrics to ClickHouse
+        // Insert system metrics as named metrics into metrics table
         val timestamp = payload.timestamp
+        val host = payload.host ?: systemId.toString()
+        val escapedHost = escapeSql(host)
+        val tagsMap = "map('system_id','$systemId')"
+        val ts = "fromUnixTimestamp64Milli(${timestamp * 1000})"
+
+        val metricRows: List<Triple<String, Double, String>> =
+            buildList {
+                add(Triple("system.cpu.percent", payload.cpu_percent.toDouble(), ts))
+                add(Triple("system.mem.total", payload.mem_total.toDouble(), ts))
+                add(Triple("system.mem.used", payload.mem_used.toDouble(), ts))
+                add(Triple("system.mem.available", payload.mem_available.toDouble(), ts))
+                add(Triple("system.swap.total", payload.swap_total.toDouble(), ts))
+                add(Triple("system.swap.used", payload.swap_used.toDouble(), ts))
+                add(Triple("system.disk.total", payload.disk_total.toDouble(), ts))
+                add(Triple("system.disk.used", payload.disk_used.toDouble(), ts))
+                add(Triple("system.disk.read_bytes", payload.disk_read_bytes.toDouble(), ts))
+                add(Triple("system.disk.write_bytes", payload.disk_write_bytes.toDouble(), ts))
+                add(Triple("system.net.recv_bytes", payload.net_recv_bytes.toDouble(), ts))
+                add(Triple("system.net.sent_bytes", payload.net_sent_bytes.toDouble(), ts))
+                add(Triple("system.load.1", payload.load_1.toDouble(), ts))
+                add(Triple("system.load.5", payload.load_5.toDouble(), ts))
+                add(Triple("system.load.15", payload.load_15.toDouble(), ts))
+                payload.temp_max?.let { add(Triple("system.temp.max", it.toDouble(), ts)) }
+                payload.gpu_percent?.let { add(Triple("system.gpu.percent", it.toDouble(), ts)) }
+                payload.gpu_mem_percent?.let { add(Triple("system.gpu.mem_percent", it.toDouble(), ts)) }
+                payload.gpu_power?.let { add(Triple("system.gpu.power", it.toDouble(), ts)) }
+                payload.battery_percent?.let { add(Triple("system.battery.percent", it.toDouble(), ts)) }
+            }
+
+        val values =
+            metricRows
+                .joinToString(",") { (name, value, tsVal) ->
+                    "($organizationId,'${escapeSql(name)}',1,$tsVal,$value,'$escapedHost',$tagsMap,'','')"
+                }
+
         val query =
             """
-            INSERT INTO $clickhouseDb.system_metrics (
-                system_id, org_id, timestamp,
-                cpu_percent, mem_total, mem_used, mem_available,
-                swap_total, swap_used, disk_total, disk_used,
-                disk_read_bytes, disk_write_bytes, net_recv_bytes, net_sent_bytes,
-                load_1, load_5, load_15, temp_max,
-                gpu_percent, gpu_mem_percent, gpu_power, battery_percent
-            ) VALUES (
-                toUUID('$systemId'),
-                $organizationId,
-                fromUnixTimestamp($timestamp),
-                ${payload.cpu_percent},
-                ${payload.mem_total},
-                ${payload.mem_used},
-                ${payload.mem_available},
-                ${payload.swap_total},
-                ${payload.swap_used},
-                ${payload.disk_total},
-                ${payload.disk_used},
-                ${payload.disk_read_bytes},
-                ${payload.disk_write_bytes},
-                ${payload.net_recv_bytes},
-                ${payload.net_sent_bytes},
-                ${payload.load_1},
-                ${payload.load_5},
-                ${payload.load_15},
-                ${payload.temp_max ?: 0f},
-                ${payload.gpu_percent ?: 0f},
-                ${payload.gpu_mem_percent ?: 0f},
-                ${payload.gpu_power ?: 0f},
-                ${payload.battery_percent ?: 0f}
-            )
+            INSERT INTO $clickhouseDb.metrics (
+                organization_id, metric_name, metric_type, timestamp, value, host, tags, unit, source_type_name
+            ) VALUES $values
             """.trimIndent()
 
         val response = ClickHouseClient.execute(query)
@@ -242,7 +249,7 @@ class MonitorService {
 
         // Insert container metrics if present
         payload.containers?.forEach { container ->
-            insertContainerMetric(systemId, organizationId, timestamp, container)
+            insertContainerMetric(systemId, organizationId, timestamp, container, host)
         }
 
         // Return the poll interval for this organization's tier
@@ -251,11 +258,26 @@ class MonitorService {
         return tier.monitorIntervalSeconds
     }
 
+    /**
+     * Count metric rows that would be inserted into the metrics table (for usage tracking).
+     * System metrics only; container data goes to the containers table.
+     */
+    fun countMetricsInPayload(payload: SystemMetricsPayload): Int {
+        var count = 15
+        if (payload.temp_max != null) count++
+        if (payload.gpu_percent != null) count++
+        if (payload.gpu_mem_percent != null) count++
+        if (payload.gpu_power != null) count++
+        if (payload.battery_percent != null) count++
+        return count
+    }
+
     private suspend fun insertContainerMetric(
         systemId: UUID,
         organizationId: Int,
         timestamp: Long,
-        container: ContainerMetricsPayload
+        container: ContainerMetricsPayload,
+        host: String
     ) {
         val fullQuery =
             buildContainerInsertQuery(
@@ -263,44 +285,14 @@ class MonitorService {
                 organizationId = organizationId,
                 timestamp = timestamp,
                 container = container,
-                includeNetwork = true
+                host = host
             )
-        var response = ClickHouseClient.execute(fullQuery)
-        if (response.status.isSuccess()) return
-
-        var errorBody = response.bodyAsText()
-
-        if (
-            errorBody.contains("UNKNOWN_TABLE", ignoreCase = true) ||
-            errorBody.contains("doesn't exist", ignoreCase = true)
-        ) {
-            ensureContainerMetricsTableExists()
-            response = ClickHouseClient.execute(fullQuery)
-            if (response.status.isSuccess()) return
-            errorBody = response.bodyAsText()
-        }
-
-        if (
-            errorBody.contains("UNKNOWN_IDENTIFIER", ignoreCase = true) ||
-            errorBody.contains("unknown column", ignoreCase = true) ||
-            errorBody.contains("no column", ignoreCase = true)
-        ) {
-            // Backward compatibility for older schemas missing network byte columns.
-            val legacyQuery =
-                buildContainerInsertQuery(
-                    systemId = systemId,
-                    organizationId = organizationId,
-                    timestamp = timestamp,
-                    container = container,
-                    includeNetwork = false
-                )
-            response = ClickHouseClient.execute(legacyQuery)
-            if (response.status.isSuccess()) return
-            errorBody = response.bodyAsText()
-        }
-
-        logger.warn {
-            "Failed to insert container metrics for system=$systemId container=${container.name}: $errorBody"
+        val response = ClickHouseClient.execute(fullQuery)
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            logger.warn {
+                "Failed to insert container metrics for system=$systemId container=${container.name}: $errorBody"
+            }
         }
     }
 
@@ -309,59 +301,30 @@ class MonitorService {
         organizationId: Int,
         timestamp: Long,
         container: ContainerMetricsPayload,
-        includeNetwork: Boolean
+        host: String
     ): String {
-        val networkColumns = if (includeNetwork) ", net_recv_bytes, net_sent_bytes" else ""
-        val networkValues = if (includeNetwork) ", ${container.net_recv_bytes}, ${container.net_sent_bytes}" else ""
-
+        val ts = "fromUnixTimestamp64Milli(${timestamp * 1000})"
+        val tagsMap = "map('system_id','$systemId')"
         return """
-            INSERT INTO $clickhouseDb.container_metrics (
-                system_id, org_id, timestamp,
-                container_name, container_id, image, status,
-                cpu_percent, mem_used, mem_limit$networkColumns
+            INSERT INTO $clickhouseDb.containers (
+                organization_id, host, container_id, name, image, state,
+                cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes, tags, timestamp
             ) VALUES (
-                toUUID('$systemId'),
                 $organizationId,
-                fromUnixTimestamp($timestamp),
-                '${escapeSql(container.name)}',
+                '${escapeSql(host)}',
                 '${escapeSql(container.id)}',
+                '${escapeSql(container.name)}',
                 '${escapeSql(container.image)}',
                 '${escapeSql(container.status)}',
                 ${container.cpu_percent},
                 ${container.mem_used},
-                ${container.mem_limit}$networkValues
+                ${container.mem_limit},
+                ${container.net_recv_bytes},
+                ${container.net_sent_bytes},
+                $tagsMap,
+                $ts
             )
         """.trimIndent()
-    }
-
-    private suspend fun ensureContainerMetricsTableExists() {
-        val query =
-            """
-            CREATE TABLE IF NOT EXISTS $clickhouseDb.container_metrics (
-                system_id UUID,
-                org_id UInt32,
-                timestamp DateTime,
-                container_name String,
-                container_id String,
-                image String,
-                status String,
-                cpu_percent Float32,
-                mem_used UInt64,
-                mem_limit UInt64,
-                net_recv_bytes UInt64,
-                net_sent_bytes UInt64
-            ) ENGINE = MergeTree()
-            PARTITION BY toYYYYMM(timestamp)
-            ORDER BY (org_id, system_id, timestamp, container_name)
-            TTL timestamp + INTERVAL 90 DAY
-            SETTINGS index_granularity = 8192
-            """.trimIndent()
-
-        val response = ClickHouseClient.execute(query)
-        if (!response.status.isSuccess()) {
-            val errorBody = response.bodyAsText()
-            logger.warn { "Failed to auto-create container_metrics table: $errorBody" }
-        }
     }
 
     /**
@@ -407,20 +370,31 @@ class MonitorService {
     }
 
     /**
-     * Get latest metrics for a system from ClickHouse.
+     * Get latest metrics for a system from ClickHouse metrics table.
      */
     suspend fun getLatestMetrics(systemId: UUID): LatestMetrics? {
+        val system = getSystemById(systemId) ?: return null
         val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
+        val sysIdStr = systemId.toString()
         val query =
             """
-            SELECT 
-                cpu_percent, mem_total, mem_used, disk_total, disk_used,
-                net_recv_bytes, net_sent_bytes, load_1, temp_max, gpu_percent, battery_percent
-            FROM $clickhouseDb.system_metrics
-            WHERE system_id = toUUID('$systemId')
-              AND timestamp >= now() - INTERVAL $retentionDays DAY
-            ORDER BY timestamp DESC
-            LIMIT 1
+            SELECT
+                argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp) as cpu_percent,
+                argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp) as mem_total,
+                argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) as mem_used,
+                argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) as mem_available,
+                argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp) as disk_total,
+                argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) as disk_used,
+                argMax(CASE WHEN metric_name='system.net.recv_bytes' THEN value END, timestamp) as net_recv_bytes,
+                argMax(CASE WHEN metric_name='system.net.sent_bytes' THEN value END, timestamp) as net_sent_bytes,
+                argMax(CASE WHEN metric_name='system.load.1' THEN value END, timestamp) as load_1,
+                argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
+                argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
+                argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
+            FROM $clickhouseDb.metrics
+            WHERE organization_id = ${system.organizationId}
+              AND tags['system_id'] = '$sysIdStr'
+              AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
             FORMAT JSONCompact
             """.trimIndent()
 
@@ -452,40 +426,47 @@ class MonitorService {
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val diskTotal =
+            val memAvailable =
                 data
                     .getOrNull(3)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val diskUsed =
+            val diskTotal =
                 data
                     .getOrNull(4)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val netRecvBytes =
+            val diskUsed =
                 data
                     .getOrNull(5)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val netSentBytes =
+            val netRecvBytes =
                 data
                     .getOrNull(6)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val load1 = data.getOrNull(7)?.toString()?.toFloatOrNull() ?: 0f
-            val tempMax = data.getOrNull(8)?.toString()?.toFloatOrNull()
-            val gpuPercent = data.getOrNull(9)?.toString()?.toFloatOrNull()
-            val batteryPercent = data.getOrNull(10)?.toString()?.toFloatOrNull()
+            val netSentBytes =
+                data
+                    .getOrNull(7)
+                    ?.toString()
+                    ?.replace("\"", "")
+                    ?.toLongOrNull() ?: 0
+            val load1 = data.getOrNull(8)?.toString()?.toFloatOrNull() ?: 0f
+            val tempMax = data.getOrNull(9)?.toString()?.toFloatOrNull()
+            val gpuPercent = data.getOrNull(10)?.toString()?.toFloatOrNull()
+            val batteryPercent = data.getOrNull(11)?.toString()?.toFloatOrNull()
 
+            val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
             return LatestMetrics(
                 cpu_percent = cpuPercent,
                 mem_total = memTotal,
-                mem_used = memUsed,
-                mem_percent = if (memTotal > 0) (memUsed.toFloat() / memTotal * 100) else 0f,
+                mem_used = effectiveMemUsed,
+                mem_percent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * 100) else 0f,
                 disk_total = diskTotal,
                 disk_used = diskUsed,
                 disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * 100) else 0f,
@@ -514,6 +495,13 @@ class MonitorService {
         intervalSeconds: Int?
     ): HistoricalMetricsResponse =
         CacheService.cached("cache:monitor_hist:$systemId:$fromTimestamp:$toTimestamp:$intervalSeconds", 30) {
+            val system = getSystemById(systemId) ?: return@cached HistoricalMetricsResponse(
+                system_id = systemId.toString(),
+                from = fromTimestamp,
+                to = toTimestamp,
+                interval_seconds = intervalSeconds ?: 3600,
+                data_points = emptyList()
+            )
             val clampedWindow = clampRangeToRetention(systemId, fromTimestamp, toTimestamp)
             if (clampedWindow == null) {
                 return@cached HistoricalMetricsResponse(
@@ -531,39 +519,35 @@ class MonitorService {
             val calculatedInterval =
                 intervalSeconds ?: when {
                     timeRange <= 3600 -> 10
-
-                    // 1 hour: 10s interval
                     timeRange <= 21600 -> 60
-
-                    // 6 hours: 1 min interval
                     timeRange <= 86400 -> 300
-
-                    // 24 hours: 5 min interval
                     timeRange <= 604800 -> 1800
-
-                    // 7 days: 30 min interval
-                    else -> 3600 // 30+ days: 1 hour interval
+                    else -> 3600
                 }
 
+            val sysIdStr = systemId.toString()
             val query =
                 """
-            SELECT 
+            SELECT
                 toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
-                avg(cpu_percent) as cpu,
-                avg(mem_used / mem_total * 100) as mem,
-                avg(disk_used / disk_total * 100) as disk,
-                sum(net_recv_bytes) as net_recv,
-                sum(net_sent_bytes) as net_sent,
-                avg(load_1) as load1,
-                avg(load_5) as load5,
-                avg(load_15) as load15,
-                max(temp_max) as temp,
-                avg(gpu_percent) as gpu,
-                avg(battery_percent) as battery
-            FROM $clickhouseDb.system_metrics
-            WHERE system_id = toUUID('$systemId')
-              AND timestamp >= fromUnixTimestamp($effectiveFrom)
-              AND timestamp <= fromUnixTimestamp($effectiveTo)
+                avg(CASE WHEN metric_name='system.cpu.percent' THEN value END) as cpu,
+                (1 - avg(CASE WHEN metric_name='system.mem.available' THEN value END) /
+                    nullIf(avg(CASE WHEN metric_name='system.mem.total' THEN value END), 0)) * 100 as mem,
+                avg(CASE WHEN metric_name='system.disk.used' THEN value END) /
+                    nullIf(avg(CASE WHEN metric_name='system.disk.total' THEN value END), 0) * 100 as disk,
+                sum(CASE WHEN metric_name='system.net.recv_bytes' THEN value ELSE 0 END) as net_recv,
+                sum(CASE WHEN metric_name='system.net.sent_bytes' THEN value ELSE 0 END) as net_sent,
+                avg(CASE WHEN metric_name='system.load.1' THEN value END) as load1,
+                avg(CASE WHEN metric_name='system.load.5' THEN value END) as load5,
+                avg(CASE WHEN metric_name='system.load.15' THEN value END) as load15,
+                max(CASE WHEN metric_name='system.temp.max' THEN value END) as temp,
+                avg(CASE WHEN metric_name='system.gpu.percent' THEN value END) as gpu,
+                avg(CASE WHEN metric_name='system.battery.percent' THEN value END) as battery
+            FROM $clickhouseDb.metrics
+            WHERE organization_id = ${system.organizationId}
+              AND tags['system_id'] = '$sysIdStr'
+              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * 1000})
+              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * 1000})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -639,57 +623,35 @@ class MonitorService {
         }
 
     /**
-     * Get latest container stats from ClickHouse.
+     * Get latest container stats from ClickHouse containers table.
      */
     suspend fun getLatestContainers(systemId: UUID): List<ContainerStats> {
+        val system = getSystemById(systemId) ?: return emptyList()
         val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
-        val organizationId = getSystemById(systemId)?.organizationId
-        val monitorIntervalSeconds =
-            organizationId
-                ?.let { getTierConfig(it).monitorIntervalSeconds }
-                ?: PricingTier.FREE.monitorIntervalSeconds
-        // Keep container visibility aligned with system health (5 min minimum), while respecting slower plans.
+        val monitorIntervalSeconds = getTierConfig(system.organizationId).monitorIntervalSeconds
         val freshnessWindowSeconds = max(monitorIntervalSeconds * 3, 300)
+        val sysIdStr = systemId.toString()
 
-        fun buildQuery(includeNetwork: Boolean): String {
-            val networkColumns = if (includeNetwork) ", net_recv_bytes, net_sent_bytes" else ""
-            return """
-                SELECT 
-                    container_name, container_id, image, status,
-                    cpu_percent, mem_used, mem_limit$networkColumns
-                FROM (
-                    SELECT *,
-                        ROW_NUMBER() OVER (PARTITION BY container_name ORDER BY timestamp DESC) as rn
-                    FROM $clickhouseDb.container_metrics
-                    WHERE system_id = toUUID('$systemId')
-                      AND timestamp >= now() - INTERVAL $retentionDays DAY
-                ) WHERE rn = 1
-                  AND timestamp >= now() - INTERVAL $freshnessWindowSeconds SECOND
-                FORMAT JSONCompact
+        val query =
+            """
+            SELECT name, container_id, image, state, cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes
+            FROM (
+                SELECT *,
+                    ROW_NUMBER() OVER (PARTITION BY host, container_id ORDER BY timestamp DESC) as rn
+                FROM $clickhouseDb.containers
+                WHERE organization_id = ${system.organizationId}
+                  AND tags['system_id'] = '$sysIdStr'
+                  AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+            ) WHERE rn = 1
+              AND timestamp >= now64(3) - INTERVAL $freshnessWindowSeconds SECOND
+            FORMAT JSONCompact
             """.trimIndent()
-        }
 
-        var includeNetwork = true
-        var response = ClickHouseClient.execute(buildQuery(includeNetwork))
-
+        val response = ClickHouseClient.execute(query)
         if (!response.status.isSuccess()) {
-            var errorBody = response.bodyAsText()
-            if (
-                errorBody.contains("UNKNOWN_IDENTIFIER", ignoreCase = true) ||
-                errorBody.contains("unknown column", ignoreCase = true) ||
-                errorBody.contains("no column", ignoreCase = true)
-            ) {
-                includeNetwork = false
-                response = ClickHouseClient.execute(buildQuery(includeNetwork))
-                if (!response.status.isSuccess()) {
-                    errorBody = response.bodyAsText()
-                    logger.warn { "Failed to fetch containers: $errorBody" }
-                    return emptyList()
-                }
-            } else {
-                logger.warn { "Failed to fetch containers: $errorBody" }
-                return emptyList()
-            }
+            val errBody = response.bodyAsText()
+            logger.warn { "Failed to fetch containers: $errBody" }
+            return emptyList()
         }
 
         val body = response.bodyAsText()
@@ -704,26 +666,8 @@ class MonitorService {
                 val arr = row.jsonArray
                 val memUsed = arr[5].toString().replace("\"", "").toLongOrNull() ?: 0
                 val memLimit = arr[6].toString().replace("\"", "").toLongOrNull() ?: 1
-                val netRecvBytes =
-                    if (includeNetwork) {
-                        arr
-                            .getOrNull(7)
-                            ?.toString()
-                            ?.replace("\"", "")
-                            ?.toLongOrNull() ?: 0
-                    } else {
-                        0
-                    }
-                val netSentBytes =
-                    if (includeNetwork) {
-                        arr
-                            .getOrNull(8)
-                            ?.toString()
-                            ?.replace("\"", "")
-                            ?.toLongOrNull() ?: 0
-                    } else {
-                        0
-                    }
+                val netRecvBytes = arr.getOrNull(7)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
+                val netSentBytes = arr.getOrNull(8)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
 
                 ContainerStats(
                     name = arr[0].toString().replace("\"", ""),
@@ -745,6 +689,38 @@ class MonitorService {
     }
 
     /**
+     * Get latest container stats from all systems in the given organizations.
+     */
+    suspend fun getLatestContainersForOrganizations(organizationIds: List<Int>): List<ContainerWithSystem> {
+        val allContainers = mutableListOf<ContainerWithSystem>()
+        for (orgId in organizationIds) {
+            val systems = listSystems(orgId)
+            for (system in systems) {
+                val containers = getLatestContainers(system.id)
+                for (c in containers) {
+                    allContainers.add(
+                        ContainerWithSystem(
+                            systemId = system.id.toString(),
+                            systemName = system.name,
+                            name = c.name,
+                            id = c.id,
+                            image = c.image,
+                            status = c.status,
+                            cpuPercent = c.cpu_percent,
+                            memUsed = c.mem_used,
+                            memLimit = c.mem_limit,
+                            netRecvBytes = c.net_recv_bytes,
+                            netSentBytes = c.net_sent_bytes,
+                            memPercent = c.mem_percent
+                        )
+                    )
+                }
+            }
+        }
+        return allContainers
+    }
+
+    /**
      * Get historical metrics for a specific container.
      */
     suspend fun getContainerHistoricalMetrics(
@@ -754,6 +730,13 @@ class MonitorService {
         toTimestamp: Long,
         intervalSeconds: Int?
     ): ContainerMetricsResponse {
+        val system = getSystemById(systemId) ?: return ContainerMetricsResponse(
+            container_name = containerName,
+            from = fromTimestamp,
+            to = toTimestamp,
+            interval_seconds = intervalSeconds ?: 3600,
+            data_points = emptyList()
+        )
         val clampedWindow = clampRangeToRetention(systemId, fromTimestamp, toTimestamp)
         if (clampedWindow == null) {
             return ContainerMetricsResponse(
@@ -776,20 +759,23 @@ class MonitorService {
                 else -> 3600
             }
 
+        val sysIdStr = systemId.toString()
+        val escapedName = escapeSql(containerName)
         val query =
             """
-            SELECT 
+            SELECT
                 toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
                 avg(cpu_percent) as cpu,
-                avg(mem_used) as mem_used,
+                avg(mem_usage) as mem_used,
                 avg(mem_limit) as mem_limit,
-                sum(net_recv_bytes) as net_recv,
-                sum(net_sent_bytes) as net_sent
-            FROM $clickhouseDb.container_metrics
-            WHERE system_id = toUUID('$systemId')
-              AND container_name = '${escapeSql(containerName)}'
-              AND timestamp >= fromUnixTimestamp($effectiveFrom)
-              AND timestamp <= fromUnixTimestamp($effectiveTo)
+                sum(net_rx_bytes) as net_recv,
+                sum(net_tx_bytes) as net_sent
+            FROM $clickhouseDb.containers
+            WHERE organization_id = ${system.organizationId}
+              AND tags['system_id'] = '$sysIdStr'
+              AND name = '$escapedName'
+              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * 1000})
+              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * 1000})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact

@@ -21,6 +21,7 @@ import com.moneat.logs.models.AgentLogsRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.models.AgentLogIngestResponse
+import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
@@ -121,6 +122,8 @@ fun Route.monitorRoutes(
          * Auth: Bearer token (agent key)
          */
         post("/ingest") {
+            var refundOrgId: Int? = null
+            var refundMetricCount = 0
             try {
                 // Extract and validate agent key
                 val authHeader = call.request.header("Authorization")
@@ -156,15 +159,39 @@ fun Route.monitorRoutes(
 
                 logger.debug { "Received metrics from system $systemId (org $organizationId)" }
 
-                // Track bandwidth usage
-                usageTracking.recordUsage(
-                    projectId = systemId.mostSignificantBits, // Use system UUID as pseudo-project for usage tracking
-                    eventType = "system_metric",
-                    byteSize = bodyBytes.size
-                )
+                val metricCount = monitorService.countMetricsInPayload(payload)
+                if (quotaService.isEnforcementEnabled() && metricCount > 0) {
+                    val reservation =
+                        quotaService.reserveUnits(
+                            organizationId = organizationId,
+                            requestedUnits = metricCount,
+                            eventType = "custom_metric"
+                        )
+                    if (!reservation.allowed) {
+                        call.respond(
+                            HttpStatusCode.TooManyRequests,
+                            IngestResponse(
+                                success = false,
+                                interval_seconds = 60,
+                                message = "Custom metrics quota exceeded. Please upgrade your plan."
+                            )
+                        )
+                        return@post
+                    }
+                    refundOrgId = organizationId
+                    refundMetricCount = metricCount
+                }
 
                 // Ingest metrics and get poll interval
                 val intervalSeconds = monitorService.ingestMetrics(systemId, organizationId, payload)
+
+                if (metricCount > 0) {
+                    usageTracking.recordOrgUsage(
+                        organizationId = organizationId,
+                        eventType = "custom_metric",
+                        count = metricCount
+                    )
+                }
 
                 call.respond(
                     HttpStatusCode.OK,
@@ -174,6 +201,13 @@ fun Route.monitorRoutes(
                     )
                 )
             } catch (e: Exception) {
+                if (quotaService.isEnforcementEnabled() && refundMetricCount > 0 && refundOrgId != null) {
+                    quotaService.refundUnits(
+                        organizationId = refundOrgId,
+                        units = refundMetricCount,
+                        eventType = "custom_metric"
+                    )
+                }
                 logger.error(e) { "Failed to ingest metrics: ${e.message}" }
                 call.respond(
                     HttpStatusCode.BadRequest,
@@ -319,6 +353,21 @@ fun Route.monitorRoutes(
                     }
 
                 call.respond(HttpStatusCode.OK, response)
+            }
+
+            // List all containers across all systems
+            get("/containers") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload.getClaim("userId").asInt()
+
+                val organizationIds = getOrganizationIdsForUser(userId)
+                if (organizationIds.isEmpty()) {
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    return@get
+                }
+
+                val containers = monitorService.getLatestContainersForOrganizations(organizationIds)
+                call.respond(HttpStatusCode.OK, AllContainersResponse(containers = containers))
             }
 
             // Create a new system

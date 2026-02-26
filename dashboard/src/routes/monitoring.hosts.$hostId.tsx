@@ -16,7 +16,7 @@
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import type {ContainerStats} from '@/lib/api'
+import type {DdContainerResponse} from '@/lib/api'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
@@ -26,7 +26,6 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
     Activity,
-    ArrowLeft,
     Box,
     Clock,
     Cpu,
@@ -37,7 +36,6 @@ import {
     Monitor,
     Network,
     Server,
-    Thermometer,
 } from 'lucide-react'
 import {
     Area,
@@ -54,7 +52,6 @@ import {
 import {useEffect, useMemo, useState} from 'react'
 import {AlertsTab} from '@/components/monitoring/AlertsTab'
 import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/components/ui/sheet'
-import {LogExplorer} from '@/components/logs/LogExplorer'
 import {getNowDate} from '@/lib/demo'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatTimeHM} from '@/lib/date-format'
@@ -62,7 +59,7 @@ import {formatTimeHM} from '@/lib/date-format'
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 type ContainerViewMode = 'cards' | 'compact'
 
-const CONTAINER_VIEW_MODE_KEY = 'moneat.containers.viewMode'
+const CONTAINER_VIEW_MODE_KEY = 'moneat.host-containers.viewMode'
 
 function getInitialContainerViewMode(): ContainerViewMode {
   if (typeof window === 'undefined') return 'cards'
@@ -99,6 +96,15 @@ function formatBytesShort(bytes: number | undefined): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)}${['B', 'K', 'M', 'G', 'T'][i]}`
 }
 
+function formatBytesKb(kb: number | undefined): string {
+  if (kb === undefined || kb === 0) return 'N/A'
+  if (kb < 1024) return `${kb} KB`
+  const mb = kb / 1024
+  if (mb < 1024) return `${mb.toFixed(1)} MB`
+  const gb = mb / 1024
+  return `${gb.toFixed(1)} GB`
+}
+
 function formatPercent(value: number | undefined): string {
   if (value === undefined) return 'N/A'
   return `${value.toFixed(1)}%`
@@ -112,16 +118,15 @@ function getPercentColor(value: number | undefined): string {
   return 'text-emerald-500'
 }
 
-export const Route = createFileRoute('/monitoring/$systemId')({
+export const Route = createFileRoute('/monitoring/hosts/$hostId')({
   beforeLoad: () => {
     if (!api.isAuthenticated()) {
       throw redirect({to: '/login'})
     }
   },
-  component: SystemDetailPage,
+  component: HostDetailPage,
 })
 
-// Custom chart tooltip
 function ChartTooltip({
   active,
   payload,
@@ -190,12 +195,23 @@ function MetricCard({
   )
 }
 
-function SystemDetailPage() {
-  const {systemId} = Route.useParams()
+function isHostOnline(lastSeenAt: string): boolean {
+  if (!lastSeenAt) return false
+  try {
+    const diff = Date.now() - new Date(lastSeenAt).getTime()
+    return diff < 5 * 60 * 1000
+  } catch {
+    return false
+  }
+}
+
+function HostDetailPage() {
+  const {hostId} = Route.useParams()
+  const hostIdNum = Number(hostId)
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
   const [containerViewMode, setContainerViewMode] = useState<ContainerViewMode>(getInitialContainerViewMode())
   const [activeTab, setActiveTab] = useState('overview')
-  const [selectedContainer, setSelectedContainer] = useState<ContainerStats | null>(null)
+  const [selectedContainer, setSelectedContainer] = useState<DdContainerResponse | null>(null)
   const {timezone} = useTimezone()
 
   const {data: billingUsage} = useQuery({
@@ -212,16 +228,15 @@ function SystemDetailPage() {
     ? timeRange
     : (availableRanges[availableRanges.length - 1]?.value ?? '24h') as TimeRange
 
-  // Persist container view mode to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(CONTAINER_VIEW_MODE_KEY, containerViewMode)
     }
   }, [containerViewMode])
 
-  const {data: system, isLoading: systemLoading} = useQuery({
-    queryKey: ['monitor-system', systemId],
-    queryFn: () => api.getMonitorSystem(systemId),
+  const {data: host, isLoading: hostLoading} = useQuery({
+    queryKey: ['host', hostIdNum],
+    queryFn: () => api.getHost(hostIdNum),
   })
 
   const selectedRange =
@@ -234,45 +249,43 @@ function SystemDetailPage() {
   const to = Math.floor(now.getTime() / 1000).toString()
 
   const {data: metrics} = useQuery({
-    queryKey: ['system-metrics', systemId, effectiveTimeRange],
-    queryFn: () => api.getSystemMetrics(systemId, from, to),
+    queryKey: ['host-metrics', hostIdNum, effectiveTimeRange],
+    queryFn: () => api.getHostMetrics(hostIdNum, from, to),
     refetchInterval: 30000,
   })
 
-  const {data: containers = []} = useQuery({
-    queryKey: ['system-containers', systemId],
-    queryFn: () => api.getSystemContainers(systemId),
+  const {data: containerData} = useQuery({
+    queryKey: ['host-containers', hostIdNum],
+    queryFn: () => api.getHostContainers(hostIdNum),
     refetchInterval: 30000,
   })
 
-  if (systemLoading) {
+  const containers = containerData?.containers ?? []
+
+  if (hostLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-muted-foreground text-sm">Loading system details...</p>
+          <p className="text-muted-foreground text-sm">Loading host details...</p>
         </div>
       </div>
     )
   }
 
-  if (!system) {
+  if (!host) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <Server className="h-12 w-12 text-muted-foreground" />
-        <div className="text-muted-foreground text-lg">System not found</div>
+        <div className="text-muted-foreground text-lg">Host not found</div>
         <Button variant="outline" asChild>
-          <Link to="/monitoring">Back to Systems</Link>
+          <Link to="/monitoring">Back to Hosts</Link>
         </Button>
       </div>
     )
   }
 
-  const memPercent =
-    system.memUsed && system.memTotal ? (system.memUsed / system.memTotal) * 100 : undefined
-  const diskPercent =
-    system.diskUsed && system.diskTotal ? (system.diskUsed / system.diskTotal) * 100 : undefined
-  const isOnline = system.status === 'up'
+  const online = isHostOnline(host.lastSeenAt)
 
   // Transform metrics data for charts
   const cpuData =
@@ -308,22 +321,6 @@ function SystemDetailPage() {
       '15 min': point.load_15 || 0,
     })) || []
 
-  const temperatureData =
-    metrics?.data_points
-      .filter((point) => point.temp_max)
-      .map((point) => ({
-        time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
-        Temperature: point.temp_max!,
-      })) || []
-
-  const gpuData =
-    metrics?.data_points
-      .filter((point) => point.gpu_percent)
-      .map((point) => ({
-        time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
-        GPU: point.gpu_percent!,
-      })) || []
-
   const commonXAxis = {
     dataKey: 'time',
     tick: {fontSize: 11},
@@ -346,30 +343,19 @@ function SystemDetailPage() {
     vertical: false,
   }
 
+  // Get latest data point for metric cards
+  const latestPoint = metrics?.data_points[metrics.data_points.length - 1]
+
   return (
     <div>
       {/* Header */}
       <div className="border-b bg-card/50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <Link to="/monitoring">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Systems
-              </Link>
-            </Button>
-          </div>
-
+        <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div
                 className={`flex items-center justify-center h-12 w-12 rounded-xl ${
-                  isOnline
+                  online
                     ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                     : 'bg-red-500/10 text-red-600 dark:text-red-400'
                 }`}
@@ -377,39 +363,47 @@ function SystemDetailPage() {
                 <Server className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">{system.name}</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{host.hostname}</h1>
                 <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 flex-wrap">
                   <Badge
                     variant="secondary"
                     className={`text-xs ${
-                      isOnline
+                      online
                         ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
                         : 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
                     }`}
                   >
                     <div
                       className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
-                        isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                        online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
                       }`}
                     />
-                    {system.status}
+                    {online ? 'Online' : 'Offline'}
                   </Badge>
-                  {system.host && (
+                  {host.os && (
                     <span className="flex items-center gap-1">
                       <Monitor className="h-3.5 w-3.5" />
-                      {system.host}
+                      {host.os}{host.platform && host.platform !== host.os ? ` (${host.platform})` : ''}
                     </span>
                   )}
-                  {system.os && (
+                  {host.processor && (
                     <span className="flex items-center gap-1">
-                      <Box className="h-3.5 w-3.5" />
-                      {system.os}
+                      <Cpu className="h-3.5 w-3.5" />
+                      {host.cpuCores} cores
                     </span>
                   )}
-                  {system.lastSeenAt && (
+                  {host.agentVersion && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-medium font-mono border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5"
+                    >
+                      Agent v{host.agentVersion}
+                    </Badge>
+                  )}
+                  {host.lastSeenAt && (
                     <span className="flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5" />
-                      {formatRelativeTime(system.lastSeenAt)}
+                      {formatRelativeTime(host.lastSeenAt)}
                     </span>
                   )}
                 </div>
@@ -459,7 +453,6 @@ function SystemDetailPage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* View mode toggle */}
             {activeTab === 'containers' && containers.length > 0 && (
               <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
                 <Button
@@ -483,12 +476,12 @@ function SystemDetailPage() {
           </div>
 
           <TabsContent value="overview" className="space-y-6">
-            {/* Current Stats Cards */}
+            {/* Metric Summary Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <MetricCard
                 title="CPU Usage"
-                value={formatPercent(system.cpuPercent)}
-                subtitle={`Load: ${system.load1?.toFixed(2) || 'N/A'}`}
+                value={formatPercent(latestPoint?.cpu_percent)}
+                subtitle={`${host.cpuCores} cores · ${host.processor || 'Unknown'}`}
                 icon={Cpu}
                 iconColor="text-blue-500"
                 gradientFrom="from-blue-500/5"
@@ -497,8 +490,8 @@ function SystemDetailPage() {
               />
               <MetricCard
                 title="Memory"
-                value={formatPercent(memPercent)}
-                subtitle={`${formatBytesShort(system.memUsed)} / ${formatBytesShort(system.memTotal)}`}
+                value={formatPercent(latestPoint?.mem_percent)}
+                subtitle={`Total: ${formatBytesKb(host.memoryTotalKb)}`}
                 icon={MemoryStick}
                 iconColor="text-violet-500"
                 gradientFrom="from-violet-500/5"
@@ -507,8 +500,8 @@ function SystemDetailPage() {
               />
               <MetricCard
                 title="Disk Usage"
-                value={formatPercent(diskPercent)}
-                subtitle={`${formatBytesShort(system.diskUsed)} / ${formatBytesShort(system.diskTotal)}`}
+                value={formatPercent(latestPoint?.disk_percent)}
+                subtitle="Disk utilization"
                 icon={HardDrive}
                 iconColor="text-amber-500"
                 gradientFrom="from-amber-500/5"
@@ -516,18 +509,18 @@ function SystemDetailPage() {
                 borderColor="border-amber-500/10"
               />
               <MetricCard
-                title="Temperature"
-                value={system.tempMax ? `${system.tempMax.toFixed(1)}°C` : 'N/A'}
-                subtitle="Max sensor temperature"
-                icon={Thermometer}
-                iconColor="text-rose-500"
-                gradientFrom="from-rose-500/5"
-                gradientTo="to-red-500/5"
-                borderColor="border-rose-500/10"
+                title="Load Average"
+                value={latestPoint?.load_1 ? latestPoint.load_1.toFixed(2) : 'N/A'}
+                subtitle="1 min load average"
+                icon={Activity}
+                iconColor="text-emerald-500"
+                gradientFrom="from-emerald-500/5"
+                gradientTo="to-teal-500/5"
+                borderColor="border-emerald-500/10"
               />
             </div>
 
-            {/* Charts - 2 column on large screens */}
+            {/* Charts */}
             <div className="grid gap-6 lg:grid-cols-2">
               {/* CPU Chart */}
               <Card>
@@ -740,113 +733,19 @@ function SystemDetailPage() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Full-width charts for conditionally visible metrics */}
-            {temperatureData.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-rose-500/10">
-                      <Thermometer className="h-4 w-4 text-rose-500" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-sm">Temperature</CardTitle>
-                      <CardDescription className="text-xs">Max sensor reading over time</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <AreaChart data={temperatureData}>
-                      <defs>
-                        <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid {...commonGrid} />
-                      <XAxis {...commonXAxis} />
-                      <YAxis {...commonYAxis} />
-                      <Tooltip
-                        content={
-                          <ChartTooltip
-                            formatter={(v) => `${v.toFixed(1)}°C`}
-                          />
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="Temperature"
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#tempGradient)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-
-            {gpuData.length > 0 && gpuData.some((d) => d.GPU > 0) && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-teal-500/10">
-                      <Cpu className="h-4 w-4 text-teal-500" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-sm">GPU Usage</CardTitle>
-                      <CardDescription className="text-xs">GPU utilization over time</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <AreaChart data={gpuData}>
-                      <defs>
-                        <linearGradient id="gpuGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid {...commonGrid} />
-                      <XAxis {...commonXAxis} />
-                      <YAxis {...commonYAxis} domain={[0, 100]} />
-                      <Tooltip
-                        content={
-                          <ChartTooltip
-                            formatter={(v) => `${v.toFixed(1)}%`}
-                          />
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="GPU"
-                        stroke="#14b8a6"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#gpuGradient)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
           </TabsContent>
 
           <TabsContent value="containers" className="space-y-6">
             {containers.length > 0 ? (
               <>
-                {/* Cards view */}
                 {containerViewMode === 'cards' ? (
                   <div className="grid gap-4 md:grid-cols-2">
                     {containers.map((container) => {
-                      const isRunning = container.status === 'running'
+                      const isRunning = container.state === 'running'
 
                       return (
                         <Card
-                          key={container.id}
+                          key={container.containerId}
                           onClick={() => setSelectedContainer(container)}
                           className={`relative overflow-hidden cursor-pointer hover:border-primary/50 transition-colors ${
                             isRunning ? 'border-emerald-500/10' : 'border-muted'
@@ -884,7 +783,7 @@ function SystemDetailPage() {
                                     : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
                                 }`}
                               >
-                                {container.status}
+                                {container.state}
                               </Badge>
                             </div>
                           </CardHeader>
@@ -905,7 +804,7 @@ function SystemDetailPage() {
                                   <span className="text-xs text-muted-foreground">Memory</span>
                                 </div>
                                 <p className="text-lg font-semibold">
-                                  {formatBytesShort(container.memUsed)}
+                                  {formatBytesShort(container.memUsage)}
                                   <span className="text-xs text-muted-foreground font-normal ml-1">
                                     / {formatBytesShort(container.memLimit)}
                                   </span>
@@ -917,7 +816,7 @@ function SystemDetailPage() {
                                   <span className="text-xs text-muted-foreground">Net In</span>
                                 </div>
                                 <p className="text-lg font-semibold">
-                                  {formatBytesShort(container.netRecvBytes)}
+                                  {formatBytesShort(container.netRxBytes)}
                                 </p>
                               </div>
                               <div className="space-y-1">
@@ -926,7 +825,7 @@ function SystemDetailPage() {
                                   <span className="text-xs text-muted-foreground">Net Out</span>
                                 </div>
                                 <p className="text-lg font-semibold">
-                                  {formatBytesShort(container.netSentBytes)}
+                                  {formatBytesShort(container.netTxBytes)}
                                 </p>
                               </div>
                             </div>
@@ -936,7 +835,6 @@ function SystemDetailPage() {
                     })}
                   </div>
                 ) : (
-                  /* Compact table view */
                   <Card>
                     <div className="overflow-x-auto">
                       <table className="w-full">
@@ -952,10 +850,10 @@ function SystemDetailPage() {
                         </thead>
                         <tbody>
                           {containers.map((container) => {
-                            const isRunning = container.status === 'running'
+                            const isRunning = container.state === 'running'
                             return (
-                              <tr 
-                                key={container.id} 
+                              <tr
+                                key={container.containerId}
                                 onClick={() => setSelectedContainer(container)}
                                 className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
                               >
@@ -985,23 +883,23 @@ function SystemDetailPage() {
                                         : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
                                     }`}
                                   >
-                                    {container.status}
+                                    {container.state}
                                   </Badge>
                                 </td>
                                 <td className={`py-3 px-4 text-right text-sm font-medium ${getPercentColor(container.cpuPercent)}`}>
                                   {formatPercent(container.cpuPercent)}
                                 </td>
                                 <td className="py-3 px-4 text-right text-sm font-medium">
-                                  {formatBytesShort(container.memUsed)}
+                                  {formatBytesShort(container.memUsage)}
                                   <span className="text-xs text-muted-foreground font-normal ml-1">
                                     / {formatBytesShort(container.memLimit)}
                                   </span>
                                 </td>
                                 <td className="py-3 px-4 text-right text-sm font-medium">
-                                  {formatBytesShort(container.netRecvBytes)}
+                                  {formatBytesShort(container.netRxBytes)}
                                 </td>
                                 <td className="py-3 px-4 text-right text-sm font-medium">
-                                  {formatBytesShort(container.netSentBytes)}
+                                  {formatBytesShort(container.netTxBytes)}
                                 </td>
                               </tr>
                             )
@@ -1021,7 +919,7 @@ function SystemDetailPage() {
                     </div>
                     <h3 className="text-xl font-semibold mb-2">No containers detected</h3>
                     <p className="text-muted-foreground text-sm mb-6">
-                      The agent is online, but it can’t read Docker container metadata yet.
+                      Enable container monitoring by mounting the Docker socket when deploying the agent.
                     </p>
                   </div>
                 </CardContent>
@@ -1058,7 +956,11 @@ function SystemDetailPage() {
                       </defs>
                       <CartesianGrid {...commonGrid} />
                       <XAxis {...commonXAxis} />
-                      <YAxis {...commonYAxis} />
+                      <YAxis
+                        {...commonYAxis}
+                        width={60}
+                        tickFormatter={(value) => formatBytesShort(value)}
+                      />
                       <Tooltip
                         content={
                           <ChartTooltip
@@ -1097,15 +999,15 @@ function SystemDetailPage() {
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-6">
-            <AlertsTab systemId={systemId} />
+            <AlertsTab systemId={host.tags?.system_id ?? `host:${hostId}`} />
           </TabsContent>
         </Tabs>
       </div>
-      
+
       <Sheet open={!!selectedContainer} onOpenChange={(open) => !open && setSelectedContainer(null)}>
         <SheetContent
           side="right"
-          className="h-screen w-[65vw] max-w-[65vw] p-0 gap-0 border-none sm:max-w-[65w]"
+          className="h-screen w-[50vw] max-w-[50vw] p-0 gap-0 border-none sm:max-w-[50vw]"
         >
           {selectedContainer && (
             <div className="flex flex-col h-full bg-background/50 backdrop-blur-sm">
@@ -1113,7 +1015,7 @@ function SystemDetailPage() {
                 <SheetHeader className="mb-6">
                   <div className="flex items-center gap-3">
                     <div className={`flex items-center justify-center h-10 w-10 rounded-xl ${
-                      selectedContainer.status === 'running'
+                      selectedContainer.state === 'running'
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                         : 'bg-muted text-muted-foreground'
                     }`}>
@@ -1134,13 +1036,13 @@ function SystemDetailPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                      <div className="p-3 border rounded-lg bg-card/50">
                         <div className="text-xs text-muted-foreground mb-1">Status</div>
-                        <Badge variant="secondary" className={selectedContainer.status === 'running' ? 'text-emerald-500 bg-emerald-500/10' : ''}>
-                          {selectedContainer.status}
+                        <Badge variant="secondary" className={selectedContainer.state === 'running' ? 'text-emerald-500 bg-emerald-500/10' : ''}>
+                          {selectedContainer.state}
                         </Badge>
                      </div>
                      <div className="p-3 border rounded-lg bg-card/50">
                         <div className="text-xs text-muted-foreground mb-1">Container ID</div>
-                        <div className="font-mono text-xs truncate" title={selectedContainer.id}>{selectedContainer.id.substring(0, 12)}</div>
+                        <div className="font-mono text-xs truncate" title={selectedContainer.containerId}>{selectedContainer.containerId.substring(0, 12)}</div>
                      </div>
                      <div className="p-3 border rounded-lg bg-card/50">
                         <div className="text-xs text-muted-foreground mb-1">CPU Usage</div>
@@ -1149,7 +1051,7 @@ function SystemDetailPage() {
                      <div className="p-3 border rounded-lg bg-card/50">
                         <div className="text-xs text-muted-foreground mb-1">Memory Usage</div>
                         <div className="text-lg font-semibold truncate">
-                          {formatBytesShort(selectedContainer.memUsed)}
+                          {formatBytesShort(selectedContainer.memUsage)}
                           <span className="text-xs text-muted-foreground font-normal ml-1 opacity-70">
                             / {formatBytesShort(selectedContainer.memLimit)}
                           </span>
@@ -1158,15 +1060,17 @@ function SystemDetailPage() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-hidden">
-                <LogExplorer 
-                  systemId={system.id}
-                  initialContainerName={selectedContainer.name}
-                  className="border-none rounded-none h-full"
-                  enableAutoRefresh={false}
-                  enableFacets={true}
-                  initialScrollToBottom={true}
-                />
+              <div className="flex-1 p-6 overflow-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 border rounded-lg bg-card/50">
+                    <div className="text-xs text-muted-foreground mb-1">Network In</div>
+                    <div className="text-lg font-semibold">{formatBytesShort(selectedContainer.netRxBytes)}</div>
+                  </div>
+                  <div className="p-3 border rounded-lg bg-card/50">
+                    <div className="text-xs text-muted-foreground mb-1">Network Out</div>
+                    <div className="text-lg font-semibold">{formatBytesShort(selectedContainer.netTxBytes)}</div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

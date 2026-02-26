@@ -94,7 +94,13 @@ object ClickHouseClient {
     ): String {
         val queryWithFormat = if (query.trimEnd().uppercase().contains("FORMAT")) query else "$query FORMAT $format"
         val response = execute(queryWithFormat, span)
-        return response.bodyAsText()
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException(
+                "ClickHouse query failed (${response.status.value}): ${body.take(500)}"
+            )
+        }
+        return body
     }
 
     suspend fun ping(): Boolean {

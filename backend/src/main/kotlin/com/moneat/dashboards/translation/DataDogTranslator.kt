@@ -67,11 +67,11 @@ class DataDogTranslator : DashboardTranslator {
 
     // Maps DD metric namespace prefixes to Moneat data sources
     private val metricNamespaceMap = mapOf(
-        "system." to "system_metrics",
+        "system." to "metrics",
         "trace." to "spans",
         "logs." to "logs",
-        "container." to "container_metrics",
-        "network." to "system_metrics"
+        "container." to "containers",
+        "network." to "metrics"
     )
 
     override fun import(json: JsonObject): DashboardImportResult {

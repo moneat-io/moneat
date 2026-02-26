@@ -16,6 +16,7 @@
 
 package com.moneat.logs.services
 
+import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -56,9 +57,10 @@ class LogIngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
+        val redis = RedisConfig.newBlockingConnection()
         while (scope.isActive) {
             try {
-                val result = RedisConfig.syncBlocking().brpop(5, queueKey)
+                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
                 val payload = result?.value ?: continue
                 processMessageForTest(workerId, payload)
             } catch (e: CancellationException) {
@@ -73,7 +75,7 @@ class LogIngestionWorker(
     internal suspend fun processMessageForTest(
         workerId: Int,
         payload: String,
-        onDlq: (String) -> Unit = { message -> RedisConfig.syncBlocking().rpush(dlqKey, message) }
+        onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
         try {
             val batch = logService.decodeQueueMessage(payload)

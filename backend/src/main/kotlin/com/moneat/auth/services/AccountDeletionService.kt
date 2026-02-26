@@ -381,10 +381,10 @@ class AccountDeletionService(
                     }
 
                 if (orgId != null) {
-                    val monitoringTables = listOf("system_metrics", "container_metrics")
+                    val monitoringTables = listOf("metrics", "containers")
                     monitoringTables.forEach { table ->
                         try {
-                            val query = "ALTER TABLE $table DELETE WHERE org_id = $orgId"
+                            val query = "ALTER TABLE $table DELETE WHERE organization_id = $orgId"
                             ClickHouseClient.execute(query)
                             logger.info { "Deleted ClickHouse monitoring data from $table for org $orgId" }
                         } catch (e: Exception) {

@@ -424,6 +424,10 @@ object DemoDataSeeder {
             println("\nStatus pages already exist. Skipping status page seeding.")
         }
 
+        // Seed Datadog agent data (hosts, traces, profiles, infra)
+        println("\nSeeding Datadog agent data...")
+        seedDatadogAgentData(orgId)
+
         val backendUrl = EnvConfig.get("BACKEND_URL", "http://localhost:8080")
         val backendHost = backendUrl.removePrefix("http://").removePrefix("https://")
 
@@ -441,8 +445,7 @@ object DemoDataSeeder {
         println("\nNext steps:")
         println("1. Login at http://localhost:3000 with demo@moneat.dev / demo123")
         println("2. Browse the realistic error data in the dashboard")
-        println("3. Run the seed script to add on-call data: ./scripts/seed-demo-data.sh")
-        println("4. Take screenshots for documentation!")
+        println("3. Take screenshots for documentation!")
         println("=========================\n")
     }
 
@@ -2328,7 +2331,7 @@ object DemoDataSeeder {
 
         // Delete existing container metrics for this organization to ensure fresh data
         try {
-            val deleteQuery = "DELETE FROM $db.container_metrics WHERE org_id = $organizationId"
+            val deleteQuery = "ALTER TABLE $db.containers DELETE WHERE organization_id = $organizationId"
             ClickHouseClient.execute(deleteQuery)
             println("🗑️  Deleted old container metrics for fresh data")
         } catch (e: Exception) {
@@ -2423,17 +2426,18 @@ object DemoDataSeeder {
                     val netRecv = if (isRunning) random.nextLong(1024L * 1024L, 100L * 1024L * 1024L) else 0L
                     val netSent = if (isRunning) random.nextLong(512L * 1024L, 50L * 1024L * 1024L) else 0L
 
+                    val ts = "fromUnixTimestamp64Milli(${timestamp.toEpochMilli()})"
+                    val tagsMap = "map('system_id','$systemId')"
                     val containerQuery =
                         """
-                        INSERT INTO $db.container_metrics (
-                            system_id, org_id, container_name, container_id, image, status,
-                            cpu_percent, mem_used, mem_limit,
-                            net_recv_bytes, net_sent_bytes, timestamp
+                        INSERT INTO $db.containers (
+                            organization_id, host, container_id, name, image, state,
+                            cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes, tags, timestamp
                         ) VALUES (
-                            toUUID('$systemId'),
                             $organizationId,
-                            '$containerName',
+                            '$systemName',
                             '$containerId',
+                            '$containerName',
                             '$image',
                             '$status',
                             $cpuPercent,
@@ -2441,7 +2445,8 @@ object DemoDataSeeder {
                             $memLimit,
                             $netRecv,
                             $netSent,
-                            toDateTime64(${timestamp.epochSecond}, 3, 'UTC')
+                            $tagsMap,
+                            $ts
                         )
                         """.trimIndent()
 
@@ -2479,7 +2484,7 @@ object DemoDataSeeder {
 
         // Delete existing system metrics for this organization to ensure fresh data
         try {
-            val deleteQuery = "DELETE FROM $db.system_metrics WHERE org_id = $organizationId"
+            val deleteQuery = "ALTER TABLE $db.metrics DELETE WHERE organization_id = $organizationId"
             ClickHouseClient.execute(deleteQuery)
             println("🗑️  Deleted old system metrics for fresh data")
         } catch (e: Exception) {
@@ -2560,45 +2565,45 @@ object DemoDataSeeder {
                 // Battery (only for mobile/laptop monitoring, rare)
                 val batteryPercent = 0.0f
 
+                val ts = "fromUnixTimestamp64Milli(${timestamp.toEpochMilli()})"
+                val tagsMap = "map('system_id','$systemId')"
+                val metricRows =
+                    listOf(
+                        Triple("system.cpu.percent", cpuPercent.toDouble(), 1),
+                        Triple("system.mem.total", memTotal.toDouble(), 1),
+                        Triple("system.mem.used", memUsed.toDouble(), 1),
+                        Triple("system.mem.available", memAvailable.toDouble(), 1),
+                        Triple("system.swap.total", swapTotal.toDouble(), 1),
+                        Triple("system.swap.used", swapUsed.toDouble(), 1),
+                        Triple("system.disk.total", diskTotal.toDouble(), 1),
+                        Triple("system.disk.used", diskUsed.toDouble(), 1),
+                        Triple("system.disk.read_bytes", diskReadBytes.toDouble(), 1),
+                        Triple("system.disk.write_bytes", diskWriteBytes.toDouble(), 1),
+                        Triple("system.net.recv_bytes", netRecvBytes.toDouble(), 1),
+                        Triple("system.net.sent_bytes", netSentBytes.toDouble(), 1),
+                        Triple("system.load.1", load1.toDouble(), 1),
+                        Triple("system.load.5", load5.toDouble(), 1),
+                        Triple("system.load.15", load15.toDouble(), 1),
+                        Triple("system.temp.max", tempMax.toDouble(), 1),
+                        Triple("system.gpu.percent", gpuPercent.toDouble(), 1),
+                        Triple("system.gpu.mem_percent", gpuMemPercent.toDouble(), 1),
+                        Triple("system.gpu.power", gpuPower.toDouble(), 1),
+                        Triple("system.battery.percent", batteryPercent.toDouble(), 1)
+                    )
+                val values =
+                    metricRows.joinToString(",") { (name, value, mtype) ->
+                        "($organizationId,'$name',$mtype,$ts,$value,'$systemName',$tagsMap,'','')"
+                    }
                 val systemMetricsQuery =
                     """
-                    INSERT INTO $db.system_metrics (
-                        system_id, org_id, timestamp,
-                        cpu_percent, mem_total, mem_used, mem_available,
-                        swap_total, swap_used, disk_total, disk_used,
-                        disk_read_bytes, disk_write_bytes, net_recv_bytes, net_sent_bytes,
-                        load_1, load_5, load_15, temp_max,
-                        gpu_percent, gpu_mem_percent, gpu_power, battery_percent
-                    ) VALUES (
-                        toUUID('$systemId'),
-                        $organizationId,
-                        toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
-                        $cpuPercent,
-                        $memTotal,
-                        $memUsed,
-                        $memAvailable,
-                        $swapTotal,
-                        $swapUsed,
-                        $diskTotal,
-                        $diskUsed,
-                        $diskReadBytes,
-                        $diskWriteBytes,
-                        $netRecvBytes,
-                        $netSentBytes,
-                        $load1,
-                        $load5,
-                        $load15,
-                        $tempMax,
-                        $gpuPercent,
-                        $gpuMemPercent,
-                        $gpuPower,
-                        $batteryPercent
-                    )
+                    INSERT INTO $db.metrics (
+                        organization_id, metric_name, metric_type, timestamp, value, host, tags, unit, source_type_name
+                    ) VALUES $values
                     """.trimIndent()
 
                 try {
                     ClickHouseClient.execute(systemMetricsQuery)
-                    totalMetrics++
+                    totalMetrics += metricRows.size
                 } catch (e: Exception) {
                     if (i == 0) println("❌ Error inserting system metric for $systemName: ${e.message}")
                 }
@@ -3213,6 +3218,518 @@ object DemoDataSeeder {
         return contexts
     }
 
+    @Suppress("LongMethod")
+    private suspend fun seedDatadogAgentData(orgId: Int) {
+        val db = ClickHouseClient.getDatabase()
+
+        // Check if already seeded — require data in key tables to skip
+        val datadogTables =
+            listOf(
+                Triple("apm_spans", "organization_id", "count()"),
+                Triple("profiles", "organization_id", "count()"),
+                Triple("service_checks", "organization_id", "count()"),
+                Triple("containers", "organization_id", "count()"),
+            )
+        var allSeeded = true
+        for ((table, orgCol, agg) in datadogTables) {
+            val cnt =
+                runCatching {
+                    ClickHouseClient.executeWithFormat(
+                        "SELECT $agg FROM $db.$table WHERE $orgCol = $orgId",
+                        "TabSeparated",
+                    ).trim().toLongOrNull() ?: 0L
+                }.getOrElse { 0L }
+            if (cnt == 0L) {
+                allSeeded = false
+                break
+            }
+        }
+        if (allSeeded) {
+            println("Datadog agent data already exists in all tables. Skipping.")
+            return
+        }
+
+        // ── Hosts (PostgreSQL) ──
+        val hosts =
+            listOf(
+                Host("prod-web-01", "Ubuntu 22.04", "linux", "Intel Xeon E5-2686 v4", 8, 16_384_000L, "7.52.1"),
+                Host("prod-web-02", "Ubuntu 22.04", "linux", "Intel Xeon E5-2686 v4", 8, 16_384_000L, "7.52.1"),
+                Host("prod-api-01", "Ubuntu 22.04", "linux", "AMD EPYC 7R13", 16, 32_768_000L, "7.52.1"),
+                Host("prod-db-01", "Ubuntu 22.04", "linux", "AMD EPYC 7R13", 32, 65_536_000L, "7.52.1"),
+                Host("prod-cache-01", "Ubuntu 22.04", "linux", "Intel Xeon E5-2686 v4", 4, 8_192_000L, "7.52.1"),
+                Host("prod-worker-01", "Ubuntu 22.04", "linux", "AMD EPYC 7R13", 8, 16_384_000L, "7.52.1"),
+            )
+        transaction {
+            exec("DELETE FROM hosts WHERE organization_id = $orgId")
+            hosts.forEach { h ->
+                val firstDays = random.nextInt(7, 30)
+                val lastSecs = random.nextInt(0, 300)
+                val firstTs =
+                    Instant.now().minus(firstDays.toLong(), ChronoUnit.DAYS)
+                        .toString()
+                        .replace("T", " ")
+                        .dropLast(1)
+                val lastTs =
+                    Instant.now().minusSeconds(lastSecs.toLong())
+                        .toString()
+                        .replace("T", " ")
+                        .dropLast(1)
+                exec(
+                    """
+                    INSERT INTO hosts (
+                        organization_id, hostname, os, platform, processor,
+                        cpu_cores, memory_total_kb, agent_version, gohai, tags,
+                        first_seen_at, last_seen_at
+                    ) VALUES (
+                        $orgId,
+                        '${h.hostname}',
+                        '${h.os}',
+                        '${h.platform}',
+                        '${h.processor}',
+                        ${h.cpuCores},
+                        ${h.memoryKb},
+                        '${h.agentVersion}',
+                        '{}',
+                        '{"env":"production","service":"acme-shopping"}',
+                        '$firstTs',
+                        '$lastTs'
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+        println("✅ Seeded ${hosts.size} hosts")
+
+        // ── APM Traces & Spans ──
+        val services =
+            listOf(
+                Service("api-gateway", "web", "prod-web-01"),
+                Service("user-service", "web", "prod-api-01"),
+                Service("product-service", "web", "prod-api-01"),
+                Service("order-service", "web", "prod-api-01"),
+                Service("payment-service", "web", "prod-api-01"),
+                Service("inventory-service", "worker", "prod-worker-01"),
+                Service("cache-service", "cache", "prod-cache-01"),
+                Service("postgres", "sql", "prod-db-01"),
+            )
+
+        // Generate ~20 traces with multiple spans each
+        val traceCount = 20
+        val spanRows = mutableListOf<String>()
+        repeat(traceCount) { traceIdx ->
+            val traceId = random.nextLong(1_000_000_000L, 9_999_999_999L)
+            val baseTime = Instant.now().minus(random.nextInt(0, 48).toLong(), ChronoUnit.HOURS)
+            val isError = random.nextFloat() < 0.15
+
+            // Root span: api-gateway
+            val rootSpanId = random.nextLong(100_000_000L, 999_999_999L)
+            val rootDuration = random.nextLong(20_000_000L, 500_000_000L) // 20-500ms in ns
+            val rootResource =
+                listOf(
+                    "GET /api/v1/products",
+                    "POST /api/v1/orders",
+                    "GET /api/v1/users/{id}",
+                    "POST /api/v1/checkout",
+                    "GET /api/v1/cart",
+                    "PUT /api/v1/cart/items",
+                    "GET /api/v1/search",
+                ).let { it[traceIdx % it.size] }
+
+            val rootTs = "fromUnixTimestamp64Nano(${baseTime.toEpochMilli() * 1_000_000L})"
+            spanRows.add(
+                "($rootSpanId, $traceId, 0, $orgId, 'http.request', 'api-gateway', " +
+                    "'$rootResource', 'web', $rootTs, $rootDuration, ${if (isError) 1 else 0}, " +
+                    "map('http.method','${rootResource.substringBefore(" ")}','http.url','${rootResource.substringAfter(" ")}','http.status_code','${if (isError) "500" else "200"}'), " +
+                    "map('_sample_rate', 1.0), 'prod-web-01', 'production', '1.3.0')",
+            )
+
+            // Child spans: downstream services
+            val downstreamCount = random.nextInt(2, 5)
+            var elapsed = random.nextLong(1_000_000L, 5_000_000L)
+            repeat(downstreamCount) { childIdx ->
+                val svc = services[1 + (traceIdx + childIdx) % (services.size - 1)]
+                val childSpanId = random.nextLong(100_000_000L, 999_999_999L)
+                val childDuration = random.nextLong(2_000_000L, rootDuration / 2)
+                val childStart = baseTime.plusNanos(elapsed)
+                val childTs = "fromUnixTimestamp64Nano(${childStart.toEpochMilli() * 1_000_000L})"
+                val childError = if (isError && childIdx == downstreamCount - 1) 1 else 0
+                val opName =
+                    when (svc.type) {
+                        "sql" -> "postgresql.query"
+                        "cache" -> "redis.command"
+                        else -> "http.request"
+                    }
+                val resource =
+                    when (svc.type) {
+                        "sql" -> "SELECT * FROM products WHERE id = ?"
+                        "cache" -> "GET product:cache:*"
+                        else -> rootResource
+                    }
+                spanRows.add(
+                    "($childSpanId, $traceId, $rootSpanId, $orgId, '$opName', '${svc.name}', " +
+                        "'${resource.replace("'", "''")}', '${svc.type}', $childTs, $childDuration, $childError, " +
+                        "map('component','${svc.name}'), map('_sample_rate', 1.0), '${svc.host}', 'production', '1.3.0')",
+                )
+                elapsed += childDuration + random.nextLong(500_000L, 2_000_000L)
+            }
+        }
+
+        // Batch insert spans
+        val spanBatch =
+            """
+            INSERT INTO $db.apm_spans (
+                span_id, trace_id, parent_id, organization_id, name, service,
+                resource, type, start, duration, error, meta, metrics, host, env, version
+            ) VALUES ${spanRows.joinToString(",\n")}
+            """.trimIndent()
+        ClickHouseClient.execute(spanBatch)
+        println("✅ Seeded $traceCount traces (${spanRows.size} spans)")
+
+        // ── Profiles ──
+        val profileTypes = listOf("cpu", "heap", "allocs", "goroutine", "block", "mutex")
+        val profileRows = mutableListOf<String>()
+        services.filter { it.type == "web" || it.type == "worker" }.forEach { svc ->
+            repeat(3) { i ->
+                val startTime = Instant.now().minus(random.nextInt(0, 24).toLong(), ChronoUnit.HOURS)
+                val durationNs = 60_000_000_000L // 60s profile window
+                val endTime = startTime.plusNanos(durationNs)
+                val ptype = profileTypes[i % profileTypes.size]
+                val startTs = "fromUnixTimestamp64Milli(${startTime.toEpochMilli()})"
+                val endTs = "fromUnixTimestamp64Milli(${endTime.toEpochMilli()})"
+                val storageKey = "$orgId/${UUID.randomUUID()}.pprof.gz"
+                val sizeBytes = random.nextInt(50_000, 500_000)
+                profileRows.add(
+                    "(generateUUIDv4(), $orgId, '${svc.host}', '${svc.name}', 'production', '1.3.0', " +
+                        "'go1.21', 'go', '$ptype', $startTs, $endTs, $durationNs, " +
+                        "'$storageKey', map('service','${svc.name}','env','production'), $sizeBytes)",
+                )
+            }
+        }
+
+        val profileBatch =
+            """
+            INSERT INTO $db.profiles (
+                profile_id, organization_id, host, service, env, version,
+                runtime, language, profile_type, start_time, end_time, duration_ns,
+                storage_key, tags, size_bytes
+            ) VALUES ${profileRows.joinToString(",\n")}
+            """.trimIndent()
+        ClickHouseClient.execute(profileBatch)
+        println("✅ Seeded ${profileRows.size} profiles")
+
+        // ── Infrastructure Events ──
+        val eventRows = mutableListOf<String>()
+        val eventTemplates =
+            listOf(
+                EventTemplate(
+                    "Deployment started: api-gateway v1.3.0",
+                    "Rolling deployment initiated for api-gateway. 4 pods updating.",
+                    "normal",
+                    "info",
+                    "deployment",
+                ),
+                EventTemplate(
+                    "Deployment completed: api-gateway v1.3.0",
+                    "All pods healthy. Zero-downtime deployment successful.",
+                    "normal",
+                    "success",
+                    "deployment",
+                ),
+                EventTemplate(
+                    "High memory usage on prod-db-01",
+                    "Memory utilization at 87%. Consider scaling or optimizing queries.",
+                    "normal",
+                    "warning",
+                    "system",
+                ),
+                EventTemplate(
+                    "Auto-scaling triggered: order-service",
+                    "CPU above 80% for 5 minutes. Scaling from 3 to 5 replicas.",
+                    "normal",
+                    "warning",
+                    "kubernetes",
+                ),
+                EventTemplate(
+                    "SSL certificate renewed: *.acme.com",
+                    "Certificate auto-renewed via Let's Encrypt. Valid until 2026-05-25.",
+                    "low",
+                    "info",
+                    "cert-manager",
+                ),
+                EventTemplate(
+                    "Database backup completed",
+                    "Full backup of prod-db-01 completed. Size: 42.3GB, Duration: 12m34s.",
+                    "low",
+                    "info",
+                    "backup",
+                ),
+                EventTemplate(
+                    "Rate limiting activated: /api/v1/search",
+                    "Request rate exceeded 1000/min threshold from 203.0.113.42.",
+                    "normal",
+                    "warning",
+                    "api-gateway",
+                ),
+                EventTemplate(
+                    "Pod restart: payment-service-7f8d9c",
+                    "Container OOMKilled. Memory limit: 512Mi. Peak usage: 498Mi.",
+                    "normal",
+                    "error",
+                    "kubernetes",
+                ),
+                EventTemplate(
+                    "Cache eviction spike on prod-cache-01",
+                    "Redis evicted 15,000 keys in last 5 minutes. maxmemory-policy: allkeys-lru.",
+                    "normal",
+                    "warning",
+                    "redis",
+                ),
+                EventTemplate(
+                    "Deployment rolled back: user-service v1.2.9",
+                    "Health check failures exceeded threshold. Automatic rollback to v1.2.8.",
+                    "normal",
+                    "error",
+                    "deployment",
+                ),
+            )
+        eventTemplates.forEachIndexed { idx, tmpl ->
+            val tsEpochMs = Instant.now().minus(random.nextInt(0, 72).toLong(), ChronoUnit.HOURS).toEpochMilli()
+            val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
+            val host = hosts[idx % hosts.size].hostname
+            eventRows.add(
+                "(generateUUIDv4(), $orgId, '${tmpl.title.replace("'", "''")}', " +
+                    "'${tmpl.text.replace("'", "''")}', $ts, '${tmpl.priority}', '$host', " +
+                    "map('env','production'), '${tmpl.alertType}', '', '${tmpl.source}', '')",
+            )
+        }
+
+        val eventBatch =
+            """
+            INSERT INTO $db.infra_events (
+                event_id, organization_id, title, text, timestamp, priority, host,
+                tags, alert_type, aggregation_key, source_type_name, device_name
+            ) VALUES ${eventRows.joinToString(",\n")}
+            """.trimIndent()
+        ClickHouseClient.execute(eventBatch)
+        println("✅ Seeded ${eventRows.size} infrastructure events")
+
+        // ── Service Checks ──
+        val checkRows = mutableListOf<String>()
+        val checks =
+            listOf(
+                Triple("datadog.agent.up", "ok", "Agent is reporting normally"),
+                Triple("http.can_connect", "ok", "HTTP connection successful (200)"),
+                Triple("postgres.can_connect", "ok", "PostgreSQL connection established"),
+                Triple("redis.can_ping", "ok", "Redis PONG received in 0.3ms"),
+                Triple("disk.check", "warning", "Disk usage at 82% on /dev/sda1"),
+                Triple("ntp.offset", "ok", "NTP offset: +12ms"),
+                Triple("tls.cert_expiry", "ok", "Certificate valid for 89 days"),
+                Triple("http.can_connect", "critical", "Connection refused on port 8443"),
+            )
+        hosts.forEach { host ->
+            checks.forEach { (checkName, status, message) ->
+                val tsEpochMs =
+                    Instant.now().minus(random.nextInt(0, 60).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+                val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
+                checkRows.add(
+                    "(generateUUIDv4(), $orgId, '$checkName', '${host.hostname}', '$status', " +
+                        "$ts, map('env','production'), '${message.replace("'", "''")}')",
+                )
+            }
+        }
+
+        val checkBatch =
+            """
+            INSERT INTO $db.service_checks (
+                check_id, organization_id, check_name, host, status,
+                timestamp, tags, message
+            ) VALUES ${checkRows.joinToString(",\n")}
+            """.trimIndent()
+        ClickHouseClient.execute(checkBatch)
+        println("✅ Seeded ${checkRows.size} service checks")
+
+        // ── Processes ──
+        val processTemplates =
+            listOf(
+                Process("nginx", "/usr/sbin/nginx -g daemon off;", "root", 1),
+                Process("api-gateway", "/app/api-gateway serve --port 8080", "appuser", 12),
+                Process("user-service", "java -jar /app/user-service.jar", "appuser", 45),
+                Process("product-service", "java -jar /app/product-service.jar", "appuser", 38),
+                Process("order-service", "/app/order-service serve", "appuser", 8),
+                Process(
+                    "postgres",
+                    "/usr/lib/postgresql/15/bin/postgres -D /var/lib/postgresql/15/main",
+                    "postgres",
+                    24,
+                ),
+                Process("redis-server", "redis-server *:6379", "redis", 4),
+                Process("node", "node /app/dist/worker.js", "appuser", 11),
+                Process("datadog-agent", "/opt/datadog-agent/bin/agent/agent run", "dd-agent", 6),
+                Process("containerd", "/usr/bin/containerd", "root", 15),
+            )
+        val processRows = mutableListOf<String>()
+        hosts.forEach { host ->
+            processTemplates.filter { proc ->
+                when {
+                    proc.name == "postgres" -> host.hostname.contains("db")
+                    proc.name == "redis-server" -> host.hostname.contains("cache")
+                    proc.name in listOf("nginx", "datadog-agent", "containerd") -> true
+                    else -> host.hostname.contains("web") || host.hostname.contains("api") || host.hostname.contains("worker")
+                }
+            }.forEachIndexed { idx, proc ->
+                val pid = 1000 + idx * 100 + random.nextInt(0, 50)
+                val cpuPercent = random.nextDouble(0.1, 45.0)
+                val memRss = random.nextLong(10L * 1024 * 1024, 2L * 1024 * 1024 * 1024)
+                val memVms = memRss + random.nextLong(50L * 1024 * 1024, 500L * 1024 * 1024)
+                val tsEpochMs =
+                    Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+                val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
+                processRows.add(
+                    "(generateUUIDv4(), $orgId, '${host.hostname}', $pid, '${proc.name}', " +
+                        "'${proc.command.replace("'", "''")}', '${proc.user}', $cpuPercent, " +
+                        "$memRss, $memVms, 'running', ${proc.threads}, ${random.nextInt(3, 256)}, " +
+                        "map('env','production'), $ts)",
+                )
+            }
+        }
+
+        val processBatch =
+            """
+            INSERT INTO $db.processes (
+                process_id, organization_id, host, pid, name, command, user,
+                cpu_percent, mem_rss, mem_vms, state, thread_count, open_fd_count,
+                tags, timestamp
+            ) VALUES ${processRows.joinToString(",\n")}
+            """.trimIndent()
+        ClickHouseClient.execute(processBatch)
+        println("✅ Seeded ${processRows.size} processes")
+
+        // ── Containers ──
+        val containerTemplates =
+            listOf(
+                Container("api-gateway", "acme/api-gateway:1.3.0", "running"),
+                Container("user-service", "acme/user-service:1.2.8", "running"),
+                Container("product-service", "acme/product-service:1.4.1", "running"),
+                Container("order-service", "acme/order-service:2.0.3", "running"),
+                Container("payment-service", "acme/payment-service:1.1.5", "running"),
+                Container("nginx-ingress", "nginx/nginx-ingress:3.4.0", "running"),
+                Container("datadog-agent", "datadog/agent:7.52.1", "running"),
+                Container("fluentd", "fluent/fluentd:v1.16", "running"),
+                Container("redis", "redis:7.2-alpine", "running"),
+                Container("postgres", "postgres:15.5", "running"),
+            )
+        val containerRows = mutableListOf<String>()
+        hosts.forEach { host ->
+            containerTemplates.filter { c ->
+                when {
+                    c.name == "postgres" -> host.hostname.contains("db")
+                    c.name == "redis" -> host.hostname.contains("cache")
+                    c.name in listOf("datadog-agent", "fluentd") -> true
+                    else -> host.hostname.contains("web") || host.hostname.contains("api") || host.hostname.contains("worker")
+                }
+            }.forEach { c ->
+                val containerId = UUID.randomUUID().toString().replace("-", "").take(12)
+                val cpuPercent = random.nextDouble(0.5, 65.0)
+                val memLimit = random.nextLong(256L, 4096L) * 1024 * 1024
+                val memUsage = (memLimit * random.nextDouble(0.2, 0.85)).toLong()
+                val netRx = random.nextLong(1024L * 1024, 500L * 1024 * 1024)
+                val netTx = random.nextLong(512L * 1024, 250L * 1024 * 1024)
+                val tsEpochMs =
+                    Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+                val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
+                containerRows.add(
+                    "(generateUUIDv4(), $orgId, '${host.hostname}', '$containerId', " +
+                        "'${c.name}', '${c.image}', '${c.state}', $cpuPercent, " +
+                        "$memUsage, $memLimit, $netRx, $netTx, " +
+                        "map('env','production','service','${c.name}'), $ts)",
+                )
+            }
+        }
+
+        val containerBatch =
+            """
+            INSERT INTO $db.containers (
+                container_id_hash, organization_id, host, container_id, name, image, state,
+                cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes,
+                tags, timestamp
+            ) VALUES ${containerRows.joinToString(",\n")}
+            """.trimIndent()
+        ClickHouseClient.execute(containerBatch)
+        println("✅ Seeded ${containerRows.size} containers")
+
+        // ── Network Connections ──
+        val connRows = mutableListOf<String>()
+        val connTemplates =
+            listOf(
+                Conn("prod-web-01", 8080, "prod-api-01", 8080, "tcp", "outgoing"),
+                Conn("prod-api-01", 8080, "prod-db-01", 5432, "tcp", "outgoing"),
+                Conn("prod-api-01", 8080, "prod-cache-01", 6379, "tcp", "outgoing"),
+                Conn("prod-web-02", 8080, "prod-api-01", 8080, "tcp", "outgoing"),
+                Conn("prod-worker-01", 8080, "prod-db-01", 5432, "tcp", "outgoing"),
+                Conn("prod-worker-01", 8080, "prod-cache-01", 6379, "tcp", "outgoing"),
+                Conn("prod-web-01", 443, "0.0.0.0", 0, "tcp", "incoming"),
+                Conn("prod-web-02", 443, "0.0.0.0", 0, "tcp", "incoming"),
+            )
+        connTemplates.forEach { conn ->
+            val pid = random.nextInt(1000, 9999)
+            val bytesSent = random.nextLong(10L * 1024, 100L * 1024 * 1024)
+            val bytesRecv = random.nextLong(10L * 1024, 100L * 1024 * 1024)
+            val tsEpochMs =
+                Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+            val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
+            connRows.add(
+                "(generateUUIDv4(), $orgId, '${conn.srcHost}', $pid, " +
+                    "'${conn.srcHost}', ${conn.srcPort}, '${conn.dstHost}', ${conn.dstPort}, " +
+                    "'${conn.protocol}', 'IPv4', '${conn.direction}', $bytesSent, $bytesRecv, " +
+                    "map('env','production'), $ts)",
+            )
+        }
+
+        val connBatch =
+            """
+            INSERT INTO $db.network_connections (
+                connection_id, organization_id, host, pid, local_addr, local_port,
+                remote_addr, remote_port, protocol, family, direction,
+                bytes_sent, bytes_recv, tags, timestamp
+            ) VALUES ${connRows.joinToString(",\n")}
+            """.trimIndent()
+        ClickHouseClient.execute(connBatch)
+        println("✅ Seeded ${connRows.size} network connections")
+    }
+
+    private data class Host(
+        val hostname: String,
+        val os: String,
+        val platform: String,
+        val processor: String,
+        val cpuCores: Int,
+        val memoryKb: Long,
+        val agentVersion: String,
+    )
+
+    private data class Service(val name: String, val type: String, val host: String)
+
+    private data class EventTemplate(
+        val title: String,
+        val text: String,
+        val priority: String,
+        val alertType: String,
+        val source: String,
+    )
+
+    private data class Process(val name: String, val command: String, val user: String, val threads: Int)
+
+    private data class Container(val name: String, val image: String, val state: String)
+
+    private data class Conn(
+        val srcHost: String,
+        val srcPort: Int,
+        val dstHost: String,
+        val dstPort: Int,
+        val protocol: String,
+        val direction: String,
+    )
+
     private data class IssueTemplate(
         val title: String,
         val exceptionType: String,
@@ -3269,6 +3786,8 @@ object DemoDataSeeder {
                 listOf(
                     // Emails and notifications first
                     "DELETE FROM emails_sent WHERE organization_id = $orgId",
+                    // Datadog agent hosts
+                    "DELETE FROM hosts WHERE organization_id = $orgId",
                     // Organization child data
                     "DELETE FROM subscriptions WHERE organization_id = $orgId",
                     "DELETE FROM uptime_monitors WHERE organization_id = $orgId",
@@ -3338,6 +3857,28 @@ object DemoDataSeeder {
                     } catch (e: Exception) {
                         // Silently continue
                     }
+                }
+            }
+
+            // Delete Datadog agent ClickHouse data (keyed by organization_id)
+            println("Deleting Datadog agent ClickHouse data...")
+            val ddClickhouseQueries =
+                listOf(
+                    "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
+                    "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
+                )
+
+            for (query in ddClickhouseQueries) {
+                try {
+                    ClickHouseClient.execute(query)
+                } catch (_: Exception) {
+                    // Silently continue - table may not exist
                 }
             }
         }

@@ -853,8 +853,8 @@ function DashboardPage() {
                 {monitorSystems.slice(0, 6).map(sys => (
                   <Link
                     key={sys.id}
-                    to="/monitoring/$systemId"
-                    params={{systemId: sys.id}}
+                    to="/monitoring/hosts/$hostId"
+                    params={{hostId: String(sys.id)}}
                     className="grid gap-3 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:minmax(12rem,15rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,11rem)] md:items-center"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">

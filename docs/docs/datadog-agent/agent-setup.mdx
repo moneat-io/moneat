@@ -1,0 +1,21 @@
+---
+sidebar_position: 2
+title: Agent Setup
+description: Deploy the Datadog-compatible agent to start collecting infrastructure telemetry.
+---
+
+# Agent Setup
+
+## Deploy the Agent
+
+Go to **Monitoring → Hosts** in the dashboard and click **Add Host**. Moneat will generate a ready-to-run Docker command with your API key and endpoint already filled in — just paste it on your server.
+
+The agent collects system metrics, processes, containers, APM traces, and logs.
+
+## Verifying the Agent
+
+After deploying, the host appears in **Monitoring → Hosts** within a few minutes with CPU, memory, platform info, and agent version.
+
+## Managing API Keys
+
+Agent keys live in **Settings → Agent Keys**. You can see when each key was last used or revoke one to immediately block that agent from sending data.

@@ -17,6 +17,7 @@
 package com.moneat.llm.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.models.LlmIngestPayload
@@ -66,9 +67,10 @@ class LlmIngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
+        val redis = RedisConfig.newBlockingConnection()
         while (scope.isActive) {
             try {
-                val result = RedisConfig.syncBlocking().brpop(5, queueKey)
+                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
                 val value = result?.value ?: continue
                 processMessageForTest(workerId, value)
             } catch (e: CancellationException) {
@@ -83,7 +85,7 @@ class LlmIngestionWorker(
     internal suspend fun processMessageForTest(
         workerId: Int,
         value: String,
-        onDlq: (String) -> Unit = { message -> RedisConfig.syncBlocking().rpush(dlqKey, message) }
+        onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
         try {
             val (projectId, payloadBytes) = decodeMessage(value)

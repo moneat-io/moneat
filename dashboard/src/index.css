@@ -318,3 +318,26 @@
 .animation-delay-400 { animation-delay: 0.4s; }
 .animation-delay-500 { animation-delay: 0.5s; }
 .animation-delay-600 { animation-delay: 0.6s; }
+
+/* React Flow — theme-aware controls */
+.service-map .react-flow__controls {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+}
+
+.service-map .react-flow__controls-button {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  fill: hsl(var(--foreground));
+  color: hsl(var(--foreground));
+}
+
+.service-map .react-flow__controls-button:hover {
+  background: hsl(var(--muted));
+}
+
+.service-map .react-flow__edge-path {
+  stroke-linecap: round;
+}

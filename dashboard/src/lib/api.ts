@@ -430,6 +430,332 @@ export interface CreateLogApiKeyResponse {
   createdAt: string
 }
 
+export interface DdApiKey {
+  id: number
+  name: string
+  keyPrefix: string
+  createdAt: string
+  lastUsedAt?: string
+}
+
+export interface CreateDdApiKeyResponse {
+  id: number
+  name: string
+  keyPrefix: string
+  key: string
+  createdAt: string
+}
+
+// --- DD Trace types ---
+
+export interface ApmTraceListItem {
+  traceId: string
+  rootService: string
+  rootResource: string
+  rootName: string
+  spanCount: number
+  durationNs: number
+  startNs: number
+  hasError: boolean
+}
+
+export interface ApmTraceListResponse {
+  traces: ApmTraceListItem[]
+  totalCount: number
+}
+
+export interface ApmSpanResponse {
+  spanId: string
+  traceId: string
+  parentId: string
+  name: string
+  service: string
+  resource: string
+  type: string
+  startNs: number
+  durationNs: number
+  error: number
+  meta: Record<string, string>
+  metrics: Record<string, number>
+  host: string
+  env: string
+  version: string
+}
+
+export interface ApmTraceDetailResponse {
+  traceId: string
+  spans: ApmSpanResponse[]
+}
+
+export interface ApmServiceMapEntry {
+  service: string
+  spanCount: number
+  errorCount: number
+  avgDurationNs: number
+  callsTo: string[]
+}
+
+export interface ApmServiceMapResponse {
+  services: ApmServiceMapEntry[]
+}
+
+// --- Profile types ---
+
+export interface ProfileResponse {
+  profileId: string
+  host: string
+  service: string
+  env: string
+  version: string
+  runtime: string
+  language: string
+  profileType: string
+  startTime: string
+  endTime: string
+  durationNs: number
+  sizeBytes: number
+  tags: Record<string, string>
+  source?: string
+}
+
+export interface ProfileListResponse {
+  profiles: ProfileResponse[]
+  totalCount: number
+}
+
+export interface FlamegraphFrame {
+  name: string
+  value: number
+  children: FlamegraphFrame[]
+}
+
+export interface FlamegraphResponse {
+  frames: FlamegraphFrame[]
+}
+
+// --- Event types ---
+
+export interface DdEventResponse {
+  eventId: string
+  title: string
+  text: string
+  timestamp: string
+  priority: string
+  host: string
+  tags: Record<string, string>
+  alertType: string
+  aggregationKey: string
+  sourceTypeName: string
+  deviceName: string
+}
+
+export interface DdEventListResponse {
+  events: DdEventResponse[]
+  totalCount: number
+}
+
+// --- Service Check types ---
+
+export interface DdServiceCheckResponse {
+  checkId: string
+  checkName: string
+  host: string
+  status: string
+  timestamp: string
+  tags: Record<string, string>
+  message: string
+}
+
+export interface DdServiceCheckListResponse {
+  serviceChecks: DdServiceCheckResponse[]
+  totalCount: number
+}
+
+// --- Host types ---
+
+export interface DdHostResponse {
+  id: number
+  hostname: string
+  os: string
+  platform: string
+  processor: string
+  cpuCores: number
+  memoryTotalKb: number
+  agentVersion: string
+  tags: Record<string, string>
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
+export interface DdHostListResponse {
+  hosts: DdHostResponse[]
+  totalCount: number
+}
+
+// --- Infrastructure types ---
+
+export interface DdProcessResponse {
+  processId: string
+  host: string
+  pid: number
+  name: string
+  command: string
+  user: string
+  cpuPercent: number
+  memRss: number
+  memVms: number
+  state: string
+  threadCount: number
+  openFdCount: number
+  tags: Record<string, string>
+  timestamp: string
+}
+
+export interface DdProcessListResponse {
+  processes: DdProcessResponse[]
+  totalCount: number
+}
+
+export interface DdContainerResponse {
+  id: string
+  host: string
+  containerId: string
+  name: string
+  image: string
+  state: string
+  cpuPercent: number
+  memUsage: number
+  memLimit: number
+  netRxBytes: number
+  netTxBytes: number
+  tags: Record<string, string>
+  timestamp: string
+}
+
+export interface DdContainerListResponse {
+  containers: DdContainerResponse[]
+  totalCount: number
+}
+
+export interface DdConnectionResponse {
+  connectionId: string
+  host: string
+  pid: number
+  localAddr: string
+  localPort: number
+  remoteAddr: string
+  remotePort: number
+  protocol: string
+  family: string
+  direction: string
+  bytesSent: number
+  bytesRecv: number
+  tags: Record<string, string>
+  timestamp: string
+}
+
+export interface DdConnectionListResponse {
+  connections: DdConnectionResponse[]
+  totalCount: number
+}
+
+export interface SyntheticAssertionPayload {
+  type: string
+  target?: string
+  operator?: string
+  value?: string
+}
+
+export interface SyntheticVariableExtractionPayload {
+  name: string
+  source: string
+  path?: string
+}
+
+export interface SyntheticStepPayload {
+  name?: string
+  url: string
+  method?: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  assertions?: SyntheticAssertionPayload[]
+  extractVariables?: SyntheticVariableExtractionPayload[]
+}
+
+export interface CreateSyntheticTestPayload {
+  name: string
+  testType: 'api' | 'multistep'
+  intervalSeconds: number
+  timeoutSeconds: number
+  url?: string | null
+  method?: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  authMethod?: 'basic' | 'bearer' | null
+  authUser?: string | null
+  authPass?: string | null
+  assertions?: SyntheticAssertionPayload[]
+  steps?: SyntheticStepPayload[]
+}
+
+export interface UpdateSyntheticTestPayload {
+  name?: string
+  active?: boolean
+  intervalSeconds?: number
+  timeoutSeconds?: number
+  url?: string | null
+  method?: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  authMethod?: 'basic' | 'bearer' | null
+  authUser?: string | null
+  authPass?: string | null
+  assertions?: SyntheticAssertionPayload[]
+  steps?: SyntheticStepPayload[]
+}
+
+export interface SyntheticTestResponse {
+  id: string
+  organizationId: number
+  name: string
+  testType: string
+  active: boolean
+  intervalSeconds: number
+  timeoutSeconds: number
+  url?: string | null
+  method: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  authMethod?: string | null
+  authUser?: string | null
+  assertions: SyntheticAssertionPayload[]
+  steps: SyntheticStepPayload[]
+  status: string
+  lastRunAt?: number | null
+  lastStatus?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SyntheticResultResponse {
+  resultId: string
+  organizationId: number
+  testId: string
+  testName: string
+  testType: string
+  status: string
+  probeDc: string
+  durationMs: number
+  errorMessage: string
+  timings: Record<string, number>
+  timestamp: string
+}
+
+export interface SyntheticResultListResponse {
+  results: SyntheticResultResponse[]
+  totalCount: number
+}
+
 interface RawLogResponse {
   logs?: Record<string, unknown>[]
   nextCursor?: string | null
@@ -580,6 +906,13 @@ interface BillingTierConfig {
   analyticsRetentionDays?: number
   monthlyAnalyticsPageviewLimit?: number
   analyticsPageviewOverageRateCentsPer100k?: number
+  monthlyApmSpanLimit?: number
+  apmSpanOverageRateCentsPer1m?: number
+  monthlyCustomMetricLimit?: number
+  customMetricOverageRateCentsPer100k?: number
+  maxHosts?: number | null
+  profilingEnabled?: boolean
+  networkMonitoringEnabled?: boolean
   isCurrent: boolean
 }
 
@@ -643,6 +976,10 @@ interface BillingUsage {
   analyticsPageviewLimit?: number
   analyticsPageviewOverageCentsEstimate?: number
   analyticsPageviewOverageRateCentsPer100k?: number
+  usedApmSpans?: number
+  apmSpanLimit?: number
+  usedCustomMetrics?: number
+  customMetricLimit?: number
   plan: string
   status: string
   withinQuota: boolean
@@ -2393,6 +2730,13 @@ class ApiClient {
   }
 
   /**
+   * Public GET helper — delegates to the private request() method with auth.
+   */
+  async get<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint)
+  }
+
+  /**
    * Fetch with auth (same credentials/impersonation/401 retry as request) for non-JSON responses (e.g. blob download).
    */
   private async fetchWithAuth(
@@ -3042,6 +3386,218 @@ class ApiClient {
 
   async deleteLogApiKey(id: number): Promise<void> {
     await this.request(`${API_BASE}/logs/api-keys/${id}`, { method: 'DELETE' })
+  }
+
+  async getAgentApiKeys(): Promise<{ keys: DdApiKey[] }> {
+    const response = await this.request<{ keys: Record<string, unknown>[] }>(
+      `${API_BASE}/agent-api-keys`
+    )
+    const keys = (response.keys ?? []).map((k) => ({
+      id: k.id as number,
+      name: k.name as string,
+      keyPrefix: (k.keyPrefix ?? k.key_prefix) as string,
+      createdAt: (k.createdAt ?? k.created_at) as string,
+      lastUsedAt: (k.lastUsedAt ?? k.last_used_at) as string | undefined,
+    }))
+    return { keys }
+  }
+
+  async createAgentApiKey(name: string): Promise<CreateDdApiKeyResponse> {
+    return this.request<CreateDdApiKeyResponse>(`${API_BASE}/agent-api-keys`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async deleteAgentApiKey(id: number): Promise<void> {
+    await this.request(`${API_BASE}/agent-api-keys/${id}`, { method: 'DELETE' })
+  }
+
+  // --- APM Traces ---
+
+  async getApmTraces(params: {
+    service?: string
+    env?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<ApmTraceListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.service) searchParams.set('service', params.service)
+    if (params.env) searchParams.set('env', params.env)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<ApmTraceListResponse>(
+      `${API_BASE}/traces${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getApmTraceDetail(traceId: string): Promise<ApmTraceDetailResponse> {
+    return this.request<ApmTraceDetailResponse>(
+      `${API_BASE}/traces/${traceId}`
+    )
+  }
+
+  async getApmServiceMap(): Promise<ApmServiceMapResponse> {
+    return this.request<ApmServiceMapResponse>(
+      `${API_BASE}/services/map`
+    )
+  }
+
+  // --- Profiles ---
+
+  async getProfiles(params: {
+    service?: string
+    type?: string
+    source?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<ProfileListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.service) searchParams.set('service', params.service)
+    if (params.type) searchParams.set('type', params.type)
+    if (params.source) searchParams.set('source', params.source)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<ProfileListResponse>(
+      `${API_BASE}/profiles${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async downloadProfile(profileId: string, filename?: string): Promise<void> {
+    const response = await this.fetchWithAuth(
+      `${API_BASE}/profiles/${profileId}/download`
+    )
+    if (!response.ok) throw new Error('Profile download failed')
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename ?? `profile-${profileId}.pprof.gz`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async getProfileFlamegraph(profileId: string): Promise<FlamegraphResponse> {
+    return this.request<FlamegraphResponse>(
+      `${API_BASE}/profiles/${profileId}/flamegraph`
+    )
+  }
+
+  // --- Events ---
+
+  async getEvents(params: {
+    alertType?: string
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdEventListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.alertType) searchParams.set('alert_type', params.alertType)
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdEventListResponse>(
+      `${API_BASE}/infra/events${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getServiceChecks(params: {
+    checkName?: string
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdServiceCheckListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.checkName) searchParams.set('check_name', params.checkName)
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdServiceCheckListResponse>(
+      `${API_BASE}/infra/service-checks${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  // --- Hosts ---
+
+  async getHosts(): Promise<DdHostListResponse> {
+    return this.request<DdHostListResponse>(`${API_BASE}/hosts`)
+  }
+
+  async getHost(hostId: number): Promise<DdHostResponse> {
+    return this.request<DdHostResponse>(`${API_BASE}/hosts/${hostId}`)
+  }
+
+  async getHostMetrics(
+    hostId: number,
+    from?: string,
+    to?: string
+  ): Promise<SystemMetricsHistory> {
+    const params = new URLSearchParams()
+    if (from) params.append('from', from)
+    if (to) params.append('to', to)
+    const qs = params.toString()
+    return this.request<SystemMetricsHistory>(
+      `${API_BASE}/hosts/${hostId}/metrics${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getHostContainers(hostId: number): Promise<DdContainerListResponse> {
+    return this.request<DdContainerListResponse>(
+      `${API_BASE}/hosts/${hostId}/containers`
+    )
+  }
+
+  // --- Infrastructure ---
+
+  async getProcesses(params: {
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdProcessListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdProcessListResponse>(
+      `${API_BASE}/infra/processes${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getContainers(params: {
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdContainerListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdContainerListResponse>(
+      `${API_BASE}/infra/containers${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getConnections(params: {
+    host?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<DdConnectionListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.host) searchParams.set('host', params.host)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<DdConnectionListResponse>(
+      `${API_BASE}/infra/connections${qs ? `?${qs}` : ''}`
+    )
   }
 
   async getLogTagValues(
@@ -3772,6 +4328,41 @@ class ApiClient {
       netRecvBytes: row.netRecvBytes ?? row.net_recv_bytes,
       netSentBytes: row.netSentBytes ?? row.net_sent_bytes,
     }))
+  }
+
+  async getAllSystemContainers(): Promise<{
+    containers: Array<{
+      system_id: string
+      system_name: string
+      name: string
+      id: string
+      image: string
+      status: string
+      cpu_percent: number
+      mem_used: number
+      mem_limit: number
+      net_recv_bytes: number
+      net_sent_bytes: number
+      mem_percent: number
+    }>
+  }> {
+    const response = await this.request<{
+      containers: Array<{
+        system_id: string
+        system_name: string
+        name: string
+        id: string
+        image: string
+        status: string
+        cpu_percent: number
+        mem_used: number
+        mem_limit: number
+        net_recv_bytes: number
+        net_sent_bytes: number
+        mem_percent: number
+      }>
+    }>(`${API_BASE}/monitor/containers`)
+    return response
   }
 
   async getContainerMetrics(
@@ -4894,6 +5485,36 @@ class ApiClient {
     return this.request<Record<string, unknown>[]>(`${API_BASE}/datasources/${id}/query`, {
       method: 'POST',
       body: JSON.stringify(request),
+    })
+  }
+
+  async listSyntheticTests(): Promise<SyntheticTestResponse[]> {
+    return this.request<SyntheticTestResponse[]>(`${API_BASE}/synthetics/tests`)
+  }
+
+  async createSyntheticTest(request: CreateSyntheticTestPayload): Promise<SyntheticTestResponse> {
+    return this.request<SyntheticTestResponse>(`${API_BASE}/synthetics/tests`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateSyntheticTest(testId: string, request: UpdateSyntheticTestPayload): Promise<SyntheticTestResponse> {
+    return this.request<SyntheticTestResponse>(`${API_BASE}/synthetics/tests/${testId}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteSyntheticTest(testId: string) {
+    return this.request<void>(`${API_BASE}/synthetics/tests/${testId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async runSyntheticTest(testId: string) {
+    return this.request<void>(`${API_BASE}/synthetics/tests/${testId}/run`, {
+      method: 'POST',
     })
   }
 }

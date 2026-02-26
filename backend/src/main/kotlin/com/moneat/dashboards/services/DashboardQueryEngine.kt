@@ -46,8 +46,8 @@ class DashboardQueryEngine {
         "spans",
         "logs",
         "sessions",
-        "system_metrics",
-        "container_metrics",
+        "metrics",
+        "containers",
         "uptime_heartbeats",
         "llm_generations",
         "analytics_events"
@@ -62,8 +62,8 @@ class DashboardQueryEngine {
             "spans" to "timestamp",
             "logs" to "timestamp",
             "sessions" to "started",
-            "system_metrics" to "timestamp",
-            "container_metrics" to "timestamp",
+            "metrics" to "timestamp",
+            "containers" to "timestamp",
             "uptime_heartbeats" to "timestamp",
             "llm_generations" to "timestamp",
             "analytics_events" to "timestamp"
@@ -423,26 +423,29 @@ class DashboardQueryEngine {
             )
         ),
         DataSourceInfo(
-            "system_metrics",
+            "metrics",
             "System Metrics",
             listOf(
                 DataSourceField("timestamp", "DateTime64", "Metric timestamp"),
-                DataSourceField("cpu_percent", "Float32", "CPU usage percent"),
-                DataSourceField("mem_used", "UInt64", "Memory used bytes"),
-                DataSourceField("disk_used", "UInt64", "Disk used bytes"),
-                DataSourceField("load_1", "Float32", "1-minute load average"),
-                DataSourceField("net_recv_bytes", "UInt64", "Network bytes received"),
-                DataSourceField("net_sent_bytes", "UInt64", "Network bytes sent"),
+                DataSourceField("metric_name", "String", "Metric name (e.g. system.cpu.percent)"),
+                DataSourceField("value", "Float64", "Metric value"),
+                DataSourceField("host", "String", "Hostname"),
+                DataSourceField("tags", "Map", "Tags including system_id"),
             )
         ),
         DataSourceInfo(
-            "container_metrics",
+            "containers",
             "Container Metrics",
             listOf(
                 DataSourceField("timestamp", "DateTime64", "Metric timestamp"),
                 DataSourceField("name", "String", "Container name"),
-                DataSourceField("cpu_percent", "Float32", "CPU usage percent"),
-                DataSourceField("mem_used", "UInt64", "Memory used bytes"),
+                DataSourceField("host", "String", "Hostname"),
+                DataSourceField("cpu_percent", "Float64", "CPU usage percent"),
+                DataSourceField("mem_usage", "UInt64", "Memory used bytes"),
+                DataSourceField("mem_limit", "UInt64", "Memory limit bytes"),
+                DataSourceField("net_rx_bytes", "UInt64", "Network bytes received"),
+                DataSourceField("net_tx_bytes", "UInt64", "Network bytes sent"),
+                DataSourceField("tags", "Map", "Tags including system_id"),
             )
         ),
         DataSourceInfo(

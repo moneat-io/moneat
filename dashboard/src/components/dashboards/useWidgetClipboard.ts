@@ -121,7 +121,7 @@ function convertGrafanaPanel(panel: GrafanaPanel, yOffset: number): PastedWidget
     if (dsType) {
       // Map known Grafana datasource types to Moneat
       if (dsType.includes('prometheus') || dsType === 'prometheus') {
-        dataSource = 'system_metrics'
+        dataSource = 'metrics'
       } else if (dsType.includes('loki') || dsType === 'loki') {
         dataSource = 'logs'
       } else if (dsType.includes('tempo') || dsType === 'tempo') {

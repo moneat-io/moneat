@@ -160,6 +160,27 @@ data class ContainerStatsResponse(
 )
 
 @Serializable
+data class ContainerWithSystem(
+    @SerialName("system_id") val systemId: String,
+    @SerialName("system_name") val systemName: String,
+    val name: String,
+    val id: String,
+    val image: String,
+    val status: String,
+    @SerialName("cpu_percent") val cpuPercent: Float,
+    @SerialName("mem_used") val memUsed: Long,
+    @SerialName("mem_limit") val memLimit: Long,
+    @SerialName("net_recv_bytes") val netRecvBytes: Long,
+    @SerialName("net_sent_bytes") val netSentBytes: Long,
+    @SerialName("mem_percent") val memPercent: Float
+)
+
+@Serializable
+data class AllContainersResponse(
+    val containers: List<ContainerWithSystem>
+)
+
+@Serializable
 data class ContainerStats(
     val name: String,
     val id: String,
@@ -284,4 +305,27 @@ data class AlertData(
     val createdAt: kotlin.time.Instant,
     val scope: String = "system",
     val templateAlertId: Int? = null
+)
+
+@Serializable
+data class CreateAgentApiKeyRequest(
+    val name: String
+)
+
+@Serializable
+data class CreateAgentApiKeyResponse(
+    val id: Int,
+    val name: String,
+    @SerialName("key_prefix") val keyPrefix: String,
+    val key: String,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Serializable
+data class AgentApiKeyResponse(
+    val id: Int,
+    val name: String,
+    @SerialName("key_prefix") val keyPrefix: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("last_used_at") val lastUsedAt: String? = null
 )

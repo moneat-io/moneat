@@ -38,6 +38,8 @@ function makeTier(overrides: Partial<PricingCardTierInput> = {}): PricingCardTie
     errorOverageRateCentsPer1k: 50,
     replayOverageRateCentsPerGb: 300,
     llmOverageRateCentsPer1k: 100,
+    profilingEnabled: false,
+    networkMonitoringEnabled: false,
     ...overrides,
   }
 }
@@ -150,6 +152,38 @@ describe('pricing-display', () => {
       const model = buildPricingCardModel(makeTier({ samlEnabled: true }), 'monthly')
       expect(model.platformFeatures).toContain('SAML SSO')
     })
+
+    it('includes continuous profiling when enabled', () => {
+      const model = buildPricingCardModel(makeTier({ profilingEnabled: true }), 'monthly')
+      expect(model.platformFeatures).toContain('Continuous profiling')
+    })
+
+    it('includes network monitoring when enabled', () => {
+      const model = buildPricingCardModel(makeTier({ networkMonitoringEnabled: true }), 'monthly')
+      expect(model.platformFeatures).toContain('Network monitoring')
+    })
+  })
+
+  describe('APM and metrics limits', () => {
+    it('includes APM span limit in included limits', () => {
+      const model = buildPricingCardModel(makeTier({ monthlyApmSpanLimit: 10_000_000 }), 'monthly')
+      expect(model.includedLimits.some(l => l.includes('10M') && l.includes('APM spans'))).toBe(true)
+    })
+
+    it('includes custom metric limit in included limits', () => {
+      const model = buildPricingCardModel(makeTier({ monthlyCustomMetricLimit: 1_000_000 }), 'monthly')
+      expect(model.includedLimits.some(l => l.includes('1M') && l.includes('custom metrics'))).toBe(true)
+    })
+
+    it('includes hosts limit when maxHosts is set', () => {
+      const model = buildPricingCardModel(makeTier({ maxHosts: 3 }), 'monthly')
+      expect(model.includedLimits.some(l => l.includes('Up to 3 hosts'))).toBe(true)
+    })
+
+    it('includes Unlimited hosts when maxHosts is null', () => {
+      const model = buildPricingCardModel(makeTier({ maxHosts: null, monthlyPriceCents: 2900 }), 'monthly')
+      expect(model.includedLimits.some(l => l.includes('Unlimited hosts'))).toBe(true)
+    })
   })
 
   describe('overages', () => {
@@ -160,6 +194,15 @@ describe('pricing-display', () => {
       }), 'monthly')
       expect(model.overages.length).toBeGreaterThan(0)
       expect(model.overages.some(o => o.label === 'Errors')).toBe(true)
+    })
+
+    it('includes APM span and custom metric overages when set', () => {
+      const model = buildPricingCardModel(makeTier({
+        apmSpanOverageRateCentsPer1m: 30,
+        customMetricOverageRateCentsPer100k: 50,
+      }), 'monthly')
+      expect(model.overages.some(o => o.label === 'APM spans')).toBe(true)
+      expect(model.overages.some(o => o.label === 'Custom metrics')).toBe(true)
     })
 
     it('no overages for free tier', () => {

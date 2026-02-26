@@ -69,6 +69,15 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val analytics_pageview_overage_rate_cents_per_100k = integer(
         "analytics_pageview_overage_rate_cents_per_100k"
     ).default(0)
+    val monthly_apm_span_limit = long("monthly_apm_span_limit").default(0)
+    val apm_span_overage_rate_cents_per_1m = integer("apm_span_overage_rate_cents_per_1m").default(0)
+    val monthly_custom_metric_limit = long("monthly_custom_metric_limit").default(0)
+    val custom_metric_overage_rate_cents_per_100k = integer(
+        "custom_metric_overage_rate_cents_per_100k"
+    ).default(0)
+    val max_hosts = integer("max_hosts").nullable()
+    val profiling_enabled = bool("profiling_enabled").default(false)
+    val network_monitoring_enabled = bool("network_monitoring_enabled").default(false)
     val stripe_base_price_id = varchar("stripe_base_price_id", 255).nullable()
     val stripe_overage_price_id = varchar("stripe_overage_price_id", 255).nullable()
     val stripe_yearly_base_price_id = varchar("stripe_yearly_base_price_id", 255).nullable()
@@ -98,6 +107,8 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_log_bytes = long("used_log_bytes").default(0)
     val used_llm_bytes = long("used_llm_bytes").default(0)
     val used_analytics_pageviews = long("used_analytics_pageviews").default(0)
+    val used_apm_spans = long("used_apm_spans").default(0)
+    val used_custom_metrics = long("used_custom_metrics").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -173,6 +184,13 @@ data class PricingTierConfigResponse(
     val analyticsRetentionDays: Int = 1095,
     val monthlyAnalyticsPageviewLimit: Long = 0,
     val analyticsPageviewOverageRateCentsPer100k: Int = 0,
+    val monthlyApmSpanLimit: Long = 0,
+    val apmSpanOverageRateCentsPer1m: Int = 0,
+    val monthlyCustomMetricLimit: Long = 0,
+    val customMetricOverageRateCentsPer100k: Int = 0,
+    val maxHosts: Int? = null,
+    val profilingEnabled: Boolean = false,
+    val networkMonitoringEnabled: Boolean = false,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,
@@ -232,11 +250,15 @@ data class BillingUsageResponse(
     val replayOverageCentsEstimate: Int = 0,
     val logOverageCentsEstimate: Int = 0,
     val llmOverageCentsEstimate: Int = 0,
+    val apmSpanOverageCentsEstimate: Int = 0,
+    val customMetricOverageCentsEstimate: Int = 0,
     val totalOverageCentsEstimate: Int = 0,
     val errorOverageRateCentsPer1k: Int = 0,
     val replayOverageRateCentsPerGb: Int = 0,
     val logOverageRateCentsPerGb: Int = 0,
     val llmOverageRateCentsPer1k: Int = 0,
+    val apmSpanOverageRateCentsPer1m: Int = 0,
+    val customMetricOverageRateCentsPer100k: Int = 0,
     val oncallSeats: Int = 0,
     val oncallUsedSeats: Int = 0,
     val oncallPerUserMonthlyCents: Int = 0,
@@ -245,6 +267,10 @@ data class BillingUsageResponse(
     val analyticsPageviewLimit: Long = 0,
     val analyticsPageviewOverageCentsEstimate: Int = 0,
     val analyticsPageviewOverageRateCentsPer100k: Int = 0,
+    val usedApmSpans: Long = 0,
+    val apmSpanLimit: Long = 0,
+    val usedCustomMetrics: Long = 0,
+    val customMetricLimit: Long = 0,
     val plan: String,
     val status: String,
     val withinQuota: Boolean,

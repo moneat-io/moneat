@@ -270,7 +270,7 @@ class DataDogTranslatorTest {
     fun `parseDataDogQueryString with avg system metric`() {
         val warnings = mutableListOf<String>()
         val dsl = translator.parseDataDogQueryString("avg:system.cpu.user{host:web01}", warnings, 0)
-        assertEquals("system_metrics", dsl.dataSource)
+        assertEquals("metrics", dsl.dataSource)
         assertEquals(AggFunction.AVG, dsl.metrics[0].function)
         assertEquals("cpu_percent", dsl.metrics[0].field)
         assertTrue(dsl.filters.any { it.field == "host" && it.value == "web01" })
@@ -318,7 +318,7 @@ class DataDogTranslatorTest {
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
                     queryConfigs = listOf(
                         QueryDsl(
-                            dataSource = "system_metrics",
+                            dataSource = "metrics",
                             metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu"))
                         )
                     ),

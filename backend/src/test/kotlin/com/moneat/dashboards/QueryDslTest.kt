@@ -49,8 +49,10 @@ class QueryDslTest {
         assertEquals(DataSource.EVENTS, DataSource.fromString("events"))
         assertEquals(DataSource.SPANS, DataSource.fromString("spans"))
         assertEquals(DataSource.LOGS, DataSource.fromString("logs"))
-        assertEquals(DataSource.SYSTEM_METRICS, DataSource.fromString("system_metrics"))
-        assertEquals(DataSource.CONTAINER_METRICS, DataSource.fromString("container_metrics"))
+        assertEquals(DataSource.METRICS, DataSource.fromString("metrics"))
+        assertEquals(DataSource.METRICS, DataSource.fromString("system_metrics")) // backward compat
+        assertEquals(DataSource.CONTAINERS, DataSource.fromString("containers"))
+        assertEquals(DataSource.CONTAINERS, DataSource.fromString("container_metrics")) // backward compat
         assertEquals(DataSource.LLM_GENERATIONS, DataSource.fromString("llm_generations"))
         assertEquals(DataSource.ANALYTICS_EVENTS, DataSource.fromString("analytics_events"))
     }

@@ -52,6 +52,8 @@ flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", versio
 
 # Kotlin ecosystem
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.7.3" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version = "1.8.1" }
 
 # Redis
 lettuce = { module = "io.lettuce:lettuce-core", version = "7.4.0.RELEASE" }
@@ -70,8 +72,13 @@ oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
 # Billing
 stripe-java = { module = "com.stripe:stripe-java", version = "31.3.0" }
 
+# JWT
+java-jwt = { module = "com.auth0:java-jwt", version = "4.4.0" }
+
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.11" }
+zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-3" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.28.3" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
 
 # Environment
@@ -98,6 +105,7 @@ kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5", versi
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }

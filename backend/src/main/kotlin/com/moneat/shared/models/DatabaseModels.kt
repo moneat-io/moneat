@@ -194,6 +194,20 @@ object LogApiKeys : Table("log_api_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object AgentApiKeys : Table("agent_api_keys") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val project_id = long("project_id").references(Projects.id).nullable()
+    val name = varchar("name", 255)
+    val key_hash = varchar("key_hash", 255).uniqueIndex()
+    val key_prefix = varchar("key_prefix", 12)
+    val created_by = integer("created_by").references(Users.id).nullable()
+    val created_at = timestamp("created_at")
+    val last_used_at = timestamp("last_used_at").nullable()
+    val is_active = bool("is_active").default(true)
+    override val primaryKey = PrimaryKey(id)
+}
+
 object AuthTokens : Table("auth_tokens") {
     val id = integer("id").autoIncrement()
     val user_id = integer("user_id").references(Users.id)
@@ -291,6 +305,12 @@ object Subscriptions : Table("subscriptions") {
     val pending_meter_units = long("pending_meter_units").default(0)
     val pending_meter_batch_id = varchar("pending_meter_batch_id", 255).nullable()
     val pending_meter_batch_units = long("pending_meter_batch_units").default(0)
+    val pending_apm_span_overage_units = long("pending_apm_span_overage_units").default(0)
+    val pending_apm_span_batch_id = varchar("pending_apm_span_batch_id", 255).nullable()
+    val pending_apm_span_batch_units = long("pending_apm_span_batch_units").default(0)
+    val pending_custom_metric_overage_units = long("pending_custom_metric_overage_units").default(0)
+    val pending_custom_metric_batch_id = varchar("pending_custom_metric_batch_id", 255).nullable()
+    val pending_custom_metric_batch_units = long("pending_custom_metric_batch_units").default(0)
     val stripe_base_item_id = varchar("stripe_base_item_id", 255).nullable()
     val stripe_overage_item_id = varchar("stripe_overage_item_id", 255).nullable()
     val stripe_oncall_item_id = varchar("stripe_oncall_item_id", 255).nullable()

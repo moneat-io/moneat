@@ -68,6 +68,9 @@ interface Usage {
   logGb: number
   aiEvents: number
   pageViews: number
+  apmSpans: number
+  customMetrics: number
+  hosts: number
 }
 
 interface OverageLine {
@@ -91,11 +94,17 @@ function calcCost(tier: PricingCardTierInput, usage: Usage): PlanCost {
     const logLimitGb = tier.monthlyGbLimit / BYTES_PER_GB
     const aiLimit = tier.monthlyLlmEventLimit ?? 0
     const pvLimit = tier.monthlyAnalyticsPageviewLimit ?? 0
+    const apmLimit = tier.monthlyApmSpanLimit ?? 0
+    const metricLimit = tier.monthlyCustomMetricLimit ?? 0
+    const hostLimit = tier.maxHosts ?? 0
     const exceedsFreeLimits =
       (errorLimit > 0 && usage.errors > errorLimit) ||
       (logLimitGb > 0 && usage.logGb > logLimitGb) ||
       (aiLimit > 0 && usage.aiEvents > aiLimit) ||
-      (pvLimit > 0 && usage.pageViews > pvLimit)
+      (pvLimit > 0 && usage.pageViews > pvLimit) ||
+      (apmLimit > 0 && usage.apmSpans > apmLimit) ||
+      (metricLimit > 0 && usage.customMetrics > metricLimit) ||
+      (hostLimit > 0 && usage.hosts > hostLimit)
     return {base: 0, overageLines: [], total: 0, exceedsFreeLimits}
   }
 
@@ -133,6 +142,22 @@ function calcCost(tier: PricingCardTierInput, usage: Usage): PlanCost {
     overageLines.push({label: 'Extra page views', cost: (extra100k * pvRate) / 100})
   }
 
+  // APM spans
+  const apmLimit = tier.monthlyApmSpanLimit ?? 0
+  const apmRate = tier.apmSpanOverageRateCentsPer1m ?? 0
+  if (apmRate > 0 && usage.apmSpans > apmLimit) {
+    const extraM = Math.ceil((usage.apmSpans - apmLimit) / 1_000_000)
+    overageLines.push({label: 'Extra APM spans', cost: (extraM * apmRate) / 100})
+  }
+
+  // Custom metrics
+  const metricLimit = tier.monthlyCustomMetricLimit ?? 0
+  const metricRate = tier.customMetricOverageRateCentsPer100k ?? 0
+  if (metricRate > 0 && usage.customMetrics > metricLimit) {
+    const extra100k = Math.ceil((usage.customMetrics - metricLimit) / 100_000)
+    overageLines.push({label: 'Extra custom metrics', cost: (extra100k * metricRate) / 100})
+  }
+
   const total = base + overageLines.reduce((s, l) => s + l.cost, 0)
   return {base, overageLines, total, exceedsFreeLimits: false}
 }
@@ -140,9 +165,42 @@ function calcCost(tier: PricingCardTierInput, usage: Usage): PlanCost {
 // ─── Presets ─────────────────────────────────────────────────────────────────────
 
 const PRESETS: {label: string; usage: Usage}[] = [
-  {label: 'Startup', usage: {errors: 10_000, logGb: 2, aiEvents: 5_000, pageViews: 100_000}},
-  {label: 'Growing', usage: {errors: 150_000, logGb: 10, aiEvents: 50_000, pageViews: 1_000_000}},
-  {label: 'Scale', usage: {errors: 1_000_000, logGb: 50, aiEvents: 250_000, pageViews: 5_000_000}},
+  {
+    label: 'Startup',
+    usage: {
+      errors: 10_000,
+      logGb: 2,
+      aiEvents: 5_000,
+      pageViews: 100_000,
+      apmSpans: 1_000_000,
+      customMetrics: 200_000,
+      hosts: 5,
+    },
+  },
+  {
+    label: 'Growing',
+    usage: {
+      errors: 150_000,
+      logGb: 10,
+      aiEvents: 50_000,
+      pageViews: 1_000_000,
+      apmSpans: 10_000_000,
+      customMetrics: 1_000_000,
+      hosts: 20,
+    },
+  },
+  {
+    label: 'Scale',
+    usage: {
+      errors: 1_000_000,
+      logGb: 50,
+      aiEvents: 250_000,
+      pageViews: 5_000_000,
+      apmSpans: 50_000_000,
+      customMetrics: 5_000_000,
+      hosts: 50,
+    },
+  },
 ]
 
 // ─── SliderInput ──────────────────────────────────────────────────────────────────
@@ -320,12 +378,30 @@ function PlanCard({tier, cost, isBest}: PlanCardProps) {
 
 // ─── Main section ─────────────────────────────────────────────────────────────────
 
+// Datadog pricing estimate (annual rates): infra $15, APM $31, profiler $19, network $5 per host
+const DATADOG_COST_PER_HOST = 15 + 31 + 19 + 5 // $70/host/mo
+const DATADOG_LOG_COST_PER_GB = 1.8 // ingest + index
+const DATADOG_ERROR_COST_FIRST_50K = 25
+const DATADOG_ERROR_RATE_PER_1K = 0.25
+
+function estimateDatadogCost(usage: Usage): number {
+  const infraCost = usage.hosts * DATADOG_COST_PER_HOST
+  const logCost = usage.logGb * DATADOG_LOG_COST_PER_GB
+  const errorCost = usage.errors <= 50_000
+    ? (usage.errors > 0 ? DATADOG_ERROR_COST_FIRST_50K : 0)
+    : DATADOG_ERROR_COST_FIRST_50K + Math.ceil((usage.errors - 50_000) / 1000) * DATADOG_ERROR_RATE_PER_1K
+  return infraCost + logCost + errorCost
+}
+
 export function PricingCalculatorSection({standalone = false}: {standalone?: boolean}) {
   const [usage, setUsage] = useState<Usage>({
     errors: 0,
     logGb: 0,
     aiEvents: 0,
     pageViews: 0,
+    apmSpans: 0,
+    customMetrics: 0,
+    hosts: 0,
   })
 
   const {data: billingPlans, isPending} = useQuery({
@@ -476,12 +552,56 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
                 </CardHeader>
               </Card>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
-                {tiers.map((tier, idx) => (
-                  <div key={tier.tierName} className="relative">
-                    <PlanCard tier={tier} cost={costs[idx]} isBest={idx === bestPlanIdx} />
-                  </div>
-                ))}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {tiers.map((tier, idx) => (
+                    <div key={tier.tierName} className="relative">
+                      <PlanCard tier={tier} cost={costs[idx]} isBest={idx === bestPlanIdx} />
+                    </div>
+                  ))}
+                </div>
+                {(() => {
+                  const datadogEst = estimateDatadogCost(usage)
+                  const freeIdx = tiers.findIndex((t) => t.tierName === 'FREE')
+                  const freeFits = freeIdx >= 0 && costs[freeIdx] && !costs[freeIdx].exceedsFreeLimits
+                  const displayMoneatCost = freeFits
+                    ? 0
+                    : bestPlanIdx >= 0
+                      ? costs[bestPlanIdx].total
+                      : 0
+                  const hasUsage =
+                    usage.errors > 0 ||
+                    usage.logGb > 0 ||
+                    usage.hosts > 0 ||
+                    usage.apmSpans > 0 ||
+                    usage.customMetrics > 0
+                  if (!hasUsage || datadogEst < 10) return null
+                  return (
+                    <Card className="border-amber-500/30 bg-amber-500/5">
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold">vs Datadog (estimated)</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Same usage would cost ~{fmtMoney(datadogEst)}/mo on Datadog (infra + APM + profiler +
+                              network + logs)
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-emerald-600">
+                              Save ~
+                              {datadogEst > 0
+                                ? Math.round((1 - displayMoneatCost / datadogEst) * 100)
+                                : 0}
+                              %
+                            </p>
+                            <p className="text-xs text-muted-foreground">with Moneat</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
               </div>
             )}
 
