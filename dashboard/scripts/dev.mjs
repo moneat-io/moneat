@@ -10,7 +10,7 @@ const rootDir = path.resolve(dashboardDir, '..')
 const docsDir = path.join(rootDir, 'docs')
 const docsOutDir = path.join(dashboardDir, 'public', 'docs')
 const viteBinPath = path.join(dashboardDir, 'node_modules', 'vite', 'bin', 'vite.js')
-const docusaurusBinPath = path.join(docsDir, 'node_modules', '.bin', 'docusaurus')
+const docusaurusBinPath = path.join(docsDir, 'node_modules', '@docusaurus', 'core', 'bin', 'docusaurus.mjs')
 
 const rawArgs = process.argv.slice(2)
 const hasHostArg = rawArgs.some((arg) => arg === '--host' || arg.startsWith('--host='))

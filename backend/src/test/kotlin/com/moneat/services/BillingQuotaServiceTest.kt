@@ -602,7 +602,11 @@ class BillingQuotaServiceTest {
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        assertEquals(100, usage.customMetricOverageCentsEstimate, "200k custom metric overage at \$0.50/100k should be 100 cents")
+        assertEquals(
+            100,
+            usage.customMetricOverageCentsEstimate,
+            "200k custom metric overage at \$0.50/100k should be 100 cents",
+        )
         assertEquals(50, usage.customMetricOverageRateCentsPer100k)
     }
 
@@ -628,7 +632,8 @@ class BillingQuotaServiceTest {
         assertEquals(100, usage.customMetricOverageCentsEstimate)
         assertTrue(
             usage.totalOverageCentsEstimate >= 130,
-            "Total overage should include APM span (30¢) + custom metric (100¢) = at least 130¢, got ${usage.totalOverageCentsEstimate}"
+            "Total overage should include APM span (30¢) + custom metric (100¢) = at least 130¢, " +
+                "got ${usage.totalOverageCentsEstimate}",
         )
     }
 

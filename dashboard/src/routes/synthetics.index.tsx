@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type SyntheticResultListResponse, type SyntheticResultResponse, type SyntheticTestResponse} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
@@ -46,7 +46,7 @@ const testTypeColors: Record<string, string> = {
   multistep: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
 }
 
-function formatLastRun(timestamp: string | null | undefined): string {
+function formatLastRun(timestamp: number | null | undefined): string {
   if (!timestamp) return 'Never'
   return new Date(timestamp).toLocaleString()
 }
@@ -57,16 +57,16 @@ function SyntheticResults() {
 
   const {data: testsData, isLoading: testsLoading} = useQuery({
     queryKey: ['synthetic-tests'],
-    queryFn: () => api.get('/v1/synthetics/tests'),
+    queryFn: () => api.listSyntheticTests(),
   })
 
   const {data: resultsData, isLoading: resultsLoading} = useQuery({
     queryKey: ['synthetic-results'],
-    queryFn: () => api.get('/v1/synthetics?limit=50'),
+    queryFn: () => api.get<SyntheticResultListResponse>('/v1/synthetics?limit=50'),
   })
 
   const runMutation = useMutation({
-    mutationFn: (testId: string) => api.post(`/v1/synthetics/tests/${testId}/run`, {}),
+    mutationFn: (testId: string) => api.runSyntheticTest(testId),
     onSuccess: () => {
       toast({title: 'Test run triggered'})
       queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
@@ -78,7 +78,7 @@ function SyntheticResults() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (testId: string) => api.delete(`/v1/synthetics/tests/${testId}`),
+    mutationFn: (testId: string) => api.deleteSyntheticTest(testId),
     onSuccess: () => {
       toast({title: 'Test deleted'})
       queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
@@ -88,8 +88,8 @@ function SyntheticResults() {
     },
   })
 
-  const tests = testsData || []
-  const results = resultsData?.results || []
+  const tests: SyntheticTestResponse[] = testsData ?? []
+  const results: SyntheticResultResponse[] = resultsData?.results ?? []
 
   const handleDelete = (testId: string) => {
     if (window.confirm('Are you sure you want to delete this test?')) {
@@ -123,12 +123,12 @@ function SyntheticResults() {
                 </tr>
               </thead>
               <tbody>
-                {tests.map((t: any) => (
+                {tests.map((t) => (
                   <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="py-2 pr-4 font-medium">{t.name}</td>
                     <td className="py-2 pr-4">
-                      <Badge variant="outline" className={cn('text-xs', testTypeColors[t.type] || '')}>
-                        {t.type}
+                      <Badge variant="outline" className={cn('text-xs', testTypeColors[t.testType] || '')}>
+                        {t.testType}
                       </Badge>
                     </td>
                     <td className="py-2 pr-4">
@@ -137,7 +137,7 @@ function SyntheticResults() {
                       </Badge>
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">{formatLastRun(t.lastRunAt)}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">Every {t.intervalMinutes} min</td>
+                    <td className="py-2 pr-4 text-muted-foreground">Every {Math.round((t.intervalSeconds ?? 0) / 60)} min</td>
                     <td className="py-2">
                       <div className="flex items-center gap-1">
                         <Button
@@ -191,7 +191,7 @@ function SyntheticResults() {
                 </tr>
               </thead>
               <tbody>
-                {results.map((r: any) => (
+                {results.map((r) => (
                   <tr key={r.resultId} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="py-2 pr-4 font-medium">{r.testName}</td>
                     <td className="py-2 pr-4"><Badge variant="outline" className="text-xs">{r.testType}</Badge></td>
@@ -218,4 +218,3 @@ function SyntheticResults() {
     </div>
   )
 }
-

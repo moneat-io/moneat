@@ -2152,7 +2152,9 @@ object DemoDataReseeder {
     private suspend fun purgeSecurityDemoData() {
         for (table in listOf("security_events", "compliance_findings", "security_dumps")) {
             runCatching {
-                ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE 1=1")
+                ClickHouseClient.execute(
+                    "ALTER TABLE $table DELETE WHERE organization_id IN ($P1, $P2, $P3)"
+                )
             }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
         }
     }
@@ -2266,7 +2268,9 @@ object DemoDataReseeder {
 
     private suspend fun purgeSyntheticsDemoData() {
         runCatching {
-            ClickHouseClient.execute("ALTER TABLE synthetic_results DELETE WHERE 1=1")
+            ClickHouseClient.execute(
+                "ALTER TABLE synthetic_results DELETE WHERE organization_id IN ($P1, $P2, $P3)"
+            )
         }.onFailure { logger.warn { "Purge synthetic_results failed (non-fatal): ${it.message}" } }
     }
 

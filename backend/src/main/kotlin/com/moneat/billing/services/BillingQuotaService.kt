@@ -279,7 +279,11 @@ class BillingQuotaService(
 
             // Track APM span and custom metric overages for Stripe metering
             if (state.subscriptionId != null) {
-                val apmSpanOverageBefore = if (state.apmSpanLimit >= 0) max(0, state.usedApmSpans - state.apmSpanLimit) else 0L
+                val apmSpanOverageBefore = if (state.apmSpanLimit >= 0) {
+                    max(0, state.usedApmSpans - state.apmSpanLimit)
+                } else {
+                    0L
+                }
                 val apmSpanOverageAfter = if (state.apmSpanLimit >= 0) {
                     max(0, state.usedApmSpans + requestedApmSpans - state.apmSpanLimit)
                 } else {
@@ -327,6 +331,134 @@ class BillingQuotaService(
                 allowed = true,
                 usage = toUsageResponse(refreshed)
             )
+        }
+    }
+
+    /**
+     * Refunds previously reserved units when ingestion fails after reserveUnits
+     * was committed. Restores OrgUsageCounters and Subscriptions overage tracking.
+     */
+    fun refundUnits(
+        organizationId: Int,
+        units: Int,
+        eventType: String = "error",
+        requestedBytes: Long = 0
+    ) {
+        if (units <= 0 && requestedBytes <= 0) return
+        val normalizedType = normalizeEventType(eventType)
+        val requestedUnits = units.toLong()
+
+        transaction {
+            val state = loadQuotaState(organizationId, lockRows = true)
+            val totalBefore = state.usedUnits
+            val totalAfter = (state.usedUnits - requestedUnits).coerceAtLeast(0)
+            val usedCustomMetricsAfter = if (normalizedType == "custom_metric") {
+                (state.usedCustomMetrics - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedCustomMetrics
+            }
+            val usedApmSpansAfter = if (normalizedType == "apm_span") {
+                (state.usedApmSpans - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedApmSpans
+            }
+            val usedErrorsAfter = if (normalizedType == "error") {
+                (state.usedErrors - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedErrors
+            }
+            val usedTransactionsAfter = if (normalizedType == "transaction") {
+                (state.usedTransactions - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedTransactions
+            }
+            val usedReplaysAfter = if (normalizedType == "replay") {
+                (state.usedReplays - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedReplays
+            }
+            val usedFeedbackAfter = if (normalizedType == "feedback") {
+                (state.usedFeedback - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedFeedback
+            }
+            val usedLlmAfter = if (normalizedType == "llm") {
+                (state.usedLlmEvents - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedLlmEvents
+            }
+            val usedLogsAfter = if (normalizedType == "log") {
+                (state.usedLogs - requestedUnits).coerceAtLeast(0)
+            } else {
+                state.usedLogs
+            }
+            val bytesAfter = (state.usedBytes - requestedBytes).coerceAtLeast(0)
+            val usedErrorBytesAfter = if (normalizedType == "error") {
+                (state.usedErrorBytes - requestedBytes).coerceAtLeast(0)
+            } else {
+                state.usedErrorBytes
+            }
+            val usedReplayBytesAfter = if (normalizedType == "replay") {
+                (state.usedReplayBytes - requestedBytes).coerceAtLeast(0)
+            } else {
+                state.usedReplayBytes
+            }
+            val usedLogBytesAfter = if (normalizedType == "log") {
+                (state.usedLogBytes - requestedBytes).coerceAtLeast(0)
+            } else {
+                state.usedLogBytes
+            }
+            val usedLlmBytesAfter = if (normalizedType == "llm") {
+                (state.usedLlmBytes - requestedBytes).coerceAtLeast(0)
+            } else {
+                state.usedLlmBytes
+            }
+
+            OrgUsageCounters.update({
+                (OrgUsageCounters.organization_id eq organizationId) and
+                    (OrgUsageCounters.period_start eq state.periodStart)
+            }) {
+                it[used_units] = totalAfter
+                it[used_errors] = usedErrorsAfter
+                it[used_transactions] = usedTransactionsAfter
+                it[used_replays] = usedReplaysAfter
+                it[used_feedback] = usedFeedbackAfter
+                it[used_llm_events] = usedLlmAfter
+                it[used_logs] = usedLogsAfter
+                it[used_apm_spans] = usedApmSpansAfter
+                it[used_custom_metrics] = usedCustomMetricsAfter
+                it[used_bytes] = bytesAfter
+                it[used_error_bytes] = usedErrorBytesAfter
+                it[used_replay_bytes] = usedReplayBytesAfter
+                it[used_log_bytes] = usedLogBytesAfter
+                it[used_llm_bytes] = usedLlmBytesAfter
+                it[updated_at] = Clock.System.now()
+            }
+
+            if (state.subscriptionId != null) {
+                val overageBefore = max(0, totalBefore - state.baseLimitUnits)
+                val overageAfter = max(0, totalAfter - state.baseLimitUnits)
+                val overageRefundDelta = (overageBefore - overageAfter).coerceAtLeast(0)
+                if (overageRefundDelta > 0 && state.paygRateMicrosPerUnit > 0) {
+                    val overageMicrosRefund = overageRefundDelta * state.paygRateMicrosPerUnit
+                    Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
+                        it[payg_used_units] = (state.paygUsedUnits - overageRefundDelta).coerceAtLeast(0)
+                        it[payg_used_micros] = (state.paygUsedMicros - overageMicrosRefund).coerceAtLeast(0)
+                        it[pending_meter_units] = (state.pendingMeterUnits - overageRefundDelta).coerceAtLeast(0)
+                    }
+                }
+                if (normalizedType == "custom_metric" && state.customMetricLimit >= 0) {
+                    val overageBefore = max(0, state.usedCustomMetrics - state.customMetricLimit)
+                    val overageAfter = max(0, usedCustomMetricsAfter - state.customMetricLimit)
+                    val customMetricRefundDelta = (overageBefore - overageAfter).coerceAtLeast(0)
+                    if (customMetricRefundDelta > 0) {
+                        Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
+                            it[pending_custom_metric_overage_units] =
+                                (state.pendingCustomMetricOverageUnits - customMetricRefundDelta).coerceAtLeast(0)
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -659,6 +659,103 @@ export interface DdConnectionListResponse {
   totalCount: number
 }
 
+export interface SyntheticAssertionPayload {
+  type: string
+  target?: string
+  operator?: string
+  value?: string
+}
+
+export interface SyntheticVariableExtractionPayload {
+  name: string
+  source: string
+  path?: string
+}
+
+export interface SyntheticStepPayload {
+  name?: string
+  url: string
+  method?: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  assertions?: SyntheticAssertionPayload[]
+  extractVariables?: SyntheticVariableExtractionPayload[]
+}
+
+export interface CreateSyntheticTestPayload {
+  name: string
+  testType: 'api' | 'multistep'
+  intervalSeconds: number
+  timeoutSeconds: number
+  url?: string | null
+  method?: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  authMethod?: 'basic' | 'bearer' | null
+  authUser?: string | null
+  authPass?: string | null
+  assertions?: SyntheticAssertionPayload[]
+  steps?: SyntheticStepPayload[]
+}
+
+export interface UpdateSyntheticTestPayload {
+  name?: string
+  active?: boolean
+  intervalSeconds?: number
+  timeoutSeconds?: number
+  url?: string | null
+  method?: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  authMethod?: 'basic' | 'bearer' | null
+  authUser?: string | null
+  authPass?: string | null
+  assertions?: SyntheticAssertionPayload[]
+  steps?: SyntheticStepPayload[]
+}
+
+export interface SyntheticTestResponse {
+  id: string
+  organizationId: number
+  name: string
+  testType: string
+  active: boolean
+  intervalSeconds: number
+  timeoutSeconds: number
+  url?: string | null
+  method: string
+  headers?: Record<string, string> | null
+  body?: string | null
+  authMethod?: string | null
+  authUser?: string | null
+  assertions: SyntheticAssertionPayload[]
+  steps: SyntheticStepPayload[]
+  status: string
+  lastRunAt?: number | null
+  lastStatus?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SyntheticResultResponse {
+  resultId: string
+  organizationId: number
+  testId: string
+  testName: string
+  testType: string
+  status: string
+  probeDc: string
+  durationMs: number
+  errorMessage: string
+  timings: Record<string, number>
+  timestamp: string
+}
+
+export interface SyntheticResultListResponse {
+  results: SyntheticResultResponse[]
+  totalCount: number
+}
+
 interface RawLogResponse {
   logs?: Record<string, unknown>[]
   nextCursor?: string | null
@@ -3429,11 +3526,11 @@ class ApiClient {
   // --- Hosts ---
 
   async getHosts(): Promise<DdHostListResponse> {
-    return this.request<DdHostListResponse>(`${API_BASE}/infra/hosts`)
+    return this.request<DdHostListResponse>(`${API_BASE}/hosts`)
   }
 
   async getHost(hostId: number): Promise<DdHostResponse> {
-    return this.request<DdHostResponse>(`${API_BASE}/infra/hosts/${hostId}`)
+    return this.request<DdHostResponse>(`${API_BASE}/hosts/${hostId}`)
   }
 
   async getHostMetrics(
@@ -3446,13 +3543,13 @@ class ApiClient {
     if (to) params.append('to', to)
     const qs = params.toString()
     return this.request<SystemMetricsHistory>(
-      `${API_BASE}/infra/hosts/${hostId}/metrics${qs ? `?${qs}` : ''}`
+      `${API_BASE}/hosts/${hostId}/metrics${qs ? `?${qs}` : ''}`
     )
   }
 
   async getHostContainers(hostId: number): Promise<DdContainerListResponse> {
     return this.request<DdContainerListResponse>(
-      `${API_BASE}/infra/hosts/${hostId}/containers`
+      `${API_BASE}/hosts/${hostId}/containers`
     )
   }
 
@@ -5388,6 +5485,36 @@ class ApiClient {
     return this.request<Record<string, unknown>[]>(`${API_BASE}/datasources/${id}/query`, {
       method: 'POST',
       body: JSON.stringify(request),
+    })
+  }
+
+  async listSyntheticTests(): Promise<SyntheticTestResponse[]> {
+    return this.request<SyntheticTestResponse[]>(`${API_BASE}/synthetics/tests`)
+  }
+
+  async createSyntheticTest(request: CreateSyntheticTestPayload): Promise<SyntheticTestResponse> {
+    return this.request<SyntheticTestResponse>(`${API_BASE}/synthetics/tests`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateSyntheticTest(testId: string, request: UpdateSyntheticTestPayload): Promise<SyntheticTestResponse> {
+    return this.request<SyntheticTestResponse>(`${API_BASE}/synthetics/tests/${testId}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteSyntheticTest(testId: string) {
+    return this.request<void>(`${API_BASE}/synthetics/tests/${testId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async runSyntheticTest(testId: string) {
+    return this.request<void>(`${API_BASE}/synthetics/tests/${testId}/run`, {
+      method: 'POST',
     })
   }
 }

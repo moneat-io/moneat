@@ -29,7 +29,7 @@ import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
-import com.moneat.synthetics.services.SyntheticsScheduler
+import com.moneat.synthetics.routes.SyntheticsScheduler
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import kotlinx.coroutines.CoroutineScope

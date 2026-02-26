@@ -1,40 +1,86 @@
 ---
 sidebar_position: 9
 title: Synthetic Tests
-description: View synthetic test results from the Datadog Agent in the Moneat dashboard.
+description: Create and schedule automated API and multistep API tests to continuously validate your endpoints.
 ---
 
 # Synthetic Tests
 
 ## Overview
 
-Moneat displays synthetic test results reported by the Datadog Agent. Tests themselves are created and managed in Datadog — Moneat receives the results and surfaces them in one place alongside your other observability data.
+Moneat's synthetic testing runs automated HTTP tests against your APIs on a configurable schedule. Tests run from Moneat's own infrastructure and results appear in the **Synthetics** dashboard alongside results from any Datadog-sourced tests.
 
 :::info Enterprise feature
-Synthetic test result ingestion requires the Datadog Agent integration, available on Enterprise plans.
+Synthetic testing requires the Datadog Agent integration, available on Enterprise plans.
 :::
 
-## Prerequisites
+## Test Types
 
-- The Datadog Agent deployed and connected to Moneat (see [Agent Setup](/datadog-agent/agent-setup))
-- Synthetic tests configured in your Datadog account
-- The Enterprise `datadog` module enabled
-
-## Creating Tests
-
-Tests are created and scheduled in Datadog, not in Moneat. Refer to the [Datadog Synthetic Monitoring documentation](https://docs.datadoghq.com/synthetics/) for how to create API tests, multistep API tests, and browser tests.
-
-Once a test runs, the Datadog Agent forwards the results to Moneat automatically.
-
-## Viewing Test Results
-
-Navigate to **Synthetics** in the sidebar to see all incoming test results.
-
-| Column | Description |
+| Type | What it tests |
 |---|---|
-| **Test Name** | The name of the synthetic test as defined in Datadog |
-| **Type** | Test type (API, multistep, or browser) |
-| **Status** | `passed`, `failed`, or `skipped` |
-| **Duration** | Test execution time in milliseconds |
-| **Probe** | The datacenter or location the test ran from |
-| **Time** | When the result was recorded |
+| **API test** | A single HTTP request with assertions on the response |
+| **Multistep API test** | A chain of HTTP requests that can pass data between steps |
+
+## Creating a Test
+
+Navigate to **Synthetics** in the sidebar and click **New Test**.
+
+### Step 1 — Select type
+
+Choose **API Test** for a single request, or **Multistep API Test** to chain multiple requests together.
+
+### Step 2 — Configure the request
+
+**For API tests:**
+
+| Field | Description |
+|---|---|
+| **Name** | A label for the test (required) |
+| **Method** | GET, POST, PUT, PATCH, or DELETE |
+| **URL** | The endpoint to test (required) |
+| **Headers** | Key-value pairs to include in the request |
+| **Body** | Request body for POST/PUT/PATCH requests |
+| **Auth** | None, Basic (username + password), or Bearer token |
+
+**For multistep tests:**
+
+Add one or more steps. Each step has its own name, URL, method, body, and can extract variables from the response to use in later steps.
+
+**Variable extraction** — in any step, add an extraction with:
+- **Variable name** — what to call the extracted value (e.g., `AUTH_TOKEN`)
+- **Source** — `json_path` (e.g., `$.token`) or `header` (e.g., `Set-Cookie`)
+
+Reference extracted variables in later steps using `{{AUTH_TOKEN}}`.
+
+### Step 3 — Add assertions
+
+Assertions define what a passing response looks like. The default assertion checks that the status code equals 200.
+
+| Assertion type | Description |
+|---|---|
+| **status_code** | HTTP response status code |
+| **body_contains** | Response body includes a string |
+| **response_time** | Response time in milliseconds (use `less_than` operator) |
+| **header** | A response header matches a value |
+
+Available operators: `equals`, `not_equals`, `contains`, `less_than`, `greater_than`.
+
+### Step 4 — Set the schedule
+
+| Field | Description |
+|---|---|
+| **Interval** | How often the test runs (1, 5, 15, 30, or 60 minutes) |
+| **Timeout** | Max seconds to wait for a response before failing (10–60s) |
+
+Click **Create Test** to save. The test starts running on the next scheduled interval.
+
+## Managing Tests
+
+The **Synthetics** page shows all configured tests with their current status, last run time, and interval. From the table you can:
+
+- **Run** — trigger an immediate test run with the ▶ button
+- **Delete** — remove the test permanently
+
+## Viewing Results
+
+The **Test Results** table below the tests list shows every run — whether triggered by Moneat's scheduler or reported by a Datadog Agent — with test name, type, pass/fail status, duration, and probe location.

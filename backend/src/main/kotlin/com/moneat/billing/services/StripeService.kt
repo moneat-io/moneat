@@ -1091,7 +1091,6 @@ class StripeService(
         return flushed
     }
 
-
     fun applyDunningDowngrade(
         @Suppress("UNUSED_PARAMETER") graceDays: Int = 7
     ): Int {

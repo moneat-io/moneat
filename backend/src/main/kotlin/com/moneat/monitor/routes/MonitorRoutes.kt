@@ -21,11 +21,9 @@ import com.moneat.logs.models.AgentLogsRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.models.AgentLogIngestResponse
-import com.moneat.monitor.models.AgentApiKeyResponse
 import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
 import com.moneat.monitor.models.CreateAgentApiKeyRequest
-import com.moneat.monitor.models.CreateAgentApiKeyResponse
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.models.CreateSystemRequest
@@ -126,6 +124,8 @@ fun Route.monitorRoutes(
          * Auth: Bearer token (agent key)
          */
         post("/ingest") {
+            var refundOrgId: Int? = null
+            var refundMetricCount = 0
             try {
                 // Extract and validate agent key
                 val authHeader = call.request.header("Authorization")
@@ -180,6 +180,8 @@ fun Route.monitorRoutes(
                         )
                         return@post
                     }
+                    refundOrgId = organizationId
+                    refundMetricCount = metricCount
                 }
 
                 // Ingest metrics and get poll interval
@@ -201,6 +203,13 @@ fun Route.monitorRoutes(
                     )
                 )
             } catch (e: Exception) {
+                if (quotaService.isEnforcementEnabled() && refundMetricCount > 0 && refundOrgId != null) {
+                    quotaService.refundUnits(
+                        organizationId = refundOrgId,
+                        units = refundMetricCount,
+                        eventType = "custom_metric"
+                    )
+                }
                 logger.error(e) { "Failed to ingest metrics: ${e.message}" }
                 call.respond(
                     HttpStatusCode.BadRequest,

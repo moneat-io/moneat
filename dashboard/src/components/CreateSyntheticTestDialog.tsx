@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useMutation} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type CreateSyntheticTestPayload} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {
   Dialog,
@@ -111,6 +111,65 @@ const STEP_DESCRIPTIONS: Record<DialogStep, string> = {
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 const BODY_METHODS = ['POST', 'PUT', 'PATCH']
 
+function toCreateSyntheticTestPayload(form: FormState): CreateSyntheticTestPayload {
+  const headers = form.headers
+    .filter((header) => header.key.trim().length > 0)
+    .reduce<Record<string, string>>((acc, header) => {
+      acc[header.key.trim()] = header.value
+      return acc
+    }, {})
+
+  const authMethod = form.authMethod === 'none' ? null : form.authMethod
+  const authUser = authMethod === 'basic' ? form.authUsername || null : null
+  const authPass =
+    authMethod === 'basic'
+      ? form.authPassword || null
+      : authMethod === 'bearer'
+        ? form.authToken || null
+        : null
+
+  const assertions = form.assertions.map((assertion) => ({
+    type: assertion.type,
+    target: assertion.target,
+    operator: assertion.operator,
+    value: assertion.value,
+  }))
+
+  const steps =
+    form.type === 'multistep'
+      ? form.steps.map((step, index) => ({
+          name: step.name || `Step ${index + 1}`,
+          url: step.url.trim(),
+          method: step.method,
+          body: BODY_METHODS.includes(step.method) && step.body ? step.body : null,
+          assertions: [],
+          extractVariables: step.extractions
+            .filter((extraction) => extraction.name.trim().length > 0)
+            .map((extraction) => ({
+              name: extraction.name.trim(),
+              source: extraction.source === 'json_path' ? 'body_json_path' : extraction.source,
+              path: extraction.path.trim(),
+            })),
+        }))
+      : []
+
+  return {
+    name: form.name.trim(),
+    testType: form.type,
+    intervalSeconds: form.intervalMinutes * 60,
+    timeoutSeconds: form.timeoutSeconds,
+    url: form.type === 'api' ? form.url.trim() : null,
+    method: form.method,
+    headers: Object.keys(headers).length > 0 ? headers : null,
+    body: BODY_METHODS.includes(form.method) && form.body ? form.body : null,
+    authMethod: authMethod as 'basic' | 'bearer' | null,
+    authUser,
+    authPass,
+    assertions,
+    steps,
+  }
+}
+
 export default function CreateSyntheticTestDialog({
   open,
   onOpenChange,
@@ -121,7 +180,7 @@ export default function CreateSyntheticTestDialog({
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
 
   const createMutation = useMutation({
-    mutationFn: (data: FormState) => api.post('/v1/synthetics/tests', data),
+    mutationFn: (data: CreateSyntheticTestPayload) => api.createSyntheticTest(data),
     onSuccess: () => {
       toast({title: 'Synthetic test created successfully'})
       onSuccess()
@@ -151,7 +210,7 @@ export default function CreateSyntheticTestDialog({
       toast({title: 'All steps must have a URL', variant: 'destructive'})
       return
     }
-    createMutation.mutate(form)
+    createMutation.mutate(toCreateSyntheticTestPayload(form))
   }
 
   const addHeader = () => setForm((f) => ({...f, headers: [...f.headers, {key: '', value: ''}]}))

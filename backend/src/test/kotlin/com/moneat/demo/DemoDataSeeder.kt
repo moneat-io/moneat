@@ -3493,7 +3493,8 @@ object DemoDataSeeder {
                 ),
             )
         eventTemplates.forEachIndexed { idx, tmpl ->
-            val ts = "fromUnixTimestamp64Milli(${Instant.now().minus(random.nextInt(0, 72).toLong(), ChronoUnit.HOURS).toEpochMilli()})"
+            val tsEpochMs = Instant.now().minus(random.nextInt(0, 72).toLong(), ChronoUnit.HOURS).toEpochMilli()
+            val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
             val host = hosts[idx % hosts.size].hostname
             eventRows.add(
                 "(generateUUIDv4(), $orgId, '${tmpl.title.replace("'", "''")}', " +
@@ -3527,7 +3528,9 @@ object DemoDataSeeder {
             )
         hosts.forEach { host ->
             checks.forEach { (checkName, status, message) ->
-                val ts = "fromUnixTimestamp64Milli(${Instant.now().minus(random.nextInt(0, 60).toLong(), ChronoUnit.MINUTES).toEpochMilli()})"
+                val tsEpochMs =
+                    Instant.now().minus(random.nextInt(0, 60).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+                val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
                 checkRows.add(
                     "(generateUUIDv4(), $orgId, '$checkName', '${host.hostname}', '$status', " +
                         "$ts, map('env','production'), '${message.replace("'", "''")}')",
@@ -3553,7 +3556,12 @@ object DemoDataSeeder {
                 Process("user-service", "java -jar /app/user-service.jar", "appuser", 45),
                 Process("product-service", "java -jar /app/product-service.jar", "appuser", 38),
                 Process("order-service", "/app/order-service serve", "appuser", 8),
-                Process("postgres", "/usr/lib/postgresql/15/bin/postgres -D /var/lib/postgresql/15/main", "postgres", 24),
+                Process(
+                    "postgres",
+                    "/usr/lib/postgresql/15/bin/postgres -D /var/lib/postgresql/15/main",
+                    "postgres",
+                    24,
+                ),
                 Process("redis-server", "redis-server *:6379", "redis", 4),
                 Process("node", "node /app/dist/worker.js", "appuser", 11),
                 Process("datadog-agent", "/opt/datadog-agent/bin/agent/agent run", "dd-agent", 6),
@@ -3573,7 +3581,9 @@ object DemoDataSeeder {
                 val cpuPercent = random.nextDouble(0.1, 45.0)
                 val memRss = random.nextLong(10L * 1024 * 1024, 2L * 1024 * 1024 * 1024)
                 val memVms = memRss + random.nextLong(50L * 1024 * 1024, 500L * 1024 * 1024)
-                val ts = "fromUnixTimestamp64Milli(${Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()})"
+                val tsEpochMs =
+                    Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+                val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
                 processRows.add(
                     "(generateUUIDv4(), $orgId, '${host.hostname}', $pid, '${proc.name}', " +
                         "'${proc.command.replace("'", "''")}', '${proc.user}', $cpuPercent, " +
@@ -3624,7 +3634,9 @@ object DemoDataSeeder {
                 val memUsage = (memLimit * random.nextDouble(0.2, 0.85)).toLong()
                 val netRx = random.nextLong(1024L * 1024, 500L * 1024 * 1024)
                 val netTx = random.nextLong(512L * 1024, 250L * 1024 * 1024)
-                val ts = "fromUnixTimestamp64Milli(${Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()})"
+                val tsEpochMs =
+                    Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+                val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
                 containerRows.add(
                     "(generateUUIDv4(), $orgId, '${host.hostname}', '$containerId', " +
                         "'${c.name}', '${c.image}', '${c.state}', $cpuPercent, " +
@@ -3662,7 +3674,9 @@ object DemoDataSeeder {
             val pid = random.nextInt(1000, 9999)
             val bytesSent = random.nextLong(10L * 1024, 100L * 1024 * 1024)
             val bytesRecv = random.nextLong(10L * 1024, 100L * 1024 * 1024)
-            val ts = "fromUnixTimestamp64Milli(${Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()})"
+            val tsEpochMs =
+                Instant.now().minus(random.nextInt(0, 30).toLong(), ChronoUnit.MINUTES).toEpochMilli()
+            val ts = "fromUnixTimestamp64Milli($tsEpochMs)"
             connRows.add(
                 "(generateUUIDv4(), $orgId, '${conn.srcHost}', $pid, " +
                     "'${conn.srcHost}', ${conn.srcPort}, '${conn.dstHost}', ${conn.dstPort}, " +

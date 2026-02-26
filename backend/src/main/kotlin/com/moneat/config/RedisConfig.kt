@@ -27,6 +27,7 @@ import io.lettuce.core.api.sync.RedisCommands
 import java.time.Duration
 
 const val BRPOP_TIMEOUT_SECONDS = 5L
+
 // Blocking command timeout — must exceed BRPOP wait time. Each worker gets its own connection.
 private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BRPOP_TIMEOUT_SECONDS + 10)
 
