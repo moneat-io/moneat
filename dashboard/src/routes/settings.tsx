@@ -335,11 +335,22 @@ function ApiKeysTab() {
   const { data: features } = useEnterpriseFeatures()
   const hasDatadog = hasEnterpriseModule(features, 'datadog')
   return (
-    <div className="space-y-8">
-      <AuthTokensSection />
-      <LogApiKeysTab />
-      {hasDatadog && <AgentApiKeysTab />}
-    </div>
+    <Tabs defaultValue="sentry">
+      <TabsList className="mb-4">
+        <TabsTrigger value="sentry">Sentry</TabsTrigger>
+        <TabsTrigger value="datadog" disabled={!hasDatadog}>Datadog</TabsTrigger>
+        <TabsTrigger value="logs">Logs</TabsTrigger>
+      </TabsList>
+      <TabsContent value="sentry" className="space-y-8 mt-0">
+        <AuthTokensSection />
+      </TabsContent>
+      <TabsContent value="datadog" className="space-y-8 mt-0">
+        {hasDatadog && <AgentApiKeysTab />}
+      </TabsContent>
+      <TabsContent value="logs" className="space-y-8 mt-0">
+        <LogApiKeysTab />
+      </TabsContent>
+    </Tabs>
   )
 }
 

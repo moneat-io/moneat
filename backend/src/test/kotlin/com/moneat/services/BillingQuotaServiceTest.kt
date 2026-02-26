@@ -31,6 +31,7 @@ import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.test.BeforeTest
@@ -565,6 +566,147 @@ class BillingQuotaServiceTest {
         assertEquals(0, usage.replayOverageCentsEstimate, "Unlimited replay limit should not show replay overage")
     }
 
+    // ============ APM Span and Custom Metric Overage Estimate Tests ============
+
+    @Test
+    fun `apm span overage estimate is computed correctly`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_apm_span_limit] = 10_000_000L
+                it[apm_span_overage_rate_cents_per_1m] = 30
+            }
+            val usageCounterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq usageCounterId }) {
+                it[used_apm_spans] = 11_000_000L // 1M over limit
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(30, usage.apmSpanOverageCentsEstimate, "1M APM span overage at \$0.30/1M should be 30 cents")
+        assertEquals(30, usage.apmSpanOverageRateCentsPer1m)
+    }
+
+    @Test
+    fun `custom metric overage estimate is computed correctly`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_custom_metric_limit] = 1_000_000L
+                it[custom_metric_overage_rate_cents_per_100k] = 50
+            }
+            val usageCounterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq usageCounterId }) {
+                it[used_custom_metrics] = 1_200_000L // 200k over limit
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(100, usage.customMetricOverageCentsEstimate, "200k custom metric overage at \$0.50/100k should be 100 cents")
+        assertEquals(50, usage.customMetricOverageRateCentsPer100k)
+    }
+
+    @Test
+    fun `apm span and custom metric overages are included in totalOverageCentsEstimate`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_apm_span_limit] = 10_000_000L
+                it[apm_span_overage_rate_cents_per_1m] = 30
+                it[monthly_custom_metric_limit] = 1_000_000L
+                it[custom_metric_overage_rate_cents_per_100k] = 50
+            }
+            val usageCounterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq usageCounterId }) {
+                it[used_apm_spans] = 11_000_000L // 30 cents overage
+                it[used_custom_metrics] = 1_200_000L // 100 cents overage
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(30, usage.apmSpanOverageCentsEstimate)
+        assertEquals(100, usage.customMetricOverageCentsEstimate)
+        assertTrue(
+            usage.totalOverageCentsEstimate >= 130,
+            "Total overage should include APM span (30¢) + custom metric (100¢) = at least 130¢, got ${usage.totalOverageCentsEstimate}"
+        )
+    }
+
+    @Test
+    fun `apm span overage tracking increments pending column on reserveUnits`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_apm_span_limit] = 10_000_000L
+                it[apm_span_overage_rate_cents_per_1m] = 30
+            }
+            insertTestUsageCounter(organizationId = testOrgId).also { counterId ->
+                OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                    it[used_apm_spans] = 10_000_000L // already at limit
+                }
+            }
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 500_000,
+            eventType = "apm_span"
+        )
+
+        assertTrue(result.allowed)
+        val pendingApmOverage = transaction {
+            Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
+                .first()[Subscriptions.pending_apm_span_overage_units]
+        }
+        assertEquals(500_000L, pendingApmOverage)
+    }
+
+    @Test
+    fun `custom metric overage tracking increments pending column on reserveUnits`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_custom_metric_limit] = 1_000_000L
+                it[custom_metric_overage_rate_cents_per_100k] = 50
+            }
+            insertTestUsageCounter(organizationId = testOrgId).also { counterId ->
+                OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                    it[used_custom_metrics] = 1_000_000L // already at limit
+                }
+            }
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 200_000,
+            eventType = "custom_metric"
+        )
+
+        assertTrue(result.allowed)
+        val pendingMetricOverage = transaction {
+            Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
+                .first()[Subscriptions.pending_custom_metric_overage_units]
+        }
+        assertEquals(200_000L, pendingMetricOverage)
+    }
+
+    @Test
+    fun `apm span overage rate of zero disables estimate`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_apm_span_limit] = 500_000L
+                it[apm_span_overage_rate_cents_per_1m] = 0 // FREE tier: no overage billing
+            }
+            insertTestUsageCounter(organizationId = testOrgId).also { counterId ->
+                OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                    it[used_apm_spans] = 600_000L
+                }
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(0, usage.apmSpanOverageCentsEstimate, "Zero overage rate should produce zero estimate")
+    }
+
     // ============ Subscription Status Tests ============
 
     @Test
@@ -887,6 +1029,10 @@ class BillingQuotaServiceTest {
             it[PricingTierConfigs.error_overage_rate_cents_per_1k] = 10
             it[PricingTierConfigs.replay_overage_rate_cents_per_gb] = 40
             it[PricingTierConfigs.llm_overage_rate_cents_per_1k] = 100
+            it[PricingTierConfigs.monthly_apm_span_limit] = 10_000_000L
+            it[PricingTierConfigs.apm_span_overage_rate_cents_per_1m] = 30
+            it[PricingTierConfigs.monthly_custom_metric_limit] = 1_000_000L
+            it[PricingTierConfigs.custom_metric_overage_rate_cents_per_100k] = 50
             it[PricingTierConfigs.stripe_base_price_id] = null
             it[PricingTierConfigs.stripe_overage_price_id] = null
             it[PricingTierConfigs.stripe_yearly_base_price_id] = null

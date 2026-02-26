@@ -61,6 +61,7 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -656,6 +657,12 @@ class StripeService(
                     it[pending_meter_units] = 0
                     it[pending_meter_batch_id] = null
                     it[pending_meter_batch_units] = 0
+                    it[pending_apm_span_overage_units] = 0
+                    it[pending_apm_span_batch_id] = null
+                    it[pending_apm_span_batch_units] = 0
+                    it[pending_custom_metric_overage_units] = 0
+                    it[pending_custom_metric_batch_id] = null
+                    it[pending_custom_metric_batch_units] = 0
                     it[stripe_base_item_id] = baseItemId
                     it[stripe_overage_item_id] = overageItemId
                     it[stripe_oncall_item_id] = oncallItemId
@@ -777,6 +784,12 @@ class StripeService(
                     it[pending_meter_units] = 0
                     it[pending_meter_batch_id] = null
                     it[pending_meter_batch_units] = 0
+                    it[pending_apm_span_overage_units] = 0
+                    it[pending_apm_span_batch_id] = null
+                    it[pending_apm_span_batch_units] = 0
+                    it[pending_custom_metric_overage_units] = 0
+                    it[pending_custom_metric_batch_id] = null
+                    it[pending_custom_metric_batch_units] = 0
                 }
                 it[billing_grace_until] = null
             }
@@ -855,13 +868,18 @@ class StripeService(
                 it[status] = "active"
                 it[current_period_start] = Clock.System.now()
                 it[current_period_end] = addDays(Clock.System.now(), 30)
-                it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
                 it[payg_budget_cents] = 0
                 it[payg_used_units] = 0
                 it[payg_used_micros] = 0
                 it[pending_meter_units] = 0
                 it[pending_meter_batch_id] = null
                 it[pending_meter_batch_units] = 0
+                it[pending_apm_span_overage_units] = 0
+                it[pending_apm_span_batch_id] = null
+                it[pending_apm_span_batch_units] = 0
+                it[pending_custom_metric_overage_units] = 0
+                it[pending_custom_metric_batch_id] = null
+                it[pending_custom_metric_batch_units] = 0
             }
         }
     }
@@ -869,9 +887,18 @@ class StripeService(
     fun flushPendingMeteredUsage(limit: Int = 200): Int {
         if (!isStripeEnabled() && !allowMeteringWhenStripeDisabled) return 0
         val meterEventName = config.propertyOrNull("stripe.meterEventName")?.getString() ?: "moneat_overage_units"
+        val apmMeterEventName = config.propertyOrNull("stripe.apmSpanMeterEventName")?.getString()
+            ?: "moneat_apm_span_overage_units"
+        val customMetricMeterEventName = config.propertyOrNull("stripe.customMetricMeterEventName")?.getString()
+            ?: "moneat_custom_metric_overage_units"
+
         val subscriptionIds = transaction {
             Subscriptions.select(Subscriptions.id).where {
-                (Subscriptions.pending_meter_units greater 0L) and
+                (
+                    (Subscriptions.pending_meter_units greater 0L) or
+                        (Subscriptions.pending_apm_span_overage_units greater 0L) or
+                        (Subscriptions.pending_custom_metric_overage_units greater 0L)
+                ) and
                     (Subscriptions.stripe_customer_id.isNotNull()) and
                     (Subscriptions.status inList listOf("active", "trialing", "past_due"))
             }
@@ -950,8 +977,120 @@ class StripeService(
                 }
             }
         }
+
+        flushed += flushPendingTypeOverage(
+            pendingUnitsColumn = Subscriptions.pending_apm_span_overage_units,
+            batchIdColumn = Subscriptions.pending_apm_span_batch_id,
+            batchUnitsColumn = Subscriptions.pending_apm_span_batch_units,
+            meterEventName = apmMeterEventName,
+            batchPrefix = "apm",
+            limit = limit
+        )
+        flushed += flushPendingTypeOverage(
+            pendingUnitsColumn = Subscriptions.pending_custom_metric_overage_units,
+            batchIdColumn = Subscriptions.pending_custom_metric_batch_id,
+            batchUnitsColumn = Subscriptions.pending_custom_metric_batch_units,
+            meterEventName = customMetricMeterEventName,
+            batchPrefix = "metric",
+            limit = limit
+        )
+
         return flushed
     }
+
+    private fun flushPendingTypeOverage(
+        pendingUnitsColumn: org.jetbrains.exposed.v1.core.Column<Long>,
+        batchIdColumn: org.jetbrains.exposed.v1.core.Column<String?>,
+        batchUnitsColumn: org.jetbrains.exposed.v1.core.Column<Long>,
+        meterEventName: String,
+        batchPrefix: String,
+        limit: Int
+    ): Int {
+        val subscriptionIds = transaction {
+            Subscriptions.select(Subscriptions.id).where {
+                (pendingUnitsColumn greater 0L) and
+                    (Subscriptions.stripe_customer_id.isNotNull()) and
+                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+            }
+                .orderBy(Subscriptions.id to SortOrder.ASC)
+                .limit(limit)
+                .map { it[Subscriptions.id] }
+        }
+
+        var flushed = 0
+        for (subscriptionId in subscriptionIds) {
+            val batch = transaction {
+                TransactionManager.current().exec(
+                    "SELECT id FROM subscriptions WHERE id = ? FOR UPDATE",
+                    listOf(IntegerColumnType() to subscriptionId)
+                )
+                val row = Subscriptions.selectAll().where { Subscriptions.id eq subscriptionId }.firstOrNull()
+                    ?: return@transaction null
+                val customerId = row[Subscriptions.stripe_customer_id] ?: return@transaction null
+                val pendingUnits = row[pendingUnitsColumn]
+                if (pendingUnits <= 0) return@transaction null
+
+                val existingBatchId = row[batchIdColumn]
+                val existingBatchUnits = row[batchUnitsColumn]
+                val batchId: String
+                val batchUnits: Long
+                if (!existingBatchId.isNullOrBlank() && existingBatchUnits > 0) {
+                    batchId = existingBatchId
+                    batchUnits = existingBatchUnits.coerceAtMost(pendingUnits)
+                    if (batchUnits != existingBatchUnits) {
+                        Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                            it[batchUnitsColumn] = batchUnits
+                        }
+                    }
+                } else {
+                    batchId = "sub-$subscriptionId-$batchPrefix-${UUID.randomUUID()}"
+                    batchUnits = pendingUnits
+                    Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                        it[batchIdColumn] = batchId
+                        it[batchUnitsColumn] = batchUnits
+                    }
+                }
+                PendingMeterBatch(subscriptionId, customerId, batchId, batchUnits)
+            } ?: continue
+
+            try {
+                val params = MeterEventCreateParams
+                    .builder()
+                    .setEventName(meterEventName)
+                    .setIdentifier(batch.batchId)
+                    .putPayload("stripe_customer_id", batch.customerId)
+                    .putPayload("value", batch.batchUnits.toString())
+                    .build()
+                meterEventSender(params)
+
+                transaction {
+                    TransactionManager.current().exec(
+                        "SELECT id FROM subscriptions WHERE id = ? FOR UPDATE",
+                        listOf(IntegerColumnType() to batch.subscriptionId)
+                    )
+                    val current = Subscriptions.selectAll()
+                        .where { Subscriptions.id eq batch.subscriptionId }
+                        .firstOrNull()
+                    if (current != null) {
+                        val remaining = (current[pendingUnitsColumn] - batch.batchUnits).coerceAtLeast(0)
+                        Subscriptions.update({ Subscriptions.id eq batch.subscriptionId }) {
+                            it[pendingUnitsColumn] = remaining
+                            it[batchIdColumn] = null
+                            it[batchUnitsColumn] = 0
+                        }
+                    }
+                }
+                flushed++
+            } catch (e: Exception) {
+                logger.error(e) {
+                    "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
+                        "(batchUnits=${batch.batchUnits})"
+                }
+            }
+        }
+        return flushed
+    }
+
 
     fun applyDunningDowngrade(
         @Suppress("UNUSED_PARAMETER") graceDays: Int = 7

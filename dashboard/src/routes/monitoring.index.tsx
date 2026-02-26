@@ -108,7 +108,9 @@ function getDockerRunCommand(apiKey: string, enableContainerMonitoring: boolean)
   --restart always \\
   --network host \\
   -e DD_API_KEY="${apiKey}" \\
-  -e DD_DD_URL="${ingestUrl}" \\${dockerSocket}
+  -e DD_DD_URL="${ingestUrl}" \\
+  -e DD_APM_DD_URL="${ingestUrl}" \\
+  -e DD_PROCESS_CONFIG_PROCESS_DD_URL="${ingestUrl}" \\${dockerSocket}
   -v /proc/:/host/proc/:ro \\
   -v /sys/:/host/sys/:ro \\
   gcr.io/datadoghq/agent:7`
@@ -136,6 +138,8 @@ ${volumes}
     environment:
       - DD_API_KEY=${apiKey}
       - DD_DD_URL=${ingestUrl}
+      - DD_APM_DD_URL=${ingestUrl}
+      - DD_PROCESS_CONFIG_PROCESS_DD_URL=${ingestUrl}
 EOF
 
 docker compose up -d`

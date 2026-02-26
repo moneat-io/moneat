@@ -213,6 +213,8 @@ export function AgentApiKeysTab() {
 dd_url: ${ingestUrl}
 apm_config:
   apm_dd_url: ${ingestUrl}
+process_config:
+  process_dd_url: ${ingestUrl}
 logs_config:
   logs_dd_url: ${ingestUrl}`}
             </pre>
@@ -221,7 +223,9 @@ logs_config:
             <p className="text-sm font-medium mb-1">Environment variables</p>
             <pre className="text-xs bg-muted px-3 py-2 rounded-md break-all whitespace-pre-wrap font-mono">
 {`DD_API_KEY=<YOUR_API_KEY>
-DD_DD_URL=${ingestUrl}`}
+DD_DD_URL=${ingestUrl}
+DD_APM_DD_URL=${ingestUrl}
+DD_PROCESS_CONFIG_PROCESS_DD_URL=${ingestUrl}`}
             </pre>
           </div>
           <p className="text-sm text-muted-foreground">
