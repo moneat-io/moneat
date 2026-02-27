@@ -70,8 +70,8 @@ object ClickHouseClient {
 
                 httpClient!!.post(baseUrl) {
                     parameter("database", database)
-                    parameter("user", user)
-                    parameter("password", password)
+                    header("X-ClickHouse-User", user)
+                    header("X-ClickHouse-Key", password)
                     contentType(ContentType.Text.Plain)
                     setBody(query)
                 }
@@ -79,8 +79,8 @@ object ClickHouseClient {
         } else {
             httpClient!!.post(baseUrl) {
                 parameter("database", database)
-                parameter("user", user)
-                parameter("password", password)
+                header("X-ClickHouse-User", user)
+                header("X-ClickHouse-Key", password)
                 contentType(ContentType.Text.Plain)
                 setBody(query)
             }

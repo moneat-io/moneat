@@ -151,6 +151,16 @@ export function LogDetail({log, open, onClose, onViewInContext, projectId}: LogD
   const hasTracing = log.traceId || log.spanId
   const hasContainer = log.containerName || log.containerId || log.containerImage
 
+  // OpenTelemetry exception attributes — extract and display them prominently
+  const exceptionStacktrace = log.tags?.['exception.stacktrace'] || log.tags?.['exception.stack_trace']
+  const exceptionType = log.tags?.['exception.type']
+  const exceptionMessage = log.tags?.['exception.message']
+  const tagsWithoutException = Object.fromEntries(
+    Object.entries(log.tags || {}).filter(
+      ([k]) => k !== 'exception.stacktrace' && k !== 'exception.stack_trace' && k !== 'exception.type' && k !== 'exception.message'
+    )
+  )
+
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[32.5vw] sm:max-w-[32.5vw] overflow-y-auto p-4 sm:p-6">
@@ -223,6 +233,25 @@ export function LogDetail({log, open, onClose, onViewInContext, projectId}: LogD
             </div>
           )}
 
+          {/* Exception (OTel exception.* attributes) */}
+          {exceptionStacktrace && (
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Stack Trace</span>
+              {(exceptionType || exceptionMessage) && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 font-mono text-xs">
+                  {exceptionType && <div className="font-semibold text-red-700 dark:text-red-400">{exceptionType}</div>}
+                  {exceptionMessage && <div className="mt-0.5 text-foreground/80">{exceptionMessage}</div>}
+                </div>
+              )}
+              <div className="relative">
+                <pre className="overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
+                  {exceptionStacktrace}
+                </pre>
+                <div className="absolute right-2 top-2"><CopyButton value={exceptionStacktrace} label="stack trace" /></div>
+              </div>
+            </div>
+          )}
+
           <Separator />
 
           {/* Tracing */}
@@ -269,7 +298,7 @@ export function LogDetail({log, open, onClose, onViewInContext, projectId}: LogD
           <Separator />
 
           {/* Tags */}
-          <MapSection label="Tags" map={log.tags} />
+          <MapSection label="Tags" map={tagsWithoutException} />
 
           {/* Resource Attributes */}
           <MapSection label="Resource Attributes" map={log.resourceAttributes} />
