@@ -5,7 +5,7 @@
 
 JAVA_OPTS=""
 
-if [ -f /app/dd-java-agent.jar ] && [ -n "$DD_AGENT_HOST" ]; then
+if [ -f /app/dd-java-agent.jar ] && [ -n "${DD_AGENT_HOST}${DD_TRACE_AGENT_URL}" ]; then
   JAVA_OPTS="-javaagent:/app/dd-java-agent.jar"
 fi
 
