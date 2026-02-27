@@ -610,6 +610,10 @@ function ApmErrorsTab() {
   const canPrev = offset > 0
   const canNext = offset + errors.length < totalCount
 
+  if (!isLoading && data && errors.length === 0 && totalCount > 0 && offset > 0) {
+    setOffset(0)
+  }
+
   return (
     <div className="px-6 py-4">
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
