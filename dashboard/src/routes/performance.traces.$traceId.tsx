@@ -109,11 +109,25 @@ function PerformanceTraceDetailPage() {
     )
   }
 
-  const spans = data.spans
+  const spans = data.spans ?? []
+  if (spans.length === 0) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
+        <div className="rounded-full bg-muted p-3">
+          <AlertTriangle className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <p className="text-muted-foreground font-medium">Trace has no spans</p>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/performance/traces">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to traces
+          </Link>
+        </Button>
+      </div>
+    )
+  }
   const rootSpan = spans.find((s) => s.parentId === '0') ?? spans[0]
-  const totalDuration = rootSpan
-    ? rootSpan.durationNs
-    : Math.max(...spans.map((s) => s.durationNs))
+  const totalDuration = rootSpan?.durationNs ?? 0
   const services = [...new Set(spans.map((s) => s.service))]
   const errorCount = spans.filter((s) => s.error > 0).length
 
