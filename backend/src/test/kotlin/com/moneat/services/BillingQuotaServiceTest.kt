@@ -1097,8 +1097,11 @@ class BillingQuotaServiceTest {
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        assertEquals(40, usage.ingestionOverageCentsEstimate,
-            "1 GB overage at \$0.40/GB = 40 cents")
+        assertEquals(
+            40,
+            usage.ingestionOverageCentsEstimate,
+            "1 GB overage at \$0.40/GB = 40 cents"
+        )
         assertEquals(40, usage.ingestionOverageRateCentsPerGb)
     }
 
@@ -1133,8 +1136,10 @@ class BillingQuotaServiceTest {
             Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
                 .first()[Subscriptions.pending_overage_bytes]
         }
-        assertTrue(pendingOverageBytes > 0,
-            "Pending overage bytes should be incremented for ingestion overage")
+        assertTrue(
+            pendingOverageBytes > 0,
+            "Pending overage bytes should be incremented for ingestion overage"
+        )
     }
 
     // ============ Analytics Pageview Quota Tests ============
@@ -1156,8 +1161,11 @@ class BillingQuotaServiceTest {
 
         assertEquals(75_000, usage.usedAnalyticsPageviews)
         assertEquals(100_000, usage.analyticsPageviewLimit)
-        assertEquals(0, usage.analyticsPageviewOverageCentsEstimate,
-            "No overage when under limit")
+        assertEquals(
+            0,
+            usage.analyticsPageviewOverageCentsEstimate,
+            "No overage when under limit"
+        )
     }
 
     @Test
@@ -1175,8 +1183,11 @@ class BillingQuotaServiceTest {
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        assertEquals(1000, usage.analyticsPageviewOverageCentsEstimate,
-            "100K pageview overage at \$10/100K = 1000 cents")
+        assertEquals(
+            1000,
+            usage.analyticsPageviewOverageCentsEstimate,
+            "100K pageview overage at \$10/100K = 1000 cents"
+        )
         assertEquals(1000, usage.analyticsPageviewOverageRateCentsPer100k)
     }
 

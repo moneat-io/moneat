@@ -796,8 +796,12 @@ class BillingQuotaService(
             if (state.analyticsPageviewOverageRateCentsPer100k > 0 &&
                 analyticsPageviewOverageUnits > 0
             ) {
-                ((analyticsPageviewOverageUnits *
-                    state.analyticsPageviewOverageRateCentsPer100k) / 100_000).toInt()
+                (
+                    (
+                        analyticsPageviewOverageUnits *
+                            state.analyticsPageviewOverageRateCentsPer100k
+                        ) / 100_000
+                    ).toInt()
             } else {
                 0
             }
@@ -821,8 +825,12 @@ class BillingQuotaService(
         }
         val customMetricOverageCents =
             if (state.customMetricOverageRateCentsPer100k > 0 && customMetricOverageUnits > 0) {
-                ((customMetricOverageUnits *
-                    state.customMetricOverageRateCentsPer100k) / 100_000).toInt()
+                (
+                    (
+                        customMetricOverageUnits *
+                            state.customMetricOverageRateCentsPer100k
+                        ) / 100_000
+                    ).toInt()
             } else {
                 0
             }
@@ -885,7 +893,7 @@ class BillingQuotaService(
             analyticsPageviewLimit = state.analyticsPageviewLimit,
             analyticsPageviewOverageCentsEstimate = analyticsPageviewOverageCents,
             analyticsPageviewOverageRateCentsPer100k =
-                state.analyticsPageviewOverageRateCentsPer100k,
+            state.analyticsPageviewOverageRateCentsPer100k,
             usedApmSpans = state.usedApmSpans,
             apmSpanLimit = state.apmSpanLimit,
             usedCustomMetrics = state.usedCustomMetrics,
