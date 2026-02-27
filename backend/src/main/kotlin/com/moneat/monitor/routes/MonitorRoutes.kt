@@ -81,6 +81,7 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
             .selectAll()
             .where { Memberships.user_id eq userId }
             .map { it[Memberships.organization_id] }
+            .distinct()
     }
 }
 
