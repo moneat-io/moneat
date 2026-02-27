@@ -78,28 +78,28 @@ describe('pricing-display', () => {
       const tier = createBaseTier({ monthlyGbLimit: 10 * 1024 * 1024 * 1024 })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('10 GB log data')
+      expect(model.features).toContain('10 GB ingestion')
     })
 
     it('formats TB limit correctly when >= 1024 GB', () => {
       const tier = createBaseTier({ monthlyGbLimit: 2048 * 1024 * 1024 * 1024 })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('2 TB log data')
+      expect(model.features).toContain('2 TB ingestion')
     })
 
     it('formats fractional GB without trailing zero', () => {
       const tier = createBaseTier({ monthlyGbLimit: Math.floor(2.5 * 1024 * 1024 * 1024) })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features.some(f => /2\.5 GB log data/.test(f))).toBe(true)
+      expect(model.features.some(f => /2\.5 GB ingestion/.test(f))).toBe(true)
     })
 
     it('formats fractional TB without trailing zero', () => {
       const tier = createBaseTier({ monthlyGbLimit: Math.floor(1.5 * 1024 * 1024 * 1024 * 1024) })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features.some(f => /1\.5 TB log data/.test(f))).toBe(true)
+      expect(model.features.some(f => /1\.5 TB ingestion/.test(f))).toBe(true)
     })
   })
 
@@ -143,18 +143,21 @@ describe('pricing-display', () => {
   })
 
   describe('Feature list building', () => {
-    it('includes session replays when enabled', () => {
-      const tier = createBaseTier({ sessionReplayEnabled: true })
-      const model = buildPricingCardModel(tier, 'monthly')
-
-      expect(model.features).toContain('Session replays')
-    })
-
-    it('excludes session replays when disabled', () => {
+    it('includes session replays unconditionally in unified model', () => {
       const tier = createBaseTier({ sessionReplayEnabled: false })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).not.toContain('Session replays')
+      // In unified model, all DD Agent features including replays
+      // are shown on all tiers regardless of sessionReplayEnabled
+      expect(model.features.some(f => f.includes('session replays'))).toBe(true)
+    })
+
+    it('does not include session replays as standalone when in combined feature', () => {
+      const tier = createBaseTier({ sessionReplayEnabled: true })
+      const model = buildPricingCardModel(tier, 'monthly')
+
+      // "Error tracking & session replays" is the combined line
+      expect(model.features).toContain('Error tracking & session replays')
     })
 
     it('includes custom status pages with custom domains', () => {
@@ -209,12 +212,11 @@ describe('pricing-display', () => {
       const tier = createBaseTier()
       const model = buildPricingCardModel(tier, 'monthly')
 
-      // Core features come first
-      expect(model.features[0]).toMatch(/replay/)
-      expect(model.features[1]).toMatch(/GB log data/)
-      expect(model.features[2]).toMatch(/day retention/)
-      expect(model.features[3]).toMatch(/project/)
-      expect(model.features[4]).toMatch(/monitor/)
+      // Included limits come first, then platform features
+      expect(model.features[0]).toMatch(/GB ingestion/)
+      expect(model.features[1]).toMatch(/day retention/)
+      expect(model.features[2]).toMatch(/project/)
+      expect(model.features[3]).toMatch(/monitor/)
     })
   })
 

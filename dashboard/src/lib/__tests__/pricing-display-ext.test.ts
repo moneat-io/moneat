@@ -73,14 +73,16 @@ describe('pricing-display', () => {
       expect(free.highlight).toBe(false)
     })
 
-    it('includes error limit in included limits', () => {
-      const model = buildPricingCardModel(makeTier({ monthlyErrorLimit: 50000 }), 'monthly')
-      expect(model.includedLimits.some(l => l.includes('50K') && l.includes('errors'))).toBe(true)
+    it('ingestion limit replaces error limit in unified model', () => {
+      const model = buildPricingCardModel(makeTier({ monthlyGbLimit: 50 * BYTES_PER_GB }), 'monthly')
+      expect(model.includedLimits.some(l => l.includes('50 GB') && l.includes('ingestion'))).toBe(true)
+      // Per-type error limits are no longer displayed
+      expect(model.includedLimits.some(l => l.includes('errors'))).toBe(false)
     })
 
-    it('includes log data limit', () => {
+    it('includes ingestion data limit', () => {
       const model = buildPricingCardModel(makeTier({ monthlyGbLimit: 10 * BYTES_PER_GB }), 'monthly')
-      expect(model.includedLimits.some(l => l.includes('10 GB') && l.includes('log'))).toBe(true)
+      expect(model.includedLimits.some(l => l.includes('10 GB') && l.includes('ingestion'))).toBe(true)
     })
 
     it('includes TB formatting for large data limits', () => {
@@ -108,14 +110,12 @@ describe('pricing-display', () => {
       expect(model.includedLimits.some(l => l.includes('10 monitors') && l.includes('60s'))).toBe(true)
     })
 
-    it('includes session replays when enabled', () => {
-      const model = buildPricingCardModel(makeTier({ sessionReplayEnabled: true, monthlyReplayLimit: 5000 }), 'monthly')
-      expect(model.includedLimits.some(l => l.includes('5K') && l.includes('session replays'))).toBe(true)
-    })
-
-    it('excludes session replays when disabled', () => {
+    it('session replays are in platform features unconditionally', () => {
       const model = buildPricingCardModel(makeTier({ sessionReplayEnabled: false }), 'monthly')
+      // In unified model, replays are not count-limited in includedLimits
       expect(model.includedLimits.some(l => l.includes('replay'))).toBe(false)
+      // But they appear in platform features
+      expect(model.platformFeatures.some(f => f.includes('session replays'))).toBe(true)
     })
 
     it('includes retention info', () => {
@@ -153,21 +153,22 @@ describe('pricing-display', () => {
       expect(model.platformFeatures).toContain('SAML SSO')
     })
 
-    it('includes continuous profiling when enabled', () => {
-      const model = buildPricingCardModel(makeTier({ profilingEnabled: true }), 'monthly')
+    it('includes continuous profiling unconditionally', () => {
+      const model = buildPricingCardModel(makeTier({ profilingEnabled: false }), 'monthly')
       expect(model.platformFeatures).toContain('Continuous profiling')
     })
 
-    it('includes network monitoring when enabled', () => {
-      const model = buildPricingCardModel(makeTier({ networkMonitoringEnabled: true }), 'monthly')
+    it('includes network monitoring unconditionally', () => {
+      const model = buildPricingCardModel(makeTier({ networkMonitoringEnabled: false }), 'monthly')
       expect(model.platformFeatures).toContain('Network monitoring')
     })
   })
 
   describe('APM and metrics limits', () => {
-    it('includes APM span limit in included limits', () => {
+    it('APM spans no longer shown as separate limit in unified model', () => {
       const model = buildPricingCardModel(makeTier({ monthlyApmSpanLimit: 10_000_000 }), 'monthly')
-      expect(model.includedLimits.some(l => l.includes('10M') && l.includes('APM spans'))).toBe(true)
+      // APM spans are folded into unified ingestion GB
+      expect(model.includedLimits.some(l => l.includes('APM spans'))).toBe(false)
     })
 
     it('includes custom metric limit in included limits', () => {
@@ -187,22 +188,23 @@ describe('pricing-display', () => {
   })
 
   describe('overages', () => {
-    it('builds overage rates for paid tiers', () => {
+    it('builds unified ingestion overage for paid tiers', () => {
       const model = buildPricingCardModel(makeTier({
-        errorOverageRateCentsPer1k: 50,
-        overageRateCentsPerGb: 200,
+        overageRateCentsPerGb: 40,
       }), 'monthly')
       expect(model.overages.length).toBeGreaterThan(0)
-      expect(model.overages.some(o => o.label === 'Errors')).toBe(true)
+      expect(model.overages.some(o => o.label === 'Ingestion')).toBe(true)
+      // Per-type error overages are no longer shown
+      expect(model.overages.some(o => o.label === 'Errors')).toBe(false)
     })
 
-    it('includes APM span and custom metric overages when set', () => {
+    it('includes custom metric overage when set', () => {
       const model = buildPricingCardModel(makeTier({
-        apmSpanOverageRateCentsPer1m: 30,
         customMetricOverageRateCentsPer100k: 50,
       }), 'monthly')
-      expect(model.overages.some(o => o.label === 'APM spans')).toBe(true)
       expect(model.overages.some(o => o.label === 'Custom metrics')).toBe(true)
+      // APM span overages are no longer shown separately
+      expect(model.overages.some(o => o.label === 'APM spans')).toBe(false)
     })
 
     it('no overages for free tier', () => {

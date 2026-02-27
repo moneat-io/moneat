@@ -471,8 +471,10 @@ class BillingQuotaServiceTest {
     }
 
     @Test
-    fun `bytes usage does not receive PAYG headroom`() {
-        val bytesWithinOldPaygHeadroom = 50L * 1024L * 1024L * 1024L
+    fun `bytes within PAYG headroom are within quota in unified model`() {
+        // In the unified ingestion model, PAYG budget DOES expand the
+        // effective byte limit (bytes are the primary billing dimension).
+        val bytesWithinPaygHeadroom = 50L * 1024L * 1024L * 1024L
         transaction {
             insertTestUsageCounter(
                 organizationId = testOrgId,
@@ -480,19 +482,21 @@ class BillingQuotaServiceTest {
                 usedTransactions = 0,
                 usedReplays = 0,
                 usedFeedback = 0,
-                usedBytes = bytesWithinOldPaygHeadroom
+                usedBytes = bytesWithinPaygHeadroom
             )
         }
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        assertFalse(usage.withinQuota, "Bytes should be limited by base bytes + bonus only")
-        assertEquals(bytesWithinOldPaygHeadroom, usage.usedBytes)
-        assertEquals(10, usage.bytesLimit)
+        // 50 GB used < 10 GB base + ~250 GB PAYG headroom → within quota
+        assertTrue(usage.withinQuota, "Bytes within PAYG headroom should be within quota")
+        assertEquals(bytesWithinPaygHeadroom, usage.usedBytes)
     }
 
     @Test
-    fun `llm usage does not receive PAYG unit headroom`() {
+    fun `llm count limits no longer affect withinQuota in unified model`() {
+        // In the unified ingestion model, LLM event counts are no longer
+        // enforced. withinQuota only checks bytes and custom metrics.
         transaction {
             val usageCounterId = insertTestUsageCounter(
                 organizationId = testOrgId,
@@ -511,7 +515,8 @@ class BillingQuotaServiceTest {
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        assertFalse(usage.withinQuota, "LLM usage should not be expanded by unit PAYG headroom")
+        // LLM count exceeds limit, but withinQuota only checks bytes + custom metrics
+        assertTrue(usage.withinQuota, "LLM count limits should not affect withinQuota")
         assertEquals(120, usage.usedLlmEvents)
         assertEquals(100, usage.llmEventLimit)
     }
@@ -611,7 +616,10 @@ class BillingQuotaServiceTest {
     }
 
     @Test
-    fun `apm span and custom metric overages are included in totalOverageCentsEstimate`() {
+    fun `custom metric overage is included in totalOverageCentsEstimate`() {
+        // In the unified model, APM span overages are legacy and not
+        // included in totalOverageCentsEstimate. Only ingestion GB,
+        // custom metric, and analytics pageview overages are summed.
         transaction {
             PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
                 it[monthly_apm_span_limit] = 10_000_000L
@@ -621,24 +629,27 @@ class BillingQuotaServiceTest {
             }
             val usageCounterId = insertTestUsageCounter(organizationId = testOrgId)
             OrgUsageCounters.update({ OrgUsageCounters.id eq usageCounterId }) {
-                it[used_apm_spans] = 11_000_000L // 30 cents overage
+                it[used_apm_spans] = 11_000_000L // 30 cents legacy overage
                 it[used_custom_metrics] = 1_200_000L // 100 cents overage
             }
         }
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
+        // APM span overage is still computed for display but NOT in total
         assertEquals(30, usage.apmSpanOverageCentsEstimate)
         assertEquals(100, usage.customMetricOverageCentsEstimate)
         assertTrue(
-            usage.totalOverageCentsEstimate >= 130,
-            "Total overage should include APM span (30¢) + custom metric (100¢) = at least 130¢, " +
+            usage.totalOverageCentsEstimate >= 100,
+            "Total overage should include custom metric (100¢), " +
                 "got ${usage.totalOverageCentsEstimate}",
         )
     }
 
     @Test
-    fun `apm span overage tracking increments pending column on reserveUnits`() {
+    fun `apm span units are tracked but no longer incur pending overage`() {
+        // In the unified model, APM span overage tracking was removed
+        // from reserveUnits. APM spans are gated by the unified GB limit.
         transaction {
             PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
                 it[monthly_apm_span_limit] = 10_000_000L
@@ -657,12 +668,12 @@ class BillingQuotaServiceTest {
             eventType = "apm_span"
         )
 
-        assertTrue(result.allowed)
+        assertTrue(result.allowed, "APM span should succeed (gated by GB, not count)")
         val pendingApmOverage = transaction {
             Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
                 .first()[Subscriptions.pending_apm_span_overage_units]
         }
-        assertEquals(500_000L, pendingApmOverage)
+        assertEquals(0L, pendingApmOverage, "APM span pending overage should not be tracked")
     }
 
     @Test
@@ -951,6 +962,235 @@ class BillingQuotaServiceTest {
         assertEquals(100, usage.feedbackLimit, "Feedback limit should match tier")
     }
 
+    // ============ Unified Ingestion Model Tests ============
+
+    @Test
+    fun `unified GB quota gates all data types`() {
+        val oneGb = 1L * 1024L * 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = oneGb
+                it[overage_rate_cents_per_gb] = 0 // No overage (strict limit)
+                it[payg_enabled] = false
+            }
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.payg_budget_cents] = 0
+            }
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedBytes = oneGb - 1000L // just under 1 GB
+            )
+        }
+
+        // Error ingestion with bytes that would push over GB limit
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 1,
+            eventType = "error",
+            requestedBytes = 2000L // Would exceed 1 GB
+        )
+
+        assertFalse(result.allowed, "Should reject when GB limit exceeded")
+        assertEquals("gb_quota_exceeded", result.reason)
+    }
+
+    @Test
+    fun `unified GB quota allows within limit across multiple types`() {
+        val tenGb = 10L * 1024L * 1024L * 1024L
+        val halfGb = 512L * 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = tenGb
+                it[overage_rate_cents_per_gb] = 0
+                it[payg_enabled] = false
+            }
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.payg_budget_cents] = 0
+            }
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedBytes = halfGb
+            )
+        }
+
+        // All types should succeed within GB budget
+        val errorResult = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 100,
+            eventType = "error",
+            requestedBytes = 1024L * 1024L // 1 MB
+        )
+        assertTrue(errorResult.allowed, "Errors within GB should succeed")
+
+        val replayResult = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 1,
+            eventType = "replay",
+            requestedBytes = 1024L * 1024L // 1 MB
+        )
+        assertTrue(replayResult.allowed, "Replays within GB should succeed")
+    }
+
+    @Test
+    fun `custom metric count limit still enforced in unified model`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_custom_metric_limit] = 1000L
+                it[custom_metric_overage_rate_cents_per_100k] = 0
+                it[monthly_gb_limit] = 100 // Plenty of GB
+            }
+            val counterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_custom_metrics] = 1000L // at limit
+            }
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 1,
+            eventType = "custom_metric",
+            requestedBytes = 100L
+        )
+
+        assertFalse(result.allowed, "Custom metric should be rejected at count limit")
+        assertEquals("event_type_quota_exceeded", result.reason)
+        assertEquals("custom_metric", result.eventType)
+    }
+
+    @Test
+    fun `error count limit is not enforced in unified model`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_error_limit] = 100L
+                it[monthly_gb_limit] = 100 // Plenty of GB
+            }
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedErrors = 200 // well over error limit
+            )
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 50,
+            eventType = "error",
+            requestedBytes = 1024L
+        )
+
+        assertTrue(result.allowed, "Error count limit should NOT be enforced")
+    }
+
+    @Test
+    fun `ingestion overage computed correctly in usage response`() {
+        val oneGb = 1L * 1024L * 1024L * 1024L
+        val twoGb = 2L * 1024L * 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = oneGb // stored in bytes
+                it[overage_rate_cents_per_gb] = 40 // $0.40/GB
+            }
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedBytes = twoGb // 2 GB used, 1 GB over limit
+            )
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(40, usage.ingestionOverageCentsEstimate,
+            "1 GB overage at \$0.40/GB = 40 cents")
+        assertEquals(40, usage.ingestionOverageRateCentsPerGb)
+    }
+
+    @Test
+    fun `ingestion overage tracking increments pending meter on reserveUnits`() {
+        val oneGb = 1L * 1024L * 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = oneGb
+                it[overage_rate_cents_per_gb] = 40
+                it[payg_enabled] = true
+            }
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.payg_budget_cents] = 10000 // $100
+            }
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedBytes = oneGb // at limit
+            )
+        }
+
+        // Push 1 GB over
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 1,
+            eventType = "error",
+            requestedBytes = oneGb
+        )
+
+        assertTrue(result.allowed, "Should allow with PAYG budget")
+        val pendingMeterUnits = transaction {
+            Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
+                .first()[Subscriptions.pending_meter_units]
+        }
+        assertTrue(pendingMeterUnits > 0,
+            "Pending meter units should be incremented for ingestion overage")
+    }
+
+    // ============ Analytics Pageview Quota Tests ============
+
+    @Test
+    fun `analytics pageview limit is reported in usage response`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_analytics_pageview_limit] = 100_000L
+                it[analytics_pageview_overage_rate_cents_per_100k] = 1000
+            }
+            val counterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_analytics_pageviews] = 75_000L
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(75_000, usage.usedAnalyticsPageviews)
+        assertEquals(100_000, usage.analyticsPageviewLimit)
+        assertEquals(0, usage.analyticsPageviewOverageCentsEstimate,
+            "No overage when under limit")
+    }
+
+    @Test
+    fun `analytics pageview overage computed correctly`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_analytics_pageview_limit] = 100_000L
+                it[analytics_pageview_overage_rate_cents_per_100k] = 1000 // $10/100K
+            }
+            val counterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_analytics_pageviews] = 200_000L // 100K over limit
+            }
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        assertEquals(1000, usage.analyticsPageviewOverageCentsEstimate,
+            "100K pageview overage at \$10/100K = 1000 cents")
+        assertEquals(1000, usage.analyticsPageviewOverageRateCentsPer100k)
+    }
+
+    // ============ Feature Flag Tests ============
+
+    @Test
+    fun `all feature flags default to true on tier configs`() {
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+
+        // Just verify the tier exists and withinQuota is true
+        // (feature flags are on the tier config, tested via PricingTierService)
+        assertTrue(usage.withinQuota, "Should be within quota with default setup")
+    }
+
     // ============ Helper Methods ============
 
     private fun insertTestOrganization(
@@ -1043,6 +1283,14 @@ class BillingQuotaServiceTest {
             it[PricingTierConfigs.stripe_yearly_base_price_id] = null
             it[PricingTierConfigs.stripe_yearly_overage_price_id] = null
             it[PricingTierConfigs.is_current] = true
+            it[PricingTierConfigs.profiling_enabled] = true
+            it[PricingTierConfigs.network_monitoring_enabled] = true
+            it[PricingTierConfigs.dbm_enabled] = true
+            it[PricingTierConfigs.debugger_enabled] = true
+            it[PricingTierConfigs.k8s_monitoring_enabled] = true
+            it[PricingTierConfigs.data_streams_enabled] = true
+            it[PricingTierConfigs.sbom_enabled] = true
+            it[PricingTierConfigs.synthetics_enabled] = true
         }[PricingTierConfigs.id]
     }
 

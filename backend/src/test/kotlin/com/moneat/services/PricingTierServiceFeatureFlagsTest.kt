@@ -88,6 +88,14 @@ class PricingTierServiceFeatureFlagsTest {
                 it[payg_rate_micros_per_unit] = 400_000
                 it[overage_rate_cents_per_gb] = 40
                 it[is_current] = true
+                it[profiling_enabled] = true
+                it[network_monitoring_enabled] = true
+                it[dbm_enabled] = true
+                it[debugger_enabled] = true
+                it[k8s_monitoring_enabled] = true
+                it[data_streams_enabled] = true
+                it[sbom_enabled] = true
+                it[synthetics_enabled] = true
             }
         }
 
@@ -122,6 +130,15 @@ class PricingTierServiceFeatureFlagsTest {
         assertTrue(created.sessionReplayEnabled)
         assertTrue(created.slackEnabled)
         assertTrue(created.incidentIoEnabled)
+        // New feature flags should be carried over from previous version
+        assertTrue(created.profilingEnabled)
+        assertTrue(created.networkMonitoringEnabled)
+        assertTrue(created.dbmEnabled)
+        assertTrue(created.debuggerEnabled)
+        assertTrue(created.k8sMonitoringEnabled)
+        assertTrue(created.dataStreamsEnabled)
+        assertTrue(created.sbomEnabled)
+        assertTrue(created.syntheticsEnabled)
     }
 
     @Test
@@ -167,6 +184,14 @@ class PricingTierServiceFeatureFlagsTest {
                     it[payg_rate_micros_per_unit] = 400_000
                     it[overage_rate_cents_per_gb] = 40
                     it[is_current] = true
+                    it[profiling_enabled] = true
+                    it[network_monitoring_enabled] = true
+                    it[dbm_enabled] = true
+                    it[debugger_enabled] = true
+                    it[k8s_monitoring_enabled] = true
+                    it[data_streams_enabled] = true
+                    it[sbom_enabled] = true
+                    it[synthetics_enabled] = true
                 }
             }
         }
@@ -192,6 +217,19 @@ class PricingTierServiceFeatureFlagsTest {
         assertTrue(business.prioritySupportEnabled)
         assertTrue(business.slaEnabled)
         assertTrue(business.customRetentionEnabled)
+
+        // All tiers should have all DD Agent features enabled
+        for ((tierName, plan) in byTier) {
+            val tier = plan.tier
+            assertTrue(tier.profilingEnabled, "$tierName should have profiling")
+            assertTrue(tier.networkMonitoringEnabled, "$tierName should have network monitoring")
+            assertTrue(tier.dbmEnabled, "$tierName should have DBM")
+            assertTrue(tier.debuggerEnabled, "$tierName should have debugger")
+            assertTrue(tier.k8sMonitoringEnabled, "$tierName should have K8s")
+            assertTrue(tier.dataStreamsEnabled, "$tierName should have data streams")
+            assertTrue(tier.sbomEnabled, "$tierName should have SBOM")
+            assertTrue(tier.syntheticsEnabled, "$tierName should have synthetics")
+        }
 
         val currentVersions =
             transaction {
