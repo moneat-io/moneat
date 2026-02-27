@@ -124,6 +124,7 @@ fun Route.monitorRoutes(
         post("/ingest") {
             var refundOrgId: Int? = null
             var refundMetricCount = 0
+            var refundBytes: Long = 0
             try {
                 // Extract and validate agent key
                 val authHeader = call.request.header("Authorization")
@@ -160,12 +161,14 @@ fun Route.monitorRoutes(
                 logger.debug { "Received metrics from system $systemId (org $organizationId)" }
 
                 val metricCount = monitorService.countMetricsInPayload(payload)
-                if (quotaService.isEnforcementEnabled() && metricCount > 0) {
+                val billableBytes = decompressedBytes.size.toLong()
+                if (quotaService.isEnforcementEnabled() && (metricCount > 0 || billableBytes > 0)) {
                     val reservation =
                         quotaService.reserveUnits(
                             organizationId = organizationId,
                             requestedUnits = metricCount,
-                            eventType = "custom_metric"
+                            eventType = "custom_metric",
+                            requestedBytes = billableBytes
                         )
                     if (!reservation.allowed) {
                         call.respond(
@@ -180,6 +183,7 @@ fun Route.monitorRoutes(
                     }
                     refundOrgId = organizationId
                     refundMetricCount = metricCount
+                    refundBytes = billableBytes
                 }
 
                 // Ingest metrics and get poll interval
@@ -201,11 +205,12 @@ fun Route.monitorRoutes(
                     )
                 )
             } catch (e: Exception) {
-                if (quotaService.isEnforcementEnabled() && refundMetricCount > 0 && refundOrgId != null) {
+                if (quotaService.isEnforcementEnabled() && (refundMetricCount > 0 || refundBytes > 0) && refundOrgId != null) {
                     quotaService.refundUnits(
                         organizationId = refundOrgId,
                         units = refundMetricCount,
-                        eventType = "custom_metric"
+                        eventType = "custom_metric",
+                        requestedBytes = refundBytes
                     )
                 }
                 logger.error(e) { "Failed to ingest metrics: ${e.message}" }
