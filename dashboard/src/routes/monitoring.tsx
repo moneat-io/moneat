@@ -68,11 +68,13 @@ function MonitoringLayout() {
   const pathParts = currentPath.replace(/^\/monitoring\/?/, '').split('/').filter(Boolean)
   const isHostDetailPage =
     pathParts.length >= 2 && pathParts[0] === 'hosts' && !KNOWN_TAB_PATHS.includes(pathParts[1])
+  const isSystemDetailPage =
+    pathParts.length === 1 && !KNOWN_TAB_PATHS.includes(pathParts[0])
   const tabs = allTabs.filter(
     (tab) => !tab.requiresDatadog || hasEnterpriseModule(features, 'datadog')
   )
 
-  if (isHostDetailPage) {
+  if (isHostDetailPage || isSystemDetailPage) {
     return (
       <div>
         <div className="border-b bg-card/50">
