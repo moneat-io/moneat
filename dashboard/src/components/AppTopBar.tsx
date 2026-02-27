@@ -32,6 +32,9 @@ import {Button} from '@/components/ui/button'
 import {getPlatformInfo} from '@/routes/projects'
 import {Package} from 'lucide-react'
 import {useNavigate} from '@tanstack/react-router'
+import {Logo} from '@/components/logo'
+
+export const TOPBAR_HEIGHT = 49
 
 function getInitials(name?: string) {
   if (!name) return 'U'
@@ -47,7 +50,12 @@ function getProjectPlatform(project: { keys?: { platformTarget?: string | null }
   return project.keys?.[0]?.platformTarget || project.framework || 'other'
 }
 
-export function AppTopBar() {
+interface AppTopBarProps {
+  sidebarWidth: number
+  isSidebarExpanded: boolean
+}
+
+export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
   const {openPalette} = useCommandPalette() ?? {}
   const {selectedProjectId, setSelectedProjectId} = useProject()
   const navigate = useNavigate()
@@ -77,22 +85,33 @@ export function AppTopBar() {
 
   return (
     <div
-      className={cn(
-        'relative flex items-center justify-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-[9px]',
-      )}
+      className="flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
     >
-      <button
-        type="button"
-        onClick={() => openPalette?.()}
-        className="flex w-full max-w-xl items-center gap-3 rounded-lg border bg-muted/50 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      {/* Logo area – width matches the sidebar below */}
+      <div
+        className="shrink-0 flex items-center justify-center h-full py-[9px] transition-all duration-300"
+        style={{width: sidebarWidth}}
       >
-        <Search className="h-4 w-4 shrink-0" />
-        <span className="flex-1">Search dashboards, projects, pages...</span>
-        <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:inline-block">
-          ⌘K
-        </kbd>
-      </button>
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+        {isSidebarExpanded ? (
+          <Logo className="h-9" />
+        ) : (
+          <Logo markOnly className="h-9 w-10" />
+        )}
+      </div>
+
+      <div className="relative flex flex-1 items-center justify-center px-4 py-[9px]">
+        <button
+          type="button"
+          onClick={() => openPalette?.()}
+          className="flex w-full max-w-xl items-center gap-3 rounded-lg border bg-muted/50 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="flex-1">Search dashboards, projects, pages...</span>
+          <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:inline-block">
+            ⌘K
+          </kbd>
+        </button>
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -175,6 +194,7 @@ export function AppTopBar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </div>
   )

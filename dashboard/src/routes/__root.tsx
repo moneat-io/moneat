@@ -15,11 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createRootRoute, Outlet, useRouterState, useNavigate} from '@tanstack/react-router'
-import {useEffect, useState} from 'react'
+import {useCallback, useEffect, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/sidebar'
 import {CommandPalette} from '../components/CommandPalette'
-import {AppTopBar} from '../components/AppTopBar'
+import {AppTopBar, TOPBAR_HEIGHT} from '../components/AppTopBar'
 import {CommandPaletteProvider} from '../contexts/command-palette-context'
 import {Toaster} from '../components/ui/toaster'
 import {ChatWidget} from '../components/ai-chat/ChatWidget'
@@ -138,6 +138,15 @@ function RootComponent() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
   const [authCheckComplete, setAuthCheckComplete] = useState(false)
+  const [headerHeight, setHeaderHeight] = useState(TOPBAR_HEIGHT)
+  const headerRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    const update = () => setHeaderHeight(node.offsetHeight)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -224,16 +233,20 @@ function RootComponent() {
     <div className="min-h-screen bg-background">
       {showSidebar && (
         <CommandPaletteProvider>
+          {/* Fixed header: optional demo banner + top bar */}
+          <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50">
+            <DemoBanner />
+            <AppTopBar sidebarWidth={sidebarWidth} isSidebarExpanded={isSidebarExpanded} />
+          </div>
           <Sidebar
             isExpanded={isSidebarExpanded}
             onExpandedChange={setIsSidebarExpanded}
+            headerHeight={headerHeight}
           />
           <div
             className="transition-[margin-left] duration-300"
-            style={{ marginLeft: sidebarWidth }}
+            style={{ marginLeft: sidebarWidth, marginTop: headerHeight }}
           >
-            <DemoBanner />
-            <AppTopBar />
             <Outlet />
           </div>
           <CommandPalette />

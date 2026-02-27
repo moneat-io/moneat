@@ -53,7 +53,6 @@ import {
 import {cn} from '@/lib/utils'
 import {platforms, type PlatformType} from '@/routes/projects'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
-import {Logo} from '@/components/logo'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
@@ -66,6 +65,7 @@ export const SIDEBAR_EXPANDED_WIDTH = 256
 interface SidebarProps {
   isExpanded: boolean
   onExpandedChange: (expanded: boolean) => void
+  headerHeight: number
 }
 
 const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
@@ -76,7 +76,7 @@ const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
   { id: 'desktop-gaming', label: 'Desktop & Gaming' },
 ]
 
-export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
+export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarProps) {
   const router = useRouterState()
   const currentPath = router.location.pathname
   const navigate = useNavigate()
@@ -243,15 +243,6 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
 
   const renderSidebarContent = () => (
     <>
-      {/* Logo */}
-      <div className={cn('p-3 border-b flex items-center', isExpanded ? 'justify-start px-4' : 'justify-center')}>
-        {isExpanded ? (
-          <Logo className="h-7" />
-        ) : (
-          <Logo markOnly className="h-7 w-8" />
-        )}
-      </div>
-
       {/* Navigation Items */}
       <nav
         className={cn(
@@ -436,9 +427,10 @@ export function Sidebar({ isExpanded, onExpandedChange }: SidebarProps) {
       {/* Fixed Sidebar */}
       <div
         className={cn(
-          'fixed left-0 top-0 h-full bg-card border-r flex flex-col transition-all duration-300 z-40',
+          'sidebar fixed left-0 bg-card border-r flex flex-col transition-all duration-300 z-40',
           isExpanded ? 'w-64' : 'w-16'
         )}
+        style={{top: headerHeight, height: `calc(100vh - ${headerHeight}px)`}}
       >
         {renderSidebarContent()}
       </div>

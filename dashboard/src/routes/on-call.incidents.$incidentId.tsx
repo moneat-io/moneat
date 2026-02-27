@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import {useToast} from '@/hooks/use-toast'
 import {AlertTriangle, CheckCircle, Clock, MessageSquare, ArrowLeft, Zap, UserPlus, Bell, CheckCircle2, Eye, Send} from 'lucide-react'
-import {useState, useEffect} from 'react'
+import {useState, useEffect, useRef} from 'react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/on-call/incidents/$incidentId')({
