@@ -201,13 +201,19 @@ class UsageTrackingService {
 
         if (records.isEmpty()) return
 
-        transaction {
-            for (rec in records) {
-                upsertUsage(rec)
+        var flushed = 0
+        for (rec in records) {
+            try {
+                transaction {
+                    upsertUsage(rec)
+                }
+                flushed++
+            } catch (e: org.jetbrains.exposed.v1.exceptions.ExposedSQLException) {
+                logger.warn { "Skipping usage record for org ${rec.organizationId}: ${e.message}" }
             }
         }
 
-        logger.debug { "Flushed ${records.size} usage records to PostgreSQL" }
+        logger.debug { "Flushed $flushed/${records.size} usage records to PostgreSQL" }
     }
 
     private fun upsertUsage(rec: UsageRecord) {
