@@ -887,9 +887,9 @@ function SystemsCompactTable({
 }
 
 const TIER_SYSTEM_LIMITS: Record<string, number> = {
-  FREE: 1,
-  PRO: 5,
-  TEAM: 25,
+  FREE: Infinity,
+  PRO: Infinity,
+  TEAM: Infinity,
 }
 
 function MonitoringListPage() {
@@ -912,7 +912,7 @@ function MonitoringListPage() {
 
   const currentPlan = billingUsage?.plan || 'FREE'
   const isSelfHosted = useIsSelfHosted()
-  const systemLimit = isSelfHosted ? Infinity : (TIER_SYSTEM_LIMITS[currentPlan] || 1)
+  const systemLimit = isSelfHosted ? Infinity : (TIER_SYSTEM_LIMITS[currentPlan.toUpperCase()] ?? Infinity)
   const systemCount = systems.length
   const isAtLimit = !isSelfHosted && systemCount >= systemLimit
 
@@ -1154,7 +1154,7 @@ function isOnline(lastSeenAt: string): boolean {
 }
 
 const TIER_HOST_LIMITS: Record<string, number> = {
-  FREE: 3,
+  FREE: Infinity,
   PRO: Infinity,
   TEAM: Infinity,
 }
@@ -1698,7 +1698,7 @@ function MonitoringHostsPage() {
   const hosts = useMemo(() => data?.hosts ?? [], [data?.hosts])
   const currentPlan = billingUsage?.plan || 'FREE'
   const isSelfHosted = useIsSelfHosted()
-  const hostLimit = isSelfHosted ? Infinity : (TIER_HOST_LIMITS[currentPlan] || 3)
+  const hostLimit = isSelfHosted ? Infinity : (TIER_HOST_LIMITS[currentPlan.toUpperCase()] ?? Infinity)
   const isAtLimit = !isSelfHosted && hosts.length >= hostLimit
 
   const maxMemory = useMemo(
