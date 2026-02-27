@@ -76,6 +76,17 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'MCP Server',
+      collapsed: false,
+      items: [
+        'mcp-server/overview',
+        'mcp-server/setup',
+        'mcp-server/tools-reference',
+        'mcp-server/examples',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Migration',
       collapsed: false,
       items: [
