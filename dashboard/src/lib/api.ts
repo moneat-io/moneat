@@ -499,6 +499,22 @@ export interface ApmServiceMapResponse {
   services: ApmServiceMapEntry[]
 }
 
+export interface ApmErrorGroup {
+  id: string
+  service: string
+  resource: string
+  errorMessage: string
+  errorType: string
+  count: number
+  lastSeen: string
+  traceId: string
+}
+
+export interface ApmErrorsResponse {
+  errors: ApmErrorGroup[]
+  totalCount: number
+}
+
 // --- Profile types ---
 
 export interface ProfileResponse {
@@ -3441,6 +3457,23 @@ class ApiClient {
   async getApmServiceMap(): Promise<ApmServiceMapResponse> {
     return this.request<ApmServiceMapResponse>(
       `${API_BASE}/services/map`
+    )
+  }
+
+  async getApmErrors(params: {
+    service?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<ApmErrorsResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.service) searchParams.set('service', params.service)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) {
+      searchParams.set('offset', String(params.offset))
+    }
+    const qs = searchParams.toString()
+    return this.request<ApmErrorsResponse>(
+      `${API_BASE}/apm-errors${qs ? `?${qs}` : ''}`
     )
   }
 

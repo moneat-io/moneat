@@ -18,6 +18,7 @@ import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import type {ApmErrorGroup} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {useProject} from '@/contexts/project-context'
 import {formatRelativeTime} from '@/lib/utils'
@@ -27,14 +28,18 @@ import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {
   Activity,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Clock,
+  Cpu,
   FolderKanban,
   Plus,
   Search,
+  Server,
   Settings,
   TrendingUp,
   Users
@@ -44,6 +49,7 @@ import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
 import {useToast} from '@/hooks/use-toast'
 import {getNow} from '@/lib/demo'
+import {useHasModule} from '@/hooks/useEnterpriseFeatures'
 
 // Helper function to get level color for badges
 function getLevelColor(level: string): string {
@@ -96,6 +102,16 @@ function formatCount(n: number): string {
   if (n >= 10000) return `${(n / 1000).toFixed(1)}k`
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
   return n.toLocaleString()
+}
+
+function normalizeApmTraceId(value: unknown): string | null {
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value) || value < 0) return null
+    return String(value)
+  }
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return /^\d+$/.test(normalized) ? normalized : null
 }
 
 function getIssueDisplayTitle(issue: { title: string; culprit: string }): string {
@@ -151,7 +167,46 @@ export const Route = createFileRoute('/issues/')({
 })
 
 function IndexPage() {
-  return <DashboardPage />
+  const hasDatadog = useHasModule('datadog')
+
+  if (!hasDatadog) {
+    return <DashboardPage />
+  }
+
+  return (
+    <Tabs defaultValue="issues" className="min-h-screen">
+      <div className="border-b px-6">
+        <TabsList className="bg-transparent h-auto p-0 gap-4">
+          <TabsTrigger
+            value="issues"
+            className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 py-3 text-sm font-medium"
+          >
+            <AlertCircle className="h-4 w-4 mr-1.5" />
+            Issues
+          </TabsTrigger>
+          <TabsTrigger
+            value="apm-errors"
+            className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 py-3 text-sm font-medium"
+          >
+            <Cpu className="h-4 w-4 mr-1.5" />
+            APM Errors
+            <Badge
+              variant="outline"
+              className="ml-1.5 text-[10px] px-1.5 py-0 font-normal"
+            >
+              Datadog
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="issues" className="mt-0">
+        <DashboardPage />
+      </TabsContent>
+      <TabsContent value="apm-errors" className="mt-0">
+        <ApmErrorsTab />
+      </TabsContent>
+    </Tabs>
+  )
 }
 
 function DashboardPage() {
@@ -529,6 +584,168 @@ function DashboardPage() {
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+const APM_ERRORS_PAGE_SIZE = 50
+
+function ApmErrorsTab() {
+  const [serviceFilter, setServiceFilter] = useState('')
+  const [offset, setOffset] = useState(0)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['apm-errors', serviceFilter, offset],
+    queryFn: () => api.getApmErrors({
+      service: serviceFilter || undefined,
+      limit: APM_ERRORS_PAGE_SIZE,
+      offset,
+    }),
+    enabled: api.isAuthenticated(),
+    refetchInterval: 15000,
+  })
+
+  const errors = data?.errors ?? []
+  const totalCount = data?.totalCount ?? 0
+  const canPrev = offset > 0
+  const canNext = offset + errors.length < totalCount
+
+  if (!isLoading && data && errors.length === 0 && totalCount > 0 && offset > 0) {
+    setOffset(0)
+  }
+
+  return (
+    <div className="px-6 py-4">
+      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">APM Errors</h2>
+          <p className="text-sm text-muted-foreground">
+            Errors extracted from Datadog APM spans
+          </p>
+        </div>
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Filter by service..."
+            value={serviceFilter}
+            onChange={(e) => { setServiceFilter(e.target.value); setOffset(0) }}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="py-16 text-center text-muted-foreground">
+          Loading APM errors...
+        </div>
+      ) : errors.length === 0 ? (
+        <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
+          <div className="max-w-md mx-auto space-y-4">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-blue-500/10 p-4">
+                <AlertTriangle className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">No APM errors found</h3>
+              <p className="text-muted-foreground">
+                Errors from Datadog APM traces will appear here when spans report errors.
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+          {totalCount > APM_ERRORS_PAGE_SIZE && (
+            <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/40">
+              Showing {offset + 1}–{offset + errors.length} of {totalCount}
+            </div>
+          )}
+          <div className="hidden md:flex items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
+            <div className="w-16 shrink-0">Service</div>
+            <div className="flex-1 min-w-0">Error</div>
+            <div className="w-16 shrink-0 text-right">Count</div>
+            <div className="w-24 shrink-0 text-right">Last Seen</div>
+            <div className="w-16 shrink-0 text-right">Trace</div>
+          </div>
+          <div className="divide-y divide-border/40">
+            {errors.map((error: ApmErrorGroup) => {
+              const traceId = normalizeApmTraceId(error.traceId)
+              const stableKey = `${error.service}|${error.resource}|${error.errorMessage}|${error.errorType}`
+              return (
+                <div
+                  key={stableKey}
+                  className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500"
+                >
+                  <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 text-[11px] px-1.5 py-0 gap-1"
+                    >
+                      <Server className="h-3 w-3" />
+                      {error.service}
+                    </Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate text-sm">
+                        {error.errorMessage || error.resource}
+                      </div>
+                      {error.errorType && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {error.errorType}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {error.resource}
+                      </div>
+                    </div>
+                    <div className="w-16 shrink-0 text-right">
+                      <div className="font-semibold text-foreground">
+                        {formatCount(error.count)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">errors</div>
+                    </div>
+                    <div className="hidden md:block w-24 shrink-0 text-right text-xs text-muted-foreground">
+                      {error.lastSeen ? formatRelativeTime(error.lastSeen) : '—'}
+                    </div>
+                    <div className="w-16 shrink-0 text-right">
+                      {traceId && (
+                        <Link
+                          to="/performance/traces/$traceId"
+                          params={{ traceId }}
+                          className="text-xs text-primary hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View trace
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {(canPrev || canNext) && (
+            <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canPrev}
+                onClick={() => setOffset(Math.max(0, offset - APM_ERRORS_PAGE_SIZE))}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canNext}
+                onClick={() => setOffset(offset + APM_ERRORS_PAGE_SIZE)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

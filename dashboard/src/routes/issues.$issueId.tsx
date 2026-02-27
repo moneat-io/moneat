@@ -119,6 +119,16 @@ function parseContextEntries(rawContexts: unknown): [string, unknown][] {
   }
 }
 
+function normalizeApmTraceId(value: unknown): string | null {
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value) || value < 0) return null
+    return String(value)
+  }
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return /^\d+$/.test(normalized) ? normalized : null
+}
+
 export const Route = createFileRoute('/issues/$issueId')({
   beforeLoad: () => {
     if (!api.isAuthenticated()) {
@@ -461,6 +471,35 @@ function IssueDetailPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Cross-link to APM trace if trace_id exists in contexts */}
+                  {(() => {
+                    const traceCtx = contextEntries.find(([key]) => key === 'trace')
+                    const traceId = traceCtx
+                      ? normalizeApmTraceId(
+                          (traceCtx[1] as Record<string, unknown>)?.trace_id
+                        )
+                      : null
+                    if (!traceId) return null
+                    return (
+                      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Activity className="h-4 w-4 text-blue-500" />
+                          <span className="text-muted-foreground">
+                            This error has an associated APM trace
+                          </span>
+                        </div>
+                        <Link
+                          to="/performance/traces/$traceId"
+                          params={{ traceId }}
+                          className="text-sm text-primary hover:underline font-medium flex items-center gap-1"
+                        >
+                          View trace
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    )
+                  })()}
 
                   <div>
                     <div className="mb-2 flex items-center justify-between">

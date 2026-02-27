@@ -81,9 +81,10 @@ type SortDir = 'asc' | 'desc'
 interface TraceListProps {
   serviceFilter?: string
   envFilter?: string
+  basePath?: string
 }
 
-export function TraceList({serviceFilter: externalService, envFilter}: TraceListProps) {
+export function TraceList({serviceFilter: externalService, envFilter, basePath}: TraceListProps) {
   const [localServiceFilter, setLocalServiceFilter] = useState('')
   const [sort, setSort] = useState<{field: SortField; dir: SortDir}>({
     field: 'time',
@@ -233,7 +234,7 @@ export function TraceList({serviceFilter: externalService, envFilter}: TraceList
                 return (
                   <Link
                     key={trace.traceId}
-                    to="/apm-traces/$traceId"
+                    to={`${basePath || '/apm-traces'}/$traceId`}
                     params={{traceId: trace.traceId}}
                     className="grid grid-cols-[minmax(180px,2fr)_minmax(200px,3fr)_80px_140px_minmax(120px,1.5fr)_80px] gap-px px-3 py-2 hover:bg-muted/40 transition-colors items-center group"
                   >
