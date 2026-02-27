@@ -29,6 +29,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -210,23 +211,34 @@ class UsageTrackingService {
     }
 
     private fun upsertUsage(rec: UsageRecord) {
-        val projectIdInt = rec.projectId.toInt()
+        // Use null for org-level records (sentinel value) to satisfy the FK constraint on project_id
+        val projectIdInt: Int? = if (rec.projectId == ORG_PROJECT_ID_SENTINEL) null else rec.projectId.toInt()
         val existing =
             UsageRecords
                 .selectAll()
                 .where {
-                    (UsageRecords.organization_id eq rec.organizationId) and
-                        (UsageRecords.project_id eq projectIdInt) and
-                        (UsageRecords.recordDate eq rec.recordDate) and
-                        (UsageRecords.event_type eq rec.eventType)
+                    val baseFilter =
+                        (UsageRecords.organization_id eq rec.organizationId) and
+                            (UsageRecords.recordDate eq rec.recordDate) and
+                            (UsageRecords.event_type eq rec.eventType)
+                    if (projectIdInt != null) {
+                        baseFilter and (UsageRecords.project_id eq projectIdInt)
+                    } else {
+                        baseFilter and UsageRecords.project_id.isNull()
+                    }
                 }.firstOrNull()
 
         if (existing != null) {
             UsageRecords.update({
-                (UsageRecords.organization_id eq rec.organizationId) and
-                    (UsageRecords.project_id eq projectIdInt) and
-                    (UsageRecords.recordDate eq rec.recordDate) and
-                    (UsageRecords.event_type eq rec.eventType)
+                val baseFilter =
+                    (UsageRecords.organization_id eq rec.organizationId) and
+                        (UsageRecords.recordDate eq rec.recordDate) and
+                        (UsageRecords.event_type eq rec.eventType)
+                if (projectIdInt != null) {
+                    baseFilter and (UsageRecords.project_id eq projectIdInt)
+                } else {
+                    baseFilter and UsageRecords.project_id.isNull()
+                }
             }) {
                 it[event_count] = existing[UsageRecords.event_count] + rec.eventCount
                 it[bytes_ingested] = existing[UsageRecords.bytes_ingested] + rec.bytesIngested
