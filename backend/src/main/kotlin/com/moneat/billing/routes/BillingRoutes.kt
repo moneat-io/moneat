@@ -93,7 +93,7 @@ fun Route.billingRoutes(
 
             val usage = quotaService.getUsageForOrganization(orgId)
 
-            // Compute accurate usedBytes from usage_records
+            // Compute accurate counts from usage_records
             try {
                 val startDate = LocalDate.parse(usage.periodStart)
                 val endDate = LocalDate.parse(usage.periodEnd)
@@ -105,10 +105,26 @@ fun Route.billingRoutes(
                         endDate,
                         listOf("log", "logs")
                     )
+                val computedApmSpans =
+                    usageTrackingService.getEventCountForOrg(
+                        orgId,
+                        startDate,
+                        endDate,
+                        listOf("apm_span", "apm")
+                    )
+                val computedCustomMetrics =
+                    usageTrackingService.getEventCountForOrg(
+                        orgId,
+                        startDate,
+                        endDate,
+                        listOf("custom_metric", "metric")
+                    )
                 call.respond(
                     usage.copy(
                         usedBytes = maxOf(computedBytes, usage.usedBytes),
-                        usedLogs = maxOf(computedLogs, usage.usedLogs)
+                        usedLogs = maxOf(computedLogs, usage.usedLogs),
+                        usedApmSpans = maxOf(computedApmSpans, usage.usedApmSpans),
+                        usedCustomMetrics = maxOf(computedCustomMetrics, usage.usedCustomMetrics)
                     )
                 )
             } catch (e: Exception) {
