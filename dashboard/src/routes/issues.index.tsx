@@ -375,8 +375,8 @@ function DashboardPage() {
                 </div>
               </div>
             ) : stats ? (
-              <div className="mb-4 grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
-                <div className="grid grid-cols-2 gap-3">
+              <div className={cn("mb-4 grid gap-3", stats.eventsTimeline.length > 0 ? "grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" : "grid-cols-1")}>
+                <div className={cn("grid gap-3", stats.eventsTimeline.length > 0 ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
                   <StatsCard
                     title="Errors (24h)"
                     value={formatCount(stats.totalEvents)}

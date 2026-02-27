@@ -3572,6 +3572,12 @@ class ApiClient {
     return this.request<DdHostResponse>(`${API_BASE}/hosts/${hostId}`)
   }
 
+  async deleteHost(hostId: number): Promise<void> {
+    return this.request<void>(`${API_BASE}/hosts/${hostId}`, {
+      method: 'DELETE',
+    })
+  }
+
   async getHostMetrics(
     hostId: number,
     from?: string,
