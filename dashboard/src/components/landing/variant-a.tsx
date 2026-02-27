@@ -517,14 +517,15 @@ export function VariantA() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-20">
             <p className="text-sm font-semibold text-sky-500 tracking-wide uppercase mb-3">
-              Features
+              Ingestion-based pricing
             </p>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-              Everything you need, nothing you don&apos;t
+              Pay per GB. Every feature included.
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Stop stitching together five different tools. Moneat gives you error tracking, logs,
-              infrastructure monitoring, APM, and incident response in one place.
+              Errors, logs, traces, infrastructure, incident response — all unlocked on every plan.
+              You pay for the data you ingest. We only limit the few things where per-GB pricing
+              doesn&apos;t apply.
             </p>
           </div>
 
