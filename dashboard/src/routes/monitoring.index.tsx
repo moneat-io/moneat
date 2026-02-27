@@ -1619,7 +1619,7 @@ function HostCard({host}: {host: DdHostResponse}) {
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
                     <div className="flex h-10 w-10 items-center justify-center">
                       <span className="text-xs font-bold tabular-nums text-sky-600 dark:text-sky-400 font-mono">
-                        v{host.agentVersion || '?'}
+                        v{host.agentVersion || '—'}
                       </span>
                     </div>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
