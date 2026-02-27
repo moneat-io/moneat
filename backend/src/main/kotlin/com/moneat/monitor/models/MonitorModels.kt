@@ -17,9 +17,42 @@
 package com.moneat.monitor.models
 
 import com.moneat.billing.models.BillingUsageResponse
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import java.util.*
+import kotlin.time.Instant
+
+object UUIDSerializer : KSerializer<UUID> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("UUID", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: UUID) {
+        encoder.encodeString(value.toString())
+    }
+
+    override fun deserialize(decoder: Decoder): UUID {
+        return UUID.fromString(decoder.decodeString())
+    }
+}
+
+object KotlinInstantSerializer : KSerializer<Instant> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("KotlinInstant", PrimitiveKind.LONG)
+
+    override fun serialize(encoder: Encoder, value: Instant) {
+        encoder.encodeLong(value.toEpochMilliseconds())
+    }
+
+    override fun deserialize(decoder: Decoder): Instant {
+        return Instant.fromEpochMilliseconds(decoder.decodeLong())
+    }
+}
 
 // Agent-facing models
 @Serializable
@@ -259,18 +292,23 @@ data class UpdateAlertRequest(
 )
 
 // Internal data classes
+@Serializable
 data class SystemData(
+    @Serializable(with = UUIDSerializer::class)
     val id: UUID,
     val organizationId: Int,
     val name: String,
     val host: String?,
     val agentKeyHash: String,
     val status: String,
+    @Serializable(with = KotlinInstantSerializer::class)
     val lastSeenAt: kotlin.time.Instant?,
     val agentVersion: String?,
     val os: String?,
     val arch: String?,
+    @Serializable(with = KotlinInstantSerializer::class)
     val createdAt: kotlin.time.Instant,
+    @Serializable(with = KotlinInstantSerializer::class)
     val updatedAt: kotlin.time.Instant
 )
 

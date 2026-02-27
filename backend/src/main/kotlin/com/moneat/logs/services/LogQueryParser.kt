@@ -579,20 +579,20 @@ class LogQueryParser {
         return if (isWildcard) {
             val pattern = wildcardToLikePattern(term)
             val escaped = escapeFn(pattern)
-            fields.joinToString(" OR ") { field ->
+            "(" + fields.joinToString(" OR ") { field ->
                 "$field ILIKE '$escaped'"
-            }
+            } + ")"
         } else if (isPhrase || hasSeparators) {
             // Phrase search or terms with separators: use ILIKE for substring match
             val escaped = escapeFn(term)
-            fields.joinToString(" OR ") { field ->
+            "(" + fields.joinToString(" OR ") { field ->
                 "$field ILIKE '%$escaped%'"
-            }
+            } + ")"
         } else {
             val escaped = escapeFn(term)
-            fields.joinToString(" OR ") { field ->
+            "(" + fields.joinToString(" OR ") { field ->
                 "hasTokenCaseInsensitive($field, '$escaped')"
-            }
+            } + ")"
         }
     }
 
@@ -637,11 +637,11 @@ class LogQueryParser {
             if (isWildcard) {
                 val pattern = wildcardToLikePattern(value)
                 val escapedPattern = escapeFn(pattern)
-                "(has(tags, '$escapedField') AND tags['$escapedField'] ILIKE '$escapedPattern') OR " +
-                    "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] ILIKE '$escapedPattern')"
+                "((has(tags, '$escapedField') AND tags['$escapedField'] ILIKE '$escapedPattern') OR " +
+                    "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] ILIKE '$escapedPattern'))"
             } else {
-                "(has(tags, '$escapedField') AND tags['$escapedField'] = '$escaped') OR " +
-                    "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] = '$escaped')"
+                "((has(tags, '$escapedField') AND tags['$escapedField'] = '$escaped') OR " +
+                    "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] = '$escaped'))"
             }
         }
     }

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {type FormEvent, Fragment, useMemo, useState} from 'react'
+import {type FormEvent, Fragment, useEffect, useMemo, useState} from 'react'
 import {createFileRoute, Link, redirect, useNavigate, useSearch} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {loadStripe} from '@stripe/stripe-js'
