@@ -14,14 +14,21 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Outlet} from '@tanstack/react-router'
+import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {BookOpen, FlaskConical, Plus} from 'lucide-react'
 import {useState} from 'react'
+import {api} from '@/lib/api'
 import {BetaBanner} from '@/components/BetaBanner'
 import {Button} from '@/components/ui/button'
 import CreateSyntheticTestDialog from '@/components/CreateSyntheticTestDialog'
 
 export const Route = createFileRoute('/synthetics')({
+  beforeLoad: async () => {
+    if (!api.isAuthenticated()) {
+      const hasSession = await api.checkAuth()
+      if (!hasSession) throw redirect({to: '/login'})
+    }
+  },
   component: SyntheticsLayout,
 })
 

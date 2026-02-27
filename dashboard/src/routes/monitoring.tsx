@@ -36,7 +36,8 @@ import {Button} from '@/components/ui/button'
 export const Route = createFileRoute('/monitoring')({
   beforeLoad: async () => {
     if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
+      const hasSession = await api.checkAuth()
+      if (!hasSession) throw redirect({to: '/login'})
     }
   },
   component: MonitoringLayout,
