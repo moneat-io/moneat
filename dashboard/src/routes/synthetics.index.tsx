@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type SyntheticResultListResponse, type SyntheticResultResponse, type SyntheticTestResponse} from '@/lib/api'
+import {api, type SyntheticResultResponse, type SyntheticTestResponse} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
@@ -62,7 +62,7 @@ function SyntheticResults() {
 
   const {data: resultsData, isLoading: resultsLoading} = useQuery({
     queryKey: ['synthetic-results'],
-    queryFn: () => api.get<SyntheticResultListResponse>('/v1/synthetics?limit=50'),
+    queryFn: () => api.listSyntheticResults(50),
   })
 
   const runMutation = useMutation({

@@ -2753,9 +2753,11 @@ class ApiClient {
 
   /**
    * Public GET helper — delegates to the private request() method with auth.
+   * Paths starting with '/' are automatically prefixed with API_BASE.
    */
   async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint)
+    const url = endpoint.startsWith('/') ? `${API_BASE}${endpoint.replace(/^\/v1/, '')}` : endpoint
+    return this.request<T>(url)
   }
 
   /**
@@ -5561,6 +5563,10 @@ class ApiClient {
     return this.request<void>(`${API_BASE}/synthetics/tests/${testId}/run`, {
       method: 'POST',
     })
+  }
+
+  async listSyntheticResults(limit = 50): Promise<SyntheticResultListResponse> {
+    return this.request<SyntheticResultListResponse>(`${API_BASE}/synthetics/results?limit=${limit}`)
   }
 }
 
