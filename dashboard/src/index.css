@@ -176,29 +176,64 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
   }
+
+  .theme-retro-dark {
+    --background: 0 0% 2%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 0 0% 90%;
+    --primary-foreground: 0 0% 2%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 90%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 70%;
+    --radius: 0rem;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
 }
 
 /* Retro theme specific overrides – thicken borders per-direction only */
-.theme-retro .border {
+.theme-retro .border,
+.theme-retro-dark .border {
   border-width: 2px;
 }
-.theme-retro .border-t {
+.theme-retro .border-t,
+.theme-retro-dark .border-t {
   border-top-width: 2px;
 }
-.theme-retro .border-r {
+.theme-retro .border-r,
+.theme-retro-dark .border-r {
   border-right-width: 2px;
 }
-.theme-retro .border-b {
+.theme-retro .border-b,
+.theme-retro-dark .border-b {
   border-bottom-width: 2px;
 }
-.theme-retro .border-l {
+.theme-retro .border-l,
+.theme-retro-dark .border-l {
   border-left-width: 2px;
 }
-.theme-retro .border-x {
+.theme-retro .border-x,
+.theme-retro-dark .border-x {
   border-left-width: 2px;
   border-right-width: 2px;
 }
-.theme-retro .border-y {
+.theme-retro .border-y,
+.theme-retro-dark .border-y {
   border-top-width: 2px;
   border-bottom-width: 2px;
 }
@@ -210,7 +245,14 @@
 .theme-retro .rounded-lg,
 .theme-retro .rounded-xl,
 .theme-retro .rounded-2xl,
-.theme-retro .rounded-3xl {
+.theme-retro .rounded-3xl,
+.theme-retro-dark .rounded-xs,
+.theme-retro-dark .rounded-sm,
+.theme-retro-dark .rounded-md,
+.theme-retro-dark .rounded-lg,
+.theme-retro-dark .rounded-xl,
+.theme-retro-dark .rounded-2xl,
+.theme-retro-dark .rounded-3xl {
   border-radius: 0;
 }
 
@@ -220,6 +262,11 @@
   box-shadow: 2px 0 0 0 hsl(var(--foreground));
 }
 
+.theme-retro-dark .sidebar {
+  border-right-width: 0;
+  box-shadow: 2px 0 0 0 hsl(var(--border));
+}
+
 .theme-retro .card,
 .theme-retro .popover,
 .theme-retro .dialog-content {
@@ -227,7 +274,15 @@
   box-shadow: 4px 4px 0px 0px hsl(var(--foreground));
 }
 
-.theme-retro button:active {
+.theme-retro-dark .card,
+.theme-retro-dark .popover,
+.theme-retro-dark .dialog-content {
+  border-radius: 0;
+  box-shadow: 4px 4px 0px 0px hsl(var(--border));
+}
+
+.theme-retro button:active,
+.theme-retro-dark button:active {
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0px 0px hsl(var(--foreground));
 }
