@@ -233,6 +233,32 @@ class PricingTierService {
             val resolvedAnalyticsRetentionDays = request.analyticsRetentionDays ?: currentConfig?.analyticsRetentionDays ?: 1095
             val resolvedMonthlyAnalyticsPageviewLimit = request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
             val resolvedAnalyticsPageviewOverageRateCentsPer100k = request.analyticsPageviewOverageRateCentsPer100k ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0
+            val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit
+                ?: currentConfig?.monthlyApmSpanLimit ?: 0
+            val resolvedApmSpanOverageRateCentsPer1m = request.apmSpanOverageRateCentsPer1m
+                ?: currentConfig?.apmSpanOverageRateCentsPer1m ?: 0
+            val resolvedMonthlyCustomMetricLimit = request.monthlyCustomMetricLimit
+                ?: currentConfig?.monthlyCustomMetricLimit ?: 0
+            val resolvedCustomMetricOverageRateCentsPer100k =
+                request.customMetricOverageRateCentsPer100k
+                    ?: currentConfig?.customMetricOverageRateCentsPer100k ?: 0
+            val resolvedMaxHosts = request.maxHosts
+            val resolvedProfilingEnabled = request.profilingEnabled
+                ?: currentConfig?.profilingEnabled ?: true
+            val resolvedNetworkMonitoringEnabled = request.networkMonitoringEnabled
+                ?: currentConfig?.networkMonitoringEnabled ?: true
+            val resolvedDbmEnabled = request.dbmEnabled
+                ?: currentConfig?.dbmEnabled ?: true
+            val resolvedDebuggerEnabled = request.debuggerEnabled
+                ?: currentConfig?.debuggerEnabled ?: true
+            val resolvedK8sMonitoringEnabled = request.k8sMonitoringEnabled
+                ?: currentConfig?.k8sMonitoringEnabled ?: true
+            val resolvedDataStreamsEnabled = request.dataStreamsEnabled
+                ?: currentConfig?.dataStreamsEnabled ?: true
+            val resolvedSbomEnabled = request.sbomEnabled
+                ?: currentConfig?.sbomEnabled ?: true
+            val resolvedSyntheticsEnabled = request.syntheticsEnabled
+                ?: currentConfig?.syntheticsEnabled ?: true
 
             val resolvedStatusPagesEnabled =
                 request.statusPagesEnabled
@@ -328,6 +354,19 @@ class PricingTierService {
                     it[analytics_retention_days] = resolvedAnalyticsRetentionDays
                     it[monthly_analytics_pageview_limit] = resolvedMonthlyAnalyticsPageviewLimit
                     it[analytics_pageview_overage_rate_cents_per_100k] = resolvedAnalyticsPageviewOverageRateCentsPer100k
+                    it[monthly_apm_span_limit] = resolvedMonthlyApmSpanLimit
+                    it[apm_span_overage_rate_cents_per_1m] = resolvedApmSpanOverageRateCentsPer1m
+                    it[monthly_custom_metric_limit] = resolvedMonthlyCustomMetricLimit
+                    it[custom_metric_overage_rate_cents_per_100k] = resolvedCustomMetricOverageRateCentsPer100k
+                    it[max_hosts] = resolvedMaxHosts
+                    it[profiling_enabled] = resolvedProfilingEnabled
+                    it[network_monitoring_enabled] = resolvedNetworkMonitoringEnabled
+                    it[dbm_enabled] = resolvedDbmEnabled
+                    it[debugger_enabled] = resolvedDebuggerEnabled
+                    it[k8s_monitoring_enabled] = resolvedK8sMonitoringEnabled
+                    it[data_streams_enabled] = resolvedDataStreamsEnabled
+                    it[sbom_enabled] = resolvedSbomEnabled
+                    it[synthetics_enabled] = resolvedSyntheticsEnabled
                     it[stripe_base_price_id] = request.stripeBasePriceId
                     it[stripe_overage_price_id] = request.stripeOveragePriceId
                     it[stripe_yearly_base_price_id] = request.stripeYearlyBasePriceId
@@ -640,6 +679,12 @@ class PricingTierService {
             maxHosts = row[PricingTierConfigs.max_hosts],
             profilingEnabled = row[PricingTierConfigs.profiling_enabled],
             networkMonitoringEnabled = row[PricingTierConfigs.network_monitoring_enabled],
+            dbmEnabled = row[PricingTierConfigs.dbm_enabled],
+            debuggerEnabled = row[PricingTierConfigs.debugger_enabled],
+            k8sMonitoringEnabled = row[PricingTierConfigs.k8s_monitoring_enabled],
+            dataStreamsEnabled = row[PricingTierConfigs.data_streams_enabled],
+            sbomEnabled = row[PricingTierConfigs.sbom_enabled],
+            syntheticsEnabled = row[PricingTierConfigs.synthetics_enabled],
             stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
             stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
             stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],

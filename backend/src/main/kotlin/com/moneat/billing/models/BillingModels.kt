@@ -78,6 +78,12 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val max_hosts = integer("max_hosts").nullable()
     val profiling_enabled = bool("profiling_enabled").default(false)
     val network_monitoring_enabled = bool("network_monitoring_enabled").default(false)
+    val dbm_enabled = bool("dbm_enabled").default(true)
+    val debugger_enabled = bool("debugger_enabled").default(true)
+    val k8s_monitoring_enabled = bool("k8s_monitoring_enabled").default(true)
+    val data_streams_enabled = bool("data_streams_enabled").default(true)
+    val sbom_enabled = bool("sbom_enabled").default(true)
+    val synthetics_enabled = bool("synthetics_enabled").default(true)
     val stripe_base_price_id = varchar("stripe_base_price_id", 255).nullable()
     val stripe_overage_price_id = varchar("stripe_overage_price_id", 255).nullable()
     val stripe_yearly_base_price_id = varchar("stripe_yearly_base_price_id", 255).nullable()
@@ -191,6 +197,12 @@ data class PricingTierConfigResponse(
     val maxHosts: Int? = null,
     val profilingEnabled: Boolean = false,
     val networkMonitoringEnabled: Boolean = false,
+    val dbmEnabled: Boolean = true,
+    val debuggerEnabled: Boolean = true,
+    val k8sMonitoringEnabled: Boolean = true,
+    val dataStreamsEnabled: Boolean = true,
+    val sbomEnabled: Boolean = true,
+    val syntheticsEnabled: Boolean = true,
     val stripeBasePriceId: String? = null,
     val stripeOveragePriceId: String? = null,
     val stripeYearlyBasePriceId: String? = null,
@@ -240,6 +252,8 @@ data class BillingUsageResponse(
     val usedLogBytes: Long = 0,
     val usedLlmBytes: Long = 0,
     val bytesLimit: Long,
+    val ingestionOverageCentsEstimate: Int = 0,
+    val ingestionOverageRateCentsPerGb: Int = 0,
     val baseLimitUnits: Long,
     val paygLimitUnits: Long,
     val totalLimitUnits: Long,
@@ -381,7 +395,20 @@ data class CreateTierVersionRequest(
     val stripeYearlyBasePriceId: String? = null,
     val stripeYearlyOveragePriceId: String? = null,
     val stripeOncallPriceId: String? = null,
-    val stripeOncallYearlyPriceId: String? = null
+    val stripeOncallYearlyPriceId: String? = null,
+    val monthlyApmSpanLimit: Long? = null,
+    val apmSpanOverageRateCentsPer1m: Int? = null,
+    val monthlyCustomMetricLimit: Long? = null,
+    val customMetricOverageRateCentsPer100k: Int? = null,
+    val maxHosts: Int? = null,
+    val profilingEnabled: Boolean? = null,
+    val networkMonitoringEnabled: Boolean? = null,
+    val dbmEnabled: Boolean? = null,
+    val debuggerEnabled: Boolean? = null,
+    val k8sMonitoringEnabled: Boolean? = null,
+    val dataStreamsEnabled: Boolean? = null,
+    val sbomEnabled: Boolean? = null,
+    val syntheticsEnabled: Boolean? = null
 )
 
 @Serializable

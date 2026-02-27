@@ -131,20 +131,19 @@ class BillingQuotaService(
             val bytesAfter = state.usedBytes + requestedTotalBytes
 
             for ((eventType, requestedUnits) in normalizedRequests) {
-                // Logs are byte-limited only; apm_span and custom_metric have separate limits
-                if (eventType == "log") continue
+                // Unified ingestion model: only custom_metric is count-gated.
+                // All other types are gated by the unified GB limit below.
+                if (eventType != "custom_metric") continue
 
                 val usedForType = usedUnitsForType(state, eventType)
                 val typeLimit = baseLimitForType(state, eventType)
                 val typeAfter = usedForType + requestedUnits
-                val paygHeadroomForType = if (isStripeMeteredUnitType(eventType)) state.paygLimitUnits else 0L
-                // APM spans and custom metrics with a configured overage rate allow unlimited overage (billed separately)
-                val hasOwnOverageBilling = (eventType == "apm_span" && state.apmSpanOverageRateCentsPer1m > 0) ||
+                val hasOwnOverageBilling =
                     (eventType == "custom_metric" && state.customMetricOverageRateCentsPer100k > 0)
                 val effectiveTypeLimit = when {
                     typeLimit < 0 -> Long.MAX_VALUE
                     hasOwnOverageBilling -> Long.MAX_VALUE
-                    else -> typeLimit + paygHeadroomForType + state.bonusUnits
+                    else -> typeLimit + state.bonusUnits
                 }
 
                 if (typeLimit >= 0 && typeAfter > effectiveTypeLimit) {
@@ -171,29 +170,8 @@ class BillingQuotaService(
                 }
             }
 
-            // Aggregate unit check (excludes LLM and logs)
-            val effectiveTotalLimit = state.totalLimitUnits + state.bonusUnits
-            if (totalAfter > effectiveTotalLimit) {
-                SentryUtils.breadcrumb(
-                    "billing",
-                    "Quota exceeded",
-                    mapOf(
-                        "organization_id" to organizationId,
-                        "requested_units" to requestedAggregate,
-                        "used_units" to state.usedUnits,
-                        "total_limit" to state.totalLimitUnits,
-                        "bonus_units" to state.bonusUnits
-                    )
-                )
-
-                return@transaction QuotaReservationResult(
-                    allowed = false,
-                    reason = "quota_exceeded",
-                    usage = toUsageResponse(state)
-                )
-            }
-
-            // GB/byte limit check (includes PAYG byte headroom when applicable)
+            // Unified ingestion model: GB/byte limit is the primary gate for all data types
+            // (replaces old per-type count limits and aggregate unit limit)
             val effectiveBytesLimit =
                 if (state.bytesLimit > 0) {
                     state.bytesLimit + state.bonusGbBytes + state.paygLimitBytes
@@ -254,43 +232,40 @@ class BillingQuotaService(
                 it[updated_at] = Clock.System.now()
             }
 
-            val overageBefore = max(0, state.usedUnits - state.baseLimitUnits)
-            val overageAfter = max(0, totalAfter - state.baseLimitUnits)
-            val overageDelta = overageAfter - overageBefore
+            // Track unified ingestion GB overage for Stripe metering
+            val ingestionOverageByteBefore = max(0, state.usedBytes - state.bytesLimit)
+            val ingestionOverageByteAfter = if (state.bytesLimit > 0) {
+                max(0, bytesAfter - state.bytesLimit)
+            } else {
+                0L
+            }
+            val ingestionOverageByteDelta = ingestionOverageByteAfter - ingestionOverageByteBefore
 
-            if (state.subscriptionId != null && overageDelta > 0 && state.paygRateMicrosPerUnit > 0) {
+            if (state.subscriptionId != null && ingestionOverageByteDelta > 0 &&
+                state.overageRateCentsPerGb > 0
+            ) {
                 SentryUtils.breadcrumb(
                     "billing",
-                    "PAYG overage incurred",
+                    "Ingestion overage incurred",
                     mapOf(
                         "organization_id" to organizationId,
-                        "overage_delta" to overageDelta,
+                        "overage_byte_delta" to ingestionOverageByteDelta,
                         "subscription_id" to state.subscriptionId
                     )
                 )
 
-                val overageMicros = overageDelta * state.paygRateMicrosPerUnit
-                Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
-                    it[payg_used_units] = state.paygUsedUnits + overageDelta
-                    it[payg_used_micros] = state.paygUsedMicros + overageMicros
-                    it[pending_meter_units] = state.pendingMeterUnits + overageDelta
+                // Convert byte overage to unit-equivalent for Stripe metering
+                // pending_meter_units tracks overage in GB * 100 for precision
+                val overageGbDelta = ingestionOverageByteDelta / (BYTES_PER_GB / 100)
+                if (overageGbDelta > 0) {
+                    Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
+                        it[pending_meter_units] = state.pendingMeterUnits + overageGbDelta
+                    }
                 }
             }
 
-            // Track APM span and custom metric overages for Stripe metering
+            // Track custom metric overages for Stripe metering
             if (state.subscriptionId != null) {
-                val apmSpanOverageBefore = if (state.apmSpanLimit >= 0) {
-                    max(0, state.usedApmSpans - state.apmSpanLimit)
-                } else {
-                    0L
-                }
-                val apmSpanOverageAfter = if (state.apmSpanLimit >= 0) {
-                    max(0, state.usedApmSpans + requestedApmSpans - state.apmSpanLimit)
-                } else {
-                    0L
-                }
-                val apmSpanOverageDelta = apmSpanOverageAfter - apmSpanOverageBefore
-
                 val customMetricOverageBefore = if (state.customMetricLimit >= 0) {
                     max(0, state.usedCustomMetrics - state.customMetricLimit)
                 } else {
@@ -303,25 +278,19 @@ class BillingQuotaService(
                 }
                 val customMetricOverageDelta = customMetricOverageAfter - customMetricOverageBefore
 
-                if (apmSpanOverageDelta > 0 || customMetricOverageDelta > 0) {
+                if (customMetricOverageDelta > 0) {
                     SentryUtils.breadcrumb(
                         "billing",
-                        "APM/metric overage incurred",
+                        "Custom metric overage incurred",
                         mapOf(
                             "organization_id" to organizationId,
-                            "apm_span_overage_delta" to apmSpanOverageDelta,
                             "custom_metric_overage_delta" to customMetricOverageDelta,
                             "subscription_id" to state.subscriptionId
                         )
                     )
                     Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
-                        if (apmSpanOverageDelta > 0) {
-                            it[pending_apm_span_overage_units] = state.pendingApmSpanOverageUnits + apmSpanOverageDelta
-                        }
-                        if (customMetricOverageDelta > 0) {
-                            it[pending_custom_metric_overage_units] =
-                                state.pendingCustomMetricOverageUnits + customMetricOverageDelta
-                        }
+                        it[pending_custom_metric_overage_units] =
+                            state.pendingCustomMetricOverageUnits + customMetricOverageDelta
                     }
                 }
             }
@@ -511,6 +480,7 @@ class BillingQuotaService(
         val replayOverageRateCentsPerGb: Int,
         val logOverageRateCentsPerGb: Int,
         val llmOverageRateCentsPer1k: Int,
+        val overageRateCentsPerGb: Int,
         val usedAnalyticsPageviews: Long,
         val analyticsPageviewLimit: Long,
         val analyticsPageviewOverageRateCentsPer100k: Int,
@@ -729,6 +699,7 @@ class BillingQuotaService(
             replayOverageRateCentsPerGb = tier.replayOverageRateCentsPerGb,
             logOverageRateCentsPerGb = tier.overageRateCentsPerGb,
             llmOverageRateCentsPer1k = tier.llmOverageRateCentsPer1k,
+            overageRateCentsPerGb = tier.overageRateCentsPerGb,
             usedAnalyticsPageviews = usedAnalyticsPageviews,
             analyticsPageviewLimit = tier.monthlyAnalyticsPageviewLimit,
             analyticsPageviewOverageRateCentsPer100k = tier.analyticsPageviewOverageRateCentsPer100k,
@@ -744,22 +715,29 @@ class BillingQuotaService(
     }
 
     private fun toUsageResponse(state: QuotaState): BillingUsageResponse {
-        val effectivePaygHeadroom = state.paygLimitUnits + state.bonusUnits
-        val standardLimitsWithinBudget =
-            listOf(
-                state.usedErrors to state.errorLimit,
-                state.usedTransactions to state.transactionLimit,
-                state.usedReplays to state.replayLimit,
-                state.usedFeedback to state.feedbackLimit,
-            ).all { (used, limit) ->
-                limit < 0 || used <= (limit + effectivePaygHeadroom)
-            }
-        // APM spans and custom metrics bill overages separately, so they are always "within budget"
-        val eventLimitsWithinBudget = standardLimitsWithinBudget
-        val llmWithinBudget = state.llmEventLimit < 0 || state.usedLlmEvents <= (state.llmEventLimit + state.bonusUnits)
-        val bytesWithinBudget = state.bytesLimit <= 0 || state.usedBytes <= (state.bytesLimit + state.bonusGbBytes)
+        // Unified ingestion model: GB is the primary gate
+        val bytesWithinBudget = state.bytesLimit <= 0 ||
+            state.usedBytes <= (state.bytesLimit + state.bonusGbBytes + state.paygLimitBytes)
 
-        // Per-type overage cost estimates
+        // Custom metrics check (count-based, separate from GB)
+        val customMetricsWithinBudget = state.customMetricLimit < 0 ||
+            state.customMetricOverageRateCentsPer100k > 0 ||
+            state.usedCustomMetrics <= (state.customMetricLimit + state.bonusUnits)
+
+        // Unified ingestion overage estimate (all bytes over GB limit)
+        val ingestionOverageBytes = if (state.bytesLimit > 0) {
+            max(0, state.usedBytes - state.bytesLimit)
+        } else {
+            0L
+        }
+        val ingestionOverageCents =
+            if (state.overageRateCentsPerGb > 0 && ingestionOverageBytes > 0) {
+                ((ingestionOverageBytes * state.overageRateCentsPerGb) / BYTES_PER_GB).toInt()
+            } else {
+                0
+            }
+
+        // Legacy per-type overage estimates (kept for backward compat)
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
         val errorOverageCents =
             if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0) {
@@ -777,7 +755,8 @@ class BillingQuotaService(
                 if (overageReplays <= 0) {
                     0
                 } else {
-                    val replayOverageBytes = (state.usedReplayBytes * overageReplays) / state.usedReplays
+                    val replayOverageBytes =
+                        (state.usedReplayBytes * overageReplays) / state.usedReplays
                     ((replayOverageBytes * state.replayOverageRateCentsPerGb) / BYTES_PER_GB).toInt()
                 }
             }
@@ -799,15 +778,23 @@ class BillingQuotaService(
                 0
             }
 
-        val analyticsPageviewOverageUnits = max(0, state.usedAnalyticsPageviews - state.analyticsPageviewLimit)
+        val analyticsPageviewOverageUnits =
+            max(0, state.usedAnalyticsPageviews - state.analyticsPageviewLimit)
         val analyticsPageviewOverageCents =
-            if (state.analyticsPageviewOverageRateCentsPer100k > 0 && analyticsPageviewOverageUnits > 0) {
-                ((analyticsPageviewOverageUnits * state.analyticsPageviewOverageRateCentsPer100k) / 100_000).toInt()
+            if (state.analyticsPageviewOverageRateCentsPer100k > 0 &&
+                analyticsPageviewOverageUnits > 0
+            ) {
+                ((analyticsPageviewOverageUnits *
+                    state.analyticsPageviewOverageRateCentsPer100k) / 100_000).toInt()
             } else {
                 0
             }
 
-        val apmSpanOverageUnits = if (state.apmSpanLimit >= 0) max(0, state.usedApmSpans - state.apmSpanLimit) else 0L
+        val apmSpanOverageUnits = if (state.apmSpanLimit >= 0) {
+            max(0, state.usedApmSpans - state.apmSpanLimit)
+        } else {
+            0L
+        }
         val apmSpanOverageCents =
             if (state.apmSpanOverageRateCentsPer1m > 0 && apmSpanOverageUnits > 0) {
                 ((apmSpanOverageUnits * state.apmSpanOverageRateCentsPer1m) / 1_000_000).toInt()
@@ -822,13 +809,14 @@ class BillingQuotaService(
         }
         val customMetricOverageCents =
             if (state.customMetricOverageRateCentsPer100k > 0 && customMetricOverageUnits > 0) {
-                ((customMetricOverageUnits * state.customMetricOverageRateCentsPer100k) / 100_000).toInt()
+                ((customMetricOverageUnits *
+                    state.customMetricOverageRateCentsPer100k) / 100_000).toInt()
             } else {
                 0
             }
 
-        val totalOverageCents = errorOverageCents + replayOverageCents + logOverageCents + llmOverageCents +
-            analyticsPageviewOverageCents + apmSpanOverageCents + customMetricOverageCents
+        val totalOverageCents = ingestionOverageCents +
+            analyticsPageviewOverageCents + customMetricOverageCents
 
         return BillingUsageResponse(
             organizationId = state.organizationId,
@@ -856,6 +844,8 @@ class BillingQuotaService(
             usedLogBytes = state.usedLogBytes,
             usedLlmBytes = state.usedLlmBytes,
             bytesLimit = state.bytesLimit,
+            ingestionOverageCentsEstimate = ingestionOverageCents,
+            ingestionOverageRateCentsPerGb = state.overageRateCentsPerGb,
             baseLimitUnits = state.baseLimitUnits,
             paygLimitUnits = state.paygLimitUnits,
             totalLimitUnits = state.totalLimitUnits,
@@ -882,14 +872,15 @@ class BillingQuotaService(
             usedAnalyticsPageviews = state.usedAnalyticsPageviews,
             analyticsPageviewLimit = state.analyticsPageviewLimit,
             analyticsPageviewOverageCentsEstimate = analyticsPageviewOverageCents,
-            analyticsPageviewOverageRateCentsPer100k = state.analyticsPageviewOverageRateCentsPer100k,
+            analyticsPageviewOverageRateCentsPer100k =
+                state.analyticsPageviewOverageRateCentsPer100k,
             usedApmSpans = state.usedApmSpans,
             apmSpanLimit = state.apmSpanLimit,
             usedCustomMetrics = state.usedCustomMetrics,
             customMetricLimit = state.customMetricLimit,
             plan = state.plan,
             status = state.status,
-            withinQuota = state.usedUnits <= (state.totalLimitUnits + state.bonusUnits) && eventLimitsWithinBudget && llmWithinBudget && bytesWithinBudget,
+            withinQuota = bytesWithinBudget && customMetricsWithinBudget,
             bonusGbBytes = state.bonusGbBytes,
             bonusUnits = state.bonusUnits,
             bonusReason = state.bonusReason
@@ -955,6 +946,12 @@ class BillingQuotaService(
             maxHosts = row[PricingTierConfigs.max_hosts],
             profilingEnabled = row[PricingTierConfigs.profiling_enabled],
             networkMonitoringEnabled = row[PricingTierConfigs.network_monitoring_enabled],
+            dbmEnabled = row[PricingTierConfigs.dbm_enabled],
+            debuggerEnabled = row[PricingTierConfigs.debugger_enabled],
+            k8sMonitoringEnabled = row[PricingTierConfigs.k8s_monitoring_enabled],
+            dataStreamsEnabled = row[PricingTierConfigs.data_streams_enabled],
+            sbomEnabled = row[PricingTierConfigs.sbom_enabled],
+            syntheticsEnabled = row[PricingTierConfigs.synthetics_enabled],
             isCurrent = row[PricingTierConfigs.is_current]
         )
     }
@@ -1052,8 +1049,14 @@ class BillingQuotaService(
             },
             customMetricOverageRateCentsPer100k = if (tier == PricingTier.FREE) 0 else 50,
             maxHosts = if (tier == PricingTier.FREE) 3 else null,
-            profilingEnabled = tier != PricingTier.FREE,
-            networkMonitoringEnabled = tier != PricingTier.FREE,
+            profilingEnabled = true,
+            networkMonitoringEnabled = true,
+            dbmEnabled = true,
+            debuggerEnabled = true,
+            k8sMonitoringEnabled = true,
+            dataStreamsEnabled = true,
+            sbomEnabled = true,
+            syntheticsEnabled = true,
             isCurrent = true
         )
     }
@@ -1094,25 +1097,11 @@ class BillingQuotaService(
         state: QuotaState,
         eventType: String
     ): Long {
+        // Unified ingestion model: only custom_metric has count-based limits.
+        // All other types are gated by the unified GB limit.
         return when (eventType) {
-            "error" -> state.errorLimit
-
-            "transaction" -> state.transactionLimit
-
-            "replay" -> state.replayLimit
-
-            "feedback" -> state.feedbackLimit
-
-            "llm" -> state.llmEventLimit
-
-            "log" -> -1L
-
-            "apm_span" -> state.apmSpanLimit
-
             "custom_metric" -> state.customMetricLimit
-
-            // Logs are byte-limited, not unit-limited
-            else -> state.errorLimit
+            else -> -1L // No count-based limit; GB is the gate
         }
     }
 
