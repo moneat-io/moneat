@@ -120,6 +120,17 @@ class EnvironmentValidator {
             validateRequired("DD_SERVICE", "DD_AGENT_HOST is set (Datadog Agent enabled)", errors)
             validateRequired("DD_ENV", "DD_AGENT_HOST is set (Datadog Agent enabled)", errors)
         }
+
+        // Validate profile payload limit (optional, defaults in code)
+        val profileMaxPayloadBytes = getConfigValue("PROFILE_MAX_PAYLOAD_BYTES")
+        if (!profileMaxPayloadBytes.isNullOrBlank()) {
+            val parsed = profileMaxPayloadBytes.toIntOrNull()
+            if (parsed == null || parsed <= 0) {
+                errors.add(
+                    "REQUIRED: PROFILE_MAX_PAYLOAD_BYTES must be a positive integer when set."
+                )
+            }
+        }
     }
 
     private fun validateRequired(

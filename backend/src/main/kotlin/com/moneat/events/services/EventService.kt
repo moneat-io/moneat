@@ -64,6 +64,10 @@ import java.util.concurrent.atomic.AtomicInteger
 private val logger = KotlinLogging.logger {}
 
 class EventService(private val notificationService: NotificationService? = null) {
+    companion object {
+        private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
+    }
+
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
@@ -73,6 +77,14 @@ class EventService(private val notificationService: NotificationService? = null)
         "PROFILE_STORAGE_PATH",
         "/var/lib/moneat/profiles"
     )
+    private val maxProfilePayloadBytes: Int =
+        EnvConfig
+            .get(
+                "PROFILE_MAX_PAYLOAD_BYTES",
+                DEFAULT_PROFILE_MAX_PAYLOAD_BYTES.toString()
+            ).toIntOrNull()
+            ?.takeIf { it > 0 }
+            ?: DEFAULT_PROFILE_MAX_PAYLOAD_BYTES
 
     // In-memory caches for hot-path lookups (project keys & org IDs rarely change)
     private data class CachedEntry<T>(val value: T, val expiresAt: Long)
@@ -1102,6 +1114,15 @@ class EventService(private val notificationService: NotificationService? = null)
             return false
         }
         try {
+            val payloadBytes = payload.toByteArray(StandardCharsets.UTF_8)
+            val payloadSize = payloadBytes.size
+            if (payloadSize > maxProfilePayloadBytes) {
+                logger.warn {
+                    "Profile payload too large, skipping insert " +
+                        "(projectId=$projectId, orgId=$orgId, bytes=$payloadSize, max=$maxProfilePayloadBytes)"
+                }
+                return false
+            }
             val profileJson = json.parseToJsonElement(payload).jsonObject
 
             val transactionName = profileJson["transaction_name"]
@@ -1131,17 +1152,13 @@ class EventService(private val notificationService: NotificationService? = null)
             val storageKey = "$orgId/$normalizedId.profile.json"
             val storageDir = java.io.File(profileStoragePath)
             val storageFile = java.io.File(storageDir, storageKey)
-            storageFile.parentFile.mkdirs()
-            storageFile.writeText(payload)
+            storageFile.parentFile?.mkdirs()
+            storageFile.writeBytes(payloadBytes)
 
             val nowMs = System.currentTimeMillis()
             val durationNs = profileJson["duration_ns"]
                 ?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                 ?: 0L
-            val payloadSize = payload.toByteArray(
-                StandardCharsets.UTF_8
-            ).size
-
             val insert = """
                 INSERT INTO $clickhouseDb.profiles (
                     profile_id, organization_id,
