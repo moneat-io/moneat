@@ -205,7 +205,9 @@ fun Route.monitorRoutes(
                     )
                 )
             } catch (e: Exception) {
-                if (quotaService.isEnforcementEnabled() && (refundMetricCount > 0 || refundBytes > 0) && refundOrgId != null) {
+                if (quotaService.isEnforcementEnabled() &&
+                    (refundMetricCount > 0 || refundBytes > 0) && refundOrgId != null
+                ) {
                     quotaService.refundUnits(
                         organizationId = refundOrgId,
                         units = refundMetricCount,
