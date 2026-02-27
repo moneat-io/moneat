@@ -49,7 +49,6 @@ import {
   AlertTriangle,
   Bell,
   BellOff,
-  Brain,
   Calendar,
   Check,
   CheckCircle2,
@@ -58,7 +57,6 @@ import {
   CreditCard,
   Database,
   Download,
-  FileText,
   Info,
   Key,
   Layers,
@@ -809,55 +807,48 @@ function UsageTab() {
 
   const usageRows = [
     {
-      key: 'error',
-      label: 'Errors',
-      used: usage.usedErrors,
-      limit: usage.errorLimit,
-      icon: AlertCircle,
-      color: 'text-red-500',
-      bgColor: 'bg-red-500',
-      retentionDays: usage.retentionDays,
-      overageCents: usage.errorOverageCentsEstimate ?? 0,
-      overageRate: usage.errorOverageRateCentsPer1k ? `$${(usage.errorOverageRateCentsPer1k / 100).toFixed(2)}/1K` : null,
-      unit: 'events',
-    },
-    {
-      key: 'replay',
-      label: 'Replays',
-      used: usage.usedReplays,
-      limit: usage.replayLimit,
-      icon: Zap,
-      color: 'text-yellow-500',
-      bgColor: 'bg-yellow-500',
-      retentionDays: usage.replayRetentionDays ?? usage.retentionDays,
-      overageCents: usage.replayOverageCentsEstimate ?? 0,
-      overageRate: usage.replayOverageRateCentsPerGb ? `$${(usage.replayOverageRateCentsPerGb / 100).toFixed(2)}/GB` : null,
-      unit: 'sessions',
-    },
-    {
-      key: 'log',
-      label: 'Log Data',
-      used: usage.usedLogBytes ?? 0,
+      key: 'ingestion',
+      label: 'Ingestion',
+      used: usage.usedBytes ?? 0,
       limit: usage.bytesLimit,
-      icon: FileText,
-      color: 'text-cyan-500',
-      bgColor: 'bg-cyan-500',
-      retentionDays: usage.logRetentionDays ?? usage.retentionDays,
-      overageCents: usage.logOverageCentsEstimate ?? 0,
-      overageRate: usage.logOverageRateCentsPerGb ? `$${(usage.logOverageRateCentsPerGb / 100).toFixed(2)}/GB` : null,
+      icon: AlertCircle,
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-500',
+      retentionDays: usage.retentionDays,
+      overageCents: usage.ingestionOverageCentsEstimate ?? 0,
+      overageRate: usage.ingestionOverageRateCentsPerGb
+        ? `$${(usage.ingestionOverageRateCentsPerGb / 100).toFixed(2)}/GB`
+        : null,
       unit: 'bytes',
     },
     {
-      key: 'llm',
-      label: 'AI Observability',
-      used: usage.usedLlmEvents ?? 0,
-      limit: usage.llmEventLimit ?? 0,
-      icon: Brain,
-      color: 'text-violet-500',
-      bgColor: 'bg-violet-500',
-      retentionDays: usage.llmRetentionDays ?? usage.retentionDays,
-      overageCents: usage.llmOverageCentsEstimate ?? 0,
-      overageRate: usage.llmOverageRateCentsPer1k ? `$${(usage.llmOverageRateCentsPer1k / 100).toFixed(2)}/1K` : null,
+      key: 'custom_metric',
+      label: 'Custom Metrics',
+      used: usage.usedCustomMetrics ?? 0,
+      limit: usage.customMetricLimit ?? 0,
+      icon: Server,
+      color: 'text-orange-500',
+      bgColor: 'bg-orange-500',
+      retentionDays: usage.retentionDays,
+      overageCents: usage.customMetricOverageCentsEstimate ?? 0,
+      overageRate: usage.customMetricOverageRateCentsPer100k
+        ? `$${(usage.customMetricOverageRateCentsPer100k / 100).toFixed(2)}/100K`
+        : null,
+      unit: 'events',
+    },
+    {
+      key: 'analytics',
+      label: 'Analytics Pageviews',
+      used: usage.usedAnalyticsPageviews ?? 0,
+      limit: usage.analyticsPageviewLimit ?? 0,
+      icon: LayoutDashboard,
+      color: 'text-indigo-500',
+      bgColor: 'bg-indigo-500',
+      retentionDays: usage.retentionDays,
+      overageCents: usage.analyticsPageviewOverageCentsEstimate ?? 0,
+      overageRate: usage.analyticsPageviewOverageRateCentsPer100k
+        ? `$${(usage.analyticsPageviewOverageRateCentsPer100k / 100).toFixed(2)}/100K`
+        : null,
       unit: 'events',
     },
   ] as const
@@ -926,7 +917,7 @@ function UsageTab() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-2">
           {usageRows.map((row) => {
             const Icon = row.icon
             const percent = getPercent(row.used, row.limit)
@@ -935,15 +926,15 @@ function UsageTab() {
             const isUnlimited = row.limit <= 0 || isUnlimitedValue(row.limit)
 
             return (
-              <div key={row.key} className="rounded-lg border p-4 space-y-3">
+              <div key={row.key} className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <div className={`p-1.5 rounded-md ${row.bgColor}/10`}>
                       <Icon className={`h-4 w-4 ${row.color}`} />
                     </div>
-                    <div>
+                    <div className="flex items-baseline gap-2">
                       <span className="text-sm font-medium">{row.label}</span>
-                      <span className="text-xs text-muted-foreground ml-2">{row.retentionDays}d retention</span>
+                      <span className="text-xs text-muted-foreground">{row.retentionDays}d retention</span>
                     </div>
                   </div>
                   <div className="text-right">
@@ -952,7 +943,7 @@ function UsageTab() {
                   </div>
                 </div>
 
-                <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
                   <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${Math.max(isUnlimited && row.used > 0 ? 5 : 0, percent)}%` }} />
                 </div>
 

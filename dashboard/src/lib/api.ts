@@ -994,8 +994,14 @@ interface BillingUsage {
   analyticsPageviewOverageRateCentsPer100k?: number
   usedApmSpans?: number
   apmSpanLimit?: number
+  apmSpanOverageCentsEstimate?: number
+  apmSpanOverageRateCentsPer1m?: number
   usedCustomMetrics?: number
   customMetricLimit?: number
+  customMetricOverageCentsEstimate?: number
+  customMetricOverageRateCentsPer100k?: number
+  ingestionOverageCentsEstimate?: number
+  ingestionOverageRateCentsPerGb?: number
   plan: string
   status: string
   withinQuota: boolean

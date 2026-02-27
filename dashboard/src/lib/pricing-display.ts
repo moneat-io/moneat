@@ -64,6 +64,12 @@ export interface PricingCardTierInput {
   maxHosts?: number | null
   profilingEnabled?: boolean
   networkMonitoringEnabled?: boolean
+  dbmEnabled?: boolean
+  debuggerEnabled?: boolean
+  k8sMonitoringEnabled?: boolean
+  dataStreamsEnabled?: boolean
+  sbomEnabled?: boolean
+  syntheticsEnabled?: boolean
 }
 
 export interface OverageItem {
@@ -142,31 +148,8 @@ function formatCentsRate(cents: number, unit: string): string {
 function buildIncludedLimits(tier: PricingCardTierInput): string[] {
   const limits: string[] = []
 
-  const errorLimit = tier.monthlyErrorLimit
-  if (errorLimit != null && errorLimit > 0) {
-    limits.push(`${isUnlimited(errorLimit) ? 'Unlimited' : formatEventLimit(errorLimit)} errors`)
-  }
-
-  if (tier.sessionReplayEnabled) {
-    const replayLimit = tier.monthlyReplayLimit
-    if (replayLimit != null && replayLimit > 0) {
-      limits.push(`${isUnlimited(replayLimit) ? 'Unlimited' : formatEventLimit(replayLimit)} session replays`)
-    } else {
-      limits.push('Session replays')
-    }
-  }
-
-  limits.push(`${formatDataLimit(tier.monthlyGbLimit)} log data`)
-
-  const llmLimit = tier.monthlyLlmEventLimit
-  if (llmLimit != null && llmLimit > 0) {
-    limits.push(`${isUnlimited(llmLimit) ? 'Unlimited' : formatEventLimit(llmLimit)} AI observability events`)
-  }
-
-  const apmLimit = tier.monthlyApmSpanLimit
-  if (apmLimit != null && apmLimit > 0) {
-    limits.push(`${isUnlimited(apmLimit) ? 'Unlimited' : formatEventLimit(apmLimit)} APM spans`)
-  }
+  // Unified ingestion GB is the primary limit
+  limits.push(`${formatDataLimit(tier.monthlyGbLimit)} ingestion`)
 
   const metricLimit = tier.monthlyCustomMetricLimit
   if (metricLimit != null && metricLimit > 0) {
@@ -223,6 +206,21 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
 function buildPlatformFeatures(tier: PricingCardTierInput): string[] {
   const features: string[] = []
 
+  // All DD Agent features included on all tiers
+  features.push('Error tracking & session replays')
+  features.push('Log management')
+  features.push('AI observability')
+  features.push('APM & distributed tracing')
+  features.push('Continuous profiling')
+  features.push('Infrastructure monitoring')
+  features.push('Database monitoring')
+  features.push('Network monitoring')
+  features.push('Kubernetes monitoring')
+  features.push('Dynamic instrumentation')
+  features.push('SBOM')
+  features.push('Synthetic testing')
+  features.push('Data streams')
+
   if (tier.statusPagesEnabled && tier.statusPageCustomDomainEnabled) {
     features.push('Status pages with custom domains')
   } else if (tier.statusPagesEnabled) {
@@ -236,8 +234,6 @@ function buildPlatformFeatures(tier: PricingCardTierInput): string[] {
   }
   if (tier.samlEnabled) features.push('SAML SSO')
   if (tier.oidcEnabled) features.push('OIDC SSO')
-  if (tier.profilingEnabled) features.push('Continuous profiling')
-  if (tier.networkMonitoringEnabled) features.push('Network monitoring')
   if (tier.prioritySupportEnabled) features.push('Priority support')
   if (tier.slaEnabled) features.push('SLA guarantee')
   if (tier.customRetentionEnabled) features.push('Custom retention')
@@ -249,24 +245,24 @@ function buildOverages(tier: PricingCardTierInput): OverageItem[] {
   if (tier.monthlyPriceCents === 0) return []
 
   const overages: OverageItem[] = []
-  const errRate = tier.errorOverageRateCentsPer1k
-  const logRate = tier.overageRateCentsPerGb
-  const replayRate = tier.replayOverageRateCentsPerGb
-  const llmRate = tier.llmOverageRateCentsPer1k
 
-  if (errRate != null && errRate > 0) overages.push({label: 'Errors', rate: formatCentsRate(errRate, '1K')})
-  if (replayRate != null && replayRate > 0) overages.push({label: 'Replays', rate: formatCentsRate(replayRate, 'GB')})
-  if (logRate != null && logRate > 0) overages.push({label: 'Logs', rate: formatCentsRate(logRate, 'GB')})
-  if (llmRate != null && llmRate > 0) overages.push({label: 'AI events', rate: formatCentsRate(llmRate, '1K')})
+  // Unified ingestion overage
+  const ingestionRate = tier.overageRateCentsPerGb
+  if (ingestionRate != null && ingestionRate > 0) {
+    overages.push({label: 'Ingestion', rate: formatCentsRate(ingestionRate, 'GB')})
+  }
 
-  const analyticsRate = tier.analyticsPageviewOverageRateCentsPer100k
-  if (analyticsRate != null && analyticsRate > 0) overages.push({label: 'Page views', rate: formatCentsRate(analyticsRate, '100K')})
-
-  const apmRate = tier.apmSpanOverageRateCentsPer1m
-  if (apmRate != null && apmRate > 0) overages.push({label: 'APM spans', rate: formatCentsRate(apmRate, '1M')})
-
+  // Custom metric overage
   const metricRate = tier.customMetricOverageRateCentsPer100k
-  if (metricRate != null && metricRate > 0) overages.push({label: 'Custom metrics', rate: formatCentsRate(metricRate, '100K')})
+  if (metricRate != null && metricRate > 0) {
+    overages.push({label: 'Custom metrics', rate: formatCentsRate(metricRate, '100K')})
+  }
+
+  // Analytics pageview overage
+  const analyticsRate = tier.analyticsPageviewOverageRateCentsPer100k
+  if (analyticsRate != null && analyticsRate > 0) {
+    overages.push({label: 'Page views', rate: formatCentsRate(analyticsRate, '100K')})
+  }
 
   return overages
 }
