@@ -19,15 +19,19 @@ import {
   Activity,
   ArrowRight,
   Bell,
+  Bot,
   Box,
+  Brain,
   Code2,
   FileText,
+  Flame,
   GitBranch,
   Globe,
   Phone,
   Play,
   Server,
   Shield,
+  ShieldCheck,
   Zap,
   type LucideIcon,
 } from 'lucide-react'
@@ -93,8 +97,10 @@ function ScreenshotFrame({
           </div>
         </div>
         {/* 16:9 screenshot area */}
-        <div className="aspect-video relative overflow-hidden bg-[#0c0e14]">
-          {children}
+        <div className="aspect-video overflow-hidden bg-[#09090b] p-1">
+          <div className="relative w-full h-full rounded-sm overflow-hidden">
+            {children}
+          </div>
         </div>
       </div>
     </div>
@@ -270,6 +276,36 @@ const secondaryFeatures: Feature[] = [
       </div>
     ),
   },
+  {
+    icon: Brain,
+    title: 'AI & LLM observability',
+    description:
+      'Monitor LLM calls, token usage, latency, and costs. Track prompts, completions, and model performance across providers.',
+    gradient: 'from-fuchsia-500 to-pink-400',
+    iconBg: 'bg-fuchsia-500/10',
+    iconColor: 'text-fuchsia-400',
+    mock: <img src="/screenshots/ai.png" alt="AI observability dashboard showing LLM metrics and token usage" className="w-full h-full object-cover" />,
+  },
+  {
+    icon: Flame,
+    title: 'Continuous profiling',
+    description:
+      'CPU, heap, and wall-time profiles from your Datadog Agent. Pinpoint hot paths and memory leaks in production.',
+    gradient: 'from-red-500 to-orange-400',
+    iconBg: 'bg-red-500/10',
+    iconColor: 'text-red-400',
+    mock: <img src="/screenshots/profiles.png" alt="Continuous profiling flamegraph showing CPU and memory hotspots" className="w-full h-full object-cover" />,
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Security & SBOM',
+    description:
+      'Software package inventory with CVE tracking. Know exactly what\'s running and which vulnerabilities affect your services.',
+    gradient: 'from-emerald-500 to-green-400',
+    iconBg: 'bg-emerald-500/10',
+    iconColor: 'text-emerald-400',
+    mock: <img src="/screenshots/security.png" alt="Security dashboard showing SBOM inventory and CVE tracking" className="w-full h-full object-cover" />,
+  },
 ]
 
 const stats = [
@@ -336,7 +372,7 @@ export function VariantA() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-400" />
                 </span>
-                Open source &middot; Works with Sentry SDKs
+                Open source &middot; Works with Sentry SDKs &amp; Datadog Agent
               </div>
             </div>
 
@@ -349,12 +385,12 @@ export function VariantA() {
             </h1>
 
             <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-8 leading-relaxed animate-fade-in-up animation-delay-150">
-              Errors, logs, uptime, replays, on-call, and status pages — stop stitching
-              together five different tools. Open source, self-hostable, and Sentry-compatible.
+              Errors, logs, uptime, replays, on-call, infrastructure, and AI — stop stitching
+              together five different tools. Open source, self-hostable, Sentry and Datadog compatible.
             </p>
 
             <div className="flex flex-wrap justify-center gap-2.5 mb-10 animate-fade-in-up animation-delay-200">
-              {['Errors', 'Logs', 'Uptime', 'Replays', 'On-Call', 'LLM', 'Dashboards', 'Analytics'].map(tag => (
+              {['Errors', 'Logs', 'Uptime', 'Replays', 'On-Call', 'Infrastructure', 'APM', 'Profiling', 'LLM', 'MCP', 'Dashboards'].map(tag => (
                 <span key={tag} className="text-sm text-slate-300/80 border border-slate-700/50 rounded-full px-3.5 py-1 bg-white/[0.03] backdrop-blur-sm">
                   {tag}
                 </span>
@@ -459,7 +495,7 @@ export function VariantA() {
               </div>
               <div className="flex gap-6 sm:gap-10 text-center shrink-0">
                 <div>
-                  <div className="text-3xl font-bold text-foreground">9</div>
+                  <div className="text-3xl font-bold text-foreground">15+</div>
                   <div className="text-xs text-muted-foreground mt-1">Features</div>
                 </div>
                 <div>
@@ -488,7 +524,7 @@ export function VariantA() {
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Stop stitching together five different tools. Moneat gives you error tracking, logs,
-              uptime, replays, and status pages in one place.
+              infrastructure monitoring, APM, and incident response in one place.
             </p>
           </div>
 
@@ -537,7 +573,7 @@ export function VariantA() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-10">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10">
             {secondaryFeatures.map((feature) => (
               <div key={feature.title} className="group">
                 {feature.noFrame ? (
@@ -637,6 +673,176 @@ export function VariantA() {
                     </div>
                     <div className="mt-4">
                       <span className="text-slate-500">{'// That\'s it. All Sentry SDK features work.'}</span>
+                    </div>
+                  </div>
+                </div>
+              </ScreenshotFrame>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Datadog Agent callout ─────────────────────────── */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-slate-950">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+            <div className="lg:w-[42%] text-center lg:text-left">
+              <div className="inline-flex rounded-lg bg-orange-500/10 p-3 mb-5 ring-1 ring-inset ring-white/5">
+                <Server className="h-6 w-6 text-orange-400" />
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">Already running the Datadog Agent? Keep it.</h2>
+              <p className="text-slate-400 text-base leading-relaxed mb-4">
+                Point your existing Datadog Agent at Moneat and get infrastructure metrics, APM traces,
+                continuous profiling, and logs — without sending data to Datadog.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {['Host metrics', 'APM traces', 'Profiling', 'Logs', 'Kubernetes', 'Database monitoring', 'Containers', 'Processes'].map(cap => (
+                  <span key={cap} className="text-xs text-orange-300/80 border border-orange-500/20 rounded-full px-2.5 py-0.5 bg-orange-500/5">
+                    {cap}
+                  </span>
+                ))}
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="border-orange-500/30 text-orange-400 hover:bg-orange-500/10 hover:border-orange-500/50"
+              >
+                <a href="/docs/datadog-agent">
+                  Learn more
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+            </div>
+            <div className="lg:w-[58%] w-full">
+              <ScreenshotFrame gradient="from-orange-500 to-amber-400">
+                <div className="absolute inset-0 p-4 sm:p-6 font-mono text-[9px] sm:text-xs leading-relaxed">
+                  <div className="space-y-0.5">
+                    <div>
+                      <span className="text-slate-500">{'# datadog.yaml — just change the URL'}</span>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-sky-300">dd_url</span>
+                      <span className="text-white/40">: </span>
+                      <span className="text-emerald-400">
+                        &quot;https://
+                        <span className="text-orange-300 font-semibold">your-moneat-instance</span>
+                        /dd&quot;
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-sky-300">api_key</span>
+                      <span className="text-white/40">: </span>
+                      <span className="text-emerald-400">&quot;your-moneat-agent-key&quot;</span>
+                    </div>
+                    <div className="mt-4">
+                      <span className="text-slate-500">{'# Enable the features you need'}</span>
+                    </div>
+                    <div className="mt-1">
+                      <span className="text-sky-300">apm_config</span>
+                      <span className="text-white/40">:</span>
+                    </div>
+                    <div className="pl-4">
+                      <span className="text-sky-300">enabled</span>
+                      <span className="text-white/40">: </span>
+                      <span className="text-amber-300">true</span>
+                    </div>
+                    <div className="mt-1">
+                      <span className="text-sky-300">logs_enabled</span>
+                      <span className="text-white/40">: </span>
+                      <span className="text-amber-300">true</span>
+                    </div>
+                    <div className="mt-1">
+                      <span className="text-sky-300">process_config</span>
+                      <span className="text-white/40">:</span>
+                    </div>
+                    <div className="pl-4">
+                      <span className="text-sky-300">enabled</span>
+                      <span className="text-white/40">: </span>
+                      <span className="text-amber-300">true</span>
+                    </div>
+                    <div className="mt-4">
+                      <span className="text-slate-500">{'# That\'s it. Metrics, traces, and logs flow to Moneat.'}</span>
+                    </div>
+                  </div>
+                </div>
+              </ScreenshotFrame>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── MCP Server callout ────────────────────────────── */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-background border-y border-border/30">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-16">
+            <div className="lg:w-[42%] text-center lg:text-left">
+              <div className="inline-flex rounded-lg bg-violet-500/10 p-3 mb-5 ring-1 ring-inset ring-white/5">
+                <Bot className="h-6 w-6 text-violet-400" />
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-4">Built-in MCP server for AI agents.</h2>
+              <p className="text-muted-foreground text-base leading-relaxed mb-4">
+                Connect Cursor, GitHub Copilot, or your own agents to Moneat via the
+                Model Context Protocol. Query issues, logs, traces, and metrics from your IDE or AI workflows.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {['Incident investigation', 'In-editor observability', 'Automated triage', 'Natural language dashboards'].map(uc => (
+                  <span key={uc} className="text-xs text-violet-300/80 border border-violet-500/20 rounded-full px-2.5 py-0.5 bg-violet-500/5">
+                    {uc}
+                  </span>
+                ))}
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="border-violet-500/30 text-violet-400 hover:bg-violet-500/10 hover:border-violet-500/50"
+              >
+                <a href="/docs/mcp-server">
+                  Learn more
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+            </div>
+            <div className="lg:w-[58%] w-full">
+              <ScreenshotFrame gradient="from-violet-500 to-purple-400">
+                <div className="absolute inset-0 p-4 sm:p-6 font-mono text-[9px] sm:text-xs leading-relaxed">
+                  <div className="space-y-0.5">
+                    <div>
+                      <span className="text-slate-500">{'// .cursor/mcp.json'}</span>
+                    </div>
+                    <div className="mt-3">
+                      <span className="text-white/40">{'{'}</span>
+                    </div>
+                    <div className="pl-4">
+                      <span className="text-sky-300">&quot;mcpServers&quot;</span>
+                      <span className="text-white/40">{': {'}</span>
+                    </div>
+                    <div className="pl-8">
+                      <span className="text-sky-300">&quot;moneat&quot;</span>
+                      <span className="text-white/40">{': {'}</span>
+                    </div>
+                    <div className="pl-12">
+                      <span className="text-sky-300">&quot;url&quot;</span>
+                      <span className="text-white/40">: </span>
+                      <span className="text-emerald-400">
+                        &quot;https://
+                        <span className="text-violet-300 font-semibold">your-instance</span>
+                        .moneat.io/v1/mcp/sse?token=...&quot;
+                      </span>
+                    </div>
+                    <div className="pl-8">
+                      <span className="text-white/40">{'}'}</span>
+                    </div>
+                    <div className="pl-4">
+                      <span className="text-white/40">{'}'}</span>
+                    </div>
+                    <div>
+                      <span className="text-white/40">{'}'}</span>
+                    </div>
+                    <div className="mt-4">
+                      <span className="text-slate-500">{'// 30+ tools: list_issues, query_logs, get_trace,'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">{'// list_hosts, create_dashboard, global_search ...'}</span>
                     </div>
                   </div>
                 </div>

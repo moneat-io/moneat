@@ -99,7 +99,7 @@ export function LandingPage() {
     name: 'Moneat',
     url: 'https://moneat.io',
     applicationCategory: 'DeveloperApplication',
-    description: 'Errors, logs, uptime, on-call, and status pages in one platform. Simple GB pricing, unlimited seats.',
+    description: 'Errors, logs, infrastructure, APM, AI observability, on-call, and status pages in one platform. Works with Sentry SDKs and the Datadog Agent.',
     operatingSystem: 'Web',
     offers: {
       '@type': 'Offer',
@@ -111,10 +111,10 @@ export function LandingPage() {
   return (
     <article className="min-h-screen bg-background">
       <Helmet>
-        <title>Moneat | Errors, Logs, Uptime, and On-Call in One Platform</title>
+        <title>Moneat | Errors, Logs, Infrastructure, APM, and On-Call in One Platform</title>
         <meta
           name="description"
-          content="Stop juggling monitoring tools. Moneat brings errors, logs, uptime, on-call, and status pages into one platform with simple GB pricing."
+          content="Stop juggling monitoring tools. Moneat brings errors, logs, infrastructure, APM, AI observability, and on-call into one platform. Works with Sentry SDKs and the Datadog Agent."
         />
         <link rel="canonical" href="https://moneat.io" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
@@ -188,7 +188,7 @@ export function LandingPage() {
                 <span className="text-lg font-semibold text-white">moneat</span>
               </div>
               <p className="text-sm text-slate-400 max-w-xs">
-                Errors, logs, uptime, and on-call — one platform, simple pricing.
+                Errors, logs, infrastructure, APM, and on-call — one platform, simple pricing.
               </p>
             </div>
             <nav className="flex items-center gap-8" aria-label="Footer navigation">
@@ -235,7 +235,7 @@ export function LandingPage() {
               &copy; {new Date().getFullYear()} Moneat. All rights reserved.
             </p>
             <p className="text-xs text-slate-500">
-              Works with Sentry SDKs. Switch in minutes.
+              Works with Sentry SDKs &amp; Datadog Agent. Switch in minutes.
             </p>
           </div>
         </div>
