@@ -253,7 +253,7 @@ function DashboardSection({
           <CardTitle className="text-sm font-semibold">{title}</CardTitle>
         </div>
         <div className="flex items-center gap-2">
-          {headerRight}
+          <div className="hidden sm:block">{headerRight}</div>
           <Link to={to as "/"}>
             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1 px-2">
               View <ArrowUpRight className="h-3 w-3" />

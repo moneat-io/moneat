@@ -99,19 +99,19 @@ export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
         )}
       </div>
 
-      <div className="relative flex flex-1 items-center justify-center px-4 py-[9px]">
+      <div className="relative flex flex-1 items-center justify-between lg:justify-center px-4 py-[9px]">
         <button
           type="button"
           onClick={() => openPalette?.()}
-          className="flex w-full max-w-xl items-center gap-3 rounded-lg border bg-muted/50 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="flex w-auto sm:w-full max-w-xl items-center gap-3 rounded-lg border bg-muted/50 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <Search className="h-4 w-4 shrink-0" />
-          <span className="flex-1">Search dashboards, projects, pages...</span>
-          <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:inline-block">
+          <span className="hidden sm:inline flex-1">Search dashboards, projects, pages...</span>
+          <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] md:inline-block">
             ⌘K
           </kbd>
         </button>
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+        <div className="flex items-center gap-3 ml-auto lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:ml-0">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -126,7 +126,7 @@ export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
                   <PlatformIcon className="h-3 w-3 text-white" />
                 </div>
               )}
-              <span className="truncate max-w-[140px] text-foreground">
+              <span className="hidden sm:inline truncate max-w-[140px] text-foreground">
                 {activeProject?.name ?? 'No project'}
               </span>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -183,7 +183,7 @@ export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate({to: '/settings'})}>
+            <DropdownMenuItem onClick={() => navigate({to: '/settings', search: {tab: 'api-keys'}})}>
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </DropdownMenuItem>

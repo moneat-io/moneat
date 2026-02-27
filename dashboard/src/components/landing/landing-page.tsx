@@ -191,7 +191,7 @@ export function LandingPage() {
                 Errors, logs, infrastructure, APM, and on-call — one platform, simple pricing.
               </p>
             </div>
-            <nav className="flex items-center gap-8" aria-label="Footer navigation">
+            <nav className="flex flex-wrap items-center gap-4 sm:gap-8" aria-label="Footer navigation">
               <a
                 href="#features"
                 className="text-sm text-slate-400 hover:text-sky-400 transition-colors"
