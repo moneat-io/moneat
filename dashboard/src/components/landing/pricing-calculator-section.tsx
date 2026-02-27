@@ -64,13 +64,9 @@ function fmtMoney(n: number): string {
 // ─── Cost calculation ────────────────────────────────────────────────────────────
 
 interface Usage {
-  errors: number
-  logGb: number
-  aiEvents: number
+  ingestGb: number
   pageViews: number
-  apmSpans: number
   customMetrics: number
-  hosts: number
 }
 
 interface OverageLine {
@@ -88,50 +84,25 @@ interface PlanCost {
 function calcCost(tier: PricingCardTierInput, usage: Usage): PlanCost {
   const isFree = tier.monthlyPriceCents === 0
   const base = tier.monthlyPriceCents / 100
+  const ingestLimitGb = tier.monthlyGbLimit / BYTES_PER_GB
 
   if (isFree) {
-    const errorLimit = tier.monthlyErrorLimit ?? 0
-    const logLimitGb = tier.monthlyGbLimit / BYTES_PER_GB
-    const aiLimit = tier.monthlyLlmEventLimit ?? 0
     const pvLimit = tier.monthlyAnalyticsPageviewLimit ?? 0
-    const apmLimit = tier.monthlyApmSpanLimit ?? 0
     const metricLimit = tier.monthlyCustomMetricLimit ?? 0
-    const hostLimit = tier.maxHosts ?? 0
     const exceedsFreeLimits =
-      (errorLimit > 0 && usage.errors > errorLimit) ||
-      (logLimitGb > 0 && usage.logGb > logLimitGb) ||
-      (aiLimit > 0 && usage.aiEvents > aiLimit) ||
+      (ingestLimitGb > 0 && usage.ingestGb > ingestLimitGb) ||
       (pvLimit > 0 && usage.pageViews > pvLimit) ||
-      (apmLimit > 0 && usage.apmSpans > apmLimit) ||
-      (metricLimit > 0 && usage.customMetrics > metricLimit) ||
-      (hostLimit > 0 && usage.hosts > hostLimit)
+      (metricLimit > 0 && usage.customMetrics > metricLimit)
     return {base: 0, overageLines: [], total: 0, exceedsFreeLimits}
   }
 
   const overageLines: OverageLine[] = []
 
-  // Errors
-  const errorLimit = tier.monthlyErrorLimit ?? 0
-  const errRate = tier.errorOverageRateCentsPer1k ?? 0
-  if (errRate > 0 && usage.errors > errorLimit) {
-    const extraK = Math.ceil((usage.errors - errorLimit) / 1000)
-    overageLines.push({label: 'Extra errors', cost: (extraK * errRate) / 100})
-  }
-
-  // Log data
-  const logLimitGb = tier.monthlyGbLimit / BYTES_PER_GB
-  const logRate = tier.overageRateCentsPerGb ?? 0
-  if (logRate > 0 && usage.logGb > logLimitGb) {
-    const extraGb = usage.logGb - logLimitGb
-    overageLines.push({label: 'Extra log data', cost: (extraGb * logRate) / 100})
-  }
-
-  // AI events
-  const aiLimit = tier.monthlyLlmEventLimit ?? 0
-  const aiRate = tier.llmOverageRateCentsPer1k ?? 0
-  if (aiRate > 0 && usage.aiEvents > aiLimit) {
-    const extraK = Math.ceil((usage.aiEvents - aiLimit) / 1000)
-    overageLines.push({label: 'Extra AI events', cost: (extraK * aiRate) / 100})
+  // Unified ingestion overage (errors, logs, replays, AI events, APM spans all count toward GB)
+  const ingestRate = tier.overageRateCentsPerGb ?? 0
+  if (ingestRate > 0 && usage.ingestGb > ingestLimitGb) {
+    const extraGb = usage.ingestGb - ingestLimitGb
+    overageLines.push({label: 'Extra ingestion', cost: (extraGb * ingestRate) / 100})
   }
 
   // Page views
@@ -140,14 +111,6 @@ function calcCost(tier: PricingCardTierInput, usage: Usage): PlanCost {
   if (pvRate > 0 && usage.pageViews > pvLimit) {
     const extra100k = Math.ceil((usage.pageViews - pvLimit) / 100_000)
     overageLines.push({label: 'Extra page views', cost: (extra100k * pvRate) / 100})
-  }
-
-  // APM spans
-  const apmLimit = tier.monthlyApmSpanLimit ?? 0
-  const apmRate = tier.apmSpanOverageRateCentsPer1m ?? 0
-  if (apmRate > 0 && usage.apmSpans > apmLimit) {
-    const extraM = Math.ceil((usage.apmSpans - apmLimit) / 1_000_000)
-    overageLines.push({label: 'Extra APM spans', cost: (extraM * apmRate) / 100})
   }
 
   // Custom metrics
@@ -168,37 +131,25 @@ const PRESETS: {label: string; usage: Usage}[] = [
   {
     label: 'Startup',
     usage: {
-      errors: 10_000,
-      logGb: 2,
-      aiEvents: 5_000,
+      ingestGb: 5,
       pageViews: 100_000,
-      apmSpans: 1_000_000,
       customMetrics: 200_000,
-      hosts: 5,
     },
   },
   {
     label: 'Growing',
     usage: {
-      errors: 150_000,
-      logGb: 10,
-      aiEvents: 50_000,
+      ingestGb: 75,
       pageViews: 1_000_000,
-      apmSpans: 10_000_000,
       customMetrics: 1_000_000,
-      hosts: 20,
     },
   },
   {
     label: 'Scale',
     usage: {
-      errors: 1_000_000,
-      logGb: 50,
-      aiEvents: 250_000,
+      ingestGb: 500,
       pageViews: 5_000_000,
-      apmSpans: 50_000_000,
       customMetrics: 5_000_000,
-      hosts: 50,
     },
   },
 ]
@@ -378,30 +329,49 @@ function PlanCard({tier, cost, isBest}: PlanCardProps) {
 
 // ─── Main section ─────────────────────────────────────────────────────────────────
 
-// Datadog pricing estimate (annual rates): infra $15, APM $31, profiler $19, network $5 per host
-const DATADOG_COST_PER_HOST = 15 + 31 + 19 + 5 // $70/host/mo
-const DATADOG_LOG_COST_PER_GB = 1.8 // ingest + index
-const DATADOG_ERROR_COST_FIRST_50K = 25
-const DATADOG_ERROR_RATE_PER_1K = 0.25
+// Datadog pricing estimate — verified against datadoghq.com/pricing on Feb 27, 2026 (annual commitment rates)
+const DATADOG_LOG_COST_PER_GB = 0.10 // log ingestion only; standard indexing is separate ($1.70/million events)
 
-function estimateDatadogCost(usage: Usage): number {
-  const infraCost = usage.hosts * DATADOG_COST_PER_HOST
-  const logCost = usage.logGb * DATADOG_LOG_COST_PER_GB
-  const errorCost = usage.errors <= 50_000
-    ? (usage.errors > 0 ? DATADOG_ERROR_COST_FIRST_50K : 0)
-    : DATADOG_ERROR_COST_FIRST_50K + Math.ceil((usage.errors - 50_000) / 1000) * DATADOG_ERROR_RATE_PER_1K
-  return infraCost + logCost + errorCost
+interface DatadogExtras {
+  hosts: number
+  apm: boolean
+  profiling: boolean
+  networkMonitoring: boolean
+  dbm: boolean
+}
+
+// Per-host/mo costs sourced from Datadog public pricing (annual commitment), verified Feb 27, 2026
+const DD_INFRA_PER_HOST = 15      // Infrastructure Pro
+const DD_APM_PER_HOST = 31        // APM (with infra attached)
+const DD_PROFILING_PER_HOST = 19  // Continuous Profiler (standalone)
+const DD_NPM_PER_HOST = 5         // Cloud Network Monitoring
+const DD_DBM_PER_DB_HOST = 70     // Database Monitoring — note: per database host, not infra host
+
+function estimateDatadogCost(usage: Usage, extras: DatadogExtras): number {
+  const logCost = usage.ingestGb * DATADOG_LOG_COST_PER_GB
+  const hostCost =
+    extras.hosts *
+    (DD_INFRA_PER_HOST +
+      (extras.apm ? DD_APM_PER_HOST : 0) +
+      (extras.profiling ? DD_PROFILING_PER_HOST : 0) +
+      (extras.networkMonitoring ? DD_NPM_PER_HOST : 0) +
+      (extras.dbm ? DD_DBM_PER_DB_HOST : 0))
+  return logCost + hostCost
 }
 
 export function PricingCalculatorSection({standalone = false}: {standalone?: boolean}) {
   const [usage, setUsage] = useState<Usage>({
-    errors: 0,
-    logGb: 0,
-    aiEvents: 0,
+    ingestGb: 0,
     pageViews: 0,
-    apmSpans: 0,
     customMetrics: 0,
+  })
+
+  const [ddExtras, setDdExtras] = useState<DatadogExtras>({
     hosts: 0,
+    apm: false,
+    profiling: false,
+    networkMonitoring: false,
+    dbm: false,
   })
 
   const {data: billingPlans, isPending} = useQuery({
@@ -491,29 +461,14 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
             {/* Sliders */}
             <div className="space-y-8 rounded-xl border border-border/50 bg-background p-6">
               <SliderInput
-                label="Errors per month"
-                sublabel="JS exceptions, backend crashes, and unhandled errors"
-                value={usage.errors}
-                max={5_000_000}
-                logMin={500}
-                onChange={set('errors')}
-              />
-              <SliderInput
-                label="Log data"
-                sublabel="Ingested log volume per month"
-                value={usage.logGb}
-                max={500}
+                label="Ingestion per month"
+                sublabel="Total data ingested: errors, logs, replays, AI events, APM spans"
+                value={usage.ingestGb}
+                max={2_000}
+                logMin={0.5}
                 unit="GB"
-                step={5}
-                onChange={set('logGb')}
-              />
-              <SliderInput
-                label="AI observability events"
-                sublabel="LLM calls, traces, and generations tracked"
-                value={usage.aiEvents}
-                max={1_000_000}
-                logMin={100}
-                onChange={set('aiEvents')}
+                step={1}
+                onChange={set('ingestGb')}
               />
               <SliderInput
                 label="Page views"
@@ -523,6 +478,60 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
                 logMin={10_000}
                 onChange={set('pageViews')}
               />
+              <SliderInput
+                label="Custom metrics"
+                sublabel="Custom time-series metrics tracked per month"
+                value={usage.customMetrics}
+                max={50_000_000}
+                logMin={10_000}
+                onChange={set('customMetrics')}
+              />
+            </div>
+
+            {/* Datadog extras — only affects the Datadog comparison, not Moneat pricing */}
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-5">
+              <div>
+                <p className="text-sm font-semibold">Datadog surcharges</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  These don't add separate line items to your Moneat bill — no per-host fees. APM, profiling, and log data count toward your unified GB ingestion above.
+                </p>
+              </div>
+              <SliderInput
+                label="Hosts"
+                sublabel={`$${DD_INFRA_PER_HOST}/host/mo on Datadog`}
+                value={ddExtras.hosts}
+                max={500}
+                logMin={1}
+                onChange={(v) => setDdExtras((e) => ({...e, hosts: v}))}
+              />
+              {ddExtras.hosts > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Datadog add-ons (per host)</p>
+                  {(
+                    [
+                      {key: 'apm', label: 'APM & distributed tracing', cost: DD_APM_PER_HOST},
+                      {key: 'profiling', label: 'Continuous profiling', cost: DD_PROFILING_PER_HOST},
+                      {key: 'networkMonitoring', label: 'Network performance monitoring', cost: DD_NPM_PER_HOST},
+                      {key: 'dbm', label: 'Database monitoring ($70/db host)', cost: DD_DBM_PER_DB_HOST},
+                    ] as const
+                  ).map(({key, label, cost}) => (
+                    <label key={key} className="flex items-center justify-between gap-3 cursor-pointer group">
+                      <span className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={ddExtras[key]}
+                          onChange={(e) => setDdExtras((ex) => ({...ex, [key]: e.target.checked}))}
+                          className="accent-amber-500 cursor-pointer"
+                        />
+                        <span className="group-hover:text-foreground transition-colors">{label}</span>
+                      </span>
+                      <span className="text-xs tabular-nums text-amber-600 font-medium shrink-0">
+                        +${cost}/host/mo
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -561,7 +570,7 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
                   ))}
                 </div>
                 {(() => {
-                  const datadogEst = estimateDatadogCost(usage)
+                  const datadogEst = estimateDatadogCost(usage, ddExtras)
                   const freeIdx = tiers.findIndex((t) => t.tierName === 'FREE')
                   const freeFits = freeIdx >= 0 && costs[freeIdx] && !costs[freeIdx].exceedsFreeLimits
                   const displayMoneatCost = freeFits
@@ -570,11 +579,10 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
                       ? costs[bestPlanIdx].total
                       : 0
                   const hasUsage =
-                    usage.errors > 0 ||
-                    usage.logGb > 0 ||
-                    usage.hosts > 0 ||
-                    usage.apmSpans > 0 ||
-                    usage.customMetrics > 0
+                    usage.ingestGb > 0 ||
+                    usage.pageViews > 0 ||
+                    usage.customMetrics > 0 ||
+                    ddExtras.hosts > 0
                   if (!hasUsage || datadogEst < 10) return null
                   return (
                     <Card className="border-amber-500/30 bg-amber-500/5">
@@ -583,8 +591,7 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
                           <div>
                             <p className="text-sm font-semibold">vs Datadog (estimated)</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              Same usage would cost ~{fmtMoney(datadogEst)}/mo on Datadog (infra + APM + profiler +
-                              network + logs)
+                              Same usage would cost ~{fmtMoney(datadogEst)}/mo on Datadog (log ingest at $0.10/GB; indexing &amp; retention billed separately)
                             </p>
                           </div>
                           <div className="text-right">
@@ -607,7 +614,8 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
 
             {!isPending && tiers.length > 0 && (
               <p className="text-xs text-muted-foreground mt-6 text-center">
-                Estimates are based on monthly billing. Unlimited team members on every plan.
+                Estimates are based on monthly billing. Unlimited team members on every plan.<br />
+                Datadog prices verified Feb 27, 2026 from datadoghq.com/pricing (annual commitment rates). Estimates only — actual costs vary by configuration.
               </p>
             )}
           </div>
