@@ -45,9 +45,9 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/replays')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: ReplaysLayout,

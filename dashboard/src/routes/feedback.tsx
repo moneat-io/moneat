@@ -44,9 +44,9 @@ import {useMemo, useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
 
 export const Route = createFileRoute('/feedback')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: FeedbackLayout,

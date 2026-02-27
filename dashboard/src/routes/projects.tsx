@@ -467,9 +467,9 @@ export const platforms: PlatformType[] = [
 ]
 
 export const Route = createFileRoute('/projects')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: ProjectsLayout,

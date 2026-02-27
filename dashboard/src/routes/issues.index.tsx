@@ -158,9 +158,9 @@ function EventSparkline({ eventCount }: { eventCount: number }) {
 }
 
 export const Route = createFileRoute('/issues/')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: IndexPage,

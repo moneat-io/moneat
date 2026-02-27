@@ -55,9 +55,9 @@ const platformFilterTabs: Array<{ id: PlatformFilter; label: string; icon: React
 ]
 
 export const Route = createFileRoute('/projects/$projectId/settings')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   loader: async ({ params }) => {

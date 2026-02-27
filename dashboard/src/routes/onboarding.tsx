@@ -31,9 +31,9 @@ import {cn} from '@/lib/utils'
 import {Copy, Check, AlertCircle, Loader2, ArrowRight} from 'lucide-react'
 
 export const Route = createFileRoute('/onboarding')({
-  beforeLoad: () => {
+  beforeLoad: ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: OnboardingPage,

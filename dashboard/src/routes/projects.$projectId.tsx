@@ -30,9 +30,9 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/projects/$projectId')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   loader: async ({ params }) => {

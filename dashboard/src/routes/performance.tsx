@@ -21,9 +21,9 @@ import {cn} from '@/lib/utils'
 import {Activity, Layers, Server} from 'lucide-react'
 
 export const Route = createFileRoute('/performance')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: PerformanceLayout,

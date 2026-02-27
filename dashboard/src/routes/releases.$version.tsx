@@ -25,9 +25,9 @@ import {StatsCard} from '@/components/charts/stats-card'
 import {Activity, AlertCircle, ArrowLeft, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/releases/$version')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: ReleaseDetailPage,

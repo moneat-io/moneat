@@ -26,18 +26,25 @@ import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/login')({
   beforeLoad: ({ search }) => {
-    // If user is already authenticated and there's NO redirect_uri (normal web login)
-    // then redirect to home. But if redirect_uri exists (mobile login), allow
-    // the page to load so they can log in again from mobile
-    const redirectUri = (search as Record<string, unknown>).redirect_uri
-    if (api.isAuthenticated() && !redirectUri) {
-      throw redirect({ to: '/' })
-    }
-    
+    const s = search as Record<string, unknown>
+    const redirectUri = s.redirect_uri as string | undefined
+    const postLoginRedirect = s.redirect as string | undefined
+
     // If user is already authenticated AND redirect_uri exists (mobile login),
     // log them out automatically so they can log in fresh
     if (api.isAuthenticated() && redirectUri) {
       api.logout()
+      return
+    }
+
+    // If authenticated with a post-login redirect (e.g. from email link), go there
+    if (api.isAuthenticated() && postLoginRedirect) {
+      throw redirect({ to: postLoginRedirect as never })
+    }
+
+    // If authenticated with no special params, redirect to home
+    if (api.isAuthenticated()) {
+      throw redirect({ to: '/' })
     }
   },
   component: LoginPage,
@@ -48,6 +55,7 @@ function LoginPage() {
   const searchParams = new URLSearchParams(window.location.search)
   const inviteToken = searchParams.get('inviteToken') || undefined
   const redirectUri = searchParams.get('redirect_uri') || undefined
+  const postLoginRedirect = searchParams.get('redirect') || undefined
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -97,17 +105,16 @@ function LoginPage() {
       if (inviteToken) {
         navigate({ to: '/accept-invite', search: { token: inviteToken } })
       } else if (redirectUri) {
-        // Validate redirect URI before redirecting
+        // Validate redirect URI before redirecting (mobile deep link)
         if (!isValidRedirectUri(redirectUri)) {
           setError('Invalid redirect URI')
           setLoading(false)
           return
         }
-        
-        // Redirect back to mobile app with token
-        // Use URL fragment (#) instead of query parameter (?) to prevent
-        // token leakage via referrer headers, server logs, and browser history
         window.location.href = `${redirectUri}#token=${token}`
+      } else if (postLoginRedirect && postLoginRedirect.startsWith('/')) {
+        // Redirect back to the page the user was trying to access (e.g. from email link)
+        window.location.href = postLoginRedirect
       } else {
         navigate({ to: '/' })
       }

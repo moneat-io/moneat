@@ -50,9 +50,9 @@ import {
 import {useState} from 'react'
 
 export const Route = createFileRoute('/feedback/$feedbackId')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: FeedbackDetailPage,

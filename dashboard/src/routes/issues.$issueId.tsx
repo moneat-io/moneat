@@ -130,9 +130,9 @@ function normalizeApmTraceId(value: unknown): string | null {
 }
 
 export const Route = createFileRoute('/issues/$issueId')({
-  beforeLoad: () => {
+  beforeLoad: ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: IssueDetailPage,

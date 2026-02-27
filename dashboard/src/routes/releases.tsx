@@ -27,9 +27,9 @@ import {StatsCard} from '@/components/charts/stats-card'
 import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/releases')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: ReleasesLayout,

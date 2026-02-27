@@ -138,9 +138,9 @@ export const Route = createFileRoute('/settings')({
       ...(search.checkout ? { checkout: search.checkout as string } : {}),
     }
   },
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: SettingsPage,

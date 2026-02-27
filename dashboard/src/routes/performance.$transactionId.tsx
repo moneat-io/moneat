@@ -49,9 +49,9 @@ import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime, formatTime} from '@/lib/date-format'
 
 export const Route = createFileRoute('/performance/$transactionId')({
-  beforeLoad: () => {
+  beforeLoad: ({ location }) => {
     if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login' })
+      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: TransactionDetailPage,
