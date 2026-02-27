@@ -76,6 +76,7 @@ class UptimeServiceTest {
                     payg_used_units BIGINT DEFAULT 0 NOT NULL,
                     payg_used_micros BIGINT DEFAULT 0 NOT NULL,
                     pending_meter_units BIGINT DEFAULT 0 NOT NULL,
+                    pending_overage_bytes BIGINT DEFAULT 0 NOT NULL,
                     pending_meter_batch_id VARCHAR(255),
                     pending_meter_batch_units BIGINT DEFAULT 0 NOT NULL,
                     pending_apm_span_overage_units BIGINT DEFAULT 0 NOT NULL,
