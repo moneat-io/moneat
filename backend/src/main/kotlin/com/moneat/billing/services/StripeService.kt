@@ -895,7 +895,7 @@ class StripeService(
             Subscriptions.select(Subscriptions.id).where {
                 (
                     (Subscriptions.pending_meter_units greater 0L) or
-                        (Subscriptions.pending_apm_span_overage_units greater 0L) or
+                        (Subscriptions.pending_overage_bytes greater 0L) or
                         (Subscriptions.pending_custom_metric_overage_units greater 0L)
                     ) and
                     (Subscriptions.stripe_customer_id.isNotNull()) and
@@ -916,7 +916,22 @@ class StripeService(
                 val row = Subscriptions.selectAll().where { Subscriptions.id eq subscriptionId }.firstOrNull()
                     ?: return@transaction null
                 val customerId = row[Subscriptions.stripe_customer_id] ?: return@transaction null
-                val pendingUnits = row[Subscriptions.pending_meter_units]
+
+                // Drain accumulated byte overage into GB*100 meter units.
+                // This is the only place integer division occurs, so sub-10MB bytes
+                // that cannot form a full unit remain in pending_overage_bytes for the
+                // next flush cycle rather than being silently dropped.
+                val pendingBytes = row[Subscriptions.pending_overage_bytes]
+                val drainableUnits = pendingBytes / (BYTES_PER_GB / 100)
+                if (drainableUnits > 0) {
+                    val remainingBytes = pendingBytes - drainableUnits * (BYTES_PER_GB / 100)
+                    Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                        it[pending_meter_units] = row[Subscriptions.pending_meter_units] + drainableUnits
+                        it[pending_overage_bytes] = remainingBytes
+                    }
+                }
+
+                val pendingUnits = row[Subscriptions.pending_meter_units] + drainableUnits
                 if (pendingUnits <= 0) return@transaction null
 
                 val existingBatchId = row[Subscriptions.pending_meter_batch_id]
@@ -1278,5 +1293,6 @@ class StripeService(
 
     companion object {
         private val TERMINAL_WEBHOOK_STATUSES = listOf("processed", "success", "skipped")
+        private const val BYTES_PER_GB = 1_073_741_824L
     }
 }

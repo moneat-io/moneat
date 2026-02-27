@@ -1129,12 +1129,12 @@ class BillingQuotaServiceTest {
         )
 
         assertTrue(result.allowed, "Should allow with PAYG budget")
-        val pendingMeterUnits = transaction {
+        val pendingOverageBytes = transaction {
             Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
-                .first()[Subscriptions.pending_meter_units]
+                .first()[Subscriptions.pending_overage_bytes]
         }
-        assertTrue(pendingMeterUnits > 0,
-            "Pending meter units should be incremented for ingestion overage")
+        assertTrue(pendingOverageBytes > 0,
+            "Pending overage bytes should be incremented for ingestion overage")
     }
 
     // ============ Analytics Pageview Quota Tests ============

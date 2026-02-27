@@ -254,13 +254,11 @@ class BillingQuotaService(
                     )
                 )
 
-                // Convert byte overage to unit-equivalent for Stripe metering
-                // pending_meter_units tracks overage in GB * 100 for precision
-                val overageGbDelta = ingestionOverageByteDelta / (BYTES_PER_GB / 100)
-                if (overageGbDelta > 0) {
-                    Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
-                        it[pending_meter_units] = state.pendingMeterUnits + overageGbDelta
-                    }
+                // Accumulate raw byte overage in pending_overage_bytes for precision.
+                // Conversion to GB*100 meter units happens at flush time so that
+                // sub-10MB increments are never silently dropped by integer division.
+                Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
+                    it[pending_overage_bytes] = state.pendingOverageBytes + ingestionOverageByteDelta
                 }
             }
 
@@ -405,6 +403,7 @@ class BillingQuotaService(
             }
 
             if (state.subscriptionId != null) {
+                // PAYG refund: unit-count-based, for legacy PAYG subscriptions
                 val overageBefore = max(0, totalBefore - state.baseLimitUnits)
                 val overageAfter = max(0, totalAfter - state.baseLimitUnits)
                 val overageRefundDelta = (overageBefore - overageAfter).coerceAtLeast(0)
@@ -413,7 +412,18 @@ class BillingQuotaService(
                     Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
                         it[payg_used_units] = (state.paygUsedUnits - overageRefundDelta).coerceAtLeast(0)
                         it[payg_used_micros] = (state.paygUsedMicros - overageMicrosRefund).coerceAtLeast(0)
-                        it[pending_meter_units] = (state.pendingMeterUnits - overageRefundDelta).coerceAtLeast(0)
+                    }
+                }
+                // Byte-based meter refund: mirrors the byte accumulation in reserveUnits
+                if (requestedBytes > 0 && state.bytesLimit > 0) {
+                    val byteOverageBefore = max(0, state.usedBytes - state.bytesLimit)
+                    val byteOverageAfter = max(0, bytesAfter - state.bytesLimit)
+                    val byteOverageRefundDelta = (byteOverageBefore - byteOverageAfter).coerceAtLeast(0)
+                    if (byteOverageRefundDelta > 0) {
+                        Subscriptions.update({ Subscriptions.id eq state.subscriptionId }) {
+                            it[pending_overage_bytes] =
+                                (state.pendingOverageBytes - byteOverageRefundDelta).coerceAtLeast(0)
+                        }
                     }
                 }
                 if (normalizedType == "custom_metric" && state.customMetricLimit >= 0) {
@@ -467,6 +477,7 @@ class BillingQuotaService(
         val paygUsedUnits: Long,
         val paygUsedMicros: Long,
         val pendingMeterUnits: Long,
+        val pendingOverageBytes: Long,
         val paygRateMicrosPerUnit: Long,
         val paygLimitBytes: Long,
         val oncallSeats: Int,
@@ -686,6 +697,7 @@ class BillingQuotaService(
             paygUsedUnits = sub?.get(Subscriptions.payg_used_units) ?: 0,
             paygUsedMicros = sub?.get(Subscriptions.payg_used_micros) ?: 0,
             pendingMeterUnits = sub?.get(Subscriptions.pending_meter_units) ?: 0,
+            pendingOverageBytes = sub?.get(Subscriptions.pending_overage_bytes) ?: 0,
             paygRateMicrosPerUnit = paygRateMicros,
             paygLimitBytes = paygLimitBytes,
             oncallSeats = sub?.get(Subscriptions.oncall_seats) ?: 0,

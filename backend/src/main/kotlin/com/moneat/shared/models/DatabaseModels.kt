@@ -303,6 +303,7 @@ object Subscriptions : Table("subscriptions") {
     val payg_used_units = long("payg_used_units").default(0)
     val payg_used_micros = long("payg_used_micros").default(0)
     val pending_meter_units = long("pending_meter_units").default(0)
+    val pending_overage_bytes = long("pending_overage_bytes").default(0)
     val pending_meter_batch_id = varchar("pending_meter_batch_id", 255).nullable()
     val pending_meter_batch_units = long("pending_meter_batch_units").default(0)
     val pending_apm_span_overage_units = long("pending_apm_span_overage_units").default(0)
