@@ -2,7 +2,7 @@
 
 ## Investigating an Error Spike
 
-```
+```text
 User: "There's been a spike in errors for project 42. What's happening?"
 
 Agent calls: list_issues(project_id=42, status="unresolved", limit=10)
@@ -21,7 +21,7 @@ into application errors."
 
 ## Creating a Dashboard
 
-```
+```text
 User: "Create a dashboard to monitor our API performance"
 
 Agent calls: create_dashboard(name="API Performance Overview")
@@ -31,7 +31,7 @@ You can now add widgets to it via the Moneat dashboard UI."
 
 ## Triaging an On-Call Incident
 
-```
+```text
 User: "What incidents are currently active?"
 
 Agent calls: list_incidents(status="triggered")
@@ -57,7 +57,7 @@ This appears to be caused by a long-running query blocking the connection pool."
 
 ## Checking Uptime Status
 
-```
+```text
 User: "Are all our uptime monitors healthy?"
 
 Agent calls: list_uptime_monitors()
@@ -83,7 +83,7 @@ database incident - the payments service likely depends on the affected database
 
 ## Global Search
 
-```
+```text
 User: "Search for anything related to 'timeout' across our infrastructure"
 
 Agent calls: global_search(query="timeout", limit=5)
