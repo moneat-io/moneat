@@ -185,6 +185,8 @@ export function LogExplorer({
   const [accumulatedLogs, setAccumulatedLogs] = useState<LogEntry[]>([])
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const scrollSentinelRef = useRef<HTMLDivElement>(null)
+  // Tracks whether the next logPage load should replace (reset) or append (infinite scroll)
+  const isReplacingRef = useRef(true)
 
   // Detail panel
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
@@ -251,10 +253,15 @@ export function LogExplorer({
         selectedLogId: selectedLog?.logId || null,
       })
       
+      // Prevent our own navigate() from triggering the hydration effect and resetting state
+      isHydratingRef.current = true
       navigate({
         search: newSearch as never,
         replace: true,
       })
+      setTimeout(() => {
+        isHydratingRef.current = false
+      }, 100)
     }, 300)
     
     return () => {
@@ -325,6 +332,7 @@ export function LogExplorer({
 
   // Reset pagination when filters change
   useEffect(() => {
+    isReplacingRef.current = true
     startTransition(() => {
       setCursor(null)
       setCursorHistory([])
@@ -399,11 +407,12 @@ export function LogExplorer({
     if (!logPage?.logs) return
     
     startTransition(() => {
-      // If cursor is null, this is the first page (or reset), so replace
-      if (cursor === null) {
+      if (isReplacingRef.current) {
+        // First page (or reset): replace accumulated logs
         setAccumulatedLogs(logPage.logs)
+        isReplacingRef.current = false
       } else {
-        // Otherwise, append only unseen entries (prevents duplicates on refetch)
+        // Infinite scroll: append only unseen entries (prevents duplicates on refetch)
         setAccumulatedLogs((prev) => {
           const seen = new Set(prev.map((log) => `${log.logId}:${log.timestamp}`))
           const next = logPage.logs.filter((log) => !seen.has(`${log.logId}:${log.timestamp}`))
@@ -412,7 +421,7 @@ export function LogExplorer({
       }
       setIsLoadingMore(false)
     })
-  }, [logPage, cursor])
+  }, [logPage])
   
   const logs = accumulatedLogs
   const totalCount = logPage?.totalCount ?? null
@@ -565,6 +574,7 @@ export function LogExplorer({
         const [entry] = entries
         if (entry.isIntersecting && logPage?.hasMore && !isLoadingMore && !isFetching) {
           if (!logPage?.nextCursor || isLoadingMore) return
+          isReplacingRef.current = false
           setIsLoadingMore(true)
           setCursorHistory((current) => [...current, cursor])
           setCursor(logPage.nextCursor)

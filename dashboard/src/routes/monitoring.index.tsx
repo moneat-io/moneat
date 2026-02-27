@@ -1163,34 +1163,64 @@ type StatusFilter = 'all' | 'online' | 'offline'
 type SortField = 'hostname' | 'cores' | 'memory' | 'lastSeen'
 type SortDir = 'asc' | 'desc'
 
-function getDockerRunCommand(apiKey: string, enableContainerMonitoring: boolean): string {
+type AgentOptions = {
+  container: boolean
+  apm: boolean
+  logs: boolean
+  processes: boolean
+}
+
+function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
-  const dockerSocket = enableContainerMonitoring
+  
+  let envs = `  -e DD_API_KEY="${apiKey}" \\\n  -e DD_DD_URL="${ingestUrl}" \\`
+  
+  if (options.apm) {
+    envs += `\n  -e DD_APM_ENABLED=true \\\n  -e DD_APM_DD_URL="${ingestUrl}" \\`
+  }
+  
+  if (options.logs) {
+    envs += `\n  -e DD_LOGS_ENABLED=true \\\n  -e DD_LOGS_CONFIG_DD_URL="${ingestUrl}" \\`
+  }
+  
+  if (options.processes) {
+    envs += `\n  -e DD_PROCESS_AGENT_ENABLED=true \\\n  -e DD_PROCESS_CONFIG_PROCESS_DD_URL="${ingestUrl}" \\`
+  }
+
+  const dockerSocket = options.container
     ? `\n  -v /var/run/docker.sock:/var/run/docker.sock:ro \\`
     : ''
+    
   return `docker run -d \\
   --name dd-agent \\
   --restart always \\
   --network host \\
-  -e DD_API_KEY="${apiKey}" \\
-  -e DD_DD_URL="${ingestUrl}" \\
-  -e DD_APM_DD_URL="${ingestUrl}" \\
-  -e DD_PROCESS_CONFIG_PROCESS_DD_URL="${ingestUrl}" \\${dockerSocket}
+${envs}${dockerSocket}
   -v /proc/:/host/proc/:ro \\
   -v /sys/:/host/sys/:ro \\
   gcr.io/datadoghq/agent:7`
 }
 
-function getDockerComposeCommand(apiKey: string, enableContainerMonitoring: boolean): string {
+function getDockerComposeCommand(apiKey: string, options: AgentOptions): string {
   const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
-  const volumes = enableContainerMonitoring
-    ? `    volumes:
-      - /proc/:/host/proc/:ro
-      - /sys/:/host/sys/:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro`
-    : `    volumes:
-      - /proc/:/host/proc/:ro
-      - /sys/:/host/sys/:ro`
+  
+  let envs = `      - DD_API_KEY=${apiKey}\n      - DD_DD_URL=${ingestUrl}`
+  
+  if (options.apm) {
+    envs += `\n      - DD_APM_ENABLED=true\n      - DD_APM_DD_URL=${ingestUrl}`
+  }
+  
+  if (options.logs) {
+    envs += `\n      - DD_LOGS_ENABLED=true\n      - DD_LOGS_CONFIG_DD_URL=${ingestUrl}`
+  }
+  
+  if (options.processes) {
+    envs += `\n      - DD_PROCESS_AGENT_ENABLED=true\n      - DD_PROCESS_CONFIG_PROCESS_DD_URL=${ingestUrl}`
+  }
+
+  const volumes = options.container
+    ? `    volumes:\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro\n      - /var/run/docker.sock:/var/run/docker.sock:ro`
+    : `    volumes:\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro`
 
   return `cat > docker-compose.yml <<'EOF'
 services:
@@ -1201,10 +1231,7 @@ services:
     network_mode: host
 ${volumes}
     environment:
-      - DD_API_KEY=${apiKey}
-      - DD_DD_URL=${ingestUrl}
-      - DD_APM_DD_URL=${ingestUrl}
-      - DD_PROCESS_CONFIG_PROCESS_DD_URL=${ingestUrl}
+${envs}
 EOF
 
 docker compose up -d`
@@ -1215,7 +1242,12 @@ function AddHostDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: boo
   const queryClient = useQueryClient()
   const [keyName, setKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
-  const [containerMonitoringEnabled, setContainerMonitoringEnabled] = useState(true)
+  const [options, setOptions] = useState<AgentOptions>({
+    container: true,
+    apm: true,
+    logs: false,
+    processes: true,
+  })
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [copied, setCopied] = useState(false)
   const [installType, setInstallType] = useState<'docker' | 'compose'>('docker')
@@ -1271,7 +1303,12 @@ function AddHostDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: boo
     setTimeout(() => {
       setCreatedKey(null)
       setKeyName('')
-      setContainerMonitoringEnabled(true)
+      setOptions({
+        container: true,
+        apm: true,
+        logs: false,
+        processes: true,
+      })
       setCopied(false)
     }, 200)
   }
@@ -1279,8 +1316,8 @@ function AddHostDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: boo
   const handleCopyCommand = async () => {
     if (createdKey) {
       const command = installType === 'docker'
-        ? getDockerRunCommand(createdKey, containerMonitoringEnabled)
-        : getDockerComposeCommand(createdKey, containerMonitoringEnabled)
+        ? getDockerRunCommand(createdKey, options)
+        : getDockerComposeCommand(createdKey, options)
       await navigator.clipboard.writeText(command)
       setCopied(true)
       toast({title: 'Copied!', description: 'Command copied to clipboard'})
@@ -1348,18 +1385,58 @@ function AddHostDialog({isOpen, setIsOpen}: {isOpen: boolean; setIsOpen: (v: boo
                   <Terminal className="h-3.5 w-3.5 text-blue-500" />
                   Installation Command
                 </Label>
-                <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 px-3 py-2.5">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">Enable container monitoring</p>
-                    <p className="text-xs text-muted-foreground">
-                      Mounts Docker socket for container metrics and stats.
-                    </p>
+                <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Container Monitoring</p>
+                      <p className="text-xs text-muted-foreground">
+                        Mounts Docker socket for container metrics and stats.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={options.container}
+                      onCheckedChange={(c) => setOptions({...options, container: c})}
+                    />
                   </div>
-                  <Switch
-                    checked={containerMonitoringEnabled}
-                    onCheckedChange={setContainerMonitoringEnabled}
-                    aria-label="Toggle container monitoring"
-                  />
+                  
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">APM & Profiling</p>
+                      <p className="text-xs text-muted-foreground">
+                        Enable tracing and continuous profiling collection.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={options.apm}
+                      onCheckedChange={(c) => setOptions({...options, apm: c})}
+                    />
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Log Collection</p>
+                      <p className="text-xs text-muted-foreground">
+                        Enable log forwarding from containers and files.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={options.logs}
+                      onCheckedChange={(c) => setOptions({...options, logs: c})}
+                    />
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Live Processes</p>
+                      <p className="text-xs text-muted-foreground">
+                        Monitor running processes and their resource usage.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={options.processes}
+                      onCheckedChange={(c) => setOptions({...options, processes: c})}
+                    />
+                  </div>
                 </div>
                 <Tabs value={installType} onValueChange={(v) => setInstallType(v as 'docker' | 'compose')} className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
@@ -1510,7 +1587,7 @@ function SortIndicator({field, sortField, sortDir}: {field: SortField; sortField
   return <span className="ml-1 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
 }
 
-function HostCard({host}: {host: DdHostResponse}) {
+function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number, name: string) => void}) {
   const online = isOnline(host.lastSeenAt)
 
   return (
@@ -1548,23 +1625,37 @@ function HostCard({host}: {host: DdHostResponse}) {
                 )}
               </div>
             </div>
-            <Badge
-              variant={online ? 'default' : 'secondary'}
-              className={cn(
-                'text-xs shrink-0',
-                online
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/20'
-                  : 'bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/20 border-red-500/20'
-              )}
-            >
-              <div
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge
+                variant={online ? 'default' : 'secondary'}
                 className={cn(
-                  'h-1.5 w-1.5 rounded-full mr-1.5',
-                  online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                  'text-xs',
+                  online
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/20'
+                    : 'bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/20 border-red-500/20'
                 )}
-              />
-              {online ? 'up' : 'down'}
-            </Badge>
+              >
+                <div
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full mr-1.5',
+                    online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                  )}
+                />
+                {online ? 'up' : 'down'}
+              </Badge>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onDelete(host.id, host.hostname)
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -1639,22 +1730,22 @@ function HostCard({host}: {host: DdHostResponse}) {
 
           {/* Secondary Metrics */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-muted-foreground">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
                 <Microchip className="h-3.5 w-3.5 text-violet-500" />
                 <span className="text-xs">Processor</span>
               </div>
-              <span className="font-mono text-xs font-medium truncate max-w-[120px]" title={host.processor}>
+              <span className="font-mono text-xs font-medium truncate" title={host.processor}>
                 {host.processor || '—'}
               </span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-muted-foreground">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
                 <Network className="h-3.5 w-3.5 text-sky-500" />
                 <span className="text-xs">Platform</span>
               </div>
-              <span className="font-mono text-xs font-medium truncate max-w-[120px]" title={host.platform}>
+              <span className="font-mono text-xs font-medium truncate" title={host.platform}>
                 {host.platform || host.os || '—'}
               </span>
             </div>
@@ -1752,6 +1843,30 @@ function MonitoringHostsPage() {
     } else {
       setSortField(field)
       setSortDir(field === 'hostname' ? 'asc' : 'desc')
+    }
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: (hostId: number) => api.deleteHost(hostId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['hosts']})
+      toast({
+        title: 'Host deleted',
+        description: 'The host has been removed from monitoring.',
+      })
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete host. Please try again.',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const handleDelete = (hostId: number, hostName: string) => {
+    if (confirm(`Are you sure you want to delete "${hostName}"? This cannot be undone.`)) {
+      deleteMutation.mutate(hostId)
     }
   }
 
@@ -1931,7 +2046,7 @@ function MonitoringHostsPage() {
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map((host) => (
-              <HostCard key={host.id} host={host} />
+              <HostCard key={host.id} host={host} onDelete={handleDelete} />
             ))}
           </div>
         ) : (
@@ -1972,6 +2087,7 @@ function MonitoringHostsPage() {
                       Last Seen
                       <SortIndicator field="lastSeen" sortField={sortField} sortDir={sortDir} />
                     </TableHead>
+                    <TableHead className="pr-4 text-right w-[80px]">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2110,6 +2226,21 @@ function MonitoringHostsPage() {
 
                         <TableCell className="text-right pr-4 text-xs text-muted-foreground">
                           {host.lastSeenAt ? formatRelativeTime(host.lastSeenAt) : 'Never seen'}
+                        </TableCell>
+
+                        <TableCell className="pr-4 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDelete(host.id, host.hostname)
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     )
