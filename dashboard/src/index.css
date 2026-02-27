@@ -178,15 +178,52 @@
   }
 }
 
-/* Retro theme specific overrides */
-.theme-retro .border,
-.theme-retro [class*="border-"] {
+/* Retro theme specific overrides – thicken borders per-direction only */
+.theme-retro .border {
   border-width: 2px;
+}
+.theme-retro .border-t {
+  border-top-width: 2px;
+}
+.theme-retro .border-r {
+  border-right-width: 2px;
+}
+.theme-retro .border-b {
+  border-bottom-width: 2px;
+}
+.theme-retro .border-l {
+  border-left-width: 2px;
+}
+.theme-retro .border-x {
+  border-left-width: 2px;
+  border-right-width: 2px;
+}
+.theme-retro .border-y {
+  border-top-width: 2px;
+  border-bottom-width: 2px;
+}
+
+/* Retro: everything square (except rounded-full for avatars/pills) */
+.theme-retro .rounded-xs,
+.theme-retro .rounded-sm,
+.theme-retro .rounded-md,
+.theme-retro .rounded-lg,
+.theme-retro .rounded-xl,
+.theme-retro .rounded-2xl,
+.theme-retro .rounded-3xl {
+  border-radius: 0;
+}
+
+/* Sidebar: drop the right border and use a hard shadow edge instead */
+.theme-retro .sidebar {
+  border-right-width: 0;
+  box-shadow: 2px 0 0 0 hsl(var(--foreground));
 }
 
 .theme-retro .card,
 .theme-retro .popover,
 .theme-retro .dialog-content {
+  border-radius: 0;
   box-shadow: 4px 4px 0px 0px hsl(var(--foreground));
 }
 
