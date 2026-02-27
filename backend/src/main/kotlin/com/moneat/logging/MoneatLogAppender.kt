@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
 
 class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     var endpoint: String = "https://api.moneat.io/v1/logs/otlp"
-    var dsn: String = ""
+    var token: String = ""
     var serviceName: String = "moneat-backend"
     var environment: String = "development"
 
@@ -51,8 +51,8 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
     override fun start() {
         super.start()
-        if (dsn.isBlank()) {
-            dsn = System.getenv("MONEAT_LOGS_DSN") ?: System.getProperty("MONEAT_LOGS_DSN") ?: ""
+        if (token.isBlank()) {
+            token = System.getenv("MONEAT_LOGS_TOKEN") ?: System.getProperty("MONEAT_LOGS_TOKEN") ?: ""
         }
         if (endpoint.isBlank() || endpoint == "https://api.moneat.io/v1/logs/otlp") {
             val envEndpoint = System.getenv("MONEAT_LOGS_ENDPOINT") ?: System.getProperty("MONEAT_LOGS_ENDPOINT")
@@ -64,17 +64,17 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             )
             return
         }
-        if (dsn.isBlank()) {
-            System.err.println("[MoneatLogAppender] WARNING: DSN is blank - logs will NOT be shipped to remote")
+        if (token.isBlank()) {
+            System.err.println("[MoneatLogAppender] WARNING: token is blank - logs will NOT be shipped to remote")
         } else {
             System.err.println(
-                "[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, environment=$environment, dsn=<set>"
+                "[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, environment=$environment, token=<set>"
             )
         }
     }
 
     override fun append(event: ILoggingEvent) {
-        if (dsn.isBlank() || (environment == "development" && isProdEndpoint)) return
+        if (token.isBlank() || (environment == "development" && isProdEndpoint)) return
 
         (event as? DeferredProcessingAware)?.prepareForDeferredProcessing()
 
@@ -118,7 +118,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         try {
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("X-Moneat-Dsn", dsn)
+            connection.setRequestProperty("Authorization", "Bearer $token")
             connection.doOutput = true
             connection.connectTimeout = 1000
             connection.readTimeout = 1000
