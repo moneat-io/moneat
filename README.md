@@ -410,3 +410,9 @@ Copyright © 2026 Moneat
 All code in this repository is licensed under the [GNU Affero General Public License v3.0](LICENSE). Self-host, modify, and redistribute freely — modifications must be shared under the same license when used to provide a network service.
 
 For licensing questions, contact [licensing@moneat.io](mailto:licensing@moneat.io).
+
+---
+
+## Trademarks
+
+Sentry is a registered trademark of Functional Software, Inc. Datadog is a registered trademark of Datadog, Inc. PagerDuty is a registered trademark of PagerDuty, Inc. All other trademarks are the property of their respective owners. Moneat is not affiliated with, endorsed by, or sponsored by any of these companies. Use of these names is solely for the purpose of describing compatibility.

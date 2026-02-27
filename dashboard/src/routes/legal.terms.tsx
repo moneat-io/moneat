@@ -120,6 +120,17 @@ function TermsOfUsePage() {
           </section>
 
           <section className="space-y-2">
+            <h2 className="text-lg font-semibold">11. Trademarks</h2>
+            <p>
+              Sentry is a registered trademark of Functional Software, Inc. Datadog is a registered trademark of
+              Datadog, Inc. PagerDuty is a registered trademark of PagerDuty, Inc. All other trademarks and service
+              marks are the property of their respective owners. Moneat is not affiliated with, endorsed by, or
+              sponsored by any of these companies. Use of these names is solely for the purpose of describing
+              compatibility with their respective products and protocols.
+            </p>
+          </section>
+
+          <section className="space-y-2">
             <h2 className="text-lg font-semibold">12. Changes to These Terms</h2>
             <p>
               We may update these terms over time. Material updates will be reflected by a new Last Updated date and version. Continued use of Moneat after updates constitutes acceptance of revised terms.

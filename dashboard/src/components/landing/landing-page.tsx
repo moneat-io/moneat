@@ -235,7 +235,10 @@ export function LandingPage() {
               &copy; {new Date().getFullYear()} Moneat. All rights reserved.
             </p>
             <p className="text-xs text-slate-500">
-              Works with Sentry SDKs &amp; Datadog Agent. Switch in minutes.
+              Compatible with Sentry&reg; SDKs &amp; Datadog&reg; Agent. Switch in minutes.
+              Sentry is a registered trademark of Functional Software, Inc.
+              Datadog is a registered trademark of Datadog, Inc.
+              Moneat is not affiliated with or endorsed by either company.
             </p>
           </div>
         </div>

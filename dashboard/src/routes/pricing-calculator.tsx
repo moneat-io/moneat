@@ -114,6 +114,11 @@ function PricingCalculatorPage() {
           <p className="text-xs text-slate-500">
             &copy; {new Date().getFullYear()} Moneat. All rights reserved.
           </p>
+          <p className="text-xs text-slate-500">
+            Sentry&reg; is a registered trademark of Functional Software, Inc.
+            Datadog&reg; is a registered trademark of Datadog, Inc.
+            Moneat is not affiliated with or endorsed by either company.
+          </p>
         </div>
       </footer>
     </article>

@@ -124,7 +124,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Moneat. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Moneat. Sentry® and Datadog® are trademarks of their respective owners. Moneat is not affiliated with Sentry or Datadog.`,
     },
     prism: {
       theme: prismThemes.github,
