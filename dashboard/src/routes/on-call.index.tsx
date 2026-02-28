@@ -27,8 +27,7 @@ const getPriorityConfig = (priority: string) => {
 }
 
 const getStatusConfig = (status: string) => {
-  if (status === 'TRIGGERED') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', label: 'Triggered', icon: Zap}
-  if (status === 'ACKNOWLEDGED') return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', label: 'Acknowledged', icon: Clock}
+  if (status === 'OPEN') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', label: 'Open', icon: Zap}
   return {color: 'bg-green-500/15 text-green-400 border-green-500/30', label: 'Resolved', icon: CheckCircle2}
 }
 
@@ -50,8 +49,8 @@ function OnCallOverview() {
   })
 
   const {data: incidents, isLoading: incidentsLoading} = useQuery({
-    queryKey: ['incidents', {status: 'TRIGGERED'}],
-    queryFn: () => api.getIncidents({status: 'TRIGGERED'}),
+    queryKey: ['on-call-incidents', {status: 'OPEN'}],
+    queryFn: () => api.getOnCallIncidents({status: 'OPEN'}),
   })
 
   const {data: policies, isLoading: policiesLoading} = useQuery({
@@ -69,7 +68,7 @@ function OnCallOverview() {
     queryFn: () => api.getBusinessHours(),
   })
 
-  const activeIncidents = incidents?.filter((i) => i.status === 'TRIGGERED' || i.status === 'ACKNOWLEDGED') || []
+  const activeIncidents = incidents?.filter((i) => i.status === 'OPEN') || []
   const hasActiveIncidents = activeIncidents.length > 0
 
   // Determine which schedules the current user is on-call for
@@ -236,7 +235,7 @@ function OnCallOverview() {
                       return (
                         <Link
                           key={incident.id}
-                          to="/on-call/incidents/$incidentId"
+                          to="/on-call/declared-incidents/$incidentId"
                           params={{incidentId: String(incident.id)}}
                           className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
                         >
@@ -274,7 +273,7 @@ function OnCallOverview() {
                       return (
                         <Link
                           key={incident.id}
-                          to="/on-call/incidents/$incidentId"
+                          to="/on-call/declared-incidents/$incidentId"
                           params={{incidentId: String(incident.id)}}
                           className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
                         >
@@ -408,7 +407,7 @@ function OnCallOverview() {
                 Active Incidents
               </CardTitle>
               <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-                <Link to="/on-call/incidents">
+                <Link to="/on-call/declared-incidents">
                   View all <ArrowUpRight className="h-3 w-3 ml-1" />
                 </Link>
               </Button>
@@ -423,7 +422,7 @@ function OnCallOverview() {
                 return (
                   <Link
                     key={incident.id}
-                    to="/on-call/incidents/$incidentId"
+                    to="/on-call/declared-incidents/$incidentId"
                     params={{incidentId: String(incident.id)}}
                     className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-all group"
                   >
@@ -432,7 +431,7 @@ function OnCallOverview() {
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate group-hover:text-foreground">{incident.title}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(incident.triggeredAt).toLocaleString()}
+                          {new Date(incident.declaredAt).toLocaleString()}
                         </p>
                       </div>
                     </div>
