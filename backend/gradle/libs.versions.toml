@@ -73,7 +73,7 @@ oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
 stripe-java = { module = "com.stripe:stripe-java", version = "31.3.0" }
 
 # JWT
-java-jwt = { module = "com.auth0:java-jwt", version = "4.4.0" }
+java-jwt = { module = "com.auth0:java-jwt", version = "4.5.1" }
 
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.11" }
