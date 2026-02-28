@@ -2981,8 +2981,24 @@ class ApiClient {
   }
 
   async checkAuth(): Promise<boolean> {
+    const impersonateToken = this.getImpersonateToken()
+    const headers: Record<string, string> = {}
+    if (impersonateToken) {
+      headers['Authorization'] = `Bearer ${impersonateToken}`
+    }
+
     try {
-      await this.getCurrentUser()
+      const response = await fetch(`${API_BASE}/user`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        sessionStorage.removeItem('authenticated')
+        return false
+      }
+
       sessionStorage.setItem('authenticated', 'true')
       return true
     } catch {

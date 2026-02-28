@@ -9,6 +9,7 @@ const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
   mockToast: vi.fn(),
   mockApi: {
     isAuthenticated: vi.fn(),
+    checkAuth: vi.fn(),
     getProjects: vi.fn(),
     getIssues: vi.fn(),
     getProjectStats: vi.fn(),
@@ -31,6 +32,10 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: mockToast }),
+}))
+
+vi.mock('@/hooks/useEnterpriseFeatures', () => ({
+  useHasModule: () => false,
 }))
 
 vi.mock('@/components/charts/stats-card', () => ({
@@ -98,6 +103,7 @@ describe('priority route coverage', () => {
     localStorage.clear()
 
     mockApi.isAuthenticated.mockReturnValue(true)
+    mockApi.checkAuth.mockResolvedValue(true)
     mockApi.getProjects.mockResolvedValue([])
     mockApi.getIssues.mockResolvedValue([])
     mockApi.getProjectStats.mockResolvedValue(null)
@@ -123,6 +129,7 @@ describe('priority route coverage', () => {
 
   it('issues and issue detail route guards redirect unauthenticated users', async () => {
     mockApi.isAuthenticated.mockReturnValue(false)
+    mockApi.checkAuth.mockResolvedValue(false)
 
     await expect(
       (
@@ -132,7 +139,13 @@ describe('priority route coverage', () => {
       to: '/login',
     })
 
-    expect(() => (IssueDetailRoute as { beforeLoad: () => void }).beforeLoad()).toThrow()
+    await expect(
+      (
+        IssueDetailRoute as { beforeLoad: (opts: { location: { href: string } }) => Promise<unknown> }
+      ).beforeLoad({ location: { href: 'http://localhost:5173/issues/issue-123' } })
+    ).rejects.toMatchObject({
+      to: '/login',
+    })
   })
 
   it('issues route renders empty project state', async () => {
