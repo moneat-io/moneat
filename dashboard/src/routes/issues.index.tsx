@@ -44,7 +44,7 @@ import {
   TrendingUp,
   Users
 } from 'lucide-react'
-import {useState} from 'react'
+import {useState, useMemo} from 'react'
 import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
 import {useToast} from '@/hooks/use-toast'
@@ -169,10 +169,6 @@ export const Route = createFileRoute('/issues/')({
 function IndexPage() {
   const hasDatadog = useHasModule('datadog')
 
-  if (!hasDatadog) {
-    return <DashboardPage />
-  }
-
   return (
     <Tabs defaultValue="issues" className="min-h-screen">
       <div className="border-b px-6">
@@ -190,12 +186,14 @@ function IndexPage() {
           >
             <Cpu className="h-4 w-4 mr-1.5" />
             APM Errors
-            <Badge
-              variant="outline"
-              className="ml-1.5 text-[10px] px-1.5 py-0 font-normal"
-            >
-              Datadog
-            </Badge>
+            {hasDatadog && (
+              <Badge
+                variant="outline"
+                className="ml-1.5 text-[10px] px-1.5 py-0 font-normal"
+              >
+                Datadog
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
       </div>
@@ -591,13 +589,31 @@ function DashboardPage() {
 const APM_ERRORS_PAGE_SIZE = 50
 
 function ApmErrorsTab() {
-  const [serviceFilter, setServiceFilter] = useState('')
+  const [selectedService, setSelectedService] = useState<string>('all')
   const [offset, setOffset] = useState(0)
 
+  // Fetch all errors (no filter) to derive the service list
+  const { data: allErrorsData } = useQuery({
+    queryKey: ['apm-errors-all'],
+    queryFn: () => api.getApmErrors({ limit: 500 }),
+    enabled: api.isAuthenticated(),
+    refetchInterval: 30000,
+  })
+
+  const services = useMemo(() => {
+    const countByService = new Map<string, number>()
+    for (const err of allErrorsData?.errors ?? []) {
+      countByService.set(err.service, (countByService.get(err.service) ?? 0) + err.count)
+    }
+    return Array.from(countByService.entries())
+      .map(([service, count]) => ({ service, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [allErrorsData])
+
   const { data, isLoading } = useQuery({
-    queryKey: ['apm-errors', serviceFilter, offset],
+    queryKey: ['apm-errors', selectedService, offset],
     queryFn: () => api.getApmErrors({
-      service: serviceFilter || undefined,
+      service: selectedService === 'all' ? undefined : selectedService,
       limit: APM_ERRORS_PAGE_SIZE,
       offset,
     }),
@@ -614,25 +630,81 @@ function ApmErrorsTab() {
     setOffset(0)
   }
 
+  function handleServiceChange(service: string) {
+    setSelectedService(service)
+    setOffset(0)
+  }
+
+  const MAX_VISIBLE_TABS = 5
+  const visibleServices = services.slice(0, MAX_VISIBLE_TABS)
+  const overflowServices = services.slice(MAX_VISIBLE_TABS)
+  const overflowSelected = overflowServices.some((s) => s.service === selectedService)
+
   return (
     <div className="px-6 py-4">
-      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">APM Errors</h2>
-          <p className="text-sm text-muted-foreground">
-            Errors extracted from Datadog APM spans
-          </p>
-        </div>
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Filter by service..."
-            value={serviceFilter}
-            onChange={(e) => { setServiceFilter(e.target.value); setOffset(0) }}
-            className="pl-10"
-          />
-        </div>
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold tracking-tight">APM Errors</h2>
+        <p className="text-sm text-muted-foreground">
+          Errors extracted from Datadog APM spans
+        </p>
       </div>
+
+      {services.length > 0 && (
+        <div className="flex items-end gap-0 mb-4 border-b border-border/60">
+          <button
+            onClick={() => handleServiceChange('all')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
+              selectedService === 'all'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30',
+            )}
+          >
+            All
+          </button>
+          {visibleServices.map((svc) => (
+            <button
+              key={svc.service}
+              onClick={() => handleServiceChange(svc.service)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
+                selectedService === svc.service
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30',
+              )}
+            >
+              <Server className="h-3 w-3" />
+              {svc.service}
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {svc.count}
+              </span>
+            </button>
+          ))}
+          {overflowServices.length > 0 && (
+            <div className={cn('pb-0.5 ml-1', overflowSelected && 'border-b-2 border-primary -mb-px')}>
+              <Select
+                value={overflowSelected ? selectedService : ''}
+                onValueChange={(val) => handleServiceChange(val)}
+              >
+                <SelectTrigger className="h-8 text-sm border-0 shadow-none px-2 gap-1 text-muted-foreground hover:text-foreground focus:ring-0 w-auto">
+                  <SelectValue placeholder={`+${overflowServices.length} more`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {overflowServices.map((svc) => (
+                    <SelectItem key={svc.service} value={svc.service}>
+                      <span className="flex items-center gap-2">
+                        <Server className="h-3 w-3" />
+                        {svc.service}
+                        <span className="text-xs text-muted-foreground tabular-nums">{svc.count}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="py-16 text-center text-muted-foreground">
