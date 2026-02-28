@@ -548,7 +548,6 @@ fun Route.adminRoutes() {
                                                 level = "error",
                                                 culprit = "com.example.UserService.getUser",
                                                 issueId = 12345L,
-                                                projectId = 1L,
                                                 baseUrl = frontendUrl,
                                                 occurrenceCount = 42,
                                                 environment = "production",
