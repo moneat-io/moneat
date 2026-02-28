@@ -108,6 +108,7 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_llm_events = long("used_llm_events").default(0)
     val used_logs = long("used_logs").default(0)
     val used_bytes = long("used_bytes").default(0)
+    val used_apm_span_bytes = long("used_apm_span_bytes").default(0)
     val used_error_bytes = long("used_error_bytes").default(0)
     val used_replay_bytes = long("used_replay_bytes").default(0)
     val used_log_bytes = long("used_log_bytes").default(0)

@@ -837,6 +837,21 @@ function UsageTab() {
       unit: 'events',
     },
     {
+      key: 'apm_span',
+      label: 'APM Spans',
+      used: usage.usedApmSpans ?? 0,
+      limit: usage.apmSpanLimit ?? 0,
+      icon: Activity,
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-500',
+      retentionDays: usage.retentionDays,
+      overageCents: usage.apmSpanOverageCentsEstimate ?? 0,
+      overageRate: usage.apmSpanOverageRateCentsPer1m
+        ? `$${(usage.apmSpanOverageRateCentsPer1m / 100).toFixed(2)}/1M`
+        : null,
+      unit: 'events',
+    },
+    {
       key: 'analytics',
       label: 'Analytics Pageviews',
       used: usage.usedAnalyticsPageviews ?? 0,
