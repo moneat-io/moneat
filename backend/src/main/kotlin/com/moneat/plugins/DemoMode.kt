@@ -32,6 +32,7 @@ private val demoUserId = EnvConfig.Demo.USER_ID
 private val demoUserEmail = EnvConfig.Demo.USER_EMAIL
 private val demoSafeWritePaths =
     setOf(
+        "/auth/login",
         "/auth/demo-login",
         "/auth/demo-refresh",
         "/auth/refresh",
