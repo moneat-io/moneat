@@ -211,22 +211,54 @@ export function AgentApiKeysTab() {
             <pre className="text-xs bg-muted px-3 py-2 rounded-md break-all whitespace-pre-wrap font-mono">
 {`api_key: <YOUR_API_KEY>
 dd_url: ${ingestUrl}
+
 apm_config:
   apm_dd_url: ${ingestUrl}
+  profiling_dd_url: ${ingestUrl}/dd/profiling/v1/input
+
 process_config:
   process_dd_url: ${ingestUrl}
+
 logs_config:
-  logs_dd_url: ${ingestUrl}`}
+  logs_dd_url: ${ingestUrl}
+
+# Route event platform forwarder tracks to Moneat
+# (these use only the host, path is appended automatically)
+container_lifecycle:
+  dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+container_image:
+  dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+sbom:
+  dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+synthetics:
+  forwarder:
+    dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+data_streams:
+  forwarder:
+    dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+event_management:
+  forwarder:
+    dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+database_monitoring:
+  metrics:
+    dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+  samples:
+    dd_url: ${BACKEND_URL.replace(/\/$/, '')}
+  activity:
+    dd_url: ${BACKEND_URL.replace(/\/$/, '')}`}
             </pre>
           </div>
           <div>
-            <p className="text-sm font-medium mb-1">Environment variables</p>
+            <p className="text-sm font-medium mb-1">Environment variables (basic)</p>
             <pre className="text-xs bg-muted px-3 py-2 rounded-md break-all whitespace-pre-wrap font-mono">
 {`DD_API_KEY=<YOUR_API_KEY>
 DD_DD_URL=${ingestUrl}
 DD_APM_DD_URL=${ingestUrl}
-DD_PROCESS_CONFIG_PROCESS_DD_URL=${ingestUrl}`}
+DD_APM_PROFILING_DD_URL=${ingestUrl}/dd/profiling/v1/input`}
             </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              Note: EPForwarder tracks (container images, SBOM, DBM, synthetics, etc.) require the full <code className="bg-muted px-1 rounded">datadog.yaml</code> above — they cannot be configured via environment variables alone.
+            </p>
           </div>
           <p className="text-sm text-muted-foreground">
             Replace <code className="bg-muted px-1 rounded">&lt;YOUR_API_KEY&gt;</code> with

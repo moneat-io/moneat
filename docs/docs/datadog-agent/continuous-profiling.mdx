@@ -27,22 +27,19 @@ Add the following to your `datadog.yaml`:
 # datadog.yaml
 apm_config:
   enabled: true
-
-# Enable continuous profiling
-profiling:
-  enabled: true
+  profiling_dd_url: "https://api.moneat.io/dd/profiling/v1/input"
 
 # Point to your Moneat instance
 dd_url: "https://api.moneat.io/dd"
 ```
 
 :::note Docker
-If you're running the Agent in Docker, you can pass these settings as environment variables instead of editing a file:
+If you're running the Agent in Docker, pass the profiling endpoint as an environment variable. The EPForwarder redirects require a `datadog.yaml` file (see [Agent Setup](/datadog-agent/agent-setup)):
 
 ```bash
 docker run -e DD_APM_ENABLED=true \
-           -e DD_PROFILING_ENABLED=true \
            -e DD_DD_URL=https://api.moneat.io/dd \
+           -e DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input \
            datadog/agent:latest
 ```
 :::
@@ -115,12 +112,15 @@ services:
     image: datadog/agent:latest
     environment:
       - DD_APM_ENABLED=true
-      - DD_PROFILING_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
       - DD_DD_URL=https://api.moneat.io/dd
+      - DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input
+      - DD_API_KEY=<YOUR_MONEAT_AGENT_KEY>
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc/:/host/proc/:ro
       - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    pid: host
 
   my-java-app:
     build: .
@@ -129,6 +129,9 @@ services:
       - DD_SERVICE=my-java-app
       - DD_ENV=production
       - DD_PROFILING_ENABLED=true
+      # DD_API_KEY must be a 32-character hex string for the Java profiler's
+      # format check. It is only validated locally — the agent uses its own key.
+      - DD_API_KEY=00000000000000000000000000000000
     depends_on:
       - datadog-agent
 ```

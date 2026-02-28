@@ -233,7 +233,6 @@ class NotificationService(private val emailService: EmailService) {
                         level = emailData.issueLevel,
                         culprit = culprit,
                         issueId = issueId.toLongOrNull() ?: 0L,
-                        projectId = projectId,
                         baseUrl = frontendUrl,
                         occurrenceCount = 1,
                         environment = emailData.environment,

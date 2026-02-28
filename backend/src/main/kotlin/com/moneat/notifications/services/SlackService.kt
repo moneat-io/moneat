@@ -593,7 +593,6 @@ class SlackService {
         level: String,
         culprit: String?,
         issueId: Long,
-        projectId: Long,
         baseUrl: String,
         occurrenceCount: Int = 1,
         environment: String? = null,
