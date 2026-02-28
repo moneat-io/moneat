@@ -616,10 +616,7 @@ class BillingQuotaServiceTest {
     }
 
     @Test
-    fun `custom metric overage is included in totalOverageCentsEstimate`() {
-        // In the unified model, APM span overages are legacy and not
-        // included in totalOverageCentsEstimate. Only ingestion GB,
-        // custom metric, and analytics pageview overages are summed.
+    fun `apm span and custom metric overage are included in totalOverageCentsEstimate`() {
         transaction {
             PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
                 it[monthly_apm_span_limit] = 10_000_000L
@@ -636,20 +633,13 @@ class BillingQuotaServiceTest {
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
-        // APM span overage is still computed for display but NOT in total
         assertEquals(30, usage.apmSpanOverageCentsEstimate)
         assertEquals(100, usage.customMetricOverageCentsEstimate)
-        assertTrue(
-            usage.totalOverageCentsEstimate >= 100,
-            "Total overage should include custom metric (100¢), " +
-                "got ${usage.totalOverageCentsEstimate}",
-        )
+        assertEquals(130, usage.totalOverageCentsEstimate)
     }
 
     @Test
-    fun `apm span units are tracked but no longer incur pending overage`() {
-        // In the unified model, APM span overage tracking was removed
-        // from reserveUnits. APM spans are gated by the unified GB limit.
+    fun `apm span overage tracking increments pending column on reserveUnits`() {
         transaction {
             PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
                 it[monthly_apm_span_limit] = 10_000_000L
@@ -668,12 +658,12 @@ class BillingQuotaServiceTest {
             eventType = "apm_span"
         )
 
-        assertTrue(result.allowed, "APM span should succeed (gated by GB, not count)")
+        assertTrue(result.allowed, "APM span should succeed via metered overage path")
         val pendingApmOverage = transaction {
             Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
                 .first()[Subscriptions.pending_apm_span_overage_units]
         }
-        assertEquals(0L, pendingApmOverage, "APM span pending overage should not be tracked")
+        assertEquals(500_000L, pendingApmOverage)
     }
 
     @Test
@@ -713,10 +703,20 @@ class BillingQuotaServiceTest {
             }
             insertTestUsageCounter(organizationId = testOrgId).also { counterId ->
                 OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
-                    it[used_apm_spans] = 600_000L
+                    it[used_apm_spans] = 500_000L
                 }
             }
         }
+
+        val reserve = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 1,
+            eventType = "apm_span",
+            requestedBytes = 100L
+        )
+        assertFalse(reserve.allowed, "APM span should be count-gated when overage is disabled")
+        assertEquals("event_type_quota_exceeded", reserve.reason)
+        assertEquals("apm_span", reserve.eventType)
 
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
@@ -992,6 +992,39 @@ class BillingQuotaServiceTest {
 
         assertFalse(result.allowed, "Should reject when GB limit exceeded")
         assertEquals("gb_quota_exceeded", result.reason)
+    }
+
+    @Test
+    fun `apm span bytes are excluded from unified GB gate`() {
+        val oneMb = 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = oneMb
+                it[overage_rate_cents_per_gb] = 0
+                it[payg_enabled] = false
+                it[monthly_apm_span_limit] = 10_000_000L
+                it[apm_span_overage_rate_cents_per_1m] = 30
+            }
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[Subscriptions.payg_budget_cents] = 0
+            }
+            val counterId = insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedBytes = oneMb
+            )
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_apm_span_bytes] = oneMb
+            }
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 1,
+            eventType = "error",
+            requestedBytes = 1L
+        )
+
+        assertTrue(result.allowed, "APM span bytes should not consume GB-eligible quota")
     }
 
     @Test

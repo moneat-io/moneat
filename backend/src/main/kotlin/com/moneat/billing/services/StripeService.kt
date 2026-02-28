@@ -890,6 +890,8 @@ class StripeService(
             ?: "moneat_ingestion_overage_gb"
         val customMetricMeterEventName = config.propertyOrNull("stripe.customMetricMeterEventName")?.getString()
             ?: "moneat_custom_metric_overage_units"
+        val apmSpanMeterEventName = config.propertyOrNull("stripe.apmSpanMeterEventName")?.getString()
+            ?: "moneat_apm_span_overage_units"
 
         val subscriptionIds = transaction {
             Subscriptions.select(Subscriptions.id).where {
@@ -992,13 +994,23 @@ class StripeService(
             }
         }
 
-        // Custom metric overage metering (APM spans folded into unified ingestion)
+        // Custom metric overage metering
         flushed += flushPendingTypeOverage(
             pendingUnitsColumn = Subscriptions.pending_custom_metric_overage_units,
             batchIdColumn = Subscriptions.pending_custom_metric_batch_id,
             batchUnitsColumn = Subscriptions.pending_custom_metric_batch_units,
             meterEventName = customMetricMeterEventName,
             batchPrefix = "metric",
+            limit = limit
+        )
+
+        // APM span overage metering
+        flushed += flushPendingTypeOverage(
+            pendingUnitsColumn = Subscriptions.pending_apm_span_overage_units,
+            batchIdColumn = Subscriptions.pending_apm_span_batch_id,
+            batchUnitsColumn = Subscriptions.pending_apm_span_batch_units,
+            meterEventName = apmSpanMeterEventName,
+            batchPrefix = "apmspan",
             limit = limit
         )
 

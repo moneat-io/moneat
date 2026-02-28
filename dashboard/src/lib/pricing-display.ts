@@ -156,6 +156,11 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
     limits.push(`${isUnlimited(metricLimit) ? 'Unlimited' : formatEventLimit(metricLimit)} custom metrics`)
   }
 
+  const spanLimit = tier.monthlyApmSpanLimit
+  if (spanLimit != null && spanLimit > 0) {
+    limits.push(`${isUnlimited(spanLimit) ? 'Unlimited' : formatEventLimit(spanLimit)} APM spans`)
+  }
+
   const maxHosts = tier.maxHosts
   if (maxHosts !== undefined) {
     if (maxHosts == null || maxHosts >= UNLIMITED_SYSTEMS_SENTINEL) {
@@ -256,6 +261,11 @@ function buildOverages(tier: PricingCardTierInput): OverageItem[] {
   const metricRate = tier.customMetricOverageRateCentsPer100k
   if (metricRate != null && metricRate > 0) {
     overages.push({label: 'Custom metrics', rate: formatCentsRate(metricRate, '100K')})
+  }
+
+  const spanRate = tier.apmSpanOverageRateCentsPer1m
+  if (spanRate != null && spanRate > 0) {
+    overages.push({label: 'APM spans', rate: formatCentsRate(spanRate, '1M')})
   }
 
   // Analytics pageview overage
