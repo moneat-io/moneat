@@ -70,7 +70,7 @@ java-saml-core = { module = "com.onelogin:java-saml-core", version = "2.9.0" }
 oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
 
 # Billing
-stripe-java = { module = "com.stripe:stripe-java", version = "31.3.0" }
+stripe-java = { module = "com.stripe:stripe-java", version = "31.4.0" }
 
 # JWT
 java-jwt = { module = "com.auth0:java-jwt", version = "4.4.0" }
