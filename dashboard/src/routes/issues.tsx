@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -165,16 +165,27 @@ export const Route = createFileRoute('/issues')({
       const redirectPath = (() => {
         try {
           const url = new URL(location.href, 'https://moneat.io')
-          return `${url.pathname}${url.search}${url.hash}` || '/issues'
+          return `${url.pathname}${url.search}${url.hash}` || '/'
         } catch {
-          return '/issues'
+          return '/'
         }
       })()
       throw redirect({ to: '/login', search: { redirect: redirectPath } })
     }
   },
-  component: IndexPage,
+  component: IssuesLayout,
 })
+
+function IssuesLayout() {
+  const matches = useMatches()
+  const showingChildRoute = matches.some((match) => match.id.includes('/issues/$issueId'))
+
+  if (showingChildRoute) {
+    return <Outlet />
+  }
+
+  return <IndexPage />
+}
 
 function IndexPage() {
   const [activeTab, setActiveTab] = useState<'issues' | 'apm-errors'>('issues')
