@@ -2916,6 +2916,7 @@ class ApiClient {
     if (response.refreshToken) {
       this.setRefreshToken(response.refreshToken)
     }
+    setDemoEpoch(null) // Clear demo mode so token refresh doesn't re-issue a demo cookie
     sessionStorage.setItem('authenticated', 'true')
     return response
   }

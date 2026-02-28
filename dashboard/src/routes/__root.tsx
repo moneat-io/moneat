@@ -22,7 +22,6 @@ import {CommandPalette} from '../components/CommandPalette'
 import {AppTopBar, TOPBAR_HEIGHT} from '../components/AppTopBar'
 import {CommandPaletteProvider} from '../contexts/command-palette-context'
 import {Toaster} from '../components/ui/toaster'
-import {ChatWidget} from '../components/ai-chat/ChatWidget'
 import {api} from '../lib/api'
 import {setDemoEpoch} from '../lib/demo'
 import {DemoBanner} from '../components/demo/DemoBanner'
@@ -250,7 +249,6 @@ function RootComponent() {
             <Outlet />
           </div>
           <CommandPalette />
-          {user?.isAdmin && <ChatWidget />}
         </CommandPaletteProvider>
       )}
       {!showSidebar && (

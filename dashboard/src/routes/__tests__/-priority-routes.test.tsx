@@ -70,7 +70,7 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
 }))
 
-import { Route as IssuesIndexRoute } from '../issues.index'
+import { Route as IssuesIndexRoute } from '../issues'
 import { Route as IssueDetailRoute } from '../issues.$issueId'
 import { Route as PerformanceRoute } from '../performance.index'
 import { Route as AiRoute } from '../ai.index'
@@ -124,7 +124,11 @@ describe('priority route coverage', () => {
   it('issues and issue detail route guards redirect unauthenticated users', async () => {
     mockApi.isAuthenticated.mockReturnValue(false)
 
-    await expect((IssuesIndexRoute as { beforeLoad: () => Promise<unknown> }).beforeLoad()).rejects.toMatchObject({
+    await expect(
+      (
+        IssuesIndexRoute as { beforeLoad: (opts: { location: { href: string } }) => Promise<unknown> }
+      ).beforeLoad({ location: { href: 'http://localhost:5173/issues' } })
+    ).rejects.toMatchObject({
       to: '/login',
     })
 

@@ -16,199 +16,58 @@
 
 package com.moneat.ai
 
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
-import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-private val logger = KotlinLogging.logger {}
+private val aiUnavailableResponse = mapOf(
+    "error" to (
+        "AI endpoints are provided by moneat-enterprise. " +
+            "Install enterprise module to enable AI."
+        ),
+)
+
+private val aiForbiddenResponse = mapOf(
+    "error" to "AI chat is restricted to admin users only.",
+)
+
+private suspend fun io.ktor.server.application.ApplicationCall.requireAdmin(): Boolean {
+    val userId = principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt() ?: return false
+    val isAdmin = transaction {
+        Users.selectAll().where { Users.id eq userId }.firstOrNull()?.get(Users.is_admin) ?: false
+    }
+    if (!isAdmin) {
+        respond(HttpStatusCode.Forbidden, aiForbiddenResponse)
+    }
+    return isAdmin
+}
 
 fun Route.aiChatRoutes() {
-    val chatService = AiChatService()
-    val actionExecutor = AiActionExecutor()
-
     authenticate("auth-jwt") {
         route("/v1/ai") {
             post("/chat") {
-                if (!OpenAiClient.isEnabled) {
-                    call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "AI chat is not enabled"))
-                    return@post
-                }
-
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                // Check if user is admin
-                if (!isUserAdmin(userId)) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "AI chat is only available for admin users")
-                    )
-                    return@post
-                }
-
-                val orgId = getOrgIdForUser(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@post
-                }
-
-                val request = call.receive<ChatRequest>()
-                if (request.message.isBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Message cannot be empty"))
-                    return@post
-                }
-
-                try {
-                    val response = chatService.chat(userId, orgId, request)
-                    call.respond(response)
-                } catch (e: OpenAiError.AuthenticationError) {
-                    logger.error(e) { "AI auth error for user $userId" }
-                    call.respond(
-                        HttpStatusCode.ServiceUnavailable,
-                        mapOf("error" to "AI service authentication failed: ${e.message}")
-                    )
-                } catch (e: OpenAiError.RateLimitError) {
-                    logger.warn(e) { "AI rate limit for user $userId" }
-                    call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to e.message))
-                } catch (e: OpenAiError) {
-                    logger.error(e) { "AI provider error for user $userId" }
-                    call.respond(HttpStatusCode.BadGateway, mapOf("error" to "AI provider error: ${e.message}"))
-                } catch (e: Exception) {
-                    logger.error(e) { "AI chat error for user $userId" }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        mapOf("error" to "Failed to process chat message: ${e.message}")
-                    )
-                }
+                if (!call.requireAdmin()) return@post
+                call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse)
             }
-
-            post("/execute-action") {
-                if (!OpenAiClient.isEnabled) {
-                    call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "AI chat is not enabled"))
-                    return@post
-                }
-
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                // Check if user is admin
-                if (!isUserAdmin(userId)) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "AI chat is only available for admin users")
-                    )
-                    return@post
-                }
-
-                val orgId = getOrgIdForUser(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@post
-                }
-
-                val request = call.receive<ExecuteActionRequest>()
-                try {
-                    val result = actionExecutor.execute(orgId, userId, request.actionId, request.params)
-                    call.respond(result)
-                } catch (e: Exception) {
-                    logger.error(e) { "Action execution error for user $userId" }
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to execute action"))
-                }
-            }
-
-            get("/conversations") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgId = getOrgIdForUser(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@get
-                }
-
-                val conversations = chatService.getConversations(userId, orgId)
-                call.respond(conversations)
-            }
-
-            get("/conversations/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgId = getOrgIdForUser(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@get
-                }
-
-                val conversationId = call.parameters["id"]?.toIntOrNull()
-                if (conversationId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid conversation ID"))
-                    return@get
-                }
-
-                val conversation = chatService.getConversation(conversationId, userId, orgId)
-                if (conversation == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Conversation not found"))
-                    return@get
-                }
-
-                call.respond(conversation)
-            }
-
-            delete("/conversations/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgId = getOrgIdForUser(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@delete
-                }
-
-                val conversationId = call.parameters["id"]?.toIntOrNull()
-                if (conversationId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid conversation ID"))
-                    return@delete
-                }
-
-                val deleted = chatService.deleteConversation(conversationId, userId, orgId)
-                if (deleted) {
-                    call.respond(HttpStatusCode.NoContent)
-                } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Conversation not found"))
-                }
-            }
+            post("/chat/stream") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
+            post("/chat/confirm") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
+            post("/assistant/stream") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
+            post("/assistant/confirm") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
+            post("/execute-action") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
+            get("/conversations") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
+            get("/conversations/{id}") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
+            delete("/conversations/{id}") { call.respond(HttpStatusCode.NotImplemented, aiUnavailableResponse) }
         }
-    }
-}
-
-private fun getOrgIdForUser(userId: Int): Int? {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .firstOrNull()
-            ?.get(Memberships.organization_id)
-    }
-}
-
-private fun isUserAdmin(userId: Int): Boolean {
-    return transaction {
-        Users
-            .selectAll()
-            .where { Users.id eq userId }
-            .firstOrNull()
-            ?.get(Users.is_admin) ?: false
     }
 }
