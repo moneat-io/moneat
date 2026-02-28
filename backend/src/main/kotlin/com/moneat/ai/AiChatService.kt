@@ -25,6 +25,7 @@ import kotlinx.serialization.json.Json
  */
 class AiChatService {
 
+    @Suppress("UnusedParameter")
     suspend fun chat(userId: Int, orgId: Int, request: ChatRequest): ChatApiResponse {
         return unavailable(
             operation = "chat",
