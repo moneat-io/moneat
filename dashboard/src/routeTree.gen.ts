@@ -98,6 +98,7 @@ import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
+import { Route as PerformanceTracesIndexRouteImport } from './routes/performance.traces.index'
 import { Route as MonitoringKubernetesIndexRouteImport } from './routes/monitoring.kubernetes.index'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as PerformanceTracesTraceIdRouteImport } from './routes/performance.traces.$traceId'
@@ -563,6 +564,11 @@ const AdminAttributionRoute = AdminAttributionRouteImport.update({
   path: '/attribution',
   getParentRoute: () => AdminRoute,
 } as any)
+const PerformanceTracesIndexRoute = PerformanceTracesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PerformanceTracesRoute,
+} as any)
 const MonitoringKubernetesIndexRoute =
   MonitoringKubernetesIndexRouteImport.update({
     id: '/',
@@ -759,6 +765,7 @@ export interface FileRoutesByFullPath {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
+  '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
@@ -818,7 +825,6 @@ export interface FileRoutesByTo {
   '/on-call/schedules': typeof OnCallSchedulesRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/performance/service-map': typeof PerformanceServiceMapRoute
-  '/performance/traces': typeof PerformanceTracesRouteWithChildren
   '/profiles/$profileId': typeof ProfilesProfileIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
@@ -855,6 +861,7 @@ export interface FileRoutesByTo {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
+  '/performance/traces': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
@@ -963,6 +970,7 @@ export interface FileRoutesById {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
+  '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
@@ -1072,6 +1080,7 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/projects/$projectId/settings'
     | '/monitoring/kubernetes/'
+    | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
   fileRoutesByTo: FileRoutesByTo
@@ -1131,7 +1140,6 @@ export interface FileRouteTypes {
     | '/on-call/schedules'
     | '/performance/$transactionId'
     | '/performance/service-map'
-    | '/performance/traces'
     | '/profiles/$profileId'
     | '/projects/$projectId'
     | '/releases/$version'
@@ -1168,6 +1176,7 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/projects/$projectId/settings'
     | '/monitoring/kubernetes'
+    | '/performance/traces'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
   id:
@@ -1275,6 +1284,7 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/projects/$projectId/settings'
     | '/monitoring/kubernetes/'
+    | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
     | '/projects/$projectId/traces/$traceId'
   fileRoutesById: FileRoutesById
@@ -1952,6 +1962,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAttributionRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/performance/traces/': {
+      id: '/performance/traces/'
+      path: '/'
+      fullPath: '/performance/traces/'
+      preLoaderRoute: typeof PerformanceTracesIndexRouteImport
+      parentRoute: typeof PerformanceTracesRoute
+    }
     '/monitoring/kubernetes/': {
       id: '/monitoring/kubernetes/'
       path: '/'
@@ -2277,10 +2294,12 @@ const OnCallRouteWithChildren =
 
 interface PerformanceTracesRouteChildren {
   PerformanceTracesTraceIdRoute: typeof PerformanceTracesTraceIdRoute
+  PerformanceTracesIndexRoute: typeof PerformanceTracesIndexRoute
 }
 
 const PerformanceTracesRouteChildren: PerformanceTracesRouteChildren = {
   PerformanceTracesTraceIdRoute: PerformanceTracesTraceIdRoute,
+  PerformanceTracesIndexRoute: PerformanceTracesIndexRoute,
 }
 
 const PerformanceTracesRouteWithChildren =
