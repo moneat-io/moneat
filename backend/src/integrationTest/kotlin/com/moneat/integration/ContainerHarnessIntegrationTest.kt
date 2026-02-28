@@ -22,9 +22,8 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.testcontainers.containers.GenericContainer
+import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
-import kotlin.test.assertTrue
-import org.testcontainers.containers.PostgreSQLContainer as BasePostgreSQLContainer
 
 private val logger = KotlinLogging.logger {}
 
@@ -42,12 +41,6 @@ private val logger = KotlinLogging.logger {}
 class ContainerHarnessIntegrationTest {
 
     companion object {
-        // Type alias to avoid deprecation warnings
-        @Suppress("DEPRECATION")
-        class PostgreSQLContainer(
-            dockerImageName: DockerImageName
-        ) : BasePostgreSQLContainer<PostgreSQLContainer>(dockerImageName)
-
         lateinit var postgres: PostgreSQLContainer
         lateinit var clickhouse: GenericContainer<*>
         lateinit var redis: GenericContainer<*>
@@ -56,7 +49,6 @@ class ContainerHarnessIntegrationTest {
         @JvmStatic
         fun setupContainers() {
             logger.info { "Starting PostgreSQL container..." }
-            @Suppress("DEPRECATION")
             postgres =
                 PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
                     .withDatabaseName("moneat_test")
