@@ -49,7 +49,6 @@ import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
 import {useToast} from '@/hooks/use-toast'
 import {getNow} from '@/lib/demo'
-import {useHasModule} from '@/hooks/useEnterpriseFeatures'
 
 // Helper function to get level color for badges
 function getLevelColor(level: string): string {
@@ -178,10 +177,18 @@ export const Route = createFileRoute('/issues')({
 })
 
 function IndexPage() {
-  const hasDatadog = useHasModule('datadog')
+  const [activeTab, setActiveTab] = useState<'issues' | 'apm-errors'>('issues')
 
   return (
-    <Tabs defaultValue="issues" className="min-h-screen">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => {
+        if (value === 'issues' || value === 'apm-errors') {
+          setActiveTab(value)
+        }
+      }}
+      className="min-h-screen"
+    >
       <div className="border-b px-6">
         <TabsList className="bg-transparent h-auto p-0 gap-4">
           <TabsTrigger
@@ -197,14 +204,6 @@ function IndexPage() {
           >
             <Cpu className="h-4 w-4 mr-1.5" />
             APM Errors
-            {hasDatadog && (
-              <Badge
-                variant="outline"
-                className="ml-1.5 text-[10px] px-1.5 py-0 font-normal"
-              >
-                Datadog
-              </Badge>
-            )}
           </TabsTrigger>
         </TabsList>
       </div>
@@ -212,7 +211,7 @@ function IndexPage() {
         <DashboardPage />
       </TabsContent>
       <TabsContent value="apm-errors" className="mt-0">
-        <ApmErrorsTab />
+        <ApmErrorsTab isActive={activeTab === 'apm-errors'} />
       </TabsContent>
     </Tabs>
   )
@@ -601,7 +600,7 @@ function DashboardPage() {
 
 const APM_ERRORS_PAGE_SIZE = 50
 
-function ApmErrorsTab() {
+function ApmErrorsTab({ isActive }: { isActive: boolean }) {
   const [selectedService, setSelectedService] = useState<string>('all')
   const [offset, setOffset] = useState(0)
 
@@ -609,7 +608,7 @@ function ApmErrorsTab() {
   const { data: allErrorsData } = useQuery({
     queryKey: ['apm-errors-all'],
     queryFn: () => api.getApmErrors({ limit: 500 }),
-    enabled: api.isAuthenticated(),
+    enabled: isActive && api.isAuthenticated(),
     refetchInterval: 30000,
   })
 
@@ -630,7 +629,7 @@ function ApmErrorsTab() {
       limit: APM_ERRORS_PAGE_SIZE,
       offset,
     }),
-    enabled: api.isAuthenticated(),
+    enabled: isActive && api.isAuthenticated(),
     refetchInterval: 15000,
   })
 
@@ -658,7 +657,7 @@ function ApmErrorsTab() {
       <div className="mb-4">
         <h2 className="text-2xl font-bold tracking-tight">APM Errors</h2>
         <p className="text-sm text-muted-foreground">
-          Errors extracted from Datadog APM spans
+          Application performance errors from traces
         </p>
       </div>
 
@@ -734,7 +733,7 @@ function ApmErrorsTab() {
             <div>
               <h3 className="text-lg font-semibold mb-2">No APM errors found</h3>
               <p className="text-muted-foreground">
-                Errors from Datadog APM traces will appear here when spans report errors.
+                Errors from application traces will appear here when spans report errors.
               </p>
             </div>
           </div>
