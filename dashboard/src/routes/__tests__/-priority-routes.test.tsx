@@ -133,7 +133,13 @@ describe('priority route coverage', () => {
     mockApi.isAuthenticated.mockReturnValue(false)
     mockApi.checkAuth.mockResolvedValue(false)
 
-    expect((IssuesIndexRoute as { beforeLoad?: unknown }).beforeLoad).toBeUndefined()
+    await expect(
+      (
+        IssuesIndexRoute as { beforeLoad: (opts: { location: { href: string } }) => Promise<unknown> }
+      ).beforeLoad({ location: { href: 'http://localhost:5173/issues' } })
+    ).rejects.toMatchObject({
+      to: '/login',
+    })
 
     await expect(
       (
