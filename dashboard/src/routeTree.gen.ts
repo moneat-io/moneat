@@ -29,6 +29,7 @@ import { Route as OnCallRouteImport } from './routes/on-call'
 import { Route as MonitoringRouteImport } from './routes/monitoring'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as IssuesRouteImport } from './routes/issues'
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
@@ -47,7 +48,6 @@ import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
-import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
@@ -216,6 +216,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IssuesRoute = IssuesRouteImport.update({
+  id: '/issues',
+  path: '/issues',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ImpersonateCallbackRoute = ImpersonateCallbackRouteImport.update({
   id: '/impersonate-callback',
   path: '/impersonate-callback',
@@ -305,11 +310,6 @@ const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MonitoringRoute,
-} as any)
-const IssuesIndexRoute = IssuesIndexRouteImport.update({
-  id: '/issues/',
-  path: '/issues/',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
@@ -672,6 +672,7 @@ export interface FileRoutesByFullPath {
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
+  '/issues': typeof IssuesRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/monitoring': typeof MonitoringRouteWithChildren
@@ -742,7 +743,6 @@ export interface FileRoutesByFullPath {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
-  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -776,6 +776,7 @@ export interface FileRoutesByTo {
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
+  '/issues': typeof IssuesRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/onboarding': typeof OnboardingRoute
@@ -838,7 +839,6 @@ export interface FileRoutesByTo {
   '/analytics': typeof AnalyticsIndexRoute
   '/apm-traces': typeof ApmTracesIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
-  '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
@@ -877,6 +877,7 @@ export interface FileRoutesById {
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
+  '/issues': typeof IssuesRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/monitoring': typeof MonitoringRouteWithChildren
@@ -947,7 +948,6 @@ export interface FileRoutesById {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
-  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -987,6 +987,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
+    | '/issues'
     | '/login'
     | '/logs'
     | '/monitoring'
@@ -1057,7 +1058,6 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
-    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -1091,6 +1091,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
+    | '/issues'
     | '/login'
     | '/logs'
     | '/onboarding'
@@ -1153,7 +1154,6 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
-    | '/issues'
     | '/monitoring'
     | '/on-call'
     | '/performance'
@@ -1191,6 +1191,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
+    | '/issues'
     | '/login'
     | '/logs'
     | '/monitoring'
@@ -1261,7 +1262,6 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
-    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -1300,6 +1300,7 @@ export interface RootRouteChildren {
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
+  IssuesRoute: typeof IssuesRouteWithChildren
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
   MonitoringRoute: typeof MonitoringRouteWithChildren
@@ -1328,7 +1329,6 @@ export interface RootRouteChildren {
   StatusPagesPageIdRoute: typeof StatusPagesPageIdRoute
   UptimeMonitorIdRoute: typeof UptimeMonitorIdRoute
   AiIndexRoute: typeof AiIndexRoute
-  IssuesIndexRoute: typeof IssuesIndexRoute
   StatusPagesIndexRoute: typeof StatusPagesIndexRoute
   UptimeIndexRoute: typeof UptimeIndexRoute
   AiTracesTraceIdRoute: typeof AiTracesTraceIdRoute
@@ -1478,6 +1478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/issues': {
+      id: '/issues'
+      path: '/issues'
+      fullPath: '/issues'
+      preLoaderRoute: typeof IssuesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/impersonate-callback': {
       id: '/impersonate-callback'
       path: '/impersonate-callback'
@@ -1603,13 +1610,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/monitoring/'
       preLoaderRoute: typeof MonitoringIndexRouteImport
       parentRoute: typeof MonitoringRoute
-    }
-    '/issues/': {
-      id: '/issues/'
-      path: '/issues'
-      fullPath: '/issues/'
-      preLoaderRoute: typeof IssuesIndexRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/dashboards/': {
       id: '/dashboards/'
@@ -2180,6 +2180,17 @@ const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
   FeedbackRouteChildren,
 )
 
+interface IssuesRouteChildren {
+  IssuesIssueIdRoute: typeof IssuesIssueIdRoute
+}
+
+const IssuesRouteChildren: IssuesRouteChildren = {
+  IssuesIssueIdRoute: IssuesIssueIdRoute,
+}
+
+const IssuesRouteWithChildren =
+  IssuesRoute._addFileChildren(IssuesRouteChildren)
+
 interface MonitoringKubernetesRouteChildren {
   MonitoringKubernetesResourceTypeRoute: typeof MonitoringKubernetesResourceTypeRoute
   MonitoringKubernetesIndexRoute: typeof MonitoringKubernetesIndexRoute
@@ -2423,6 +2434,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,
+  IssuesRoute: IssuesRouteWithChildren,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
   MonitoringRoute: MonitoringRouteWithChildren,
@@ -2451,7 +2463,6 @@ const rootRouteChildren: RootRouteChildren = {
   StatusPagesPageIdRoute: StatusPagesPageIdRoute,
   UptimeMonitorIdRoute: UptimeMonitorIdRoute,
   AiIndexRoute: AiIndexRoute,
-  IssuesIndexRoute: IssuesIndexRoute,
   StatusPagesIndexRoute: StatusPagesIndexRoute,
   UptimeIndexRoute: UptimeIndexRoute,
   AiTracesTraceIdRoute: AiTracesTraceIdRoute,

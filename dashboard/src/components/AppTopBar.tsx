@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useQuery} from '@tanstack/react-query'
-import {ChevronDown, Search, Plus, Settings, LogOut} from 'lucide-react'
+import {ChevronDown, Search, Plus, Settings, LogOut, Sparkles} from 'lucide-react'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/project-context'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
@@ -107,6 +107,11 @@ export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
         >
           <Search className="h-4 w-4 shrink-0" />
           <span className="hidden sm:inline flex-1">Search dashboards, projects, pages...</span>
+          <span className="hidden sm:flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-xs text-muted-foreground">
+            <Sparkles className="h-3 w-3" />
+            AI
+            <kbd className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] leading-none border border-border/40">/</kbd>
+          </span>
           <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] md:inline-block">
             ⌘K
           </kbd>

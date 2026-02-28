@@ -1,7 +1,7 @@
 [versions]
 kotlin = "2.3.10"
 ktor = "3.4.0"
-exposed = "1.1.0"
+exposed = "1.1.1"
 logback = "1.5.32"
 hikari = "7.0.2"
 kotlinx-datetime = "0.7.1-0.6.x-compat"
@@ -70,15 +70,15 @@ java-saml-core = { module = "com.onelogin:java-saml-core", version = "2.9.0" }
 oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
 
 # Billing
-stripe-java = { module = "com.stripe:stripe-java", version = "31.3.0" }
+stripe-java = { module = "com.stripe:stripe-java", version = "31.4.0" }
 
 # JWT
-java-jwt = { module = "com.auth0:java-jwt", version = "4.4.0" }
+java-jwt = { module = "com.auth0:java-jwt", version = "4.5.1" }
 
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.11" }
-zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-3" }
-protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.28.3" }
+zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-7" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.34.0" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
 
 # Environment
