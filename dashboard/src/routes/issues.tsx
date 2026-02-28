@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -157,22 +157,6 @@ function EventSparkline({ eventCount }: { eventCount: number }) {
 }
 
 export const Route = createFileRoute('/issues')({
-  beforeLoad: async ({ location }) => {
-    if (api.isAuthenticated()) return
-
-    const hasSession = await api.checkAuth()
-    if (!hasSession) {
-      const redirectPath = (() => {
-        try {
-          const url = new URL(location.href, 'https://moneat.io')
-          return `${url.pathname}${url.search}${url.hash}` || '/issues'
-        } catch {
-          return '/issues'
-        }
-      })()
-      throw redirect({ to: '/login', search: { redirect: redirectPath } })
-    }
-  },
   component: IndexPage,
 })
 

@@ -127,17 +127,11 @@ describe('priority route coverage', () => {
     })
   })
 
-  it('issues and issue detail route guards redirect unauthenticated users', async () => {
+  it('issues index route is always directly accessible and issue detail still guards unauthenticated users', async () => {
     mockApi.isAuthenticated.mockReturnValue(false)
     mockApi.checkAuth.mockResolvedValue(false)
 
-    await expect(
-      (
-        IssuesIndexRoute as { beforeLoad: (opts: { location: { href: string } }) => Promise<unknown> }
-      ).beforeLoad({ location: { href: 'http://localhost:5173/issues' } })
-    ).rejects.toMatchObject({
-      to: '/login',
-    })
+    expect((IssuesIndexRoute as { beforeLoad?: unknown }).beforeLoad).toBeUndefined()
 
     await expect(
       (
