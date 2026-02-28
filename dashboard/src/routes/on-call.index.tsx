@@ -431,7 +431,9 @@ function OnCallOverview() {
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate group-hover:text-foreground">{incident.title}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(incident.declaredAt).toLocaleString()}
+                          {incident.declaredAt && !isNaN(new Date(incident.declaredAt).getTime())
+                            ? new Date(incident.declaredAt).toLocaleString()
+                            : '—'}
                         </p>
                       </div>
                     </div>
