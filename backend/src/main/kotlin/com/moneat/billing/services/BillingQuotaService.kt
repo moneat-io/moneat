@@ -314,7 +314,7 @@ class BillingQuotaService(
                 }
                 val apmSpanOverageDelta = apmSpanOverageAfter - apmSpanOverageBefore
 
-                if (apmSpanOverageDelta > 0) {
+                if (apmSpanOverageDelta > 0 && state.apmSpanOverageRateCentsPer1m > 0) {
                     SentryUtils.breadcrumb(
                         "billing",
                         "APM span overage incurred",
