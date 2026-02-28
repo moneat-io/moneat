@@ -446,6 +446,69 @@ export interface CreateDdApiKeyResponse {
   createdAt: string
 }
 
+export type DebuggerProbeType = 'log_probe' | 'snapshot' | 'span_decoration' | 'metric_probe'
+export type DebuggerProbeWhereType = 'method' | 'line'
+export type DebuggerMetricKind = 'count' | 'gauge' | 'histogram'
+
+export interface DebuggerProbe {
+  id: string
+  organizationId: number
+  probeType: DebuggerProbeType
+  service: string
+  environment: string
+  language: string
+  active: boolean
+  whereType: DebuggerProbeWhereType
+  typeName?: string | null
+  methodName?: string | null
+  sourceFile?: string | null
+  sourceLines?: string | null
+  template?: string | null
+  metricName?: string | null
+  metricKind?: DebuggerMetricKind | null
+  tags?: string | null
+  captureConfig?: string | null
+  createdBy?: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateDebuggerProbeRequest {
+  probeType: DebuggerProbeType
+  service: string
+  environment?: string
+  language?: string
+  active?: boolean
+  whereType?: DebuggerProbeWhereType
+  typeName?: string
+  methodName?: string
+  sourceFile?: string
+  sourceLines?: string
+  template?: string
+  metricName?: string
+  metricKind?: DebuggerMetricKind
+  tags?: string
+  captureConfig?: string
+}
+
+export interface UpdateDebuggerProbeRequest {
+  probeType?: DebuggerProbeType
+  service?: string
+  environment?: string
+  language?: string
+  active?: boolean
+  whereType?: DebuggerProbeWhereType
+  typeName?: string
+  methodName?: string
+  sourceFile?: string
+  sourceLines?: string
+  template?: string
+  metricName?: string
+  metricKind?: DebuggerMetricKind
+  tags?: string
+  captureConfig?: string
+}
+
 // --- DD Trace types ---
 
 export interface ApmTraceListItem {
@@ -3468,6 +3531,32 @@ class ApiClient {
 
   async deleteAgentApiKey(id: number): Promise<void> {
     await this.request(`${API_BASE}/agent-api-keys/${id}`, { method: 'DELETE' })
+  }
+
+  async getDebuggerProbes(): Promise<{ probes: DebuggerProbe[] }> {
+    return this.request<{ probes: DebuggerProbe[] }>(
+      `${API_BASE}/infra/debugger/probes`
+    )
+  }
+
+  async createDebuggerProbe(request: CreateDebuggerProbeRequest): Promise<DebuggerProbe> {
+    return this.request<DebuggerProbe>(`${API_BASE}/infra/debugger/probes`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateDebuggerProbe(probeId: string, request: UpdateDebuggerProbeRequest): Promise<DebuggerProbe> {
+    return this.request<DebuggerProbe>(`${API_BASE}/infra/debugger/probes/${encodeURIComponent(probeId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteDebuggerProbe(probeId: string): Promise<void> {
+    await this.request<void>(`${API_BASE}/infra/debugger/probes/${encodeURIComponent(probeId)}`, {
+      method: 'DELETE',
+    })
   }
 
   // --- APM Traces ---
