@@ -649,7 +649,7 @@ class SlackService {
                 text =
                 SlackText(
                     type = "mrkdwn",
-                    text = "*<$baseUrl/projects/$projectId/issues/$issueId|$issueTitle>*"
+                    text = "*<$baseUrl/issues/$issueId|$issueTitle>*"
                 )
             )
         )
@@ -719,7 +719,7 @@ class SlackService {
                     SlackElement(
                         type = "button",
                         text = SlackText(type = "plain_text", text = "View Issue"),
-                        url = "$baseUrl/projects/$projectId/issues/$issueId"
+                        url = "$baseUrl/issues/$issueId"
                     )
                 )
             )

@@ -515,6 +515,22 @@ export interface ApmErrorsResponse {
   totalCount: number
 }
 
+export interface ApmResourceStatsItem {
+  service: string
+  resource: string
+  name: string
+  type: string
+  totalHits: number
+  totalErrors: number
+  avgDurationNs: number
+  errorRate: number
+}
+
+export interface ApmResourceStatsResponse {
+  resources: ApmResourceStatsItem[]
+  totalCount: number
+}
+
 // --- Profile types ---
 
 export interface ProfileResponse {
@@ -3482,6 +3498,21 @@ class ApiClient {
     const qs = searchParams.toString()
     return this.request<ApmErrorsResponse>(
       `${API_BASE}/apm-errors${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  async getApmResourceStats(params: {
+    service?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<ApmResourceStatsResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.service) searchParams.set('service', params.service)
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.offset != null) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    return this.request<ApmResourceStatsResponse>(
+      `${API_BASE}/traces/resources${qs ? `?${qs}` : ''}`
     )
   }
 

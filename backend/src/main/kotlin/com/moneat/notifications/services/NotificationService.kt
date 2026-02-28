@@ -141,7 +141,7 @@ class NotificationService(private val emailService: EmailService) {
             }
 
             // Build email data
-            val issueUrl = "$frontendUrl/projects/$projectId/issues/$issueId"
+            val issueUrl = "$frontendUrl/issues/$issueId"
             val settingsUrl = "$frontendUrl/settings/notifications"
 
             // Derive culprit from exception or use first frame
@@ -261,7 +261,7 @@ class NotificationService(private val emailService: EmailService) {
 
             if (discordEnabled) {
                 try {
-                    val discordIssueUrl = "$frontendUrl/projects/$projectId/issues/$issueId"
+                    val discordIssueUrl = "$frontendUrl/issues/$issueId"
                     discordService.sendErrorAlert(
                         organizationId = orgId,
                         projectName = projectName,
