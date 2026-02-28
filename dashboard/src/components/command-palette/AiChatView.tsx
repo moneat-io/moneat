@@ -50,8 +50,8 @@ export function AiChatView({
     endRef.current?.scrollIntoView({behavior: 'smooth'})
   }, [messages, toolInvocations, pendingConfirmation, loading])
 
-  const lastAssistantIdx = messages.findLastIndex((m) => m.role === 'assistant')
-  const toolInsertIdx = lastAssistantIdx >= 0 ? lastAssistantIdx : messages.length
+  const lastUserIdx = messages.findLastIndex((m) => m.role === 'user')
+  const toolInsertIdx = lastUserIdx >= 0 ? lastUserIdx + 1 : messages.length
   const hasActiveTools = toolInvocations.some((t) => t.status === 'invoking')
 
   return (

@@ -16,6 +16,7 @@
 
 import {AlertTriangle} from 'lucide-react'
 import type {AiPalettePendingConfirmation} from '@/contexts/CommandPaletteContext'
+import {Button} from '@/components/ui/button'
 
 interface ConfirmationCardProps {
   confirmation: AiPalettePendingConfirmation
@@ -42,22 +43,24 @@ export function ConfirmationCard({
         {argPreview}
       </pre>
       <div className="mt-2 flex items-center gap-2">
-        <button
+        <Button
           type="button"
+          variant="default"
+          size="sm"
           onClick={onApprove}
           disabled={loading}
-          className="rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground disabled:opacity-60"
         >
           Approve
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={onDeny}
           disabled={loading}
-          className="rounded border border-border px-2.5 py-1 text-xs hover:bg-muted disabled:opacity-60"
         >
           Deny
-        </button>
+        </Button>
       </div>
     </div>
   )

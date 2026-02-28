@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
+import {useId, useState} from 'react'
 import {Loader2, CheckCircle2, AlertCircle, ChevronDown} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import type {AiPaletteToolInvocation} from '@/contexts/CommandPaletteContext'
@@ -39,6 +39,7 @@ interface ToolInvocationProps {
 
 export function ToolInvocation({invocation}: ToolInvocationProps) {
   const [expanded, setExpanded] = useState(false)
+  const panelId = useId()
   const hasArgs = Boolean(invocation.args && Object.keys(invocation.args).length > 0)
   const prettyJson = invocation.summary ? tryPrettyJson(invocation.summary) : null
   const hasExpandableContent = hasArgs || prettyJson !== null
@@ -59,6 +60,10 @@ export function ToolInvocation({invocation}: ToolInvocationProps) {
           'flex w-full items-center gap-2 px-2.5 py-1 text-xs',
           hasExpandableContent ? 'cursor-pointer hover:bg-muted/50' : 'cursor-default',
         )}
+        {...(hasExpandableContent && {
+          'aria-expanded': expanded,
+          'aria-controls': panelId,
+        })}
       >
         {invocation.status === 'invoking' ? (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
@@ -83,7 +88,7 @@ export function ToolInvocation({invocation}: ToolInvocationProps) {
         )}
       </button>
       {expanded && (
-        <div className="mx-2.5 mb-1.5 space-y-1.5">
+        <div id={panelId} className="mx-2.5 mb-1.5 space-y-1.5">
           {prettyJson && (
             <pre className="overflow-x-auto rounded bg-muted/40 p-2 text-[11px] leading-relaxed text-muted-foreground">
               {prettyJson}

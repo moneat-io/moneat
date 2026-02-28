@@ -77,9 +77,13 @@ export async function streamAiAssistant(
   signal?: AbortSignal,
   projectId?: number | null,
 ): Promise<void> {
+  const impersonateToken = sessionStorage.getItem('impersonate_token')
+  const authHeaders: Record<string, string> = impersonateToken
+    ? {'Authorization': `Bearer ${impersonateToken}`}
+    : {}
   const response = await fetch(`${API_BASE}/ai/assistant/stream`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...authHeaders},
     credentials: 'include',
     body: JSON.stringify({
       message,
@@ -121,9 +125,13 @@ export async function confirmAiAction(
   requestId: string,
   approve = true,
 ): Promise<ConfirmAiActionResponse> {
+  const impersonateToken = sessionStorage.getItem('impersonate_token')
+  const authHeaders: Record<string, string> = impersonateToken
+    ? {'Authorization': `Bearer ${impersonateToken}`}
+    : {}
   const response = await fetch(`${API_BASE}/ai/assistant/confirm`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...authHeaders},
     credentials: 'include',
     body: JSON.stringify({requestId, approve}),
   })

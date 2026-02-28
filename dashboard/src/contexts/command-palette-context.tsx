@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState, useCallback, useRef, type ReactNode} from 'react'
+import {useState, useCallback, useRef, useEffect, type ReactNode} from 'react'
 import {
   CommandPaletteContext,
   type AiPaletteMessage,
@@ -50,6 +50,12 @@ export function CommandPaletteProvider({children}: {children: ReactNode}) {
   }, [cleanupConnection])
 
   const openPalette = useCallback(() => setOpen(true), [])
+
+  useEffect(() => {
+    return () => {
+      cleanupConnection()
+    }
+  }, [cleanupConnection])
   const setOpenValue = useCallback(
     (value: boolean | ((prev: boolean) => boolean)) => {
       setOpen((prev) => {

@@ -393,8 +393,9 @@ export function CommandPalette() {
         selectedProjectId,
       )
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Assistant request failed'
-      if (errorMessage !== 'The operation was aborted.') {
+      const isAbort = error instanceof DOMException || (error instanceof Error && error.name === 'AbortError')
+      if (!isAbort) {
+        const errorMessage = error instanceof Error ? error.message : 'Assistant request failed'
         setAiMessages((prev) => [
           ...prev,
           {id: `assistant-error-${Date.now()}`, role: 'assistant', content: errorMessage},

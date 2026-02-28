@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {Button} from '@/components/ui/button'
+
 const DEFAULT_SUGGESTIONS = [
   'What errors happened in the last hour?',
   'Show me the slowest endpoints',
@@ -31,14 +33,16 @@ export function AiSuggestions({suggestions = DEFAULT_SUGGESTIONS, onSelect}: AiS
   return (
     <div className="flex flex-wrap gap-2 px-3 py-3">
       {suggestions.map((suggestion) => (
-        <button
+        <Button
           key={suggestion}
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onSelect(suggestion)}
-          className="rounded-full border border-border bg-muted/70 px-3 py-1.5 text-xs text-left hover:bg-muted transition-colors"
+          className="rounded-full text-xs"
         >
           {suggestion}
-        </button>
+        </Button>
       ))}
     </div>
   )

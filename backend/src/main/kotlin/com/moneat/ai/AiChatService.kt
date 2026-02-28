@@ -16,6 +16,8 @@
 
 package com.moneat.ai
 
+import kotlinx.serialization.json.Json
+
 /**
  * Legacy core AI service stub.
  *
@@ -28,8 +30,44 @@ class AiChatService {
             operation = "chat",
             userId = userId,
             orgId = orgId,
-            context = request.message.take(32),
         )
+    }
+
+    private fun sanitizeUserInput(input: String): String {
+        val maxLength = 4000
+        val injectionPatterns = listOf(
+            Regex("ignore previous instructions", RegexOption.IGNORE_CASE),
+            Regex("system:", RegexOption.IGNORE_CASE),
+            Regex("###"),
+        )
+        var sanitized = input
+        for (pattern in injectionPatterns) {
+            sanitized = pattern.replace(sanitized, "")
+        }
+        return sanitized.take(maxLength)
+    }
+
+    private fun buildOpenAiMessages(
+        systemPrompt: String,
+        docBlock: String,
+        history: List<OpenAiMessage>,
+    ): List<OpenAiMessage> {
+        val systemContent = "$systemPrompt\n\n== API DOCUMENTATION ==\n$docBlock"
+        val systemMessage = OpenAiMessage(role = "system", content = systemContent)
+        val recentHistory = history.takeLast(20)
+        return listOf(systemMessage) + recentHistory
+    }
+
+    companion object {
+        private val json = Json { ignoreUnknownKeys = true }
+    }
+
+    private fun parseAiResponse(jsonStr: String): AiResponse {
+        return try {
+            json.decodeFromString<AiResponse>(jsonStr)
+        } catch (_: Exception) {
+            AiResponse(message = jsonStr)
+        }
     }
 
     fun getConversations(userId: Int, orgId: Int): List<ConversationSummary> {
