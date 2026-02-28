@@ -152,18 +152,13 @@ object DemoDataReseeder {
             if (freshInfraCount > 0) {
                 logger.info { "Infra demo data is fresh ($freshInfraCount recent rows), skipping infra reseed" }
             } else {
-                logger.info { "Infra demo data is stale or missing, reseeding..." }
+                logger.info { "Infra demo data is stale or missing, reseeding for demo org..." }
                 purgeInfraDemoData()
-                val orgIds = getAllOrgIds()
-                val chOrgIds = orgIds.map { "toUInt64($it)" }
-                logger.info { "Seeding infra demo data for ${chOrgIds.size} organizations" }
-                for (chOrg in chOrgIds) {
-                    reseedKubernetesData(chOrg)
-                    reseedDbmData(chOrg)
-                    reseedDebuggerData(chOrg)
-                    reseedNdmData(chOrg)
-                    reseedSbomData(chOrg)
-                }
+                reseedKubernetesData(ORG1)
+                reseedDbmData(ORG1)
+                reseedDebuggerData(ORG1)
+                reseedNdmData(ORG1)
+                reseedSbomData(ORG1)
             }
 
             if (demoDashboardCount >= 4) {
@@ -1843,23 +1838,18 @@ object DemoDataReseeder {
         )
 
     private suspend fun checkFreshInfraDataCount(): Long {
-        val orgIds = getAllOrgIds()
-        if (orgIds.isEmpty()) return 0
-        val orgList = orgIds.joinToString(",") { "toUInt64($it)" }
         val query =
             """
-            SELECT count(DISTINCT organization_id) as cnt
+            SELECT count() as cnt
             FROM k8s_resources
-            WHERE organization_id IN ($orgList)
+            WHERE organization_id = $ORG1
                 AND collected_at >= now() - INTERVAL 2 HOUR
             """.trimIndent()
         return runCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299) return 0
-            val distinctOrgs = body.trim().toLongOrNull() ?: 0
-            if (distinctOrgs < orgIds.size) return 0
-            distinctOrgs
+            body.trim().toLongOrNull() ?: 0
         }.getOrElse {
             logger.warn { "Failed to check fresh infra demo data (non-fatal): ${it.message}" }
             0
@@ -1867,13 +1857,10 @@ object DemoDataReseeder {
     }
 
     private suspend fun purgeInfraDemoData() {
-        val orgIds = getAllOrgIds()
-        if (orgIds.isEmpty()) return
-        val orgList = orgIds.joinToString(",") { "toUInt64($it)" }
         for (table in infraDemoTables) {
             runCatching {
                 ClickHouseClient.execute(
-                    "ALTER TABLE $table DELETE WHERE organization_id IN ($orgList)"
+                    "ALTER TABLE $table DELETE WHERE organization_id = $ORG1"
                 )
             }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
         }
