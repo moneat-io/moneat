@@ -24,11 +24,28 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Helmet} from 'react-helmet-async'
 
+function normalizePostLoginRedirect(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed
+  }
+
+  try {
+    const url = new URL(trimmed, 'https://moneat.io')
+    return `${url.pathname}${url.search}${url.hash}` || undefined
+  } catch {
+    return undefined
+  }
+}
+
 export const Route = createFileRoute('/login')({
   beforeLoad: ({ search }) => {
     const s = search as Record<string, unknown>
     const redirectUri = s.redirect_uri as string | undefined
-    const postLoginRedirect = s.redirect as string | undefined
+    const postLoginRedirect = normalizePostLoginRedirect(s.redirect)
 
     // If user is already authenticated AND redirect_uri exists (mobile login),
     // log them out automatically so they can log in fresh
@@ -55,7 +72,8 @@ function LoginPage() {
   const searchParams = new URLSearchParams(window.location.search)
   const inviteToken = searchParams.get('inviteToken') || undefined
   const redirectUri = searchParams.get('redirect_uri') || undefined
-  const postLoginRedirect = searchParams.get('redirect') || undefined
+  const postLoginRedirect =
+    normalizePostLoginRedirect(searchParams.get('redirect') || undefined)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -112,7 +130,7 @@ function LoginPage() {
           return
         }
         window.location.href = `${redirectUri}#token=${token}`
-      } else if (postLoginRedirect && postLoginRedirect.startsWith('/')) {
+      } else if (postLoginRedirect) {
         // Redirect back to the page the user was trying to access (e.g. from email link)
         window.location.href = postLoginRedirect
       } else {

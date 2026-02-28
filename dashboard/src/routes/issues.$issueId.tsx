@@ -130,9 +130,20 @@ function normalizeApmTraceId(value: unknown): string | null {
 }
 
 export const Route = createFileRoute('/issues/$issueId')({
-  beforeLoad: ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
+  beforeLoad: async ({ location }) => {
+    if (api.isAuthenticated()) return
+
+    const hasSession = await api.checkAuth()
+    if (!hasSession) {
+      const redirectPath = (() => {
+        try {
+          const url = new URL(location.href, 'https://moneat.io')
+          return `${url.pathname}${url.search}${url.hash}` || '/issues'
+        } catch {
+          return '/issues'
+        }
+      })()
+      throw redirect({ to: '/login', search: { redirect: redirectPath } })
     }
   },
   component: IssueDetailPage,

@@ -44,7 +44,7 @@ import {
   TrendingUp,
   Users
 } from 'lucide-react'
-import {useState, useMemo} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
 import {useToast} from '@/hooks/use-toast'
@@ -159,8 +159,19 @@ function EventSparkline({ eventCount }: { eventCount: number }) {
 
 export const Route = createFileRoute('/issues')({
   beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
+    if (api.isAuthenticated()) return
+
+    const hasSession = await api.checkAuth()
+    if (!hasSession) {
+      const redirectPath = (() => {
+        try {
+          const url = new URL(location.href, 'https://moneat.io')
+          return `${url.pathname}${url.search}${url.hash}` || '/issues'
+        } catch {
+          return '/issues'
+        }
+      })()
+      throw redirect({ to: '/login', search: { redirect: redirectPath } })
     }
   },
   component: IndexPage,
@@ -224,10 +235,12 @@ function DashboardPage() {
   const projectId = selectedProjectId || projects?.[0]?.id
   const currentProject = projects?.find(p => p.id === projectId)
 
-  // Auto-set the first project if none is selected
-  if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
-    setSelectedProjectId(projects[0].id)
-  }
+  // Auto-select first project after data load without mutating state during render.
+  useEffect(() => {
+    if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
+      setSelectedProjectId(projects[0].id)
+    }
+  }, [selectedProjectId, projects, setSelectedProjectId])
 
   const { data: issues = [] } = useQuery({
     queryKey: ['issues', projectId, statusFilter],
