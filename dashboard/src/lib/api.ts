@@ -448,6 +448,7 @@ export interface CreateDdApiKeyResponse {
 
 export type DebuggerProbeType = 'log_probe' | 'snapshot' | 'span_decoration' | 'metric_probe'
 export type DebuggerProbeWhereType = 'method' | 'line'
+export type DebuggerMetricKind = 'count' | 'gauge' | 'histogram'
 
 export interface DebuggerProbe {
   id: string
@@ -464,7 +465,7 @@ export interface DebuggerProbe {
   sourceLines?: string | null
   template?: string | null
   metricName?: string | null
-  metricKind?: string | null
+  metricKind?: DebuggerMetricKind | null
   tags?: string | null
   captureConfig?: string | null
   createdBy?: number | null
@@ -485,7 +486,7 @@ export interface CreateDebuggerProbeRequest {
   sourceLines?: string
   template?: string
   metricName?: string
-  metricKind?: 'count' | 'gauge' | 'histogram'
+  metricKind?: DebuggerMetricKind
   tags?: string
   captureConfig?: string
 }
@@ -503,7 +504,7 @@ export interface UpdateDebuggerProbeRequest {
   sourceLines?: string
   template?: string
   metricName?: string
-  metricKind?: 'count' | 'gauge' | 'histogram'
+  metricKind?: DebuggerMetricKind
   tags?: string
   captureConfig?: string
 }

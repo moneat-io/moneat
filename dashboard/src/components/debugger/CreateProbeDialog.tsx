@@ -278,13 +278,15 @@ export default function CreateProbeDialog({open, onOpenChange, probe}: CreatePro
         {step === 1 && !isEdit ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
             {probeTypeOptions.map((option) => (
-              <button
+              <Button
                 key={option.value}
+                type="button"
+                variant="ghost"
                 onClick={() => {
                   setSelectedType(option.value)
                   setStep(2)
                 }}
-                className="flex items-start rounded-xl border p-4 text-left transition-colors hover:bg-accent"
+                className="h-auto justify-start flex items-start rounded-xl border p-4 text-left transition-colors hover:bg-accent"
               >
                 <div className={cn('mr-4 rounded-lg p-2', option.bgClassName)}>
                   <option.icon className={cn('h-6 w-6', option.iconClassName)} />
@@ -293,7 +295,7 @@ export default function CreateProbeDialog({open, onOpenChange, probe}: CreatePro
                   <div className="font-semibold mb-1">{option.label}</div>
                   <div className="text-sm text-muted-foreground">{option.description}</div>
                 </div>
-              </button>
+              </Button>
             ))}
           </div>
         ) : (

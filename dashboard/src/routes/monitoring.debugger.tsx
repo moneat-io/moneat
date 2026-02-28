@@ -62,6 +62,23 @@ function formatProbeType(probeType: string): string {
   }
 }
 
+function formatStatusLabel(status: string): string {
+  switch (status) {
+    case 'received':
+      return 'Received'
+    case 'installed':
+      return 'Installed'
+    case 'emitting':
+      return 'Emitting'
+    case 'error':
+      return 'Error'
+    case 'blocked':
+      return 'Blocked'
+    default:
+      return 'Unknown'
+  }
+}
+
 function formatProbeLocation(probe: DebuggerProbe): string {
   if (probe.whereType === 'line') {
     return `${probe.sourceFile || 'Unknown file'}:${probe.sourceLines || '?'}`
@@ -133,7 +150,7 @@ function DebuggerDashboard() {
 
     diagnostics.forEach((diagnostic) => {
       const probeId = diagnostic.probeId?.trim()
-      if (!probeId || result.has(probeId)) {
+      if (!probeId) {
         return
       }
       result.set(probeId, diagnostic)
@@ -328,25 +345,31 @@ function DebuggerDashboard() {
                 </div>
               ) : diagnostics.length > 0 ? (
                 <div className="space-y-2">
-                  {diagnostics.map((diagnostic, index) => (
-                    <div
-                      key={`${diagnostic.probeId || 'probe'}-${index}`}
-                      className="flex items-center justify-between rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-mono text-xs truncate">{diagnostic.probeId}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {diagnostic.service} · {diagnostic.env}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className={cn('text-xs shrink-0 ml-3', statusColors[diagnostic.status ?? ''] || '')}
+                  {diagnostics.map((diagnostic, index) => {
+                    const normalizedStatus = diagnostic.status || 'unknown'
+                    return (
+                      <div
+                        key={`${diagnostic.probeId || 'probe'}-${index}`}
+                        className="flex items-center justify-between rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
                       >
-                        {diagnostic.status}
-                      </Badge>
-                    </div>
-                  ))}
+                        <div className="min-w-0">
+                          <p className="font-mono text-xs truncate">{diagnostic.probeId}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {diagnostic.service} · {diagnostic.env}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            'text-xs shrink-0 ml-3',
+                            statusColors[normalizedStatus] || statusColors.unknown
+                          )}
+                        >
+                          {formatStatusLabel(normalizedStatus)}
+                        </Badge>
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="py-12 text-center">

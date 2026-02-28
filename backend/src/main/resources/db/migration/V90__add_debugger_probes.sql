@@ -20,3 +20,18 @@ CREATE TABLE IF NOT EXISTS debugger_probes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_debugger_probes_org_id
+    ON debugger_probes (organization_id);
+
+CREATE INDEX IF NOT EXISTS idx_debugger_probes_org_active
+    ON debugger_probes (organization_id, active);
+
+CREATE INDEX IF NOT EXISTS idx_debugger_probes_org_probe_type
+    ON debugger_probes (organization_id, probe_type);
+
+CREATE INDEX IF NOT EXISTS idx_debugger_probes_org_service_env
+    ON debugger_probes (organization_id, service, environment);
+
+CREATE INDEX IF NOT EXISTS idx_debugger_probes_org_updated_at
+    ON debugger_probes (organization_id, updated_at DESC);
