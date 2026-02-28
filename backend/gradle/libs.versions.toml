@@ -53,7 +53,7 @@ flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", versio
 # Kotlin ecosystem
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.7.3" }
-kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version = "1.8.1" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version = "1.10.2" }
 
 # Redis
 lettuce = { module = "io.lettuce:lettuce-core", version = "7.4.0.RELEASE" }
