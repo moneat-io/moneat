@@ -78,7 +78,7 @@ java-jwt = { module = "com.auth0:java-jwt", version = "4.4.0" }
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.11" }
 zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-3" }
-protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.28.3" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.34.0" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
 
 # Environment
