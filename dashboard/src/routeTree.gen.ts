@@ -480,9 +480,9 @@ const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const IssuesIssueIdRoute = IssuesIssueIdRouteImport.update({
-  id: '/issues/$issueId',
-  path: '/issues/$issueId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$issueId',
+  path: '/$issueId',
+  getParentRoute: () => IssuesRoute,
 } as any)
 const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
   id: '/$feedbackId',
@@ -1321,7 +1321,6 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
   AiGenerationsRoute: typeof AiGenerationsRoute
-  IssuesIssueIdRoute: typeof IssuesIssueIdRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalSmsConsentRoute: typeof LegalSmsConsentRoute
   LegalTermsRoute: typeof LegalTermsRoute
@@ -1845,10 +1844,10 @@ declare module '@tanstack/react-router' {
     }
     '/issues/$issueId': {
       id: '/issues/$issueId'
-      path: '/issues/$issueId'
+      path: '/$issueId'
       fullPath: '/issues/$issueId'
       preLoaderRoute: typeof IssuesIssueIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof IssuesRoute
     }
     '/feedback/$feedbackId': {
       id: '/feedback/$feedbackId'
@@ -2445,7 +2444,6 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
   AiGenerationsRoute: AiGenerationsRoute,
-  IssuesIssueIdRoute: IssuesIssueIdRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalSmsConsentRoute: LegalSmsConsentRoute,
   LegalTermsRoute: LegalTermsRoute,
