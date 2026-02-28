@@ -286,7 +286,7 @@ class BillingQuotaService(
                 }
                 val customMetricOverageDelta = customMetricOverageAfter - customMetricOverageBefore
 
-                if (customMetricOverageDelta > 0) {
+                if (customMetricOverageDelta > 0 && state.customMetricOverageRateCentsPer100k > 0) {
                     SentryUtils.breadcrumb(
                         "billing",
                         "Custom metric overage incurred",
