@@ -18,7 +18,6 @@ package com.moneat.notifications.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.SentryEvent
-import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
@@ -32,7 +31,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -64,8 +62,6 @@ class NotificationService(private val emailService: EmailService) {
     private val json = Json { ignoreUnknownKeys = true }
     private val slackService = SlackService()
     private val discordService = DiscordService()
-    private val incidentService =
-        IncidentService()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Rate limiting: track last alert time per (user, project)
@@ -274,41 +270,6 @@ class NotificationService(private val emailService: EmailService) {
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to send Discord notification for new issue" }
                 }
-            }
-
-            // Fire incident alert for error
-            try {
-                val severityFromLevel =
-                    when (emailData.issueLevel.lowercase()) {
-                        "fatal", "critical" -> com.moneat.incident.models.IncidentSeverity.CRITICAL
-                        "error" -> com.moneat.incident.models.IncidentSeverity.HIGH
-                        "warning" -> com.moneat.incident.models.IncidentSeverity.MEDIUM
-                        else -> com.moneat.incident.models.IncidentSeverity.LOW
-                    }
-
-                val incidentEvent =
-                    com.moneat.incident.models.IncidentEvent(
-                        title = "[$projectName] ${emailData.issueTitle}",
-                        description = "Level: ${emailData.issueLevel}\nEnvironment: ${emailData.environment}\nCulprit: $culprit\n\nStack trace:\n$stackTrace",
-                        severity = severityFromLevel,
-                        status = com.moneat.incident.models.IncidentStatus.FIRING,
-                        source = com.moneat.incident.models.AlertSource.ERROR_ALERT,
-                        deduplicationKey = "moneat-error-$projectId-$issueId",
-                        organizationId = orgId,
-                        metadata =
-                        mapOf(
-                            "project_id" to JsonPrimitive(projectId.toString()),
-                            "project_name" to JsonPrimitive(projectName),
-                            "issue_id" to JsonPrimitive(issueId),
-                            "level" to JsonPrimitive(emailData.issueLevel),
-                            "environment" to JsonPrimitive(emailData.environment),
-                            "culprit" to JsonPrimitive(culprit)
-                        ),
-                        moneatUrl = issueUrl
-                    )
-                incidentService.fireAlert(incidentEvent)
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to fire incident alert for error" }
             }
         } catch (e: Exception) {
             logger.error(e) { "Error in onNewIssue handler" }
