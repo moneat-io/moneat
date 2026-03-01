@@ -86,7 +86,7 @@ docker compose up -d postgres clickhouse redis
 cd backend && ./gradlew run -Penterprise
 
 # 4. Run dashboard
-cd dashboard && npm run dev
+cd dashboard && npm install && npm run dev
 ```
 
 **Custom paths:** If your enterprise checkout is not at `../moneat-enterprise`:

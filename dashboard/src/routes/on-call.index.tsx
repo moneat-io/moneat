@@ -62,8 +62,8 @@ function OnCallOverview() {
   })
 
   const {data: incidents, isLoading: incidentsLoading} = useQuery({
-    queryKey: ['incidents', {status: 'TRIGGERED'}],
-    queryFn: () => api.getIncidents({status: 'TRIGGERED'}),
+    queryKey: ['incidents', {active: true}],
+    queryFn: () => api.getIncidents(),
   })
 
   const {data: policies, isLoading: policiesLoading} = useQuery({

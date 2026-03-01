@@ -80,7 +80,7 @@ function ErrorRateBadge({rate}: {rate: number}) {
 function Traces() {
   const [serviceFilter, setServiceFilter] = useState('')
 
-  const {data, isLoading} = useQuery({
+  const {data, isLoading, isError, error} = useQuery({
     queryKey: ['apm-resource-stats'],
     queryFn: () => api.getApmResourceStats({limit: 200}),
     refetchInterval: 60000,
@@ -147,6 +147,7 @@ function Traces() {
               <button
                 key={s}
                 onClick={() => setServiceFilter(isActive ? '' : s)}
+                aria-pressed={isActive}
                 className={cn(
                   'px-2.5 py-1 rounded-md text-xs font-medium border transition-all',
                   isActive
@@ -165,6 +166,13 @@ function Traces() {
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-violet-500" />
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center py-20 border border-dashed rounded-xl">
+          <h3 className="text-base font-semibold mb-1">Failed to load trace stats</h3>
+          <p className="text-sm text-muted-foreground text-center max-w-sm">
+            {error instanceof Error ? error.message : 'An unexpected error occurred.'}
+          </p>
         </div>
       ) : filtered.length > 0 ? (
         <div className="rounded-xl border overflow-hidden">
