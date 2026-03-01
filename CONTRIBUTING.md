@@ -85,7 +85,7 @@ docker compose up -d postgres clickhouse redis
 #    Gradle auto-discovers ../moneat-enterprise/backend via settings.gradle.kts
 cd backend && ./gradlew run -Penterprise
 
-# 4. Run dashboard — enterprise routes are synced automatically via predev hook
+# 4. Run dashboard
 cd dashboard && npm run dev
 ```
 
@@ -94,9 +94,6 @@ cd dashboard && npm run dev
 ```bash
 # Backend — override Gradle enterprise path
 cd backend && ./gradlew run -Penterprise -PenterprisePath=/path/to/enterprise/backend
-
-# Dashboard — override sync script source
-ENTERPRISE_PATH=/path/to/enterprise npm run dev
 ```
 
 **How it works:** The `-Penterprise` flag adds the `:enterprise` subproject as a `runtimeOnly` dependency. The backend's `FeatureRegistry` uses Java `ServiceLoader` to auto-discover all `EnterpriseModule` implementations at startup — no additional configuration needed.
@@ -108,13 +105,13 @@ ENTERPRISE_PATH=/path/to/enterprise npm run dev
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | On-Call voice alerts |
 | `SAML_CERT` / `SAML_KEY` / `SAML_ENTITY_ID` | SSO (SAML) |
 
-**Enterprise routes:** Files in `moneat-enterprise/dashboard/src/routes/` are the source of truth. They are copied into `dashboard/src/routes/` automatically by the dashboard pre-hooks (`predev`/`prebuild`) when enterprise sources are present, or by running `scripts/sync-enterprise-routes.sh` manually. Never edit the copies in `dashboard/src/routes/` directly.
-
 #### Docker with enterprise features
 
 ```bash
-# Build with enterprise modules (uses ../moneat-enterprise by default)
+# Build with enterprise backend modules (uses ../moneat-enterprise by default)
 ./scripts/docker-build.sh --enterprise
+
+# Note: Enterprise overlay now applies to backend only. All UI is open source.
 
 # Or with a custom enterprise path
 ENTERPRISE_PATH=/path/to/enterprise ./scripts/docker-build.sh --enterprise
