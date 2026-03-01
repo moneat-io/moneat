@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {type ReactElement, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -130,22 +130,6 @@ function normalizeApmTraceId(value: unknown): string | null {
 }
 
 export const Route = createFileRoute('/issues/$issueId')({
-  beforeLoad: async ({ location }) => {
-    if (api.isAuthenticated()) return
-
-    const hasSession = await api.checkAuth()
-    if (!hasSession) {
-      const redirectPath = (() => {
-        try {
-          const url = new URL(location.href, 'https://moneat.io')
-          return `${url.pathname}${url.search}${url.hash}` || '/'
-        } catch {
-          return '/'
-        }
-      })()
-      throw redirect({ to: '/login', search: { redirect: redirectPath } })
-    }
-  },
   component: IssueDetailPage,
 })
 

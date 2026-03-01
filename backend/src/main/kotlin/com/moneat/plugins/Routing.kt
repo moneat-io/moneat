@@ -37,6 +37,7 @@ import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
+import com.moneat.summary.routes.summaryRoutes
 import com.moneat.uptime.routes.uptimeRoutes
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -188,6 +189,9 @@ fun Application.configureRouting() {
 
         // Status page endpoints
         statusPageRoutes()
+
+        // Summary and report endpoints
+        summaryRoutes()
 
         // Incident provider integration endpoints
         incidentProviderRoutes()
