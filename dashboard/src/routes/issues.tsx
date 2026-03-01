@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useMatches} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -191,10 +191,10 @@ export const Route = createFileRoute('/issues')({
 })
 
 function IssuesLayout() {
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/issues'
-  const normalizedPath = pathname.replace(/\/+$/, '') || '/'
-  const showingChildRoute =
-    normalizedPath.startsWith('/issues/') && normalizedPath !== '/issues'
+  const matches = useMatches()
+  const showingChildRoute = matches.some(
+    (match) => match.id !== '/issues' && match.id.startsWith('/issues/'),
+  )
 
   if (showingChildRoute) {
     return <Outlet />
@@ -525,8 +525,9 @@ function DashboardPage() {
                           aria-label={`Select ${issue.title}`}
                           className="shrink-0"
                         />
-                        <a
-                          href={`/issues/${encodeURIComponent(issue.id)}`}
+                        <Link
+                          to="/issues/$issueId"
+                          params={{ issueId: issue.id }}
                           className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
                         >
                           <Badge className={`${getLevelColor(issue.level)} shrink-0 text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0 w-12 sm:w-14 justify-center`}>
@@ -575,7 +576,7 @@ function DashboardPage() {
                               {formatRelativeTime(issue.lastSeen)}
                             </span>
                           </div>
-                        </a>
+                        </Link>
                       </div>
                     </div>
                   ))}

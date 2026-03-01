@@ -129,19 +129,9 @@ describe('priority route coverage', () => {
     })
   })
 
-  it('issues index route is always directly accessible and issue detail still guards unauthenticated users', async () => {
-    mockApi.isAuthenticated.mockReturnValue(false)
-    mockApi.checkAuth.mockResolvedValue(false)
-
+  it('issues routes have no beforeLoad guards (auth handled by root)', () => {
     expect((IssuesIndexRoute as { beforeLoad?: unknown }).beforeLoad).toBeUndefined()
-
-    await expect(
-      (
-        IssueDetailRoute as { beforeLoad: (opts: { location: { href: string } }) => Promise<unknown> }
-      ).beforeLoad({ location: { href: 'http://localhost:5173/issues/issue-123' } })
-    ).rejects.toMatchObject({
-      to: '/login',
-    })
+    expect((IssueDetailRoute as { beforeLoad?: unknown }).beforeLoad).toBeUndefined()
   })
 
   it('issues route renders empty project state', async () => {
