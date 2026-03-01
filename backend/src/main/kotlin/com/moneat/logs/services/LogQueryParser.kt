@@ -607,6 +607,7 @@ class LogQueryParser {
             when (field.lowercase()) {
                 "status" -> "level"
                 "message" -> "message"
+                "index" -> "index_name"
                 else -> field
             }
 
@@ -614,7 +615,8 @@ class LogQueryParser {
         val topLevelFields =
             setOf(
                 "service", "environment", "host", "source", "level", "message", "body",
-                "container_name", "container_id", "container_image", "trace_id", "span_id"
+                "container_name", "container_id", "container_image", "trace_id", "span_id",
+                "index_name"
             )
 
         // Enum8 columns need toString() cast for string comparison
@@ -688,6 +690,7 @@ class LogQueryParser {
         val actualField =
             when (field.lowercase()) {
                 "status" -> "level"
+                "index" -> "index_name"
                 else -> field
             }
 
@@ -696,7 +699,8 @@ class LogQueryParser {
         val topLevelFields =
             setOf(
                 "service", "environment", "host", "source", "level", "message", "body",
-                "container_name", "container_id", "container_image", "trace_id", "span_id"
+                "container_name", "container_id", "container_image", "trace_id", "span_id",
+                "index_name"
             )
 
         val enumFields = setOf("level", "source")
@@ -729,13 +733,15 @@ class LogQueryParser {
         val actualField =
             when (field.lowercase()) {
                 "status" -> "level"
+                "index" -> "index_name"
                 else -> field
             }
 
         val topLevelFields =
             setOf(
                 "service", "environment", "host", "source", "level", "message", "body",
-                "container_name", "container_id", "container_image", "trace_id", "span_id"
+                "container_name", "container_id", "container_image", "trace_id", "span_id",
+                "index_name"
             )
 
         return if (actualField in topLevelFields) {

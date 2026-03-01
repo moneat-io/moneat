@@ -24,9 +24,12 @@ import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.logs.models.CreateLogApiKeyRequest
+import com.moneat.logs.models.CreateLogIndexRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogTailFilters
+import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.logs.services.LogApiKeyService
+import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
@@ -47,6 +50,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
@@ -64,6 +68,7 @@ fun Route.logRoutes(
     logService: LogService = LogService(),
     quotaService: BillingQuotaService = BillingQuotaService(),
     logApiKeyService: LogApiKeyService = LogApiKeyService(),
+    logIndexService: LogIndexService = LogIndexService(),
 ) {
     val eventService = EventService()
     val dashboardService = DashboardService()
@@ -110,6 +115,92 @@ fun Route.logRoutes(
                     return@delete
                 }
                 call.respond(HttpStatusCode.NoContent)
+            }
+
+            // --- Log Indexes CRUD ---
+
+            get("/logs/indexes") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val indexes = logIndexService.list(orgId)
+                call.respond(
+                    HttpStatusCode.OK,
+                    mapOf("indexes" to indexes)
+                )
+            }
+
+            post("/logs/indexes") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val request =
+                    call.receive<CreateLogIndexRequest>()
+                if (request.name.isBlank()) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse("Name is required")
+                    )
+                    return@post
+                }
+                val index = logIndexService.create(orgId, request)
+                call.respond(HttpStatusCode.Created, index)
+            }
+
+            put("/logs/indexes/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse("Invalid index ID")
+                    )
+                    return@put
+                }
+                val request =
+                    call.receive<UpdateLogIndexRequest>()
+                val updated =
+                    logIndexService.update(orgId, id, request)
+                if (updated == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        ErrorResponse("Index not found")
+                    )
+                    return@put
+                }
+                call.respond(HttpStatusCode.OK, updated)
+            }
+
+            delete("/logs/indexes/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse("Invalid index ID")
+                    )
+                    return@delete
+                }
+                val deleted =
+                    logIndexService.delete(orgId, id)
+                if (!deleted) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        ErrorResponse("Index not found")
+                    )
+                    return@delete
+                }
+                call.respond(HttpStatusCode.NoContent)
+            }
+
+            post("/logs/indexes/test") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val body = call.receive<Map<String, String>>()
+                val filterQuery = body["filter_query"] ?: ""
+                val result =
+                    logIndexService.testFilter(orgId, filterQuery)
+                call.respond(HttpStatusCode.OK, result)
             }
         }
 

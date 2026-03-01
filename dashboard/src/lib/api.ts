@@ -459,6 +459,43 @@ export interface CreateLogApiKeyResponse {
   createdAt: string
 }
 
+export interface LogIndex {
+  id: number
+  name: string
+  filter_query: string
+  retention_days: number
+  sampling_rate: number
+  priority: number
+  is_active: boolean
+  daily_quota_gb: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateLogIndexRequest {
+  name: string
+  filter_query?: string
+  retention_days?: number
+  sampling_rate?: number
+  priority?: number
+  daily_quota_gb?: number | null
+}
+
+export interface UpdateLogIndexRequest {
+  name?: string
+  filter_query?: string
+  retention_days?: number
+  sampling_rate?: number
+  priority?: number
+  is_active?: boolean
+  daily_quota_gb?: number | null
+}
+
+export interface LogIndexTestResult {
+  match_count: number
+  total_count: number
+}
+
 export interface DdApiKey {
   id: number
   name: string
@@ -5757,6 +5794,37 @@ class ApiClient {
 
   async listSyntheticResults(limit = 50): Promise<SyntheticResultListResponse> {
     return this.request<SyntheticResultListResponse>(`${API_BASE}/synthetics/results?limit=${limit}`)
+  }
+
+  // --- Log Indexes ---
+
+  async getLogIndexes(): Promise<{ indexes: LogIndex[] }> {
+    return this.request<{ indexes: LogIndex[] }>(`${API_BASE}/logs/indexes`)
+  }
+
+  async createLogIndex(request: CreateLogIndexRequest): Promise<LogIndex> {
+    return this.request<LogIndex>(`${API_BASE}/logs/indexes`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateLogIndex(id: number, request: UpdateLogIndexRequest): Promise<LogIndex> {
+    return this.request<LogIndex>(`${API_BASE}/logs/indexes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteLogIndex(id: number): Promise<void> {
+    await this.request(`${API_BASE}/logs/indexes/${id}`, { method: 'DELETE' })
+  }
+
+  async testLogIndexFilter(filterQuery: string): Promise<LogIndexTestResult> {
+    return this.request<LogIndexTestResult>(`${API_BASE}/logs/indexes/test`, {
+      method: 'POST',
+      body: JSON.stringify({ filter_query: filterQuery }),
+    })
   }
 }
 

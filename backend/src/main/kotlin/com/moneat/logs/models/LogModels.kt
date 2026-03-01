@@ -98,7 +98,8 @@ data class QueuedLogEntry(
     @SerialName("span_id") val spanId: String,
     val tags: Map<String, String> = emptyMap(),
     @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap(),
-    @SerialName("system_id") val systemId: String? = null
+    @SerialName("system_id") val systemId: String? = null,
+    @SerialName("index_name") val indexName: String = ""
 )
 
 @Serializable
@@ -208,4 +209,45 @@ data class LogFilterOptionsWithCountsResponse(
     val environments: List<LogFilterOptionWithCount>,
     val levels: List<String>,
     @SerialName("tag_keys") val tagKeys: List<String>
+)
+
+@Serializable
+data class LogIndexResponse(
+    val id: Int,
+    val name: String,
+    @SerialName("filter_query") val filterQuery: String,
+    @SerialName("retention_days") val retentionDays: Int,
+    @SerialName("sampling_rate") val samplingRate: Float,
+    val priority: Int,
+    @SerialName("is_active") val isActive: Boolean,
+    @SerialName("daily_quota_gb") val dailyQuotaGb: Float? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class CreateLogIndexRequest(
+    val name: String,
+    @SerialName("filter_query") val filterQuery: String = "",
+    @SerialName("retention_days") val retentionDays: Int = 30,
+    @SerialName("sampling_rate") val samplingRate: Float = 1.0f,
+    val priority: Int = 0,
+    @SerialName("daily_quota_gb") val dailyQuotaGb: Float? = null
+)
+
+@Serializable
+data class UpdateLogIndexRequest(
+    val name: String? = null,
+    @SerialName("filter_query") val filterQuery: String? = null,
+    @SerialName("retention_days") val retentionDays: Int? = null,
+    @SerialName("sampling_rate") val samplingRate: Float? = null,
+    val priority: Int? = null,
+    @SerialName("is_active") val isActive: Boolean? = null,
+    @SerialName("daily_quota_gb") val dailyQuotaGb: Float? = null
+)
+
+@Serializable
+data class LogIndexTestResponse(
+    @SerialName("match_count") val matchCount: Long,
+    @SerialName("total_count") val totalCount: Long
 )

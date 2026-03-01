@@ -152,7 +152,8 @@ class LogService {
                 '${escapeSql(entry.traceId)}',
                 '${escapeSql(entry.spanId)}',
                 ${mapToSqlMap(entry.tags)},
-                ${mapToSqlMap(entry.resourceAttributes)}
+                ${mapToSqlMap(entry.resourceAttributes)},
+                '${escapeSql(entry.indexName)}'
             )
                 """.trimIndent()
             }
@@ -177,7 +178,8 @@ class LogService {
                 trace_id,
                 span_id,
                 tags,
-                resource_attributes
+                resource_attributes,
+                index_name
             ) VALUES
             $rows
             """.trimIndent()
