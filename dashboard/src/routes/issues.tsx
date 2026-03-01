@@ -109,10 +109,38 @@ function normalizeApmTraceId(value: unknown): string | null {
 
 const ISSUE_TITLE_RENDER_MAX_CHARS = 240
 const ISSUE_CULPRIT_RENDER_MAX_CHARS = 160
+const ISSUE_SEARCH_TEXT_MAX_CHARS = 512
+const ISSUE_ID_MAX_CHARS = 512
+
+type SafeIssue = {
+  id: string
+  title: string
+  culprit: string
+  level: string
+  platform: string
+  firstSeen: string
+  lastSeen: string
+  eventCount: number
+  userCount: number
+  status: string
+}
 
 function clampText(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value
   return `${value.slice(0, maxChars - 1)}…`
+}
+
+function toSafeString(value: unknown, fallback = '', maxChars = ISSUE_SEARCH_TEXT_MAX_CHARS): string {
+  const raw = typeof value === 'string' ? value : fallback
+  const trimmed = raw.trim()
+  if (trimmed.length <= maxChars) return trimmed
+  return trimmed.slice(0, maxChars)
+}
+
+function toSafeCount(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n) || n < 0) return 0
+  return Math.floor(n)
 }
 
 function getIssueDisplayTitle(issue: { title: string; culprit: string }): string {
@@ -294,20 +322,38 @@ function DashboardPage() {
     resolveMutation.mutate(Array.from(selectedIssues))
   }
 
-  if (isLoading) return <div className="p-8">Loading...</div>
+  const safeIssues = useMemo<SafeIssue[]>(() => {
+    return issues
+      .map((issue) => {
+        const id = toSafeString(issue.id, '', ISSUE_ID_MAX_CHARS)
+        return {
+          id,
+          title: toSafeString(issue.title, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
+          culprit: toSafeString(issue.culprit, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
+          level: toSafeString(issue.level, 'error', 16) || 'error',
+          platform: toSafeString(issue.platform, 'unknown', 64) || 'unknown',
+          firstSeen: toSafeString(issue.firstSeen, ''),
+          lastSeen: toSafeString(issue.lastSeen, ''),
+          eventCount: toSafeCount(issue.eventCount),
+          userCount: toSafeCount(issue.userCount),
+          status: toSafeString(issue.status, 'unresolved', 32) || 'unresolved',
+        }
+      })
+      .filter((issue) => issue.id.length > 0)
+  }, [issues])
 
-  const safeIssues = issues.filter(
-    (issue) => typeof issue.id === 'string' && issue.id.trim().length > 0
-  )
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
   const filteredIssues = safeIssues.filter((issue) => {
     const matchesSearch =
-      searchQuery === '' ||
-      issue.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      issue.culprit?.toLowerCase().includes(searchQuery.toLowerCase())
+      normalizedSearchQuery === '' ||
+      issue.title.toLowerCase().includes(normalizedSearchQuery) ||
+      issue.culprit.toLowerCase().includes(normalizedSearchQuery)
     const matchesStatus = statusFilter === 'all' || issue.status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  if (isLoading) return <div className="p-8">Loading...</div>
 
   return (
     <div className="min-h-screen">

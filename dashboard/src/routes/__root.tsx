@@ -26,8 +26,6 @@ import {api} from '../lib/api'
 import {setDemoEpoch} from '../lib/demo'
 import {DemoBanner} from '../components/demo/DemoBanner'
 
-const USER_STATUS_TIMEOUT_MS = 4000
-
 export const Route = createRootRoute({
   component: RootComponent,
 })
@@ -184,38 +182,13 @@ function RootComponent() {
         if (cancelled) return
         setIsAuthenticated(hasSession) // Update state based on auth check
         setAuthCheckComplete(true)
+        setOnboardingChecked(true)
         if (!hasSession) {
-          setOnboardingChecked(true)
           return
         }
       } else {
         setAuthCheckComplete(true)
-      }
-
-      // Never block page rendering indefinitely on a hanging user endpoint.
-      setOnboardingChecked(true)
-
-      try {
-        const user = await Promise.race([
-          api.getCurrentUser(),
-          new Promise<null>((resolve) => {
-            window.setTimeout(() => resolve(null), USER_STATUS_TIMEOUT_MS)
-          }),
-        ])
-        if (cancelled || !user) return
-        
-        // First check: Email verification (blocks everything)
-        if (!user.emailVerified && currentPath !== '/verify-email-required') {
-          navigate({ to: '/verify-email-required' })
-          return
-        }
-        
-        // Second check: Onboarding completion (only after email is verified)
-        if (!user.onboardingCompleted && currentPath !== '/onboarding') {
-          navigate({ to: '/onboarding' })
-        }
-      } catch (error) {
-        console.error('Failed to check user status:', error)
+        setOnboardingChecked(true)
       }
     }
 
@@ -224,6 +197,28 @@ function RootComponent() {
       cancelled = true
     }
   }, [isAuthenticated, currentPath, navigate])
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return
+    if (
+      PUBLIC_ROUTES.has(currentPath) ||
+      currentPath.startsWith('/s/') ||
+      currentPath.startsWith('/auth/') ||
+      currentPath.startsWith('/legal/') ||
+      currentPath.startsWith('/docs')
+    ) {
+      return
+    }
+
+    if (!user.emailVerified && currentPath !== '/verify-email-required') {
+      navigate({ to: '/verify-email-required' })
+      return
+    }
+
+    if (!user.onboardingCompleted && currentPath !== '/onboarding') {
+      navigate({ to: '/onboarding' })
+    }
+  }, [currentPath, isAuthenticated, navigate, user])
   
   // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
   const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password', '/onboarding'].includes(currentPath)

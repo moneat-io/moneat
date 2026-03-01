@@ -19,6 +19,7 @@ import {isDemo, setDemoEpoch} from './demo'
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
 const AUTH_PAGE_PATHS = new Set(['/', '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
 const AUTH_CHECK_TIMEOUT_MS = 4000
+const API_REQUEST_TIMEOUT_MS = 15000
 
 // Helper to format errors for logging without massive stack traces
 export function formatErrorForLogging(error: unknown): string {
@@ -41,6 +42,33 @@ interface AuthResponse {
     name?: string
     emailVerified: boolean
     onboardingCompleted: boolean
+  }
+}
+
+function withRequestTimeoutSignal(
+  existingSignal?: AbortSignal,
+  timeoutMs = API_REQUEST_TIMEOUT_MS
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  const onExistingAbort = () => controller.abort()
+  if (existingSignal) {
+    if (existingSignal.aborted) {
+      controller.abort()
+    } else {
+      existingSignal.addEventListener('abort', onExistingAbort, { once: true })
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeoutId)
+      if (existingSignal) {
+        existingSignal.removeEventListener('abort', onExistingAbort)
+      }
+    },
   }
 }
 
@@ -2757,14 +2785,23 @@ class ApiClient {
     // Only send Authorization header for impersonation; normal auth uses httpOnly cookie
     if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
 
+    const { signal, cleanup } = withRequestTimeoutSignal(options.signal)
+
     let response: Response
     try {
-      response = await fetch(endpoint, { ...options, headers, credentials: 'include' })
+      response = await fetch(endpoint, {
+        ...options,
+        headers,
+        credentials: 'include',
+        signal,
+      })
     } catch {
       // Create a clean error without the massive stack trace from fetch
       const networkError = new Error('NETWORK_ERROR')
       networkError.stack = undefined // Remove stack trace to keep error small
       throw networkError
+    } finally {
+      cleanup()
     }
 
     if (response.status === 401) {
@@ -2854,11 +2891,20 @@ class ApiClient {
     }
     if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
 
+    const { signal, cleanup } = withRequestTimeoutSignal(options.signal)
+
     let response: Response
     try {
-      response = await fetch(endpoint, { ...options, headers, credentials: 'include' })
+      response = await fetch(endpoint, {
+        ...options,
+        headers,
+        credentials: 'include',
+        signal,
+      })
     } catch {
       throw new Error('NETWORK_ERROR')
+    } finally {
+      cleanup()
     }
 
     if (response.status === 401) {
