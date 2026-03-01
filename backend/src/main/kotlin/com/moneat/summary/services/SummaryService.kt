@@ -73,6 +73,9 @@ private const val MAX_ERROR_SPIKES = 10
 private const val MAX_NOISY_ISSUES = 5
 private const val MAX_TRANSACTION_LATENCIES = 10
 private const val PERCENT_MULTIPLIER = 100.0
+private const val STATUS_ONLINE = "online"
+private const val STATUS_OFFLINE = "offline"
+private const val STATUS_DOWN = "down"
 
 class SummaryService(
     private val monitorService: MonitorService = MonitorService(),
@@ -93,10 +96,10 @@ class SummaryService(
         val monitors = uptimeService.listMonitors(organizationId)
 
         val hostCounts = HostStatusCounts(
-            online = systems.count { it.status == "online" },
-            offline = systems.count { it.status == "offline" },
+            online = systems.count { it.status == STATUS_ONLINE },
+            offline = systems.count { it.status == STATUS_OFFLINE },
             warning = systems.count {
-                it.status != "online" && it.status != "offline"
+                it.status != STATUS_ONLINE && it.status != STATUS_OFFLINE
             },
             total = systems.size
         )
@@ -112,9 +115,11 @@ class SummaryService(
             )
         }
 
-        val topAlertsDeferred = async { getTopAlerts(organizationId, period) }
+        val topAlertsDeferred = async {
+            getTopAlerts(organizationId, period)
+        }
         val topErrorHostsDeferred = async {
-            getTopErrorRateHosts(organizationId, systems)
+            getTopErrorRateHosts(systems, period)
         }
 
         InfrastructureSummaryResponse(
@@ -141,7 +146,9 @@ class SummaryService(
             .atTime(DEFAULT_OVERNIGHT_START_HOUR, 0)
             .atZone(zone).toInstant()
 
-        val prevEnd = windowStart
+        val prevEnd = today.minusDays(1)
+            .atTime(DEFAULT_OVERNIGHT_END_HOUR, 0)
+            .atZone(zone).toInstant()
         val prevStart = today.minusDays(2)
             .atTime(DEFAULT_OVERNIGHT_START_HOUR, 0)
             .atZone(zone).toInstant()
@@ -181,12 +188,12 @@ class SummaryService(
 
         val hostChanges = systems.filter { sys ->
             sys.lastSeenAt != null &&
-                sys.status == "offline"
+                sys.status == STATUS_OFFLINE
         }.map { sys ->
             HostStatusChange(
                 systemId = sys.id.toString(),
                 systemName = sys.name,
-                previousStatus = "online",
+                previousStatus = STATUS_ONLINE,
                 currentStatus = sys.status,
                 changedAt = sys.lastSeenAt?.let {
                     isoFormatter.format(
@@ -197,7 +204,7 @@ class SummaryService(
         }
 
         val uptimeIncidents = monitors.filter {
-            it.status == "down"
+            it.status == STATUS_DOWN
         }.map { m ->
             UptimeIncidentSummary(
                 monitorId = m.id,
@@ -277,27 +284,23 @@ class SummaryService(
             )
         }
 
-        val avgCpu = if (systems.isEmpty()) {
-            0.0
+        val systemMetrics = if (systems.isEmpty()) {
+            emptyList()
         } else {
             systems.mapNotNull {
                 runCatching {
                     monitorService.getLatestMetrics(it.id)
                 }.getOrNull()
-            }.map { it.cpu_percent.toDouble() }
-                .takeIf { it.isNotEmpty() }?.average() ?: 0.0
+            }
         }
 
-        val avgMem = if (systems.isEmpty()) {
-            0.0
-        } else {
-            systems.mapNotNull {
-                runCatching {
-                    monitorService.getLatestMetrics(it.id)
-                }.getOrNull()
-            }.map { it.mem_percent.toDouble() }
-                .takeIf { it.isNotEmpty() }?.average() ?: 0.0
-        }
+        val avgCpu = systemMetrics
+            .map { it.cpu_percent.toDouble() }
+            .takeIf { it.isNotEmpty() }?.average() ?: 0.0
+
+        val avgMem = systemMetrics
+            .map { it.mem_percent.toDouble() }
+            .takeIf { it.isNotEmpty() }?.average() ?: 0.0
 
         WeeklyReportResponse(
             periodStart = isoFormatter.format(weekAgo),
@@ -329,39 +332,43 @@ class SummaryService(
         val now = Instant.now()
         val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * 60)
 
+        // Incident lookup requires the enterprise OnCallBridge which is
+        // not available in core. Approximate by finding the most recently
+        // triggered alert across the org's systems as context.
         var alertContext: AlertContextInfo? = null
         var hostMetrics: HostMetricsWindow? = null
 
-        for (system in systems) {
-            val alerts = monitorService.listAlerts(system.id)
-            val triggered = alerts.find {
-                it.lastTriggeredAt != null
-            }
-            if (triggered != null) {
-                alertContext = AlertContextInfo(
-                    alertId = triggered.id,
-                    metric = triggered.metric,
-                    condition = triggered.condition,
-                    threshold = triggered.threshold,
+        val triggeredAlerts = systems.flatMap { system ->
+            monitorService.listAlerts(system.id)
+                .filter { it.lastTriggeredAt != null }
+                .map { alert -> alert to system }
+        }.sortedByDescending { it.first.lastTriggeredAt }
+
+        val mostRecent = triggeredAlerts.firstOrNull()
+        if (mostRecent != null) {
+            val (alert, system) = mostRecent
+            alertContext = AlertContextInfo(
+                alertId = alert.id,
+                metric = alert.metric,
+                condition = alert.condition,
+                threshold = alert.threshold,
+                systemId = system.id.toString(),
+                systemName = system.name
+            )
+            val metrics = runCatching {
+                monitorService.getLatestMetrics(system.id)
+            }.getOrNull()
+            if (metrics != null) {
+                hostMetrics = HostMetricsWindow(
                     systemId = system.id.toString(),
-                    systemName = system.name
+                    systemName = system.name,
+                    avgCpu = metrics.cpu_percent.toDouble(),
+                    maxCpu = metrics.cpu_percent.toDouble(),
+                    avgMemory = metrics.mem_percent.toDouble(),
+                    maxMemory = metrics.mem_percent.toDouble(),
+                    windowStart = isoFormatter.format(windowStart),
+                    windowEnd = isoFormatter.format(now)
                 )
-                val metrics = runCatching {
-                    monitorService.getLatestMetrics(system.id)
-                }.getOrNull()
-                if (metrics != null) {
-                    hostMetrics = HostMetricsWindow(
-                        systemId = system.id.toString(),
-                        systemName = system.name,
-                        avgCpu = metrics.cpu_percent.toDouble(),
-                        maxCpu = metrics.cpu_percent.toDouble(),
-                        avgMemory = metrics.mem_percent.toDouble(),
-                        maxMemory = metrics.mem_percent.toDouble(),
-                        windowStart = isoFormatter.format(windowStart),
-                        windowEnd = isoFormatter.format(now)
-                    )
-                }
-                break
             }
         }
 
@@ -376,7 +383,7 @@ class SummaryService(
         }
 
         val affectedMonitors = monitors.filter {
-            it.status == "down"
+            it.status == STATUS_DOWN
         }.map { m ->
             UptimeMonitorSummary(
                 id = m.id,
@@ -412,8 +419,10 @@ class SummaryService(
 
     private fun getTopAlerts(
         organizationId: Int,
-        @Suppress("UnusedParameter") period: String
+        period: String
     ): List<AlertSummaryItem> {
+        val periodMs = periodToMillis(period)
+        val cutoff = System.currentTimeMillis() - periodMs
         val systems = monitorService.listSystems(organizationId)
         val allAlerts = systems.flatMap { sys ->
             monitorService.listAlerts(sys.id).map { alert ->
@@ -428,18 +437,26 @@ class SummaryService(
             }
         }
         return allAlerts
-            .filter { it.lastTriggeredAt != null }
+            .filter {
+                it.lastTriggeredAt != null &&
+                    it.lastTriggeredAt >= cutoff
+            }
             .sortedByDescending { it.lastTriggeredAt }
             .take(MAX_TOP_ALERTS)
     }
 
     private fun getTopErrorRateHosts(
-        @Suppress("UnusedParameter") organizationId: Int,
-        systems: List<com.moneat.monitor.models.SystemData>
+        systems: List<com.moneat.monitor.models.SystemData>,
+        period: String
     ): List<HostErrorRate> {
+        val periodMs = periodToMillis(period)
+        val cutoff = System.currentTimeMillis() - periodMs
         return systems.map { sys ->
             val alertCount = monitorService.listAlerts(sys.id)
-                .count { it.lastTriggeredAt != null }
+                .count { alert ->
+                    alert.lastTriggeredAt != null &&
+                        alert.lastTriggeredAt >= cutoff
+                }
             HostErrorRate(
                 systemId = sys.id.toString(),
                 systemName = sys.name,
@@ -448,6 +465,15 @@ class SummaryService(
         }.filter { it.alertCount > 0 }
             .sortedByDescending { it.alertCount }
             .take(MAX_TOP_HOSTS)
+    }
+
+    private fun periodToMillis(period: String): Long {
+        return when (period) {
+            "24h" -> 24L * 3600 * 1000
+            "7d" -> 7L * 24 * 3600 * 1000
+            "30d" -> 30L * 24 * 3600 * 1000
+            else -> 24L * 3600 * 1000
+        }
     }
 
     private suspend fun getNewIssues(

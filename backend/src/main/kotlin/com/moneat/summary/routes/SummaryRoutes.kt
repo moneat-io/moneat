@@ -31,6 +31,8 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.time.DateTimeException
+import java.time.ZoneId
 
 private val logger = KotlinLogging.logger {}
 
@@ -127,6 +129,20 @@ fun Route.summaryRoutes(
 
                     val timezone = call.parameters["timezone"]
                         ?: "America/New_York"
+                    try {
+                        ZoneId.of(timezone)
+                    } catch (
+                        @Suppress("SwallowedException")
+                        e: DateTimeException
+                    ) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse(
+                                "Invalid timezone: $timezone"
+                            )
+                        )
+                        return@get
+                    }
 
                     val result = summaryService
                         .getOvernightSummary(orgIds.first(), timezone)
