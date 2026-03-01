@@ -44,7 +44,8 @@ SELECT
     container_name, container_id, container_image,
     trace_id, span_id, tags, resource_attributes,
     '' AS index_name
-FROM logs;
+FROM logs
+WHERE (SELECT count() FROM logs_new) = 0;
 
 RENAME TABLE logs TO logs_old, logs_new TO logs;
 

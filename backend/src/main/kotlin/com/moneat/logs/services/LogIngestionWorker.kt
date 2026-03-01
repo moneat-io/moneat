@@ -31,6 +31,7 @@ import mu.KotlinLogging
 import kotlin.random.Random
 
 private val logger = KotlinLogging.logger {}
+private const val FULL_SAMPLING_RATE = 1.0f
 
 class LogIngestionWorker(
     private val queueKey: String,
@@ -128,7 +129,7 @@ class LogIngestionWorker(
             "container_image" to entry.containerImage,
             "trace_id" to entry.traceId,
             "span_id" to entry.spanId
-        ) + entry.tags
+        ) + entry.tags + entry.resourceAttributes
 
         val parser = LogQueryParser()
         for (index in indexes) {
@@ -138,7 +139,11 @@ class LogIngestionWorker(
                 try {
                     val parsed = parser.parse(index.filterQuery)
                     if (parsed.rootNode == null) {
-                        true
+                        logger.debug {
+                            "Filter '${index.filterQuery}' for index '${index.name}' " +
+                                "produced null AST; treating as non-match"
+                        }
+                        false
                     } else {
                         evaluateFilter(parsed.rootNode, entryMap)
                     }
@@ -148,7 +153,7 @@ class LogIngestionWorker(
             }
 
             if (matches) {
-                if (index.samplingRate < 1.0f &&
+                if (index.samplingRate < FULL_SAMPLING_RATE &&
                     Random.nextFloat() > index.samplingRate
                 ) {
                     return null
@@ -167,12 +172,15 @@ class LogIngestionWorker(
             is LogQueryParser.QueryNode.FieldNode -> {
                 val value = entry[node.field] ?: return false
                 if (node.isWildcard) {
-                    val regex = node.value
-                        .replace("*", ".*")
-                        .replace("?", ".")
-                    value.matches(
-                        Regex(regex, RegexOption.IGNORE_CASE)
-                    )
+                    val escaped = Regex.escape(node.value)
+                    val pattern = escaped
+                        .replace("\\*", ".*")
+                        .replace("\\?", ".")
+                    try {
+                        value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
+                    } catch (_: Exception) {
+                        false
+                    }
                 } else {
                     value.equals(node.value, ignoreCase = true)
                 }
@@ -207,8 +215,23 @@ class LogIngestionWorker(
                 entry.values.any {
                     it.contains(node.term, ignoreCase = true)
                 }
-            is LogQueryParser.QueryNode.RangeNode -> false
-            is LogQueryParser.QueryNode.ComparisonNode -> false
+            is LogQueryParser.QueryNode.RangeNode -> {
+                val v = entry[node.field]?.toDoubleOrNull() ?: return false
+                val min = node.min.toDoubleOrNull() ?: return false
+                val max = node.max.toDoubleOrNull() ?: return false
+                v in min..max
+            }
+            is LogQueryParser.QueryNode.ComparisonNode -> {
+                val v = entry[node.field]?.toDoubleOrNull() ?: return false
+                val target = node.value.toDoubleOrNull() ?: return false
+                when (node.operator) {
+                    ">" -> v > target
+                    ">=" -> v >= target
+                    "<" -> v < target
+                    "<=" -> v <= target
+                    else -> false
+                }
+            }
         }
     }
 }

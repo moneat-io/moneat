@@ -38,6 +38,17 @@ import com.moneat.utils.ClickHouseSqlUtils
  */
 class LogQueryParser {
 
+    companion object {
+        /** Top-level ClickHouse log columns (not stored in tags/resource_attributes). */
+        val TOP_LEVEL_FIELDS: Set<String> = setOf(
+            "service", "environment", "host", "source", "level", "message", "body",
+            "container_name", "container_id", "container_image", "trace_id", "span_id",
+            "index_name"
+        )
+
+        val ENUM_FIELDS: Set<String> = setOf("level", "source")
+    }
+
     sealed class Token {
         data class Text(val value: String) : Token()
 
@@ -612,15 +623,10 @@ class LogQueryParser {
             }
 
         // Check if it's a top-level field or a tag/attribute
-        val topLevelFields =
-            setOf(
-                "service", "environment", "host", "source", "level", "message", "body",
-                "container_name", "container_id", "container_image", "trace_id", "span_id",
-                "index_name"
-            )
+        val topLevelFields = TOP_LEVEL_FIELDS
 
         // Enum8 columns need toString() cast for string comparison
-        val enumFields = setOf("level", "source")
+        val enumFields = ENUM_FIELDS
 
         return if (actualField in topLevelFields) {
             val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
@@ -666,10 +672,10 @@ class LogQueryParser {
 
         // For top-level numeric fields, use direct comparison
         // For tags/attributes, cast to Int
-        val topLevelFields = setOf("service", "environment", "host", "source", "level", "message", "body")
+        val topLevelFields = TOP_LEVEL_FIELDS
 
         return if (actualField in topLevelFields) {
-            val fieldRef = if (actualField in setOf("level", "source")) "toString($actualField)" else actualField
+            val fieldRef = if (actualField in ENUM_FIELDS) "toString($actualField)" else actualField
             "($fieldRef >= $minVal AND $fieldRef <= $maxVal)"
         } else {
             val escapedField = escapeFn(actualField)
@@ -696,14 +702,9 @@ class LogQueryParser {
 
         val numVal = value.toDoubleOrNull()
 
-        val topLevelFields =
-            setOf(
-                "service", "environment", "host", "source", "level", "message", "body",
-                "container_name", "container_id", "container_image", "trace_id", "span_id",
-                "index_name"
-            )
+        val topLevelFields = TOP_LEVEL_FIELDS
 
-        val enumFields = setOf("level", "source")
+        val enumFields = ENUM_FIELDS
 
         return if (actualField in topLevelFields) {
             val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
@@ -737,15 +738,10 @@ class LogQueryParser {
                 else -> field
             }
 
-        val topLevelFields =
-            setOf(
-                "service", "environment", "host", "source", "level", "message", "body",
-                "container_name", "container_id", "container_image", "trace_id", "span_id",
-                "index_name"
-            )
+        val topLevelFields = TOP_LEVEL_FIELDS
 
         return if (actualField in topLevelFields) {
-            val fieldRef = if (actualField in setOf("level", "source")) "toString($actualField)" else actualField
+            val fieldRef = if (actualField in ENUM_FIELDS) "toString($actualField)" else actualField
             "$fieldRef IS NOT NULL AND $fieldRef != ''"
         } else {
             val escapedField = escapeFn(actualField)

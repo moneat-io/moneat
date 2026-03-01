@@ -56,21 +56,23 @@ class LogIndexService {
         organizationId: Int,
         request: CreateLogIndexRequest
     ): LogIndexResponse {
+        val name = request.name.trim()
+        if (name.isEmpty()) throw IllegalArgumentException("Index name cannot be empty")
         val now = Clock.System.now()
         val id = transaction {
             LogIndexes.insert {
-                it[LogIndexes.organization_id] = organizationId
-                it[LogIndexes.name] = request.name.trim()
-                it[LogIndexes.filter_query] = request.filterQuery
-                it[LogIndexes.retention_days] = request.retentionDays
+                it[LogIndexes.organizationId] = organizationId
+                it[LogIndexes.name] = name
+                it[LogIndexes.filterQuery] = request.filterQuery
+                it[LogIndexes.retentionDays] = request.retentionDays
                     .coerceIn(1, MAX_RETENTION_DAYS)
-                it[LogIndexes.sampling_rate] = request.samplingRate
+                it[LogIndexes.samplingRate] = request.samplingRate
                     .coerceIn(MIN_SAMPLING_RATE, MAX_SAMPLING_RATE)
                 it[LogIndexes.priority] = request.priority
-                it[LogIndexes.is_active] = true
-                it[LogIndexes.daily_quota_gb] = request.dailyQuotaGb
-                it[LogIndexes.created_at] = now
-                it[LogIndexes.updated_at] = now
+                it[LogIndexes.isActive] = true
+                it[LogIndexes.dailyQuotaGb] = request.dailyQuotaGb
+                it[LogIndexes.createdAt] = now
+                it[LogIndexes.updatedAt] = now
             }[LogIndexes.id]
         }
         invalidateCache(organizationId)
@@ -86,30 +88,34 @@ class LogIndexService {
         val updated = transaction {
             LogIndexes.update({
                 (LogIndexes.id eq indexId) and
-                    (LogIndexes.organization_id eq organizationId)
+                    (LogIndexes.organizationId eq organizationId)
             }) {
-                request.name?.let { v -> it[LogIndexes.name] = v.trim() }
+                request.name?.let { v ->
+                    val trimmed = v.trim()
+                    if (trimmed.isEmpty()) throw IllegalArgumentException("Index name cannot be empty")
+                    it[LogIndexes.name] = trimmed
+                }
                 request.filterQuery?.let { v ->
-                    it[LogIndexes.filter_query] = v
+                    it[LogIndexes.filterQuery] = v
                 }
                 request.retentionDays?.let { v ->
-                    it[LogIndexes.retention_days] =
+                    it[LogIndexes.retentionDays] =
                         v.coerceIn(1, MAX_RETENTION_DAYS)
                 }
                 request.samplingRate?.let { v ->
-                    it[LogIndexes.sampling_rate] =
+                    it[LogIndexes.samplingRate] =
                         v.coerceIn(MIN_SAMPLING_RATE, MAX_SAMPLING_RATE)
                 }
                 request.priority?.let { v ->
                     it[LogIndexes.priority] = v
                 }
                 request.isActive?.let { v ->
-                    it[LogIndexes.is_active] = v
+                    it[LogIndexes.isActive] = v
                 }
                 request.dailyQuotaGb?.let { v ->
-                    it[LogIndexes.daily_quota_gb] = v
+                    it[LogIndexes.dailyQuotaGb] = v
                 }
-                it[LogIndexes.updated_at] = now
+                it[LogIndexes.updatedAt] = now
             }
         }
         if (updated == 0) return null
@@ -121,7 +127,7 @@ class LogIndexService {
         val deleted = transaction {
             LogIndexes.deleteWhere {
                 (LogIndexes.id eq indexId) and
-                    (LogIndexes.organization_id eq organizationId)
+                    (LogIndexes.organizationId eq organizationId)
             }
         }
         if (deleted > 0) invalidateCache(organizationId)
@@ -132,7 +138,7 @@ class LogIndexService {
         return transaction {
             LogIndexes
                 .selectAll()
-                .where { LogIndexes.organization_id eq organizationId }
+                .where { LogIndexes.organizationId eq organizationId }
                 .orderBy(LogIndexes.priority)
                 .map { toResponse(it) }
         }
@@ -147,7 +153,7 @@ class LogIndexService {
                 .selectAll()
                 .where {
                     (LogIndexes.id eq indexId) and
-                        (LogIndexes.organization_id eq organizationId)
+                        (LogIndexes.organizationId eq organizationId)
                 }
                 .firstOrNull()
                 ?.let { toResponse(it) }
@@ -169,8 +175,8 @@ class LogIndexService {
                 LogIndexes
                     .selectAll()
                     .where {
-                        (LogIndexes.organization_id eq organizationId) and
-                            (LogIndexes.is_active eq true)
+                        (LogIndexes.organizationId eq organizationId) and
+                            (LogIndexes.isActive eq true)
                     }
                     .orderBy(LogIndexes.priority)
                     .map { toResponse(it) }
@@ -189,8 +195,15 @@ class LogIndexService {
         val indexes = getActiveIndexesCached(organizationId)
         for (index in indexes) {
             if (index.filterQuery.isBlank()) return index.name
-            if (matchesFilter(index.filterQuery, logEntry)) {
-                return index.name
+            try {
+                if (matchesFilter(index.filterQuery, logEntry)) {
+                    return index.name
+                }
+            } catch (e: Exception) {
+                logger.warn(e) {
+                    "Filter evaluation failed for index '${index.name}' " +
+                        "query='${index.filterQuery}'; skipping"
+                }
             }
         }
         return ""
@@ -271,10 +284,15 @@ class LogIndexService {
             is LogQueryParser.QueryNode.FieldNode -> {
                 val value = entry[node.field] ?: return false
                 if (node.isWildcard) {
-                    val regex = node.value
-                        .replace("*", ".*")
-                        .replace("?", ".")
-                    value.matches(Regex(regex, RegexOption.IGNORE_CASE))
+                    val escaped = Regex.escape(node.value)
+                    val pattern = escaped
+                        .replace("\\*", ".*")
+                        .replace("\\?", ".")
+                    try {
+                        value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
+                    } catch (_: Exception) {
+                        false
+                    }
                 } else {
                     value.equals(node.value, ignoreCase = true)
                 }
@@ -362,14 +380,14 @@ class LogIndexService {
         return LogIndexResponse(
             id = row[LogIndexes.id],
             name = row[LogIndexes.name],
-            filterQuery = row[LogIndexes.filter_query],
-            retentionDays = row[LogIndexes.retention_days],
-            samplingRate = row[LogIndexes.sampling_rate],
+            filterQuery = row[LogIndexes.filterQuery],
+            retentionDays = row[LogIndexes.retentionDays],
+            samplingRate = row[LogIndexes.samplingRate],
             priority = row[LogIndexes.priority],
-            isActive = row[LogIndexes.is_active],
-            dailyQuotaGb = row[LogIndexes.daily_quota_gb],
-            createdAt = row[LogIndexes.created_at].toString(),
-            updatedAt = row[LogIndexes.updated_at].toString()
+            isActive = row[LogIndexes.isActive],
+            dailyQuotaGb = row[LogIndexes.dailyQuotaGb],
+            createdAt = row[LogIndexes.createdAt].toString(),
+            updatedAt = row[LogIndexes.updatedAt].toString()
         )
     }
 

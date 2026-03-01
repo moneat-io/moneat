@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
+import {useState, useEffect} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type LogIndex, type CreateLogIndexRequest, type UpdateLogIndexRequest} from '@/lib/api'
 import {Button} from '@/components/ui/button'
@@ -122,6 +122,7 @@ export function LogIndexesTab() {
                           size="icon"
                           className="h-6 w-6"
                           disabled={i === 0}
+                          aria-label={`Move ${idx.name} up`}
                           onClick={() => {
                             const prev = indexes[i - 1]
                             if (prev) {
@@ -136,6 +137,7 @@ export function LogIndexesTab() {
                           size="icon"
                           className="h-6 w-6"
                           disabled={i === indexes.length - 1}
+                          aria-label={`Move ${idx.name} down`}
                           onClick={() => {
                             const next = indexes[i + 1]
                             if (next) {
@@ -177,6 +179,7 @@ export function LogIndexesTab() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
+                          aria-label={`Edit ${idx.name}`}
                           onClick={() => setEditIndex(idx)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -185,6 +188,7 @@ export function LogIndexesTab() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive"
+                          aria-label={`Delete ${idx.name}`}
                           onClick={() => setDeleteIndex(idx)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -259,6 +263,19 @@ function LogIndexFormDialog({
   const [samplingRate, setSamplingRate] = useState(initial?.sampling_rate ?? 1.0)
   const [priority, setPriority] = useState(initial?.priority ?? 0)
   const [testResult, setTestResult] = useState<{match: number; total: number} | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      // Reset form state when dialog opens so stale values are not shown.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setName(initial?.name ?? '')
+      setFilterQuery(initial?.filter_query ?? '')
+      setRetentionDays(initial?.retention_days ?? 30)
+      setSamplingRate(initial?.sampling_rate ?? 1.0)
+      setPriority(initial?.priority ?? 0)
+      setTestResult(null)
+    }
+  }, [open])
 
   const createMutation = useMutation({
     mutationFn: (req: CreateLogIndexRequest) => api.createLogIndex(req),
@@ -384,7 +401,10 @@ function LogIndexFormDialog({
                 max={1}
                 step={0.01}
                 value={samplingRate}
-                onChange={(e) => setSamplingRate(parseFloat(e.target.value) || 1.0)}
+                onChange={(e) => {
+                  const parsed = parseFloat(e.target.value)
+                  setSamplingRate(Number.isNaN(parsed) ? 1.0 : parsed)
+                }}
               />
             </div>
             <div className="space-y-2">
