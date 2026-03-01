@@ -138,9 +138,9 @@ export const Route = createFileRoute('/issues/$issueId')({
       const redirectPath = (() => {
         try {
           const url = new URL(location.href, 'https://moneat.io')
-          return `${url.pathname}${url.search}${url.hash}` || '/issues'
+          return `${url.pathname}${url.search}${url.hash}` || '/'
         } catch {
-          return '/issues'
+          return '/'
         }
       })()
       throw redirect({ to: '/login', search: { redirect: redirectPath } })

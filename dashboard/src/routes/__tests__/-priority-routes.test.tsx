@@ -73,6 +73,8 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
   redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),
   useNavigate: () => mockNavigate,
+  useMatches: () => [],
+  Outlet: () => null,
 }))
 
 import { Route as IssuesIndexRoute } from '../issues'
