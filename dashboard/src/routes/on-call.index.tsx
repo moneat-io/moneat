@@ -1,6 +1,18 @@
-// Moneat Enterprise - proprietary module
-// Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
@@ -27,7 +39,8 @@ const getPriorityConfig = (priority: string) => {
 }
 
 const getStatusConfig = (status: string) => {
-  if (status === 'OPEN') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', label: 'Open', icon: Zap}
+  if (status === 'TRIGGERED') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', label: 'Triggered', icon: Zap}
+  if (status === 'ACKNOWLEDGED') return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', label: 'Acknowledged', icon: Clock}
   return {color: 'bg-green-500/15 text-green-400 border-green-500/30', label: 'Resolved', icon: CheckCircle2}
 }
 
@@ -49,8 +62,8 @@ function OnCallOverview() {
   })
 
   const {data: incidents, isLoading: incidentsLoading} = useQuery({
-    queryKey: ['on-call-incidents', {status: 'OPEN'}],
-    queryFn: () => api.getOnCallIncidents({status: 'OPEN'}),
+    queryKey: ['incidents', {active: true}],
+    queryFn: () => api.getIncidents(),
   })
 
   const {data: policies, isLoading: policiesLoading} = useQuery({
@@ -68,7 +81,7 @@ function OnCallOverview() {
     queryFn: () => api.getBusinessHours(),
   })
 
-  const activeIncidents = incidents?.filter((i) => i.status === 'OPEN') || []
+  const activeIncidents = incidents?.filter((i) => i.status === 'TRIGGERED' || i.status === 'ACKNOWLEDGED') || []
   const hasActiveIncidents = activeIncidents.length > 0
 
   // Determine which schedules the current user is on-call for
@@ -235,7 +248,7 @@ function OnCallOverview() {
                       return (
                         <Link
                           key={incident.id}
-                          to="/on-call/declared-incidents/$incidentId"
+                          to="/on-call/incidents/$incidentId"
                           params={{incidentId: String(incident.id)}}
                           className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
                         >
@@ -273,7 +286,7 @@ function OnCallOverview() {
                       return (
                         <Link
                           key={incident.id}
-                          to="/on-call/declared-incidents/$incidentId"
+                          to="/on-call/incidents/$incidentId"
                           params={{incidentId: String(incident.id)}}
                           className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
                         >
@@ -407,7 +420,7 @@ function OnCallOverview() {
                 Active Incidents
               </CardTitle>
               <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-                <Link to="/on-call/declared-incidents">
+                <Link to="/on-call/incidents">
                   View all <ArrowUpRight className="h-3 w-3 ml-1" />
                 </Link>
               </Button>
@@ -422,7 +435,7 @@ function OnCallOverview() {
                 return (
                   <Link
                     key={incident.id}
-                    to="/on-call/declared-incidents/$incidentId"
+                    to="/on-call/incidents/$incidentId"
                     params={{incidentId: String(incident.id)}}
                     className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-all group"
                   >
@@ -431,9 +444,7 @@ function OnCallOverview() {
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate group-hover:text-foreground">{incident.title}</p>
                         <p className="text-xs text-muted-foreground">
-                          {incident.declaredAt && !isNaN(new Date(incident.declaredAt).getTime())
-                            ? new Date(incident.declaredAt).toLocaleString()
-                            : '—'}
+                          {new Date(incident.triggeredAt).toLocaleString()}
                         </p>
                       </div>
                     </div>

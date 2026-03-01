@@ -13,20 +13,6 @@ COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 COPY dashboard/ .
-# Overlay enterprise routes/components when present in build context (used by moneat-deploy CI/CD)
-RUN --mount=type=bind,source=.,target=/repo,readonly \
-    if [ -d /repo/enterprise/dashboard/src ]; then \
-      for path in routes components/on-call components/sso-settings.tsx; do \
-        src="/repo/enterprise/dashboard/src/${path}"; \
-        dst="./src/${path}"; \
-        case "${path}" in \
-          *.tsx) \
-            [ -f "${src}" ] && mkdir -p "$(dirname "${dst}")" && cp "${src}" "${dst}" ;; \
-          *) \
-            [ -d "${src}" ] && mkdir -p "${dst}" && cp -r "${src}/." "${dst}/" ;; \
-        esac; \
-      done; \
-    fi
 COPY --from=docs-build /app/build ./public/docs
 ARG VITE_BACKEND_URL=""
 ARG VITE_API_URL=""

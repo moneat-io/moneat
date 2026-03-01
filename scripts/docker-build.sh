@@ -47,7 +47,7 @@ if [ "$BUILD_ENTERPRISE" = true ]; then
   echo "Preparing enterprise build context from $ENTERPRISE_PATH..."
   mkdir -p "$ENTERPRISE_DIR"
   cp -r "$ENTERPRISE_PATH/backend" "$ENTERPRISE_DIR/backend"
-  cp -r "$ENTERPRISE_PATH/dashboard" "$ENTERPRISE_DIR/dashboard"
+  # Dashboard files now in open source - no copy needed
 
   echo "Building with enterprise modules..."
   cd "$REPO_ROOT"
@@ -56,10 +56,7 @@ else
   # Create empty stubs so Dockerfile COPY instructions succeed
   echo "Creating enterprise stubs for core-only build..."
   mkdir -p "$ENTERPRISE_DIR/backend/src"
-  mkdir -p "$ENTERPRISE_DIR/dashboard/src/routes"
-  mkdir -p "$ENTERPRISE_DIR/dashboard/src/components/analytics"
-  mkdir -p "$ENTERPRISE_DIR/dashboard/src/components/on-call"
-  : > "$ENTERPRISE_DIR/dashboard/src/components/sso-settings.tsx"
+  # Dashboard stubs no longer needed
 
   echo "Building core-only..."
   cd "$REPO_ROOT"
