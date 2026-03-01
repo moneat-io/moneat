@@ -80,6 +80,9 @@ private const val STATUS_ONLINE = "online"
 private const val STATUS_OFFLINE = "offline"
 private const val STATUS_DOWN = "down"
 private const val UUID_STRING_LENGTH = 36
+private const val SPIKE_FACTOR = 2
+private const val WEEK_SECONDS = 7 * 24 * 3600L
+private const val TWO_WEEKS_SECONDS = 14 * 24 * 3600L
 
 class SummaryService(
     private val monitorService: MonitorService = MonitorService(),
@@ -226,7 +229,7 @@ class SummaryService(
             errorSpikes = ErrorSpikeInfo(
                 overnightCount = overnightErrors,
                 baselineCount = baselineErrors,
-                spikeDetected = overnightErrors > baselineErrors * 2
+                spikeDetected = overnightErrors > baselineErrors * SPIKE_FACTOR
             ),
             hostStatusChanges = hostChanges,
             uptimeIncidents = uptimeIncidents,
@@ -243,8 +246,8 @@ class SummaryService(
         organizationId: Int
     ): WeeklyReportResponse = coroutineScope {
         val now = Instant.now()
-        val weekAgo = now.minusSeconds(7 * 24 * 3600)
-        val twoWeeksAgo = now.minusSeconds(14 * 24 * 3600)
+        val weekAgo = now.minusSeconds(WEEK_SECONDS)
+        val twoWeeksAgo = now.minusSeconds(TWO_WEEKS_SECONDS)
 
         val projectIds = getProjectIds(organizationId)
         val monitors = uptimeService.listMonitors(organizationId)
@@ -458,21 +461,24 @@ class SummaryService(
         val title: String
     )
 
-    private fun loadIncidentLog(organizationId: Int, incidentId: Long): IncidentLogEntry? = transaction {
-        IncidentEventLog
-            .selectAll()
-            .where {
-                (IncidentEventLog.id eq incidentId.toInt()) and
-                    (IncidentEventLog.organizationId eq organizationId)
-            }
-            .firstOrNull()
-            ?.let { row ->
-                IncidentLogEntry(
-                    deduplicationKey = row[IncidentEventLog.deduplicationKey],
-                    alertSource = row[IncidentEventLog.alertSource],
-                    title = row[IncidentEventLog.title]
-                )
-            }
+    private fun loadIncidentLog(organizationId: Int, incidentId: Long): IncidentLogEntry? {
+        if (incidentId !in Int.MIN_VALUE..Int.MAX_VALUE) return null
+        return transaction {
+            IncidentEventLog
+                .selectAll()
+                .where {
+                    (IncidentEventLog.id eq incidentId.toInt()) and
+                        (IncidentEventLog.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.let { row ->
+                    IncidentLogEntry(
+                        deduplicationKey = row[IncidentEventLog.deduplicationKey],
+                        alertSource = row[IncidentEventLog.alertSource],
+                        title = row[IncidentEventLog.title]
+                    )
+                }
+        }
     }
 
     /**
@@ -485,6 +491,7 @@ class SummaryService(
     private fun parseSystemUuidFromDedupKey(key: String): UUID? {
         val systemAlertPrefix = "moneat-system-alert-"
         val systemDownPrefix = "moneat-system-down-"
+        val uptimePrefix = "moneat-uptime-"
         val uuidStr = when {
             key.startsWith(systemAlertPrefix) -> {
                 val remainder = key.removePrefix(systemAlertPrefix)
@@ -492,6 +499,7 @@ class SummaryService(
                 remainder.take(UUID_STRING_LENGTH)
             }
             key.startsWith(systemDownPrefix) -> key.removePrefix(systemDownPrefix)
+            key.startsWith(uptimePrefix) -> key.removePrefix(uptimePrefix)
             else -> null
         }
         return uuidStr?.let { runCatching { UUID.fromString(it) }.getOrNull() }
