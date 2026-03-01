@@ -32,6 +32,7 @@ import {Dialog, DialogContent} from '@/components/ui/dialog'
 import {AiSuggestions} from '@/components/command-palette/AiSuggestions'
 import {AiChatView} from '@/components/command-palette/AiChatView'
 import {confirmAiAction, streamAiAssistant, type AssistantStreamEvent} from '@/lib/mcp-chat'
+import type {ChatSnapshot} from '@/lib/ai-chat-history'
 import {useProject} from '@/contexts/project-context'
 import {
   Home,
@@ -63,6 +64,8 @@ import {
   Router,
   Loader2,
   Sparkles,
+  Plus,
+  History,
 } from 'lucide-react'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 
@@ -212,6 +215,9 @@ export function CommandPalette() {
   const aiMessages = palette?.aiMessages ?? []
   const toolInvocations = palette?.toolInvocations ?? []
   const pendingConfirmation = palette?.pendingConfirmation ?? null
+  const chatHistory = palette?.chatHistory ?? []
+  const startNewChat = palette?.startNewChat ?? (() => undefined)
+  const restoreChat = palette?.restoreChat ?? (() => undefined)
 
   const setAiMode = palette?.setAiMode ?? (() => undefined)
   const setConversationId = palette?.setConversationId ?? (() => undefined)
@@ -230,6 +236,13 @@ export function CommandPalette() {
     document.addEventListener('keydown', down)
     return () => document.removeEventListener('keydown', down)
   }, [setIsOpen])
+
+  // Restore AI mode when dialog opens with an existing chat
+  useEffect(() => {
+    if (isOpen && aiMessages.length > 0 && !localAiMode) {
+      setLocalAiMode(true)
+    }
+  }, [isOpen]) // only trigger on open state change
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 200)
@@ -475,7 +488,6 @@ export function CommandPalette() {
         setIsOpen(o)
         if (!o) {
           setSearch('')
-          setLocalAiMode(false)
           setAiInput('')
         }
       }}
@@ -508,9 +520,58 @@ export function CommandPalette() {
           )}
           {localAiMode ? (
             <>
+              {aiMessages.length > 0 && (
+                <div className="flex items-center justify-between border-b px-3 py-2">
+                  <span className="text-xs font-medium text-muted-foreground">Ask AI</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      startNewChat()
+                      setAiInput('')
+                      requestAnimationFrame(() => aiInputRef.current?.focus())
+                    }}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    New Chat
+                  </button>
+                </div>
+              )}
               <div className="max-h-[380px] overflow-y-auto">
                 {aiMessages.length === 0 && toolInvocations.length === 0 && !pendingConfirmation ? (
-                  <AiSuggestions onSelect={(suggestion) => void handleAiSubmit(suggestion)} />
+                  <>
+                    <AiSuggestions onSelect={(suggestion) => void handleAiSubmit(suggestion)} />
+                    {chatHistory.length > 0 && (
+                      <div className="border-t px-3 py-2">
+                        <p className="mb-1.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <History className="h-3 w-3" />
+                          Recent Chats
+                        </p>
+                        <div className="space-y-1">
+                          {chatHistory.map((snapshot: ChatSnapshot) => {
+                            const firstUserMsg = snapshot.messages.find((m) => m.role === 'user')
+                            if (!firstUserMsg) return null
+                            const label = firstUserMsg.content.length > 60
+                              ? `${firstUserMsg.content.slice(0, 60)}…`
+                              : firstUserMsg.content
+                            return (
+                              <button
+                                key={snapshot.id}
+                                type="button"
+                                onClick={() => {
+                                  restoreChat(snapshot)
+                                  requestAnimationFrame(() => aiInputRef.current?.focus())
+                                }}
+                                className="w-full text-left rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors truncate"
+                              >
+                                {label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <AiChatView
                     messages={aiMessages}

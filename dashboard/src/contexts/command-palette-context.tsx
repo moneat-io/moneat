@@ -21,15 +21,85 @@ import {
   type AiPalettePendingConfirmation,
   type AiPaletteToolInvocation,
 } from '@/contexts/CommandPaletteContext'
+import {
+  saveActiveChat,
+  loadActiveChat,
+  clearActiveChat,
+  archiveChat,
+  getHistory,
+  type ChatSnapshot,
+} from '@/lib/ai-chat-history'
+
+const EXPIRY_MS = 60 * 60 * 1000 // 1 hour
+
+function loadInitialActiveChat() {
+  return loadActiveChat()
+}
 
 export function CommandPaletteProvider({children}: {children: ReactNode}) {
   const [open, setOpen] = useState(false)
-  const [aiMode, setAiMode] = useState(false)
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [aiMessages, setAiMessages] = useState<AiPaletteMessage[]>([])
-  const [toolInvocations, setToolInvocations] = useState<AiPaletteToolInvocation[]>([])
+  const initialChat = useState(loadInitialActiveChat)[0]
+  const [aiMode, setAiMode] = useState(() => initialChat !== null)
+  const [conversationId, setConversationId] = useState<string | null>(
+    () => initialChat?.conversationId ?? null,
+  )
+  const [aiMessages, setAiMessages] = useState<AiPaletteMessage[]>(
+    () => initialChat?.messages ?? [],
+  )
+  const [toolInvocations, setToolInvocations] = useState<AiPaletteToolInvocation[]>(
+    () => initialChat?.toolInvocations ?? [],
+  )
   const [pendingConfirmation, setPendingConfirmation] = useState<AiPalettePendingConfirmation | null>(null)
+  const [chatHistory, setChatHistory] = useState<ChatSnapshot[]>(() => getHistory())
   const connectionCleanupRef = useRef<(() => void) | null>(null)
+  const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearExpiryTimer = useCallback(() => {
+    if (expiryTimerRef.current) {
+      clearTimeout(expiryTimerRef.current)
+      expiryTimerRef.current = null
+    }
+  }, [])
+
+  const buildSnapshot = useCallback((): ChatSnapshot => ({
+    id: `chat-${Date.now()}`,
+    conversationId,
+    messages: aiMessages,
+    toolInvocations,
+    timestamp: Date.now(),
+  }), [conversationId, aiMessages, toolInvocations])
+
+  // Persist active chat to localStorage whenever it changes
+  useEffect(() => {
+    if (aiMessages.length > 0) {
+      saveActiveChat({
+        id: `chat-${Date.now()}`,
+        conversationId,
+        messages: aiMessages,
+        toolInvocations,
+        timestamp: Date.now(),
+      })
+    }
+  }, [conversationId, aiMessages, toolInvocations])
+
+  // Reset expiry timer whenever messages change
+  useEffect(() => {
+    clearExpiryTimer()
+    if (aiMessages.length > 0) {
+      expiryTimerRef.current = setTimeout(() => {
+        const snapshot = buildSnapshot()
+        archiveChat(snapshot)
+        clearActiveChat()
+        setConversationId(null)
+        setAiMessages([])
+        setToolInvocations([])
+        setPendingConfirmation(null)
+        setAiMode(false)
+        setChatHistory(getHistory())
+      }, EXPIRY_MS)
+    }
+    return clearExpiryTimer
+  }, [aiMessages, clearExpiryTimer, buildSnapshot])
 
   const cleanupConnection = useCallback(() => {
     connectionCleanupRef.current?.()
@@ -37,12 +107,34 @@ export function CommandPaletteProvider({children}: {children: ReactNode}) {
   }, [])
 
   const resetAiState = useCallback(() => {
+    clearExpiryTimer()
     setAiMode(false)
     setConversationId(null)
     setAiMessages([])
     setToolInvocations([])
     setPendingConfirmation(null)
-  }, [])
+    clearActiveChat()
+  }, [clearExpiryTimer])
+
+  const startNewChat = useCallback(() => {
+    cleanupConnection()
+    if (aiMessages.length > 0) {
+      const snapshot = buildSnapshot()
+      archiveChat(snapshot)
+      setChatHistory(getHistory())
+    }
+    resetAiState()
+  }, [cleanupConnection, aiMessages, buildSnapshot, resetAiState])
+
+  const restoreChat = useCallback((snapshot: ChatSnapshot) => {
+    cleanupConnection()
+    setConversationId(snapshot.conversationId)
+    setAiMessages(snapshot.messages)
+    setToolInvocations(snapshot.toolInvocations)
+    setPendingConfirmation(null)
+    setAiMode(true)
+    saveActiveChat({...snapshot, timestamp: Date.now()})
+  }, [cleanupConnection])
 
   const registerConnectionCleanup = useCallback((cleanup: (() => void) | null) => {
     cleanupConnection()
@@ -62,12 +154,11 @@ export function CommandPaletteProvider({children}: {children: ReactNode}) {
         const next = typeof value === 'function' ? value(prev) : value
         if (!next) {
           cleanupConnection()
-          resetAiState()
         }
         return next
       })
     },
-    [cleanupConnection, resetAiState],
+    [cleanupConnection],
   )
   return (
     <CommandPaletteContext.Provider
@@ -88,6 +179,9 @@ export function CommandPaletteProvider({children}: {children: ReactNode}) {
         registerConnectionCleanup,
         cleanupConnection,
         resetAiState,
+        chatHistory,
+        startNewChat,
+        restoreChat,
       }}
     >
       {children}

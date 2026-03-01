@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createContext} from 'react'
+import type {ChatSnapshot} from '@/lib/ai-chat-history'
 
 export interface AiPaletteMessage {
   id: string
@@ -59,6 +60,9 @@ export interface CommandPaletteContextValue {
   registerConnectionCleanup: (cleanup: (() => void) | null) => void
   cleanupConnection: () => void
   resetAiState: () => void
+  chatHistory: ChatSnapshot[]
+  startNewChat: () => void
+  restoreChat: (snapshot: ChatSnapshot) => void
 }
 
 export const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null)
