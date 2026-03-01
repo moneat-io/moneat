@@ -26,6 +26,8 @@ import {api} from '../lib/api'
 import {setDemoEpoch} from '../lib/demo'
 import {DemoBanner} from '../components/demo/DemoBanner'
 
+const USER_STATUS_TIMEOUT_MS = 4000
+
 export const Route = createRootRoute({
   component: RootComponent,
 })
@@ -166,6 +168,8 @@ function RootComponent() {
 
   // Centralized authentication and user status check
   useEffect(() => {
+    let cancelled = false
+
     async function checkUserStatus() {
       // Skip check on public routes and status pages
       if (PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
@@ -177,6 +181,7 @@ function RootComponent() {
       // If session flag is not set, try to validate via cookie (cold-load case)
       if (!isAuthenticated) {
         const hasSession = await api.checkAuth()
+        if (cancelled) return
         setIsAuthenticated(hasSession) // Update state based on auth check
         setAuthCheckComplete(true)
         if (!hasSession) {
@@ -187,13 +192,21 @@ function RootComponent() {
         setAuthCheckComplete(true)
       }
 
+      // Never block page rendering indefinitely on a hanging user endpoint.
+      setOnboardingChecked(true)
+
       try {
-        const user = await api.getCurrentUser()
+        const user = await Promise.race([
+          api.getCurrentUser(),
+          new Promise<null>((resolve) => {
+            window.setTimeout(() => resolve(null), USER_STATUS_TIMEOUT_MS)
+          }),
+        ])
+        if (cancelled || !user) return
         
         // First check: Email verification (blocks everything)
         if (!user.emailVerified && currentPath !== '/verify-email-required') {
           navigate({ to: '/verify-email-required' })
-          setOnboardingChecked(true)
           return
         }
         
@@ -203,12 +216,13 @@ function RootComponent() {
         }
       } catch (error) {
         console.error('Failed to check user status:', error)
-      } finally {
-        setOnboardingChecked(true)
       }
     }
 
     checkUserStatus()
+    return () => {
+      cancelled = true
+    }
   }, [isAuthenticated, currentPath, navigate])
   
   // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
