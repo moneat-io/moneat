@@ -111,7 +111,7 @@ object ClickHouseMigrations {
             ORDER BY version
             """.trimIndent()
 
-        ClickHouseClient.execute(sql)
+        ClickHouseClient.executeMigration(sql)
     }
 
     private fun loadMigrations(): List<Migration> {
@@ -177,7 +177,7 @@ object ClickHouseMigrations {
             """.trimIndent()
 
         return try {
-            val response = ClickHouseClient.execute(query)
+            val response = ClickHouseClient.executeMigration(query)
             val body = response.bodyAsText()
             if (body.isBlank()) return emptyList()
 
@@ -228,7 +228,7 @@ object ClickHouseMigrations {
         for ((index, statement) in statements.withIndex()) {
             if (statement.isBlank()) continue
 
-            val response = ClickHouseClient.execute(statement)
+            val response = ClickHouseClient.executeMigration(statement)
             val body = response.bodyAsText()
 
             if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
@@ -245,7 +245,7 @@ object ClickHouseMigrations {
             VALUES (${migration.version}, '${escapeSql(migration.description)}', '${migration.checksum}')
             """.trimIndent()
 
-        val recordResponse = ClickHouseClient.execute(insertSql)
+        val recordResponse = ClickHouseClient.executeMigration(insertSql)
         val recordBody = recordResponse.bodyAsText()
 
         if (!recordResponse.status.isSuccess() || recordBody.trimStart().startsWith("Code:")) {

@@ -19,6 +19,7 @@ package com.moneat.config
 import com.moneat.utils.SentryUtils
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.events.*
@@ -28,7 +29,10 @@ import io.sentry.ISpan
 import io.sentry.Sentry
 
 object ClickHouseClient {
+    private const val MIGRATION_TIMEOUT_MS = 600_000L
+
     private var httpClient: HttpClient? = null
+    private var migrationClient: HttpClient? = null
     private var baseUrl: String = ""
     private var database: String = ""
     private var user: String = ""
@@ -54,6 +58,22 @@ object ClickHouseClient {
                         connectTimeout = 10_000
                         socketTimeout = 30_000
                     }
+                }
+            }
+        this.migrationClient =
+            HttpClient(CIO) {
+                engine {
+                    maxConnectionsCount = 4
+                    endpoint {
+                        keepAliveTime = 5000
+                        connectTimeout = 10_000
+                        socketTimeout = MIGRATION_TIMEOUT_MS
+                    }
+                }
+                install(HttpTimeout) {
+                    requestTimeoutMillis = MIGRATION_TIMEOUT_MS
+                    connectTimeoutMillis = 10_000
+                    socketTimeoutMillis = MIGRATION_TIMEOUT_MS
                 }
             }
     }
@@ -103,6 +123,20 @@ object ClickHouseClient {
         return body
     }
 
+    /**
+     * Execute a query using the migration client with extended timeouts.
+     * Use for DDL and data-copy statements that may run for minutes.
+     */
+    suspend fun executeMigration(query: String): HttpResponse {
+        return migrationClient!!.post(baseUrl) {
+            parameter("database", database)
+            header("X-ClickHouse-User", user)
+            header("X-ClickHouse-Key", password)
+            contentType(ContentType.Text.Plain)
+            setBody(query)
+        }
+    }
+
     suspend fun ping(): Boolean {
         return try {
             val response = httpClient!!.get("$baseUrl/ping")
@@ -117,6 +151,8 @@ object ClickHouseClient {
     fun close() {
         httpClient?.close()
         httpClient = null
+        migrationClient?.close()
+        migrationClient = null
     }
 }
 
