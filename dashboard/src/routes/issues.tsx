@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useMatches} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -30,7 +30,6 @@ import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {
-  Activity,
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
@@ -41,12 +40,8 @@ import {
   Search,
   Server,
   Settings,
-  TrendingUp,
-  Users
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
-import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
-import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
 import {useToast} from '@/hooks/use-toast'
 import {getNow} from '@/lib/demo'
 
@@ -157,22 +152,6 @@ function EventSparkline({ eventCount }: { eventCount: number }) {
 }
 
 export const Route = createFileRoute('/issues')({
-  beforeLoad: async ({ location }) => {
-    if (api.isAuthenticated()) return
-
-    const hasSession = await api.checkAuth()
-    if (!hasSession) {
-      const redirectPath = (() => {
-        try {
-          const url = new URL(location.href, 'https://moneat.io')
-          return `${url.pathname}${url.search}${url.hash}` || '/issues'
-        } catch {
-          return '/issues'
-        }
-      })()
-      throw redirect({ to: '/login', search: { redirect: redirectPath } })
-    }
-  },
   component: IssuesLayout,
 })
 
@@ -255,12 +234,6 @@ function DashboardPage() {
   const { data: issues = [] } = useQuery({
     queryKey: ['issues', projectId, statusFilter],
     queryFn: () => (projectId ? api.getIssues(projectId) : []),
-    enabled: !!projectId,
-  })
-
-  const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['stats', projectId],
-    queryFn: () => (projectId ? api.getProjectStats(projectId, '24h') : null),
     enabled: !!projectId,
   })
 
@@ -382,60 +355,6 @@ function DashboardPage() {
           </Card>
         ) : (
           <>
-            {/* Overview Stats & Chart — always visible, compact side-by-side layout */}
-            {isLoadingStats ? (
-              <div className="mb-4 grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <StatsCardSkeleton accent="blue" />
-                  <StatsCardSkeleton accent="amber" />
-                  <StatsCardSkeleton accent="emerald" />
-                  <StatsCardSkeleton accent="violet" />
-                </div>
-                <div className="min-h-[160px]">
-                  <EventsChartSkeleton fillHeight />
-                </div>
-              </div>
-            ) : stats ? (
-              <div className={cn("mb-4 grid gap-3", stats.eventsTimeline.length > 0 ? "grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" : "grid-cols-1")}>
-                <div className={cn("grid gap-3", stats.eventsTimeline.length > 0 ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
-                  <StatsCard
-                    title="Errors (24h)"
-                    value={formatCount(stats.totalEvents)}
-                    icon={Activity}
-                    accent="blue"
-                  />
-                  <StatsCard
-                    title="Unresolved"
-                    value={formatCount(stats.unresolvedIssues)}
-                    icon={AlertCircle}
-                    accent="amber"
-                    valueColor={stats.unresolvedIssues > 0 ? 'text-amber-600 dark:text-amber-400' : undefined}
-                  />
-                  <StatsCard
-                    title="Users (24h)"
-                    value={formatCount(stats.affectedUsers)}
-                    icon={Users}
-                    accent="emerald"
-                  />
-                  <StatsCard
-                    title="Total Issues"
-                    value={formatCount(stats.totalIssues)}
-                    icon={TrendingUp}
-                    accent="violet"
-                  />
-                </div>
-                {stats.eventsTimeline.length > 0 && (
-                  <div className="min-h-[160px]">
-                    <EventsChart
-                      data={stats.eventsTimeline}
-                      title="Errors — Last 24 Hours"
-                      fillHeight
-                    />
-                  </div>
-                )}
-              </div>
-            ) : null}
-
             {/* Toolbar */}
             <div className="mb-3 flex gap-3 items-center">
               {filteredIssues.length > 0 && (
