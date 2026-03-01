@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet, useMatches} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -163,8 +163,10 @@ export const Route = createFileRoute('/issues')({
 })
 
 function IssuesLayout() {
-  const matches = useMatches()
-  const showingChildRoute = matches.some((match) => match.id.includes('/issues/$issueId'))
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/issues'
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/'
+  const showingChildRoute =
+    normalizedPath.startsWith('/issues/') && normalizedPath !== '/issues'
 
   if (showingChildRoute) {
     return <Outlet />
@@ -580,10 +582,6 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
   const totalCount = data?.totalCount ?? 0
   const canPrev = offset > 0
   const canNext = offset + errors.length < totalCount
-
-  if (!isLoading && data && errors.length === 0 && totalCount > 0 && offset > 0) {
-    setOffset(0)
-  }
 
   function handleServiceChange(service: string) {
     setSelectedService(service)

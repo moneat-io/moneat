@@ -18,6 +18,7 @@ import {isDemo, setDemoEpoch} from './demo'
 
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
 const AUTH_PAGE_PATHS = new Set(['/', '/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'])
+const AUTH_CHECK_TIMEOUT_MS = 4000
 
 // Helper to format errors for logging without massive stack traces
 export function formatErrorForLogging(error: unknown): string {
@@ -3050,11 +3051,15 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${impersonateToken}`
     }
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), AUTH_CHECK_TIMEOUT_MS)
+
     try {
       const response = await fetch(`${API_BASE}/user`, {
         method: 'GET',
         headers,
         credentials: 'include',
+        signal: controller.signal,
       })
 
       if (!response.ok) {
@@ -3067,6 +3072,8 @@ class ApiClient {
     } catch {
       sessionStorage.removeItem('authenticated')
       return false
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 
