@@ -92,6 +92,11 @@ import java.util.*
 private val logger = KotlinLogging.logger {}
 
 class DashboardService {
+    companion object {
+        private const val ISSUE_LIST_TITLE_MAX_CHARS = 240
+        private const val ISSUE_LIST_CULPRIT_MAX_CHARS = 160
+    }
+
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
     private val json = Json { ignoreUnknownKeys = true }
@@ -733,8 +738,8 @@ class DashboardService {
                 """
             SELECT 
                 issue_id,
-                any(message) as title,
-                any(exception_type) as culprit,
+                substringUTF8(any(message), 1, $ISSUE_LIST_TITLE_MAX_CHARS) as title,
+                substringUTF8(any(exception_type), 1, $ISSUE_LIST_CULPRIT_MAX_CHARS) as culprit,
                 any(level) as level,
                 any(platform) as platform,
                 formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,

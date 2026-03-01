@@ -28,7 +28,6 @@ import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
-import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {
   AlertCircle,
   AlertTriangle,
@@ -108,9 +107,17 @@ function normalizeApmTraceId(value: unknown): string | null {
   return /^\d+$/.test(normalized) ? normalized : null
 }
 
+const ISSUE_TITLE_RENDER_MAX_CHARS = 240
+const ISSUE_CULPRIT_RENDER_MAX_CHARS = 160
+
+function clampText(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value
+  return `${value.slice(0, maxChars - 1)}…`
+}
+
 function getIssueDisplayTitle(issue: { title: string; culprit: string }): string {
-  const title = issue.title?.trim() ?? ''
-  const culprit = issue.culprit?.trim() ?? ''
+  const title = clampText(issue.title?.trim() ?? '', ISSUE_TITLE_RENDER_MAX_CHARS)
+  const culprit = clampText(issue.culprit?.trim() ?? '', ISSUE_CULPRIT_RENDER_MAX_CHARS)
 
   if (!title) return culprit || 'Unknown error'
   if (!culprit) return title
@@ -170,40 +177,43 @@ function IndexPage() {
   const [activeTab, setActiveTab] = useState<'issues' | 'apm-errors'>('issues')
 
   return (
-    <Tabs
-      value={activeTab}
-      onValueChange={(value) => {
-        if (value === 'issues' || value === 'apm-errors') {
-          setActiveTab(value)
-        }
-      }}
-      className="min-h-screen"
-    >
+    <div className="min-h-screen">
       <div className="border-b px-6">
-        <TabsList className="bg-transparent h-auto p-0 gap-4">
-          <TabsTrigger
-            value="issues"
-            className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 py-3 text-sm font-medium"
+        <div className="flex gap-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab('issues')}
+            className={cn(
+              'border-b-2 px-1 py-3 text-sm font-medium inline-flex items-center',
+              activeTab === 'issues'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
           >
             <AlertCircle className="h-4 w-4 mr-1.5" />
             Issues
-          </TabsTrigger>
-          <TabsTrigger
-            value="apm-errors"
-            className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 py-3 text-sm font-medium"
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('apm-errors')}
+            className={cn(
+              'border-b-2 px-1 py-3 text-sm font-medium inline-flex items-center',
+              activeTab === 'apm-errors'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
           >
             <Cpu className="h-4 w-4 mr-1.5" />
             APM Errors
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
       </div>
-      <TabsContent value="issues" className="mt-0">
+      {activeTab === 'issues' ? (
         <DashboardPage />
-      </TabsContent>
-      <TabsContent value="apm-errors" className="mt-0">
-        <ApmErrorsTab isActive={activeTab === 'apm-errors'} />
-      </TabsContent>
-    </Tabs>
+      ) : (
+        <ApmErrorsTab isActive />
+      )}
+    </div>
   )
 }
 
