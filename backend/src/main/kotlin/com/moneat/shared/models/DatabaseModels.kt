@@ -194,6 +194,21 @@ object LogApiKeys : Table("log_api_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object LogIndexes : Table("log_indexes") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val filterQuery = text("filter_query").default("")
+    val retentionDays = integer("retention_days").default(30)
+    val samplingRate = float("sampling_rate").default(1.0f)
+    val priority = integer("priority").default(0)
+    val isActive = bool("is_active").default(true)
+    val dailyQuotaGb = float("daily_quota_gb").nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object AgentApiKeys : Table("agent_api_keys") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)
