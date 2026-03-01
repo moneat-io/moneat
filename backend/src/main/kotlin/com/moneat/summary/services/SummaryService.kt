@@ -19,6 +19,7 @@ package com.moneat.summary.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.ReleaseService
+import com.moneat.incident.models.IncidentEventLog
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Projects
@@ -53,10 +54,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
+import java.util.UUID
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -76,6 +79,7 @@ private const val PERCENT_MULTIPLIER = 100.0
 private const val STATUS_ONLINE = "online"
 private const val STATUS_OFFLINE = "offline"
 private const val STATUS_DOWN = "down"
+private const val UUID_STRING_LENGTH = 36
 
 class SummaryService(
     private val monitorService: MonitorService = MonitorService(),
@@ -332,43 +336,79 @@ class SummaryService(
         val now = Instant.now()
         val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * 60)
 
-        // Incident lookup requires the enterprise OnCallBridge which is
-        // not available in core. Approximate by finding the most recently
-        // triggered alert across the org's systems as context.
+        // Load the specific incident from IncidentEventLog by ID and org, then
+        // parse the deduplication key to find the exact triggering system/alert.
         var alertContext: AlertContextInfo? = null
         var hostMetrics: HostMetricsWindow? = null
 
-        val triggeredAlerts = systems.flatMap { system ->
-            monitorService.listAlerts(system.id)
-                .filter { it.lastTriggeredAt != null }
-                .map { alert -> alert to system }
-        }.sortedByDescending { it.first.lastTriggeredAt }
-
-        val mostRecent = triggeredAlerts.firstOrNull()
-        if (mostRecent != null) {
-            val (alert, system) = mostRecent
-            alertContext = AlertContextInfo(
-                alertId = alert.id,
-                metric = alert.metric,
-                condition = alert.condition,
-                threshold = alert.threshold,
-                systemId = system.id.toString(),
-                systemName = system.name
-            )
-            val metrics = runCatching {
-                monitorService.getLatestMetrics(system.id)
-            }.getOrNull()
-            if (metrics != null) {
-                hostMetrics = HostMetricsWindow(
+        val incidentLog = loadIncidentLog(organizationId, incidentId)
+        if (incidentLog != null) {
+            val systemUuid = parseSystemUuidFromDedupKey(incidentLog.deduplicationKey)
+            val alertId = parseAlertIdFromDedupKey(incidentLog.deduplicationKey)
+            val system = if (systemUuid != null) {
+                systems.firstOrNull { it.id == systemUuid }
+            } else {
+                null
+            }
+            if (system != null) {
+                val alert = if (alertId != null) {
+                    monitorService.listAlerts(system.id).firstOrNull { it.id == alertId }
+                } else {
+                    monitorService.listAlerts(system.id).firstOrNull { it.lastTriggeredAt != null }
+                }
+                alertContext = AlertContextInfo(
+                    alertId = alert?.id ?: 0,
+                    metric = alert?.metric ?: "",
+                    condition = alert?.condition ?: "",
+                    threshold = alert?.threshold ?: 0.0,
                     systemId = system.id.toString(),
-                    systemName = system.name,
-                    avgCpu = metrics.cpu_percent.toDouble(),
-                    maxCpu = metrics.cpu_percent.toDouble(),
-                    avgMemory = metrics.mem_percent.toDouble(),
-                    maxMemory = metrics.mem_percent.toDouble(),
-                    windowStart = isoFormatter.format(windowStart),
-                    windowEnd = isoFormatter.format(now)
+                    systemName = system.name
                 )
+                val metrics = runCatching { monitorService.getLatestMetrics(system.id) }.getOrNull()
+                if (metrics != null) {
+                    hostMetrics = HostMetricsWindow(
+                        systemId = system.id.toString(),
+                        systemName = system.name,
+                        avgCpu = metrics.cpu_percent.toDouble(),
+                        maxCpu = metrics.cpu_percent.toDouble(),
+                        avgMemory = metrics.mem_percent.toDouble(),
+                        maxMemory = metrics.mem_percent.toDouble(),
+                        windowStart = isoFormatter.format(windowStart),
+                        windowEnd = isoFormatter.format(now)
+                    )
+                }
+            }
+        } else {
+            // Fallback: use the most recently triggered alert across the org
+            // when the incident log entry cannot be found.
+            val mostRecent = systems.flatMap { system ->
+                monitorService.listAlerts(system.id)
+                    .filter { it.lastTriggeredAt != null }
+                    .map { alert -> alert to system }
+            }.maxByOrNull { it.first.lastTriggeredAt ?: 0 }
+            if (mostRecent != null) {
+                val (alert, system) = mostRecent
+                alertContext = AlertContextInfo(
+                    alertId = alert.id,
+                    metric = alert.metric,
+                    condition = alert.condition,
+                    threshold = alert.threshold,
+                    systemId = system.id.toString(),
+                    systemName = system.name
+                )
+                val metrics = runCatching { monitorService.getLatestMetrics(system.id) }.getOrNull()
+                if (metrics != null) {
+                    hostMetrics = HostMetricsWindow(
+                        systemId = system.id.toString(),
+                        systemName = system.name,
+                        avgCpu = metrics.cpu_percent.toDouble(),
+                        maxCpu = metrics.cpu_percent.toDouble(),
+                        avgMemory = metrics.mem_percent.toDouble(),
+                        maxMemory = metrics.mem_percent.toDouble(),
+                        windowStart = isoFormatter.format(windowStart),
+                        windowEnd = isoFormatter.format(now)
+                    )
+                }
             }
         }
 
@@ -407,6 +447,66 @@ class SummaryService(
     }
 
     // --- Private helpers ---
+
+    /**
+     * Look up the specific [IncidentEventLog] entry by its ID, scoped to the
+     * organization for security. Returns null when no matching entry exists.
+     */
+    private data class IncidentLogEntry(
+        val deduplicationKey: String,
+        val alertSource: String,
+        val title: String
+    )
+
+    private fun loadIncidentLog(organizationId: Int, incidentId: Long): IncidentLogEntry? = transaction {
+        IncidentEventLog
+            .selectAll()
+            .where {
+                (IncidentEventLog.id eq incidentId.toInt()) and
+                    (IncidentEventLog.organizationId eq organizationId)
+            }
+            .firstOrNull()
+            ?.let { row ->
+                IncidentLogEntry(
+                    deduplicationKey = row[IncidentEventLog.deduplicationKey],
+                    alertSource = row[IncidentEventLog.alertSource],
+                    title = row[IncidentEventLog.title]
+                )
+            }
+    }
+
+    /**
+     * Deduplication key formats:
+     * - `moneat-system-alert-{UUID}-id_{Int}` or `...-tpl_{Int}`
+     * - `moneat-system-down-{UUID}`
+     * - `moneat-uptime-{UUID}`
+     * Returns the UUID of the host system when present, or null.
+     */
+    private fun parseSystemUuidFromDedupKey(key: String): UUID? {
+        val systemAlertPrefix = "moneat-system-alert-"
+        val systemDownPrefix = "moneat-system-down-"
+        val uuidStr = when {
+            key.startsWith(systemAlertPrefix) -> {
+                val remainder = key.removePrefix(systemAlertPrefix)
+                // UUID is 36 chars; the suffix (-id_ or -tpl_) follows immediately
+                remainder.take(UUID_STRING_LENGTH)
+            }
+            key.startsWith(systemDownPrefix) -> key.removePrefix(systemDownPrefix)
+            else -> null
+        }
+        return uuidStr?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+    }
+
+    /**
+     * Parses the alert ID integer from `moneat-system-alert-{UUID}-id_{Int}` keys.
+     * Returns null for other key formats.
+     */
+    private fun parseAlertIdFromDedupKey(key: String): Int? {
+        val idMarker = "-id_"
+        val idx = key.indexOf(idMarker)
+        if (idx < 0) return null
+        return key.substring(idx + idMarker.length).toIntOrNull()
+    }
 
     private fun getProjectIds(organizationId: Int): List<Long> {
         return transaction {
