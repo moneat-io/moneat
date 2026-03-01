@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as TracesRouteImport } from './routes/traces'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SyntheticsRouteImport } from './routes/synthetics'
 import { Route as SignupRouteImport } from './routes/signup'
@@ -124,6 +125,11 @@ const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TracesRoute = TracesRouteImport.update({
+  id: '/traces',
+  path: '/traces',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -691,6 +697,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
+  '/traces': typeof TracesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -789,6 +796,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/traces': typeof TracesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -896,6 +904,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
+  '/traces': typeof TracesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -1006,6 +1015,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/synthetics'
     | '/terms'
+    | '/traces'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1104,6 +1114,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/terms'
+    | '/traces'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1210,6 +1221,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/synthetics'
     | '/terms'
+    | '/traces'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1319,6 +1331,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   SyntheticsRoute: typeof SyntheticsRouteWithChildren
   TermsRoute: typeof TermsRoute
+  TracesRoute: typeof TracesRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
   AiGenerationsRoute: typeof AiGenerationsRoute
@@ -1350,6 +1363,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/traces': {
+      id: '/traces'
+      path: '/traces'
+      fullPath: '/traces'
+      preLoaderRoute: typeof TracesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -2453,6 +2473,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   SyntheticsRoute: SyntheticsRouteWithChildren,
   TermsRoute: TermsRoute,
+  TracesRoute: TracesRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
   AiGenerationsRoute: AiGenerationsRoute,
