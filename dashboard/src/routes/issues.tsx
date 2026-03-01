@@ -294,7 +294,11 @@ function DashboardPage() {
 
   if (isLoading) return <div className="p-8">Loading...</div>
 
-  const filteredIssues = issues.filter((issue) => {
+  const safeIssues = issues.filter(
+    (issue) => typeof issue.id === 'string' && issue.id.trim().length > 0
+  )
+
+  const filteredIssues = safeIssues.filter((issue) => {
     const matchesSearch =
       searchQuery === '' ||
       issue.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -473,9 +477,8 @@ function DashboardPage() {
                           aria-label={`Select ${issue.title}`}
                           className="shrink-0"
                         />
-                        <Link
-                          to="/issues/$issueId"
-                          params={{ issueId: issue.id }}
+                        <a
+                          href={`/issues/${encodeURIComponent(issue.id)}`}
                           className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
                         >
                           <Badge className={`${getLevelColor(issue.level)} shrink-0 text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0 w-12 sm:w-14 justify-center`}>
@@ -524,7 +527,7 @@ function DashboardPage() {
                               {formatRelativeTime(issue.lastSeen)}
                             </span>
                           </div>
-                        </Link>
+                        </a>
                       </div>
                     </div>
                   ))}
