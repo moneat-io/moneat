@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as TracesRouteImport } from './routes/traces'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SyntheticsRouteImport } from './routes/synthetics'
 import { Route as SignupRouteImport } from './routes/signup'
@@ -48,6 +49,7 @@ import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
+import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
@@ -124,6 +126,11 @@ const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TracesRoute = TracesRouteImport.update({
+  id: '/traces',
+  path: '/traces',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -310,6 +317,11 @@ const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MonitoringRoute,
+} as any)
+const IssuesIndexRoute = IssuesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => IssuesRoute,
 } as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
@@ -691,6 +703,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
+  '/traces': typeof TracesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -743,6 +756,7 @@ export interface FileRoutesByFullPath {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -776,7 +790,6 @@ export interface FileRoutesByTo {
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
-  '/issues': typeof IssuesRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/onboarding': typeof OnboardingRoute
@@ -789,6 +802,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/traces': typeof TracesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -839,6 +853,7 @@ export interface FileRoutesByTo {
   '/analytics': typeof AnalyticsIndexRoute
   '/apm-traces': typeof ApmTracesIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
+  '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
@@ -896,6 +911,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
+  '/traces': typeof TracesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -948,6 +964,7 @@ export interface FileRoutesById {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -1006,6 +1023,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/synthetics'
     | '/terms'
+    | '/traces'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1058,6 +1076,7 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
+    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -1091,7 +1110,6 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
-    | '/issues'
     | '/login'
     | '/logs'
     | '/onboarding'
@@ -1104,6 +1122,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/terms'
+    | '/traces'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1154,6 +1173,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
+    | '/issues'
     | '/monitoring'
     | '/on-call'
     | '/performance'
@@ -1210,6 +1230,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/synthetics'
     | '/terms'
+    | '/traces'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1262,6 +1283,7 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
+    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -1319,6 +1341,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   SyntheticsRoute: typeof SyntheticsRouteWithChildren
   TermsRoute: typeof TermsRoute
+  TracesRoute: typeof TracesRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
   AiGenerationsRoute: typeof AiGenerationsRoute
@@ -1350,6 +1373,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/traces': {
+      id: '/traces'
+      path: '/traces'
+      fullPath: '/traces'
+      preLoaderRoute: typeof TracesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -1610,6 +1640,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/monitoring/'
       preLoaderRoute: typeof MonitoringIndexRouteImport
       parentRoute: typeof MonitoringRoute
+    }
+    '/issues/': {
+      id: '/issues/'
+      path: '/'
+      fullPath: '/issues/'
+      preLoaderRoute: typeof IssuesIndexRouteImport
+      parentRoute: typeof IssuesRoute
     }
     '/dashboards/': {
       id: '/dashboards/'
@@ -2182,10 +2219,12 @@ const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
 
 interface IssuesRouteChildren {
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
+  IssuesIndexRoute: typeof IssuesIndexRoute
 }
 
 const IssuesRouteChildren: IssuesRouteChildren = {
   IssuesIssueIdRoute: IssuesIssueIdRoute,
+  IssuesIndexRoute: IssuesIndexRoute,
 }
 
 const IssuesRouteWithChildren =
@@ -2453,6 +2492,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   SyntheticsRoute: SyntheticsRouteWithChildren,
   TermsRoute: TermsRoute,
+  TracesRoute: TracesRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
   AiGenerationsRoute: AiGenerationsRoute,
