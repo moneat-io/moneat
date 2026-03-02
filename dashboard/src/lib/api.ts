@@ -762,6 +762,7 @@ export interface DdHostResponse {
   tags: Record<string, string>
   firstSeenAt: string
   lastSeenAt: string
+  isOnline: boolean
 }
 
 export interface DdHostListResponse {

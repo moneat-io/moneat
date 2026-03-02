@@ -1144,15 +1144,6 @@ function formatBytes(kb: number): string {
   return `${gb.toFixed(1)} GB`
 }
 
-function isOnline(lastSeenAt: string): boolean {
-  if (!lastSeenAt) return false
-  try {
-    const diff = Date.now() - new Date(lastSeenAt).getTime()
-    return diff < 15 * 60 * 1000
-  } catch {
-    return false
-  }
-}
 
 const TIER_HOST_LIMITS: Record<string, number> = {
   FREE: Infinity,
@@ -1589,7 +1580,7 @@ function SortIndicator({field, sortField, sortDir}: {field: SortField; sortField
 }
 
 function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number, name: string) => void}) {
-  const online = isOnline(host.lastSeenAt)
+  const online = host.isOnline
 
   return (
     <Link
@@ -1811,8 +1802,8 @@ function MonitoringHostsPage() {
           h.agentVersion?.toLowerCase().includes(q)
       )
     }
-    if (statusFilter === 'online') result = result.filter((h) => isOnline(h.lastSeenAt))
-    else if (statusFilter === 'offline') result = result.filter((h) => !isOnline(h.lastSeenAt))
+    if (statusFilter === 'online') result = result.filter((h) => h.isOnline)
+    else if (statusFilter === 'offline') result = result.filter((h) => !h.isOnline)
 
     result = [...result].sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1
@@ -1833,7 +1824,7 @@ function MonitoringHostsPage() {
     return result
   }, [hosts, searchQuery, statusFilter, sortField, sortDir])
 
-  const onlineCount = hosts.filter((h) => isOnline(h.lastSeenAt)).length
+  const onlineCount = hosts.filter((h) => h.isOnline).length
   const offlineCount = hosts.length - onlineCount
   const totalCores = hosts.reduce((sum, h) => sum + (h.cpuCores || 0), 0)
   const totalMemoryKb = hosts.reduce((sum, h) => sum + (h.memoryTotalKb || 0), 0)
@@ -2093,7 +2084,7 @@ function MonitoringHostsPage() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((host: DdHostResponse) => {
-                    const online = isOnline(host.lastSeenAt)
+                    const online = host.isOnline
                     const memPct = maxMemory > 0 ? (host.memoryTotalKb / maxMemory) * 100 : 0
 
                     return (
