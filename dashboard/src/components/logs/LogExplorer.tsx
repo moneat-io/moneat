@@ -592,7 +592,7 @@ export function LogExplorer({
     return () => {
       observer.disconnect()
     }
-  }, [logPage?.hasMore, logPage?.nextCursor, isLoadingMore, isFetching, cursor])
+  }, [logPage?.hasMore, logPage?.nextCursor, isLoadingMore, isFetching, cursor, logs.length])
 
   // Show loading state only on initial load with no accumulated logs
   const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
@@ -863,7 +863,7 @@ export function LogExplorer({
                       <div className="text-center text-xs text-muted-foreground/50">
                         Scroll for more
                       </div>
-                    ) : logs.length > 150 ? (
+                    ) : logPage && !logPage.hasMore ? (
                       <div className="border-t pt-3 text-center text-xs text-muted-foreground/70">
                         End of results • {logs.length} logs loaded
                       </div>
