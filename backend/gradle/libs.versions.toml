@@ -56,7 +56,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version = "1.10.2" }
 
 # Redis
-lettuce = { module = "io.lettuce:lettuce-core", version = "7.4.0.RELEASE" }
+lettuce = { module = "io.lettuce:lettuce-core", version = "7.5.0.RELEASE" }
 
 # Email
 jakarta-mail = { module = "com.sun.mail:jakarta.mail", version = "2.0.2" }
