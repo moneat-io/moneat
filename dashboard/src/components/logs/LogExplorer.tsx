@@ -603,17 +603,32 @@ export function LogExplorer({
     <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]", className)}>
       {/* Header bar */}
       <div className="shrink-0 border-b bg-background/95 backdrop-blur-sm z-20">
-          <div className="flex items-center justify-between gap-4 px-3 py-2 sm:px-4 sm:py-3 lg:px-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-gradient-to-br from-blue-500/15 to-violet-500/15 p-2 ring-1 ring-blue-500/20">
-                <TerminalSquare className="h-5 w-5 text-blue-500" />
+          <div className="flex items-center gap-3 px-3 py-2 sm:px-4 lg:px-6">
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="rounded-lg bg-gradient-to-br from-blue-500/15 to-violet-500/15 p-1.5 ring-1 ring-blue-500/20">
+                <TerminalSquare className="h-4 w-4 text-blue-500" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold leading-tight">Log Explorer</h2>
-                <p className="hidden sm:block text-[11px] text-muted-foreground">
-                  Search, filter, and analyze logs
-                </p>
-              </div>
+              <h2 className="text-sm font-semibold leading-tight hidden sm:block">Log Explorer</h2>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <LogSearchBar
+                query={query}
+                onQueryChange={setQuery}
+                facetFilters={facetFilters}
+                onFacetFiltersChange={setFacetFilters}
+                levels={levels}
+                onToggleLevel={toggleLevel}
+                availableTagKeys={filterOptions?.tagKeys ?? []}
+                availableServices={(filterOptions?.services ?? []).map(s => s.value)}
+                availableEnvironments={(filterOptions?.environments ?? []).map(e => e.value)}
+                timePreset={timePreset}
+                onTimePresetChange={setTimePreset}
+                customFrom={customFrom}
+                customTo={customTo}
+                onCustomFromChange={setCustomFrom}
+                onCustomToChange={setCustomTo}
+              />
             </div>
 
             {enableAutoRefresh && (
@@ -622,27 +637,6 @@ export function LogExplorer({
                 onIntervalChange={setAutoRefreshInterval}
               />
             )}
-          </div>
-
-          {/* Search bar */}
-          <div className="border-t bg-card/40 px-3 py-2 sm:px-4 sm:py-3 lg:px-6">
-            <LogSearchBar
-              query={query}
-              onQueryChange={setQuery}
-              facetFilters={facetFilters}
-              onFacetFiltersChange={setFacetFilters}
-              levels={levels}
-              onToggleLevel={toggleLevel}
-              availableTagKeys={filterOptions?.tagKeys ?? []}
-              availableServices={(filterOptions?.services ?? []).map(s => s.value)}
-              availableEnvironments={(filterOptions?.environments ?? []).map(e => e.value)}
-              timePreset={timePreset}
-              onTimePresetChange={setTimePreset}
-              customFrom={customFrom}
-              customTo={customTo}
-              onCustomFromChange={setCustomFrom}
-              onCustomToChange={setCustomTo}
-            />
           </div>
       </div>
 

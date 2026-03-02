@@ -18,7 +18,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
-import {ChevronDown, Clock, Search, X} from 'lucide-react'
+import {ChevronDown, Clock, ListFilter, Search, X} from 'lucide-react'
 import {DateTimePicker} from '@/components/ui/datetime-picker'
 import {format} from 'date-fns'
 
@@ -49,15 +49,6 @@ const TIME_PRESETS: TimeRangePreset[] = [
 ]
 
 const LEVEL_OPTIONS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal']
-
-const levelColors: Record<string, string> = {
-  trace: 'bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-500/10',
-  debug: 'bg-transparent text-teal-600 dark:text-teal-300 hover:bg-teal-500/10',
-  info: 'bg-transparent text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/10',
-  warn: 'bg-transparent text-amber-600 dark:text-amber-300 hover:bg-amber-500/10',
-  error: 'bg-transparent text-red-600 dark:text-red-300 hover:bg-red-500/10',
-  fatal: 'bg-transparent text-rose-600 dark:text-rose-300 hover:bg-rose-500/10',
-}
 
 const levelActiveColors: Record<string, string> = {
   trace: 'bg-zinc-500/30 text-zinc-700 dark:text-zinc-200 border-zinc-500/50 ring-1 ring-zinc-500/20',
@@ -343,14 +334,34 @@ export function LogSearchBar({
 
   const hasActiveFilters = query || facetFilters.length > 0 || hasCustomLevelFilter
 
+  const [showLevelDropdown, setShowLevelDropdown] = useState(false)
+  const levelDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleLevelClickOutside(event: MouseEvent) {
+      if (
+        levelDropdownRef.current &&
+        !levelDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowLevelDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleLevelClickOutside)
+    return () => document.removeEventListener('mousedown', handleLevelClickOutside)
+  }, [])
+
+  const levelSummary = useMemo(() => {
+    if (levels.length === 0 || levels.length === LEVEL_OPTIONS.length) return 'All Levels'
+    if (levels.length === 1) return levels[0].charAt(0).toUpperCase() + levels[0].slice(1)
+    return `${levels.length} Levels`
+  }, [levels])
+
   return (
-    <div className="space-y-2.5">
-      {/* Main search row */}
-      <div className="flex items-stretch gap-2">
-        {/* Search input with chips */}
-        <div className="relative flex-1">
-          <div className="flex min-h-[40px] flex-wrap items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+    <div className="flex items-stretch gap-2">
+      {/* Search input with chips */}
+      <div className="relative flex-1 min-w-0">
+        <div className="flex min-h-[36px] flex-wrap items-center gap-1.5 rounded-lg border bg-card px-3 py-1 ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
 
             {/* Query text chip */}
             {query && (
@@ -483,12 +494,66 @@ export function LogSearchBar({
           )}
         </div>
 
+        {/* Level selector dropdown */}
+        <div className="relative" ref={levelDropdownRef}>
+          <Button
+            variant="outline"
+            size="default"
+            className={cn(
+              'h-[36px] px-3 sm:px-4 gap-2 whitespace-nowrap font-normal',
+              hasCustomLevelFilter && 'border-primary/40'
+            )}
+            onClick={() => setShowLevelDropdown(!showLevelDropdown)}
+          >
+            <ListFilter className="h-4 w-4 text-muted-foreground" />
+            <span className="hidden sm:inline text-sm">{levelSummary}</span>
+            <ChevronDown className="hidden sm:inline h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+
+          {showLevelDropdown && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1 shadow-lg">
+              {LEVEL_OPTIONS.map((level) => {
+                const active = levels.includes(level)
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => onToggleLevel(level)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors',
+                      active
+                        ? levelActiveColors[level]
+                        : 'hover:bg-accent/50'
+                    )}
+                  >
+                    <span className="font-mono text-xs uppercase">{level}</span>
+                  </button>
+                )
+              })}
+              {hasCustomLevelFilter && (
+                <div className="border-t mt-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetLevelFilter()
+                      setShowLevelDropdown(false)
+                    }}
+                    className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/50"
+                  >
+                    Reset to all levels
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Time range selector */}
         <div className="relative" ref={timeDropdownRef}>
             <Button
               variant="outline"
               size="default"
-              className="h-[40px] px-3 sm:px-4 gap-2 whitespace-nowrap font-normal"
+              className="h-[36px] px-3 sm:px-4 gap-2 whitespace-nowrap font-normal"
               onClick={() => setShowTimeDropdown(!showTimeDropdown)}
             >
               <Clock className="h-4 w-4 text-muted-foreground" />
@@ -556,40 +621,6 @@ export function LogSearchBar({
           )}
         </div>
       </div>
-
-      {/* Level pills */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Levels</span>
-        {LEVEL_OPTIONS.map((level) => {
-          const active = levels.includes(level)
-          return (
-            <button
-              key={level}
-              type="button"
-              onClick={() => onToggleLevel(level)}
-              aria-pressed={active}
-              className={cn(
-                'rounded-md px-2.5 py-1 font-mono text-[11px] uppercase transition-all',
-                active
-                  ? levelActiveColors[level]
-                  : levelColors[level]
-              )}
-            >
-              {level}
-            </button>
-          )
-        })}
-        {hasCustomLevelFilter && (
-          <button
-            type="button"
-            onClick={resetLevelFilter}
-            className="ml-1 text-[11px] text-muted-foreground hover:text-foreground"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-    </div>
   )
 }
 
