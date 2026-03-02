@@ -672,7 +672,7 @@ export function LogExplorer({
           {/* Log content area */}
           <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
             {/* Toolbar: facets toggle, viz tabs, group by, export, pagination */}
-            <div className="flex items-center gap-2 border-b bg-card/30 px-3 py-1.5">
+            <div className="flex items-center gap-2 border-b bg-card/30 px-3 py-[5px]">
               {enableFacets && (
                 <button
                   type="button"

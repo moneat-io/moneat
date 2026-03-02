@@ -41,7 +41,15 @@ function LogsPage() {
   })
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div
+      className="fixed flex flex-col overflow-hidden"
+      style={{
+        top: 'var(--header-height, 0px)',
+        left: 'var(--sidebar-width, 0px)',
+        right: 0,
+        bottom: 0,
+      }}
+    >
       <LogExplorer
         sdkVersions={sdkVersionsResponse?.versions}
         className="h-full"

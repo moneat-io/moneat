@@ -294,7 +294,9 @@ function AuthenticatedContent({
           left: sidebarWidth,
           right: 0,
           bottom: 0,
-        }}
+          '--header-height': `${headerHeight}px`,
+          '--sidebar-width': `${sidebarWidth}px`,
+        } as React.CSSProperties}
         className="transition-[left,top] duration-300"
       >
         <Outlet />
@@ -305,7 +307,12 @@ function AuthenticatedContent({
   return (
     <div
       className="transition-[margin-left] duration-300"
-      style={{marginLeft: sidebarWidth, marginTop: headerHeight}}
+      style={{
+        marginLeft: sidebarWidth,
+        paddingTop: headerHeight,
+        '--header-height': `${headerHeight}px`,
+        '--sidebar-width': `${sidebarWidth}px`,
+      } as React.CSSProperties}
     >
       <Outlet />
     </div>
