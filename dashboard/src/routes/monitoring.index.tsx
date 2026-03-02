@@ -72,7 +72,8 @@ import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
 
 function MonitoringPage() {
-  const {data: features} = useEnterpriseFeatures()
+  const {data: features, isLoading} = useEnterpriseFeatures()
+  if (isLoading) return null
   return hasEnterpriseModule(features, 'datadog') ? <MonitoringHostsPage /> : <MonitoringListPage />
 }
 
