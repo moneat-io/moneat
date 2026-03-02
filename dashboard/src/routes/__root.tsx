@@ -25,6 +25,9 @@ import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
 import {setDemoEpoch} from '../lib/demo'
 import {DemoBanner} from '../components/demo/DemoBanner'
+import {AiFloatingPanel} from '../components/AiFloatingPanel'
+import {AiSplitPanel} from '../components/AiSplitPanel'
+import {useCommandPalette} from '../hooks/useCommandPalette'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -251,13 +254,9 @@ function RootComponent() {
             onExpandedChange={setIsSidebarExpanded}
             headerHeight={headerHeight}
           />
-          <div
-            className="transition-[margin-left] duration-300"
-            style={{ marginLeft: sidebarWidth, marginTop: headerHeight }}
-          >
-            <Outlet />
-          </div>
+          <AuthenticatedContent sidebarWidth={sidebarWidth} headerHeight={headerHeight} />
           <CommandPalette />
+          <AiFloatingPanel />
         </CommandPaletteProvider>
       )}
       {!showSidebar && (
@@ -270,6 +269,45 @@ function RootComponent() {
         </div>
       )}
       <Toaster />
+    </div>
+  )
+}
+
+function AuthenticatedContent({
+  sidebarWidth,
+  headerHeight,
+}: {
+  sidebarWidth: number
+  headerHeight: number
+}) {
+  const palette = useCommandPalette()
+  const aiPanelMode = palette?.aiPanelMode ?? 'dialog'
+
+  if (aiPanelMode === 'split') {
+    // Use position:fixed so the container fills exactly the space below the header
+    // with no margin/calc rounding errors or body-scroll bleed
+    return (
+      <AiSplitPanel
+        style={{
+          position: 'fixed',
+          top: headerHeight,
+          left: sidebarWidth,
+          right: 0,
+          bottom: 0,
+        }}
+        className="transition-[left,top] duration-300"
+      >
+        <Outlet />
+      </AiSplitPanel>
+    )
+  }
+
+  return (
+    <div
+      className="transition-[margin-left] duration-300"
+      style={{marginLeft: sidebarWidth, marginTop: headerHeight}}
+    >
+      <Outlet />
     </div>
   )
 }

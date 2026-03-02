@@ -32,6 +32,22 @@ export function formatErrorForLogging(error: unknown): string {
   return String(error)
 }
 
+function filenameFromContentDisposition(value: string | null): string | null {
+  if (!value) return null
+
+  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim())
+    } catch {
+      return utf8Match[1].trim()
+    }
+  }
+
+  const filenameMatch = value.match(/filename="?([^";]+)"?/i)
+  return filenameMatch?.[1]?.trim() ?? null
+}
+
 interface AuthResponse {
   token: string
   refreshToken?: string
@@ -3733,16 +3749,26 @@ class ApiClient {
     )
   }
 
-  async downloadProfile(profileId: string, filename?: string): Promise<void> {
+  async downloadProfile(
+    profileId: string,
+    filename?: string,
+    profileType?: string,
+  ): Promise<void> {
     const response = await this.fetchWithAuth(
       `${API_BASE}/profiles/${profileId}/download`
     )
     if (!response.ok) throw new Error('Profile download failed')
     const blob = await response.blob()
+    const dispositionName = filenameFromContentDisposition(
+      response.headers.get('content-disposition')
+    )
+    const defaultExt = profileType?.toLowerCase().includes('jfr')
+      ? 'jfr'
+      : 'pprof.gz'
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = filename ?? `profile-${profileId}.pprof.gz`
+    a.download = filename ?? dispositionName ?? `profile-${profileId}.${defaultExt}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

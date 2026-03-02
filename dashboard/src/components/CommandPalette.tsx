@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent} from 'react'
+import {useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent} from 'react'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
@@ -29,10 +29,8 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import {Dialog, DialogContent} from '@/components/ui/dialog'
-import {AiSuggestions} from '@/components/command-palette/AiSuggestions'
-import {AiChatView} from '@/components/command-palette/AiChatView'
-import {confirmAiAction, streamAiAssistant, type AssistantStreamEvent} from '@/lib/mcp-chat'
-import {useProject} from '@/contexts/project-context'
+import {Button} from '@/components/ui/button'
+import {AiChatContent} from '@/components/command-palette/AiChatContent'
 import {
   Home,
   AlertCircle,
@@ -61,7 +59,6 @@ import {
   Database,
   Bug,
   Router,
-  Loader2,
   Sparkles,
 } from 'lucide-react'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
@@ -200,26 +197,18 @@ export function CommandPalette() {
   const setIsOpen = palette?.setOpen ?? setLocalOpen
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [isConfirming, setIsConfirming] = useState(false)
   const [localAiMode, setLocalAiMode] = useState(false)
-  const [aiInput, setAiInput] = useState('')
-  const streamingAssistantMessageId = useRef<string | null>(null)
-  const aiInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
-  const {selectedProjectId} = useProject()
-  const conversationId = palette?.conversationId ?? null
+
+  const aiPanelMode = palette?.aiPanelMode ?? 'dialog'
+  const setAiInput = palette?.setAiInput ?? (() => undefined)
+  const handleAiSubmit = palette?.handleAiSubmit ?? (() => Promise.resolve())
   const aiMessages = palette?.aiMessages ?? []
-  const toolInvocations = palette?.toolInvocations ?? []
-  const pendingConfirmation = palette?.pendingConfirmation ?? null
 
-  const setAiMode = palette?.setAiMode ?? (() => undefined)
-  const setConversationId = palette?.setConversationId ?? (() => undefined)
-  const setAiMessages = palette?.setAiMessages ?? (() => undefined)
-  const setToolInvocations = palette?.setToolInvocations ?? (() => undefined)
-  const setPendingConfirmation = palette?.setPendingConfirmation ?? (() => undefined)
-  const registerConnectionCleanup = palette?.registerConnectionCleanup ?? (() => undefined)
+  // Show AI mode in the dialog only when explicitly in dialog mode
+  const showAiMode = aiPanelMode === 'dialog' && (localAiMode || (isOpen && aiMessages.length > 0))
 
+  // Cmd+K always opens the palette (search in split/float, dialog in dialog mode)
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -236,23 +225,20 @@ export function CommandPalette() {
     return () => clearTimeout(t)
   }, [search])
 
-  useEffect(() => {
-    if (!localAiMode && search.startsWith('/')) {
+  const handleSearchChange = (value: string) => {
+    if (!localAiMode && value.startsWith('/')) {
       setLocalAiMode(true)
-      setAiInput(search.slice(1))
+      setAiInput(value.slice(1))
       setSearch('')
-      requestAnimationFrame(() => aiInputRef.current?.focus())
+      return
     }
-  }, [search, localAiMode])
-
-  useEffect(() => {
-    setAiMode(localAiMode)
-  }, [localAiMode, setAiMode])
+    setSearch(value)
+  }
 
   const {data: searchResult} = useQuery({
     queryKey: ['search', debouncedSearch],
     queryFn: () => api.search(debouncedSearch),
-    enabled: isOpen && !localAiMode && debouncedSearch.length >= 2,
+    enabled: isOpen && !showAiMode && debouncedSearch.length >= 2,
   })
 
   const {data: features} = useEnterpriseFeatures()
@@ -289,160 +275,6 @@ export function CommandPalette() {
     )
   }, [search])
 
-  const upsertToolInvocation = (
-    tool: string,
-    status: 'invoking' | 'completed' | 'error',
-    summary?: string,
-    args?: Record<string, unknown>,
-  ) => {
-    setToolInvocations((prev) => {
-      const next = [...prev]
-      const reverseIndex = [...next]
-        .reverse()
-        .findIndex((entry) => entry.tool === tool && entry.status === 'invoking')
-
-      if (reverseIndex >= 0 && status !== 'invoking') {
-        const index = next.length - 1 - reverseIndex
-        next[index] = {...next[index], status, summary}
-        return next
-      }
-
-      next.push({
-        id: `${tool}-${Date.now()}-${next.length}`,
-        tool,
-        status,
-        summary,
-        args,
-      })
-      return next
-    })
-  }
-
-  const appendAssistantChunk = (content: string) => {
-    const messageId = streamingAssistantMessageId.current ?? `assistant-${Date.now()}`
-    streamingAssistantMessageId.current = messageId
-
-    setAiMessages((prev) => {
-      const existing = prev.find((message) => message.id === messageId)
-      if (existing) {
-        return prev.map((message) =>
-          message.id === messageId
-            ? {...message, content: `${message.content}${content}`}
-            : message,
-        )
-      }
-      return [...prev, {id: messageId, role: 'assistant', content}]
-    })
-  }
-
-  const handleAssistantEvent = (event: AssistantStreamEvent) => {
-    if (event.type === 'tool_invoking') {
-      upsertToolInvocation(event.tool, 'invoking', undefined, event.args)
-      return
-    }
-    if (event.type === 'tool_result') {
-      upsertToolInvocation(event.tool, event.isError ? 'error' : 'completed', event.summary)
-      return
-    }
-    if (event.type === 'confirmation_needed') {
-      setPendingConfirmation({
-        requestId: event.requestId,
-        tool: event.tool,
-        args: event.args,
-      })
-      return
-    }
-    if (event.type === 'response') {
-      appendAssistantChunk(event.content)
-      return
-    }
-    if (event.type === 'error') {
-      setAiMessages((prev) => [
-        ...prev,
-        {id: `assistant-error-${Date.now()}`, role: 'assistant', content: event.error},
-      ])
-      return
-    }
-    if (event.type === 'done' && event.conversationId) {
-      setConversationId(event.conversationId)
-    }
-  }
-
-  const handleAiSubmit = async (prompt: string) => {
-    const normalizedPrompt = prompt.trim()
-    if (!normalizedPrompt || isStreaming || isConfirming) return
-
-    streamingAssistantMessageId.current = null
-    setPendingConfirmation(null)
-    setToolInvocations([])
-    setAiMessages((prev) => [
-      ...prev,
-      {id: `user-${Date.now()}`, role: 'user', content: normalizedPrompt},
-    ])
-
-    const controller = new AbortController()
-    registerConnectionCleanup(() => controller.abort())
-    setIsStreaming(true)
-
-    try {
-      await streamAiAssistant(
-        normalizedPrompt,
-        conversationId,
-        handleAssistantEvent,
-        controller.signal,
-        selectedProjectId,
-      )
-    } catch (error) {
-      const isAbort = error instanceof DOMException || (error instanceof Error && error.name === 'AbortError')
-      if (!isAbort) {
-        const errorMessage = error instanceof Error ? error.message : 'Assistant request failed'
-        setAiMessages((prev) => [
-          ...prev,
-          {id: `assistant-error-${Date.now()}`, role: 'assistant', content: errorMessage},
-        ])
-      }
-    } finally {
-      registerConnectionCleanup(null)
-      setIsStreaming(false)
-    }
-  }
-
-  const handleConfirm = async (approve: boolean) => {
-    if (!pendingConfirmation || isConfirming) return
-    setIsConfirming(true)
-
-    try {
-      const response = await confirmAiAction(pendingConfirmation.requestId, approve)
-      setConversationId(response.conversationId)
-      setPendingConfirmation(null)
-
-      upsertToolInvocation(
-        response.tool,
-        approve ? 'completed' : 'error',
-        response.toolSummary,
-      )
-
-      if (response.response.trim()) {
-        setAiMessages((prev) => [
-          ...prev,
-          {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            content: response.response,
-          },
-        ])
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to confirm action'
-      setAiMessages((prev) => [
-        ...prev,
-        {id: `assistant-error-${Date.now()}`, role: 'assistant', content: errorMessage},
-      ])
-    } finally {
-      setIsConfirming(false)
-    }
-  }
-
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter' && search.startsWith('/')) {
       event.preventDefault()
@@ -453,13 +285,6 @@ export function CommandPalette() {
         void handleAiSubmit(prompt)
       }
     }
-  }
-
-  const handleAiInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter' || !aiInput.trim() || isStreaming || isConfirming) return
-    event.preventDefault()
-    void handleAiSubmit(aiInput.trim())
-    setAiInput('')
   }
 
   const handleSelect = (href: string) => {
@@ -475,153 +300,134 @@ export function CommandPalette() {
         setIsOpen(o)
         if (!o) {
           setSearch('')
-          setLocalAiMode(false)
           setAiInput('')
+          if (!aiMessages.length) setLocalAiMode(false)
         }
       }}
     >
-      <DialogContent className={cn('overflow-hidden p-0 shadow-lg', localAiMode && 'max-w-3xl')}>
+      <DialogContent className={cn('overflow-hidden p-0 shadow-lg', showAiMode && 'max-w-3xl')}>
         <Command
           className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
           shouldFilter={false}
           disablePointerSelection
         >
-          {!localAiMode && (
+          {!showAiMode && (
             <div className="relative">
               <CommandInput
                 className="pr-24"
                 placeholder="Search dashboards, projects, pages..."
                 value={search}
-                onValueChange={setSearch}
+                onValueChange={handleSearchChange}
                 onKeyDown={handleInputKeyDown}
               />
-              <button
+              <Button
                 type="button"
-                onClick={() => setSearch('/')}
+                variant="ghost"
+                onClick={() => {
+                  if (aiPanelMode !== 'dialog') {
+                    // Switch back to dialog mode so AI appears here
+                    palette?.setAiPanelMode('dialog')
+                  }
+                  setLocalAiMode(true)
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Sparkles className="h-3 w-3" />
                 <span>Ask AI</span>
                 <kbd className="rounded bg-background/80 px-1 py-0.5 font-mono text-[10px] leading-none border border-border/40">/</kbd>
-              </button>
+              </Button>
             </div>
           )}
-          {localAiMode ? (
-            <>
-              <div className="max-h-[380px] overflow-y-auto">
-                {aiMessages.length === 0 && toolInvocations.length === 0 && !pendingConfirmation ? (
-                  <AiSuggestions onSelect={(suggestion) => void handleAiSubmit(suggestion)} />
-                ) : (
-                  <AiChatView
-                    messages={aiMessages}
-                    toolInvocations={toolInvocations}
-                    pendingConfirmation={pendingConfirmation}
-                    loading={isStreaming}
-                    confirming={isConfirming}
-                    onApprove={() => void handleConfirm(true)}
-                    onDeny={() => void handleConfirm(false)}
-                  />
-                )}
-              </div>
-              <div className="flex items-center gap-2 border-t px-3 py-2.5">
-                <input
-                  ref={aiInputRef}
-                  type="text"
-                  value={aiInput}
-                  onChange={(e) => setAiInput(e.target.value)}
-                  onKeyDown={handleAiInputKeyDown}
-                  placeholder={aiMessages.length > 0 ? 'Ask a follow-up…' : 'Ask about your systems…'}
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
-                  disabled={isStreaming}
-                />
-                {isStreaming && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-              </div>
-            </>
+          {showAiMode ? (
+            <AiChatContent
+              variant="dialog"
+              onClose={() => setIsOpen(false)}
+            />
           ) : (
             <CommandList>
-        {search.trim() &&
-        filteredPages.length === 0 &&
-        filteredSettings.length === 0 &&
-        !searchResult?.dashboards?.length &&
-        !searchResult?.projects?.length && (
-          <CommandEmpty>No results found.</CommandEmpty>
-        )}
-        {filteredPages.length > 0 && (
-          <CommandGroup heading="Pages" forceMount>
-            {filteredPages.map((item) => {
-              const Icon = item.icon
-              return (
-                <CommandItem
-                  key={`page-${item.label}`}
-                  value={item.label}
-                  onSelect={() => handleSelect(item.href)}
-                >
-                  <Icon className="mr-2 h-4 w-4 shrink-0" />
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span>{item.label}</span>
-                    <span className="text-xs text-muted-foreground">{item.description}</span>
-                  </div>
-                </CommandItem>
-              )
-            })}
-          </CommandGroup>
-        )}
-        {filteredSettings.length > 0 && (
-          <CommandGroup heading="Settings" forceMount>
-            {filteredSettings.map((item) => {
-              const Icon = item.icon
-              return (
-                <CommandItem
-                  key={`settings-${item.tab}`}
-                  value={item.label}
-                  onSelect={() => handleSelect(item.href)}
-                >
-                  <Icon className="mr-2 h-4 w-4 shrink-0" />
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span>{item.label}</span>
-                    <span className="text-xs text-muted-foreground">{item.description}</span>
-                  </div>
-                </CommandItem>
-              )
-            })}
-          </CommandGroup>
-        )}
-        {searchResult?.dashboards && searchResult.dashboards.length > 0 && (
-          <CommandGroup heading="Dashboards">
-            {searchResult.dashboards.map((d) => (
-              <CommandItem
-                key={d.id}
-                value={`dashboard-${d.id}`}
-                onSelect={() => {
-                  setIsOpen(false)
-                  setSearch('')
-                  navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(d.id)}})
-                }}
-              >
-                <LayoutDashboard className="mr-2 h-4 w-4" />
-                {d.title}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-        {searchResult?.projects && searchResult.projects.length > 0 && (
-          <CommandGroup heading="Projects">
-            {searchResult.projects.map((p) => (
-              <CommandItem
-                key={p.id}
-                value={`project-${p.id}`}
-                onSelect={() => {
-                  setIsOpen(false)
-                  setSearch('')
-                  navigate({to: '/projects/$projectId', params: {projectId: String(p.id)}})
-                }}
-              >
-                <Folder className="mr-2 h-4 w-4" />
-                {p.name}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
+              {search.trim() &&
+              filteredPages.length === 0 &&
+              filteredSettings.length === 0 &&
+              !searchResult?.dashboards?.length &&
+              !searchResult?.projects?.length && (
+                <CommandEmpty>No results found.</CommandEmpty>
+              )}
+              {filteredPages.length > 0 && (
+                <CommandGroup heading="Pages" forceMount>
+                  {filteredPages.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <CommandItem
+                        key={`page-${item.label}`}
+                        value={item.label}
+                        onSelect={() => handleSelect(item.href)}
+                      >
+                        <Icon className="mr-2 h-4 w-4 shrink-0" />
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span>{item.label}</span>
+                          <span className="text-xs text-muted-foreground">{item.description}</span>
+                        </div>
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              )}
+              {filteredSettings.length > 0 && (
+                <CommandGroup heading="Settings" forceMount>
+                  {filteredSettings.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <CommandItem
+                        key={`settings-${item.tab}`}
+                        value={item.label}
+                        onSelect={() => handleSelect(item.href)}
+                      >
+                        <Icon className="mr-2 h-4 w-4 shrink-0" />
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span>{item.label}</span>
+                          <span className="text-xs text-muted-foreground">{item.description}</span>
+                        </div>
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              )}
+              {searchResult?.dashboards && searchResult.dashboards.length > 0 && (
+                <CommandGroup heading="Dashboards">
+                  {searchResult.dashboards.map((d) => (
+                    <CommandItem
+                      key={d.id}
+                      value={`dashboard-${d.id}`}
+                      onSelect={() => {
+                        setIsOpen(false)
+                        setSearch('')
+                        navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(d.id)}})
+                      }}
+                    >
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      {d.title}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+              {searchResult?.projects && searchResult.projects.length > 0 && (
+                <CommandGroup heading="Projects">
+                  {searchResult.projects.map((p) => (
+                    <CommandItem
+                      key={p.id}
+                      value={`project-${p.id}`}
+                      onSelect={() => {
+                        setIsOpen(false)
+                        setSearch('')
+                        navigate({to: '/projects/$projectId', params: {projectId: String(p.id)}})
+                      }}
+                    >
+                      <Folder className="mr-2 h-4 w-4" />
+                      {p.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
             </CommandList>
           )}
         </Command>
@@ -629,3 +435,4 @@ export function CommandPalette() {
     </Dialog>
   )
 }
+
