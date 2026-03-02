@@ -115,7 +115,10 @@ function ProfileDetailPage() {
   const tagEntries = profile ? Object.entries(profile.tags) : []
 
   return (
-    <div className="p-6 space-y-5">
+    <div
+      className="flex flex-col overflow-hidden p-6 gap-y-5"
+      style={{height: 'calc(100vh - var(--header-height, 0px))'}}
+    >
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
@@ -254,7 +257,7 @@ function ProfileDetailPage() {
       )}
 
       {/* Flamegraph */}
-      <div>
+      <div className="flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
             Flamegraph
