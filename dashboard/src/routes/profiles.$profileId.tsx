@@ -158,10 +158,12 @@ function ProfileDetailPage() {
           variant="outline"
           size="sm"
           className="shrink-0"
-          onClick={() => api.downloadProfile(profileId)}
+          onClick={() => api.downloadProfile(profileId, undefined, profile.profileType)}
         >
           <Download className="h-3.5 w-3.5 mr-1.5" />
-          Download pprof
+          {profile.profileType.toLowerCase() === 'jfr'
+            ? 'Download JFR'
+            : 'Download pprof'}
         </Button>
       </div>
 

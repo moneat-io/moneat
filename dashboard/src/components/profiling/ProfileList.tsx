@@ -285,7 +285,11 @@ export function ProfileList({
                     className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation()
-                      api.downloadProfile(profile.profileId)
+                      api.downloadProfile(
+                        profile.profileId,
+                        undefined,
+                        profile.profileType
+                      )
                     }}
                   >
                     <Download className="h-3.5 w-3.5" />
