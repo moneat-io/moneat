@@ -29,6 +29,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import {Dialog, DialogContent} from '@/components/ui/dialog'
+import {Button} from '@/components/ui/button'
 import {AiChatContent} from '@/components/command-palette/AiChatContent'
 import {
   Home,
@@ -319,8 +320,9 @@ export function CommandPalette() {
                 onValueChange={handleSearchChange}
                 onKeyDown={handleInputKeyDown}
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   if (aiPanelMode !== 'dialog') {
                     // Switch back to dialog mode so AI appears here
@@ -333,7 +335,7 @@ export function CommandPalette() {
                 <Sparkles className="h-3 w-3" />
                 <span>Ask AI</span>
                 <kbd className="rounded bg-background/80 px-1 py-0.5 font-mono text-[10px] leading-none border border-border/40">/</kbd>
-              </button>
+              </Button>
             </div>
           )}
           {showAiMode ? (

@@ -129,20 +129,18 @@ export function CommandPaletteProvider({children}: {children: ReactNode}) {
   // Persist active chat to localStorage whenever it changes
   useEffect(() => {
     if (aiMessages.length > 0) {
-      saveActiveChat({
-        id: `chat-${Date.now()}`,
-        conversationId,
-        messages: aiMessages,
-        toolInvocations,
-        timestamp: Date.now(),
-      })
+      saveActiveChat(buildSnapshot())
     }
-  }, [conversationId, aiMessages, toolInvocations])
+  }, [aiMessages, buildSnapshot])
 
   // Reset 1-hour expiry timer whenever messages change
   useEffect(() => {
     clearExpiryTimer()
     if (aiMessages.length > 0) {
+      const persisted = loadActiveChat()
+      const remainingMs = persisted
+        ? Math.max(EXPIRY_MS - (Date.now() - persisted.timestamp), 0)
+        : EXPIRY_MS
       expiryTimerRef.current = setTimeout(() => {
         archiveChat(buildSnapshot())
         clearActiveChat()
@@ -152,7 +150,7 @@ export function CommandPaletteProvider({children}: {children: ReactNode}) {
         setPendingConfirmation(null)
         setAiMode(false)
         setChatHistory(getHistory())
-      }, EXPIRY_MS)
+      }, remainingMs)
     }
     return clearExpiryTimer
   }, [aiMessages, clearExpiryTimer, buildSnapshot])
