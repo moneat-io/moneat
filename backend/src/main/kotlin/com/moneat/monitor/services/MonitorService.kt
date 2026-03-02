@@ -79,6 +79,7 @@ class MonitorService {
     companion object {
         const val ALERT_SCOPE_GLOBAL = "global"
         const val ALERT_SCOPE_SYSTEM = "system"
+        const val INFRA_LOOKBACK_DAYS = 7
     }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -732,12 +733,7 @@ class MonitorService {
     ): List<Map<String, Any?>> {
         if (organizationIds.isEmpty()) return emptyList()
         val orgList = organizationIds.joinToString(",") { it.toString() }
-        val hostClause =
-            if (hostFilter != null && hostFilter.isNotBlank()) {
-                "AND host = '${escapeSql(hostFilter)}'"
-            } else {
-                ""
-            }
+        val hostClause = if (hostFilter != null && hostFilter.isNotBlank()) "AND host = '${escapeSql(hostFilter)}'" else ""
         val query =
             """
             SELECT host, container_id, name, image, state, cpu_percent, mem_usage, mem_limit,
@@ -747,7 +743,7 @@ class MonitorService {
                     ROW_NUMBER() OVER (PARTITION BY organization_id, host, container_id ORDER BY timestamp DESC) as rn
                 FROM $clickhouseDb.containers
                 WHERE organization_id IN ($orgList)
-                  AND timestamp >= now64(3) - INTERVAL 7 DAY
+                  AND timestamp >= now64(3) - INTERVAL $INFRA_LOOKBACK_DAYS DAY
                   $hostClause
             ) WHERE rn = 1
             ORDER BY host, name

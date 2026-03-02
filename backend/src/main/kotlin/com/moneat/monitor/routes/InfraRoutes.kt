@@ -35,6 +35,10 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  * Returns distinct containers (latest per host+container_id) for infra/MCP API.
  * Deduplicates time-series rows so each container appears once.
  */
+private const val DEFAULT_LIMIT = 100
+private const val MIN_LIMIT = 1
+private const val MAX_LIMIT = 500
+
 fun Route.infraRoutes(monitorService: MonitorService = MonitorService()) {
     authenticate("auth-jwt") {
         route("/v1/infra") {
@@ -57,7 +61,7 @@ fun Route.infraRoutes(monitorService: MonitorService = MonitorService()) {
 
                 val params = call.request.queryParameters
                 val hostFilter = params["host"]?.takeIf { it.isNotBlank() }
-                val limit = (params["limit"]?.toIntOrNull() ?: 100).coerceIn(1, 500)
+                val limit = (params["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT).coerceIn(MIN_LIMIT, MAX_LIMIT)
 
                 val containers = monitorService.getLatestInfraContainers(organizationIds, hostFilter, limit)
                 call.respond(

@@ -162,18 +162,25 @@ function getIssueDisplayTitle(issue: { title: string; culprit: string }): string
 }
 
 // Simple sparkline component
-function EventSparkline({ eventCount }: { eventCount: number }) {
-  // Generate a simple frequency visualization
-  const bars = Math.min(Math.ceil(eventCount / 10), 10)
-  const heights = Array.from({ length: 10 }, (_, i) => {
-    if (i < bars) {
-      return 40 + ((i * 23 + 7) % 60) // 40-100% deterministic height for active bars
-    }
-    return 0
-  })
+function EventSparkline({ eventCount, eventSeries }: { eventCount: number; eventSeries?: number[] }) {
+  let heights: number[]
+  if (eventSeries && eventSeries.length > 0) {
+    const max = Math.max(...eventSeries, 1)
+    const padded = eventSeries.slice(-10)
+    while (padded.length < 10) padded.unshift(0)
+    heights = padded.map(v => Math.round((v / max) * 100))
+  } else {
+    // Static activity indicator — not a trend
+    const bars = Math.min(Math.ceil(eventCount / 10), 10)
+    heights = Array.from({ length: 10 }, (_, i) => (i < bars ? 40 : 0))
+  }
 
   return (
-    <div className="flex items-end gap-0.5 h-8 w-20">
+    <div
+      className="flex items-end gap-0.5 h-8 w-20"
+      aria-label="activity indicator, not a trend"
+      title="activity indicator, not a trend"
+    >
       {heights.map((height, i) => (
         <div
           key={i}
@@ -241,7 +248,7 @@ function DashboardPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  const { data: projects, isLoading } = useQuery({
+  const { data: projects, isLoading, isError: projectsError, error: projectsErrorObj } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
@@ -257,7 +264,7 @@ function DashboardPage() {
     }
   }, [selectedProjectId, projects, setSelectedProjectId])
 
-  const { data: issues = [] } = useQuery({
+  const { data: issues = [], isError: issuesError, error: issuesErrorObj } = useQuery({
     queryKey: ['issues', projectId, statusFilter],
     queryFn: () => (projectId ? api.getIssues(projectId) : []),
     enabled: !!projectId,
@@ -340,6 +347,12 @@ function DashboardPage() {
   })
 
   if (isLoading) return <div className="p-8">Loading...</div>
+
+  if (projectsError) return (
+    <div className="p-8 text-destructive">
+      Failed to load projects: {projectsErrorObj instanceof Error ? projectsErrorObj.message : 'Unknown error'}
+    </div>
+  )
 
   return (
     <div className="min-h-screen">
@@ -457,7 +470,11 @@ function DashboardPage() {
               </span>
             </div>
 
-            {filteredIssues.length === 0 ? (
+            {issuesError ? (
+              <div className="p-6 text-destructive border border-destructive/30 rounded-lg bg-destructive/5">
+                Failed to load issues: {issuesErrorObj instanceof Error ? issuesErrorObj.message : 'Unknown error'}
+              </div>
+            ) : filteredIssues.length === 0 ? (
               <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
                 <div className="max-w-md mx-auto space-y-4">
                   <div className="flex justify-center">
