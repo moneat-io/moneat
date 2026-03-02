@@ -193,11 +193,11 @@ export function Flamegraph({frames, emptyMessage}: Props) {
 
   const handleZoomIn = useCallback(
     (frame: FlamegraphFrame) => {
-      if (frame.children.length > 0) {
+      if (frame.children.length > 0 && frame !== focusFrame) {
         setFocusStack((prev) => [...prev, frame])
       }
     },
-    [],
+    [focusFrame],
   )
 
   const handleZoomBack = useCallback((toIndex: number) => {
