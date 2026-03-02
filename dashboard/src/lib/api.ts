@@ -1129,6 +1129,7 @@ interface BillingUsage {
   usedReplayBytes?: number
   usedLogBytes?: number
   usedLlmBytes?: number
+  usedProfilerBytes?: number
   bytesLimit: number
   baseLimitUnits: number
   paygLimitUnits: number

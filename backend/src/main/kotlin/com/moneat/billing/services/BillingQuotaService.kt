@@ -215,6 +215,7 @@ class BillingQuotaService(
             val logBytes = normalizedBytes["log"] ?: 0L
             val llmBytes = normalizedBytes["llm"] ?: 0L
             val apmSpanBytes = normalizedBytes["apm_span"] ?: 0L
+            val profilerBytes = normalizedBytes["profile"] ?: 0L
 
             OrgUsageCounters.update({
                 (OrgUsageCounters.organization_id eq organizationId) and
@@ -235,6 +236,7 @@ class BillingQuotaService(
                 it[used_replay_bytes] = state.usedReplayBytes + replayBytes
                 it[used_log_bytes] = state.usedLogBytes + logBytes
                 it[used_llm_bytes] = state.usedLlmBytes + llmBytes
+                it[used_profiler_bytes] = state.usedProfilerBytes + profilerBytes
                 it[updated_at] = Clock.System.now()
             }
 
@@ -423,6 +425,11 @@ class BillingQuotaService(
             } else {
                 state.usedLlmBytes
             }
+            val usedProfilerBytesAfter = if (normalizedType == "profile") {
+                (state.usedProfilerBytes - requestedBytes).coerceAtLeast(0)
+            } else {
+                state.usedProfilerBytes
+            }
 
             OrgUsageCounters.update({
                 (OrgUsageCounters.organization_id eq organizationId) and
@@ -443,6 +450,7 @@ class BillingQuotaService(
                 it[used_replay_bytes] = usedReplayBytesAfter
                 it[used_log_bytes] = usedLogBytesAfter
                 it[used_llm_bytes] = usedLlmBytesAfter
+                it[used_profiler_bytes] = usedProfilerBytesAfter
                 it[updated_at] = Clock.System.now()
             }
 
@@ -522,6 +530,7 @@ class BillingQuotaService(
         val usedReplayBytes: Long,
         val usedLogBytes: Long,
         val usedLlmBytes: Long,
+        val usedProfilerBytes: Long,
         val errorLimit: Long,
         val transactionLimit: Long,
         val replayLimit: Long,
@@ -684,6 +693,7 @@ class BillingQuotaService(
         val usedReplayBytes = usageRow[OrgUsageCounters.used_replay_bytes]
         val usedLogBytes = usageRow[OrgUsageCounters.used_log_bytes]
         val usedLlmBytes = usageRow[OrgUsageCounters.used_llm_bytes]
+        val usedProfilerBytes = usageRow[OrgUsageCounters.used_profiler_bytes]
         val usedAnalyticsPageviews = usageRow[OrgUsageCounters.used_analytics_pageviews]
         val usedApmSpans = usageRow[OrgUsageCounters.used_apm_spans]
         val usedCustomMetrics = usageRow[OrgUsageCounters.used_custom_metrics]
@@ -744,6 +754,7 @@ class BillingQuotaService(
             usedReplayBytes = usedReplayBytes,
             usedLogBytes = usedLogBytes,
             usedLlmBytes = usedLlmBytes,
+            usedProfilerBytes = usedProfilerBytes,
             errorLimit = errorLimit,
             llmEventLimit = llmEventLimit,
             transactionLimit = transactionLimit,
@@ -929,6 +940,7 @@ class BillingQuotaService(
             usedReplayBytes = state.usedReplayBytes,
             usedLogBytes = state.usedLogBytes,
             usedLlmBytes = state.usedLlmBytes,
+            usedProfilerBytes = state.usedProfilerBytes,
             bytesLimit = state.bytesLimit,
             ingestionOverageCentsEstimate = ingestionOverageCents,
             ingestionOverageRateCentsPerGb = state.overageRateCentsPerGb,
@@ -1157,6 +1169,7 @@ class BillingQuotaService(
             "log", "logs" -> "log"
             "apm_span", "apm" -> "apm_span"
             "custom_metric", "metric" -> "custom_metric"
+            "dd_profile", "profile" -> "profile"
             else -> "error"
         }
     }
