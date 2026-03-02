@@ -7,6 +7,10 @@ plugins {
     jacoco
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
 group = "com.moneat"
 version = "0.0.1"
 
