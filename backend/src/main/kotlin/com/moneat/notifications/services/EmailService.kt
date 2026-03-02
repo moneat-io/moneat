@@ -47,13 +47,13 @@ private fun String.escapeHtml(): String =
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
 
-private val BADGE_STYLE = "margin:0;font-size:0.75rem;font-weight:600;" +
+private const val BADGE_STYLE = "margin:0;font-size:0.75rem;font-weight:600;" +
     "display:inline-block;border-radius:4px;padding:1px 8px;"
-private val BADGE_POSITIVE =
+private const val BADGE_POSITIVE =
     "background-color:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;"
-private val BADGE_NEGATIVE =
+private const val BADGE_NEGATIVE =
     "background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;"
-private val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
+private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
 
 class EmailService {
