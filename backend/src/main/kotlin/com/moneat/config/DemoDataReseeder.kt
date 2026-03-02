@@ -1660,13 +1660,12 @@ object DemoDataReseeder {
         val sql =
             """
             INSERT INTO logs (
-                log_id, project_id, organization_id, timestamp, received_at, level, message, body,
+                log_id, organization_id, timestamp, received_at, level, message, body,
                 service, environment, host, source, trace_id, span_id, tags,
                 container_name, container_id, container_image, resource_attributes
             )
             SELECT
                 generateUUIDv4() AS log_id,
-                CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END AS project_id,
                 $P1 AS organization_id,
                 now64(3) - INTERVAL (
                     CASE
