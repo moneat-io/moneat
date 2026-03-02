@@ -41,6 +41,21 @@ import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
+private fun String.escapeHtml(): String =
+    replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+
+private val BADGE_STYLE = "margin:0;font-size:0.75rem;font-weight:600;" +
+    "display:inline-block;border-radius:4px;padding:1px 8px;"
+private val BADGE_POSITIVE =
+    "background-color:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;"
+private val BADGE_NEGATIVE =
+    "background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;"
+private val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
+    "border:1px solid #e5e5e5;color:#737373;"
+
 class EmailService {
     private val config = ApplicationConfig("application.conf")
     private val fromEmail = config.property("email.from").getString()
@@ -726,20 +741,20 @@ class EmailService {
                     <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                       <tr>
                         <td style="vertical-align:top;">
-                          <p style="margin:0;font-size:0.875rem;font-weight:500;color:#0a0a0a;">${issue.title}</p>
+                          <p style="margin:0;font-size:0.875rem;font-weight:500;color:#0a0a0a;">${issue.title.escapeHtml()}</p>
                           <table cellpadding="0" cellspacing="0" role="presentation" style="margin-top:0.25rem;">
                             <tr>
                               <td style="padding-right:0.5rem;">
-                                <p style="margin:0;font-size:0.75rem;color:#737373;font-family:ui-monospace,monospace;">${issue.culprit}</p>
+                                <p style="margin:0;font-size:0.75rem;color:#737373;font-family:ui-monospace,monospace;">${issue.culprit.escapeHtml()}</p>
                               </td>
                               <td>
-                                <p style="margin:0;font-size:0.75rem;font-weight:500;display:inline-block;background-color:#f5f5f5;border:1px solid #e5e5e5;border-radius:4px;padding:0 6px;color:#525252;">${issue.project}</p>
+                                <p style="margin:0;font-size:0.75rem;font-weight:500;display:inline-block;background-color:#f5f5f5;border:1px solid #e5e5e5;border-radius:4px;padding:0 6px;color:#525252;">${issue.project.escapeHtml()}</p>
                               </td>
                             </tr>
                           </table>
                         </td>
                         <td style="text-align:right;vertical-align:middle;white-space:nowrap;">
-                          <p style="margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;">${issue.count}</p>
+                          <p style="margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;">${issue.count.escapeHtml()}</p>
                         </td>
                       </tr>
                     </table>
@@ -758,20 +773,20 @@ class EmailService {
                   </tr>
                   <tr>
                     <td style="padding:1rem;">
-                      <p style="margin:0;margin-bottom:0.75rem;font-size:0.875rem;font-weight:600;color:#0a0a0a;">${project.name}</p>
+                      <p style="margin:0;margin-bottom:0.75rem;font-size:0.875rem;font-weight:600;color:#0a0a0a;">${project.name.escapeHtml()}</p>
                       <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                         <tr>
                           <td style="width:33%;">
                             <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Events</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.events}</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.events.escapeHtml()}</p>
                           </td>
                           <td style="width:33%;">
                             <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Issues</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.issues}</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.issues.escapeHtml()}</p>
                           </td>
                           <td style="width:33%;">
                             <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Crash-Free</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree}%</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree.escapeHtml()}%</p>
                           </td>
                         </tr>
                       </table>
@@ -801,18 +816,17 @@ class EmailService {
     }
 
     private fun trendBadgeHtml(trend: Int, positiveIsGood: Boolean): String {
-        val badgeStyle = "margin:0;font-size:0.75rem;font-weight:600;display:inline-block;border-radius:4px;padding:1px 8px;"
         return when {
             trend > 0 && positiveIsGood ->
-                """<p style="$badgeStyle background-color:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;">&uarr; $trend%</p>"""
+                """<p style="$BADGE_STYLE $BADGE_POSITIVE">&uarr; $trend%</p>"""
             trend > 0 ->
-                """<p style="$badgeStyle background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;">&uarr; $trend%</p>"""
+                """<p style="$BADGE_STYLE $BADGE_NEGATIVE">&uarr; $trend%</p>"""
             trend < 0 && positiveIsGood ->
-                """<p style="$badgeStyle background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;">&darr; ${-trend}%</p>"""
+                """<p style="$BADGE_STYLE $BADGE_NEGATIVE">&darr; ${-trend}%</p>"""
             trend < 0 ->
-                """<p style="$badgeStyle background-color:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;">&darr; ${-trend}%</p>"""
+                """<p style="$BADGE_STYLE $BADGE_POSITIVE">&darr; ${-trend}%</p>"""
             else ->
-                """<p style="$badgeStyle font-weight:500;background-color:#f5f5f5;border:1px solid #e5e5e5;color:#737373;">&rarr; 0%</p>"""
+                """<p style="$BADGE_STYLE $BADGE_NEUTRAL">&rarr; 0%</p>"""
         }
     }
 
