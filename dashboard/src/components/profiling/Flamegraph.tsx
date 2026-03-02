@@ -130,16 +130,19 @@ function computeTopFunctions(
   }
   for (const f of frames) walk(f)
 
-  return Array.from(map.entries())
-    .map(([name, {self: selfValue, total: totalValue}]) => ({
-      name,
-      selfValue,
-      totalValue,
-      selfPercent: totalSamples > 0 ? (selfValue / totalSamples) * 100 : 0,
-      totalPercent: totalSamples > 0 ? (totalValue / totalSamples) * 100 : 0,
-    }))
-    .filter((f) => f.selfPercent > 0.1)
-    .sort((a, b) => b.selfValue - a.selfValue)
+  const entries = Array.from(map.entries()).map(([name, {self: selfValue, total: totalValue}]) => ({
+    name,
+    selfValue,
+    totalValue,
+    selfPercent: totalSamples > 0 ? (selfValue / totalSamples) * 100 : 0,
+    totalPercent: totalSamples > 0 ? (totalValue / totalSamples) * 100 : 0,
+  }))
+
+  const hasSelfData = entries.some((f) => f.selfValue > 0)
+
+  return entries
+    .filter((f) => (hasSelfData ? f.selfPercent > 0.1 : f.totalPercent > 0.1))
+    .sort((a, b) => (hasSelfData ? b.selfValue - a.selfValue : b.totalValue - a.totalValue))
     .slice(0, 20)
 }
 
