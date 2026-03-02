@@ -49,6 +49,7 @@ import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
+import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
@@ -316,6 +317,11 @@ const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MonitoringRoute,
+} as any)
+const IssuesIndexRoute = IssuesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => IssuesRoute,
 } as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
@@ -750,6 +756,7 @@ export interface FileRoutesByFullPath {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -783,7 +790,6 @@ export interface FileRoutesByTo {
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
-  '/issues': typeof IssuesRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/onboarding': typeof OnboardingRoute
@@ -847,6 +853,7 @@ export interface FileRoutesByTo {
   '/analytics': typeof AnalyticsIndexRoute
   '/apm-traces': typeof ApmTracesIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
+  '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
@@ -957,6 +964,7 @@ export interface FileRoutesById {
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
@@ -1068,6 +1076,7 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
+    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -1101,7 +1110,6 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
-    | '/issues'
     | '/login'
     | '/logs'
     | '/onboarding'
@@ -1165,6 +1173,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/apm-traces'
     | '/dashboards'
+    | '/issues'
     | '/monitoring'
     | '/on-call'
     | '/performance'
@@ -1274,6 +1283,7 @@ export interface FileRouteTypes {
     | '/analytics/'
     | '/apm-traces/'
     | '/dashboards/'
+    | '/issues/'
     | '/monitoring/'
     | '/on-call/'
     | '/performance/'
@@ -1630,6 +1640,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/monitoring/'
       preLoaderRoute: typeof MonitoringIndexRouteImport
       parentRoute: typeof MonitoringRoute
+    }
+    '/issues/': {
+      id: '/issues/'
+      path: '/'
+      fullPath: '/issues/'
+      preLoaderRoute: typeof IssuesIndexRouteImport
+      parentRoute: typeof IssuesRoute
     }
     '/dashboards/': {
       id: '/dashboards/'
@@ -2202,10 +2219,12 @@ const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
 
 interface IssuesRouteChildren {
   IssuesIssueIdRoute: typeof IssuesIssueIdRoute
+  IssuesIndexRoute: typeof IssuesIndexRoute
 }
 
 const IssuesRouteChildren: IssuesRouteChildren = {
   IssuesIssueIdRoute: IssuesIssueIdRoute,
+  IssuesIndexRoute: IssuesIndexRoute,
 }
 
 const IssuesRouteWithChildren =

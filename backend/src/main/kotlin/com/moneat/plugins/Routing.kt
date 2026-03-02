@@ -33,6 +33,7 @@ import com.moneat.incident.routes.incidentProviderRoutes
 import com.moneat.llm.routes.llmIngestRoutes
 import com.moneat.llm.routes.llmRoutes
 import com.moneat.logs.routes.logRoutes
+import com.moneat.monitor.routes.infraRoutes
 import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
@@ -180,6 +181,9 @@ fun Application.configureRouting() {
 
         // Server monitoring endpoints
         monitorRoutes()
+
+        // Infra endpoints (containers, processes — deduplicated)
+        infraRoutes()
 
         // Logging ingestion and query endpoints
         logRoutes()

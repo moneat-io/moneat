@@ -77,7 +77,7 @@ vi.mock('@tanstack/react-router', () => ({
   Outlet: () => null,
 }))
 
-import { Route as IssuesIndexRoute } from '../issues'
+import { Route as IssuesIndexRoute } from '../issues.index'
 import { Route as IssueDetailRoute } from '../issues.$issueId'
 import { Route as PerformanceRoute } from '../performance.index'
 import { Route as AiRoute } from '../ai.index'

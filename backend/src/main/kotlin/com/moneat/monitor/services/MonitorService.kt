@@ -79,6 +79,7 @@ class MonitorService {
     companion object {
         const val ALERT_SCOPE_GLOBAL = "global"
         const val ALERT_SCOPE_SYSTEM = "system"
+        const val INFRA_LOOKBACK_DAYS = 7
     }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -718,6 +719,94 @@ class MonitorService {
             }
         }
         return allContainers
+    }
+
+    /**
+     * Get latest container stats per host+container_id from the containers table.
+     * Deduplicates time-series rows so each container appears once (fixes inflated
+     * counts when raw rows are returned to MCP/API consumers).
+     */
+    suspend fun getLatestInfraContainers(
+        organizationIds: List<Int>,
+        hostFilter: String?,
+        limit: Int
+    ): List<Map<String, Any?>> {
+        if (organizationIds.isEmpty()) return emptyList()
+        val orgList = organizationIds.joinToString(",") { it.toString() }
+        val escapedHost = if (hostFilter != null && hostFilter.isNotBlank()) escapeSql(hostFilter) else null
+        val hostClause = if (escapedHost != null) "AND host = '$escapedHost'" else ""
+        val query =
+            """
+            SELECT host, container_id, name, image, state, cpu_percent, mem_usage, mem_limit,
+                   net_rx_bytes, net_tx_bytes, tags, timestamp
+            FROM (
+                SELECT *,
+                    ROW_NUMBER() OVER (PARTITION BY organization_id, host, container_id ORDER BY timestamp DESC) as rn
+                FROM $clickhouseDb.containers
+                WHERE organization_id IN ($orgList)
+                  AND timestamp >= now64(3) - INTERVAL $INFRA_LOOKBACK_DAYS DAY
+                  $hostClause
+            ) WHERE rn = 1
+            ORDER BY host, name
+            LIMIT $limit
+            FORMAT JSONCompact
+            """.trimIndent()
+
+        val response = ClickHouseClient.execute(query)
+        if (!response.status.isSuccess()) {
+            val errBody = response.bodyAsText()
+            logger.warn { "Failed to fetch infra containers: $errBody" }
+            return emptyList()
+        }
+
+        val body = response.bodyAsText()
+        if (body.isBlank()) return emptyList()
+
+        return try {
+            val json = Json { ignoreUnknownKeys = true }
+            val result = json.parseToJsonElement(body).jsonObject
+            val data = result["data"]?.jsonArray ?: return emptyList()
+
+            data.map { row ->
+                val arr = row.jsonArray
+                val tagsObj = try {
+                    arr.getOrNull(10)?.toString()?.let { t ->
+                        json.parseToJsonElement(t.replace("\\\"", "\""))
+                            .jsonObject
+                            .entries
+                            .associate { (k, v) -> k to v.toString().trim('"') }
+                    } ?: emptyMap<String, String>()
+                } catch (_: Exception) {
+                    emptyMap<String, String>()
+                }
+                val ts = arr.getOrNull(11)?.toString()?.replace("\"", "") ?: ""
+
+                mapOf(
+                    "host" to arr.getOrNull(0)?.toString()?.replace("\"", ""),
+                    "container_id" to arr.getOrNull(1)?.toString()?.replace("\"", ""),
+                    "containerId" to arr.getOrNull(1)?.toString()?.replace("\"", ""),
+                    "name" to arr.getOrNull(2)?.toString()?.replace("\"", ""),
+                    "image" to arr.getOrNull(3)?.toString()?.replace("\"", ""),
+                    "state" to arr.getOrNull(4)?.toString()?.replace("\"", ""),
+                    "cpu_percent" to (arr.getOrNull(5)?.toString()?.toFloatOrNull() ?: 0f),
+                    "cpuPercent" to (arr.getOrNull(5)?.toString()?.toFloatOrNull() ?: 0f),
+                    "mem_usage" to (arr.getOrNull(6)?.toString()?.toLongOrNull() ?: 0L),
+                    "memUsage" to (arr.getOrNull(6)?.toString()?.toLongOrNull() ?: 0L),
+                    "mem_limit" to (arr.getOrNull(7)?.toString()?.toLongOrNull() ?: 0L),
+                    "memLimit" to (arr.getOrNull(7)?.toString()?.toLongOrNull() ?: 0L),
+                    "net_rx_bytes" to (arr.getOrNull(8)?.toString()?.toLongOrNull() ?: 0L),
+                    "netRxBytes" to (arr.getOrNull(8)?.toString()?.toLongOrNull() ?: 0L),
+                    "net_tx_bytes" to (arr.getOrNull(9)?.toString()?.toLongOrNull() ?: 0L),
+                    "netTxBytes" to (arr.getOrNull(9)?.toString()?.toLongOrNull() ?: 0L),
+                    "tags" to tagsObj,
+                    "timestamp" to ts,
+                    "id" to arr.getOrNull(1)?.toString()?.replace("\"", "")
+                )
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to parse infra container stats" }
+            emptyList()
+        }
     }
 
     /**
