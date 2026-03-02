@@ -53,7 +53,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.0.0",
-    "lucide-react": "^0.575.0",
+    "lucide-react": "^0.576.0",
     "react": "^19.0.0",
     "react-day-picker": "^9.0.0",
     "react-dom": "^19.0.0",
