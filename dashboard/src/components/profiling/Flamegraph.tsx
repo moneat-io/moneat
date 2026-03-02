@@ -147,7 +147,6 @@ function computeTopFunctions(
 }
 
 const ROW_HEIGHT = 22
-const MAX_VISIBLE_HEIGHT = 600
 
 export function Flamegraph({frames, emptyMessage}: Props) {
   const [focusStack, setFocusStack] = useState<FlamegraphFrame[]>([])
@@ -243,7 +242,7 @@ export function Flamegraph({frames, emptyMessage}: Props) {
   const chartHeight = (maxDepth + 1) * ROW_HEIGHT + 4
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col h-full gap-y-3">
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -348,8 +347,7 @@ export function Flamegraph({frames, emptyMessage}: Props) {
       {/* Flamegraph (icicle – root at top) */}
       <div
         ref={containerRef}
-        className="border rounded-lg overflow-x-auto overflow-y-auto relative"
-        style={{maxHeight: MAX_VISIBLE_HEIGHT}}
+        className="border rounded-lg overflow-x-auto overflow-y-auto relative flex-1 min-h-0"
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoveredFrame(null)}
       >
