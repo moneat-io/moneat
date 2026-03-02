@@ -15,6 +15,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createContext} from 'react'
+import type {ChatSnapshot} from '@/lib/ai-chat-history'
+
+export type AiPanelMode = 'dialog' | 'split' | 'float'
+export type AiPanelOrientation = 'vertical' | 'horizontal'
 
 export interface AiPaletteMessage {
   id: string
@@ -59,6 +63,24 @@ export interface CommandPaletteContextValue {
   registerConnectionCleanup: (cleanup: (() => void) | null) => void
   cleanupConnection: () => void
   resetAiState: () => void
+  chatHistory: ChatSnapshot[]
+  startNewChat: () => void
+  restoreChat: (snapshot: ChatSnapshot) => void
+  // Streaming state (moved to context so panels share it)
+  isStreaming: boolean
+  isConfirming: boolean
+  aiInput: string
+  setAiInput: (value: string) => void
+  handleAiSubmit: (prompt: string) => Promise<void>
+  handleConfirm: (approve: boolean) => Promise<void>
+  // Panel display mode
+  aiPanelMode: AiPanelMode
+  aiPanelSize: number
+  aiPanelOrientation: AiPanelOrientation
+  setAiPanelMode: (mode: AiPanelMode) => void
+  setAiPanelSize: (size: number) => void
+  setAiPanelOrientation: (orientation: AiPanelOrientation) => void
 }
 
 export const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null)
+
