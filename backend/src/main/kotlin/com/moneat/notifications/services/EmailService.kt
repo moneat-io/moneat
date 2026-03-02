@@ -707,48 +707,80 @@ class EmailService {
                     .replace("{{ startDate }}", data.startDate)
                     .replace("{{ endDate }}", data.endDate)
                     .replace("{{ totalEvents }}", data.totalEvents)
-                    .replace("{{ eventsTrend }}", data.eventsTrend.toString())
                     .replace("{{ newIssues }}", data.newIssues)
-                    .replace("{{ issuesTrend }}", data.issuesTrend.toString())
                     .replace("{{ affectedUsers }}", data.affectedUsers)
-                    .replace("{{ usersTrend }}", data.usersTrend.toString())
                     .replace("{{ dashboardUrl }}", data.dashboardUrl)
                     .replace("{{ settingsUrl }}", data.settingsUrl)
                     .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
                     .replace("{{ year }}", year)
 
-            // Replace issue list (simplified - in production would use proper template engine)
+            html = html.replace("EVENTS_TREND_PLACEHOLDER", trendBadgeHtml(data.eventsTrend, positiveIsGood = true))
+            html = html.replace("ISSUES_TREND_PLACEHOLDER", trendBadgeHtml(data.issuesTrend, positiveIsGood = false))
+            html = html.replace("USERS_TREND_PLACEHOLDER", trendBadgeHtml(data.usersTrend, positiveIsGood = false))
+
             val issuesHtml =
                 data.topIssues.joinToString("\n") { issue ->
                     """
-                <tr class="border-b border-slate-200">
-                  <td class="py-3 pr-2">
-                    <p class="m-0 text-sm font-semibold text-slate-900 mb-1">${issue.title}</p>
-                    <p class="m-0 text-xs text-slate-600 font-mono">${issue.culprit}</p>
-                  </td>
-                  <td class="py-3 px-2">
-                    <p class="m-0 text-sm text-slate-700">${issue.project}</p>
-                  </td>
-                  <td class="py-3 pl-2 text-right">
-                    <p class="m-0 text-sm font-bold text-slate-900">${issue.count}</p>
+                <tr>
+                  <td style="padding:0.75rem 1rem;border-bottom:1px solid #f5f5f5;">
+                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                      <tr>
+                        <td style="vertical-align:top;">
+                          <p style="margin:0;font-size:0.875rem;font-weight:500;color:#0a0a0a;">${issue.title}</p>
+                          <table cellpadding="0" cellspacing="0" role="presentation" style="margin-top:0.25rem;">
+                            <tr>
+                              <td style="padding-right:0.5rem;">
+                                <p style="margin:0;font-size:0.75rem;color:#737373;font-family:ui-monospace,monospace;">${issue.culprit}</p>
+                              </td>
+                              <td>
+                                <p style="margin:0;font-size:0.75rem;font-weight:500;display:inline-block;background-color:#f5f5f5;border:1px solid #e5e5e5;border-radius:4px;padding:0 6px;color:#525252;">${issue.project}</p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td style="text-align:right;vertical-align:middle;white-space:nowrap;">
+                          <p style="margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;">${issue.count}</p>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
                     """.trimIndent()
                 }
-            html = html.replace("<!-- ISSUES_PLACEHOLDER -->", issuesHtml)
+            html = html.replace("ISSUES_PLACEHOLDER", issuesHtml)
 
             val projectsHtml =
                 data.projects.joinToString("\n") { project ->
                     """
-                <tr>
-                  <td class="pb-4">
-                    <p class="m-0 text-base font-bold text-slate-900 mb-2">${project.name}</p>
-                    <p class="m-0 text-sm text-slate-600">Events: ${project.events} | Issues: ${project.issues} | Crash-Free: ${project.crashFree}%</p>
-                  </td>
-                </tr>
+                <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-radius:8px;border:1px solid #e5e5e5;overflow:hidden;margin-bottom:12px;">
+                  <tr>
+                    <td style="height:4px;background:linear-gradient(90deg,#3b82f6 0%,#8b5cf6 100%);line-height:1px;font-size:1px;">&nbsp;</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:1rem;">
+                      <p style="margin:0;margin-bottom:0.75rem;font-size:0.875rem;font-weight:600;color:#0a0a0a;">${project.name}</p>
+                      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                        <tr>
+                          <td style="width:33%;">
+                            <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Events</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.events}</p>
+                          </td>
+                          <td style="width:33%;">
+                            <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Issues</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.issues}</p>
+                          </td>
+                          <td style="width:33%;">
+                            <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Crash-Free</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree}%</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
                     """.trimIndent()
                 }
-            html = html.replace("<!-- PROJECTS_PLACEHOLDER -->", projectsHtml)
+            html = html.replace("PROJECTS_PLACEHOLDER", projectsHtml)
 
             html
         } else {
@@ -765,6 +797,22 @@ class EmailService {
             </body>
             </html>
             """.trimIndent()
+        }
+    }
+
+    private fun trendBadgeHtml(trend: Int, positiveIsGood: Boolean): String {
+        val badgeStyle = "margin:0;font-size:0.75rem;font-weight:600;display:inline-block;border-radius:4px;padding:1px 8px;"
+        return when {
+            trend > 0 && positiveIsGood ->
+                """<p style="$badgeStyle background-color:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;">&uarr; $trend%</p>"""
+            trend > 0 ->
+                """<p style="$badgeStyle background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;">&uarr; $trend%</p>"""
+            trend < 0 && positiveIsGood ->
+                """<p style="$badgeStyle background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;">&darr; ${-trend}%</p>"""
+            trend < 0 ->
+                """<p style="$badgeStyle background-color:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;">&darr; ${-trend}%</p>"""
+            else ->
+                """<p style="$badgeStyle font-weight:500;background-color:#f5f5f5;border:1px solid #e5e5e5;color:#737373;">&rarr; 0%</p>"""
         }
     }
 
