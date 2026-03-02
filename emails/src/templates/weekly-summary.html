@@ -1,47 +1,15 @@
 ---
-startDate: Jan 30, 2026
-endDate: Feb 6, 2026
-totalEvents: "1,247"
-eventsTrend: -12
-newIssues: "8"
-issuesTrend: 15
-affectedUsers: "342"
-usersTrend: -5
-dashboardUrl: https://moneat.example.com/dashboard
-issues:
-  - title: 'TypeError: Cannot read property "id"'
-    culprit: "api/users.js:42"
-    project: Web App
-    count: "284"
-  - title: Network timeout error
-    culprit: "lib/http-client.js:108"
-    project: Mobile App
-    count: "156"
-  - title: Database connection failed
-    culprit: "db/pool.js:23"
-    project: Backend API
-    count: "89"
-  - title: Null reference exception
-    culprit: "components/Dashboard.tsx:67"
-    project: Web App
-    count: "72"
-  - title: Invalid JSON response
-    culprit: "services/api.ts:201"
-    project: Mobile App
-    count: "45"
-projects:
-  - name: Web App
-    events: "847"
-    issues: "5"
-    crashFree: "99.2"
-  - name: Mobile App
-    events: "312"
-    issues: "3"
-    crashFree: "98.7"
-  - name: Backend API
-    events: "88"
-    issues: "2"
-    crashFree: "99.9"
+startDate: ""
+endDate: ""
+totalEvents: ""
+eventsTrend: 0
+newIssues: ""
+issuesTrend: 0
+affectedUsers: ""
+usersTrend: 0
+dashboardUrl: ""
+issues: []
+projects: []
 ---
 <x-main>
   <table class="w-full max-w-[600px]" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);">
@@ -61,7 +29,7 @@ projects:
             <td>
               <h2 class="m-0 text-2xl font-semibold tracking-tight" style="color: #0a0a0a;">Weekly Summary</h2>
               <p class="m-0 mt-1 text-sm" style="color: #737373;">
-                [[ page.startDate ]] &ndash; [[ page.endDate ]]
+                {{ startDate }} &ndash; {{ endDate }}
               </p>
             </td>
             <td class="text-right" style="text-align: right; vertical-align: top;">
@@ -92,16 +60,8 @@ projects:
                 <tr>
                   <td class="p-3 text-center" style="text-align: center;">
                     <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Total Events</p>
-                    <p class="m-0 text-2xl font-bold mb-1" style="color: #0a0a0a;">[[ page.totalEvents ]]</p>
-                    <if condition="page.eventsTrend > 0">
-                      <p class="m-0 text-xs font-semibold" style="display: inline-block; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 1px 8px; color: #16a34a;">&uarr; [[ page.eventsTrend ]]%</p>
-                    </if>
-                    <if condition="page.eventsTrend < 0">
-                      <p class="m-0 text-xs font-semibold" style="display: inline-block; background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; padding: 1px 8px; color: #dc2626;">&darr; [[ page.eventsTrend ]]%</p>
-                    </if>
-                    <if condition="page.eventsTrend === 0">
-                      <p class="m-0 text-xs font-medium" style="display: inline-block; background-color: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; padding: 1px 8px; color: #737373;">&rarr; 0%</p>
-                    </if>
+                    <p class="m-0 text-2xl font-bold mb-1" style="color: #0a0a0a;">{{ totalEvents }}</p>
+                    EVENTS_TREND_PLACEHOLDER
                   </td>
                 </tr>
               </table>
@@ -116,16 +76,8 @@ projects:
                 <tr>
                   <td class="p-3 text-center" style="text-align: center;">
                     <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">New Issues</p>
-                    <p class="m-0 text-2xl font-bold mb-1" style="color: #0a0a0a;">[[ page.newIssues ]]</p>
-                    <if condition="page.issuesTrend > 0">
-                      <p class="m-0 text-xs font-semibold" style="display: inline-block; background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; padding: 1px 8px; color: #dc2626;">&uarr; [[ page.issuesTrend ]]%</p>
-                    </if>
-                    <if condition="page.issuesTrend < 0">
-                      <p class="m-0 text-xs font-semibold" style="display: inline-block; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 1px 8px; color: #16a34a;">&darr; [[ page.issuesTrend ]]%</p>
-                    </if>
-                    <if condition="page.issuesTrend === 0">
-                      <p class="m-0 text-xs font-medium" style="display: inline-block; background-color: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; padding: 1px 8px; color: #737373;">&rarr; 0%</p>
-                    </if>
+                    <p class="m-0 text-2xl font-bold mb-1" style="color: #0a0a0a;">{{ newIssues }}</p>
+                    ISSUES_TREND_PLACEHOLDER
                   </td>
                 </tr>
               </table>
@@ -140,16 +92,8 @@ projects:
                 <tr>
                   <td class="p-3 text-center" style="text-align: center;">
                     <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Affected Users</p>
-                    <p class="m-0 text-2xl font-bold mb-1" style="color: #0a0a0a;">[[ page.affectedUsers ]]</p>
-                    <if condition="page.usersTrend > 0">
-                      <p class="m-0 text-xs font-semibold" style="display: inline-block; background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; padding: 1px 8px; color: #dc2626;">&uarr; [[ page.usersTrend ]]%</p>
-                    </if>
-                    <if condition="page.usersTrend < 0">
-                      <p class="m-0 text-xs font-semibold" style="display: inline-block; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 1px 8px; color: #16a34a;">&darr; [[ page.usersTrend ]]%</p>
-                    </if>
-                    <if condition="page.usersTrend === 0">
-                      <p class="m-0 text-xs font-medium" style="display: inline-block; background-color: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; padding: 1px 8px; color: #737373;">&rarr; 0%</p>
-                    </if>
+                    <p class="m-0 text-2xl font-bold mb-1" style="color: #0a0a0a;">{{ affectedUsers }}</p>
+                    USERS_TREND_PLACEHOLDER
                   </td>
                 </tr>
               </table>
@@ -179,32 +123,7 @@ projects:
             </td>
           </tr>
           <!-- Issue Rows -->
-          <each loop="issue in page.issues">
-            <tr>
-              <td class="px-4 py-3" style="border-bottom: 1px solid #f5f5f5;">
-                <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
-                  <tr>
-                    <td style="vertical-align: top;">
-                      <p class="m-0 text-sm font-medium" style="color: #0a0a0a;">[[ issue.title ]]</p>
-                      <table cellpadding="0" cellspacing="0" role="presentation" class="mt-1">
-                        <tr>
-                          <td class="pr-2">
-                            <p class="m-0 text-xs" style="color: #737373; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;">[[ issue.culprit ]]</p>
-                          </td>
-                          <td>
-                            <p class="m-0 text-xs font-medium" style="display: inline-block; background-color: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; padding: 0px 6px; color: #525252;">[[ issue.project ]]</p>
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                    <td style="text-align: right; vertical-align: middle; white-space: nowrap;">
-                      <p class="m-0 text-sm font-bold" style="color: #0a0a0a;">[[ issue.count ]]</p>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </each>
+          ISSUES_PLACEHOLDER
         </table>
       </td>
     </tr>
@@ -214,45 +133,7 @@ projects:
       <td class="px-8 pb-6 bg-white">
         <p class="m-0 text-sm font-semibold mb-3" style="color: #0a0a0a;">Project Breakdown</p>
 
-        <each loop="project in page.projects">
-          <table class="w-full mb-3" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden; margin-bottom: 12px;">
-            <tr>
-              <td style="height: 4px; background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%); line-height: 1px; font-size: 1px;">&nbsp;</td>
-            </tr>
-            <tr>
-              <td class="p-4">
-                <!-- Project name -->
-                <p class="m-0 text-sm font-semibold mb-3" style="color: #0a0a0a;">[[ project.name ]]</p>
-                <!-- Stats row -->
-                <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
-                  <tr>
-                    <td class="w-1/3">
-                      <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Events</p>
-                      <p class="m-0 text-lg font-bold" style="color: #0a0a0a;">[[ project.events ]]</p>
-                    </td>
-                    <td class="w-1/3">
-                      <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Issues</p>
-                      <p class="m-0 text-lg font-bold" style="color: #0a0a0a;">[[ project.issues ]]</p>
-                    </td>
-                    <td class="w-1/3">
-                      <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Crash-Free</p>
-                      <table cellpadding="0" cellspacing="0" role="presentation">
-                        <tr>
-                          <td class="pr-1" style="vertical-align: middle;">
-                            <div style="width: 8px; height: 8px; border-radius: 50%; background-color: #22c55e; display: inline-block;"></div>
-                          </td>
-                          <td style="vertical-align: middle;">
-                            <p class="m-0 text-lg font-bold" style="color: #16a34a;">[[ project.crashFree ]]%</p>
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </each>
+        PROJECTS_PLACEHOLDER
       </td>
     </tr>
 
@@ -262,7 +143,7 @@ projects:
         <table cellpadding="0" cellspacing="0" role="presentation">
           <tr>
             <td align="center" style="border-radius: 6px; background-color: #171717; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);">
-              <a href="[[ page.dashboardUrl ]]"
+              <a href="{{ dashboardUrl }}"
                 style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #fafafa; text-decoration: none; padding: 12px 24px; border-radius: 6px; display: inline-block; font-size: 14px; font-weight: 500;">
                 Open Dashboard &rarr;
               </a>

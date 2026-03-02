@@ -1148,7 +1148,7 @@ function isOnline(lastSeenAt: string): boolean {
   if (!lastSeenAt) return false
   try {
     const diff = Date.now() - new Date(lastSeenAt).getTime()
-    return diff < 5 * 60 * 1000
+    return diff < 15 * 60 * 1000
   } catch {
     return false
   }
