@@ -195,16 +195,6 @@ function MetricCard({
   )
 }
 
-function isHostOnline(lastSeenAt: string): boolean {
-  if (!lastSeenAt) return false
-  try {
-    const diff = Date.now() - new Date(lastSeenAt).getTime()
-    return diff < 5 * 60 * 1000
-  } catch {
-    return false
-  }
-}
-
 function HostDetailPage() {
   const {hostId} = Route.useParams()
   const hostIdNum = Number(hostId)
@@ -237,6 +227,7 @@ function HostDetailPage() {
   const {data: host, isLoading: hostLoading} = useQuery({
     queryKey: ['host', hostIdNum],
     queryFn: () => api.getHost(hostIdNum),
+    refetchInterval: 30000,
   })
 
   const selectedRange =
@@ -285,7 +276,7 @@ function HostDetailPage() {
     )
   }
 
-  const online = isHostOnline(host.lastSeenAt)
+  const online = host.isOnline
 
   // Transform metrics data for charts
   const cpuData =

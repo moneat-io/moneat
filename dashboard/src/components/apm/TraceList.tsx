@@ -26,6 +26,7 @@ import {
   Clock,
 } from 'lucide-react'
 import {useState, useMemo} from 'react'
+import {keepPreviousData} from '@tanstack/react-query'
 import {Link} from '@tanstack/react-router'
 import {cn} from '@/lib/utils'
 
@@ -103,6 +104,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
       }),
     enabled: api.isAuthenticated(),
     refetchInterval: 15000,
+    placeholderData: keepPreviousData,
   })
 
   const traces = data?.traces ?? []

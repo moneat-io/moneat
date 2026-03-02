@@ -341,7 +341,7 @@ class LogService {
         }
 
         decodeCursor(request.cursor)?.let { (cursorTs, cursorLogId) ->
-            conditions += "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR (timestamp = fromUnixTimestamp64Milli($cursorTs) AND log_id < toUUID('${escapeSql(cursorLogId)}')))"
+            conditions += "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR (timestamp = fromUnixTimestamp64Milli($cursorTs) AND toString(log_id) < '${escapeSql(cursorLogId)}'))"
         }
 
         val whereClause = conditions.joinToString(" AND ")

@@ -18,17 +18,15 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {TraceList} from '@/components/apm/TraceList'
-import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
 import {
   Activity,
   AlertTriangle,
   Clock,
   Layers,
-  Search,
   Server,
 } from 'lucide-react'
-import {useState, useMemo} from 'react'
+import {useMemo} from 'react'
 
 export const Route = createFileRoute('/performance/traces/')({
   component: PerformanceTracesPage,
@@ -42,15 +40,10 @@ function formatDuration(ns: number): string {
 }
 
 function PerformanceTracesPage() {
-  const [serviceFilter, setServiceFilter] = useState('')
-  const [envFilter] = useState('')
-
   const {data} = useQuery({
-    queryKey: ['apmTraces', serviceFilter, envFilter],
+    queryKey: ['apmTraces', undefined, undefined],
     queryFn: () =>
       api.getApmTraces({
-        service: serviceFilter || undefined,
-        env: envFilter || undefined,
         limit: 100,
       }),
     enabled: api.isAuthenticated(),
@@ -80,28 +73,15 @@ function PerformanceTracesPage() {
 
   return (
     <div className="p-6 space-y-5">
-      {/* Header with filter */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Distributed Traces</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Individual trace view from APM instrumentation
-            <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 font-normal">
-              Datadog
-            </Badge>
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Filter by service..."
-              value={serviceFilter}
-              onChange={(e) => setServiceFilter(e.target.value)}
-              className="pl-9 h-9 w-[200px]"
-            />
-          </div>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Distributed Traces</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          Individual trace view from APM instrumentation
+          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 font-normal">
+            Datadog
+          </Badge>
+        </p>
       </div>
 
       {/* Summary stats */}
@@ -139,11 +119,7 @@ function PerformanceTracesPage() {
       )}
 
       {/* Trace list */}
-      <TraceList
-        serviceFilter={serviceFilter || undefined}
-        envFilter={envFilter || undefined}
-        basePath="/performance/traces"
-      />
+      <TraceList basePath="/performance/traces" />
     </div>
   )
 }
