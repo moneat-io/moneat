@@ -29,6 +29,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import {Dialog, DialogContent} from '@/components/ui/dialog'
+import {Button} from '@/components/ui/button'
 import {AiSuggestions} from '@/components/command-palette/AiSuggestions'
 import {AiChatView} from '@/components/command-palette/AiChatView'
 import {confirmAiAction, streamAiAssistant, type AssistantStreamEvent} from '@/lib/mcp-chat'
@@ -507,15 +508,16 @@ export function CommandPalette() {
                 onValueChange={setSearch}
                 onKeyDown={handleInputKeyDown}
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setSearch('/')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Sparkles className="h-3 w-3" />
                 <span>Ask AI</span>
                 <kbd className="rounded bg-background/80 px-1 py-0.5 font-mono text-[10px] leading-none border border-border/40">/</kbd>
-              </button>
+              </Button>
             </div>
           )}
           {localAiMode ? (
@@ -523,8 +525,9 @@ export function CommandPalette() {
               {aiMessages.length > 0 && (
                 <div className="flex items-center justify-between border-b px-3 py-2">
                   <span className="text-xs font-medium text-muted-foreground">Ask AI</span>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={() => {
                       startNewChat()
                       setAiInput('')
@@ -534,7 +537,7 @@ export function CommandPalette() {
                   >
                     <Plus className="h-3 w-3" />
                     New Chat
-                  </button>
+                  </Button>
                 </div>
               )}
               <div className="max-h-[380px] overflow-y-auto">
@@ -555,17 +558,18 @@ export function CommandPalette() {
                               ? `${firstUserMsg.content.slice(0, 60)}…`
                               : firstUserMsg.content
                             return (
-                              <button
+                              <Button
                                 key={snapshot.id}
                                 type="button"
+                                variant="ghost"
                                 onClick={() => {
                                   restoreChat(snapshot)
                                   requestAnimationFrame(() => aiInputRef.current?.focus())
                                 }}
-                                className="w-full text-left rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors truncate"
+                                className="w-full justify-start text-left rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors truncate"
                               >
                                 {label}
-                              </button>
+                              </Button>
                             )
                           })}
                         </div>

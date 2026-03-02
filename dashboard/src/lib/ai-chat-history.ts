@@ -41,7 +41,16 @@ export function loadActiveChat(): ChatSnapshot | null {
   try {
     const raw = localStorage.getItem(ACTIVE_CHAT_KEY)
     if (!raw) return null
-    const snapshot = JSON.parse(raw) as ChatSnapshot
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      typeof parsed !== 'object' || parsed === null ||
+      typeof (parsed as Record<string, unknown>).timestamp !== 'number' ||
+      !Array.isArray((parsed as Record<string, unknown>).messages)
+    ) {
+      localStorage.removeItem(ACTIVE_CHAT_KEY)
+      return null
+    }
+    const snapshot = parsed as ChatSnapshot
     if (Date.now() - snapshot.timestamp > EXPIRY_MS) {
       archiveChat(snapshot)
       clearActiveChat()
@@ -79,7 +88,14 @@ export function getHistory(): ChatSnapshot[] {
   try {
     const raw = localStorage.getItem(CHAT_HISTORY_KEY)
     if (!raw) return []
-    return JSON.parse(raw) as ChatSnapshot[]
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is ChatSnapshot =>
+        typeof item === 'object' && item !== null &&
+        typeof (item as Record<string, unknown>).timestamp === 'number' &&
+        Array.isArray((item as Record<string, unknown>).messages),
+    )
   } catch {
     return []
   }
