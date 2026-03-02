@@ -879,6 +879,20 @@ function UsageTab() {
     },
   ] as const
 
+  const ingestionBreakdown = [
+    { label: 'Errors', bytes: usage.usedErrorBytes ?? 0, color: 'bg-red-400' },
+    { label: 'Replays', bytes: usage.usedReplayBytes ?? 0, color: 'bg-purple-400' },
+    { label: 'Logs', bytes: usage.usedLogBytes ?? 0, color: 'bg-emerald-400' },
+    { label: 'LLM', bytes: usage.usedLlmBytes ?? 0, color: 'bg-amber-400' },
+    { label: 'Profiling', bytes: usage.usedProfilerBytes ?? 0, color: 'bg-pink-400' },
+  ]
+  const ingestionKnownBytes = ingestionBreakdown.reduce((sum, s) => sum + s.bytes, 0)
+  const ingestionOtherBytes = Math.max(0, (usage.usedBytes ?? 0) - ingestionKnownBytes)
+  const ingestionSegments = [
+    ...ingestionBreakdown,
+    { label: 'Other', bytes: ingestionOtherBytes, color: 'bg-blue-300' },
+  ].filter((s) => s.bytes > 0)
+
   const UNLIMITED_SENTINEL = 9_007_199_254_740_000
 
   const isUnlimitedValue = (value: number) => value >= UNLIMITED_SENTINEL || value < 0
@@ -969,9 +983,40 @@ function UsageTab() {
                   </div>
                 </div>
 
-                <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${Math.max(isUnlimited && row.used > 0 ? 5 : 0, percent)}%` }} />
-                </div>
+                {row.key === 'ingestion' ? (
+                  <div className="space-y-1.5">
+                    <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden flex">
+                      {ingestionSegments.length > 0 ? ingestionSegments.map((seg) => {
+                        const w = isUnlimited
+                          ? row.used > 0 ? (seg.bytes / row.used) * 5 : 0
+                          : row.limit > 0 ? Math.min(100, (seg.bytes / row.limit) * 100) : 0
+                        return (
+                          <div key={seg.label} className={`h-full ${seg.color} transition-all`} style={{ width: `${w}%` }} />
+                        )
+                      }) : (
+                        <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${Math.max(isUnlimited && row.used > 0 ? 5 : 0, percent)}%` }} />
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      {ingestionBreakdown.map((seg) => (
+                        <div key={seg.label} className="flex items-center gap-1">
+                          <div className={`h-1.5 w-1.5 rounded-full ${seg.color}`} />
+                          <span className="text-xs text-muted-foreground">{seg.label} · {formatGB(seg.bytes)} GB</span>
+                        </div>
+                      ))}
+                      {ingestionOtherBytes > 0 && (
+                        <div className="flex items-center gap-1">
+                          <div className="h-1.5 w-1.5 rounded-full bg-blue-300" />
+                          <span className="text-xs text-muted-foreground">Other · {formatGB(ingestionOtherBytes)} GB</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${Math.max(isUnlimited && row.used > 0 ? 5 : 0, percent)}%` }} />
+                  </div>
+                )}
 
                 {(isOver || row.overageCents > 0) && (
                   <div className="flex items-center justify-between text-xs">

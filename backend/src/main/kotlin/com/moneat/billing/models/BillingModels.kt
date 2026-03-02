@@ -113,6 +113,7 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_replay_bytes = long("used_replay_bytes").default(0)
     val used_log_bytes = long("used_log_bytes").default(0)
     val used_llm_bytes = long("used_llm_bytes").default(0)
+    val used_profiler_bytes = long("used_profiler_bytes").default(0)
     val used_analytics_pageviews = long("used_analytics_pageviews").default(0)
     val used_apm_spans = long("used_apm_spans").default(0)
     val used_custom_metrics = long("used_custom_metrics").default(0)
@@ -252,6 +253,7 @@ data class BillingUsageResponse(
     val usedReplayBytes: Long = 0,
     val usedLogBytes: Long = 0,
     val usedLlmBytes: Long = 0,
+    val usedProfilerBytes: Long = 0,
     val bytesLimit: Long,
     val ingestionOverageCentsEstimate: Int = 0,
     val ingestionOverageRateCentsPerGb: Int = 0,
