@@ -732,9 +732,12 @@ class MonitorService {
     ): List<Map<String, Any?>> {
         if (organizationIds.isEmpty()) return emptyList()
         val orgList = organizationIds.joinToString(",") { it.toString() }
-        val hostClause = if (hostFilter != null && hostFilter.isNotBlank()) {
-            "AND host = '${escapeSql(hostFilter)}'"
-        } else ""
+        val hostClause =
+            if (hostFilter != null && hostFilter.isNotBlank()) {
+                "AND host = '${escapeSql(hostFilter)}'"
+            } else {
+                ""
+            }
         val query =
             """
             SELECT host, container_id, name, image, state, cpu_percent, mem_usage, mem_limit,
