@@ -118,8 +118,12 @@ private suspend fun respondWithFullHealth(call: io.ktor.server.application.Appli
     }
 }
 
+private val routingLogger = mu.KotlinLogging.logger("Routing")
+
 fun Application.configureRouting() {
     routing {
+        routingLogger.info { "Starting route registration..." }
+
         get("/") {
             call.respondText("Moneat API v0.0.1")
         }
@@ -149,11 +153,13 @@ fun Application.configureRouting() {
             respondWithFullHealth(call)
         }
 
+        routingLogger.info { "Registering ingestion routes..." }
         // Sentry-compatible ingestion endpoints (rate limited per project key)
         rateLimit(RateLimitName("ingestion")) {
             ingestRoutes()
             llmIngestRoutes()
         }
+        routingLogger.info { "Ingestion routes registered" }
 
         // Telemetry pulse receiver — accepts anonymous heartbeats from self-hosted instances
         telemetryIngestRoutes()
@@ -203,13 +209,17 @@ fun Application.configureRouting() {
         // Organization team management endpoints
         orgManagementRoutes()
 
+        routingLogger.info { "Registering enterprise routes..." }
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
+        routingLogger.info { "Enterprise routes registered" }
 
         // AI chat assistant endpoints
         aiChatRoutes()
 
         // Custom dashboard builder endpoints
         customDashboardRoutes()
+
+        routingLogger.info { "All routes registered successfully" }
     }
 }

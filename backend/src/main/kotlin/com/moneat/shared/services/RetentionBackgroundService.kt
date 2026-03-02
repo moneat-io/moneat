@@ -78,6 +78,11 @@ class RetentionBackgroundService(
     }
 
     private suspend fun runSweep() {
+        if (!ClickHouseClient.isInitialized()) {
+            logger.debug { "Retention sweep skipped: ClickHouse is not initialized" }
+            return
+        }
+
         val retentionByOrg = retentionPolicyService.getRetentionDaysByOrganization()
         val logRetentionByOrg = retentionPolicyService.getLogRetentionDaysByOrganization()
         val replayRetentionByOrg = retentionPolicyService.getReplayRetentionDaysByOrganization()
@@ -272,6 +277,10 @@ class RetentionBackgroundService(
         query: String,
         label: String
     ): Boolean {
+        if (!ClickHouseClient.isInitialized()) {
+            logger.debug { "Retention mutation skipped for $label: ClickHouse is not initialized" }
+            return false
+        }
         return try {
             val response = ClickHouseClient.execute(query)
             if (response.status.value !in 200..299) {

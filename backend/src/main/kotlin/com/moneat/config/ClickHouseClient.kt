@@ -31,7 +31,10 @@ import io.sentry.Sentry
 object ClickHouseClient {
     private const val MIGRATION_TIMEOUT_MS = 600_000L
 
+    @Volatile
     private var httpClient: HttpClient? = null
+
+    @Volatile
     private var migrationClient: HttpClient? = null
     private var baseUrl: String = ""
     private var database: String = ""
@@ -82,13 +85,14 @@ object ClickHouseClient {
         query: String,
         span: ISpan? = null
     ): HttpResponse {
+        val client = checkNotNull(httpClient) { "ClickHouseClient is not initialized. Call init() first." }
         return if (span != null && Sentry.isEnabled()) {
             SentryUtils.withSpan(span, "db.clickhouse", "ClickHouse query") { childSpan ->
                 childSpan?.setData("db.system", "clickhouse")
                 childSpan?.setData("db.name", database)
                 childSpan?.setData("db.statement", query.take(200)) // Truncate long queries
 
-                httpClient!!.post(baseUrl) {
+                client.post(baseUrl) {
                     parameter("database", database)
                     header("X-ClickHouse-User", user)
                     header("X-ClickHouse-Key", password)
@@ -97,7 +101,7 @@ object ClickHouseClient {
                 }
             }
         } else {
-            httpClient!!.post(baseUrl) {
+            client.post(baseUrl) {
                 parameter("database", database)
                 header("X-ClickHouse-User", user)
                 header("X-ClickHouse-Key", password)
@@ -128,7 +132,8 @@ object ClickHouseClient {
      * Use for DDL and data-copy statements that may run for minutes.
      */
     suspend fun executeMigration(query: String): HttpResponse {
-        return migrationClient!!.post(baseUrl) {
+        val client = checkNotNull(migrationClient) { "ClickHouseClient is not initialized. Call init() first." }
+        return client.post(baseUrl) {
             parameter("database", database)
             header("X-ClickHouse-User", user)
             header("X-ClickHouse-Key", password)
@@ -145,6 +150,8 @@ object ClickHouseClient {
             false
         }
     }
+
+    fun isInitialized(): Boolean = httpClient != null
 
     fun getDatabase(): String = database
 
@@ -174,9 +181,8 @@ fun Application.configureClickHouse() {
         log.info("Initializing ClickHouse client for $url...")
         ClickHouseClient.init(url, database, user, password)
         log.info("ClickHouse client initialized")
-        monitor.subscribe(ApplicationStopping) {
-            ClickHouseClient.close()
-        }
+        // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
+        // (workers must stop before ClickHouse client is closed)
     } catch (e: Exception) {
         log.error("Failed to initialize ClickHouse client. Make sure ClickHouse is running and accessible.", e)
         throw e

@@ -31,9 +31,20 @@ import com.moneat.plugins.configureRouting
 import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
 import io.ktor.server.application.*
+import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.netty.EngineMain
 
 fun main(args: Array<String>) {
+    // Add JVM shutdown hook to log when shutdown is triggered
+    Runtime.getRuntime().addShutdownHook(
+        Thread {
+            System.err.println("=== JVM SHUTDOWN HOOK TRIGGERED ===")
+            Thread.currentThread().stackTrace.forEach { frame ->
+                System.err.println("  at $frame")
+            }
+        }
+    )
+
     // Load .env file into system properties before starting the server
     EnvConfig.initialize()
 
@@ -51,6 +62,14 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    // Log stack trace when shutdown is triggered to identify the cause
+    monitor.subscribe(ApplicationStopping) {
+        log.warn("APPLICATION STOPPING - Stack trace to identify trigger:")
+        Thread.currentThread().stackTrace.take(20).forEach { frame ->
+            log.warn("  at $frame")
+        }
+    }
+
     try {
         configureSecurity()
         configureHTTP()
@@ -62,7 +81,9 @@ fun Application.module() {
         configureClickHouse()
         configureDatabases()
         configureBackgroundJobs()
+        log.info("About to configure routing...")
         configureRouting()
+        log.info("Routing configured successfully, application startup complete")
     } catch (e: Exception) {
         log.error("Failed to start application", e)
         throw e

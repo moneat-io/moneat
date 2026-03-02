@@ -32,7 +32,10 @@ const val BRPOP_TIMEOUT_SECONDS = 5L
 private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BRPOP_TIMEOUT_SECONDS + 10)
 
 object RedisConfig {
+    @Volatile
     private var client: RedisClient? = null
+
+    @Volatile
     private var connection: StatefulRedisConnection<String, String>? = null
     private val blockingConnections = mutableListOf<StatefulRedisConnection<String, String>>()
 
@@ -44,25 +47,31 @@ object RedisConfig {
     }
 
     fun sync(): RedisCommands<String, String> {
-        return connection!!.sync()
+        val conn = checkNotNull(connection) { "RedisConfig is not initialized. Call init() first." }
+        return conn.sync()
     }
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
     fun newBlockingConnection(): RedisCommands<String, String> {
-        val conn = client!!.connect().also { it.timeout = BLOCKING_COMMAND_TIMEOUT }
+        val c = checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }
+        val conn = c.connect().also { it.timeout = BLOCKING_COMMAND_TIMEOUT }
         synchronized(blockingConnections) { blockingConnections.add(conn) }
         return conn.sync()
     }
 
     fun async(): RedisAsyncCommands<String, String> {
-        return connection!!.async()
+        val conn = checkNotNull(connection) { "RedisConfig is not initialized. Call init() first." }
+        return conn.async()
     }
 
     fun reactive(): RedisReactiveCommands<String, String> {
-        return connection!!.reactive()
+        val conn = checkNotNull(connection) { "RedisConfig is not initialized. Call init() first." }
+        return conn.reactive()
     }
 
     fun isConnected(): Boolean = connection?.isOpen == true
+
+    fun isInitialized(): Boolean = connection != null
 
     fun close() {
         connection?.close()
@@ -90,9 +99,8 @@ fun Application.configureRedis() {
         log.info("Connecting to Redis at $redisUrl...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
-        monitor.subscribe(ApplicationStopping) {
-            RedisConfig.close()
-        }
+        // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
+        // (workers must stop before Redis connection is closed)
     } catch (e: Exception) {
         log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
         throw e

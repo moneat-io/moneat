@@ -76,7 +76,14 @@ object FeatureRegistry {
 
     fun registerRoutes(route: Route) {
         for (module in modules) {
-            module.registerRoutes(route)
+            logger.info { "Registering routes for enterprise module: ${module.name}" }
+            try {
+                module.registerRoutes(route)
+                logger.info { "Routes registered for enterprise module: ${module.name}" }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to register routes for enterprise module: ${module.name}" }
+                throw e
+            }
         }
     }
 

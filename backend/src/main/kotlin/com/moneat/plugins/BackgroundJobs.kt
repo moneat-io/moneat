@@ -18,6 +18,8 @@ package com.moneat.plugins
 
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.billing.services.BillingBackgroundService
+import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.IngestionWorker
@@ -139,5 +141,12 @@ fun Application.configureBackgroundJobs() {
         llmIngestionWorker.stop()
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
+
+        // Close infrastructure connections AFTER all workers have stopped
+        // to prevent NPEs from workers trying to use closed connections
+        logger.info { "Closing infrastructure connections..." }
+        RedisConfig.close()
+        ClickHouseClient.close()
+        logger.info { "Infrastructure connections closed" }
     }
 }
