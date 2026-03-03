@@ -18,8 +18,6 @@ import {useMemo, useState} from 'react'
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type SystemAlert} from '@/lib/api'
-
-type HostAlertScope = 'global' | 'host'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {
@@ -38,6 +36,8 @@ import {Switch} from '@/components/ui/switch'
 import {Badge} from '@/components/ui/badge'
 import {Bell, BellRing, Clock, Edit, Globe2, Mail, Plus, Server, Shield, Trash2, Zap} from 'lucide-react'
 import {formatRelativeTime} from '@/lib/utils'
+
+type HostAlertScope = 'global' | 'host'
 
 interface AlertsTabProps {
   hostId: number
@@ -263,7 +263,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                     </DialogTitle>
                     <DialogDescription>
                       This rule will be added to{' '}
-                      {activeScope === 'global' ? 'the global shared profile.' : 'this system only.'}
+                      {activeScope === 'global' ? 'the global shared profile.' : 'this host only.'}
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleCreateAlert}>
@@ -369,8 +369,8 @@ export function AlertsTab({hostId}: AlertsTabProps) {
 
           <p className="text-xs text-muted-foreground">
             {activeScope === 'global'
-              ? 'Global profile applies to all systems currently set to Global.'
-              : 'System profile applies only to this system. Global changes will not affect it.'}
+              ? 'Global profile applies to all hosts currently set to Global.'
+              : 'Host profile applies only to this host. Global changes will not affect it.'}
           </p>
         </CardHeader>
 
@@ -631,9 +631,9 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                 <Shield className="h-4 w-4 text-emerald-500" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-sm font-medium">System Status Notifications</h4>
+                <h4 className="text-sm font-medium">Host Status Notifications</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  You'll also receive notifications when systems go down (no metrics for 5+
+                  You'll also receive notifications when hosts go down (no metrics for 5+
                   minutes) or come back online after being offline
                   {slackEnabled && ', both via email and Slack'}.
                 </p>

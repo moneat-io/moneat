@@ -1370,8 +1370,8 @@ export interface MonitorHostResponse {
   name: string
   hostname: string
   status: string
-  last_seen_at?: number | null
-  first_seen_at?: number | null
+  last_seen_at?: number | string | null
+  first_seen_at?: number | string | null
   agent_version?: string | null
   os?: string | null
   arch?: string | null
@@ -1393,6 +1393,18 @@ export interface CreateMonitorHostResponse {
 export function mapMonitorHostToDdHost(h: MonitorHostResponse): DdHostResponse {
   const status = (h.status ?? '').toLowerCase()
   const isOnline = status === 'up' || status === 'online'
+  const toIsoTimestamp = (value: number | string | null | undefined): string => {
+    if (value === null || value === undefined || value === '') return ''
+
+    const numeric = Number(value)
+    const normalized = Number.isFinite(numeric)
+      ? (Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric)
+      : value
+    const date = new Date(normalized)
+
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+  }
+
   return {
     id: h.id,
     hostname: h.hostname ?? h.name ?? '',
@@ -1403,8 +1415,8 @@ export function mapMonitorHostToDdHost(h: MonitorHostResponse): DdHostResponse {
     memoryTotalKb: h.memory_total_kb ?? (h.latest_metrics?.mem_total ? Math.round(h.latest_metrics.mem_total / 1024) : 0),
     agentVersion: h.agent_version ?? '',
     tags: {},
-    firstSeenAt: h.first_seen_at ? new Date(h.first_seen_at).toISOString() : '',
-    lastSeenAt: h.last_seen_at ? new Date(h.last_seen_at).toISOString() : '',
+    firstSeenAt: toIsoTimestamp(h.first_seen_at),
+    lastSeenAt: toIsoTimestamp(h.last_seen_at),
     isOnline,
   }
 }
@@ -1473,7 +1485,7 @@ interface ContainerMetricsHistory {
 interface SystemAlert {
   id: number
   systemId?: string
-  scope: 'global' | 'system'
+  scope: 'global' | 'system' | 'host'
   metric: string
   condition: string
   threshold: number
@@ -3113,6 +3125,15 @@ class ApiClient {
       incidentSeverity: (row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
       lastTriggeredAt: (row.lastTriggeredAt ?? row.last_triggered_at) as number | undefined,
       createdAt: (row.createdAt ?? row.created_at) as number,
+    }
+  }
+
+  private mapHostAlert(row: Record<string, unknown>): SystemAlert {
+    const alert = this.mapSystemAlert(row)
+    const rawScope = ((row.scope as string | undefined) ?? '').toLowerCase()
+    return {
+      ...alert,
+      scope: rawScope === 'global' ? 'global' : 'host',
     }
   }
 
@@ -4874,15 +4895,15 @@ class ApiClient {
       `${API_BASE}/monitor/hosts/${hostId}/alerts/config`
     )
     return {
-      scope: (response.scope ?? 'host') as 'global' | 'host',
+      scope: response.scope === 'global' ? 'global' : 'host',
       globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map(
-        (row) => this.mapSystemAlert(row)
+        (row) => ({...this.mapHostAlert(row), scope: 'global' as const})
       ),
       hostAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map(
-        (row) => this.mapSystemAlert(row)
+        (row) => this.mapHostAlert(row)
       ),
       effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map(
-        (row) => this.mapSystemAlert(row)
+        (row) => this.mapHostAlert(row)
       ),
     }
   }
