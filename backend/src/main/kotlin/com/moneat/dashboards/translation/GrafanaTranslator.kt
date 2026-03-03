@@ -455,6 +455,20 @@ class GrafanaTranslator : DashboardTranslator {
             return parseGrafanaSql(rawSql, warnings, panelIndex)
         }
 
+        // Try Grafana Elasticsearch plugin format (metrics/bucketAggs arrays)
+        // Check before generic query so ES targets with Lucene query + aggregations
+        // get full translation instead of losing metrics/bucketAggs
+        val esMetrics = target["metrics"] as? JsonArray
+        val esBucketAggs = target["bucketAggs"] as? JsonArray
+        if (esMetrics != null || esBucketAggs != null) {
+            val esQuery = translateGrafanaElasticsearchTarget(target)
+            return QueryDsl(
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+                rawQuery = esQuery
+            )
+        }
+
         // Try generic query (skip empty strings from plugin-specific targets)
         val query = target["query"]?.jsonPrimitive?.contentOrNull
         if (!query.isNullOrBlank()) {
@@ -474,6 +488,38 @@ class GrafanaTranslator : DashboardTranslator {
                 dataSource = "events",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
                 rawQuery = rawCmd
+            )
+        }
+
+        // Try Grafana InfluxDB plugin format (measurement/select/groupBy)
+        val measurement = target["measurement"]?.jsonPrimitive?.contentOrNull
+        if (measurement != null) {
+            val fluxFilter = translateGrafanaInfluxTarget(target)
+            return QueryDsl(
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+                rawQuery = fluxFilter
+            )
+        }
+
+        // Try Grafana CloudWatch plugin format (namespace/metricName)
+        val namespace = target["namespace"]?.jsonPrimitive?.contentOrNull
+        if (namespace != null && target.containsKey("metricName")) {
+            val cwJson = translateGrafanaCloudWatchTarget(target)
+            return QueryDsl(
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+                rawQuery = cwJson
+            )
+        }
+
+        // Try Grafana Graphite plugin format (target field)
+        val graphiteTarget = target["target"]?.jsonPrimitive?.contentOrNull
+        if (!graphiteTarget.isNullOrBlank()) {
+            return QueryDsl(
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+                rawQuery = graphiteTarget
             )
         }
 
@@ -516,6 +562,191 @@ class GrafanaTranslator : DashboardTranslator {
             "clusternodes" -> "CLUSTER NODES"
             "dbsize" -> "DBSIZE"
             else -> command.uppercase()
+        }
+    }
+
+    /**
+     * Convert Grafana InfluxDB plugin target to a Flux filter() expression
+     * that [InfluxDBHandler] can wrap with from(bucket)/range.
+     */
+    internal fun translateGrafanaInfluxTarget(target: JsonObject): String {
+        val measurement = target["measurement"]?.jsonPrimitive?.contentOrNull ?: ""
+        val conditions = mutableListOf<String>()
+        if (measurement.isNotBlank()) {
+            conditions.add("r._measurement == \"$measurement\"")
+        }
+        // Extract field names from the select array
+        // Format: [[{type:"field",params:["usage_idle"]},{type:"mean"}],...]
+        val selectArr = target["select"]?.jsonArray
+        if (selectArr != null) {
+            for (col in selectArr) {
+                val parts = col.jsonArray
+                val fieldPart = parts.firstOrNull {
+                    it.jsonObject["type"]?.jsonPrimitive?.contentOrNull == "field"
+                }
+                val fieldName = fieldPart?.jsonObject
+                    ?.get("params")?.jsonArray
+                    ?.firstOrNull()?.jsonPrimitive?.contentOrNull
+                if (!fieldName.isNullOrBlank()) {
+                    conditions.add("r._field == \"$fieldName\"")
+                }
+            }
+        }
+        // Extract tag filters
+        val tags = target["tags"]?.jsonArray
+        if (tags != null) {
+            for (tag in tags) {
+                val obj = tag.jsonObject
+                val key = obj["key"]?.jsonPrimitive?.contentOrNull ?: continue
+                val value = obj["value"]?.jsonPrimitive?.contentOrNull ?: continue
+                val op = obj["operator"]?.jsonPrimitive?.contentOrNull ?: "="
+                val fluxOp = if (op == "=~") "=~" else "=="
+                val fluxVal = if (fluxOp == "=~") value else "\"$value\""
+                conditions.add("r.$key $fluxOp $fluxVal")
+            }
+        }
+        return if (conditions.isNotEmpty()) {
+            "filter(fn: (r) => ${conditions.joinToString(" and ")})"
+        } else {
+            "filter(fn: (r) => true)"
+        }
+    }
+
+    /**
+     * Convert Grafana CloudWatch plugin target to the PascalCase JSON
+     * that [CloudWatchHandler] expects.
+     */
+    internal fun translateGrafanaCloudWatchTarget(target: JsonObject): String {
+        return buildJsonObject {
+            target["namespace"]?.jsonPrimitive?.contentOrNull?.let { put("Namespace", it) }
+            target["metricName"]?.jsonPrimitive?.contentOrNull?.let { put("MetricName", it) }
+            target["period"]?.jsonPrimitive?.contentOrNull?.let { put("Period", it) }
+            val stats = target["statistics"]?.jsonArray
+            if (stats != null) {
+                put("Statistics", stats)
+            }
+            val dims = target["dimensions"]
+            if (dims is JsonObject) {
+                put(
+                    "Dimensions",
+                    buildJsonArray {
+                        for ((key, value) in dims) {
+                            val vals = if (value is JsonArray) {
+                                value.map { it.jsonPrimitive.content }
+                            } else {
+                                listOf(value.jsonPrimitive.content)
+                            }
+                            for (v in vals) {
+                                add(
+                                    buildJsonObject {
+                                        put("Name", key)
+                                        put("Value", v)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+        }.toString()
+    }
+
+    /**
+     * Convert Grafana Elasticsearch plugin target to an ES query JSON body
+     * from the metrics/bucketAggs arrays + Lucene query filter.
+     */
+    internal fun translateGrafanaElasticsearchTarget(target: JsonObject): String {
+        val luceneQuery = target["query"]?.jsonPrimitive?.contentOrNull ?: "*"
+        val metricsArr = target["metrics"]?.jsonArray
+        val bucketAggsArr = target["bucketAggs"]?.jsonArray
+
+        return buildJsonObject {
+            // Query section
+            put(
+                "query",
+                buildJsonObject {
+                    put(
+                        "query_string",
+                        buildJsonObject {
+                            put("query", luceneQuery)
+                        }
+                    )
+                }
+            )
+            put("size", 0)
+
+            // Build aggregations from bucketAggs + metrics
+            if (bucketAggsArr != null && bucketAggsArr.isNotEmpty()) {
+                put("aggs", buildBucketAggs(bucketAggsArr, metricsArr))
+            } else if (metricsArr != null) {
+                // No bucket aggs — just metric aggs at top level
+                put("aggs", buildMetricAggs(metricsArr))
+            }
+        }.toString()
+    }
+
+    private fun buildBucketAggs(
+        bucketAggs: JsonArray,
+        metrics: JsonArray?
+    ): JsonObject {
+        // Recursively nest bucket aggs; innermost gets metric aggs
+        val first = bucketAggs.firstOrNull()?.jsonObject ?: return buildMetricAggs(metrics)
+        val id = first["id"]?.jsonPrimitive?.contentOrNull ?: "1"
+        val type = first["type"]?.jsonPrimitive?.contentOrNull ?: "terms"
+        val field = first["field"]?.jsonPrimitive?.contentOrNull
+        val settings = first["settings"]?.jsonObject
+
+        val innerAggs = if (bucketAggs.size > 1) {
+            val remaining = JsonArray(bucketAggs.drop(1))
+            buildBucketAggs(remaining, metrics)
+        } else {
+            buildMetricAggs(metrics)
+        }
+
+        return buildJsonObject {
+            put(
+                id,
+                buildJsonObject {
+                    put(
+                        type,
+                        buildJsonObject {
+                            if (field != null) put("field", field)
+                            if (settings != null) {
+                                for ((k, v) in settings) {
+                                    put(k, v)
+                                }
+                            }
+                        }
+                    )
+                    if (innerAggs.isNotEmpty()) {
+                        put("aggs", innerAggs)
+                    }
+                }
+            )
+        }
+    }
+
+    private fun buildMetricAggs(metrics: JsonArray?): JsonObject {
+        if (metrics == null) return JsonObject(emptyMap())
+        return buildJsonObject {
+            for (metric in metrics) {
+                val obj = metric.jsonObject
+                val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: continue
+                val type = obj["type"]?.jsonPrimitive?.contentOrNull ?: continue
+                if (type == "count") continue // count is implicit
+                val field = obj["field"]?.jsonPrimitive?.contentOrNull ?: continue
+                put(
+                    id,
+                    buildJsonObject {
+                        put(
+                            type,
+                            buildJsonObject {
+                                put("field", field)
+                            }
+                        )
+                    }
+                )
+            }
         }
     }
 

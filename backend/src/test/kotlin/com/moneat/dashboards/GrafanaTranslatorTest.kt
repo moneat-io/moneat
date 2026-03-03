@@ -1492,4 +1492,490 @@ class GrafanaTranslatorTest {
         translator.extractGrafanaTransformations(panel, config)
         assertTrue(config.isEmpty())
     }
+
+    // --- InfluxDB translator tests ---
+
+    @Test
+    fun `translateGrafanaInfluxTarget with measurement and select`() {
+        val target = buildJsonObject {
+            put("measurement", "cpu")
+            put(
+                "select",
+                buildJsonArray {
+                    add(
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "field")
+                                    put(
+                                        "params",
+                                        buildJsonArray { add(JsonPrimitive("usage_idle")) }
+                                    )
+                                }
+                            )
+                            add(buildJsonObject { put("type", "mean") })
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertEquals(
+            "filter(fn: (r) => r._measurement == \"cpu\" and r._field == \"usage_idle\")",
+            result
+        )
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with measurement only`() {
+        val target = buildJsonObject {
+            put("measurement", "disk")
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertEquals("filter(fn: (r) => r._measurement == \"disk\")", result)
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with tags`() {
+        val target = buildJsonObject {
+            put("measurement", "cpu")
+            put(
+                "tags",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("key", "host")
+                            put("operator", "=")
+                            put("value", "server01")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertContains(result, "r._measurement == \"cpu\"")
+        assertContains(result, "r.host == \"server01\"")
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with empty measurement`() {
+        val target = buildJsonObject {
+            put("measurement", "")
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertEquals("filter(fn: (r) => true)", result)
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with multiple select fields`() {
+        val target = buildJsonObject {
+            put("measurement", "net")
+            put(
+                "select",
+                buildJsonArray {
+                    add(
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "field")
+                                    put(
+                                        "params",
+                                        buildJsonArray { add(JsonPrimitive("bytes_recv")) }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                    add(
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "field")
+                                    put(
+                                        "params",
+                                        buildJsonArray { add(JsonPrimitive("bytes_sent")) }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertContains(result, "r._field == \"bytes_recv\"")
+        assertContains(result, "r._field == \"bytes_sent\"")
+    }
+
+    // --- CloudWatch translator tests ---
+
+    @Test
+    fun `translateGrafanaCloudWatchTarget maps keys to PascalCase`() {
+        val target = buildJsonObject {
+            put("namespace", "AWS/EC2")
+            put("metricName", "CPUUtilization")
+            put("period", "300")
+            put(
+                "statistics",
+                buildJsonArray { add(JsonPrimitive("Average")) }
+            )
+            put(
+                "dimensions",
+                buildJsonObject {
+                    put(
+                        "InstanceId",
+                        buildJsonArray { add(JsonPrimitive("i-123")) }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaCloudWatchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        assertEquals("AWS/EC2", parsed["Namespace"]?.jsonPrimitive?.content)
+        assertEquals("CPUUtilization", parsed["MetricName"]?.jsonPrimitive?.content)
+        assertEquals("300", parsed["Period"]?.jsonPrimitive?.content)
+        assertEquals("Average", parsed["Statistics"]?.jsonArray?.get(0)?.jsonPrimitive?.content)
+        val dims = parsed["Dimensions"]?.jsonArray
+        assertEquals(1, dims?.size)
+        assertEquals("InstanceId", dims?.get(0)?.jsonObject?.get("Name")?.jsonPrimitive?.content)
+        assertEquals("i-123", dims?.get(0)?.jsonObject?.get("Value")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `translateGrafanaCloudWatchTarget with multiple dimension values`() {
+        val target = buildJsonObject {
+            put("namespace", "AWS/ELB")
+            put("metricName", "RequestCount")
+            put(
+                "dimensions",
+                buildJsonObject {
+                    put(
+                        "LoadBalancerName",
+                        buildJsonArray {
+                            add(JsonPrimitive("lb-1"))
+                            add(JsonPrimitive("lb-2"))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaCloudWatchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        val dims = parsed["Dimensions"]?.jsonArray
+        assertEquals(2, dims?.size)
+    }
+
+    @Test
+    fun `translateGrafanaCloudWatchTarget with minimal fields`() {
+        val target = buildJsonObject {
+            put("namespace", "AWS/S3")
+            put("metricName", "BucketSizeBytes")
+        }
+        val result = translator.translateGrafanaCloudWatchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        assertEquals("AWS/S3", parsed["Namespace"]?.jsonPrimitive?.content)
+        assertEquals("BucketSizeBytes", parsed["MetricName"]?.jsonPrimitive?.content)
+    }
+
+    // --- Graphite translator tests ---
+
+    @Test
+    fun `parseTarget detects Graphite target field`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "CPU Average")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "CPU")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0); put("y", 0)
+                                    put("w", 24); put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put(
+                                                "target",
+                                                "alias(summarize(stats.gauges.*.cpu, '1h', 'avg'), 'CPU')"
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        assertEquals(
+            "alias(summarize(stats.gauges.*.cpu, '1h', 'avg'), 'CPU')",
+            widget.queryConfigs.first().rawQuery
+        )
+    }
+
+    // --- Elasticsearch translator tests ---
+
+    @Test
+    fun `translateGrafanaElasticsearchTarget with metrics and bucketAggs`() {
+        val target = buildJsonObject {
+            put("query", "status:500")
+            put(
+                "metrics",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "1")
+                            put("type", "avg")
+                            put("field", "response_time")
+                        }
+                    )
+                }
+            )
+            put(
+                "bucketAggs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "2")
+                            put("type", "date_histogram")
+                            put("field", "@timestamp")
+                            put(
+                                "settings",
+                                buildJsonObject { put("interval", "1m") }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaElasticsearchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        // Has query_string with status:500
+        assertEquals(
+            "status:500",
+            parsed["query"]?.jsonObject
+                ?.get("query_string")?.jsonObject
+                ?.get("query")?.jsonPrimitive?.content
+        )
+        // Has aggs
+        val aggs = parsed.getValue("aggs").jsonObject
+        assertTrue(aggs.isNotEmpty())
+        // Bucket agg "2" has date_histogram
+        val bucket = aggs.getValue("2").jsonObject
+        assertTrue(bucket.containsKey("date_histogram"))
+        // Inner aggs has metric "1" with avg
+        val innerAggs = bucket.getValue("aggs").jsonObject
+        val metric = innerAggs.getValue("1").jsonObject
+        assertTrue(metric.containsKey("avg"))
+    }
+
+    @Test
+    fun `translateGrafanaElasticsearchTarget with count only`() {
+        val target = buildJsonObject {
+            put("query", "*")
+            put(
+                "metrics",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "1")
+                            put("type", "count")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaElasticsearchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        assertEquals("*", parsed["query"]?.jsonObject?.get("query_string")?.jsonObject?.get("query")?.jsonPrimitive?.content)
+        // count is implicit — no aggs section needed
+        assertEquals(0, parsed["size"]?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `translateGrafanaElasticsearchTarget with no query defaults to star`() {
+        val target = buildJsonObject {
+            put(
+                "metrics",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "1")
+                            put("type", "max")
+                            put("field", "cpu_usage")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaElasticsearchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        assertEquals(
+            "*",
+            parsed["query"]?.jsonObject?.get("query_string")?.jsonObject?.get("query")?.jsonPrimitive?.content
+        )
+        val aggs = parsed["aggs"]?.jsonObject
+        assertTrue(aggs?.containsKey("1") == true)
+    }
+
+    // --- parseTarget integration tests for new datasource types ---
+
+    @Test
+    fun `parseTarget detects InfluxDB measurement field`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "InfluxDB Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "CPU")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0); put("y", 0)
+                                    put("w", 24); put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put("measurement", "cpu")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        assertContains(widget.queryConfigs.first().rawQuery ?: "", "_measurement == \"cpu\"")
+    }
+
+    @Test
+    fun `parseTarget detects CloudWatch namespace and metricName`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "CloudWatch Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "EC2 CPU")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0); put("y", 0)
+                                    put("w", 24); put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put("namespace", "AWS/EC2")
+                                            put("metricName", "CPUUtilization")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        val rawQuery = widget.queryConfigs.first().rawQuery ?: ""
+        assertContains(rawQuery, "Namespace")
+        assertContains(rawQuery, "AWS/EC2")
+    }
+
+    @Test
+    fun `parseTarget detects ES metrics array`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "ES Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "Errors")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0); put("y", 0)
+                                    put("w", 24); put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put(
+                                                "metrics",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("id", "1")
+                                                            put("type", "count")
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "bucketAggs",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("id", "2")
+                                                            put("type", "date_histogram")
+                                                            put("field", "@timestamp")
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        val rawQuery = widget.queryConfigs.first().rawQuery ?: ""
+        assertContains(rawQuery, "query_string")
+        assertContains(rawQuery, "date_histogram")
+    }
 }
