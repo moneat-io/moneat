@@ -35,11 +35,13 @@ import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
+import com.moneat.monitor.models.HostData
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -62,6 +64,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
+private const val DEFAULT_PROJECT_ID = 0L
 
 @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 private val json =
@@ -111,6 +114,18 @@ private fun resolveProjectForOrganization(
     }
 }
 
+private suspend fun ensureHostAccessible(
+    call: ApplicationCall,
+    host: HostData?,
+    organizationIds: List<Int>
+): HostData? {
+    if (host == null || host.organizationId !in organizationIds) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
+        return null
+    }
+    return host
+}
+
 fun Route.monitorRoutes(
     monitorService: MonitorService = MonitorService(),
     logService: LogService = LogService(),
@@ -119,6 +134,8 @@ fun Route.monitorRoutes(
     val usageTracking = UsageTrackingService.instance
 
     route("/v1/monitor") {
+        // Agent ingestion endpoints intentionally use agent-key auth (validateAgentKey),
+        // while dashboard endpoints remain inside authenticate("auth-jwt") below.
         /**
          * Agent-facing ingestion endpoint.
          * Auth: Bearer token (agent key)
@@ -234,6 +251,9 @@ fun Route.monitorRoutes(
          * Auth: Bearer token (agent key)
          */
         post("/logs") {
+            var refundOrgId: Int? = null
+            var refundLogCount = 0
+            var refundBytes: Long = 0
             try {
                 val authHeader = call.request.header("Authorization")
                 if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -276,7 +296,10 @@ fun Route.monitorRoutes(
 
                 if (quotaService.isEnforcementEnabled()) {
                     val billableBytes =
-                        payload.logs.sumOf { ((it.message?.length ?: 0) + (it.body?.length ?: 0)).toLong() }
+                        payload.logs.sumOf { entry ->
+                            (entry.message?.toByteArray(Charsets.UTF_8)?.size ?: 0).toLong() +
+                                (entry.body?.toByteArray(Charsets.UTF_8)?.size ?: 0).toLong()
+                        }
                     val reservation =
                         quotaService.reserveUnits(
                             organizationId = organizationId,
@@ -295,6 +318,9 @@ fun Route.monitorRoutes(
                         )
                         return@post
                     }
+                    refundOrgId = organizationId
+                    refundLogCount = payload.logs.size
+                    refundBytes = billableBytes
                 }
 
                 val queueKey =
@@ -308,11 +334,32 @@ fun Route.monitorRoutes(
                     payload.logs,
                     queueKey
                 )
+                if (quotaService.isEnforcementEnabled() && accepted <= 0 && refundOrgId != null) {
+                    quotaService.refundUnits(
+                        organizationId = refundOrgId,
+                        units = refundLogCount,
+                        eventType = "log",
+                        requestedBytes = refundBytes
+                    )
+                }
+                refundOrgId = null
+                refundLogCount = 0
+                refundBytes = 0
                 call.respond(
                     HttpStatusCode.Accepted,
                     AgentLogIngestResponse(accepted = accepted, hostId = hostId.toString())
                 )
             } catch (e: Exception) {
+                if (quotaService.isEnforcementEnabled() && refundOrgId != null &&
+                    (refundLogCount > 0 || refundBytes > 0)
+                ) {
+                    quotaService.refundUnits(
+                        organizationId = refundOrgId,
+                        units = refundLogCount,
+                        eventType = "log",
+                        requestedBytes = refundBytes
+                    )
+                }
                 logger.error(e) { "Failed to ingest agent logs: ${e.message}" }
                 call.respond(
                     HttpStatusCode.BadRequest,
@@ -361,7 +408,7 @@ fun Route.monitorRoutes(
                     allHosts.map { host ->
                         HostResponse(
                             id = host.id,
-                            projectId = 0L,
+                            projectId = DEFAULT_PROJECT_ID,
                             name = host.displayName ?: host.hostname,
                             hostname = host.hostname,
                             status = host.status,
@@ -437,7 +484,7 @@ fun Route.monitorRoutes(
                         host =
                         HostResponse(
                             id = host.id,
-                            projectId = 0L,
+                            projectId = DEFAULT_PROJECT_ID,
                             name = host.displayName ?: host.hostname,
                             hostname = host.hostname,
                             status = host.status,
@@ -477,17 +524,15 @@ fun Route.monitorRoutes(
                         return@get
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@get
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@get
 
                 call.respond(
                     HttpStatusCode.OK,
                     HostResponse(
                         id = host.id,
-                        projectId = 0L,
+                        projectId = DEFAULT_PROJECT_ID,
                         name = host.displayName ?: host.hostname,
                         hostname = host.hostname,
                         status = host.status,
@@ -524,11 +569,9 @@ fun Route.monitorRoutes(
                         return@delete
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@delete
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@delete
 
                 val deleted = monitorService.deleteHost(hostId, host.organizationId)
                 if (!deleted) {
@@ -557,11 +600,9 @@ fun Route.monitorRoutes(
                         return@get
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@get
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@get
 
                 val fromParam = call.request.queryParameters["from"]?.toLongOrNull()
                 val toParam = call.request.queryParameters["to"]?.toLongOrNull()
@@ -594,11 +635,9 @@ fun Route.monitorRoutes(
                         return@get
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@get
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@get
 
                 val containers = monitorService.getLatestContainers(hostId)
                 call.respond(HttpStatusCode.OK, ContainerStatsResponse(containers = containers))
@@ -628,11 +667,9 @@ fun Route.monitorRoutes(
                         return@get
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@get
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@get
 
                 val fromParam = call.request.queryParameters["from"]?.toLongOrNull()
                 val toParam = call.request.queryParameters["to"]?.toLongOrNull()
@@ -672,11 +709,9 @@ fun Route.monitorRoutes(
                         return@get
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@get
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@get
 
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
                 val cursor = call.request.queryParameters["cursor"]
@@ -702,7 +737,7 @@ fun Route.monitorRoutes(
                         containerName = containerName
                     )
 
-                val response = logService.queryLogs(0L, logRequest)
+                val response = logService.queryLogs(host.organizationId.toLong(), logRequest)
                 call.respond(HttpStatusCode.OK, response)
             }
 
@@ -724,11 +759,9 @@ fun Route.monitorRoutes(
                         return@get
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@get
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@get
 
                 val alerts = monitorService.listAlerts(hostId, host.organizationId)
                 call.respond(HttpStatusCode.OK, alerts)
@@ -752,11 +785,9 @@ fun Route.monitorRoutes(
                         return@get
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@get
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@get
 
                 val config = monitorService.getAlertConfig(hostId, host.organizationId)
                 call.respond(HttpStatusCode.OK, config)
@@ -780,11 +811,9 @@ fun Route.monitorRoutes(
                         return@put
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@put
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@put
 
                 val request = call.receive<UpdateAlertScopeRequest>()
                 val scope = request.scope.lowercase()
@@ -815,11 +844,9 @@ fun Route.monitorRoutes(
                         return@post
                     }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@post
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@post
 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
@@ -857,11 +884,9 @@ fun Route.monitorRoutes(
                     return@put
                 }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@put
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@put
 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
@@ -904,11 +929,9 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val host = monitorService.getHostById(hostId)
-                if (host == null || host.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
-                    return@delete
-                }
+                val host =
+                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
+                        ?: return@delete
 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
