@@ -2012,4 +2012,318 @@ class GrafanaTranslatorTest {
         assertContains(rawQuery, "query_string")
         assertContains(rawQuery, "date_histogram")
     }
+
+    // ─── Redis dashboard import integration tests ────────────────────
+
+    /**
+     * Build a minimal Redis panel with command-style target and
+     * optional filterFieldsByName transformation.
+     */
+    private fun buildRedisPanel(
+        title: String,
+        type: String,
+        command: String,
+        section: String = "",
+        visibleFields: List<String>? = null,
+    ) = buildJsonObject {
+        put("type", type)
+        put("title", title)
+        put("datasource", "\${DS_REDIS}")
+        put(
+            "gridPos",
+            buildJsonObject {
+                put("x", 0)
+                put("y", 0)
+                put("w", 6)
+                put("h", 4)
+            }
+        )
+        put(
+            "targets",
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("command", command)
+                        put("query", "")
+                        put("refId", "A")
+                        put("section", section)
+                        put("type", "command")
+                    }
+                )
+            }
+        )
+        if (visibleFields != null) {
+            put(
+                "transformations",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "filterFieldsByName")
+                            put(
+                                "options",
+                                buildJsonObject {
+                                    put(
+                                        "include",
+                                        buildJsonObject {
+                                            put(
+                                                "names",
+                                                buildJsonArray {
+                                                    visibleFields.forEach { add(JsonPrimitive(it)) }
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        put(
+            "fieldConfig",
+            buildJsonObject {
+                put("defaults", buildJsonObject { put("unit", "ops") })
+            }
+        )
+    }
+
+    private fun buildRedisInputs() = buildJsonArray {
+        add(
+            buildJsonObject {
+                put("name", "DS_REDIS")
+                put("type", "datasource")
+                put("pluginId", "redis-datasource")
+            }
+        )
+    }
+
+    @Test
+    fun `Redis import sets rawQuery for INFO command panels`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildRedisPanel(
+                            "Ops/sec",
+                            "stat",
+                            "info",
+                            "stats",
+                            visibleFields = listOf("instantaneous_ops_per_sec")
+                        )
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        assertEquals("INFO stats", widget.queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import sets visibleFields from filterFieldsByName`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildRedisPanel(
+                            "Network",
+                            "gauge",
+                            "info",
+                            "stats",
+                            visibleFields = listOf(
+                                "instantaneous_input_kbps",
+                                "instantaneous_output_kbps"
+                            )
+                        )
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        assertEquals(
+            "instantaneous_input_kbps,instantaneous_output_kbps",
+            widget.displayConfig["visibleFields"]
+        )
+    }
+
+    @Test
+    fun `Redis import translates clientList command`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildRedisPanel("Clients", "table", "clientList"))
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("CLIENT LIST", result.dashboard.widgets.first().queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import translates slowlogGet command`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildRedisPanel("Slow Queries", "table", "slowlogGet"))
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("SLOWLOG GET", result.dashboard.widgets.first().queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import translates cluster commands`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildRedisPanel("State", "stat", "clusterInfo"))
+                    add(buildRedisPanel("Nodes", "table", "clusterNodes"))
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widgets = result.dashboard.widgets
+        assertEquals("CLUSTER INFO", widgets[0].queryConfigs.first().rawQuery)
+        assertEquals("CLUSTER NODES", widgets[1].queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import with pre-mapped datasource preserves custom id`() {
+        // Simulates what happens after frontend maps ${DS_REDIS} -> custom:5
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Ops/sec")
+                            put("datasource", "custom:5")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("command", "info")
+                                            put("query", "")
+                                            put("refId", "A")
+                                            put("section", "stats")
+                                            put("type", "command")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        // When frontend already replaced ${DS_REDIS} with custom:5,
+        // backend should preserve it
+        assertEquals("custom:5", widget.queryConfigs.first().dataSource)
+        assertEquals("INFO stats", widget.queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import cli-type target with query field`() {
+        // The "Number of Keys" panel uses type=cli, query=dbsize
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Number of Keys")
+                            put("datasource", "\${DS_REDIS}")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("query", "dbsize")
+                                            put("refId", "A")
+                                            put("type", "cli")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        // "dbsize" comes through via generic query detection
+        assertEquals("dbsize", widget.queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import commandstats uses INFO commandstats query`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildRedisPanel(
+                            "Command Statistics",
+                            "table",
+                            "info",
+                            "commandstats"
+                        )
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(
+            "INFO commandstats",
+            result.dashboard.widgets.first().queryConfigs.first().rawQuery
+        )
+    }
 }

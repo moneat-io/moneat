@@ -137,9 +137,11 @@ export const WidgetRenderer = memo(function WidgetRenderer({
 }: WidgetRendererProps) {
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
+  // Include query config fingerprint so datasource/query changes trigger refetch
+  const queryFingerprint = queries.map(q => `${q.dataSource}:${q.rawQuery || ''}`).join('|')
 
   const {data, isLoading, error} = useQuery({
-    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queries.length, variables],
+    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queryFingerprint, variables],
     queryFn: async () => {
       if (!projectId && !isDemo()) return []
       const effectiveProjectId = projectId ?? -1

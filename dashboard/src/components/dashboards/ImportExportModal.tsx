@@ -44,6 +44,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const [showDataSourceMapper, setShowDataSourceMapper] = useState(false)
   const [unmappedDataSources, setUnmappedDataSources] = useState<string[]>([])
   const [pendingImport, setPendingImport] = useState<{format: string; json: string} | null>(null)
+  const [autoMappings, setAutoMappings] = useState<Record<string, string>>({})
   
   // Fetch custom data sources for mapping
   const {data: customDataSourcesData} = useQuery({
@@ -191,8 +192,40 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       }
       
       if (unmapped.length > 0) {
-        // Show mapper modal
-        console.log('Unmapped datasources detected:', unmapped)
+        // Auto-match: map Grafana pluginId to our source_type
+        const pluginToSourceType: Record<string, string> = {
+          'redis-datasource': 'redis',
+          'prometheus': 'prometheus',
+          'elasticsearch': 'elasticsearch',
+          'grafana-elasticsearch-datasource': 'elasticsearch',
+          'influxdb': 'influxdb',
+          'graphite': 'graphite',
+          'loki': 'loki',
+          'cloudwatch': 'cloudwatch',
+          'mysql': 'mysql',
+          'postgres': 'postgresql',
+          'grafana-postgresql-datasource': 'postgresql',
+          'mssql': 'mssql',
+          'grafana-clickhouse-datasource': 'clickhouse',
+          'grafana-bigquery-datasource': 'bigquery',
+          'grafana-mongodb-datasource': 'mongodb',
+          'marcusolsson-json-datasource': 'elasticsearch',
+        }
+        const initialMappings: Record<string, string> = {}
+        for (const ds of unmapped) {
+          const expectedType = pluginToSourceType[ds]
+          if (expectedType && customDataSourcesData) {
+            const matches = customDataSourcesData.filter(
+              cds => cds.source_type === expectedType
+            )
+            if (matches.length === 1) {
+              initialMappings[ds] = `custom:${matches[0].id}`
+            }
+          }
+        }
+        // Show mapper modal with auto-matched defaults
+        console.log('Unmapped datasources detected:', unmapped, 'auto-matched:', initialMappings)
+        setAutoMappings(initialMappings)
         setUnmappedDataSources(unmapped)
         setPendingImport({format, json: jsonInput})
         setShowDataSourceMapper(true)
@@ -477,6 +510,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         unmappedDataSources={unmappedDataSources}
         dataSources={allDataSources}
         onMapped={handleDataSourceMapped}
+        initialMappings={autoMappings}
       />
     </div>
   )
